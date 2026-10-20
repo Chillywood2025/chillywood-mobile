@@ -22,6 +22,7 @@ function apiHarness(rows, options = {}) {
   const calls = [];
   let tableReads = 0;
   const api = loadStubbed('_lib/moderation.ts', {
+    './adminCursorPagination': loadStubbed('_lib/adminCursorPagination.ts'),
     './supabase': { supabase: {
       from() { tableReads++; throw new Error('Unexpected unfiltered table fallback'); },
       async rpc(name, args) {
@@ -30,7 +31,11 @@ function apiHarness(rows, options = {}) {
           ? { error: options.overviewError }
           : { data: { connected: true, totalReports: rows.length, queueHealth: 'connected', sourceSurfaces: [], ...options.overview } };
         if (options.error) return { error: options.error };
-        return { data: rows.filter(r => matches(r, args.p_filter)).slice(0, args.p_limit) };
+        const cursor = args.p_cursor ? JSON.parse(args.p_cursor) : null;
+        const filtered = rows.filter(r => matches(r, args.p_filter) && (!cursor || r.id < Number(cursor.id))).sort((a, b) => b.id - a.id);
+        const items = filtered.slice(0, args.p_limit);
+        const hasMore = filtered.length > items.length;
+        return { data: { items, hasMore, nextCursor: hasMore ? JSON.stringify({ v: 1, scope: { source: 'reports', filter: args.p_filter }, createdAt: items.at(-1).created_at, id: String(items.at(-1).id) }) : null } };
       },
     } },
   });
@@ -42,7 +47,7 @@ test('actual queue helper filters at source before 25 resolved rows can hide pen
     row(31), row(32, 'reviewing')];
   const h = apiHarness(rows);
   const result = await h.api.readSafetyReportQueue({ filter: 'needs_review', limit: 25 });
-  assert.deepEqual(result.items.map(r => r.id), [31, 32]);
+  assert.deepEqual(result.items.map(r => r.id), [32, 31]);
   assert.equal(result.summary.totalReports, 32);
   assert.equal(result.items.length, 2);
   assert.equal(result.windowFull, false);
@@ -57,25 +62,29 @@ test('all UI filter keys preserve the SQL filter groups', async () => {
   const h = apiHarness(rows);
   for (const filter of ['all', 'needs_review', 'critical', 'creator_video', 'profile_post', 'player', 'actioned']) {
     const result = await h.api.readSafetyReportQueue({ filter, limit: 50 });
-    assert.deepEqual(result.items.map(r => r.id), rows.filter(r => matches(r, filter)).map(r => r.id));
+    assert.deepEqual(result.items.map(r => r.id), rows.filter(r => matches(r, filter)).map(r => r.id).sort((a, b) => b - a));
     assert.equal(h.calls.at(-2).args.p_filter, filter);
   }
 });
 
-test('duplicate and tied rows stay bounded without unsafe timestamp continuation', async () => {
-  const rows = Array.from({ length: 60 }, (_, i) => row(i + 1));
-  rows[10] = rows[9];
+test('more than two equal-timestamp pages traverse every matching report exactly once', async () => {
+  const rows = Array.from({ length: 131 }, (_, i) => row(i + 1));
   const h = apiHarness(rows);
-  const first = await h.api.readSafetyReportQueue({ filter: 'all', limit: 25 });
-  const expanded = await h.api.readSafetyReportQueue({ filter: 'all', limit: 100 });
-  assert.equal(first.windowFull, true);
-  assert.equal(first.items.length, 24);
-  assert.equal(expanded.windowLimit, 50);
-  assert.equal(expanded.windowFull, true);
-  assert.equal(expanded.items.length, 49);
-  assert.equal(new Set(expanded.items.map(r => r.id)).size, 49);
-  for (const call of h.calls.filter(call => call.name === 'list_admin_reports')) {
-    assert.equal(call.args.p_cursor, null, 'timestamp-only cursor must never skip tied rows');
+  let cursor = null; const ids = [];
+  do {
+    const page = await h.api.readSafetyReportQueue({ filter: 'all', limit: 50, cursor });
+    ids.push(...page.items.map(r => r.id)); cursor = page.nextCursor;
+    assert.equal(page.hasMore, !!cursor);
+  } while (cursor);
+  assert.equal(ids.length, 131); assert.equal(new Set(ids).size, 131);
+  assert.deepEqual(ids, rows.map(r => r.id).reverse());
+});
+
+test('duplicate source rows and malformed or filter-mismatched cursors fail closed', async () => {
+  const h = apiHarness([row(1), row(1)]);
+  await assert.rejects(h.api.readSafetyReportQueue({ filter: 'all' }), /did not advance/);
+  for (const cursor of ['', 'bad', JSON.stringify({ v: 1, scope: { source: 'reports', filter: 'actioned' }, createdAt: '2026-10-19', id: '2' })]) {
+    await assert.rejects(h.api.readSafetyReportQueue({ filter: 'all', cursor }), /cursor/);
   }
 });
 
@@ -97,6 +106,28 @@ test('null overview counts remain unknown and cannot be called global totals', a
   assert.equal(result.overviewAvailable, false);
   assert.equal(result.summary.totalReports, 1);
   assert.equal(result.summary.actionedTodayCount, null);
+  assert.equal(result.summary.needsReviewCount, null);
+  assert.equal(result.summary.criticalHighRiskCount, null);
+});
+
+test('report audit helper drains tied history and rejects repeated or failed later pages', async () => {
+  const ids = Array.from({ length: 251 }, (_, n) => `97300000-0000-4000-8000-${String(n+1).padStart(12,'0')}`).reverse();
+  for (const mode of ['success','repeat','fail']) {
+    const api = loadStubbed('_lib/moderation.ts', {
+      './adminCursorPagination': loadStubbed('_lib/adminCursorPagination.ts'),
+      './supabase': { supabase: { async rpc(name,args) {
+        assert.equal(name,'list_admin_report_audit_events_page');
+        const cursor=args.p_cursor ? JSON.parse(args.p_cursor) : null;
+        if(mode==='fail' && cursor) return {error:new Error('later page failed')};
+        const remaining=ids.filter(id=>mode==='repeat'||!cursor||id<cursor.id);
+        const items=remaining.slice(0,args.p_limit).map(id=>({id,created_at:'2026-10-20T01:00:00Z',action:'report_review',action_category:'moderation'}));
+        const hasMore=remaining.length>items.length;
+        return {data:{items,hasMore,nextCursor:hasMore?JSON.stringify({v:1,scope:{source:'report-audit',reportId:'1'},id:items.at(-1).id,createdAt:items.at(-1).created_at}):null}};
+      } } },
+    });
+    if(mode==='success') assert.equal((await api.listAdminReportAuditEvents(1)).length,251);
+    else await assert.rejects(api.listAdminReportAuditEvents(1));
+  }
 });
 
 const deferred = () => {
@@ -104,8 +135,8 @@ const deferred = () => {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-const queue = (id, limit = 25) => ({ items: [{ id }], summary: { totalReports: 99 },
-  generatedAt: 'now', windowLimit: limit, windowFull: true, overviewAvailable: true });
+const queue = (id, nextCursor = `cursor-${id}`) => ({ items: [{ id }], summary: { totalReports: 99 },
+  generatedAt: 'now', windowLimit: 25, windowFull: !!nextCursor, nextCursor, hasMore: !!nextCursor, overviewAvailable: true });
 
 // Execute the actual screen's loader, not a reimplementation of its guards.
 const screenSource = read('app/admin.tsx');
@@ -117,6 +148,7 @@ function screenHarness() {
   let session = { userId: 'owner', sessionGeneration: 'one', restoreOnly: false };
   const context = {
     useCallback: fn => fn, safetyReportRequestRef: { current: 0 },
+    safetyReportPageRef: { current: { scope: null, cursor: null, loading: false, ids: new Set() } },
     safetyReportAuthorityKey: 'owner:one:needs_review',
     safetyReportAuthorityRef: { current: 'owner:one:needs_review' },
     canAccessAdmin: true, canReviewSafetyReports: true, user: { id: 'owner' },
@@ -128,7 +160,7 @@ function screenHarness() {
   };
   for (const name of ['SafetyReportsLoading', 'ModerationNotice', 'SafetyReports', 'SafetyReportQueueSummary',
     'SafetyReportWindow', 'SafetyReportsLastLoadedAt', 'SelectedReportAuditRows']) {
-    context[`set${name}`] = value => { state[name] = value; };
+    context[`set${name}`] = value => { state[name] = typeof value === 'function' ? value(state[name]) : value; };
   }
   const compile = () => {
     const js = ts.transpileModule(`${loaderSource}\nreturn loadSafetyReports;`, {
@@ -139,16 +171,18 @@ function screenHarness() {
   return { state, pending, context, compile, session: value => { session = value; } };
 }
 
-test('screen loads the selected filter and replaces rather than appends the expanded window', async () => {
+test('screen loads the selected filter then appends exact-cursor history and blocks duplicate load-more', async () => {
   const h = screenHarness(); const load = h.compile();
   const initial = load();
-  assert.deepEqual(h.pending[0].options, { filter: 'needs_review', limit: 25 });
+  assert.deepEqual(h.pending[0].options, { filter: 'needs_review', limit: 25, cursor: null });
   h.pending[0].resolve(queue(1)); await initial;
-  const expanded = load(50);
-  assert.equal(h.pending[1].options.limit, 50);
-  h.pending[1].resolve(queue(2, 50)); await expanded;
-  assert.deepEqual(h.state.SafetyReports, [{ id: 2 }]);
-  assert.equal(h.state.SafetyReportWindow.limit, 50);
+  const expanded = load(true); await load(true);
+  assert.equal(h.pending.length, 2);
+  assert.equal(h.pending[1].options.cursor, 'cursor-1');
+  h.pending[1].resolve(queue(2, null)); await expanded;
+  assert.deepEqual(h.state.SafetyReports, [{ id: 1 }, { id: 2 }]);
+  assert.equal(h.state.SafetyReportWindow.full, false);
+  await load(true); assert.equal(h.pending.length, 2);
 });
 
 test('stale filter success or failure cannot override current queue/loading/error', async () => {
@@ -207,9 +241,36 @@ test('unauthorized or missing session clears prior rows and never starts a read'
   }
 });
 
-test('screen labels the bounded window honestly and provides a safe expansion button', () => {
-  assert.match(screenSource, /Showing only the most recent 50 matching reports\. Older results are unavailable/);
-  assert.match(screenSource, /onPress=\{\(\) => void loadSafetyReports\(50\)\}/);
+test('screen labels continuation and provides a load-more button', () => {
+  assert.match(screenSource, /End of matching history/);
+  assert.match(screenSource, /onPress=\{\(\) => void loadSafetyReports\(true\)\}/);
   assert.match(screenSource, /label: "Loaded Count",\s*value: safetyReportQueueConnected \? String\(safetyReports.length\)/);
   assert.match(screenSource, /Report queue unavailable/);
+});
+
+test('report audit detail ignores unrendered session/account changes, permission loss and unmount', async () => {
+  const start=screenSource.indexOf('  useEffect(() => {\n    setSelectedReportAuditComplete(false);');
+  const source=screenSource.slice(start,screenSource.indexOf('\n\n  useEffect(',start+10));
+  for(const change of ['current','account','session','unmount','permission']) {
+    const pending=deferred(); const state={}; let cleanup;
+    let session={userId:'owner',sessionGeneration:'one',restoreOnly:false};
+    const context={
+      useEffect:fn=>{cleanup=fn();},user:{id:'owner'},safetyReportDetailVisible:true,selectedSafetyReport:{id:1},
+      safetyReportAuthorityKey:'owner:one',safetyReportAuthorityRef:{current:'owner:one'},
+      canReviewSafetyReports:change!=='permission',getCurrentAccountSessionAuthoritySnapshot:()=>session,
+      sameAccountSessionAuthority:(a,b)=>a?.userId===b?.userId&&a?.sessionGeneration===b?.sessionGeneration,
+      listAdminReportAuditEvents:()=>pending.promise,
+      setSelectedReportAuditComplete:value=>{state.complete=value;},
+      setSelectedReportAuditScope:value=>{state.scope=value;},
+      setSelectedReportAuditRows:value=>{state.rows=value;},
+      setSelectedReportAuditLoading:value=>{state.loading=value;},
+    };
+    new Function(...Object.keys(context),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText)(...Object.values(context));
+    if(change==='account') session={userId:'other',sessionGeneration:'one'};
+    if(change==='session') session={userId:'owner',sessionGeneration:'two'};
+    if(change==='unmount') cleanup();
+    pending.resolve([{id:'audit'}]); await new Promise(resolve=>setImmediate(resolve));
+    if(change==='current') {assert.deepEqual(state.rows,[{id:'audit'}]);assert.equal(state.complete,true);}
+    else {assert.deepEqual(state.rows,[]);assert.equal(state.complete,false);}
+  }
 });

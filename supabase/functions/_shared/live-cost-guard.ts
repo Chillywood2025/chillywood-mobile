@@ -82,6 +82,14 @@ const toPositiveInteger = (value: unknown, fallback: number) => {
   return Math.trunc(parsed);
 };
 
+const toNonnegativeInteger = (value: unknown, fallback: number) => {
+  if (typeof value !== "number" && typeof value !== "string") return fallback;
+  if (typeof value === "string" && value.trim() === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.trunc(parsed);
+};
+
 export const sanitizeLiveCostGuardError = (error: unknown) => {
   const raw = error instanceof Error ? error.message : String(error ?? "Unknown Live Cost Guard error.");
   return raw
@@ -175,7 +183,7 @@ export const normalizeLiveCostGuardActionType = (value: unknown): LiveCostGuardA
 };
 
 const parseSettings = (row: any): LiveCostGuardSettings => ({
-  cooldownSeconds: Math.max(0, toPositiveInteger(row?.cooldown_seconds, DEFAULT_SETTINGS.cooldownSeconds)),
+  cooldownSeconds: toNonnegativeInteger(row?.cooldown_seconds, DEFAULT_SETTINGS.cooldownSeconds),
   criticalThresholdMbps: toNumberOrNull(row?.critical_threshold_mbps),
   emergencyThresholdMbps: toNumberOrNull(row?.emergency_threshold_mbps),
   enabled: row?.enabled === true,
@@ -483,6 +491,11 @@ export async function readLiveCostGuardTokenDecision(
 
   const settings = await readLiveCostGuardSettings(adminClient);
   if (!settings.enabled || settings.mode === "observe_only") {
+    return { blockNewLiveRooms: false, reason: null, tokenTtlSeconds: null };
+  }
+
+  // Zero disables the continuing token window, not immediate participant actions.
+  if (settings.cooldownSeconds === 0) {
     return { blockNewLiveRooms: false, reason: null, tokenTtlSeconds: null };
   }
 

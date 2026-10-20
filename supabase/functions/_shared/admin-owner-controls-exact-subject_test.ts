@@ -23,24 +23,24 @@ const assertExcludes = (value: string, forbidden: string, label: string) => {
   }
 };
 
-Deno.test("permission templates resolve one exact subject and mutate only target_user_id", () => {
+Deno.test("permission templates resolve one exact subject and mutate through one actor RPC", async () => {
   const templateMutation = sliceBetween(
-    "const resolveTargetAdminSubject",
+    "const templateApply",
     "const breakGlassStatus",
   );
   assertIncludes(
     templateMutation,
-    'readExactTargetStaffSubject(adminClient, email, "operator")',
+    'readPermissionTemplateTarget(adminClient, targetEmail, templateKey)',
     "confirmed subject resolver",
   );
   assertIncludes(
     templateMutation,
-    '.eq("target_user_id", target.userId)',
-    "exact target mutation",
+    'mutatePermissionTemplate(actorClient, {',
+    "actor-authenticated transactional mutation",
   );
   assertIncludes(
     templateMutation,
-    "target_user_id: target.userId",
+    "targetUserId: target.userId",
     "exact target insert/readback",
   );
   assertExcludes(
@@ -53,6 +53,11 @@ Deno.test("permission templates resolve one exact subject and mutate only target
     '.ilike("target_email"',
     "case-insensitive email-derived target mutation",
   );
+  assertExcludes(templateMutation, '.from("platform_staff_permission_grants")', "no service-role partial permission writes");
+  const helper = await Deno.readTextFile(new URL("./staff-permission-templates.ts", import.meta.url));
+  assertIncludes(helper, 'readExactTargetStaffSubject(adminClient, email, role)', "canonical confirmed subject reader");
+  assertIncludes(helper, 'p_target_user_id: input.targetUserId', "RPC binds immutable subject");
+  assertIncludes(helper, '"admin_mutate_staff_permission_template"', "single transactional RPC");
 });
 
 Deno.test("First Owner succession membership ids are selected by exact subjects", () => {

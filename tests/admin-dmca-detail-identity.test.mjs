@@ -32,6 +32,9 @@ function harness() {
     readAdminDmcaCaseDetail(id) { const pending = deferred(); reads.push({ id, ...pending }); return pending.promise; },
     adminDmcaSetCaseStatus: async input => { writes.push(input); },
     refreshDmcaAfterAction: async () => {}, loadDmcaCases: async () => {},
+    user: { id: 'owner' }, session: { userId: 'owner', sessionGeneration: 'one', restoreOnly: false },
+    getCurrentAccountSessionAuthoritySnapshot: () => context.session,
+    sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.sessionGeneration === b.sessionGeneration,
   };
   for (const [setter, key] of [['setDmcaCaseDetail', 'dmcaCaseDetail'], ['setDmcaSelectedCaseId', 'dmcaSelectedCaseId'], ['setDmcaDetailVisible', 'dmcaDetailVisible'], ['setDmcaActionReason', 'dmcaActionReason'], ['setDmcaAdminNotes', 'dmcaAdminNotes'], ['setDmcaActionBusy', 'dmcaActionBusy'], ['setDmcaNotice', 'notice']]) {
     context[setter] = value => { context[key] = value; };
@@ -68,6 +71,15 @@ test('DMCA role/account changes discard in-flight detail', async () => {
   h.reads[0].resolve(detail('B')); await pending;
   assert.equal(h.context.dmcaCaseDetail, null);
   assert.equal(h.context.dmcaDetailVisible, false);
+});
+test('DMCA detail discards unrendered account/session replacements before applying data or loading state', async () => {
+  for (const change of ['account','session']) {
+    const h = harness(); const pending = h.context.loadDmcaCaseDetail('B');
+    h.context.session = { userId: change==='account'?'other':'owner', sessionGeneration: 'two', restoreOnly: false };
+    h.reads[0].resolve(detail('B')); await pending;
+    assert.equal(h.context.dmcaCaseDetail,null); assert.equal(h.context.dmcaDetailVisible,false);
+    assert.equal(h.context.dmcaActionBusy,'detail-B');
+  }
 });
 test('DMCA mutation rejects stale case identity even when loading is false', async () => {
   const h = harness(); h.context.dmcaSelectedCaseId = 'B';

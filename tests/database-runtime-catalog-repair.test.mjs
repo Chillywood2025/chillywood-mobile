@@ -73,6 +73,21 @@ const inspectionFunctionKeys = new Set([
   'public.stage_deleted_content_media/6',
 ]);
 
+const adminBackendFiles = [
+  '20261020023827_transactional_staff_permission_templates.sql',
+  '20261020024058_admin_reports_dmca_complete_history.sql',
+];
+const adminBackendFunctionKeys = new Set([
+  'private.staff_permission_template/1',
+  'private.assert_staff_permission_template_authority/3',
+  'public.admin_mutate_staff_permission_template/7',
+  'public.admin_parse_history_cursor/2',
+  'public.list_admin_reports_page/3',
+  'public.list_admin_dmca_cases_page/5',
+  'public.get_admin_dmca_case_summary/1',
+  'public.list_admin_report_audit_events_page/3',
+]);
+
 const studioBundleFiles = [
   '20261015073423_platform_studio_publication_and_audience_authority.sql',
   '20261019020049_platform_studio_rolling_brand_compatibility.sql',
@@ -137,7 +152,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>adminBackendFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
+      [...adminBackendFunctionKeys].sort(),'exact admin backend successor function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>inspectionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
       [...inspectionFunctionKeys].sort(),'exact disabled inspection/retention function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>studioFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
@@ -164,7 +181,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>adminBackendFiles.includes(file)),adminBackendFiles,
+      'entire admin backend successor bundle is replayed');
     assert.deepEqual(replayReport.files.filter(file=>inspectionBundleFiles.includes(file)),inspectionBundleFiles,
       'entire disabled inspection/retention successor bundle is replayed');
     assert.ok(replayReport.files.includes('20261019000210_circle_request_rpc_anon_execute_closure.sql'));

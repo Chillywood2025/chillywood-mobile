@@ -10,7 +10,7 @@ const source = process.env.ADMIN_LEGAL_BASELINE
   ? execFileSync('git', ['show', `${process.env.ADMIN_LEGAL_BASELINE}:${path}`], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 })
   : readFileSync(path, 'utf8');
 const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['openLegalRequestDetail', 'addLegalRequestNote', 'updateSelectedLegalRequestStatus', 'linkLegalRequestToEvidence', 'refreshLegalRequestAfterEvidence'];
+const names = ['openLegalRequestDetail', 'addLegalRequestNote', 'updateSelectedLegalRequestStatus', 'linkLegalRequestToEvidence', 'refreshLegalRequestAfterEvidence', 'loadMoreLegalHistory'];
 const declarations = new Map();
 function visit(node) {
   if (ts.isVariableDeclaration(node) && names.includes(node.name.getText(ast))) declarations.set(node.name.getText(ast), node.initializer.getText(ast));
@@ -21,14 +21,17 @@ const compile = name => ts.transpileModule(`exports.callback = ${declarations.ge
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
-const detail = id => ({ request: { id }, events: [], holds: [], evidenceRequests: [] });
+const detail = id => ({ request: { id }, events: [], holds: [], evidenceRequests: [], historyPages: { events: { nextCursor: 'older-events', hasMore: true }, holds: { nextCursor: null, hasMore: false }, evidenceRequests: { nextCursor: null, hasMore: false } } });
 function harness() {
   const reads = [], writes = [];
   const context = {
     exports: {}, useCallback: callback => callback,
-    canAccessLegalIntake: true, canAccessLegalEvidence: true, isOwnerStaff: true,
+    canAccessLegalIntake: true, canAccessLegalEvidence: true, canReadLegalHistory: true, isOwnerStaff: true, user: { id: 'owner' },
     legalDetailAuthorityKey: 'owner:true:true', legalDetailAuthorityRef: { current: 'owner:true:true' },
     legalDetailRequestRef: { current: { generation: 0, requestId: 'A', loaded: true } },
+    legalHistoryRequestRef: { current: null }, setLegalHistoryBusy() {},
+    getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: 'owner', sessionGeneration: 'one' }),
+    sameAccountSessionAuthority: (a, b) => a.userId === b.userId && a.sessionGeneration === b.sessionGeneration,
     legalNoteBusyRef: { current: false }, selectedLegalRequestId: 'A', selectedLegalRequestDetail: detail('A'),
     legalRequestNote: 'Note about A', legalRequestDetailBusy: false,
     formatAdminOperationFailure: (_error, fallback) => fallback,
@@ -39,9 +42,11 @@ function harness() {
     setLegalRequestStatusUpdate(value) { context.status = value; },
     setOwnerControlNotice(value) { context.notice = value; },
     setLegalRequests(value) { context.requests = value; },
-    readLegalRequestDetail({ id }) { const pending = deferred(); reads.push({ id, ...pending }); return pending.promise; },
+    readLegalRequestDetail(input) { const pending = deferred(); reads.push({ ...input, ...pending }); return pending.promise; },
     updateLegalRequest(input) { writes.push(input); return Promise.resolve(); },
     loadLegalIntake: async () => {}, listLegalRequests: async () => [],
+    legalRequestStatusFilter: 'all', legalRequestSearch: '',
+    loadLegalHistoryPage: async read => read(null), listLegalRequestsPage: async () => ({ items: [], hasMore: false, nextCursor: null }),
   };
   for (const [setter, key] of [['setSelectedLegalRequestId', 'selectedLegalRequestId'], ['setSelectedLegalRequestDetail', 'selectedLegalRequestDetail'], ['setLegalRequestNote', 'legalRequestNote'], ['setLegalRequestDetailBusy', 'legalRequestDetailBusy']]) {
     context[setter] = value => { context[key] = typeof value === 'function' ? value(context[key]) : value; };
@@ -137,4 +142,47 @@ test('evidence refresh cannot replace details after a request switch', async () 
   h.context.selectedLegalRequestId = 'B'; h.context.selectedLegalRequestDetail = detail('B');
   h.reads[0].resolve(detail('A')); await pending;
   assert.equal(h.context.selectedLegalRequestDetail.request.id, 'B');
+});
+
+test('legal history load-more latches rapid clicks and appends deduplicated matching records', async () => {
+  const h = harness(); h.context.selectedLegalRequestDetail.events = [{ id: 'existing' }];
+  const pending = h.callback('loadMoreLegalHistory')('events');
+  await h.callback('loadMoreLegalHistory')('events');
+  assert.equal(h.reads.length, 1); assert.equal(h.reads[0].cursor, 'older-events');
+  h.reads[0].resolve({ ...detail('A'), events: [{ id: 'existing' }, { id: 'older' }], historyPages: { ...detail('A').historyPages, events: { hasMore: false, nextCursor: null } } });
+  await pending;
+  assert.deepEqual(Array.from(h.context.selectedLegalRequestDetail.events, row => row.id), ['existing', 'older']);
+  assert.equal(h.context.legalHistoryRequestRef.current, null);
+});
+
+test('legal history continuation cannot overwrite a new selection or account', async () => {
+  for (const kind of ['selection', 'account']) {
+    const h = harness(); const pending = h.callback('loadMoreLegalHistory')('events');
+    if (kind === 'selection') {
+      h.context.legalDetailRequestRef.current = { generation: 2, requestId: 'B', loaded: true };
+      h.context.selectedLegalRequestDetail = detail('B');
+    } else h.context.getCurrentAccountSessionAuthoritySnapshot = () => ({ userId: 'other', sessionGeneration: 'two' });
+    h.reads[0].resolve({ ...detail('A'), events: [{ id: 'stale' }] }); await pending;
+    assert.equal(h.context.selectedLegalRequestDetail.events.length, 0);
+  }
+});
+
+test('initial detail and evidence refresh discard unrendered account/session replacements', async () => {
+  for (const name of ['openLegalRequestDetail', 'refreshLegalRequestAfterEvidence']) {
+    for (const replacement of [{ userId: 'other', sessionGeneration: 'two' }, { userId: 'owner', sessionGeneration: 'two' }]) {
+      const h = harness(); const pending = h.callback(name)('A');
+      h.context.getCurrentAccountSessionAuthoritySnapshot = () => replacement;
+      h.reads[0].resolve({ ...detail('A'), marker: 'stale' }); await pending;
+      assert.notEqual(h.context.selectedLegalRequestDetail?.marker, 'stale');
+    }
+  }
+});
+
+test('initial detail and evidence refresh do not read for restore-only or mismatched sessions', async () => {
+  for (const name of ['openLegalRequestDetail', 'refreshLegalRequestAfterEvidence']) {
+    for (const session of [null, { userId: 'other', sessionGeneration: 'two' }, { userId: 'owner', sessionGeneration: 'one', restoreOnly: true }]) {
+      const h = harness(); h.context.getCurrentAccountSessionAuthoritySnapshot = () => session;
+      await h.callback(name)('A'); assert.equal(h.reads.length, 0);
+    }
+  }
 });

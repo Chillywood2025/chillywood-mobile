@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { adminPageLimit, parseAdminCursor, parseAdminCursorPage } from "./adminCursorPagination";
 import {
   createAccountBoundMutationOperationKey,
   isAccountBoundSupabaseMutationOutcomeAmbiguous,
@@ -246,6 +247,7 @@ export type DmcaCaseDetail = {
   contentState: DmcaContentState | null;
   strikes: DmcaStrike[];
   auditLog: DmcaAuditLogEntry[];
+  historiesComplete: boolean;
 };
 
 export type SubmitDmcaNoticeInput = {
@@ -336,7 +338,7 @@ const normalizeStatus = (value: unknown): DmcaCaseStatus => {
   return DMCA_CASE_STATUSES.includes(normalized as DmcaCaseStatus) ? normalized as DmcaCaseStatus : "received";
 };
 const isUuidText = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export const normalizeDmcaContentType = (value: unknown): DmcaContentType => {
   const normalized = toLowerText(value);
@@ -572,168 +574,129 @@ export async function adminDmcaCreateCase(input: AdminDmcaCreateCaseInput) {
   return parseDmcaCase(data);
 }
 
-export async function readAdminDmcaCases(options?: {
+export type DmcaCasesPageOptions = {
   includeTestCases?: boolean;
   limit?: number;
   search?: string;
   status?: DmcaCaseStatus | "all";
-}): Promise<DmcaCase[]> {
-  const limit = Math.max(1, Math.min(200, Math.floor(Number(options?.limit ?? 20))));
-  let query = dmcaClient
-    .from("dmca_cases")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(limit);
+  cursor?: string | null;
+};
 
-  if (options?.status && options.status !== "all") {
-    query = query.eq("status", options.status);
-  }
-  if (options?.includeTestCases !== true && !__DEV__) {
-    query = query.eq("is_test_case", false);
-  }
-
-  const search = toText(options?.search);
-  if (search) {
-    const escapedSearch = search.replaceAll("%", "\\%").replaceAll("_", "\\_").replaceAll(",", " ");
-    const pattern = `%${escapedSearch}%`;
-    const clauses = [
-      `case_number.ilike.${pattern}`,
-      `allegedly_infringing_content_id.ilike.${pattern}`,
-      `allegedly_infringing_url.ilike.${pattern}`,
-      `reporter_email.ilike.${pattern}`,
-      `uploader_user_id.ilike.${pattern}`,
-      `status.ilike.${pattern}`,
-    ];
-    if (isUuidText(search)) clauses.push(`id.eq.${search}`);
-    query = query.or(clauses.join(","));
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const rows = data ?? [];
-  const caseIds = rows.map((row: any) => toText(row.id)).filter(Boolean);
-  const uploaderIds = Array.from(new Set(rows.map((row: any) => toText(row.uploader_user_id)).filter(Boolean)));
-  const activeStrikeCounts = new Map<string, number>();
-  const latestActions = new Map<string, { eventType: string; createdAt: string }>();
-  if (uploaderIds.length) {
-    const { data: strikes } = await dmcaClient
-      .from("dmca_strikes")
-      .select("user_id")
-      .in("user_id", uploaderIds)
-      .eq("strike_status", "active")
-      .limit(500);
-    (strikes ?? []).forEach((strike: any) => {
-      const userId = toText(strike.user_id);
-      if (!userId) return;
-      activeStrikeCounts.set(userId, (activeStrikeCounts.get(userId) ?? 0) + 1);
-    });
-  }
-  if (caseIds.length) {
-    const { data: auditRows } = await dmcaClient
-      .from("dmca_audit_log")
-      .select("dmca_case_id,event_type,created_at")
-      .in("dmca_case_id", caseIds)
-      .order("created_at", { ascending: false })
-      .limit(500);
-    (auditRows ?? []).forEach((entry: any) => {
-      const caseId = toText(entry.dmca_case_id);
-      if (!caseId || latestActions.has(caseId)) return;
-      latestActions.set(caseId, {
-        createdAt: toDateText(entry.created_at),
-        eventType: toText(entry.event_type),
-      });
-    });
-  }
-
-  return rows.map((row: any) => {
-    const action = latestActions.get(toText(row.id));
-    return parseDmcaCase({
-      ...row,
-      last_action: action?.eventType ?? null,
-      last_action_at: action?.createdAt ?? null,
-    }, activeStrikeCounts.get(toText(row.uploader_user_id)) ?? 0);
+export async function readAdminDmcaCasesPage(options?: DmcaCasesPageOptions): Promise<{
+  items: DmcaCase[]; nextCursor: string | null; hasMore: boolean;
+}> {
+  const limit = adminPageLimit(options?.limit, 50);
+  const status = options?.status ?? "all";
+  const search = toText(options?.search).toLowerCase();
+  const includeTestCases = options?.includeTestCases === true || __DEV__;
+  const scope = { source: "dmca", status, search, includeTestCases };
+  parseAdminCursor(options?.cursor, scope);
+  const { data, error } = await dmcaClient.rpc("list_admin_dmca_cases_page", {
+    p_status: status, p_search: search, p_limit: limit,
+    p_cursor: options?.cursor ?? null, p_include_test_cases: includeTestCases,
   });
+  if (error) throw error;
+  const page = parseAdminCursorPage(data, scope, limit, options?.cursor);
+  return { ...page, items: page.items.map((row) => parseDmcaCase(row, exactDmcaCount(row.active_strike_count))) };
 }
 
-export async function readAdminDmcaCaseSummary(): Promise<DmcaCaseSummary> {
-  const cases = await readAdminDmcaCases({ limit: 200, status: "all" });
-  const byStatus = Object.fromEntries(DMCA_CASE_STATUSES.map((status) => [status, 0])) as Record<DmcaCaseStatus, number>;
-  for (const dmcaCase of cases) {
-    byStatus[dmcaCase.status] = (byStatus[dmcaCase.status] ?? 0) + 1;
-  }
-  const openStatuses: DmcaCaseStatus[] = [
-    "received",
-    "needs_more_info",
-    "under_review",
-    "content_disabled",
-    "counter_notice_received",
-    "waiting_rightsholder_response",
-    "eligible_for_restore",
-    "repeat_infringer_review",
-    "preserved_evidence",
-  ];
-  const priorityStatuses: DmcaCaseStatus[] = [
-    "received",
-    "needs_more_info",
-    "counter_notice_received",
-    "eligible_for_restore",
-    "repeat_infringer_review",
-  ];
+/** Compatibility wrapper for existing callers that intentionally want one page. */
+export async function readAdminDmcaCases(options?: DmcaCasesPageOptions): Promise<DmcaCase[]> {
+  return (await readAdminDmcaCasesPage({ ...options, limit: options?.limit ?? 20 })).items;
+}
 
+const exactDmcaCount = (value: unknown): number => {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error("DMCA counts are unavailable. Refresh to retry.");
+  }
+  return value;
+};
+
+export async function readAdminDmcaCaseSummary(options?: { includeTestCases?: boolean }): Promise<DmcaCaseSummary> {
+  const { data, error } = await dmcaClient.rpc("get_admin_dmca_case_summary", {
+    p_include_test_cases: options?.includeTestCases === true || __DEV__,
+  });
+  if (error) throw error;
+  if (!parseJsonObject(data) || !parseJsonObject(data.byStatus)) throw new Error("DMCA summary is unavailable.");
+  const byStatus = Object.fromEntries(DMCA_CASE_STATUSES.map((status) => [status, exactDmcaCount(data.byStatus[status])])) as Record<DmcaCaseStatus, number>;
+  const total = exactDmcaCount(data.total);
+  if (Object.values(byStatus).reduce((sum, count) => sum + count, 0) !== total) throw new Error("DMCA summary is inconsistent.");
   return {
-    total: cases.length,
-    open: cases.filter((dmcaCase) => openStatuses.includes(dmcaCase.status)).length,
-    priority: cases.filter((dmcaCase) => priorityStatuses.includes(dmcaCase.status) || dmcaCase.activeStrikeCount >= 3).length,
-    repeatInfringerReview: byStatus.repeat_infringer_review ?? 0,
+    total, open: exactDmcaCount(data.open), priority: exactDmcaCount(data.priority),
+    repeatInfringerReview: exactDmcaCount(data.repeatInfringerReview),
     byStatus,
   };
+}
+
+// Exact remaining counts prevent a lower PostgREST max_rows setting from looking
+// like end-of-history. Every relation remains under its existing RLS policy.
+async function readCompleteDmcaHistory(table: string, caseId: string): Promise<any[]> {
+  const rows: any[] = [];
+  const seen = new Set<string>();
+  let last: { id: string; created_at: string } | null = null;
+  while (true) {
+    let query = dmcaClient.from(table).select("*", { count: "exact" })
+      .eq("dmca_case_id", caseId).order("created_at", { ascending: false })
+      .order("id", { ascending: false }).limit(200);
+    if (last) query = query.or(`created_at.lt.${last.created_at},and(created_at.eq.${last.created_at},id.lt.${last.id})`);
+    const { data, count, error } = await query;
+    if (error) throw error;
+    const remaining = exactDmcaCount(count);
+    if (!Array.isArray(data) || data.length > remaining || (!data.length && remaining)) {
+      throw new Error("DMCA history is incomplete. Refresh to retry.");
+    }
+    for (const row of data) {
+      if (!isUuidText(toText(row.id)) || seen.has(row.id)
+        || !/^\d{4}-\d\d-\d\dT[\d:.]+(?:Z|[+-]\d\d:\d\d)$/.test(toText(row.created_at))
+        || !Number.isFinite(Date.parse(row.created_at))) throw new Error("DMCA history pagination did not advance.");
+      seen.add(row.id); rows.push(row);
+    }
+    if (data.length === remaining) return rows;
+    last = data.at(-1);
+  }
 }
 
 export async function readAdminDmcaCaseDetail(caseId: string): Promise<DmcaCaseDetail> {
   const normalizedCaseId = toText(caseId);
   if (!normalizedCaseId) throw new Error("Missing DMCA case id.");
 
-  const [caseResult, attachmentsResult, countersResult, actionsResult, strikesResult, auditResult] = await Promise.all([
+  const [caseResult, attachments, counters, actions, strikeRows, auditRows] = await Promise.all([
     dmcaClient.from("dmca_cases").select("*").eq("id", normalizedCaseId).single(),
-    dmcaClient.from("dmca_attachments").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
-    dmcaClient.from("dmca_counter_notices").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
-    dmcaClient.from("dmca_content_actions").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
-    dmcaClient.from("dmca_strikes").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
-    dmcaClient.from("dmca_audit_log").select("*").eq("dmca_case_id", normalizedCaseId).order("created_at", { ascending: false }),
+    ...["dmca_attachments", "dmca_counter_notices", "dmca_content_actions", "dmca_strikes", "dmca_audit_log"]
+      .map((table) => readCompleteDmcaHistory(table, normalizedCaseId)),
   ]);
 
   if (caseResult.error) throw caseResult.error;
-  if (attachmentsResult.error) throw attachmentsResult.error;
-  if (countersResult.error) throw countersResult.error;
-  if (actionsResult.error) throw actionsResult.error;
-  if (strikesResult.error) throw strikesResult.error;
-  if (auditResult.error) throw auditResult.error;
-
   const caseRow = caseResult.data;
-  const strikes = (strikesResult.data ?? []).map(parseStrike);
-  const activeStrikeCount = strikes.filter((strike: DmcaStrike) => (
-    strike.userId === toText(caseRow.uploader_user_id) && strike.strikeStatus === "active"
-  )).length;
+  const strikes = strikeRows.map(parseStrike);
+  let activeStrikeCount = 0;
+  if (caseRow.uploader_user_id) {
+    const countResult = await dmcaClient.from("dmca_strikes").select("id", { head: true, count: "exact" })
+      .eq("user_id", caseRow.uploader_user_id).eq("strike_status", "active");
+    if (countResult.error) throw countResult.error;
+    activeStrikeCount = exactDmcaCount(countResult.count);
+  }
 
   const parsedCase = parseDmcaCase(caseRow, activeStrikeCount);
   let contentState: DmcaContentState | null = null;
   if (parsedCase.contentId) {
-    const { data: contentStateData } = await dmcaClient.rpc("admin_dmca_get_content_state", {
+    const { data: contentStateData, error: contentError } = await dmcaClient.rpc("admin_dmca_get_content_state", {
       p_content_id: parsedCase.contentId,
       p_content_type: parsedCase.contentType,
     });
+    if (contentError) throw contentError;
     contentState = parseContentState(contentStateData);
   }
 
   return {
     case: parsedCase,
-    attachments: (attachmentsResult.data ?? []).map(parseAttachment),
-    counterNotices: (countersResult.data ?? []).map(parseCounterNotice),
-    contentActions: (actionsResult.data ?? []).map(parseContentAction),
+    attachments: attachments.map(parseAttachment),
+    counterNotices: counters.map(parseCounterNotice),
+    contentActions: actions.map(parseContentAction),
     contentState,
     strikes,
-    auditLog: (auditResult.data ?? []).map(parseAudit),
+    auditLog: auditRows.map(parseAudit),
+    historiesComplete: true,
   };
 }
 
