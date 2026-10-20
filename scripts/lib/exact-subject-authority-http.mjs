@@ -351,6 +351,38 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       check((await source.authority.readExactCurrentSessionAuthority(client, value.id))?.userId === value.id, `${label}: actual current session`);
       return value;
     }
+    async function qualifyOwner(client, label) {
+      const session = await source.authority.readExactCurrentSessionAuthority(client, owner.id);
+      assert.ok(session, `${label}: exact live Owner session`);
+      const requirements = data(await client.rpc('wave1_legal_requirements_readback', {p_capability: 'account'}),
+        `${label}: canonical account legal requirements`);
+      const binding = value => {
+        assert.equal(value.state, 'ACTIVE'); assert.equal(value.restoreOnly, false);
+        assert.equal(value.userId, owner.id); assert.equal(value.accountId, owner.id);
+        assert.equal(value.sessionGeneration, session.sessionGeneration);
+        assert.equal(value.market, 'UNITED_STATES'); assert.equal(value.capability, 'account');
+      };
+      binding(requirements);
+      assert.ok(Array.isArray(requirements.requirements) && requirements.requirements.length > 0);
+      const acceptances = {};
+      for (const requirement of requirements.requirements) {
+        assert.equal(typeof requirement.documentKey, 'string'); assert.ok(requirement.documentKey.length);
+        assert.equal(typeof requirement.version, 'string'); assert.ok(requirement.version.length);
+        assert.ok(!Object.hasOwn(acceptances, requirement.documentKey), 'no duplicate canonical legal requirement');
+        acceptances[requirement.documentKey] = requirement.version;
+      }
+      const accepted = data(await client.rpc('wave1_accept_legal_documents', {
+        p_acceptances: acceptances, p_market: 'UNITED_STATES', p_capability: 'account',
+        p_expected_user_id: owner.id, p_expected_account_id: owner.id, p_session_generation: session.sessionGeneration,
+      }), `${label}: authenticated exact-session legal acceptance`);
+      binding(accepted); check(accepted.allAccepted === true, `${label}: current account legal authority`);
+      assert.deepEqual(await source.authority.readExactCurrentSessionAuthority(client, owner.id), session,
+        `${label}: session unchanged after legal acceptance`);
+      check(data(await client.rpc('has_platform_role', {required_roles: ['owner']}), `${label}: real SQL Owner predicate`) === true,
+        `${label}: actual SQL Owner authority`);
+      check(data(await client.rpc('platform_staff_actor_role'), `${label}: real SQL actor role`) === 'owner',
+        `${label}: canonical producer receives non-null Owner authority`);
+    }
     const keys = ['content_moderation', 'reports_review', 'emergency_break_glass', 'legal_request_intake', 'legal_review', 'audit_review', 'security_review', 'admin.audit.view', 'live_ops'];
     async function scopes(person, expected, description) {
       for (const [caller, permissions] of Object.entries(source.scopes)) {
@@ -365,6 +397,8 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       data(await independentOwner.auth.signInWithPassword({email: owner.email, password: owner.password}), 'independent real Owner sign in');
       check((await source.authority.readExactCurrentSessionAuthority(independentOwner, owner.id))?.userId === owner.id,
         'independent Owner has actual current session');
+      await qualifyOwner(owner.client, 'issuing Owner');
+      await qualifyOwner(independentOwner, 'revoking Owner');
       check(await source.authority.readExactPlatformRole(admin, sa.id, ['owner', 'operator', 'moderator']) === null, 'SA cannot synthesize operator');
       check(await source.authority.readExactPlatformRole(admin, sa.id, ['owner', 'super_admin']) === 'super_admin', 'explicit SA role preserved');
       assert.deepEqual(sorted(await source.authority.readExactPermissionKeys(admin, sa.id, keys)), [], 'SA cannot fabricate requested scopes'); checks++;
