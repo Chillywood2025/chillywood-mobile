@@ -11,6 +11,31 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 
+// Put current proof inputs before historical events: Node/CI can truncate a
+// large thrown error before it reaches the endpoint state that actually failed.
+// This changes diagnostics only; callers evaluate the original full snapshot.
+export function summarizeLegacyBrowserFailure(state) {
+  const { endpoints, retiredEndpoints, events = [], operationResults = [], ...context } = state;
+  const currentResources = (endpoint) => ({
+    ...endpoint,
+    peers: endpoint.peers?.filter((peer) => peer.connection !== "closed"),
+    closedPeerCount: endpoint.peers?.filter((peer) => peer.connection === "closed").length,
+    tracks: endpoint.tracks?.filter((track) => track.state !== "ended"),
+    endedTrackCount: endpoint.tracks?.filter((track) => track.state === "ended").length,
+    audioReceivers: endpoint.audioReceivers?.filter((receiver) => receiver.connection !== "closed"),
+    closedAudioReceiverCount: endpoint.audioReceivers?.filter((receiver) => receiver.connection === "closed").length,
+  });
+  return {
+    ...context,
+    endpoints: endpoints?.map(currentResources),
+    retiredEndpoints: retiredEndpoints?.map(currentResources),
+    eventCount: events.length,
+    operationResultCount: operationResults.length,
+    recentEvents: events.slice(-20),
+    recentOperationResults: operationResults.slice(-12),
+  };
+}
+
 // Measure a sustained interval of received PCM, not an assumed wall-clock
 // drain. WebRTC playout and AudioWorklet messages can lag the test runner.
 // The caller still owns a bounded deadline: continuous audio or absent input
