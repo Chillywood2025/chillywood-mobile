@@ -18,7 +18,7 @@ facts. No broad helper EXECUTE grant, RLS exception, or general staff mutation
 permission is part of this repair.
 
 A separate regression in the `202608250004` function replacements reopened a
-null-actor path in the canonical grant, revoke, and expiry-update APIs. An exact
+null-actor path in the canonical grant, revoke, and permission-set replacement APIs. An exact
 current nonstaff session, or an Owner session without accepted legal terms, can
 have no effective actor role. The old `NOT session_ok OR actor_role <> 'owner'`
 predicate then evaluates to NULL and skips the PL/pgSQL denial. Forward migration
@@ -61,6 +61,70 @@ claim. The finite expiry limits effective authority; it does not prove that
 stored role/grant rows or Auth accounts were cleaned up. Unknown historical
 proof accounts are not adopted by email prefix or erased by a broad sweep.
 
+After an app reload or session change, refresh Canary history to discover the
+current actor's pending runs. The **Recover cleanup** action submits the exact
+recorded run ID. An open run before its deadline remains in progress; recovery
+after its deadline or closure does not rerun checks or turn an interrupted run
+into a passing result. The app refreshes authoritative history after recovery
+and keeps an incomplete run visible. New runs remain blocked until pending
+cleanup is resolved. Unsupported UUID versions or variants are rejected before
+a manifest can be persisted.
+
+Bulk revocation captures its exact row selection before waiting for the request
+lock. A later grant commit cannot join that selection, even if its transaction
+timestamps precede the request. Subsequent row changes require a retry rather
+than silently revoking a renewed or replaced grant.
+
+## Client compatibility and deployment hold
+
+The new UUID contract applies to exactly three Edge actions:
+`revoke_temporary_owner_grant`, `revoke_all_temporary_owner_grants`, and
+`canary_run` (including exact-run recovery). A valid authorized older request
+without `requestId` receives `400 request_id_required` before grant or canary
+authority mutation. Request-context capture and trusted-device telemetry can
+occur before that rejection. The server must not manufacture an operation ID
+to make an older mutation client appear compatible.
+
+This matrix follows the source request and receipt contracts. It is not a
+completed deployment-matrix qualification.
+
+| Database / Edge / client combination | Supported conclusion |
+| --- | --- |
+| New database, old Edge | The old direct-write failures remain. Migrations alone do not repair the handlers. |
+| Old database, new Edge | Required RPCs are missing. Affected mutations and Canary history cannot complete. |
+| New database and Edge, old client | The three mutation actions above reject missing UUIDs. Old Canary UI has no exact-run recovery control. |
+| New client, old Edge | Unsafe mixed contract: the old handler may execute, then the new client rejects its incompatible receipt. Do not release the client first. |
+| Matching new database, Edge and client | Intended compatible contract. Require successful exact-head integration checks and separately approved installed-client qualification before production use. |
+
+`canary_list` needs no UUID, but the repaired Edge uses the new
+`list_admin_canary_pending_runs` RPC. Ordinary staff permission APIs and
+templates gain no UUID argument. The three canonical staff APIs keep their
+signatures and ACLs while denying NULL or non-current Owner authority.
+Device trust/revoke, First Owner, Break Glass, legal actions and other read
+panels are outside the new UUID requirement; their existing checks still apply.
+
+Every client bundle containing the pre-repair request helper, including the
+PR578 source, sends the older request shapes. No current installed-version
+inventory was established during this source repair. Repository release/config
+records are historical or planned, and a native version number alone cannot
+identify the running JavaScript after an OTA update. Before rollout, record the
+affected admin devices' binary/build, running update ID, runtime/channel and
+source binding. Do not infer that a historical v80 or runtime record is what
+is installed now.
+
+Grant revocation IDs are currently cached only in the app process and exact
+account/session. Identical ambiguous retries in that process reuse the receipt;
+this does not establish receipt recovery after an app restart or session
+change. After a lost response plus restart, inspect authoritative grant/receipt
+state before authorizing a fresh bulk action. Canary recovery is separate:
+its persisted manifest and pending-run UI support eligible same-actor sessions.
+
+The source suite contains 95 receipt/recovery tests and a 58-case real
+PostgreSQL/Auth/PostgREST harness. Test definitions, executed exact-head results,
+deployed RPC/Edge readback and installed-client evidence are separate proof.
+The harness uses actual production handlers and SDK/database calls, but it is
+not an installed mobile release, live provider canary or production cleanup.
+
 ## Rollout and evidence
 
 This is source repair, not a production cleanup receipt. Do not deploy the old
@@ -69,7 +133,11 @@ Do not reopen that ACL to make its direct writes work.
 
 After exact-head review and Required Validation, separately authorize and apply
 the forward database migrations, verify their function/ACL/receipt contract, and
-deploy the matching repaired Edge handler. Deploy any changed app code only
+deploy the matching repaired Edge handler. Hold the three affected admin
+mutations unused/unavailable during the mixed-version window and verify client
+uptake before resuming them. Inventory interrupted legacy runs separately;
+the new manifest protocol does not authorize adopting or deleting their
+unregistered accounts or grants. Deploy any changed app code only
 under its own app/OTA/release authorization. A database deployment alone does
 not replace the old Edge behavior; an Edge deployment before its required RPCs
 exist must fail closed.
