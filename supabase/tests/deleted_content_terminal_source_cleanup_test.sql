@@ -6,8 +6,14 @@ set search_path=public,extensions;
 select no_plan();
 delete from public.videos where id='6e1c3405-7db8-4cb2-98f3-5a7642e82126'
  and title='Chi''llywood Originals Proof Fixture' and storage_provider='supabase';
+delete from public.media_scan_jobs
+ where target_table='videos' and target_id='6e1c3405-7db8-4cb2-98f3-5a7642e82126';
+-- The gate must close before qualification, just as in the common local
+-- fixture. No gateway/provider requests exist in this disposable SQL test.
+update private.deleted_content_retention_settings set legacy_object_deletes_blocked=true;
 update private.deleted_content_rollout_qualification set source_revision=repeat('0',40),
  client_enforcement_evidence='disposable-local terminal cleanup fixture',
+ legacy_delete_drain_evidence='disposable-local fixture: no gateway/provider requests in flight',
  worker_schedule_evidence='disposable-local manually driven expiry',
  origin_cleanup_evidence='disposable-local no live provider claim',qualified_at=clock_timestamp();
 select public.record_deleted_content_worker_heartbeat();
@@ -27,6 +33,7 @@ declare author uuid:='d3400000-0000-4000-8000-000000000001';
  deletion uuid:=md5('terminal-deletion-'||n)::uuid;
  original text:=author||'/profile_post/'||parent||'/'||attachment||'.jpg';
  created timestamptz:=now()-interval '35 days'; deleted timestamptz:=now()-interval '31 days';
+ revoked jsonb;
 begin
  insert into public.profile_posts(id,user_id,body,visibility,created_at,deleted_at)
  values(parent,author::text,'Synthetic deleted parent','draft',created,deleted);
@@ -44,6 +51,9 @@ begin
  insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id)
  values(stage,'social_attachment',attachment::text,author::text,'cloudflare_r2','chillywood-media-origin',original,reservation);
  if shared then insert into public.retention_terminal_alias(object_path) values(original); end if;
+ revoked:=public.revoke_media_object_delivery('social_attachment','cloudflare_r2','chillywood-media-origin',
+  original,author,attachment::text,null,null);
+ if revoked->>'revoked' is distinct from 'true' then raise exception 'terminal_fixture_revocation_failed'; end if;
  if parent_proof then
   insert into private.deleted_content_records(target_type,target_id,author,content,source_created_at,
    deletion_kind,deleted_at,expires_at,media_disposition)
@@ -68,6 +78,27 @@ select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-1')::uui
  'active parent hold blocks terminal source cleanup before any metadata mutation');
 select ok(exists(select 1 from public.social_attachments where id=md5('terminal-attachment-1')::uuid),
  'held attachment metadata remains present');
+select is((select status from public.media_upload_reservations where id=md5('terminal-reservation-1')::uuid),
+ 'deleted','soft parent retention preserves source while revoking original delivery');
+-- A text owner ID can leave the attachment present after account cleanup
+-- cascades its mutable reservation. Retention authority is already permanent.
+delete from public.media_upload_reservations where id=md5('terminal-reservation-1')::uuid;
+select ok(not exists(select 1 from public.media_upload_reservations where id=md5('terminal-reservation-1')::uuid),
+ 'synthetic account-cleanup equivalent removes mutable reservation while source remains held');
+select ok(private.deleted_content_soft_media_coverage(md5('terminal-deletion-1')::uuid),
+ 'extant held source remains covered by exact immutable stage, registry and deletion provenance');
+update private.deleted_content_retention_settings
+ set activation_ready=false,capture_enabled=false,media_staging_enabled=false,media_expiry_enabled=false,text_expiry_enabled=false;
+select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-1')::uuid)->>'status','disabled',
+ 'stopped worker cannot start cleanup of retained source');
+select ok(exists(select 1 from public.legal_holds where target_id=md5('terminal-parent-1')::uuid::text and status='active'),
+ 'worker stop preserves the actual parent hold');
+select public.record_deleted_content_worker_heartbeat();
+select lives_ok($$update private.deleted_content_retention_settings
+ set activation_ready=true,capture_enabled=true,media_staging_enabled=true,media_expiry_enabled=true,text_expiry_enabled=true$$,
+ 'qualified restart accepts exact retained soft-source provenance despite revoked delivery reservation');
+select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-1')::uuid)->>'status','held',
+ 'restart preserves hold protection and does not renew or bypass retention');
 update public.legal_holds set status='released',released_at=clock_timestamp(),release_reason='Synthetic release'
  where target_id=md5('terminal-parent-1')::uuid::text;
 select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-1')::uuid)->>'status','claimed',
@@ -82,6 +113,13 @@ select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-1')::uui
  'retry after terminal cleanup is idempotent');
 select is((select count(*) from private.deleted_content_media_expiry_claims where stage_id=md5('terminal-stage-1')::uuid),
  1::bigint,'retry keeps one permanent object claim');
+-- The same original reservation is still absent after terminal metadata
+-- cleanup. Permanent provenance must continue to govern provider retries.
+select ok(private.deleted_content_soft_media_coverage(md5('terminal-deletion-1')::uuid),
+ 'absent-source cleanup remains covered after mutable reservation removal');
+select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-1')::uuid)->>'claimId',
+ (select id::text from private.deleted_content_media_expiry_claims where stage_id=md5('terminal-stage-1')::uuid),
+ 'mutable provenance cleanup does not replace or strand the permanent object claim');
 
 select pg_temp.terminal_attachment(2,true);
 select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-2')::uuid)->>'status','unsupported_or_live_reference',
@@ -95,24 +133,50 @@ select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-2')::uui
  'later retry succeeds after real shared alias is removed');
 
 select pg_temp.terminal_attachment(3);
+select set_config('test.terminal.unsupported_soft_count',
+ public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount',true);
 update public.profile_posts set deleted_at=null where id=md5('terminal-parent-3')::uuid;
 select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-3')::uuid)->>'status','source_live_or_changed',
  'restoring parent prevents attachment cleanup');
 select ok(exists(select 1 from public.social_attachments where id=md5('terminal-attachment-3')::uuid),
  'restored parent retains attachment metadata');
+select is((public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount')::bigint,
+ current_setting('test.terminal.unsupported_soft_count')::bigint+1,
+ 'restored parent is reported as an unsupported soft-media cleanup instead of ready');
 
+select set_config('test.terminal.unsupported_soft_count',
+ public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount',true);
 select pg_temp.terminal_attachment(4,false,false);
 select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-4')::uuid)->>'status','parent_deletion_unproven',
  'deleted_at or absent parent alone cannot substitute for captured parent deletion');
 select ok(exists(select 1 from public.social_attachments where id=md5('terminal-attachment-4')::uuid),
  'unproven parent does not authorize attachment removal');
+select is((public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount')::bigint,
+ current_setting('test.terminal.unsupported_soft_count')::bigint+1,
+ 'missing parent deletion proof is included in the readiness blocker count');
 
 select pg_temp.terminal_attachment(5);
+select set_config('test.terminal.unsupported_soft_count',
+ public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount',true);
 update public.profile_posts set created_at=clock_timestamp() where id=md5('terminal-parent-5')::uuid;
 select is(public.claim_deleted_content_media_expiry(md5('terminal-stage-5')::uuid)->>'status','parent_deletion_unproven',
  'new parent incarnation cannot inherit old deletion authority');
 select ok(exists(select 1 from public.social_attachments where id=md5('terminal-attachment-5')::uuid),
  'new incarnation preserves current attachment source');
+select is((public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount')::bigint,
+ current_setting('test.terminal.unsupported_soft_count')::bigint+1,
+ 'reused parent incarnation is included in the readiness blocker count');
+
+select set_config('test.terminal.unsupported_soft_count',
+ public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount',true);
+insert into private.deleted_content_records(id,target_type,target_id,author,deletion_kind,deleted_at,expires_at,media_disposition)
+ values(md5('terminal-soft-empty')::uuid,'social_attachment',md5('terminal-soft-empty-source')::uuid::text,
+ 'd3400000-0000-4000-8000-000000000001','soft',now()-interval '31 days',now()-interval '1 day','metadata_only');
+select is((public.deleted_content_expiry_readiness()->>'unsupportedSoftMediaArchiveCount')::bigint,
+ current_setting('test.terminal.unsupported_soft_count')::bigint+1,
+ 'soft metadata-only archive is honestly blocked until its source cleanup has proof');
+select ok((public.deleted_content_expiry_readiness()->'blockers') ? 'unsupported_soft_media_archive_cleanup',
+ 'unsupported soft-media archives prevent activation readiness');
 
 insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at,media_disposition)
  values(md5('terminal-empty-draft')::uuid,'creator_video',md5('terminal-empty-draft-source')::uuid::text,

@@ -105,6 +105,10 @@ liveness evidence only, including when all queues were disabled.
    its exact object, owner, source incarnation and verified reservation prove it
    aliases the same original; a quality label alone is not proof. Other cleanup
    and retention paths need further reviewed scope.
+   Soft media archives are covered only for the proven deleted-parent attachment
+   path. Independent soft attachment deletion and soft metadata-only media have
+   no supported expiry path and must block readiness. Current consumer attachment
+   deletion uses a hard delete; privileged historical state is not assumed safe.
 5. Account purge remains its existing restore-window-controlled deidentification
    workflow. It does not silently become content erasure or create new copies of
    identity fields, push tokens, notifications or other scrubbed personal data.

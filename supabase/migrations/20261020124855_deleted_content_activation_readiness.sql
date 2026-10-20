@@ -92,6 +92,57 @@ language sql volatile security definer set search_path='' as $$
 $$;
 revoke all on function private.deleted_content_original_rendition_alias(jsonb,jsonb) from public,anon,authenticated,service_role;
 
+-- Restart inventory must recognize a retained attachment whose delivery was
+-- revoked during an actual parent deletion. This is diagnostic coverage only;
+-- it never admits a new locator or grants a cleanup claim.
+create function private.deleted_content_soft_media_coverage(p_deletion_id uuid) returns boolean
+language plpgsql volatile security definer set search_path='' as $$
+declare d private.deleted_content_records%rowtype; registry private.deleted_media_key_retirements%rowtype;
+ source jsonb; parent jsonb; parent_kind text; parent_table text;
+begin
+ select * into d from private.deleted_content_records where id=p_deletion_id;
+ if d.id is null or d.target_type<>'social_attachment' or d.deletion_kind<>'soft'
+   or to_jsonb(d)->>'media_disposition' is distinct from 'retained_original'
+   or d.source_created_at is null then return false; end if;
+ select r.* into registry from private.deleted_media_key_retirements r
+ join private.deleted_content_media_stages s on s.id=r.stage_id and s.deletion_id=d.id
+ where r.deletion_id=d.id and r.status in ('retained','claimed')
+   and r.target_type=d.target_type and r.target_id=d.target_id and r.author=d.author
+   and r.source_created_at::timestamptz=d.source_created_at
+   and r.deleted_at=d.deleted_at and r.expires_at=d.expires_at
+   and s.target_type=r.target_type and s.target_id=r.target_id and s.author=r.author
+   and s.provider=r.provider and s.bucket=r.bucket and s.object_key=r.object_key and s.reservation_id=r.reservation_id;
+ if registry.id is null then return false; end if;
+ select to_jsonb(a) into source from public.social_attachments a where a.id::text=d.target_id;
+ -- A completed metadata cleanup needs no further source deletion authority.
+ -- Its permanent registry governs retries even if account removal cascades
+ -- through the mutable upload reservation.
+ if source is null then return true; end if;
+ -- Retained provenance is the immutable registry's verified/attached tuple.
+ -- Reservation removal cannot reopen that authority or make worker restart
+ -- depend on an account row that may have been deleted.
+ if registry.status<>'retained'
+   or (source->>'created_at')::timestamptz is distinct from d.source_created_at
+   or source->>'owner_user_id' is distinct from d.author
+   or source->>'surface_type' is distinct from d.parent_type or source->>'surface_id' is distinct from d.parent_id
+   or source->>'storage_provider' is distinct from registry.provider
+   or source->>'storage_bucket' is distinct from registry.bucket
+   or coalesce(nullif(source->>'storage_object_key',''),source->>'storage_path') is distinct from registry.object_key
+   or (nullif(source->>'storage_path','') is not null and source->>'storage_path'<>registry.object_key) then return false; end if;
+ parent_kind:=case d.parent_type when 'watch_party_room_message' then 'room_message' else d.parent_type end;
+ parent_table:=case parent_kind when 'profile_post' then 'profile_posts'
+   when 'profile_post_comment' then 'profile_post_comments' when 'creator_video_comment' then 'creator_video_comments'
+   when 'chat_message' then 'chat_messages' when 'room_message' then 'watch_party_room_messages' end;
+ if parent_table is null or d.parent_id is null then return false; end if;
+ execute format('select to_jsonb(p) from public.%I p where id::text=$1',parent_table) into parent using d.parent_id;
+ if parent is not null and parent->>'deleted_at' is null then return false; end if;
+ return exists(select 1 from private.deleted_content_records p
+   where p.target_type=parent_kind and p.target_id=d.parent_id and p.deleted_at<=d.deleted_at
+     and (parent is null or (p.deletion_kind='soft'
+       and (parent->>'created_at')::timestamptz is not distinct from p.source_created_at)));
+end $$;
+revoke all on function private.deleted_content_soft_media_coverage(uuid) from public,anon,authenticated,service_role;
+
 create function private.deleted_content_source_coverage(p_type text,p_source jsonb) returns text
 language plpgsql volatile security definer set search_path='' as $$
 declare k text:=coalesce(nullif(p_source->>'storage_object_key',''),p_source->>'storage_path');
@@ -129,6 +180,17 @@ begin
  end if;
  if exists(select 1 from unnest(array['thumb_storage_path','thumb_url','playback_url']) c
    where nullif(btrim(p_source->>c),'') is not null) then return 'secondary_media_uncovered'; end if;
+ -- Deliberately distinct from eligible_r2_original: the admission trigger must
+ -- never treat an already-retained object as permission to create a new source.
+ if p_type='social_attachment' and exists(
+   select 1 from private.deleted_content_records d join private.deleted_media_key_retirements registry on registry.deletion_id=d.id
+   where d.target_type=p_type and d.target_id=target and d.author=a
+     and d.source_created_at=(p_source->>'created_at')::timestamptz
+     and d.parent_type=p_source->>'surface_type' and d.parent_id=p_source->>'surface_id'
+     and registry.provider=p_source->>'storage_provider' and registry.bucket=p_source->>'storage_bucket'
+     and registry.object_key=k and registry.source_created_at=p_source->>'created_at'
+     and private.deleted_content_soft_media_coverage(d.id)
+ ) then return 'retained_r2_original'; end if;
  if not exists(select 1 from public.media_upload_reservations r
    where r.surface_type=p_type and r.owner_user_id::text=a and r.attached_record_id=target
      and r.storage_provider='cloudflare_r2' and r.storage_bucket='chillywood-media-origin'
@@ -210,7 +272,8 @@ revoke all on function private.guard_deleted_content_secondary_coverage() from p
 create or replace function public.deleted_content_expiry_readiness() returns jsonb
 language plpgsql volatile security definer set search_path='' as $$
 declare inventory jsonb; uncovered bigint; attached_stages bigint; secondary_count bigint; brand_count bigint;
- outstanding_scans bigint; exhausted_scans bigint; unknown_archives bigint:=0; unproven_stages bigint; blockers text[]:='{}';
+ outstanding_scans bigint; exhausted_scans bigint; unknown_archives bigint:=0; unsupported_soft_archives bigint:=0;
+ unproven_stages bigint; blockers text[]:='{}';
  settings private.deleted_content_retention_settings%rowtype;
  qualification private.deleted_content_rollout_qualification%rowtype;
  heartbeat timestamptz; references_ready boolean; source_guards_ready boolean; protocol_ready boolean; capture_guards_ready boolean;
@@ -230,7 +293,7 @@ begin
  )
  select coalesce(jsonb_agg(jsonb_build_object('targetType',kind,'provider',provider,'coverage',coverage,'count',n)
    order by kind,provider,coverage),'[]'::jsonb),
-   coalesce(sum(n) filter(where coverage not in ('eligible_r2_original','metadata_only')),0)
+   coalesce(sum(n) filter(where coverage not in ('eligible_r2_original','retained_r2_original','metadata_only')),0)
  into inventory,uncovered from groups;
  select (select count(*) from public.video_renditions r left join public.videos v on v.id=r.video_id
      where not private.deleted_content_original_rendition_alias(to_jsonb(r),to_jsonb(v)))
@@ -248,6 +311,9 @@ begin
            and registry.target_type=d.target_type and registry.target_id=d.target_id and registry.author=d.author
            and registry.provider=s.provider and registry.bucket=s.bucket and registry.object_key=s.object_key
        )))$query$ into unknown_archives;
+   execute $query$select count(*) from private.deleted_content_records d
+     where d.target_type in ('creator_video','social_attachment') and d.deletion_kind='soft'
+       and not private.deleted_content_soft_media_coverage(d.id)$query$ into unsupported_soft_archives;
  end if;
  select count(*) into unproven_stages from private.deleted_content_media_stages s
  where s.deletion_id is not null and not exists(select 1 from private.deleted_media_key_retirements r
@@ -305,6 +371,7 @@ begin
  if brand_count>0 then blockers:=array_append(blockers,'platform_brand_media_not_covered'); end if;
  if outstanding_scans>0 then blockers:=array_append(blockers,'outstanding_scan_references_require_resolution'); end if;
  if unknown_archives>0 or unproven_stages>0 then blockers:=array_append(blockers,'historical_media_provenance_requires_resolution'); end if;
+ if unsupported_soft_archives>0 then blockers:=array_append(blockers,'unsupported_soft_media_archive_cleanup'); end if;
  if attached_stages>0 then blockers:=array_append(blockers,'attached_legacy_stages_require_fresh_content_delete_intent'); end if;
  if not references_ready or not source_guards_ready then blockers:=array_append(blockers,'media_admission_guard_coverage_incomplete'); end if;
  if not capture_guards_ready then blockers:=array_append(blockers,'content_capture_guard_coverage_incomplete'); end if;
@@ -328,6 +395,7 @@ begin
    'secondaryMediaSourceCount',secondary_count,'platformBrandMediaSourceCount',brand_count,
    'outstandingScanReferencesCount',outstanding_scans,'failedOrExhaustedScanReferencesCount',exhausted_scans,
    'unprovenMediaArchiveCount',unknown_archives,'unprovenFinalizedStageCount',unproven_stages,
+   'unsupportedSoftMediaArchiveCount',unsupported_soft_archives,
    'platformBrandMediaCoverage','unsupported','secondaryMediaCoverage','unsupported',
    'attachedLegacyStageCount',attached_stages,'referenceGuardCoverage',references_ready,
    'sourceAdmissionGuardCoverage',source_guards_ready,'protocolInstalled',protocol_ready,

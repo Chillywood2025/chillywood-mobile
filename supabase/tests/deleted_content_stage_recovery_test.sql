@@ -113,6 +113,24 @@ select is(public.read_deleted_content_stage_cleanup_claim(
  'authorized','restart resumes the original durable claim');
 select is((select count(*) from private.deleted_content_stage_cleanup_claims),1::bigint,'restart never creates a fresh claim');
 
+-- Exercise restart before adding the deliberately unproven historical archive
+-- below: that separate archive correctly blocks every later activation.
+select pg_temp.legacy_stage(3);
+select pg_temp.replace_original(3);
+-- Stopped capture simulates an older client whose metadata commit was missed.
+update private.deleted_content_retention_settings
+ set capture_enabled=false,media_staging_enabled=false,media_expiry_enabled=false;
+delete from public.videos where id=md5('recovery-target-3')::uuid;
+update public.media_scan_jobs set status='clean' where target_table='videos' and target_id=md5('recovery-target-3')::uuid::text;
+update private.deleted_content_retention_settings
+ set capture_enabled=true,media_staging_enabled=true,media_expiry_enabled=true;
+select is(public.reconcile_deleted_content_stage(md5('recovery-stage-3')::uuid)->>'status','claimed',
+ 'missing content commit permits orphan cleanup without fabricating retained content');
+select is((select count(*) from private.deleted_content_records where target_id=md5('recovery-target-3')::uuid::text),
+ 0::bigint,'missing commit cannot be reconstructed as a deletion archive');
+select throws_ok($$delete from private.deleted_content_stage_cleanup_claims where stage_id=md5('recovery-stage-3')::uuid$$,
+ 'P0001','cleanup_claim_permanent','orphan cleanup proof cannot be removed');
+
 select pg_temp.legacy_stage(2);
 select pg_temp.replace_original(2);
 -- Older capture linked every target stage to a later deletion record. The exact
@@ -150,22 +168,8 @@ select is((select count(*) from private.deleted_content_media_expiry_claims wher
 select throws_ok($$insert into public.retention_recovery_alias(object_path)
  values('d3100000-0000-4000-8000-000000000001/'||md5('recovery-target-2')::uuid||'/source.mp4')$$,
  '55000','media_key_retired_reference_forbidden','permanent retirement blocks alias resurrection');
-
-select pg_temp.legacy_stage(3);
-select pg_temp.replace_original(3);
--- Stopped capture simulates an older client whose metadata commit was missed.
-update private.deleted_content_retention_settings
- set capture_enabled=false,media_staging_enabled=false,media_expiry_enabled=false;
-delete from public.videos where id=md5('recovery-target-3')::uuid;
-update public.media_scan_jobs set status='clean' where target_table='videos' and target_id=md5('recovery-target-3')::uuid::text;
-update private.deleted_content_retention_settings
- set capture_enabled=true,media_staging_enabled=true,media_expiry_enabled=true;
-select is(public.reconcile_deleted_content_stage(md5('recovery-stage-3')::uuid)->>'status','claimed',
- 'missing content commit permits orphan cleanup without fabricating retained content');
-select is((select count(*) from private.deleted_content_records where target_id=md5('recovery-target-3')::uuid::text),
- 0::bigint,'missing commit cannot be reconstructed as a deletion archive');
-select throws_ok($$delete from private.deleted_content_stage_cleanup_claims where stage_id=md5('recovery-stage-3')::uuid$$,
- 'P0001','cleanup_claim_permanent','orphan cleanup proof cannot be removed');
+select ok((public.deleted_content_expiry_readiness()->'blockers') ? 'historical_media_provenance_requires_resolution',
+ 'unproven historical archive remains an explicit activation blocker after orphan cleanup');
 
 -- Reparenting/replacement cannot switch the hold scope of an old object request.
 do $$

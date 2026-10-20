@@ -44,7 +44,9 @@ select 'c3000000-0000-4000-8000-000000000001'::uuid,public.wave1_sha256('c300000
 from public.wave1_legal_document_versions d where d.active and d.market='UNITED_STATES' and d.capability='account';
 insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path)
 values('c5000000-0000-4000-8000-000000000001','c3000000-0000-4000-8000-000000000001',
- 'Synthetic legacy source','draft','clean','supabase','creator-videos','legacy-readiness-key.mp4','legacy-readiness-key.mp4');
+ 'Synthetic legacy source','draft','clean','supabase','creator-videos',
+ 'c3000000-0000-4000-8000-000000000001/c5000000-0000-4000-8000-000000000001/legacy-readiness-key.mp4',
+ 'c3000000-0000-4000-8000-000000000001/c5000000-0000-4000-8000-000000000001/legacy-readiness-key.mp4');
 select is(public.deleted_content_expiry_readiness()->>'uncoveredSourceCount','1','actual legacy source blocks readiness even with all assertions recorded');
 select ok((public.deleted_content_expiry_readiness()->'blockers') ? 'current_media_inventory_not_fully_covered','legacy decision cannot be waived by operator evidence');
 select ok(strpos(public.deleted_content_expiry_readiness()::text,'legacy-readiness-key.mp4')=0,'readiness contains counts not private object keys');
@@ -115,7 +117,9 @@ select throws_ok($$update public.videos set thumb_storage_path='new-uncovered-co
  '55000','retention_source_coverage_required: secondary_media_uncovered','active original-only scope rejects new uncovered locators');
 select throws_ok($$insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path)
  values('c5000000-0000-4000-8000-000000000003','c3000000-0000-4000-8000-000000000001',
- 'Synthetic forbidden legacy admission','draft','clean','supabase','creator-videos','new-legacy.mp4','new-legacy.mp4')$$,
+ 'Synthetic forbidden legacy admission','draft','clean','supabase','creator-videos',
+ 'c3000000-0000-4000-8000-000000000001/c5000000-0000-4000-8000-000000000003/source.mp4',
+ 'c3000000-0000-4000-8000-000000000001/c5000000-0000-4000-8000-000000000003/source.mp4')$$,
  '55000','retention_source_coverage_required: unsupported_provider','active admission cannot reopen direct legacy storage coverage gap');
 select is(private.deleted_content_source_coverage('creator_video',jsonb_build_object('created_at',now())),
  'metadata_only','coverage does not invent a media object for an empty historic source');

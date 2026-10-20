@@ -82,6 +82,7 @@ const retentionRecoveryFiles = [
 const retentionRecoveryFunctionKeys = new Set([
   'private.cleanup_expired_deleted_attachment_source/1',
   'private.deleted_content_original_rendition_alias/2',
+  'private.deleted_content_soft_media_coverage/1',
   'private.deleted_content_source_coverage/2',
   'private.expire_deleted_content_text_legacy/1',
   'private.guard_deleted_content_activation/0',

@@ -36,11 +36,19 @@ create function pg_temp.intent_video(n integer,ext text default 'mp4',replace_so
 language plpgsql as $$
 declare u uuid:='e3300000-0000-4000-8000-000000000001'; t uuid:=pg_temp.intent_id(n);
  k text:=u::text||'/'||t::text||'/source.'||ext;
+ scan_result jsonb;
 begin
  insert into public.media_upload_reservations(owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,
   expected_mime_type,expected_size_bytes,status,expires_at,observed_mime_type,observed_size_bytes,verified_at)
  values(u,'creator_video','cloudflare_r2','chillywood-media-origin',k,'video/mp4',1024,'verified',
   clock_timestamp()+interval '1 hour','video/mp4',1024,clock_timestamp());
+ -- Authenticated producers consume in their existing BEFORE INSERT trigger.
+ -- This privileged fixture must perform that same real binding before its
+ -- source write so active admission sees a fully attached verified original.
+ perform pg_temp.intent_claim(1);
+ if not public.consume_verified_media_upload('creator_video','cloudflare_r2','chillywood-media-origin',k,'video/mp4',1024,t::text) then
+  raise exception 'synthetic_reservation_consume_failed';
+ end if;
  if replace_source then
   update public.videos set storage_object_key=k,storage_path=k,updated_at=clock_timestamp() where id=t;
  else
@@ -49,10 +57,20 @@ begin
   values(t,u,'Synthetic delete intent','Current body','draft','clean','cloudflare_r2','chillywood-media-origin',
    k,k,'video/mp4',1024,clock_timestamp());
  end if;
- perform pg_temp.intent_claim(1);
- if not public.consume_verified_media_upload('creator_video','cloudflare_r2','chillywood-media-origin',k,'video/mp4',1024,t::text) then
-  raise exception 'synthetic_reservation_consume_failed';
+ -- Resolve only this fixture's automatically enqueued original scan through
+ -- the real completion/target-propagation boundary before qualification.
+ perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+ select public.complete_media_scan_job(j.id,'clean','clamav','synthetic',
+  'synthetic-signatures',null,null,5) into strict scan_result
+ from public.media_scan_jobs j
+ where j.target_table='videos' and j.target_column='source' and j.target_id=t::text
+  and j.storage_provider='cloudflare_r2' and j.storage_bucket='chillywood-media-origin'
+  and j.storage_object_key=k;
+ if scan_result->>'targetPropagationComplete' is distinct from 'true'
+  or (select scan_status from public.videos where id=t) is distinct from 'clean' then
+  raise exception 'synthetic_scan_projection_failed';
  end if;
+ perform pg_temp.intent_claim(1);
 end $$;
 create function pg_temp.intent_delete(n integer,created_at timestamptz,ext text default 'mp4') returns jsonb language sql as $$
  select public.delete_retained_content('creator_video',pg_temp.intent_id(n),'cloudflare_r2','chillywood-media-origin',
