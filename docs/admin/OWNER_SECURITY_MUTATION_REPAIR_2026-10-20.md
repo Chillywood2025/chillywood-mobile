@@ -122,8 +122,10 @@ change. After a lost response plus restart, inspect authoritative grant/receipt
 state before authorizing a fresh bulk action. Canary recovery is separate:
 its persisted manifest and pending-run UI support eligible same-actor sessions.
 
-The source suite contains 95 receipt/recovery tests and a 58-case real
-PostgreSQL/Auth/PostgREST harness. Test definitions, executed exact-head results,
+The source suite contains 95 receipt/recovery tests and a 61-case real
+PostgreSQL/Auth/PostgREST harness, including three legacy payload rejection
+cases that compare protected database state around actual Edge handlers.
+Test definitions, executed exact-head results,
 deployed RPC/Edge readback and installed-client evidence are separate proof.
 The harness uses actual production handlers and SDK/database calls, but it is
 not an installed mobile release, live provider canary or production cleanup.

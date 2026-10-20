@@ -236,7 +236,7 @@ declare
  actor uuid:=auth.uid(); authority jsonb; context_metadata jsonb; old_receipt private.owner_security_revocation_receipts;
  action text; scope_time timestamptz:=clock_timestamp(); revoked_time timestamptz;
  scope jsonb; item jsonb; current_grant public.platform_staff_permission_grants; result jsonb;
- ids uuid[]:='{}'; single_grant jsonb; reason text:=btrim(coalesce(p_reason,''));
+ ids uuid[]:='{}'; single_grant jsonb; v_reason text:=btrim(coalesce(p_reason,''));
 begin
  -- Match normalizeExactSubjectId so a durable receipt remains recoverable
  -- through the existing Edge/client operation parser.
@@ -244,7 +244,7 @@ begin
   or p_request_id::text !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
   or p_mode not in ('single','bulk') or p_mode is null
   or (p_mode='single') is distinct from (p_grant_id is not null)
-  or length(reason) not between 6 and 1000 then raise exception 'owner_security_request_invalid' using errcode='22023'; end if;
+  or length(v_reason) not between 6 and 1000 then raise exception 'owner_security_request_invalid' using errcode='22023'; end if;
  authority:=private.assert_admin_mutation_actor(false);
  action:=case when p_mode='single' then 'revoke_temporary_owner_grant' else 'revoke_all_temporary_owner_grants' end;
  perform private.assert_owner_security_context(p_security_context_id,p_device_id,action);
@@ -273,7 +273,7 @@ begin
    or old_receipt.actor_session_id::text is distinct from auth.jwt()->>'session_id'
    or old_receipt.device_id is distinct from p_device_id
    or old_receipt.mode is distinct from p_mode or old_receipt.grant_id is distinct from p_grant_id
-   or old_receipt.reason is distinct from reason then
+   or old_receipt.reason is distinct from v_reason then
    raise exception 'owner_security_request_conflict' using errcode='22023';
   end if;
   return old_receipt.receipt;
@@ -292,14 +292,14 @@ begin
  perform private.assert_owner_security_context(p_security_context_id,p_device_id,action);
  revoked_time:=clock_timestamp();
  for item in select value from jsonb_array_elements(scope) order by value->>'id' loop
-  update public.platform_staff_permission_grants set status='revoked',reason=owner_security_revoke_grants.reason,
+  update public.platform_staff_permission_grants set status='revoked',reason=v_reason,
    revoked_by=actor::text,revoked_at=revoked_time,updated_at=revoked_time
    where id=(item->>'id')::uuid returning * into current_grant;
   if p_mode='single' then single_grant:=to_jsonb(current_grant); end if;
   insert into public.platform_staff_permission_audit(actor_user_id,actor_email,actor_role,
    target_user_id,target_email,permission_key,action,reason,metadata,security_context_id)
   values(actor::text,authority->>'email','owner',current_grant.target_user_id,current_grant.target_email,
-   current_grant.permission_key,'revoke',reason,
+   current_grant.permission_key,'revoke',v_reason,
    jsonb_build_object('source','owner_security_center')||context_metadata||
     case when p_mode='bulk' then '{"bulk_revoke":true}'::jsonb else '{}'::jsonb end,p_security_context_id);
  end loop;
@@ -310,7 +310,7 @@ begin
    case when p_mode='single' then 'temporary_grant_revoked' else 'temporary_grants_bulk_revoked' end,
    case when p_mode='single' then 'high' else 'critical' end,
    case when p_mode='single' then 'platform_staff_permission_grant' else 'platform_staff_permission_grants' end,
-   case when p_mode='single' then p_grant_id::text else 'temporary_owner_grants' end,reason,
+   case when p_mode='single' then p_grant_id::text else 'temporary_owner_grants' end,v_reason,
    context_metadata||case when p_mode='single' then jsonb_build_object('grant_type',single_grant->>'permission_key',
     'target_email',lower(btrim(single_grant->>'target_email')),'target_user_id',single_grant->>'target_user_id')
     else jsonb_build_object('revoked_count',cardinality(ids)) end,p_security_context_id);
@@ -318,7 +318,7 @@ begin
  result:=jsonb_build_object('ok',true,'requestId',p_request_id,'mode',p_mode,'scopeAsOf',scope_time,
   'revokedCount',cardinality(ids),'grantIds',to_jsonb(ids),'grant',single_grant,'revokedAt',revoked_time);
  insert into private.owner_security_revocation_receipts(request_id,actor_user_id,actor_session_id,device_id,mode,grant_id,reason,receipt)
- values(p_request_id,actor,(auth.jwt()->>'session_id')::uuid,p_device_id,p_mode,p_grant_id,reason,result);
+ values(p_request_id,actor,(auth.jwt()->>'session_id')::uuid,p_device_id,p_mode,p_grant_id,v_reason,result);
  -- Includes waits in every grant, audit and receipt sink; failure rolls all back.
  if private.assert_admin_mutation_actor(false) is distinct from authority then
   raise exception 'admin_mutation_authority_changed' using errcode='42501';

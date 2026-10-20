@@ -51,9 +51,11 @@ function actualCanaryAdapters() {
   const policy = declarations('_lib/legalPolicies.ts', ['ACCOUNT_LEGAL_DOCUMENT_KEYS', 'LEGAL_DOCUMENTS'],
     {'../legal/policies.mjs': legalPolicies});
   return declarations('supabase/functions/admin-owner-controls/index.ts',
-    ['readCanaryProofScope', 'ensureProofUser', 'cleanupProofAccess', 'authenticate', 'upsertCurrentOwnerDevice', 'revokeTemporaryOwnerGrant'], {
+    ['readCanaryProofScope', 'ensureProofUser', 'cleanupProofAccess', 'authenticate', 'upsertCurrentOwnerDevice',
+      'revokeTemporaryOwnerGrant', 'revokeAllTemporaryOwnerGrants', 'canaryRun'], {
       '../_shared/exact-subject-authority.ts': authority, '../_shared/canary-proof-scope.ts': scope,
       '../../../_lib/legalPolicies.ts': policy, '../_shared/security-request-context.ts': context,
+      '../../../legal/policies.mjs': legalPolicies,
       'npm:@supabase/supabase-js@2': {createClient},
     });
 }
@@ -127,6 +129,18 @@ export async function runOwnerSecurityGrantConcurrency(harness) {
       'permissionAudit',(select coalesce(jsonb_agg(to_jsonb(a) order by id),'[]') from public.platform_staff_permission_audit a),
       'securityAudit',(select coalesce(jsonb_agg(to_jsonb(a) order by id),'[]') from public.security_audit_events a),
       'adminAudit',(select coalesce(jsonb_agg(to_jsonb(a) order by id),'[]') from public.platform_admin_audit_logs a))::text;`);
+    const compatibilitySnapshot = () => JSON.parse(query(`select jsonb_build_object(${
+      [
+        'public.platform_staff_permission_grants', 'public.platform_role_memberships',
+        'public.platform_staff_permission_audit', 'public.platform_staff_role_audit',
+        'public.security_audit_events', 'public.platform_admin_audit_logs',
+        'private.owner_security_revocation_receipts', 'private.admin_canary_fixture_runs',
+        'private.admin_canary_fixture_users', 'private.admin_canary_fixture_roles',
+        'private.admin_canary_fixture_grants', 'public.admin_canary_runs',
+        'auth.users', 'auth.identities', 'auth.sessions', 'auth.refresh_tokens', 'auth.audit_log_entries',
+      ].map(table => `${literal(table)},(select jsonb_build_object('rows',count(*),
+        'digest',md5(coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]')::text)) from ${table} t)`).join(',')
+    })::text;`));
     async function grant(owner, target, key = 'audit_review', expiresAt = new Date(Date.now() + 3_600_000).toISOString()) {
       const row = data(await owner.client.rpc('admin_grant_platform_staff_permission_by_email', {
         p_target_email: target.email, p_permission_key: key, p_reason: reason, p_expires_at: expiresAt,
@@ -221,6 +235,44 @@ export async function runOwnerSecurityGrantConcurrency(harness) {
       data(await admin.from('owner_trusted_devices').update({trusted_at: new Date().toISOString(), trusted_by: owner.user})
         .eq('id', edgeDevice.currentDevice.id), 'real trusted device precondition for actual handler');
       const edgeGrant = await grant(owner, target, 'legal_review');
+      assert.equal(auth.user.role, 'owner', 'compatibility cases use the actual qualified Owner');
+      const trustedDevice = data(await admin.from('owner_trusted_devices')
+        .select('owner_user_id,device_fingerprint_hash,trusted_at,revoked_at')
+        .eq('id', edgeDevice.currentDevice.id).single(), 'compatibility trusted-device readback');
+      assert.equal(trustedDevice.owner_user_id, owner.user);
+      assert.equal(trustedDevice.device_fingerprint_hash, edgeDevice.fingerprintHash);
+      assert.ok(trustedDevice.trusted_at); assert.equal(trustedDevice.revoked_at, null);
+      assert.equal(data(await admin.from('platform_staff_permission_grants').select('status')
+        .eq('id', edgeGrant).single(), 'compatibility live grant precondition').status, 'active');
+      for (const [action, invoke] of [
+        ['revoke_temporary_owner_grant', user => adapters.revokeTemporaryOwnerGrant(admin, owner.client, user, {
+          grantId: edgeGrant, reason, confirmation: 'REVOKE GRANT', deviceContext: edgeDeviceInput,
+        })],
+        ['revoke_all_temporary_owner_grants', user => adapters.revokeAllTemporaryOwnerGrants(admin, owner.client, user, {
+          reason, confirmation: 'REVOKE GRANTS', deviceContext: edgeDeviceInput,
+        })],
+        ['canary_run', user => adapters.canaryRun(admin, freshClient(), user,
+          connection.apiUrl, connection.anonKey, owner.client, {})],
+      ]) {
+        const source = `admin-owner-controls:${action}`;
+        const context = data(await admin.from('security_request_context').insert({
+          user_id: owner.user, device_hash: edgeDevice.fingerprintHash,
+          source, ip_hash: sha(`legacy-client-synthetic-ip:${randomUUID()}`), capture_status: 'unavailable',
+          metadata: {auth_session_id: owner.session, owner_security_action: action, disposable_test: true},
+        }).select('id').single(), `real ${action} compatibility request context`);
+        const user = {...auth.user, securityContext: {
+          id: context.id, captureStatus: 'unavailable', networkProofState: 'missing', source,
+        }};
+        // Hash complete rows inside PostgreSQL so an assertion cannot print Auth
+        // secrets. Only device/request-context telemetry is excluded.
+        const beforeCompatibility = compatibilitySnapshot();
+        const response = await invoke(user);
+        assert.equal(response.status, 400, `${action}: qualified legacy request must fail validation`);
+        assert.equal((await response.json()).error, 'request_id_required');
+        assert.deepEqual(compatibilitySnapshot(), beforeCompatibility,
+          `${action}: missing request ID cannot mutate grants, audits, receipts, canary manifests or Auth state`);
+        pass(`actual Edge ${action} rejects missing requestId without protected state changes`);
+      }
       const edgeResponse = await adapters.revokeTemporaryOwnerGrant(admin, owner.client, auth.user, {
         requestId: randomUUID(), grantId: edgeGrant, reason, confirmation: 'REVOKE GRANT', deviceContext: edgeDeviceInput,
       });
@@ -259,7 +311,7 @@ export async function runOwnerSecurityGrantConcurrency(harness) {
         'Owner Security real authority qualification failed');
     }
   });
-  assert.equal(checks, 58, 'all declared real-client, failure and concurrency cases executed');
+  assert.equal(checks, 61, 'all declared real-client, failure and concurrency cases executed');
   console.log(`Owner Security real Auth/PostgREST/PG: ${checks} cases passed; generated clone only`);
 }
 
