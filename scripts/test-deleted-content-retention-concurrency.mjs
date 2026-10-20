@@ -25,18 +25,35 @@ function session(name,sql,finish=false,isolation='read committed'){
  child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');child.stdout.on('data',s=>stdout+=s);child.stderr.on('data',s=>stderr+=s);
  const done=new Promise(resolve=>{child.on('error',e=>resolve({code:-1,stderr:e.message,stdout}));child.on('close',code=>resolve({code,stderr,stdout}));});
  child.stdin.on('error',()=>{});
- child.stdin.write(`set application_name=${lit(name)};begin isolation level ${isolation};set local statement_timeout='35s';set local idle_in_transaction_session_timeout='45s';${sql}\n`);
+ // Each supplied batch must be complete before COMMIT or a later stdin write.
+ // Callers intentionally need not provide a final statement separator.
+ child.stdin.write(`set application_name=${lit(name)};begin isolation level ${isolation};set local statement_timeout='35s';set local idle_in_transaction_session_timeout='45s';${sql};\n`);
  if(finish)child.stdin.end('commit;\n\\q\n');
- return{child,done,output:()=>stdout};
+ return{child,done,output:()=>stdout,status:()=>({code:child.exitCode,stdout,stderr})};
 }
-async function until(fn,label){const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await delay(25);}throw Error(`timeout ${label}`);}
+async function until(fn,label,sessions=[]){
+ const end=Date.now()+20000;
+ while(Date.now()<end){
+  if(fn())return;
+  for(const s of sessions){
+   const result=s.status();
+   if(result.code!==null){
+    const diagnostic=result.stderr.replaceAll(/[A-Za-z0-9_-]{40,}/g,'<redacted>')
+     .replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,'<synthetic-id>').slice(-2000);
+    throw Error(`${label}: backend exited (${result.code}) before the required state: ${diagnostic}`);
+   }
+  }
+  await delay(25);
+ }
+ throw Error(`timeout ${label}`);
+}
 async function terminate(name,s){if(!s || s.child.exitCode!==null)return;query(`select pg_terminate_backend(pid) from pg_stat_activity where datname=current_database() and application_name=${lit(name)} and pid<>pg_backend_pid();`);s.child.kill('SIGTERM');await Promise.race([s.done,delay(1000)]);}
 async function ordered(first,second,verify,{rollback=false,afterQueue=''}={}){
  const hn=`retention-holder-${checks}-${process.pid}`,wn=`retention-waiter-${checks}-${process.pid}`;let h,w;
  try{
-  h=session(hn,`${first};select 'HOLDER_READY';`);await until(()=>h.output().includes('HOLDER_READY'),'holder ready');
+  h=session(hn,`${first};select 'HOLDER_READY';`);await until(()=>h.output().includes('HOLDER_READY'),'holder ready',[h]);
   w=session(wn,second,true);
-  await until(()=>query(`select count(*) from pg_stat_activity w join pg_stat_activity h on h.application_name=${lit(hn)} where w.datname=current_database() and w.application_name=${lit(wn)} and w.wait_event_type='Lock' and h.pid=any(pg_blocking_pids(w.pid));`)==='1','observed independent backend lock queue');
+  await until(()=>query(`select count(*) from pg_stat_activity w join pg_stat_activity h on h.application_name=${lit(hn)} where w.datname=current_database() and w.application_name=${lit(wn)} and w.wait_event_type='Lock' and h.pid=any(pg_blocking_pids(w.pid));`)==='1','observed independent backend lock queue',[h,w]);
   h.child.stdin.end(`${afterQueue};${rollback?'rollback':'commit'};\n\\q\n`);const [a,b]=await Promise.all([h.done,w.done]);assert.equal(a.code,0,a.stderr);verify(b);checks++;
  }finally{await terminate(hn,h);await terminate(wn,w);}
 }
@@ -97,7 +114,7 @@ try{
   for(const isolation of ['repeatable read','serializable']){
    const name=`retention-stale-${isolation.replaceAll(' ','-')}-${process.pid}`;
    const s=session(name,"select count(*) from private.deleted_media_reference_fence;select 'SNAPSHOT_READY';",false,isolation);
-   stale.push({name,s});await until(()=>s.output().includes('SNAPSHOT_READY'),'stale snapshot established');
+   stale.push({name,s});await until(()=>s.output().includes('SNAPSHOT_READY'),'stale snapshot established',[s]);
   }
   // The first armer must wait for every pre-arm writer before taking source or
   // global locks. The holder can still update the source while arming waits.
