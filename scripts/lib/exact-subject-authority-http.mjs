@@ -3,6 +3,7 @@
 // HTTP sidecars point only at the clone and are removed before it is dropped.
 // No provider actions, mocked authority, trigger bypass, or remote endpoints.
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import {execFileSync} from 'node:child_process';
 import {createHmac, randomBytes, randomUUID, webcrypto} from 'node:crypto';
 import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
