@@ -8,9 +8,10 @@ import { mount, textOf, productionFunctions } from "../platform-studio-mounted-h
 
 const root = path.resolve(import.meta.dirname, "../..");
 const studio = fs.readFileSync(path.join(root, "app/channel-settings.tsx"), "utf8");
+const admin = fs.readFileSync(path.join(root, "app/admin.tsx"), "utf8");
 const guard = fs.readFileSync(path.join(root, "scripts/guard-money-center-policy.mjs"), "utf8");
 const compiledGuard = ts.transpileModule(guard, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
-function runGuard(source) {
+function runGuard(source, adminSource = admin) {
   const failures = [];
   const processFixture = { cwd: () => root, exitCode: 0, exit: () => {} };
   vm.runInNewContext(compiledGuard, {
@@ -18,12 +19,28 @@ function runGuard(source) {
     require: name => {
       if (name === "typescript") return ts;
       if (name === "node:path") return path;
-      if (name === "node:fs") return { readFileSync: (file, encoding) => file === path.join(root, "app/channel-settings.tsx") ? source : fs.readFileSync(file, encoding) };
+      if (name === "node:fs") return { readFileSync: (file, encoding) => file === path.join(root, "app/channel-settings.tsx") ? source : file === path.join(root, "app/admin.tsx") ? adminSource : fs.readFileSync(file, encoding) };
       throw new Error(`Unexpected guard dependency: ${name}`);
     },
   });
   return { failures, exitCode: processFixture.exitCode };
 }
+
+test("Money policy accepts historical evidence but rejects omitted rendered money boundaries", () => {
+  assert.deepEqual(runGuard(studio, admin), { failures: [], exitCode: 0 });
+  for (const [needle, diagnostic] of [
+    ["live money and payouts off", "money-off boundary"],
+    ["not current production verification", "historical evidence boundary"],
+    ["No cash-out or withdrawal action exists here.", "no withdrawal boundary"],
+    ["Sandbox and setup rows are inspectable, labeled not payable, and never become creator balances or withdrawals.", "nonpayable boundary"],
+  ]) {
+    const changed = admin.replace(needle, "Boundary removed") + `\n// ${needle}\n`;
+    assert.notEqual(changed, admin);
+    const result = runGuard(studio, changed);
+    assert.equal(result.exitCode, 1, diagnostic);
+    assert.ok(result.failures.some(value => value.includes(diagnostic)), diagnostic);
+  }
+});
 
 test("Money policy allows measured non-money focus but rejects a removed or comment-only exclusion", () => {
   assert.deepEqual(runGuard(studio), { failures: [], exitCode: 0 });
