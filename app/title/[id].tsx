@@ -150,6 +150,7 @@ export default function TitleDetails() {
   const [myListBusy, setMyListBusy] = useState(false);
   const [myListMessage, setMyListMessage] = useState<string | null>(null);
   const [myListSyncUnknown, setMyListSyncUnknown] = useState(false);
+  const [myListSyncConflict, setMyListSyncConflict] = useState(false);
   const [titleAccess, setTitleAccess] = useState<ContentAccessResolution | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
@@ -258,13 +259,16 @@ export default function TitleDetails() {
     setMyListBusy(false);
     setMyListMessage(null);
     setMyListSyncUnknown(false);
+    setMyListSyncConflict(false);
     readMyListState()
       .then((state) => {
         if (active && generation === savedGenerationRef.current) {
           setMyListIds(state.ids);
           setMyListSubject(viewerUserId);
           setMyListSyncUnknown(state.syncStatus === "unknown");
-          if (state.syncStatus === "unknown") setMyListMessage("Showing Saved on this device. An account update could not be confirmed; check again before retrying.");
+          setMyListSyncConflict(state.syncStatus === "conflict");
+          if (state.syncStatus === "conflict") setMyListMessage("Saved changed on another device. Your local choice has not overwritten it. Use the account version, then make a new choice if needed.");
+          else if (state.syncStatus === "unknown") setMyListMessage("Showing Saved on this device. An account update could not be confirmed; check again before retrying.");
           else if (state.readStatus === "offline") setMyListMessage("Showing Saved on this device. Account status could not be checked; try again.");
           else if (state.syncStatus === "pending") setMyListMessage("Showing Saved on this device. Account sync is pending.");
         }
@@ -427,6 +431,8 @@ export default function TitleDetails() {
       setMyListIds(result.ids);
       setMyListSubject(viewerUserId);
       setMyListSyncUnknown(result.syncStatus === "unknown");
+      setMyListSyncConflict(result.syncStatus === "conflict");
+      if (result.syncStatus === "conflict") setMyListMessage("Saved changed on another device. Your local choice has not overwritten it. Use the account version, then make a new choice if needed.");
       if (result.syncStatus === "pending") setMyListMessage("Updated on this device. Account sync is pending.");
       if (result.syncStatus === "unknown") setMyListMessage("Updated on this device. The account update could not be confirmed; check again before retrying.");
     } catch {
@@ -439,18 +445,21 @@ export default function TitleDetails() {
     }
   };
 
-  const retrySavedAccountSync = async () => {
+  const retrySavedAccountSync = async (useAccountVersion = false) => {
     if (savedBusyRef.current || savedAuthorityRef.current !== viewerUserId) return;
     savedBusyRef.current = true;
     const generation = ++savedGenerationRef.current;
     setMyListBusy(true);
     try {
-      const state = await readMyListState({ retryUnknown: true });
+      const state = await readMyListState(useAccountVersion ? { useAccountVersion: true } : { retryUnknown: true });
       if (generation !== savedGenerationRef.current) return;
       setMyListIds(state.ids);
       setMyListSubject(viewerUserId);
       setMyListSyncUnknown(state.syncStatus === "unknown");
-      setMyListMessage(state.syncStatus === "unknown"
+      setMyListSyncConflict(state.syncStatus === "conflict");
+      setMyListMessage(state.syncStatus === "conflict"
+        ? "Saved changed on another device. Use the account version before making a new choice."
+        : state.syncStatus === "unknown"
         ? "The account update still could not be confirmed. Saved on this device is preserved."
         : state.syncStatus === "pending" || state.readStatus === "offline"
           ? "Saved on this device is preserved. Account sync is still pending."
@@ -899,8 +908,13 @@ export default function TitleDetails() {
             </Pressable>
             {myListMessage ? <AppText accessibilityRole="alert">{myListMessage}</AppText> : null}
             {myListSyncUnknown ? (
-              <Pressable style={styles.btnGhost} accessibilityRole="button" accessibilityLabel="Retry account sync" disabled={myListBusy} onPress={retrySavedAccountSync}>
+              <Pressable style={styles.btnGhost} accessibilityRole="button" accessibilityLabel="Retry account sync" disabled={myListBusy} onPress={() => retrySavedAccountSync()}>
                 <AppText style={styles.btnText}>{myListBusy ? "Syncing…" : "Retry account sync"}</AppText>
+              </Pressable>
+            ) : null}
+            {myListSyncConflict ? (
+              <Pressable style={styles.btnGhost} accessibilityRole="button" accessibilityLabel="Use account Saved version" disabled={myListBusy} onPress={() => retrySavedAccountSync(true)}>
+                <AppText style={styles.btnText}>{myListBusy ? "Syncing…" : "Use account Saved version"}</AppText>
               </Pressable>
             ) : null}
 

@@ -9,6 +9,8 @@ for (const [mutation, pattern] of [
   ['completion', 'remote completion suppresses old local progress'],
   ['persistence', 'local persistence failure rejects'],
   ['unknown', 'unknown committed write blocks a conflicting successor'],
+  ['stickyconflict', 'cross-device conflict stays blocked'],
+  ['events', 'unsent playback starts are durable events'],
 ]) {
   test(`negative control: removing ${mutation} protection is detected`, () => {
     const env = { ...process.env, USER_COLLECTION_MUTATION: mutation };
