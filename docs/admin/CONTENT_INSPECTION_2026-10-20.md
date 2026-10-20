@@ -132,7 +132,9 @@ native golden cases include role denial, exact target/content display, session
 and grant revocation, image/video/audio cleanup, keyboard/safe-area appearance,
 deleted-versus-current labeling and the 30-day expiry boundary.
 
-Rollback disables the new feature and retains existing consumer behavior;
-historical deployed migrations are never edited. Any retained data must follow
-its confirmed expiry/hold rules rather than being silently discarded during a
-source rollback.
+Rollback disables feature entry points while preserving permanent retired-key
+fences and the closed legacy-delete gate. After activation, stopping retention
+may pause media deletion; it does not restore the old immediate provider-delete
+flow. Historical deployed migrations are never edited. Any retained data must
+follow its confirmed expiry/hold rules rather than being silently discarded
+during a source rollback.

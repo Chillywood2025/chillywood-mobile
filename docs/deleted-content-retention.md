@@ -162,11 +162,12 @@ liveness evidence only, including when all queues were disabled.
 - `supabase/tests/deleted_content_retention_test.sql`: canonical rollback-only
   pgTAP tests on the full migrated disposable database, plus
   `supabase/tests/deleted_content_media_expiry_test.sql` for media claims and the
-  readiness, delete-intent, stage-recovery and terminal-source-cleanup suites.
+  readiness, delete-intent (including real session-revocation rollback),
+  stage-recovery and terminal-source-cleanup suites.
 - `node scripts/test-deleted-content-retention-concurrency.mjs`: observed
   two-backend PostgreSQL lock orderings on a generated disposable local clone,
-  including edit/delete, legal holds, activation/admission, abandoned stages and
-  exact-session revocation. The runner also exercises the production worker
+  including edit/delete, legal holds, activation/admission and abandoned stages.
+  The runner also exercises the production worker
   against a real local TLS/SigV4 endpoint with provider failures and restarts.
   Synthetic local transport qualification does not establish live R2 behavior.
   The runner never points at a remote URL or modifies the local source database.
