@@ -10,21 +10,21 @@ import {createDatabase,repairMigrationPath} from './helpers/database-runtime-aut
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
 const inspectionBundleFiles = [
-  '20261020010608_owner_content_inspection_disabled.sql',
-  '20261020011354_content_inspection_verified_media.sql',
-  '20261020011409_content_inspection_subject_browse.sql',
-  '20261020011840_deleted_content_retention.sql',
-  '20261020012144_content_inspection_deleted_fallback.sql',
-  '20261020013500_deleted_media_reference_retirement.sql',
-  '20261020013556_deleted_content_media_expiry.sql',
-  '20261020014747_content_inspection_retained_originals.sql',
+  '20261020124645_owner_content_inspection_disabled.sql',
+  '20261020124904_content_inspection_verified_media.sql',
+  '20261020124927_content_inspection_subject_browse.sql',
+  '20261020141458_deleted_content_retention.sql',
+  '20261020141529_content_inspection_deleted_fallback.sql',
+  '20261020141554_deleted_media_reference_retirement.sql',
+  '20261020141633_deleted_content_media_expiry.sql',
+  '20261020141653_content_inspection_retained_originals.sql',
 ];
 
 const retentionRecoveryFiles = [
-  '20261020124805_deleted_content_stage_recovery.sql',
-  '20261020124855_deleted_content_activation_readiness.sql',
-  '20261020125038_deleted_content_delete_intent.sql',
-  '20261020125453_deleted_content_terminal_source_cleanup.sql',
+  '20261020142315_deleted_content_stage_recovery.sql',
+  '20261020142317_deleted_content_activation_readiness.sql',
+  '20261020142318_deleted_content_delete_intent.sql',
+  '20261020142319_deleted_content_terminal_source_cleanup.sql',
 ];
 
 const studioBundleFiles = [
@@ -34,8 +34,8 @@ const studioBundleFiles = [
 ];
 
 const adminBackendFiles = [
-  '20261020023827_transactional_staff_permission_templates.sql',
-  '20261020024058_admin_reports_dmca_complete_history.sql',
+  '20261020141826_transactional_staff_permission_templates.sql',
+  '20261020141850_admin_reports_dmca_complete_history.sql',
 ];
 
 for(const includeHeldStudio of [false,true]) test(`staff mutation repair with Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async t=>{

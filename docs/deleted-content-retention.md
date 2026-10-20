@@ -133,11 +133,15 @@ liveness evidence only, including when all queues were disabled.
 
 ## Production sequence (not executed by this source change)
 
-1. Review the exact candidate and pass protected Required Validation. Reconcile
-   remote migration history through separately authorized tooling: the observed
-   remote `20261020124645_owner_content_inspection_disabled` body matches local
-   `20261020010608_owner_content_inspection_disabled.sql` but uses another version.
-   Do not blindly reapply it or edit historical deployed SQL.
+1. Review the exact candidate and pass protected Required Validation. Source
+   filenames now match the ten confirmed deployed receipts, from
+   `20261020124645_owner_content_inspection_disabled` through
+   `20261020141850_admin_reports_dmca_complete_history`, with SQL bytes preserved.
+   The four undeployed repairs were allocated later versions by the Supabase CLI:
+   `20261020142315`, `20261020142317`, `20261020142318`, and `20261020142319`.
+   This source reconciliation does not write remote history or deploy anything.
+   Recheck exact version, name and body parity before separately authorized
+   deployment; do not reapply deployed bodies or edit historical deployed SQL.
 2. Decide and authorize legacy-object coverage. Inventory every current original,
    secondary locator and producer path; resolve uncovered classes without
    deleting/moving originals merely to clear a gate.

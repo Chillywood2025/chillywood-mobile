@@ -58,13 +58,13 @@ try {
   for(const name of ['platform_exact_current_session_authority_internal','platform_subject_has_role_internal']) {
     await db.exec(extract('supabase/migrations/202608250004_platform_role_exact_subject_closure.sql',name));
   }
-  await db.exec(readFileSync('supabase/migrations/20261020010608_owner_content_inspection_disabled.sql','utf8'));
-  await db.exec(readFileSync('supabase/migrations/20261020011354_content_inspection_verified_media.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261020124645_owner_content_inspection_disabled.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261020124904_content_inspection_verified_media.sql','utf8'));
   for(const table of ['profile_posts','profile_post_comments','creator_video_comments','chat_messages','watch_party_room_messages','social_attachments']) {
     await db.exec(`alter table public.${table} add column created_at timestamptz default now()`);
   }
   await db.exec('alter table public.videos add column created_at timestamp default now()');
-  await db.exec(readFileSync('supabase/migrations/20261020011409_content_inspection_subject_browse.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261020124927_content_inspection_subject_browse.sql','utf8'));
   for(let n=1;n<=6;n++) {
     await db.query('insert into auth.users values($1,now(),null)',[uid(n)]);
     await db.query('insert into auth.sessions values($1,$2,now()+interval \'1 hour\')',[sid(n),uid(n)]);
@@ -173,11 +173,11 @@ try {
     insert into private.deleted_content_retention_settings values(false);
     create table private.deleted_content_records(id uuid default gen_random_uuid(),target_type text,target_id text,author text,content jsonb,
       source_updated_at timestamptz,deleted_at timestamptz,expires_at timestamptz,owner_protected boolean);`);
-  const retentionSource=readFileSync('supabase/migrations/20261020011840_deleted_content_retention.sql','utf8');
+  const retentionSource=readFileSync('supabase/migrations/20261020141458_deleted_content_retention.sql','utf8');
   const retentionStart=retentionSource.indexOf('create function private.read_deleted_content_inspection(');
   assert.ok(retentionStart>=0);
   await db.exec(retentionSource.slice(retentionStart,retentionSource.indexOf('$$;',retentionStart)+3));
-  await db.exec(readFileSync('supabase/migrations/20261020012144_content_inspection_deleted_fallback.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261020141529_content_inspection_deleted_fallback.sql','utf8'));
   check((await db.query('select private.content_inspection_source($1,$2) as source',['profile_post',target])).rows[0].source===null,'soft-deleted live row cannot bypass absent retained record');
   await db.query("insert into private.deleted_content_records(target_type,target_id,author,content,deleted_at,expires_at,owner_protected) values('profile_post',$1,$2,$3,now(),now()+interval '30 days',true)",[target,uid(5),JSON.stringify({body:'Exact deletion snapshot'})]);
   check((await db.query('select private.content_inspection_source($1,$2) as source',['profile_post',target])).rows[0].source===null,'disabled retention does not expose records');
@@ -194,7 +194,7 @@ try {
     drop table private.deleted_content_records; drop table private.deleted_content_retention_settings;
     create table public.legal_holds(id uuid primary key default gen_random_uuid(),target_type text,target_id text,status text,placed_by_user_id text,released_by_user_id text);
     create table public.platform_brand_assets(id uuid primary key,owner_user_id text,deleted_at timestamptz);`);
-  for(const migration of ['20261020011840_deleted_content_retention','20261020013500_deleted_media_reference_retirement','20261020013556_deleted_content_media_expiry','20261020014747_content_inspection_retained_originals']) {
+  for(const migration of ['20261020141458_deleted_content_retention','20261020141554_deleted_media_reference_retirement','20261020141633_deleted_content_media_expiry','20261020141653_content_inspection_retained_originals']) {
     await db.exec(readFileSync(`supabase/migrations/${migration}.sql`,'utf8'));
   }
   await db.exec('update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true');

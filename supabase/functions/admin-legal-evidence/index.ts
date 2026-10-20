@@ -30,7 +30,11 @@ const JSON_HEADERS = {
 const toText = (value: unknown) => String(value ?? "").trim();
 const isRecord = (value: unknown): value is JsonObject =>
   !!value && typeof value === "object" && !Array.isArray(value);
-const isOwnerClassRole = (role: AuthenticatedUser["role"]) => role === "owner" || role === "super_admin";
+const canReleaseHold = (user: AuthenticatedUser) =>
+  user.role === "owner" || (
+    user.role === "super_admin" &&
+    (user.permissions.has("legal_hold") || user.permissions.has("legal_ops"))
+  );
 
 const json = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), { headers: JSON_HEADERS, status });
@@ -86,17 +90,17 @@ const shouldWriteAppAudit = (user: AuthenticatedUser) =>
   user.role !== "owner" || !!user.activeBreakGlassSessionId;
 
 const resolveLegalReason = (user: AuthenticatedUser, value: unknown, fallback: string) => {
-  if (isOwnerClassRole(user.role) && !user.activeBreakGlassSessionId) {
+  if (user.role === "owner" && !user.activeBreakGlassSessionId) {
     return sanitizeText(value, 500) || fallback;
   }
   return requireReason(value);
 };
 
 const hasPermission = (user: AuthenticatedUser, key: string) =>
-  isOwnerClassRole(user.role) || user.permissions.has(normalizePermission(key));
+  user.role === "owner" || user.permissions.has(normalizePermission(key));
 
 const hasAnyPermission = (user: AuthenticatedUser, keys: string[]) =>
-  isOwnerClassRole(user.role) || keys.some((key) => user.permissions.has(normalizePermission(key)));
+  user.role === "owner" || keys.some((key) => user.permissions.has(normalizePermission(key)));
 
 const readActivePermissions = async (
   adminClient: SupabaseClientLike,
@@ -549,7 +553,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "release_hold") {
-      if (!isOwnerClassRole(auth.user.role)) return json(403, { error: "owner_or_super_admin_required" });
+      if (!canReleaseHold(auth.user)) return json(403, { error: "owner_or_explicit_super_admin_legal_hold_permission_required" });
       const holdId = sanitizeText(payload.holdId, 180);
       if (!holdId) throw new Error("legal_hold_id_required");
       const { data, error } = await adminClient.from("legal_holds")

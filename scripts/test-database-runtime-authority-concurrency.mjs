@@ -9,6 +9,7 @@ import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {runProfileMediaReportConcurrency} from './profile-media-report-concurrency-cases.mjs';
+import {runExactSubjectAuthorityHttpQualification} from './lib/exact-subject-authority-http.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset: node scripts/test-database-runtime-authority-concurrency.mjs. Optional SUPABASE_DB_CONTAINER must name a local supabase_db_* CLI container. Creates and drops only its generated disposable clone; remote endpoints are rejected.');
@@ -189,6 +190,7 @@ try{
   await queueCase({label:'actor-bound prior receipt survives role-only expiry',change:'role-expiry',replay:true,allow:true});
   assert.equal(checks,25,'all declared old-control, denial and positive queue cases executed');
   await runProfileMediaReportConcurrency({query,literal,claimSql,seedPerson,seedRole,openSession,waitUntil,terminate});
+  await runExactSubjectAuthorityHttpQualification({container,database});
   console.log(`Runtime authority native PostgreSQL: ${checks} deterministic queue cases passed; SQL SHA256 ${createHash('sha256').update(repairSql).digest('hex')}`);
 }finally{
   if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop only generated disposable clone');

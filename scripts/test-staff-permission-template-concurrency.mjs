@@ -163,7 +163,7 @@ async function queueCase(change,auditBoundary=false) {
   } finally {await terminate(holderName,holder);await terminate(waiterName,waiter);}
 }
 
-const migration=readFileSync(path.join(root,'supabase/migrations/20261020023827_transactional_staff_permission_templates.sql'),'utf8');
+const migration=readFileSync(path.join(root,'supabase/migrations/20261020141826_transactional_staff_permission_templates.sql'),'utf8');
 const fingerprintSql=`select jsonb_build_object('users',(select count(*) from auth.users),'sessions',(select count(*) from auth.sessions),
  'roles',(select count(*) from public.platform_role_memberships),'grants',(select count(*) from public.platform_staff_permission_grants),
  'audits',(select count(*) from public.platform_admin_audit_logs),
@@ -174,7 +174,7 @@ try {
   assert.match(success(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker required').trim(),/^(unix|npipe):\/\//u,'remote Docker context forbidden');
   const containers=success(docker(['ps','--filter','label=com.supabase.cli.project','--format','{{.Names}}']),'local CLI discovery').trim().split('\n');
   assert.ok(containers.includes(container),'selected local Supabase CLI database must be running');
-  assert.equal(query("select exists(select 1 from supabase_migrations.schema_migrations where version='20261020023827');",'postgres'),'t','reset local source through template migration first');
+  assert.equal(query("select exists(select 1 from supabase_migrations.schema_migrations where version='20261020141826');",'postgres'),'t','reset local source through template migration first');
   sourceFingerprint=query(fingerprintSql,'postgres');
   success(docker(['exec',container,'createdb','-U','postgres','-T','template0',database]),'create only generated disposable clone');cloned=true;
   success(docker(psqlArgs(),'create schema vault;create extension supabase_vault with schema vault;'),'initialize clone extension');

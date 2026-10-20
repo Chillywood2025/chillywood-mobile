@@ -25,9 +25,9 @@ create table public.videos(id uuid primary key,owner_id uuid,title text,descript
 create table public.social_attachments(id uuid primary key,owner_user_id text,surface_type text,surface_id uuid,storage_provider text,storage_bucket text,storage_object_key text,storage_path text,deleted_at timestamptz);
 create table public.platform_brand_assets(id uuid primary key,owner_user_id text,deleted_at timestamptz);
 create table public.media_upload_reservations(id uuid primary key,surface_type text,storage_provider text,storage_bucket text,storage_object_key text,attached_record_id text,owner_user_id uuid,status text,verified_at timestamptz,attached_at timestamptz);`);
-await db.exec(readFileSync('supabase/migrations/20261020011840_deleted_content_retention.sql','utf8'));
-await db.exec(readFileSync('supabase/migrations/20261020013500_deleted_media_reference_retirement.sql','utf8'));
-await db.exec(readFileSync('supabase/migrations/20261020013556_deleted_content_media_expiry.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261020141458_deleted_content_retention.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261020141554_deleted_media_reference_retirement.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261020141633_deleted_content_media_expiry.sql','utf8'));
 await db.exec("set timezone='America/Denver'");
 await db.exec(`insert into profile_posts values('${vid}','${uid}','disabled',null,now());update profile_posts set body='still updates';delete from profile_posts;`);
 check(await scalar('select count(*)=0 v from private.deleted_content_records'),'default disabled creates nothing');

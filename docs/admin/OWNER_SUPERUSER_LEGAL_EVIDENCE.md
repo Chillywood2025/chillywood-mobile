@@ -6,6 +6,7 @@
 - Owner public profile/channel/search/discovery/follow/Chi'lly Circle/chat surfaces must return unavailable or no rows to non-owner users.
 - Owner platform access is explicit `owner_platform_access`; do not create fake RevenueCat state or entitlement rows.
 - Admin/operator staff powers are scoped by owner-granted permissions. Broad operator role alone is not enough for moderator/admin grants.
+- Server role checks accept only the endpoint's explicit roles. `super_admin` does not imply `operator` or synthesize permission grants; a subject with a separate active `operator` membership retains that membership's existing access. Exact subject, active status, and expiry checks apply to every persisted role and grant. Nonowner Live Ops and Live Cost callers, including Super Admin, require `live_ops`.
 
 ## Scoped Staff Permissions
 - `manage_moderators` is the canonical permission for adding/removing moderators.
@@ -15,12 +16,13 @@
 
 ## Legal Evidence
 - Owner can always access Legal Intake and Legal Evidence.
-- Approved Admin/operator Legal Evidence access requires exact scoped permissions. `legal_review` or `evidence_preview` allows reason-required preview/search, `evidence_export` allows reason-required export record creation, `legal_hold` allows reason-required hold placement, and `legal_ops` covers the full scoped legal workflow.
+- Approved Admin/operator and Super Admin Legal Evidence access requires exact scoped permissions. `legal_review` or `evidence_preview` allows reason-required preview/search, `evidence_export` allows reason-required export record creation, `legal_hold` allows reason-required hold placement, and `legal_ops` covers these scoped actions. Super Admin without a matching grant is denied.
+- Hold release has a narrower role boundary: Owner, or Super Admin with an active `legal_hold` or `legal_ops` grant. An operator with either grant may place a hold but cannot release it. Moderators remain denied from the Legal Evidence endpoint.
 - Legal Intake is part of the single top-level Legal Admin tab, not a separate top-level Admin tab.
 - Legal Intake stores legal request records with status, target links, notes, evidence links, exports, holds, and timeline/history. These are functional legal case records, not owner-sensitive app-level audit rows.
 - The Edge Functions write legal request events plus preview/export/hold records, with service-role credentials kept server-side only.
 - This tool must never delete evidence, chat history, or user content.
-- Owner normal Legal Evidence use no longer requires a reason prompt and does not emit app-level owner audit rows unless Break Glass is active. Approved Admin legal/evidence use still requires exact grants, a reason, and audit.
+- Owner normal Legal Evidence use no longer requires a reason prompt and does not emit app-level owner audit rows unless Break Glass is active. Approved Admin and Super Admin legal/evidence use still requires exact grants, a reason, and audit.
 
 ## DMCA / Copyright Admin
 - Owner can always access Admin DMCA.

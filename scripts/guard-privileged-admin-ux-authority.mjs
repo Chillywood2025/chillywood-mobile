@@ -33,25 +33,27 @@ requireText(admin, "accessibilityState={{ selected: active }}", "Admin selectabl
 requireText(admin, "admin-main-tab-", "Admin main tabs need stable test IDs for route/UX regression coverage.");
 requireText(admin, "ADMIN_TAB_MAIN_GROUP", "Specialized Admin tools must remain grouped into coherent main workspaces.");
 
-// Canonical role semantics: Super Admin is Owner-equivalent for ordinary
-// privileged work, while true-owner-only controls remain a separate boundary.
-requireText(roleMatrix, "super_admin: owner", "Role matrix must preserve Super Admin -> Owner authority equivalence.");
-requireText(moderation, 'hasPlatformRoleMembership(memberships, ["owner", "super_admin"])', "Client authority must recognize Owner and Super Admin together.");
+// Preserve existing client navigation without using it as server authority.
+requireText(roleMatrix, "super_admin: owner", "Preserve the existing Super Admin navigation matrix.");
+requireText(moderation, 'hasPlatformRoleMembership(memberships, ["owner", "super_admin"])', "Preserve existing privileged client entry points; server permissions are checked separately.");
 requireText(admin, "isOwnerStaff", "Admin UI must retain an explicit true-owner-only state for break-glass/first-owner controls.");
 requireText(ownerControls, 'role === "owner"', "Owner controls must retain exact true-owner checks.");
 
-// Server parity: Super Admin may cross permission-scoped operator boundaries,
-// but exact owner-only callers that do not allow operator remain owner-only.
-requireText(exactAuthority, 'roles.includes("operator")', "Exact authority helper must support the scoped Super Admin compatibility path.");
-requireText(exactAuthority, 'hasExactActiveRole(rows, subjectId, "super_admin"', "Exact authority helper must verify active Super Admin membership.");
-requireText(exactAuthority, 'return new Set(keys);', "Super Admin must receive owner-equivalent scoped permission keys server-side.");
+// Server authority requires the exact caller-allowed role and persisted grants.
+forbidText(exactAuthority, 'roles.includes("operator")', "Exact authority must not alias Super Admin to operator.");
+forbidText(exactAuthority, 'return new Set(keys);', "Roles must never synthesize requested permission grants.");
+requireText(exactAuthority, '.in("role", roles)', "Role queries must use only the caller's allowed roles.");
+requireText(exactAuthority, '.from("platform_staff_permission_grants")', "Permission lookup must read persisted exact-subject grants.");
+requireText(exactAuthority, 'resolveExactPermissionKeys(result.data, subjectId, keys, nowMs)', "Permissions must retain subject, expiry and status checks.");
 requireText(liveOps, '["owner", "super_admin", "operator"]', "Live Ops Fix Center must recognize Super Admin.");
-requireText(liveOps, 'userRole === "operator"', "Live Ops operators must remain permission-scoped.");
-requireText(liveOps, '"live_ops"', "Live Ops operator boundary must still require live_ops permission.");
+requireText(liveOps, 'userRole !== "owner" && !(await hasActiveStaffPermission', "Every nonowner Live Ops caller must have an explicit grant.");
+requireText(liveOps, '"live_ops"', "Live Ops boundary must still require live_ops permission.");
 requireText(liveCost, '["owner", "super_admin", "operator"]', "Live Cost Guard must recognize Super Admin.");
-requireText(liveCost, 'role === "owner" || role === "super_admin"', "Live Cost Guard must preserve Owner/Super Admin parity.");
-requireText(legalEvidence, 'isOwnerClassRole', "Legal evidence must use a single Owner/Super Admin owner-class predicate.");
-requireText(legalEvidence, 'error: "owner_or_super_admin_required"', "Legal hold release must explicitly enforce Owner/Super Admin authority.");
+forbidText(liveCost, 'role === "owner" || role === "super_admin"', "Super Admin must not bypass the Live Cost permission grant.");
+requireText(liveCost, '.has("live_ops")', "Live Cost must check the explicit live_ops grant.");
+forbidText(legalEvidence, 'isOwnerClassRole', "Legal evidence must not grant implicit Super Admin authority.");
+requireText(legalEvidence, 'if (!canReleaseHold(auth.user))', "Legal hold release must enforce its narrower role and explicit-grant boundary.");
+requireText(legalEvidence, 'user.permissions.has("legal_hold") || user.permissions.has("legal_ops")', "Super Admin hold release needs an explicit hold/operations grant.");
 requireText(legalEvidence, 'role === "moderator"', "Moderator must remain denied from legal-evidence authority.");
 
 if (failures.length) {
@@ -67,7 +69,7 @@ console.log(JSON.stringify({
     "role-scoped-tab-visibility",
     "accessible-selected-tab-state",
     "stable-admin-tab-test-contracts",
-    "owner-super-admin-parity",
+    "explicit-server-permissions",
     "true-owner-only-separation",
     "live-ops-exact-authority",
     "live-cost-guard-exact-authority",

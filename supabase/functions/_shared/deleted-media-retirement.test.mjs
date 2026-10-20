@@ -24,7 +24,7 @@ test('inspection carries finite server deadline for internal signer cap',async()
  assert.deepEqual(await checkDeletedMediaRetirement({rpc:async()=>({data:{allowed:true,expiresAt},error:null})},{...input,purpose:'inspection'}),{allowed:true,expiresAt});
 });
 test('source contract remains no-copy and no provider capability assumption',()=>{
- const sql=readFileSync(new URL('../../migrations/20261020013500_deleted_media_reference_retirement.sql',import.meta.url),'utf8');
+ const sql=readFileSync(new URL('../../migrations/20261020141554_deleted_media_reference_retirement.sql',import.meta.url),'utf8');
  assert.match(sql,/pg_advisory_xact_lock\(176214,30\)/);
  assert.match(sql,/retirement_tombstone_permanent/);
  assert.match(sql,/n\.nspname='public'/);

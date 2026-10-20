@@ -12,6 +12,9 @@ const includes = (source, needle, label) => {
 const matches = (source, pattern, label) => {
   if (!pattern.test(source)) fail(`${label} malformed`);
 };
+const notIncludes = (source, needle, label) => {
+  if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
+};
 
 const helper = read("_lib/ownerCommandOperator.ts");
 const fn = read("supabase/functions/owner-command-operator/index.ts");
@@ -118,17 +121,30 @@ for (const phrase of [
   '.select("user_id,role,status,expires_at")',
   '.eq("user_id", subjectId)',
   '.eq("status", "active")',
-  "const queryRoles = Array.from(new Set([",
-  '!roles.includes("super_admin") && roles.includes("operator") ? ["super_admin"] : []',
-  '.in("role", queryRoles)',
+  '.in("role", roles)',
   "normalizeExactSubjectId(row.user_id) === subjectId",
-  'hasExactActiveRole(rows, subjectId, "super_admin", nowMs)',
-  'return "operator"',
+  "for (const role of roles)",
+  "if (hasExactActiveRole(rows, subjectId, role, nowMs)) return role",
   'toText(row.status).toLowerCase() === "active"',
   "toText(row.role).toLowerCase() === role",
   "isUnexpired(row.expires_at, nowMs)",
   "return resolveExactPlatformRole(result.data, subjectId, roles, nowMs)",
+  '.from("platform_staff_permission_grants")',
+  '.select("target_user_id,permission_key,status,expires_at")',
+  '.eq("target_user_id", subjectId)',
+  '.in("permission_key", keys)',
+  "normalizeExactSubjectId(row.target_user_id) === subjectId",
+  "allowed.has(permissionKey)",
+  "return resolveExactPermissionKeys(result.data, subjectId, keys, nowMs)",
 ]) includes(exactSubjectAuthority, phrase, "shared exact-subject authority");
+
+// The command endpoint explicitly admits Super Admin above. That must not
+// become a synthetic operator membership or implied grant in shared readers.
+for (const phrase of [
+  'roles.includes("operator")',
+  'return "operator"',
+  "return new Set(keys)",
+]) notIncludes(exactSubjectAuthority, phrase, "shared authority must preserve exact roles and persisted grants");
 
 for (const action of [
   "create_command",
