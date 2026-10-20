@@ -36,6 +36,12 @@ select is(public.deleted_content_expiry_readiness()->>'physicalDeletionAllowed',
 
 insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
 values('c3000000-0000-4000-8000-000000000001','retention-readiness@example.test',now(),false,false);
+insert into auth.sessions(id,user_id,not_after)
+values('c4000000-0000-4000-8000-000000000001','c3000000-0000-4000-8000-000000000001',now()+interval '1 day');
+insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
+select 'c3000000-0000-4000-8000-000000000001'::uuid,public.wave1_sha256('c3000000-0000-4000-8000-000000000001'),
+ d.document_key,d.version,d.market,'member',d.capability,'c4000000-0000-4000-8000-000000000001','service_reconciliation'
+from public.wave1_legal_document_versions d where d.active and d.market='UNITED_STATES' and d.capability='account';
 insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path)
 values('c5000000-0000-4000-8000-000000000001','c3000000-0000-4000-8000-000000000001',
  'Synthetic legacy source','draft','clean','supabase','creator-videos','legacy-readiness-key.mp4','legacy-readiness-key.mp4');
@@ -66,6 +72,9 @@ select ok((public.deleted_content_expiry_readiness()->>'ready')::boolean,'actual
 update public.videos set created_at=null where id='c5000000-0000-4000-8000-000000000002';
 select ok(not (public.deleted_content_expiry_readiness()->>'ready')::boolean,'missing source incarnation cannot pass readiness');
 update public.videos set created_at=now() where id='c5000000-0000-4000-8000-000000000002';
+update public.videos set storage_path='uncovered-secondary-path.mp4' where id='c5000000-0000-4000-8000-000000000002';
+select ok(not (public.deleted_content_expiry_readiness()->>'ready')::boolean,'a distinct fallback storage path is a second uncovered object');
+update public.videos set storage_path=storage_object_key where id='c5000000-0000-4000-8000-000000000002';
 update public.videos set thumb_storage_path='cover-secondary.jpg' where id='c5000000-0000-4000-8000-000000000002';
 select ok(not (public.deleted_content_expiry_readiness()->>'ready')::boolean,'original eligibility does not hide uncovered cover bytes');
 update public.videos set thumb_storage_path=null where id='c5000000-0000-4000-8000-000000000002';
@@ -105,9 +114,26 @@ select throws_ok($$insert into public.videos(id,owner_id,title,visibility,modera
  values('c5000000-0000-4000-8000-000000000003','c3000000-0000-4000-8000-000000000001',
  'Synthetic forbidden legacy admission','draft','clean','supabase','creator-videos','new-legacy.mp4','new-legacy.mp4')$$,
  '55000','retention_source_coverage_required: unsupported_provider','active admission cannot reopen direct legacy storage coverage gap');
-select lives_ok($$insert into public.videos(id,owner_id,title,visibility,moderation_status)
- values('c5000000-0000-4000-8000-000000000004','c3000000-0000-4000-8000-000000000001',
- 'Synthetic empty draft','draft','clean')$$,'active gate permits an empty draft before original upload');
+select is(private.deleted_content_source_coverage('creator_video',jsonb_build_object('created_at',now())),
+ 'metadata_only','coverage does not invent a media object for an empty historic source');
+insert into public.media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,
+ expected_mime_type,expected_size_bytes,status,expires_at,observed_mime_type,observed_size_bytes,verified_at)
+values('c7000000-0000-4000-8000-000000000002','c3000000-0000-4000-8000-000000000001','creator_video',
+ 'cloudflare_r2','chillywood-media-origin','c3000000-0000-4000-8000-000000000001/c5000000-0000-4000-8000-000000000005/source.mp4',
+ 'video/mp4',1024,'verified',now()+interval '1 hour','video/mp4',1024,now());
+set local request.jwt.claims='{"sub":"c3000000-0000-4000-8000-000000000001","role":"authenticated","email":"retention-readiness@example.test","session_id":"c4000000-0000-4000-8000-000000000001"}';
+set local role authenticated;
+select lives_ok($$insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes)
+ values('c5000000-0000-4000-8000-000000000005','c3000000-0000-4000-8000-000000000001',
+ 'Synthetic consumer upload','draft','clean','cloudflare_r2','chillywood-media-origin',
+ 'c3000000-0000-4000-8000-000000000001/c5000000-0000-4000-8000-000000000005/source.mp4',
+ 'c3000000-0000-4000-8000-000000000001/c5000000-0000-4000-8000-000000000005/source.mp4','video/mp4',1024)$$,
+ 'active coverage sees the real verified reservation consumed earlier in the same authenticated INSERT');
+reset role;
+set local request.jwt.claims='';
+select is((select attached_record_id from public.media_upload_reservations where id='c7000000-0000-4000-8000-000000000002'),
+ 'c5000000-0000-4000-8000-000000000005','actual consumer trigger bound upload before coverage check');
+update public.media_scan_jobs set status='clean' where target_table='videos' and target_id='c5000000-0000-4000-8000-000000000005';
 
 update private.deleted_content_worker_health set last_completed_at=clock_timestamp()-interval '16 minutes';
 select ok((public.deleted_content_expiry_readiness()->'blockers') ? 'worker_completion_missing_or_stale','stopped worker makes diagnostics unready');

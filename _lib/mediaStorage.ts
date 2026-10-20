@@ -171,7 +171,8 @@ async function callMediaStorageFunction<T>(body: Record<string, unknown>): Promi
     // unknown-action response. Timeouts, auth denials and unknown outcomes must
     // never fall through to destructive legacy deletion.
     if (body.action === "delete_content" && response.status === 400
-      && payload && typeof payload === "object" && "error" in payload && payload.error === "invalid_action") {
+      && payload && typeof payload === "object"
+      && (payload as {error?: unknown}).error === "invalid_action") {
       return { retentionHandled: false } as T;
     }
     throw new Error("Media upload is not available right now.");

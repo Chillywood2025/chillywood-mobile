@@ -124,6 +124,9 @@ begin
  if left(k,length(prefix))<>prefix or substr(k,length(prefix)+1)!~'^[a-z0-9]{1,10}$' then
    return 'unproven_original_key';
  end if;
+ if nullif(p_source->>'storage_path','') is not null and p_source->>'storage_path'<>k then
+   return 'secondary_media_uncovered';
+ end if;
  if exists(select 1 from unnest(array['thumb_storage_path','thumb_url','playback_url']) c
    where nullif(btrim(p_source->>c),'') is not null) then return 'secondary_media_uncovered'; end if;
  if not exists(select 1 from public.media_upload_reservations r
@@ -321,7 +324,8 @@ begin
    'sourceAdmissionGuardCoverage',source_guards_ready,'protocolInstalled',protocol_ready,
    'contentCaptureGuardCoverage',capture_guards_ready,
    'retentionScope','verified_private_r2_originals_only','supabaseDirectStorageCoverage','unsupported',
-   'legacyObjectDeleteBehavior','explicit_content_delete_required_when_enabled',
+   'legacyObjectDeleteBehavior','object_only_requests_rejected_after_gate_closure',
+   'unattachedUploadCleanupCoverage','outside_retained_original_protocol',
    'physicalDeletionAllowed',false,'perObjectIrreversibleClaimRequired',true,
    'permanentPhysicalAbsenceGuaranteed',false,
    'workerLastCompletedAt',heartbeat,'workerCompletionProves','bounded_worker_pass_only',
