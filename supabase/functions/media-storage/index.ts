@@ -1,4 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { decideDeletedContentMediaDeletion } from "../_shared/deleted-content-retention.ts";
+import {checkDeletedMediaRetirement} from "../_shared/deleted-media-retirement.ts";
 import {
   captureSecurityRequestContext,
   securityContextAuditMetadata,
@@ -1643,6 +1645,14 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
+    if (action !== "delete_object") {
+      const retirement = await checkDeletedMediaRetirement(adminClient, {
+        provider: originStorage.provider, bucket: originStorage.bucket, objectKey,
+        purpose: action === "create_download_url" ? "read" : "upload",
+      });
+      if (!retirement.allowed) return json(409, {error: "media_object_retired", message: "This media object is no longer available."});
+    }
+
     if (action === "create_upload_url") {
       const mimeType = normalizeMediaContentType(payload.mimeType) || "application/octet-stream";
       const sizeBytes = parseSizeBytes(payload.sizeBytes);
@@ -2018,6 +2028,11 @@ Deno.serve(async (req): Promise<Response> => {
         includeRevokedLegacy: true,
       })
       : null;
+    const retentionDecision = await decideDeletedContentMediaDeletion(
+      (name, args) => adminClient.rpc(name, args),
+      {surfaceType, recordId: recordId || null, provider: originStorage.provider,
+        bucket: originStorage.bucket, objectKey, actorId: user.id},
+    );
     if (!await revokeGatewayMediaObjectBeforeDelete(adminClient, {
       binding,
       fallbackOwnerUserId: user.id,
@@ -2033,7 +2048,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    if (!(await deleteReservedOriginObject(originStorage, objectKey))) {
+    if (retentionDecision === "delete_now" && !(await deleteReservedOriginObject(originStorage, objectKey))) {
       return json(502, { error: "delete_failed", message: "Unable to delete this media object right now." });
     }
     await safeWriteMediaSecurityEvent(adminClient, user, {

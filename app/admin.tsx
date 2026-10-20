@@ -308,6 +308,8 @@ import { formatContentTypeLabel, normalizeAdminCanaryDisplayCopy } from "../_lib
 import { runCurrentAccountBoundSupabaseMutationRpc } from "../_lib/accountBoundSupabaseMutation";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { CognitiveControlCenterFoundation } from "../components/admin/cognitive-control-center";
+import { ContentInspectionPanel } from "../components/admin/content-inspection-panel";
+import { INSPECTION_TARGET_TYPES, isInspectionUuid, type InspectionTarget } from "../_lib/contentInspection";
 
 type TitleId = Database["public"]["Tables"]["titles"]["Row"]["id"];
 
@@ -2279,6 +2281,12 @@ const legalStatusTone = (status: unknown): OwnerControlTone => {
   return "info";
 };
 
+const inspectionTargetFromReference = (targetType: string, targetId: string): InspectionTarget | undefined => (
+  (INSPECTION_TARGET_TYPES as readonly string[]).includes(targetType) && isInspectionUuid(targetId)
+    ? { targetType: targetType as InspectionTarget["targetType"], targetId }
+    : undefined
+);
+
 const legalRequestPrimaryTarget = (request: OwnerControlLegalRequest | null | undefined) => {
   if (!request) return { id: "", label: "No target", targetType: "user_id" as LegalEvidenceTargetType };
   const pairs: readonly [keyof OwnerControlLegalRequest, string, LegalEvidenceTargetType][] = [
@@ -3430,6 +3438,7 @@ export default function AdminStudioScreen() {
   const consumedAdminRouteRef = useRef<string | null>(null);
   const lastAdminSearchAuditKeyRef = useRef<string | null>(null);
   const { isLoading: authLoading, isSignedIn, user, authority, authorityStatus } = useSession();
+  const [contentInspectionEntry, setContentInspectionEntry] = useState<{ authorityKey: string; initialTarget?: InspectionTarget; initialSubjectUserId?: string } | null>(null);
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3788,6 +3797,17 @@ export default function AdminStudioScreen() {
     && authorityStatus === "active" && authority && authority.userId === user?.id && !authority.restoreOnly
     ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration, platformRoles])
     : null;
+  const canOpenContentInspection = !!adminReadAuthorityKey
+    && hasPlatformRoleMembership(platformRoles, ["owner", "super_admin", "operator"]);
+  const inspectionEntryAuthorityRef = useRef(adminReadAuthorityKey);
+  inspectionEntryAuthorityRef.current = adminReadAuthorityKey;
+  useEffect(() => { setContentInspectionEntry(null); }, [adminReadAuthorityKey]);
+  const openContentInspection = useCallback((initialTarget?: InspectionTarget, initialSubjectUserId?: string) => {
+    if (!canOpenContentInspection || !adminReadAuthorityKey || inspectionEntryAuthorityRef.current !== adminReadAuthorityKey) return;
+    if (initialTarget && (!INSPECTION_TARGET_TYPES.includes(initialTarget.targetType) || !isInspectionUuid(initialTarget.targetId))) return;
+    if (initialSubjectUserId && !isInspectionUuid(initialSubjectUserId)) return;
+    setContentInspectionEntry({ authorityKey: adminReadAuthorityKey, initialTarget, initialSubjectUserId });
+  }, [adminReadAuthorityKey, canOpenContentInspection]);
   const runAdminUsageRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminV1ReadModel, EMPTY_ADMIN_V1_READ_MODEL);
   const runAdminUsersRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminUsersReadModel, EMPTY_ADMIN_USERS_READ_MODEL);
   const runAdminUsageDetailRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminUsageDetailReadModel, EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
@@ -12558,6 +12578,17 @@ export default function AdminStudioScreen() {
 
         {renderAdminSearchPanel()}
 
+        {canOpenContentInspection ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            testID="admin-open-content-inspection"
+            style={styles.ownerSecondaryButton}
+            onPress={() => openContentInspection()}
+          >
+            <Text style={styles.ownerSecondaryButtonText}>Stored content inspection</Text>
+          </TouchableOpacity>
+        ) : null}
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -13018,6 +13049,15 @@ export default function AdminStudioScreen() {
                           >
                             <Text style={styles.orderBtnText}>Review</Text>
                           </TouchableOpacity>
+                          {canOpenContentInspection && inspectionTargetFromReference(report.targetType, report.targetId) ? (
+                            <TouchableOpacity
+                              accessibilityRole="button"
+                              style={styles.orderBtn}
+                              onPress={() => openContentInspection(inspectionTargetFromReference(report.targetType, report.targetId))}
+                            >
+                              <Text style={styles.orderBtnText}>Inspect stored content</Text>
+                            </TouchableOpacity>
+                          ) : null}
                         </View>
 
                         <View style={styles.badgesRow}>
@@ -14563,6 +14603,14 @@ export default function AdminStudioScreen() {
                             onPress: () => {
                               setSelectedAdminDrilldown(null);
                               router.push(`/channel/${entry.userId}`);
+                            },
+                          },
+                          {
+                            label: "Inspect content",
+                            disabled: !canOpenContentInspection,
+                            onPress: () => {
+                              setSelectedAdminDrilldown(null);
+                              openContentInspection(undefined, entry.userId);
                             },
                           },
                           {
@@ -17253,6 +17301,15 @@ export default function AdminStudioScreen() {
               <View style={styles.configListRowSubtle}>
                 <Text style={styles.configListBody}>Contact: {formatAuditDisplayText(selectedLegalRequestDetail.request?.contact_name) || "not supplied"} · {formatAuditDisplayText(selectedLegalRequestDetail.request?.contact_email) || "email not supplied"}</Text>
                 <Text style={styles.configListBody}>Target: {selectedLegalTarget.label} {formatCompactIdentifier(selectedLegalTarget.id)}</Text>
+                {canOpenContentInspection && selectedLegalTarget.targetType === "user_id" && isInspectionUuid(selectedLegalTarget.id) ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    style={styles.ownerSecondaryButton}
+                    onPress={() => openContentInspection(undefined, selectedLegalTarget.id)}
+                  >
+                    <Text style={styles.ownerSecondaryButtonText}>Inspect this user&apos;s stored content</Text>
+                  </TouchableOpacity>
+                ) : null}
                 <Text style={styles.configListBody}>Reviewed: {formatAuditDisplayText(selectedLegalRequestDetail.request?.reviewed_summary) || "none recorded"}</Text>
                 <Text style={styles.configListBody}>Exported: {formatAuditDisplayText(selectedLegalRequestDetail.request?.exported_summary) || "none recorded"}</Text>
                 <Text style={styles.configListBody}>Hold: {formatModerationToken(selectedLegalRequestDetail.request?.legal_hold_status || "none")}</Text>
@@ -22064,6 +22121,13 @@ export default function AdminStudioScreen() {
           </View>
         </View>
       </Modal>
+      <ContentInspectionPanel
+        visible={canOpenContentInspection && contentInspectionEntry !== null && contentInspectionEntry.authorityKey === adminReadAuthorityKey}
+        authority={canOpenContentInspection ? authority : null}
+        initialTarget={contentInspectionEntry?.initialTarget}
+        initialSubjectUserId={contentInspectionEntry?.initialSubjectUserId}
+        onClose={() => setContentInspectionEntry(null)}
+      />
     </ImageBackground>
   );
 }
