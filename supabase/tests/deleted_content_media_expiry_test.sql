@@ -6,6 +6,27 @@ select ok(not (select media_expiry_enabled from private.deleted_content_retentio
 select ok(not has_table_privilege('service_role','private.deleted_content_media_expiry_claims','INSERT'),'service cannot forge claims directly');
 select ok(not has_function_privilege('authenticated','public.read_deleted_content_media_expiry_claim(uuid)','EXECUTE'),'consumer cannot resolve private deletion bindings');
 -- Explicit capture enable arms the permanent retention fence before fixtures.
+-- Disposable test database ONLY. These explicit owner assertions exercise the
+-- gate, not deployment/schedule/provider evidence. Production remains unset.
+-- No inventory/guard check is disabled or replaced by this fixture.
+-- The full historical migration stack seeds exactly this public proof video.
+-- Remove that known synthetic local row before qualifying an empty inventory;
+-- never erase arbitrary legacy objects to make readiness pass.
+delete from public.videos
+where id='6e1c3405-7db8-4cb2-98f3-5a7642e82126'
+  and title='Chi''llywood Originals Proof Fixture' and storage_provider='supabase';
+delete from public.media_scan_jobs
+where target_table='videos' and target_id='6e1c3405-7db8-4cb2-98f3-5a7642e82126';
+update private.deleted_content_retention_settings set legacy_object_deletes_blocked=true;
+update private.deleted_content_rollout_qualification
+set source_revision=repeat('0',40),
+    client_enforcement_evidence='disposable-local qualification fixture: SQL protocol exercised',
+    legacy_delete_drain_evidence='disposable-local fixture: no gateway/provider requests in flight',
+    worker_schedule_evidence='disposable-local qualification fixture: manually driven bounded worker',
+    origin_cleanup_evidence='disposable-local qualification fixture: no live provider claim',
+    qualified_at=clock_timestamp()
+where singleton;
+select public.record_deleted_content_worker_heartbeat();
 update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true;
 update private.deleted_content_retention_settings set capture_enabled=false,media_staging_enabled=false;
 insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
@@ -22,10 +43,11 @@ values('c5100000-0000-4000-8000-000000000001','c3100000-0000-4000-8000-000000000
 insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id)
 values('c6100000-0000-4000-8000-000000000001','creator_video','c5100000-0000-4000-8000-000000000001','c3100000-0000-4000-8000-000000000001',
  'cloudflare_r2','chillywood-media-origin','c3100000-0000-4000-8000-000000000001/c5100000-0000-4000-8000-000000000001/source.mp4','c4100000-0000-4000-8000-000000000001');
-insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at)
+insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at,media_disposition)
 values('c7100000-0000-4000-8000-000000000001','creator_video','c5100000-0000-4000-8000-000000000001','c3100000-0000-4000-8000-000000000001',
- '{"title":"Synthetic expired title"}','hard',now()-interval '31 days',now()-interval '1 day');
+ '{"title":"Synthetic expired title"}','hard',now()-interval '31 days',now()-interval '1 day','retained_original');
 update private.deleted_content_media_stages set deletion_id='c7100000-0000-4000-8000-000000000001' where id='c6100000-0000-4000-8000-000000000001';
+update public.media_scan_jobs set status='clean' where target_table='videos' and target_id='c5100000-0000-4000-8000-000000000001';
 update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true,media_expiry_enabled=true;
 select is(public.claim_deleted_content_media_expiry('c6100000-0000-4000-8000-000000000001')->>'status','unsupported_or_live_reference','live source blocks claim');
 -- Capture is disabled only while constructing the already-deleted aged fixture.

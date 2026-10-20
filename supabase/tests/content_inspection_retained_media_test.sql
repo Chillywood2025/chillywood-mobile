@@ -41,8 +41,8 @@ declare u uuid:=('c3300000-0000-4000-8000-'||lpad(author_n::text,12,'0'))::uuid;
  saved_claims text:=current_setting('request.jwt.claims',true);
 begin
  insert into public.media_upload_reservations(owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,
-  expected_mime_type,expected_size_bytes,status,expires_at,observed_mime_type,observed_size_bytes,verified_at)
- values(u,'creator_video','cloudflare_r2','chillywood-media-origin',k,mime,1024,'verified',now()+interval '1 hour',mime,1024,now());
+  expected_mime_type,expected_size_bytes,status,expires_at,observed_mime_type,observed_size_bytes,verified_at,attached_record_id,attached_at)
+ values(u,'creator_video','cloudflare_r2','chillywood-media-origin',k,mime,1024,'verified',now()+interval '1 hour',mime,1024,now(),t::text,now());
  if replace_source then
   update public.videos set storage_object_key=k,storage_path=k,mime_type=mime,file_size_bytes=1024,
    updated_at=clock_timestamp() where id=t;
@@ -63,14 +63,11 @@ begin
 end;
 $$;
 create function pg_temp.retained_delete(n integer) returns void language plpgsql as $$
-declare v public.videos%rowtype; response jsonb; saved_claims text:=current_setting('request.jwt.claims',true);
+declare v public.videos%rowtype; saved_claims text:=current_setting('request.jwt.claims',true);
 begin
  select * into strict v from public.videos where id=pg_temp.retained_id(n);
  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
- response:=public.stage_deleted_content_media('creator_video',v.id::text,v.storage_provider,v.storage_bucket,v.storage_object_key,v.owner_id);
- if response->>'decision' is distinct from 'defer' then raise exception 'synthetic_stage_failed'; end if;
- response:=public.revoke_media_object_delivery('creator_video',v.storage_provider,v.storage_bucket,v.storage_object_key,v.owner_id,v.id::text,null,null);
- if response->>'revoked' is distinct from 'true' then raise exception 'synthetic_revoke_failed'; end if;
+ -- The real explicit row deletion atomically stages and revokes its original.
  delete from public.videos where id=v.id;
  perform set_config('request.jwt.claims',coalesce(saved_claims,''),true);
 end;
@@ -82,6 +79,27 @@ $$;
 select ok((select not capture_enabled and not media_staging_enabled from private.deleted_content_retention_settings),'retention remains disabled until test-only activation');
 select ok(not has_table_privilege('authenticated','private.deleted_media_key_retirements','SELECT'),'clients cannot enumerate retained locators or proofs');
 select ok(not has_table_privilege('service_role','private.deleted_media_key_retirements','UPDATE'),'gateway cannot forge finalized retained proof');
+-- Disposable test database ONLY. These explicit owner assertions exercise the
+-- gate, not deployment/schedule/provider evidence. Production remains unset.
+-- No inventory/guard check is disabled or replaced by this fixture.
+-- The full historical migration stack seeds exactly this public proof video.
+-- Remove that known synthetic local row before qualifying an empty inventory;
+-- never erase arbitrary legacy objects to make readiness pass.
+delete from public.videos
+where id='6e1c3405-7db8-4cb2-98f3-5a7642e82126'
+  and title='Chi''llywood Originals Proof Fixture' and storage_provider='supabase';
+delete from public.media_scan_jobs
+where target_table='videos' and target_id='6e1c3405-7db8-4cb2-98f3-5a7642e82126';
+update private.deleted_content_retention_settings set legacy_object_deletes_blocked=true;
+update private.deleted_content_rollout_qualification
+set source_revision=repeat('0',40),
+    client_enforcement_evidence='disposable-local qualification fixture: SQL protocol exercised',
+    legacy_delete_drain_evidence='disposable-local fixture: no gateway/provider requests in flight',
+    worker_schedule_evidence='disposable-local qualification fixture: manually driven bounded worker',
+    origin_cleanup_evidence='disposable-local qualification fixture: no live provider claim',
+    qualified_at=clock_timestamp()
+where singleton;
+select public.record_deleted_content_worker_heartbeat();
 update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true;
 update private.content_inspection_settings set enabled=true;
 select pg_temp.retained_video(1);
@@ -100,7 +118,7 @@ select set_config('test.retained.grant',public.admin_grant_content_inspection_ac
  'Synthetic retained review',gen_random_uuid())->>'grantId',true);
 reset role;
 
-select lives_ok($$select pg_temp.retained_delete(1)$$,'canonical stage, provenance revoke and real hard delete capture ready proof');
+select lives_ok($$select pg_temp.retained_delete(1)$$,'real hard delete atomically stages and revokes exact original proof');
 select is((select count(*) from public.videos where id=pg_temp.retained_id(1)),0::bigint,'original source row is genuinely absent');
 select ok((select status='retained' and inspection_proof is not null from private.deleted_media_key_retirements where target_id=pg_temp.retained_id(1)::text),'deletion finalizes exact immutable media proof');
 select ok((select r.deletion_id=d.id and r.expires_at=d.expires_at and r.expires_at=r.deleted_at+interval '30 days'
@@ -187,19 +205,19 @@ select is(pg_temp.retained_prepare(3,current_setting('test.retained.context')::u
  'unclean recreated current source cannot fall back to older retained bytes');
 reset role;
 
--- Stage an original, replace it before metadata deletion, and do not stage the
--- replacement. This is ordinary edit history, not the deleted original proof.
+-- Construct an old staged original, then replace it before actual deletion.
+-- The new original is captured atomically; the old stage is never edit history.
 set local request.jwt.claims='{"role":"service_role"}';
-select public.stage_deleted_content_media('creator_video',pg_temp.retained_id(4)::text,'cloudflare_r2','chillywood-media-origin',
+select private.stage_deleted_content_media_internal('creator_video',pg_temp.retained_id(4)::text,'cloudflare_r2','chillywood-media-origin',
  'c3300000-0000-4000-8000-000000000004/c5300000-0000-4000-8000-000000000004/source.mp4','c3300000-0000-4000-8000-000000000004');
 select pg_temp.retained_video(4,4,'webm',true);
 delete from public.videos where id=pg_temp.retained_id(4);
-select ok((select inspection_proof is null from private.deleted_media_key_retirements where target_id=pg_temp.retained_id(4)::text),
+select ok((select inspection_proof is null from private.deleted_media_key_retirements where target_id=pg_temp.retained_id(4)::text and object_key like '%/source.mp4'),
  'source replaced after staging never receives a finalized deleted-original proof');
 select pg_temp.retained_claim(1);
 set local role authenticated;
-select is(pg_temp.retained_prepare(4,current_setting('test.retained.context')::uuid)->>'availability','unsupported_media_inspection',
- 'a replaced staged original is never exposed as retained edit history');
+select is(pg_temp.retained_prepare(4,current_setting('test.retained.context')::uuid)->>'mimeType','video/webm',
+ 'only the final deleted original is retained; replaced stage is never exposed as edit history');
 reset role;
 
 -- Fail-closed proof variants use the actual stage/revoke/delete flow.

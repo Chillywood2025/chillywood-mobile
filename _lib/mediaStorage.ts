@@ -167,6 +167,14 @@ async function callMediaStorageFunction<T>(body: Record<string, unknown>): Promi
   } | T | null;
 
   if (!response.ok) {
+    // Compatibility with an older gateway is permitted only for its explicit
+    // unknown-action response. Timeouts, auth denials and unknown outcomes must
+    // never fall through to destructive legacy deletion.
+    if (body.action === "delete_content" && response.status === 400
+      && payload && typeof payload === "object"
+      && (payload as {error?: unknown}).error === "invalid_action") {
+      return { retentionHandled: false } as T;
+    }
     throw new Error("Media upload is not available right now.");
   }
 
@@ -309,6 +317,29 @@ export async function deleteStoredMediaObject(input: {
     objectKey: input.objectKey,
     recordId: input.recordId ?? null,
   });
+}
+
+export async function deleteRetainedMediaContent(input: {
+  surfaceType: MediaStorageSurfaceType;
+  provider: MediaStorageProvider;
+  bucket: string;
+  objectKey: string;
+  recordId: string;
+  sourceCreatedAt: string;
+}): Promise<boolean> {
+  if (input.provider !== "s3" && input.provider !== "cloudflare_r2") return false;
+  const payload = await callMediaStorageFunction<{ retentionHandled?: unknown }>({
+    action: "delete_content",
+    surfaceType: input.surfaceType,
+    bucket: input.bucket,
+    objectKey: input.objectKey,
+    recordId: input.recordId,
+    sourceCreatedAt: input.sourceCreatedAt,
+  });
+  if (typeof payload.retentionHandled !== "boolean") {
+    throw new Error("Content deletion could not be confirmed.");
+  }
+  return payload.retentionHandled;
 }
 
 class SlowDownUploadError extends Error {

@@ -32,7 +32,7 @@ import {
   SOCIAL_ATTACHMENT_UPLOAD_EXPIRES_SECONDS,
 } from "../_shared/media-upload-integrity.ts";
 
-type MediaStorageAction = "create_upload_url" | "verify_upload" | "create_download_url" | "delete_object";
+type MediaStorageAction = "create_upload_url" | "verify_upload" | "create_download_url" | "delete_object" | "delete_content";
 type MediaStorageSurfaceType = "creator_video" | "social_attachment";
 type MediaOriginStorageProvider = "s3" | "cloudflare_r2";
 
@@ -44,6 +44,7 @@ type MediaStoragePayload = {
   mimeType?: unknown;
   sizeBytes?: unknown;
   recordId?: unknown;
+  sourceCreatedAt?: unknown;
 };
 
 type SupabaseClient = any;
@@ -156,6 +157,7 @@ const normalizeAction = (value: unknown): MediaStorageAction | null => {
     || normalized === "verify_upload"
     || normalized === "create_download_url"
     || normalized === "delete_object"
+    || normalized === "delete_content"
   ) {
     return normalized;
   }
@@ -1645,7 +1647,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    if (action !== "delete_object") {
+    if (action !== "delete_object" && action !== "delete_content") {
       const retirement = await checkDeletedMediaRetirement(adminClient, {
         provider: originStorage.provider, bucket: originStorage.bucket, objectKey,
         purpose: action === "create_download_url" ? "read" : "upload",
@@ -2018,6 +2020,30 @@ Deno.serve(async (req): Promise<Response> => {
       );
     if (!allowed) return json(403, { error: "not_allowed", message: "You cannot delete this media object." });
 
+    if (action === "delete_content") {
+      const sourceCreatedAt = toText(payload.sourceCreatedAt);
+      if (!recordId || !sourceCreatedAt || !Number.isFinite(Date.parse(sourceCreatedAt))) {
+        return json(400, {error: "content_delete_identity_required", message: "Refresh this content before deleting it."});
+      }
+      // Use the caller's exact authenticated session at the database boundary.
+      // The RPC checks ownership and source incarnation again under its row lock.
+      const {data, error} = await actorClient.rpc("delete_retained_content", {
+        p_type: surfaceType, p_target: recordId, p_provider: originStorage.provider,
+        p_bucket: originStorage.bucket, p_object_key: objectKey, p_source_created_at: sourceCreatedAt,
+      });
+      if (error || !data || typeof data !== "object" || Array.isArray(data)
+        || typeof data.retentionHandled !== "boolean"
+        || !["disabled", "deleted", "already_deleted"].includes(data.status)) {
+        return json(409, {error: "content_delete_unconfirmed", message: "Content deletion could not be confirmed. Refresh and try again."});
+      }
+      if (data.retentionHandled) {
+        await safeWriteMediaSecurityEvent(adminClient, user, {
+          action, objectKey, recordId, securityContext, surfaceType,
+        });
+      }
+      return json(200, {ok: true, retentionHandled: data.retentionHandled});
+    }
+
     const binding = recordId
       ? await resolveGatewayMediaObjectBinding(adminClient, {
         surfaceType,
@@ -2029,7 +2055,7 @@ Deno.serve(async (req): Promise<Response> => {
       })
       : null;
     const retentionDecision = await decideDeletedContentMediaDeletion(
-      (name, args) => adminClient.rpc(name, args),
+      async (name, args) => await adminClient.rpc(name, args),
       {surfaceType, recordId: recordId || null, provider: originStorage.provider,
         bucket: originStorage.bucket, objectKey, actorId: user.id},
     );

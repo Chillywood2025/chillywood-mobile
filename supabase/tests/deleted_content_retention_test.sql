@@ -11,7 +11,7 @@ select ok(not has_table_privilege('service_role','private.deleted_content_retent
 select ok(not has_function_privilege('authenticated','public.stage_deleted_content_media(text,text,text,text,text,uuid)','EXECUTE'),'staging not client callable');
 select ok(not has_function_privilege('authenticated','private.read_deleted_content_inspection(text,uuid)','EXECUTE'),'private adapter not client callable');
 select is(public.deleted_content_expiry_readiness()->>'physicalDeletionAllowed','false','physical purge fails closed');
-select throws_ok($$update private.deleted_content_retention_settings set capture_enabled=true$$,'23514',null,'capture cannot be enabled without explicit readiness');
+select throws_ok($$update private.deleted_content_retention_settings set capture_enabled=true$$,'55000',null,'capture cannot be enabled without explicit readiness');
 insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
 values('b3000000-0000-4000-8000-000000000001','retention-synthetic@example.test',now(),false,false);
 insert into public.profile_posts(id,user_id,body,visibility,moderation_status)
@@ -20,6 +20,27 @@ update public.profile_posts set body='disabled edit' where id='b5000000-0000-400
 select is((select body from public.profile_posts where id='b5000000-0000-4000-8000-000000000001'),'disabled edit','disabled trigger preserves existing updates');
 delete from public.profile_posts where id='b5000000-0000-4000-8000-000000000001';
 select is((select count(*) from private.deleted_content_records),0::bigint,'disabled deletion captures nothing');
+-- Disposable test database ONLY. These explicit owner assertions exercise the
+-- gate, not deployment/schedule/provider evidence. Production remains unset.
+-- No inventory/guard check is disabled or replaced by this fixture.
+-- The full historical migration stack seeds exactly this public proof video.
+-- Remove that known synthetic local row before qualifying an empty inventory;
+-- never erase arbitrary legacy objects to make readiness pass.
+delete from public.videos
+where id='6e1c3405-7db8-4cb2-98f3-5a7642e82126'
+  and title='Chi''llywood Originals Proof Fixture' and storage_provider='supabase';
+delete from public.media_scan_jobs
+where target_table='videos' and target_id='6e1c3405-7db8-4cb2-98f3-5a7642e82126';
+update private.deleted_content_retention_settings set legacy_object_deletes_blocked=true;
+update private.deleted_content_rollout_qualification
+set source_revision=repeat('0',40),
+    client_enforcement_evidence='disposable-local qualification fixture: SQL protocol exercised',
+    legacy_delete_drain_evidence='disposable-local fixture: no gateway/provider requests in flight',
+    worker_schedule_evidence='disposable-local qualification fixture: manually driven bounded worker',
+    origin_cleanup_evidence='disposable-local qualification fixture: no live provider claim',
+    qualified_at=clock_timestamp()
+where singleton;
+select public.record_deleted_content_worker_heartbeat();
 update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true;
 insert into public.profile_posts(id,user_id,body,visibility,moderation_status)
 values('b5000000-0000-4000-8000-000000000002','b3000000-0000-4000-8000-000000000001','original','draft','clean');
