@@ -40,7 +40,7 @@ const adminBackendFiles = [
 
 // Both reviewed successors are part of the current replay: new transactional
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
-const collectionOrderingFiles = ['20261020223000_user_collection_revision_authority.sql'];
+const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
 const ownerSecurityFiles = [
   '20261020222318_transactional_owner_security_canary.sql',
   '20261020222325_staff_permission_null_actor_closure.sql',

@@ -25,6 +25,16 @@ failed write; an unavailable read must not be presented as an empty collection.
 
 ## Server ordering follow-through (2026-10-20)
 
+PR #582 merged after exact-head Required Validation passed, including 5,025
+native pgTAP assertions and all eight real PostgreSQL lock-queue scenarios.
+The separately approved backend migration deployed as
+`20261020233652_user_collection_revision_authority`; SQL bytes are unchanged
+(MD5 `6cfd69b74e9a5047960a4cbb91533138`). Readback confirmed all 13 Saved rows
+and 503 watch-history rows unchanged by count and whole-row digest, private
+revision/receipt tables initially empty, authenticated RPC execution enabled,
+and old direct mutations denied while existing SELECT access remains. No live
+collection writes, OTA or phone verification were performed as deployment probes.
+
 The current candidate closes the separately recorded server-ordering gap for
 Saved and Continue Watching. A private per-account/title revision survives
 removal as a null tombstone. Mutation RPCs require the caller's exact current

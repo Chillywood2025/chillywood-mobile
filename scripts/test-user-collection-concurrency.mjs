@@ -111,7 +111,7 @@ try {
       alter table public.${name} enable row level security;grant select,insert,update,delete on public.${name} to authenticated;`);
     for (const action of ['select', 'insert', 'update', 'delete']) query(sqlPolicy(baseline, `${name}_owner_${action}`));
   }
-  query(readFileSync('supabase/migrations/20261020223000_user_collection_revision_authority.sql', 'utf8'));
+  query(readFileSync('supabase/migrations/20261020233652_user_collection_revision_authority.sql', 'utf8'));
   query(`insert into auth.users(id,email_confirmed_at) values(${lit(actor)},now());
     insert into auth.sessions(id,user_id) values(${lit(sessionA)},${lit(actor)}),(${lit(sessionB)},${lit(actor)});`);
 

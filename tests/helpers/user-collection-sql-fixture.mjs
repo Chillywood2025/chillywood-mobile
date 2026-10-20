@@ -1,6 +1,6 @@
 import { makeFixture, read, table, sqlPolicy, sqlFunction, ids, sessionId } from './studio-authority-fixture.mjs';
 export { ids, sessionId };
-export const collectionMigration = 'supabase/migrations/20261020223000_user_collection_revision_authority.sql';
+export const collectionMigration = 'supabase/migrations/20261020233652_user_collection_revision_authority.sql';
 export async function makeCollectionFixture() {
   const fixture = await makeFixture();
   const { db } = fixture;
