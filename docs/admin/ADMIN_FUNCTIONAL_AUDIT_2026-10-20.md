@@ -131,6 +131,13 @@ They do not establish deployed backend behavior or installed-device proof.
 
 ## Validation status
 
+The subsequent [Owner Security mutation repair](OWNER_SECURITY_MUTATION_REPAIR_2026-10-20.md)
+addresses a service-role CHECK-helper ACL failure in the automatic expiry sweep,
+temporary-grant revoke and canary write paths. The earlier Edge pagination and
+batch checks described above do not prove atomic database mutation or deployed
+behavior. Their replacement requires transactional SQL receipts and real
+database failure/concurrency validation; no production cleanup is claimed.
+
 Checkpoint: 126 focused tests passed without failures/skips. The tests execute
 production helpers and extracted production callbacks; read-lifecycle tests
 mount the real hook/callbacks through React. They are not a full mounted Admin

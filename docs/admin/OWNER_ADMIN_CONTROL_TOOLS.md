@@ -1,5 +1,11 @@
 # Owner/Admin Control Tools
 
+Current backend limitation (2026-10-20): the old Owner-controls expiry sweep and
+direct grant/canary writes fail against the private CHECK-helper ACL. Historical
+production proof below does not establish current operation. See the
+[Owner Security mutation repair](OWNER_SECURITY_MUTATION_REPAIR_2026-10-20.md)
+for the transactional source contract and separately authorized rollout sequence.
+
 Owner/Admin Command Center UI: Closed after validation. The canonical staff operations route is `/admin`; Admin is the product-facing name, `operator` is internal/backend only, and Support is a workflow/case area. The Command Center must fail closed, sanitize backend errors, hide or honestly disable unavailable tools, require confirmation/reason/audit for dangerous actions where supported, and keep money/provider/payout controls disabled/read-only/manual/external.
 
 ## Scope

@@ -21,10 +21,11 @@ const roleMigration = read("supabase/migrations/202605140008_platform_staff_role
 const adminScopeMigration = read("supabase/migrations/20260625184725_admin_role_scope_permissions.sql");
 const moderatorMigration = read("supabase/migrations/20260625192527_moderator_role_scope_support_duties.sql");
 const edge = read("supabase/functions/admin-owner-controls/index.ts");
+const permissionTemplates = read("supabase/functions/_shared/staff-permission-templates.ts");
 const moderation = read("_lib/moderation.ts");
 const adminUi = read("app/admin.tsx");
 const packageJson = read("package.json");
-const combined = [doc, roleLock, roleMigration, adminScopeMigration, moderatorMigration, edge, moderation, adminUi].join("\n");
+const combined = [doc, roleLock, roleMigration, adminScopeMigration, moderatorMigration, edge, permissionTemplates, moderation, adminUi].join("\n");
 
 assertIncludes(doc, "Moderator role scope: Closed", "closed status");
 assertIncludes(doc, "Moderator is a real production role", "real role wording");
@@ -56,8 +57,10 @@ assertNotIncludes(moderation, "hasPlatformRoleMembership(memberships, [\"owner\"
 assertIncludes(moderation, "admin.dmca.view", "DMCA view scope in UI helper");
 assertIncludes(moderation, "admin.dmca.manage", "DMCA manage scope in UI helper");
 
-assertIncludes(edge, "moderator_support", "moderator support permission template");
-assertIncludes(edge, "Moderator Support Workflow", "moderator support template label");
+assertIncludes(edge, 'from "../_shared/staff-permission-templates.ts"', "shared permission template catalog import");
+assertIncludes(edge, "const TEMPLATE_KEYS = Object.keys(PERMISSION_TEMPLATES)", "shared permission template catalog use");
+assertIncludes(permissionTemplates, "moderator_support", "moderator support permission template");
+assertIncludes(permissionTemplates, "Moderator Support Workflow", "moderator support template label");
 assertIncludes(moderatorMigration, "v_actor_role = 'operator' and v_target_role = 'moderator' and public.has_platform_permission('manage_moderators')", "Admin-only lower-role management condition");
 assertIncludes(moderatorMigration, "Moderator cannot grant Owner/Admin/operator or staff roles", "Moderator grant denial comment");
 assertIncludes(moderatorMigration, "Moderator cannot revoke Owner/Admin/operator or staff roles", "Moderator revoke denial comment");
