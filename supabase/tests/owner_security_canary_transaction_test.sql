@@ -259,7 +259,11 @@ select throws_ok($$insert into auth.users(id,email,email_confirmed_at,is_sso_use
  'P0001','admin_canary_run_closed','late Auth creation cannot appear after the close receipt');
 select throws_ok($$update public.platform_staff_permission_grants set status='active'
  where id=(current_setting('test.canary.grant')::jsonb->>'grantId')::uuid$$,
- 'P0001','admin_canary_run_closed','all normal producers are fenced from reactivating a closed fixture');
+ 'P0001','platform_staff_permission_exact_confirmed_subject_required',
+ 'closed fixture cannot regain permissions after its staff role is revoked');
+select throws_ok($$update public.platform_role_memberships set status='active'
+ where id=(current_setting('test.canary.role')::jsonb->>'roleId')::bigint$$,
+ 'P0001','admin_canary_run_closed','closed run fences normal staff-role reactivation');
 select is((select count(*)::text from public.platform_admin_audit_logs where actor_user_id=pg_temp.mutation_id('01',1)::text),
  current_setting('test.owner.app_audit_before'),'canary setup and cleanup add no normal Owner application audit');
 select * from finish();

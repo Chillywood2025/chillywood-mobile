@@ -93,7 +93,7 @@ completed deployment-matrix qualification.
 | New database, old Edge | The old direct-write failures remain. Migrations alone do not repair the handlers. |
 | Old database, new Edge | Required RPCs are missing. Affected mutations and Canary history cannot complete. |
 | New database and Edge, old client | The three mutation actions above reject missing UUIDs. Old Canary UI has no exact-run recovery control. |
-| New client, old Edge | Unsafe mixed contract: the old handler may execute, then the new client rejects its incompatible receipt. Do not release the client first. |
+| New client, old Edge | Unsafe for these mutations: the old handler may execute, then the new client rejects its incompatible receipt. Keep the three actions held during installation/source verification until the backend switch completes. |
 | Matching new database, Edge and client | Intended compatible contract. Require successful exact-head integration checks and separately approved installed-client qualification before production use. |
 
 `canary_list` needs no UUID, but the repaired Edge uses the new
@@ -106,9 +106,12 @@ panels are outside the new UUID requirement; their existing checks still apply.
 Every client bundle containing the pre-repair request helper, including the
 PR578 source, sends the older request shapes. Read-only package inspection on
 2026-10-20 verified one attached Android installation at version 1.0.0, build
-109, last updated 2026-10-18. Its running OTA update ID, runtime/channel and
-source revision were not established; iOS and the wider installed fleet remain
-unverified. The latest server-reported Owner device record (build 91, last seen
+109, last updated 2026-10-18, and one connected iPhone at version 1.0.0, build
+41. Their running OTA update IDs, runtime/channel and source revisions were
+not established by package inspection. This app is pre-public-release with a small test population
+that will update to the matching app/OTA. Qualify that intended test set;
+broad public-fleet uptake and obsolete-version feature support are not rollout
+requirements. The latest server-reported Owner device record (build 91, last seen
 2026-09-02) is stale and is not current installation proof. A native version
 alone cannot identify running JavaScript after an OTA update. Before rollout,
 bind every affected admin client's binary, running update, runtime/channel and
@@ -136,14 +139,20 @@ This is source repair, not a production cleanup receipt. Do not deploy the old
 `admin-owner-controls` implementation while the CHECK-helper ACL remains closed.
 Do not reopen that ACL to make its direct writes work.
 
-After exact-head review and Required Validation, separately authorize and apply
-the forward database migrations, verify their function/ACL/receipt contract, and
-deploy the matching repaired Edge handler. Hold the three affected admin
-mutations unused/unavailable during the mixed-version window and verify client
-uptake before resuming them. Inventory interrupted legacy runs separately;
+After exact-head review and Required Validation, qualify the matching newer
+app artifact and obtain its separate installation/app/OTA/release authorization.
+Hold the three affected admin mutations unused/unavailable during the mixed
+window. Install the matching newer client and verify its running update,
+runtime/channel and source without invoking these mutations against the old
+Edge. Then, with separate database/Edge authorization, apply the forward
+migrations, verify their function/ACL/receipt contract, and switch to the
+matching repaired Edge handler. Verify the updated test clients and matching complete
+contract before resuming the three actions. Legacy mutation payload support is
+not a rollout requirement; safe rejection remains intentional. Once the intended
+updated test clients are verified, old payload incompatibility is not an outstanding
+product defect. Inventory interrupted legacy runs separately;
 the new manifest protocol does not authorize adopting or deleting their
-unregistered accounts or grants. Deploy any changed app code only
-under its own app/OTA/release authorization. A database deployment alone does
+unregistered accounts or grants. A database deployment alone does
 not replace the old Edge behavior; an Edge deployment before its required RPCs
 exist must fail closed.
 
