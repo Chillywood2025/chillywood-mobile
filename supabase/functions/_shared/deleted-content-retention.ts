@@ -4,8 +4,8 @@ export async function decideDeletedContentMediaDeletion(
   rpc: (name: string, args: Record<string, unknown>) => Promise<{data: unknown; error: unknown}>,
   input: {surfaceType: string; recordId: string | null; provider: string; bucket: string; objectKey: string; actorId: string},
 ): Promise<"delete_now" | "defer"> {
-  // Unattached upload rollback must not create deleted-content history.
-  if (!input.recordId) return "delete_now";
+  // A missing client record ID is not proof that an object is still unattached.
+  // The database must fence retired keys and active object-only requests too.
   const {data, error} = await rpc("stage_deleted_content_media", {
     p_type: input.surfaceType, p_target: input.recordId, p_provider: input.provider,
     p_bucket: input.bucket, p_object_key: input.objectKey, p_actor: input.actorId,
@@ -20,20 +20,19 @@ export async function decideDeletedContentMediaDeletion(
   return decision;
 }
 
-// Bounded, manually invoked SQL-only worker. No provider delete dependency exists.
-// Held/media/soft-source blockers remain visible rather than being retried as a
-// successful purge. Each mutation RPC independently checks enablement and holds.
+// Bounded, manually invoked SQL-only text worker. Orphan stage cleanup has its
+// own queue and irreversible object claims; this worker must not lease that work.
 export async function runDeletedContentExpiryBatch(
   rpc: (name: string,args: Record<string,unknown>) => Promise<{data: unknown;error: unknown}>,
 ): Promise<{enabled: boolean; results: {kind: string;status: string}[]}> {
   const work=await rpc("list_deleted_content_expiry_work",{});
-  if(work.error || !work.data || typeof work.data!=="object") throw new Error("retention_work_unavailable");
+  if(work.error || !work.data || typeof work.data!=="object" || Array.isArray(work.data)) throw new Error("retention_work_unavailable");
   const data=work.data as Record<string,unknown>;
-  if(data.enabled!==true) return {enabled:false,results:[]};
+  if(data.enabled===false) return {enabled:false,results:[]};
+  if(data.enabled!==true) throw new Error("retention_work_invalid");
   const results: {kind:string;status:string}[]=[];
   for(const [field,name,param,kind] of [
     ["deletionIds","expire_deleted_content_text","p_deletion_id","deletion"],
-    ["stageIds","reconcile_deleted_content_stage","p_stage_id","stage"],
   ]) {
     const ids=data[field];
     if(!Array.isArray(ids) || ids.length>20 || ids.some(id=>typeof id!=="string" || !/^[0-9a-f-]{36}$/i.test(id))) {

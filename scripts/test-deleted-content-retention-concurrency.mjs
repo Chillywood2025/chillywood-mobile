@@ -68,6 +68,7 @@ try{
  ok(dump,'read-only dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],dump.stdout,null),'restore clone');
  assert.equal(query('select not capture_enabled from private.deleted_content_retention_settings;'),'t');
  assert.equal(query('select not armed from private.deleted_media_reference_fence;'),'t');
+ query(readFileSync('tests/fixtures/deleted-content-local-qualification.sql','utf8'));
  query(`create table public.retirement_inactive_consumer(id uuid primary key default gen_random_uuid(),metadata jsonb);
  create trigger zzz_deleted_media_reference_guard before insert or update on public.retirement_inactive_consumer
  for each row execute function private.guard_deleted_media_references();`);
@@ -176,7 +177,128 @@ try{
    else{assert.notEqual(r.code,0);assert.match(r.stderr,/retention_preservation_unavailable_deletion_already_claimed/);assert.equal(query(`select count(*) from private.deleted_content_media_expiry_claims where stage_id=${lit(stage)};`),'1');}
   });
  }
- assert.equal(checks,16);console.log(`Retention native PostgreSQL: ${checks} isolation and real two-backend ordering checks passed.`);
+ assert.equal(checks,16);
+ // Historical object-only requests are constructed as aged stages against real
+ // verified source/reservation rows. They are never whole-content delete intent.
+ const recoveryFixture=()=>{
+  const target=randomUUID(),reservation=randomUUID(),stage=randomUUID(),replacementReservation=randomUUID();
+  const key=`${author}/${target}/source.mp4`,replacement=`${author}/${target}/source.mov`;
+  query(`insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,attached_record_id,attached_at)
+   values(${lit(reservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(key)},'video/mp4',1024,'verified',now()+interval '1 hour',now(),${lit(target)},now()),
+    (${lit(replacementReservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(replacement)},'video/quicktime',1024,'verified',now()+interval '1 hour',now(),${lit(target)},now());
+   insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes)
+   values(${lit(target)},${lit(author)},'Synthetic recovery','draft','clean','cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(key)},'video/mp4',1024);
+   update media_scan_jobs set status='clean' where target_table='videos' and target_id=${lit(target)};
+   insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id,staged_at,reconcile_after)
+   values(${lit(stage)},'creator_video',${lit(target)},${lit(author)},'cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(reservation)},clock_timestamp()-interval '2 hours',clock_timestamp()-interval '1 hour');`);
+  return {target,stage,key,replacement,
+   replace:`update videos set storage_object_key=${lit(replacement)},storage_path=${lit(replacement)},mime_type='video/quicktime' where id=${lit(target)};
+    update media_scan_jobs set status='clean' where target_table='videos' and target_id=${lit(target)}`,
+   reconcile:`select public.reconcile_deleted_content_stage(${lit(stage)})::text`,
+   hold:`insert into public.legal_holds(target_type,target_id,reason,status) values('creator_video',${lit(target)},'Synthetic orphan preservation','active')`,
+   alias:`insert into public.retirement_inactive_consumer(metadata) values(jsonb_build_object('key',${lit(key)}))`};
+ };
+ for(const holdFirst of [true,false]){
+  const f=recoveryFixture();query(f.replace);
+  await ordered(holdFirst?f.hold:f.reconcile,holdFirst?f.reconcile:f.hold,r=>{
+   if(holdFirst){
+    assert.equal(r.code,0,r.stderr);assert.match(r.stdout,/"status": "held"/);
+    assert.equal(query(`select count(*) from private.deleted_content_stage_cleanup_claims where stage_id=${lit(f.stage)}`),'0');
+   }else{
+    assert.notEqual(r.code,0);assert.match(r.stderr,/retention_preservation_unavailable_deletion_already_claimed/);
+    assert.equal(query(`select count(*) from private.deleted_content_stage_cleanup_claims where stage_id=${lit(f.stage)}`),'1');
+   }
+  });
+ }
+ for(const referenceFirst of [true,false]){
+  const f=recoveryFixture();query(f.replace);
+  await ordered(referenceFirst?f.alias:f.reconcile,referenceFirst?f.reconcile:f.alias,r=>{
+   if(referenceFirst){assert.equal(r.code,0,r.stderr);assert.match(r.stdout,/"status": "unsupported_or_live_reference"/);}
+   else{assert.notEqual(r.code,0);assert.match(r.stderr,/media_key_retired_reference_forbidden/);}
+  });
+  query(`delete from public.retirement_inactive_consumer where private.deleted_media_mentions(metadata,${lit(f.key)});`);
+ }
+ {
+  const f=recoveryFixture();
+  const beforeStage=query(`select (staged_at,reconcile_after)::text from private.deleted_content_media_stages where id=${lit(f.stage)}`);
+  await ordered(f.replace,f.reconcile,r=>{
+   assert.equal(r.code,0,r.stderr);assert.match(r.stdout,/"status": "attached_requires_explicit_content_delete"/);
+   assert.equal(query(`select count(*) from private.deleted_content_records where target_id=${lit(f.target)}`),'0');
+   assert.equal(query(`select (staged_at,reconcile_after)::text from private.deleted_content_media_stages where id=${lit(f.stage)}`),beforeStage);
+  },{rollback:true});
+  // Metadata delete rollback cannot become retention or orphan cleanup intent.
+  await ordered(`delete from videos where id=${lit(f.target)}`,f.reconcile,r=>{
+   assert.equal(r.code,0,r.stderr);assert.match(r.stdout,/"status": "attached_requires_explicit_content_delete"/);
+   assert.equal(query(`select count(*) from private.deleted_content_records where target_id=${lit(f.target)}`),'0');
+  },{rollback:true});
+  query(f.replace);
+ }
+ {
+  const f=recoveryFixture();query(f.replace);
+  await ordered(f.reconcile,f.hold,r=>{
+   assert.equal(r.code,0,r.stderr);
+   assert.equal(query(`select status from private.deleted_media_key_retirements where stage_id=${lit(f.stage)}`),'staged');
+   assert.equal(query(`select count(*) from private.deleted_content_stage_cleanup_claims where stage_id=${lit(f.stage)}`),'0');
+  },{rollback:true});
+ }
+ {
+  const f=recoveryFixture();query(f.replace);
+  await ordered(f.reconcile,f.reconcile,r=>{
+   assert.equal(r.code,0,r.stderr);const claim=JSON.parse(r.stdout.trim());
+   assert.equal(claim.status,'claimed');
+   assert.equal(query(`select id::text from private.deleted_content_stage_cleanup_claims where stage_id=${lit(f.stage)}`),claim.claimId);
+   assert.equal(query(`select count(*) from private.deleted_content_stage_cleanup_claims where stage_id=${lit(f.stage)}`),'1');
+  });
+ }
+ // Existing writer lock order is source -> stage -> advisory. The cleanup
+ // worker must yield at either row lock, never invert that order and deadlock.
+ for(const lockStage of [false,true]){
+  const f=recoveryFixture(),hn=`retention-source-busy-${checks}-${process.pid}`;
+  let h;
+  try{
+   h=session(hn,`select 1 from videos where id=${lit(f.target)} for update;
+    ${lockStage?`select 1 from private.deleted_content_media_stages where id=${lit(f.stage)} for update;`:''}
+    select 'HOLDER_READY';`);
+   await until(()=>h.output().includes('HOLDER_READY'),'source writer held real row locks',[h]);
+   assert.equal(JSON.parse(query(f.reconcile)).status,'source_busy');
+   h.child.stdin.end('commit;\n\\q\n');assert.equal((await h.done).code,0);
+   assert.equal(query(`select count(*) from private.deleted_content_stage_cleanup_claims where stage_id=${lit(f.stage)}`),'0');
+   checks++;
+  }finally{await terminate(hn,h);}
+  query(f.replace);
+ }
+ assert.equal(checks,26);
+ {
+  const f=recoveryFixture();query(f.replace);
+  assert.equal(JSON.parse(query(f.reconcile)).status,'claimed');
+  const {verifyDeletedContentWorkerTransport}=await import('./lib/deleted-content-worker-transport.mjs');
+  const parameters={
+   list_deleted_content_stage_cleanup_work:[],
+   reconcile_deleted_content_stage:['p_stage_id'],
+   read_deleted_content_stage_cleanup_claim:['p_claim_id'],
+   record_deleted_content_stage_cleanup_result:['p_claim_id','p_result'],
+  };
+  const rpc=async(name,args)=>{
+   assert.ok(Object.hasOwn(parameters,name),'real PostgreSQL RPC allowlist');
+   const values=parameters[name].map(key=>{assert.equal(typeof args[key],'string');return lit(args[key]);});
+   return {data:JSON.parse(query(`select public.${name}(${values.join(',')})::text`)),error:null};
+  };
+  const resetDispatch=async()=>{
+   // Controlled time advancement only in this generated clone. Other
+   // synthetic scenarios must not consume the bounded transport worker batch.
+   query(`insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
+    select 'stage',id,clock_timestamp()+interval '1 hour' from private.deleted_content_media_stages
+    on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
+    update private.deleted_content_work_dispatch set next_attempt_at=clock_timestamp()-interval '1 second'
+     where kind='stage' and work_id=${lit(f.stage)};
+    update private.deleted_content_stage_cleanup_claims set next_check_at=clock_timestamp()-interval '1 second'
+     where stage_id=${lit(f.stage)};`);
+  };
+  const transport=await verifyDeletedContentWorkerTransport({rpc,stageId:f.stage,resetDispatch});
+  assert.equal(transport.scope,'local_tls_and_real_postgres_not_live_r2');
+  console.log(`Retention worker transport: ${transport.checks} real PostgreSQL/local TLS checks passed; live R2 remains unqualified.`);
+ }
+ console.log(`Retention native PostgreSQL: ${checks} isolation and real two-backend ordering checks passed.`);
 }finally{
  if(cloned)ok(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');
  if(before!==undefined)assert.equal(query(fingerprint,'postgres'),before,'local source unchanged');

@@ -1,6 +1,7 @@
 # Staff content inspection and deletion-only retention
 
-Status: source implementation in progress; not deployed or activated.
+Status: source retention repairs remain disabled; no activation is authorized
+by this document. Readiness must be read from actual code/database inventory.
 
 ## Product scope
 
@@ -82,16 +83,29 @@ cover replacement or failed unattached upload is not a history-capture event.
 The server's deletion time starts a fixed 30-day period. Reads, retries, grants
 and hold release do not extend it.
 
-Existing video/attachment clients delete bytes before metadata. A compatible
-gateway staging step must retain an exact eligible object binding without
-making staging inspectable; actual metadata deletion finalizes retention.
-The existing private immutable object should be retained where possible,
-rather than copying every edit. A metadata record does not prove bytes survived.
+Compatible video/attachment clients now request an explicit content deletion
+bound to the owner, current session, original key and source creation time.
+Staging, delivery revocation, metadata deletion and capture commit together.
+Direct metadata deletion uses the same capture trigger. While inactive,
+compatible clients retain the prior deletion flow. Once the legacy-delete gate
+closes, old object-only calls fail closed, including calls omitting a record ID.
+Existing staged/retired originals never fall through to immediate provider
+deletion while stopped. A metadata record does not prove bytes survived.
 
-Direct legacy Supabase Storage deletion bypasses the gateway. Coverage for
-that path must be proven before activation; a database snapshot alone cannot
-guarantee object survival. An abandoned storage-delete stage also cannot be
-interpreted as permission to delete its whole parent or restore delivery.
+Direct legacy Supabase Storage deletion bypasses the gateway and remains a
+hard readiness blocker. Preferring R2 does not authorize moving or deleting
+legacy objects. Current secondary/brand media and unproven original bindings
+also remain outside the bounded contract. See
+[`deleted-content-retention.md`](../deleted-content-retention.md) for the exact
+activation contract, disabled flags, legacy-request drain and production sequence.
+
+An abandoned attached object stage requires fresh content-delete intent.
+Detached/replaced original cleanup has a separate irreversible claim under the
+legal-hold/reference lock; it never captures edit history or deletes the parent.
+Deleted-parent attachment metadata can be removed at expiry only for the exact
+original incarnation while the parent remains deleted/absent; restores and
+shared references block it. These soft-deleted attachments still do not gain
+the hard-deletion-only inspection proof automatically.
 
 Expiry must respect verified legal holds and live/shared object references.
 Hold placement and irreversible purge claims need a shared serialization

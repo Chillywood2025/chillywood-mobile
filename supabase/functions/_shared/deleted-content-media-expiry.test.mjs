@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {runDeletedMediaExpiryBatch} from './deleted-content-media-expiry.ts';
+import {runDeletedMediaExpiryBatch,runDeletedStageCleanupBatch} from './deleted-content-media-expiry.ts';
 import {createRetiredMediaOriginCleanup} from './deleted-content-origin.ts';
+import {runDeletedContentRetentionWorker} from './deleted-content-retention-worker.ts';
 const stage='11111111-1111-4111-8111-111111111111',claim='22222222-2222-4222-8222-222222222222';
 const binding={claimId:claim,provider:'cloudflare_r2',bucket:'chillywood-media-origin',objectKey:'synthetic/source.mp4'};
 const fixture=(change={})=>{
@@ -58,4 +59,60 @@ test('worker-only signer keeps DELETE private, no redirects, and binds canonical
 test('provider exceptions cannot leak private signed URLs',async()=>{
  const origin=createRetiredMediaOriginCleanup(k=>environment[k],async()=>{throw Error('https://secret-signed-url');});
  await assert.rejects(origin(binding,'DELETE'),e=>e.message==='retired_media_origin_request_failed');
+});
+test('orphan cleanup uses its own claims and never creates a content expiry claim',async()=>{
+ const calls=[],methods=[];
+ const result=await runDeletedStageCleanupBatch(async(name,args)=>{
+  calls.push(name);
+  const replies={
+   list_deleted_content_stage_cleanup_work:{enabled:true,stageIds:[stage]},
+   reconcile_deleted_content_stage:{status:'claimed',claimId:claim},
+   read_deleted_content_stage_cleanup_claim:{status:'authorized',...binding},
+   record_deleted_content_stage_cleanup_result:{status:args.p_result,permanentlyAbsent:false},
+  };
+  return {data:replies[name],error:null};
+ },async(_binding,method)=>{methods.push(method);return new Response(null,{status:method==='DELETE'?204:404});});
+ assert.deepEqual(calls,['list_deleted_content_stage_cleanup_work','reconcile_deleted_content_stage',
+  'read_deleted_content_stage_cleanup_claim','record_deleted_content_stage_cleanup_result']);
+ assert.deepEqual(methods,['DELETE','HEAD']);
+ assert.equal(result.results[0].status,'observed_absent');
+});
+test('malformed queues, claims, provider bindings and receipts fail closed',async()=>{
+ for(const change of [
+  {list_deleted_content_media_expiry_work:{}},
+  {list_deleted_content_media_expiry_work:{enabled:true,stageIds:[stage,stage]}},
+  {claim_deleted_content_media_expiry:{status:'claimed',claimId:'-'.repeat(36)}},
+  {read_deleted_content_media_expiry_claim:{status:'authorized',...binding,provider:'s3'}},
+  {read_deleted_content_media_expiry_claim:{status:'authorized',...binding,claimId:stage}},
+ ]){
+  const f=fixture(change);let providerCalls=0;
+  await assert.rejects(runDeletedMediaExpiryBatch(f.rpc,async()=>{providerCalls++;return new Response(null,{status:204});}),/invalid/);
+  assert.equal(providerCalls,0);
+ }
+ const f=fixture({record_deleted_content_media_expiry_result:{status:'purged',permanentlyAbsent:true}});
+ await assert.rejects(runDeletedMediaExpiryBatch(f.rpc,async()=>new Response(null,{status:404})),/receipt_invalid/);
+});
+test('disabled complete pass records liveness without constructing or calling an origin',async()=>{
+ const calls=[];
+ const result=await runDeletedContentRetentionWorker(async(name)=>{
+  calls.push(name);
+  return {data:name==='record_deleted_content_worker_heartbeat'?null:{enabled:false},error:null};
+ },()=>{throw Error('disabled provider');});
+ assert.deepEqual(calls,['list_deleted_content_expiry_work','list_deleted_content_media_expiry_work',
+  'list_deleted_content_stage_cleanup_work','record_deleted_content_worker_heartbeat']);
+ assert.equal(result.permanentPhysicalAbsenceGuaranteed,false);
+});
+test('provider or receipt failure cannot refresh a successful worker heartbeat',async()=>{
+ for(const failReceipt of [false,true]){
+  const calls=[],f=fixture();
+  await assert.rejects(runDeletedContentRetentionWorker(async(name,args)=>{
+   calls.push(name);
+   if(name==='list_deleted_content_expiry_work'||name==='list_deleted_content_stage_cleanup_work'){
+    return {data:{enabled:false},error:null};
+   }
+   if(failReceipt&&name==='record_deleted_content_media_expiry_result')return {data:null,error:{message:'synthetic unavailable'}};
+   return f.rpc(name,args);
+  },async()=>new Response(null,{status:failReceipt?404:503})),/failed/);
+  assert.ok(!calls.includes('record_deleted_content_worker_heartbeat'));
+ }
 });

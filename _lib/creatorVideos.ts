@@ -5,6 +5,7 @@ import {
 } from "./appConfig";
 import {
   createSignedMediaDownload,
+  deleteRetainedMediaContent,
   deleteStoredMediaObject,
   getMediaStorageProviderBucket,
   normalizeMediaStorageProvider,
@@ -999,7 +1000,7 @@ export async function moderateCreatorVideo(input: {
 }
 
 export async function deleteCreatorVideo(
-  video: Pick<CreatorVideo, "id" | "storageProvider" | "storageBucket" | "storageObjectKey" | "storagePath" | "thumbStoragePath">,
+  video: Pick<CreatorVideo, "id" | "createdAt" | "storageProvider" | "storageBucket" | "storageObjectKey" | "storagePath" | "thumbStoragePath">,
 ): Promise<void> {
   const videoId = toText(video.id);
   if (!videoId) return;
@@ -1008,6 +1009,10 @@ export async function deleteCreatorVideo(
   const objectKey = toText(video.storageObjectKey) || toText(video.storagePath);
   const thumbnailPath = toText(video.thumbStoragePath);
   if (usesPrivateOriginMediaGateway(provider) && objectKey) {
+    if (await deleteRetainedMediaContent({
+      surfaceType: "creator_video", provider, bucket: toText(video.storageBucket),
+      objectKey, recordId: videoId, sourceCreatedAt: video.createdAt,
+    })) return;
     await deleteStoredMediaObject({
       surfaceType: "creator_video",
       provider,

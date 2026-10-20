@@ -2,6 +2,7 @@ import type { Tables, TablesInsert } from "../supabase/database.types";
 import { normalizeImageUploadFile } from "./imageUploadNormalization";
 import {
   createSignedMediaDownload,
+  deleteRetainedMediaContent,
   deleteStoredMediaObject,
   getMediaStorageProviderBucket,
   normalizeMediaStorageProvider,
@@ -485,7 +486,7 @@ export async function createSocialAttachmentForSurface(input: {
 }
 
 export async function deleteSocialAttachment(
-  attachment: Pick<SocialAttachment, "id" | "storageProvider" | "storageBucket" | "storageObjectKey" | "storagePath">,
+  attachment: Pick<SocialAttachment, "id" | "createdAt" | "storageProvider" | "storageBucket" | "storageObjectKey" | "storagePath">,
 ): Promise<void> {
   const id = toText(attachment.id);
   if (!id) return;
@@ -493,6 +494,10 @@ export async function deleteSocialAttachment(
   const provider = normalizeMediaStorageProvider(attachment.storageProvider);
   const objectKey = toText(attachment.storageObjectKey) || toText(attachment.storagePath);
   if (usesPrivateOriginMediaGateway(provider) && objectKey) {
+    if (await deleteRetainedMediaContent({
+      surfaceType: "social_attachment", provider, bucket: toText(attachment.storageBucket),
+      objectKey, recordId: id, sourceCreatedAt: attachment.createdAt,
+    })) return;
     await deleteStoredMediaObject({
       surfaceType: "social_attachment",
       provider,

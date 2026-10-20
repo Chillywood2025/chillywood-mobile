@@ -14,8 +14,15 @@ test('disabled and detached decisions preserve existing provider deletion', asyn
 test('staged and finalized bindings defer physical deletion', async () => {
   assert.equal(await decideDeletedContentMediaDeletion(async () => ({data:{decision:'defer'},error:null}),input),'defer');
 });
-test('unattached rollback does not create history', async () => {
-  assert.equal(await decideDeletedContentMediaDeletion(async () => {throw Error('must not call');},{...input,recordId:null}),'delete_now');
+test('missing record ID still requires database deletion decision', async () => {
+  let calls=0;
+  assert.equal(await decideDeletedContentMediaDeletion(async (name,args) => {
+    calls++;assert.equal(name,'stage_deleted_content_media');assert.equal(args.p_target,null);
+    return {data:{decision:'delete_now',retention:'disabled'},error:null};
+  },{...input,recordId:null}),'delete_now');
+  assert.equal(calls,1);
+  assert.equal(await decideDeletedContentMediaDeletion(async () => ({data:{decision:'defer'},error:null}),
+    {...input,recordId:null}),'defer');
 });
 test('failure and malformed decisions fail closed', async () => {
   for (const reply of [{data:null,error:{}},{data:{decision:'yes'},error:null},{data:[],error:null}]) {
@@ -25,8 +32,7 @@ test('failure and malformed decisions fail closed', async () => {
 test('actual expiry worker has service authentication and uses bounded claim-controlled helpers', () => {
   const source=readFileSync(new URL('../deleted-content-retention-expiry/index.ts',import.meta.url),'utf8');
   assert.ok(source.includes('req.headers.get("Authorization")!==`Bearer ${key}`'));
-  assert.ok(source.includes('runDeletedContentExpiryBatch'));
-  assert.ok(source.includes('runDeletedMediaExpiryBatch'));
+  assert.ok(source.includes('runDeletedContentRetentionWorker'));
   assert.ok(!source.includes('fetch(') && !source.includes('createPresignedS3Url'));
 });
 test('actual gateway retains authorization, stages before revocation and conditionally deletes', () => {
@@ -45,9 +51,9 @@ test('bounded expiry worker preserves blocked statuses and never contacts provid
     if(name==='list_deleted_content_expiry_work')return {data:{enabled:true,deletionIds:['11111111-1111-4111-8111-111111111111'],stageIds:['22222222-2222-4222-8222-222222222222']},error:null};
     return {data:{status:name==='expire_deleted_content_text'?'held':'attached_metadata_delete_missing_repair_required'},error:null};
   });
-  assert.deepEqual(calls,['list_deleted_content_expiry_work','expire_deleted_content_text','reconcile_deleted_content_stage']);
+  assert.deepEqual(calls,['list_deleted_content_expiry_work','expire_deleted_content_text']);
   assert.equal(result.results[0].status,'held');
-  assert.equal(result.results[1].status,'attached_metadata_delete_missing_repair_required');
+  assert.equal(result.results.length,1);
 });
 test('disabled expiry worker performs no mutations',async()=>{
   const calls=[];

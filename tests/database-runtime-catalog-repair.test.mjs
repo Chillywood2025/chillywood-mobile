@@ -73,6 +73,30 @@ const inspectionFunctionKeys = new Set([
   'public.stage_deleted_content_media/6',
 ]);
 
+const retentionRecoveryFiles = [
+  '20261020124805_deleted_content_stage_recovery.sql',
+  '20261020124855_deleted_content_activation_readiness.sql',
+  '20261020125038_deleted_content_delete_intent.sql',
+  '20261020125453_deleted_content_terminal_source_cleanup.sql',
+];
+const retentionRecoveryFunctionKeys = new Set([
+  'private.cleanup_expired_deleted_attachment_source/1',
+  'private.deleted_content_original_rendition_alias/2',
+  'private.deleted_content_source_coverage/2',
+  'private.expire_deleted_content_text_legacy/1',
+  'private.guard_deleted_content_activation/0',
+  'private.guard_deleted_content_secondary_coverage/0',
+  'private.guard_deleted_content_source_coverage/0',
+  'private.preserve_deleted_content_legacy_gate/0',
+  'private.preserve_deleted_stage_cleanup_claim/0',
+  'private.stage_deleted_content_media_internal/6',
+  'public.delete_retained_content/6',
+  'public.list_deleted_content_stage_cleanup_work/0',
+  'public.read_deleted_content_stage_cleanup_claim/1',
+  'public.record_deleted_content_stage_cleanup_result/2',
+  'public.record_deleted_content_worker_heartbeat/0',
+]);
+
 const adminBackendFiles = [
   '20261020023827_transactional_staff_permission_templates.sql',
   '20261020024058_admin_reports_dmca_complete_history.sql',
@@ -152,7 +176,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>retentionRecoveryFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
+      [...retentionRecoveryFunctionKeys].sort(),'exact retention recovery successor function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>adminBackendFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
       [...adminBackendFunctionKeys].sort(),'exact admin backend successor function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>inspectionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
@@ -181,7 +207,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles,
+      'entire retention recovery successor bundle is replayed');
     assert.deepEqual(replayReport.files.filter(file=>adminBackendFiles.includes(file)),adminBackendFiles,
       'entire admin backend successor bundle is replayed');
     assert.deepEqual(replayReport.files.filter(file=>inspectionBundleFiles.includes(file)),inspectionBundleFiles,

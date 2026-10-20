@@ -20,6 +20,13 @@ const inspectionBundleFiles = [
   '20261020014747_content_inspection_retained_originals.sql',
 ];
 
+const retentionRecoveryFiles = [
+  '20261020124805_deleted_content_stage_recovery.sql',
+  '20261020124855_deleted_content_activation_readiness.sql',
+  '20261020125038_deleted_content_delete_intent.sql',
+  '20261020125453_deleted_content_terminal_source_cleanup.sql',
+];
+
 const studioBundleFiles = [
   '20261015073423_platform_studio_publication_and_audience_authority.sql',
   '20261019020049_platform_studio_rolling_brand_compatibility.sql',
@@ -203,7 +210,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
       }finally{await db.exec('rollback')}
     }
     // This remains a full-current-chain repair test, including reviewed successors.
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length);
+    check('complete retention recovery successors',replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles);
     check('complete admin backend successors',replayReport.files.filter(file=>adminBackendFiles.includes(file)),adminBackendFiles);
     check('complete disabled inspection/retention successors',replayReport.files.filter(file=>inspectionBundleFiles.includes(file)),inspectionBundleFiles);
     check('Circle closure remains in both runtime scenarios',replayReport.files.includes('20261019000210_circle_request_rpc_anon_execute_closure.sql'),true);
