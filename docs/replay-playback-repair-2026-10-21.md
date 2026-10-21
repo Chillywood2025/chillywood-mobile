@@ -72,10 +72,15 @@ check of the Edge source with synthetic external-module declarations finds no
 diagnostics; it is not a Deno/provider integration test. Expo Doctor is not
 installed in this local workspace, so its no-install invocation did not run.
 
-The standalone historical `guard-save-replay-content-library-policy.mjs`
-fails on an unchanged Studio copy assertion, before reaching replay checks:
-it expects an old Content Library sentence absent from base source. This
-repair does not change the unrelated Studio text or weaken that guard.
+The standalone `guard-save-replay-content-library-policy.mjs` initially failed
+on an obsolete Studio marketing sentence, before reaching replay checks. Its
+copy assertion is now replaced by AST-scoped checks of the actual content
+filter IDs, rendered selection controls, replay shelf/action wiring, controlled
+route and exact replay identity. No Studio UI text is changed. All existing
+authentication, rights and forbidden-media assertions remain intact. The real
+guard is tested against copied current inputs and bounded source mutations;
+removing controls or protections must fail, while changing marketing copy must
+not. The fixture never alters repository product source.
 
 ## Remaining qualification and rollback
 
