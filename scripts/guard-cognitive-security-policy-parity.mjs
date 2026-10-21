@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import ts from "typescript";
+import { formatRuntimeProbeFailure } from "./lib/runtime-probe-diagnostics.mjs";
 
 const root = process.cwd();
 const temporaryRoot = fs.mkdtempSync(
@@ -191,7 +192,7 @@ const runtime = spawnSync(
     timeout: 30_000,
   },
 );
-assert.equal(runtime.status, 0, "Deno runtime policy probe must pass");
+assert.equal(runtime.status, 0, formatRuntimeProbeFailure(runtime));
 const runtimeResults = JSON.parse(runtime.stdout.trim());
 assert.deepEqual(
   runtimeResults,

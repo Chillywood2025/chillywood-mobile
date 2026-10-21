@@ -90,6 +90,12 @@ const recordedV14Source = {
   sha: "d2ec4dc2a25d67e8f98b578496f5985359b9bebc",
   tree: "4a2181bbba47a4d61bf131856e5301c6b7b34046",
 };
+// Reviewed V15 source before the Expo asset patch. This preserves its cohort
+// without asserting whether matching binaries were built or distributed.
+const recordedV15Source = {
+  sha: "191ffb8e610c81204f1d114ba39a80235ec58031",
+  tree: "d482493bae0a43038b689eb1034e8cc5be8883e2",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -236,8 +242,8 @@ test("recorded v14 camera effects retain the reviewed v13 source cohort", () => 
   }
 });
 
-test("local camera inference uses v15 without rewriting the held v14 source cohort", () => {
-  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+test("recorded local camera inference v15 preserves the held v14 source cohort", () => {
+  const generation = JSON.parse(git(repo, "show", `${recordedV15Source.sha}:config/release/internal-native-generation.json`));
   const recorded = JSON.parse(git(repo, "show", `${recordedV14Source.sha}:config/release/internal-native-generation.json`));
   assert.equal(generation.generation, "internal-native-v15");
   assert.equal(generation.supersedes.generation, recorded.generation);
@@ -253,6 +259,28 @@ test("local camera inference uses v15 without rewriting the held v14 source coho
     assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.equal(generation.channels[platform], recorded.channels[platform]);
   }
+});
+
+test("Expo asset patch uses prospective v16 without rewriting the v15 source cohort", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV15Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v16");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV15Source.sha, sourceTree: recordedV15Source.tree,
+    }).digest);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v16`);
+    assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
+    assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.equal(generation.channels[platform], recorded.channels[platform]);
+  }
+  const { reason: currentReason, ...currentPolicy } = generation.policy;
+  const { reason: recordedReason, ...recordedPolicy } = recorded.policy;
+  assert.deepEqual(currentPolicy, recordedPolicy, "new source identity must not expand release authority");
+  assert.notEqual(currentReason, recordedReason);
 });
 
 test("effective EAS inheritance enables diagnostics only for the exact reviewed iOS tester build", () => {
@@ -460,6 +488,22 @@ for (const [change, changedPaths] of Object.entries({
 }
 
 for (const platform of ["android", "ios"]) {
+  test(`${platform}: Expo asset patch cannot reuse the v15 binary or runtime`, (t) => {
+    const { root, baseline, publish } = fixture(t, recordedV15Source.sha);
+    for (const name of ["package.json", "package-lock.json"]) write(root, name, fs.readFileSync(path.join(repo, name)));
+    const changedSource = commit(root);
+    assert.notEqual(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: baseline.sha }).digest,
+      nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: changedSource.sha }).digest);
+    const oldBinary = publish(platform);
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "v15 binary must stop before Expo or provider calls");
+    const rebuiltInOldRuntime = publish(platform, changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "changed native inputs cannot repurpose the v15 cohort");
+  });
+
   test(`${platform}: native camera effects cannot reuse the v13 binary or runtime`, (t) => {
     const { root, publish } = fixture(t, recordedV13Source.sha);
     for (const name of git(repo, "ls-tree", "-r", "--name-only", "HEAD", "modules/chillywood-camera-effects").split("\n").filter(Boolean)) {
