@@ -1,5 +1,5 @@
 begin;
-select plan(16);
+select plan(17);
 select ok(not (select expiry_enabled from private.platform_brand_retention_settings),'brand expiry defaults disabled');
 select has_function('public','read_platform_brand_retention_binding',array['uuid'],'service exact-incarnation reader exists');
 select has_function('public','record_platform_brand_retention_proof',array['uuid','jsonb','jsonb'],'real scan-receipt qualification exists');
@@ -27,6 +27,7 @@ update public.platform_brand_assets set deleted_at='2020-01-01' where id='f75000
 select ok((select deleted_at>clock_timestamp()-interval '1 minute' from public.platform_brand_assets where id='f7500000-0000-4000-8000-000000000002'),'client timestamp cannot shorten retention');
 select ok((select retain_until-removed_at=interval '720 hours' from private.platform_brand_object_incarnations where asset_id='f7500000-0000-4000-8000-000000000002'),'retention interval is exactly 720 hours');
 select throws_ok($$update public.platform_brand_assets set deleted_at=null where id='f7500000-0000-4000-8000-000000000002'$$,'P0001','brand_retention_tombstone_permanent','tombstone cannot be reset');
+select throws_ok($$insert into public.legal_holds(target_type,target_id,reason,status,metadata) values('room_message',gen_random_uuid()::text,'Retired Brand metadata counterexample','active','{"unknown":"brand-retention-fixture/logo/object.png"}')$$,'P0001','brand_retained_reference_forbidden','unrelated hold with retired Brand locator stays fenced at read committed');
 select is(public.claim_platform_brand_retention_expiry('f7500000-0000-4000-8000-000000000002')->>'status','disabled','metadata fencing never enables provider cleanup');
 select * from finish();
 rollback;

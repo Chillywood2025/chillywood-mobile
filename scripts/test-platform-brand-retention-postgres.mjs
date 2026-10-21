@@ -24,8 +24,9 @@ try {
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,version text,created_at timestamptz default now(),last_accessed_at timestamptz,updated_at timestamptz default now(),path_tokens text[] generated always as (string_to_array(name,'/')) stored,metadata jsonb,unique(bucket_id,name));
  create table public.videos(id text primary key,owner_id text,visibility text,moderation_status text);
- create table public.legal_holds(id uuid primary key default gen_random_uuid(),target_type text,target_id text,status text);
+ create table public.legal_holds(id uuid primary key default gen_random_uuid(),target_type text,target_id text,status text,metadata jsonb not null default '{}'::jsonb);
  create table public.brand_url_consumers(id uuid primary key default gen_random_uuid(),media_url text,metadata jsonb);
+ create table public.brand_hold_shape_counterexample(id uuid primary key default gen_random_uuid(),target_type text,metadata jsonb);
  create function public.whole_app_exact_current_session_authority_internal() returns boolean language sql as $$select current_setting('test.authority',true)='true'$$;
  create function public.has_active_premium_creator_tool_access(text) returns boolean language sql as $$select coalesce(current_setting('test.premium',true),'true')<>'false'$$;
  create function storage.foldername(text) returns text[] language sql as $$select string_to_array($1,'/')$$;
@@ -56,14 +57,44 @@ try {
  await deny(()=>db.exec('lock table public.platform_brand_assets, storage.objects in share row exclusive mode;'), error=>error.code==='25P01');
  await applyBrandMigrationStatements(db,read(migration));
  await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
+ check((await q("select count(*)::int n from pg_trigger where tgrelid='public.legal_holds'::regclass and tgfoid in ('private.guard_platform_brand_retention_hold()'::regprocedure,'private.guard_platform_brand_retention_references()'::regprocedure) and tgenabled in ('O','A')")).n,2,'actual metadata-bearing hold has BOTH guards');
  for (const isolation of ['repeatable read','serializable']) {
   await db.exec(`begin isolation level ${isolation}`);
-  await db.exec("insert into public.legal_holds(target_type,target_id,status) values('room_message',gen_random_uuid()::text,'active')"); checks++;
+  const h=(await q("insert into public.legal_holds(target_type,target_id,status) values('room_message',gen_random_uuid()::text,'active') returning id")).id; checks++;
+  await db.query("update public.legal_holds set target_type='chat_message',status='released' where id=$1",[h]); checks++;
+  check((await q('select status from public.legal_holds where id=$1',[h])).status,'released','actual unrelated UPDATE executes under both guards');
   await db.exec('rollback');
   await db.exec(`begin isolation level ${isolation}`);
-  await deny(()=>db.exec("insert into public.legal_holds(target_type,target_id,status) values('unknown_scope',gen_random_uuid()::text,'active')"),/brand_retention_read_committed_required/);
+  await deny(()=>db.exec("insert into public.brand_hold_shape_counterexample(target_type,metadata) values('room_message','{}')"),/brand_retention_read_committed_required/);
+  await db.exec('rollback');
+  for(const scope of ['account','platform_brand_asset','unknown_scope']){
+   await db.exec(`begin isolation level ${isolation}`);
+   await deny(()=>db.query("insert into public.legal_holds(target_type,target_id,status) values($1,gen_random_uuid()::text,'active')",[scope]),/brand_retention_read_committed_required/);
+   await db.exec('rollback');
+  }
+  for(const metadata of [{locator:legacyKey},{unknown:true}]){
+   await db.exec(`begin isolation level ${isolation}`);
+   await deny(()=>db.query("insert into public.legal_holds(target_type,target_id,status,metadata) values('room_message',gen_random_uuid()::text,'active',$1)",[metadata]),/brand_retention_read_committed_required/);
+   await db.exec('rollback');
+  }
+  for(const prior of [{scope:'account',metadata:{}},{scope:'platform_brand_asset',metadata:{}},{scope:'unknown_scope',metadata:{}},{scope:'room_message',metadata:{unknown:true}}]){
+   const id=(await q("insert into public.legal_holds(target_type,target_id,status,metadata) values($1,gen_random_uuid()::text,'released',$2) returning id",[prior.scope,prior.metadata])).id;
+   await db.exec(`begin isolation level ${isolation}`);
+   await deny(()=>db.query("update public.legal_holds set target_type='room_message',metadata='{}'::jsonb where id=$1",[id]),/brand_retention_read_committed_required/);
+   await db.exec('rollback');await db.query('delete from public.legal_holds where id=$1',[id]);
+  }
+ }
+ await deny(()=>db.query("insert into public.legal_holds(target_type,target_id,status,metadata) values('room_message',gen_random_uuid()::text,'active',$1)",[{unknown:legacyKey}]),/brand_retained_reference_forbidden/);
+ // A new locator column, even NULL, cannot silently inherit the exception.
+ await db.exec('alter table public.legal_holds add column future_media_url text');
+ for(const isolation of ['repeatable read','serializable']){
+  await db.exec(`begin isolation level ${isolation}`);
+  await deny(()=>db.exec("insert into public.legal_holds(target_type,target_id,status) values('room_message',gen_random_uuid()::text,'active')"),/brand_retention_read_committed_required/);
   await db.exec('rollback');
  }
+ await db.exec('alter table public.legal_holds drop column future_media_url');
+
+
 
  check((await db.query(`select policyname,qual,with_check from pg_policies where tablename in ('platform_brand_assets','platform_brand_profiles','objects') order by policyname`)).rows,policiesBefore,'existing read/session/owner predicates unchanged');
  check((await q('select owner_id from private.platform_brand_object_incarnations where asset_id=$1',[legacyId])).owner_id,'platform_rachi_official','official TEXT owner retained');

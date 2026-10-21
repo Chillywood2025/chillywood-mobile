@@ -319,9 +319,17 @@ create function private.guard_platform_brand_retention_references() returns trig
 language plpgsql security definer set search_path='' as $$
 declare r private.platform_brand_object_incarnations%rowtype; doc jsonb; old_doc jsonb;
 begin
- perform private.platform_brand_retention_lock();
  doc:=private.deleted_media_locator_document(to_jsonb(new),tg_relid);
  if tg_op='UPDATE' then old_doc:=private.deleted_media_locator_document(to_jsonb(old),tg_relid); end if;
+ -- The dedicated hold trigger already preserves these unrelated scopes. The
+ -- generic JSON trigger must agree only when neither row carries any locator.
+ -- Exact document equality keeps future locator columns fail-closed as well.
+ if tg_relid=to_regclass('public.legal_holds')
+   and to_jsonb(new)->>'target_type' in ('profile_post','profile_post_comment','creator_video_comment','chat_message','room_message','watch_party_room_message','creator_video','video','social_attachment')
+   and doc='{"metadata":{}}'::jsonb
+   and (tg_op='INSERT' or (tg_op='UPDATE' and old_doc='{"metadata":{}}'::jsonb
+     and to_jsonb(old)->>'target_type' in ('profile_post','profile_post_comment','creator_video_comment','chat_message','room_message','watch_party_room_message','creator_video','video','social_attachment'))) then return new; end if;
+ perform private.platform_brand_retention_lock();
  for r in select * from private.platform_brand_object_incarnations where removed_at is not null loop
    if private.deleted_media_mentions(doc,r.object_key) or private.deleted_media_mentions(doc,r.storage_path) then
      if tg_table_name='platform_brand_assets' and to_jsonb(new)->>'id'=r.asset_id::text then continue; end if;
