@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { parse } from "yaml";
 
-import { computeValidationPlan, evaluateRun, evaluateWorkflowSnapshot, expectedJobs, isVerifiedRepositoryOwnerAuthor, validatePublisherAppIdentity } from "../../scripts/ci/required-validation.mjs";
+import { computeValidationPlan, evaluateRun, evaluateWorkflowRun, evaluateWorkflowSnapshot, expectedJobs, isVerifiedRepositoryOwnerAuthor, validatePublisherAppIdentity } from "../../scripts/ci/required-validation.mjs";
 
 const sha = (character) => character.repeat(40);
 const repository = "Chillywood2025/chillywood-mobile";
@@ -24,6 +25,71 @@ const evaluate = (paths, overrides = {}) => evaluateRun({
   reviews: [],
   author: "contributor",
   ...overrides,
+});
+
+test("missing run association after merge skips reporting without granting validation", async (t) => {
+  const run = { event: "pull_request", name: "Chi'llywood Source Validation", path: ".github/workflows/required-validation.yml", status: "completed", conclusion: "success", head_sha: sha("b"), head_branch: "repair", pull_requests: [] };
+  const pull = { number: 7, state: "closed", merged: true, merged_at: "2026-10-17T09:44:54Z", merge_commit_sha: sha("c"), head: { sha: sha("b"), ref: "repair", repo: { full_name: repository } }, base: { ref: "main", repo: { full_name: repository } } };
+  let currentRun = run;
+  let currentPull = pull;
+  let associated = [{ number: 7 }];
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push(String(url));
+    assert.equal(options.method, undefined, "fallback must be read-only");
+    const path = new URL(url).pathname;
+    let body;
+    if (path.endsWith("/actions/runs/123")) body = currentRun;
+    else if (path.endsWith(`/commits/${sha("b")}/pulls`)) body = associated;
+    else if (path.endsWith("/pulls/7")) body = currentPull;
+    else assert.fail(`Unexpected authority/API call: ${path}`);
+    return { ok: true, json: async () => body };
+  });
+  const evaluate = () => evaluateWorkflowRun({ repository, runId: 123, token: "test-only" });
+  const result = await evaluate();
+  assert.equal(result.disposition, "skipped");
+  assert.equal(result.reason, "SOURCE_PULL_REQUEST_ALREADY_MERGED");
+  assert.equal(result.ok, undefined, "skip is not a successful required check");
+  assert.equal(calls.length, 3);
+  const hook = `globalThis.fetch = async (url, options = {}) => {
+    if (options.method) throw new Error('UNEXPECTED_WRITE');
+    const path = new URL(url).pathname;
+    const body = path.endsWith('/actions/runs/123') ? ${JSON.stringify(run)}
+      : path.endsWith('/commits/${sha("b")}/pulls') ? [{number: 7}]
+      : path.endsWith('/pulls/7') ? ${JSON.stringify(pull)} : null;
+    if (!body) throw new Error('UNEXPECTED_AUTHORITY_REQUEST');
+    return {ok: true, json: async () => body};
+  };`;
+  const cli = spawnSync(process.execPath, ["--import", `data:text/javascript,${encodeURIComponent(hook)}`, "scripts/ci/required-validation.mjs", "--publish"], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, GITHUB_REPOSITORY: repository, GITHUB_READ_TOKEN: "test-only", SOURCE_RUN_ID: "123" },
+  });
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.equal(JSON.parse(cli.stdout).disposition, "skipped");
+  for (const change of [
+    { state: "open", merged: false }, { merged: false }, { merged_at: null },
+    { merge_commit_sha: "invalid" }, { number: 8 },
+    { head: { ...pull.head, sha: sha("d") } },
+    { head: { ...pull.head, ref: "other" } },
+    { head: { ...pull.head, repo: { full_name: "fork/repo" } } },
+    { base: { ...pull.base, ref: "release" } },
+    { base: { ...pull.base, repo: { full_name: "other/repo" } } },
+  ]) {
+    currentPull = { ...pull, ...change };
+    await assert.rejects(evaluate(), /VALIDATION_PULL_REQUEST_IDENTITY_INVALID/u);
+  }
+  currentPull = pull;
+  for (const candidates of [[], [{ number: 7 }, { number: 8 }]]) {
+    associated = candidates;
+    await assert.rejects(evaluate(), /VALIDATION_PULL_REQUEST_IDENTITY_INVALID/u);
+  }
+  associated = [{ number: 7 }];
+  for (const change of [{ event: "push" }, { name: "forged" }, { path: "forged.yml" }, { status: "in_progress" }, { conclusion: "failure" }, { head_sha: "invalid" }]) {
+    currentRun = { ...run, ...change };
+    const before = calls.length;
+    await assert.rejects(evaluate(), /VALIDATION_PULL_REQUEST_IDENTITY_INVALID/u);
+    assert.equal(calls.length - before, 1);
+  }
 });
 
 test("runtime authority repair requires native lock-queue proof in the database job", () => {
