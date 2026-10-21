@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { decideDeletedContentMediaDeletion } from "../_shared/deleted-content-retention.ts";
 import {checkDeletedMediaRetirement} from "../_shared/deleted-media-retirement.ts";
+import {legacyMediaDeliveryNotRevoked} from "../_shared/legacy-media-delivery-revocation.ts";
 import {
   captureSecurityRequestContext,
   securityContextAuditMetadata,
@@ -1648,6 +1649,9 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     if (action !== "delete_object" && action !== "delete_content") {
+      if (!await legacyMediaDeliveryNotRevoked(adminClient, {
+        provider: originStorage.provider, bucket: originStorage.bucket, objectKey,
+      })) return json(409, {error: "media_object_revoked", message: "This media object is no longer available."});
       const retirement = await checkDeletedMediaRetirement(adminClient, {
         provider: originStorage.provider, bucket: originStorage.bucket, objectKey,
         purpose: action === "create_download_url" ? "read" : "upload",
@@ -1975,6 +1979,9 @@ Deno.serve(async (req): Promise<Response> => {
         });
       }
 
+      if (!await legacyMediaDeliveryNotRevoked(adminClient, {
+        provider: originStorage.provider, bucket: originStorage.bucket, objectKey,
+      })) return json(409, {error: "media_object_revoked", message: "This media object is no longer available."});
       const downloadUrl = await createPresignedS3Url({
         method: "GET",
         endpoint: originStorage.endpoint,
@@ -1985,6 +1992,12 @@ Deno.serve(async (req): Promise<Response> => {
         secretAccessKey: originStorage.secretAccessKey,
         expiresSeconds: PRIVATE_MEDIA_DOWNLOAD_EXPIRES_SECONDS,
       });
+      // Signing is asynchronous. Do not return a freshly minted URL if exact
+      // legacy delivery was revoked while it was being signed. Already-issued
+      // URLs retain their bounded provider TTL; no immediate invalidation claim.
+      if (!await legacyMediaDeliveryNotRevoked(adminClient, {
+        provider: originStorage.provider, bucket: originStorage.bucket, objectKey,
+      })) return json(409, {error: "media_object_revoked", message: "This media object is no longer available."});
       await safeWriteMediaSecurityEvent(adminClient, user, {
         action,
         objectKey,
@@ -1997,6 +2010,34 @@ Deno.serve(async (req): Promise<Response> => {
         downloadUrl,
         expiresAt: new Date(Date.now() + PRIVATE_MEDIA_DOWNLOAD_EXPIRES_SECONDS * 1000).toISOString(),
       });
+    }
+
+    // The actor RPC owns exact session, source/retirement identity and deletion
+    // authorization. A completed legacy retry has no live row/reservation, so
+    // it must reach that authoritative already_deleted path before object-only
+    // checks. Disabled behavior still uses the existing object authorization.
+    if (action === "delete_content") {
+      const sourceCreatedAt = toText(payload.sourceCreatedAt);
+      if (!recordId || !sourceCreatedAt || !Number.isFinite(Date.parse(sourceCreatedAt))) {
+        return json(400, {error: "content_delete_identity_required", message: "Refresh this content before deleting it."});
+      }
+      // Use the caller's exact authenticated session at the database boundary.
+      // The RPC checks ownership and source incarnation again under its row lock.
+      const {data, error} = await actorClient.rpc("delete_retained_content", {
+        p_type: surfaceType, p_target: recordId, p_provider: originStorage.provider,
+        p_bucket: originStorage.bucket, p_object_key: objectKey, p_source_created_at: sourceCreatedAt,
+      });
+      if (error || !data || typeof data !== "object" || Array.isArray(data)
+        || typeof data.retentionHandled !== "boolean"
+        || !["disabled", "deleted", "already_deleted"].includes(data.status)) {
+        return json(409, {error: "content_delete_unconfirmed", message: "Content deletion could not be confirmed. Refresh and try again."});
+      }
+      if (data.retentionHandled) {
+        await safeWriteMediaSecurityEvent(adminClient, user, {
+          action, objectKey, recordId, securityContext, surfaceType,
+        });
+      }
+      if (data.retentionHandled) return json(200, {ok: true, retentionHandled: true});
     }
 
     const allowed = surfaceType === "creator_video"
@@ -2019,30 +2060,7 @@ Deno.serve(async (req): Promise<Response> => {
         securityContext,
       );
     if (!allowed) return json(403, { error: "not_allowed", message: "You cannot delete this media object." });
-
-    if (action === "delete_content") {
-      const sourceCreatedAt = toText(payload.sourceCreatedAt);
-      if (!recordId || !sourceCreatedAt || !Number.isFinite(Date.parse(sourceCreatedAt))) {
-        return json(400, {error: "content_delete_identity_required", message: "Refresh this content before deleting it."});
-      }
-      // Use the caller's exact authenticated session at the database boundary.
-      // The RPC checks ownership and source incarnation again under its row lock.
-      const {data, error} = await actorClient.rpc("delete_retained_content", {
-        p_type: surfaceType, p_target: recordId, p_provider: originStorage.provider,
-        p_bucket: originStorage.bucket, p_object_key: objectKey, p_source_created_at: sourceCreatedAt,
-      });
-      if (error || !data || typeof data !== "object" || Array.isArray(data)
-        || typeof data.retentionHandled !== "boolean"
-        || !["disabled", "deleted", "already_deleted"].includes(data.status)) {
-        return json(409, {error: "content_delete_unconfirmed", message: "Content deletion could not be confirmed. Refresh and try again."});
-      }
-      if (data.retentionHandled) {
-        await safeWriteMediaSecurityEvent(adminClient, user, {
-          action, objectKey, recordId, securityContext, surfaceType,
-        });
-      }
-      return json(200, {ok: true, retentionHandled: data.retentionHandled});
-    }
+    if (action === "delete_content") return json(200, {ok: true, retentionHandled: false});
 
     const binding = recordId
       ? await resolveGatewayMediaObjectBinding(adminClient, {

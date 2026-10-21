@@ -1,0 +1,22 @@
+-- Full migrated disposable schema. No provider access; all work rolls back.
+begin;
+create extension if not exists pgtap with schema extensions;
+select no_plan();
+select has_table('private','deleted_media_legacy_provenance','distinct legacy evidence exists');
+select has_table('private','deleted_media_legacy_delivery_revocations','legacy revocation is not an upload reservation');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.deleted_media_legacy_provenance'::regclass),'legacy evidence forces RLS');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.deleted_media_legacy_delivery_revocations'::regclass),'revocation evidence forces RLS');
+select ok(not has_function_privilege('service_role','private.enroll_deleted_media_legacy_provenance(text,uuid,jsonb,jsonb)','execute'),'worker cannot manufacture legacy admission');
+select ok(not has_function_privilege('authenticated','private.enroll_deleted_media_legacy_provenance(text,uuid,jsonb,jsonb)','execute'),'consumer cannot manufacture legacy admission');
+select ok(not has_function_privilege('service_role','private.revoke_deleted_media_legacy_delivery(uuid)','execute'),'revocation only inside capture transaction');
+select ok(not has_function_privilege('authenticated','public.check_legacy_media_delivery_revocation(text,text,text)','execute'),'consumer cannot probe private keys');
+select ok(has_function_privilege('service_role','public.check_legacy_media_delivery_revocation(text,text,text)','execute'),'gateway can evaluate negative-only fence');
+select ok(not has_table_privilege('service_role','private.deleted_media_legacy_provenance','INSERT'),'worker cannot forge evidence');
+select ok(not has_table_privilege('service_role','private.deleted_media_legacy_delivery_revocations','DELETE'),'worker cannot erase revocation');
+select ok(exists(select 1 from pg_constraint where conrelid='private.deleted_content_media_stages'::regclass and conname='deleted_content_stage_provenance_tag'),'stage provenance is exclusive');
+select ok(exists(select 1 from pg_constraint where conrelid='private.deleted_media_key_retirements'::regclass and conname='deleted_media_retirement_provenance_tag'),'retirement provenance is exclusive');
+select is(public.check_legacy_media_delivery_revocation(null,'chillywood-media-origin','originals/synthetic.mp4')->>'revoked','true','missing provider fails closed');
+select is(private.validate_deleted_media_legacy_provenance('00000000-0000-0000-0000-000000000000')->>'supported','false','missing ledger grants no claim');
+select ok(not (select capture_enabled or media_staging_enabled or media_expiry_enabled or text_expiry_enabled from private.deleted_content_retention_settings where singleton),'installation preserves disabled settings');
+select * from finish();
+rollback;
