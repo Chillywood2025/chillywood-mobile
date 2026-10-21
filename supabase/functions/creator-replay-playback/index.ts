@@ -38,9 +38,10 @@ type BroadcastSessionRow = {
 };
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
 } as const;
 
 const JSON_HEADERS = {
@@ -340,17 +341,36 @@ const parseRecordRoute = (req: Request) => {
   return null;
 };
 
-const safeSegmentUrl = (playlistUrl: string, segmentPath: string) => {
-  if (!segmentPath || /[\u0000-\u001F]/.test(segmentPath) || segmentPath.length > 600) return null;
+const resolveApprovedResourceUrl = (playlistUrl: string, reference: string) => {
+  if (!reference || /[\u0000-\u001F]/.test(reference)) return null;
   const base = new URL(playlistUrl);
-  const target = new URL(segmentPath, base);
+  const target = new URL(reference, base);
   const baseDir = base.pathname.slice(0, base.pathname.lastIndexOf("/") + 1);
   if (target.origin !== base.origin) return null;
   if (!target.pathname.startsWith(baseDir)) return null;
   return target.toString();
 };
 
-const fetchApprovedHlsUrl = (url: string, headers?: HeadersInit) => fetch(url, { headers, redirect: "follow" });
+// The public route's relative-path bound is distinct from an approved source
+// URL, whose provider signature may legitimately exceed that length.
+const safeSegmentUrl = (playlistUrl: string, segmentPath: string) => (
+  segmentPath.length > 600 ? null : resolveApprovedResourceUrl(playlistUrl, segmentPath)
+);
+
+const fetchApprovedHlsUrl = async (url: string, headers?: HeadersInit, sourceUrl = url) => {
+  let target = resolveApprovedResourceUrl(sourceUrl, url);
+  for (let redirects = 0; target && redirects <= 5; redirects += 1) {
+    const response = await fetch(target, { headers, redirect: "manual" });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return { response, url: target };
+    const location = response.headers.get("Location");
+    await response.body?.cancel();
+    if (!location) throw new Error("The replay source returned an invalid redirect.");
+    // Keep the original approved root, even when a playlist redirects into a
+    // subdirectory. Never send a redirected fetch to a different media scope.
+    target = resolveApprovedResourceUrl(sourceUrl, new URL(location, target).toString());
+  }
+  throw new Error("The replay source redirect is outside its approved scope or limit.");
+};
 
 const authorizeRecordRoute = async (
   req: Request,
@@ -379,13 +399,27 @@ const authorizeRecordRoute = async (
   return { replay, session: playback.session, token };
 };
 
-const rewritePlaylist = (req: Request, replayId: string, playlist: string) => {
+const rewritePlaylist = (req: Request, replayId: string, playlist: string, sourceUrl: string, playlistUrl = sourceUrl) => {
   const token = new URL(req.url).searchParams.get("token") || "";
   const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : "";
+  const source = new URL(sourceUrl);
+  const sourceDirectory = source.pathname.slice(0, source.pathname.lastIndexOf("/") + 1);
+  const resourceUrl = (reference: string) => {
+    // Resolve against the playlist that contains the reference, not always the
+    // master. Keep every nested resource within the approved replay directory.
+    const resolved = resolveApprovedResourceUrl(sourceUrl, new URL(reference, playlistUrl).toString());
+    if (!resolved) throw new Error("Replay playlist contains an unsupported media reference.");
+    const target = new URL(resolved);
+    const path = `${target.pathname.slice(sourceDirectory.length)}${target.search}`;
+    return `${functionBaseUrl(req)}/records/${encodeURIComponent(replayId)}/segment?path=${encodeURIComponent(path)}${tokenQuery}`;
+  };
   return playlist.split(/\r?\n/).map((line) => {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) return line;
-    return `${functionBaseUrl(req)}/records/${encodeURIComponent(replayId)}/segment?path=${encodeURIComponent(trimmed)}${tokenQuery}`;
+    if (!trimmed) return line;
+    // HLS keys, initialization maps and alternate renditions carry their URI
+    // in attributes rather than standalone lines (RFC 8216 section 4.3).
+    if (trimmed.startsWith("#")) return line.replace(/([:,][ \t]*)URI="([^"]*)"/g, (_match, prefix, uri) => `${prefix}URI="${resourceUrl(uri)}"`);
+    return resourceUrl(trimmed);
   }).join("\n");
 };
 
@@ -394,11 +428,11 @@ const handlePlaylistFetch = async (req: Request, adminClient: SupabaseClientLike
   if ("error" in authorized) return authorized.error;
   const sourceUrl = isApprovedHlsPlaylistUrl(authorized.session.hls_playback_url);
   if (!sourceUrl) return jsonResponse(404, baseState("unavailable", "Replay unavailable", "The approved playback source is missing."));
-  const upstream = await fetchApprovedHlsUrl(sourceUrl, {
+  const { response: upstream, url: playlistUrl } = await fetchApprovedHlsUrl(sourceUrl, {
     Accept: "application/vnd.apple.mpegurl, application/x-mpegURL, text/plain",
   });
   if (!upstream.ok) return jsonResponse(502, baseState("error", "Replay unavailable", "The controlled playback source could not be fetched."));
-  return new Response(rewritePlaylist(req, replayId, await upstream.text()), {
+  return new Response(rewritePlaylist(req, replayId, await upstream.text(), sourceUrl, playlistUrl), {
     headers: PLAYLIST_HEADERS,
     status: 200,
   });
@@ -416,15 +450,37 @@ const handleSegmentFetch = async (req: Request, adminClient: SupabaseClientLike,
       rawHlsUrlReturned: false,
     });
   }
-  const upstream = await fetchApprovedHlsUrl(targetUrl);
-  if (!upstream.ok || !upstream.body) return jsonResponse(502, baseState("error", "Replay unavailable", "The controlled playback segment could not be fetched."));
-  return new Response(upstream.body, {
-    headers: {
+  const range = req.headers.get("Range");
+  let { response: upstream, url: resourceUrl } = await fetchApprovedHlsUrl(targetUrl, range ? { Range: range } : undefined, sourceUrl!);
+  if (upstream.status === 416) {
+    return new Response(null, { status: 416, headers: {
       ...CORS_HEADERS,
-      "Cache-Control": "no-store",
-      "Content-Type": upstream.headers.get("Content-Type") || "video/mp2t",
-    },
-    status: 200,
+      ...(upstream.headers.has("Content-Range") ? { "Content-Range": upstream.headers.get("Content-Range")! } : {}),
+    } });
+  }
+  if (!upstream.ok || !upstream.body) return jsonResponse(502, baseState("error", "Replay unavailable", "The controlled playback segment could not be fetched."));
+  const contentType = upstream.headers.get("Content-Type") || "video/mp2t";
+  if (new URL(resourceUrl).pathname.toLowerCase().endsWith(".m3u8") || /(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(contentType)) {
+    // A playlist must be rewritten as a whole. Native range requests apply to
+    // byte-range media, not a truncated manifest (including extensionless ones).
+    if (upstream.status === 206) {
+      await upstream.body.cancel();
+      ({ response: upstream, url: resourceUrl } = await fetchApprovedHlsUrl(targetUrl, undefined, sourceUrl!));
+    }
+    if (upstream.status !== 200 || !upstream.body) return jsonResponse(502, baseState("error", "Replay unavailable", "The controlled replay playlist could not be fetched."));
+    return new Response(rewritePlaylist(req, replayId, await upstream.text(), sourceUrl!, resourceUrl), {
+      headers: PLAYLIST_HEADERS,
+      status: 200,
+    });
+  }
+  const mediaHeaders = new Headers({ ...CORS_HEADERS, "Cache-Control": "no-store", "Content-Type": contentType });
+  for (const name of ["Content-Range", "Content-Length", "Accept-Ranges"]) {
+    const value = upstream.headers.get(name);
+    if (value) mediaHeaders.set(name, value);
+  }
+  return new Response(upstream.body, {
+    headers: mediaHeaders,
+    status: upstream.status,
   });
 };
 
