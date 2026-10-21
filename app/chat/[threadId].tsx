@@ -285,6 +285,7 @@ function GatedSmartReplySuggestions(_: {
 }
 
 type IncomingCallAnswerOperation = { context: { key: string }; inviteId: string };
+type OutgoingCallStartOperation = { context: { key: string } };
 
 function useChatThreadOperationOwnership({
   currentUserId, threadId, sessionGeneration, isSignedIn, setCallBusy, visibleInviteId,
@@ -299,27 +300,39 @@ function useChatThreadOperationOwnership({
   const contextKey = JSON.stringify([currentUserId, threadId, sessionGeneration, isSignedIn]);
   const contextRef = useRef<{ key: string } | null>(null);
   const operationRef = useRef<IncomingCallAnswerOperation | null>(null);
+  const startOperationRef = useRef<OutgoingCallStartOperation | null>(null);
   const readRef = useRef<{ context: { key: string } } | null>(null);
   const visibleInviteRef = useRef(visibleInviteId);
   useLayoutEffect(() => {
     const context = { key: contextKey };
     contextRef.current = context;
     operationRef.current = null;
+    startOperationRef.current = null;
     readRef.current = null;
     setCallBusy(false);
     return () => {
       if (contextRef.current !== context) return;
       contextRef.current = null;
       operationRef.current = null;
+      startOperationRef.current = null;
       readRef.current = null;
     };
   }, [contextKey, setCallBusy]);
   useLayoutEffect(() => {
+    // A ringing and terminal projection can both occur before this commit,
+    // leaving the same visible id as before. Always reconcile the synchronous
+    // event fence with the committed view, even when that id did not change.
     visibleInviteRef.current = visibleInviteId;
+    if (visibleInviteId && startOperationRef.current) {
+      // Realtime/native Answer may reveal a current call before Start's push
+      // dispatch returns. That newer projection owns the UI, not the old reply.
+      startOperationRef.current = null;
+      setCallBusy(false);
+    }
     if (!visibleInviteId || !operationRef.current || operationRef.current.inviteId === visibleInviteId) return;
     operationRef.current = null;
     setCallBusy(false);
-  }, [setCallBusy, visibleInviteId]);
+  });
 
   const captureCallOperation = useCallback(() => {
     const context = contextRef.current;
@@ -331,7 +344,7 @@ function useChatThreadOperationOwnership({
   const beginAnswerOperation = useCallback((inviteId: string) => {
     const context = contextRef.current;
     if (!isSignedIn || !currentUserId || !threadId || !inviteId
-      || !context || context.key !== contextKey || operationRef.current) return null;
+      || !context || context.key !== contextKey || operationRef.current || startOperationRef.current) return null;
     const operation = { context, inviteId };
     operationRef.current = operation;
     setCallBusy(true);
@@ -345,6 +358,33 @@ function useChatThreadOperationOwnership({
     operationRef.current = null;
     setCallBusy(false);
   }, [isAnswerOperationCurrent, setCallBusy]);
+  const beginStartOperation = useCallback(() => {
+    const context = contextRef.current;
+    if (!isSignedIn || !currentUserId || !threadId || !context || context.key !== contextKey
+      || operationRef.current || startOperationRef.current || visibleInviteRef.current) return null;
+    const operation = { context };
+    startOperationRef.current = operation;
+    setCallBusy(true);
+    return operation;
+  }, [contextKey, currentUserId, isSignedIn, setCallBusy, threadId]);
+  const isStartOperationCurrent = useCallback((operation: OutgoingCallStartOperation) => (
+    startOperationRef.current === operation && contextRef.current === operation.context
+  ), []);
+  const finishStartOperation = useCallback((operation: OutgoingCallStartOperation) => {
+    if (!isStartOperationCurrent(operation)) return;
+    startOperationRef.current = null;
+    setCallBusy(false);
+  }, [isStartOperationCurrent, setCallBusy]);
+  const observeIncomingCallProjection = useCallback((inviteId: string) => {
+    if (!inviteId || contextRef.current?.key !== contextKey) return;
+    // State updates can remain batched while a Start response settles. Fence
+    // both that response and retained Start callbacks at the event boundary,
+    // rather than waiting for the visible-invite layout effect to run.
+    visibleInviteRef.current = inviteId;
+    if (!startOperationRef.current) return;
+    startOperationRef.current = null;
+    setCallBusy(false);
+  }, [contextKey, setCallBusy]);
   const beginThreadRead = useCallback(() => {
     const context = contextRef.current;
     if (!context || context.key !== contextKey) return null;
@@ -356,7 +396,7 @@ function useChatThreadOperationOwnership({
     readRef.current === read && contextRef.current === read.context
   ), []);
   const invalidateThreadReads = useCallback(() => { readRef.current = null; }, []);
-  return { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation };
+  return { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginStartOperation, isStartOperationCurrent, finishStartOperation, observeIncomingCallProjection, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation };
 }
 
 function useIosNativeMicrophoneAcknowledgements(contextKey: string, callUuid: string) {
@@ -531,7 +571,7 @@ export default function ChillyChatThreadScreen() {
   const { rememberNativeMicAck, consumeNativeMicAck, forgetNativeMicAck, isNativeMicContextCurrent } = useIosNativeMicrophoneAcknowledgements(
     JSON.stringify([currentUserId, threadId, authority?.sessionGeneration ?? "", isSignedIn, activeCallInvite?.id ?? "", activeCallInvite?.communicationRoomId ?? ""]), nativeControlCallUuid,
   );
-  const { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation } = useChatThreadOperationOwnership({
+  const { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginStartOperation, isStartOperationCurrent, finishStartOperation, observeIncomingCallProjection, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation } = useChatThreadOperationOwnership({
     currentUserId, threadId, sessionGeneration: authority?.sessionGeneration ?? "", isSignedIn, setCallBusy,
     visibleInviteId: incomingCallInvite?.id ?? activeCallInvite?.id ?? outgoingCallInvite?.id ?? "",
   });
@@ -851,6 +891,7 @@ export default function ChillyChatThreadScreen() {
     if (!valid) return false;
     if (!fromCurrentRead) invalidateThreadReads();
 
+    observeIncomingCallProjection(invite.id);
     rememberHandledIncomingInvite(invite);
     activeCallInviteRef.current = invite;
     setActiveCallInvite(invite);
@@ -868,7 +909,7 @@ export default function ChillyChatThreadScreen() {
     setError(null);
     setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
     return true;
-  }, [currentUserId, invalidateThreadReads, rememberHandledIncomingInvite, threadId]);
+  }, [currentUserId, invalidateThreadReads, observeIncomingCallProjection, rememberHandledIncomingInvite, threadId]);
 
   const terminalIosNativeAnswerOperations = useMemo(() => ({
       delay: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -1085,6 +1126,7 @@ export default function ChillyChatThreadScreen() {
       const visibleIncomingInvite = latestInviteForCurrentUser && !latestInviteWasHandled
         ? latestInviteForCurrentUser
         : null;
+      if (visibleIncomingInvite) observeIncomingCallProjection(visibleIncomingInvite.id);
       setIncomingCallInvite(visibleIncomingInvite);
       const cleanupPending = !!activeCallInviteRef.current
         && TERMINAL_CHAT_CALL_INVITE_STATUSES.has(activeCallInviteRef.current.status);
@@ -1131,7 +1173,7 @@ export default function ChillyChatThreadScreen() {
       setError(getUserFacingErrorMessage(loadError, "Unable to load this Chi'lly Chat thread."));
       setLoading(false);
     }
-  }, [applyAcceptedIncomingInviteState, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, messageEntryKey, reconcileEndedCallState, stopOutgoingRingback, threadId]);
+  }, [applyAcceptedIncomingInviteState, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, messageEntryKey, observeIncomingCallProjection, reconcileEndedCallState, stopOutgoingRingback, threadId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -2321,14 +2363,28 @@ export default function ChillyChatThreadScreen() {
       return;
     }
 
+    const operation = beginStartOperation();
+    if (!operation) return;
     try {
-      setCallBusy(true);
       setCallDeliveryStatus(null);
       setOutgoingCallDeviceAlertSent(false);
       void (Platform.OS === "android"
         ? requestPushPermissionAndRegister()
         : refreshPushRegistrationIfGranted());
       const result = await startChatThreadCall(threadId, mode);
+      if (!isStartOperationCurrent(operation)) return;
+      // Dispatch can outlive Answer/End. The refreshed thread is authoritative;
+      // the begin-call invite in this result may still say ringing from before
+      // that await. Never reopen it or retain it as a barrier to the next call.
+      if (result.invite?.status !== "busy"
+        && (!result.invite || !["ringing", "accepted"].includes(result.invite.status)
+          || result.invite.threadId !== threadId
+          || result.thread.threadId !== threadId
+          || result.thread.activeCommunicationRoomId !== result.invite.communicationRoomId)) {
+        await loadThreadState();
+        return;
+      }
+      invalidateThreadReads();
       setThread(result.thread);
       if (result.role === "callee" && result.invite?.status === "ringing") {
         stopOutgoingRingback();
@@ -2372,6 +2428,7 @@ export default function ChillyChatThreadScreen() {
         mode,
       });
     } catch (callStartError) {
+      if (!isStartOperationCurrent(operation)) return;
       setOutgoingCallInvite(null);
       logChatCall("handle_start_call_failed", {
         threadId,
@@ -2386,9 +2443,9 @@ export default function ChillyChatThreadScreen() {
         mode,
       });
     } finally {
-      setCallBusy(false);
+      finishStartOperation(operation);
     }
-  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, callBusy, officialAccount, stopOutgoingRingback, threadId]);
+  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, beginStartOperation, callBusy, finishStartOperation, invalidateThreadReads, isStartOperationCurrent, loadThreadState, officialAccount, stopOutgoingRingback, threadId]);
 
   const readAcceptableIncomingInvite = useCallback(async (
     invite: ChillyChatCallInvite,

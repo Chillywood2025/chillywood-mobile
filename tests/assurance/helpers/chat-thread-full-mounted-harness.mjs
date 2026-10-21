@@ -237,7 +237,7 @@ export async function mountFullChatThread(options = {}) {
   const runtime = {
     userId: "local-user", remoteUserId: "remote-user", threadId: "thread", roomId: "ROOM-LEGACY",
     platform: "android", sessionGeneration: "session-1", errors: [], transitions: [],
-    leaves: [], hostEnds: 0, clears: [], nativeEnds: [], notifications: [], timers: [], intervals: [],
+    leaves: [], hostEnds: 0, clears: [], nativeEnds: [], notifications: [], timers: [], intervals: [], startCalls: [],
     subscriptions: new Set(), threadSubscriptions: new Set(), focused: true, ...options,
   };
   runtime.keyboard = { visible: options.keyboardVisible ?? false, dismissals: 0 };
@@ -367,6 +367,8 @@ export async function mountFullChatThread(options = {}) {
       return runtime.clearThread ? runtime.clearThread(...args) : { cleared: true, reason: "ended" };
     },
     startChatThreadCall: async (id, callType) => {
+      runtime.startCalls.push({ id, callType });
+      if (runtime.startCall) return runtime.startCall(id, callType);
       if (durableThread) {
         const invite = durableThread.start(runtime.userId, id, callType);
         runtime.roomId = invite.communicationRoomId;
