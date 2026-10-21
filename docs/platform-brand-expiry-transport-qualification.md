@@ -12,6 +12,8 @@ Transport sends an exact version-specific DELETE and then a HEAD observation to 
 
 ## Owner removal and rollout contract
 
+Reference-free profile/publication writes retain different-owner independence only for the exact known table shape: all seven Brand asset references must be NULL in the new row and also the old row on update, with empty locator documents. Future columns, nonempty references, unchanged references, replacement and reference-clearing transitions retain the claim-ordering lock. No publish, ownership, scan or entitlement authority changes.
+
 The generic Brand reference guard does not serialize authority-reducing updates of an exact permission-grant row whose old and new locator documents contain only empty metadata. Only status, expiry and update timestamp may change; status may stay unchanged or move from active to revoked, and expiry may stay unchanged, shorten, or become finite from unlimited. Identity, metadata, future locator columns, inserts, extensions and reactivation retain normal fencing, as do all existing authorization and canary triggers. This corrects avoidable cross-feature serialization during independently committed permission maintenance; it does not promise that the full admin revoke RPC is nonblocking, since its audit write can still acquire the Brand lock.
 
 

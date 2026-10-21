@@ -184,21 +184,79 @@ export async function runStudioRollingHttp({ container, database, owner, request
     for (const published of [false, true]) {
       const assetId = randomUUID();
       const objectKey = `${owner.user}/hero_image/${assetId}.png`;
-      const inserted = request('POST', '/platform_brand_assets?select=*', {
+      const assetPayload = {
         id: assetId, owner_user_id: owner.user, asset_type: 'hero_image', asset_state: 'draft',
         moderation_status: 'pending_review', storage_provider: 'supabase', storage_bucket: 'platform-brand-assets',
         storage_object_key: objectKey, storage_path: objectKey, mime_type: 'image/png', file_size_bytes: 1,
         original_file_name: 'local-http-fixture.png', updated_at: new Date().toISOString(),
-      }, owner, { Prefer: 'return=representation', Accept: 'application/vnd.pgrst.object+json' });
-      expect(inserted, 201, 'historical draft asset row insertion');
+      };
+      const insertAsset = () => request('POST', '/platform_brand_assets?select=*', assetPayload,
+        owner, { Prefer: 'return=representation', Accept: 'application/vnd.pgrst.object+json' });
+      const absent = insertAsset();
+      expect(absent, 400, 'absent object incarnation is rejected');
+      assert.equal(json(absent).code, 'P0001');
+      assert.equal(json(absent).message, 'brand_storage_incarnation_required');
+      assert.equal(query(`select count(*) from public.platform_brand_assets where id=${literal(assetId)};`), '0');
+      // Exact metadata generation in the generated clone, not an upload or
+      // evidence that provider bytes exist.
+      query(`insert into storage.objects(bucket_id,name,version,metadata)
+        values('platform-brand-assets',${literal(objectKey)},${literal(randomUUID())},'{"size":1}');`);
+      const inserted = insertAsset();
+      expect(inserted, 201, 'historical draft asset row insertion with exact incarnation');
       if (published) {
-        // Scanner completion is a local fixture input; actual file upload and
-        // malware scanning remain outside this HTTP protocol test.
-        query(`update public.platform_brand_assets set scan_status='clean' where id=${literal(assetId)};`);
+        // Use the actual queue/claim/completion protocol with a synthetic
+        // scanner result. This does not prove byte scanning or ClamAV efficacy.
+        const job = query(`select id from public.media_scan_jobs where target_table='platform_brand_assets' and target_id=${literal(assetId)};`);
+        assert.match(job, /^[0-9a-f-]{36}$/u);
+        query(`update public.media_scan_jobs set priority=-2147483648 where id=${literal(job)};`);
+        const claimed = query(`begin; set local request.jwt.claim.role='service_role';
+          select id from public.claim_media_scan_jobs(1,'studio-rolling-fixture'); commit;`);
+        assert.equal(claimed, job, 'actual worker claim owns the exact fixture job');
+        const completed = JSON.parse(query(`begin; set local request.jwt.claim.role='service_role';
+          select public.complete_media_scan_job(${literal(job)},'clean','clamav','synthetic fixture','fixture',null,null,1); commit;`));
+        assert.equal(completed.targetPropagationComplete, true);
+        assert.equal(query(`select scan_status from public.platform_brand_assets where id=${literal(assetId)};`), 'clean');
         const selected = request('POST', '/rpc/publish_platform_brand_profile', {
           p_profile: full(owner, { accent_color: '#654321', hero_image_asset_id: assetId }),
         });
         expect(selected, 200, 'fixture public asset publication');
+      }
+      if (published) {
+        const sourceBefore = query(`select to_jsonb(a)::text from public.platform_brand_assets a where id=${literal(assetId)};`);
+        const publicationBefore = snapshot();
+        const originalDraft = query(`select to_jsonb(d)::text from public.platform_brand_profiles d where owner_user_id=${literal(owner.user)};`);
+        const blocked = request('PATCH', `/platform_brand_assets?id=eq.${assetId}&owner_user_id=eq.${owner.user}`, {
+          asset_state: 'archived', deleted_at: new Date().toISOString(),
+        }, owner, { Prefer: 'return=minimal' });
+        expect(blocked, 400, 'referenced owner archive is rejected');
+        assert.equal(json(blocked).code, 'P0001');
+        assert.equal(json(blocked).message, 'brand_asset_in_use');
+        assert.equal(query(`select to_jsonb(a)::text from public.platform_brand_assets a where id=${literal(assetId)};`), sourceBefore);
+        assert.equal(snapshot(), publicationBefore, 'rejection preserves the public selection');
+        assert.equal(query(`select to_jsonb(d)::text from public.platform_brand_profiles d where owner_user_id=${literal(owner.user)};`), originalDraft, 'rejection preserves the draft selection');
+        const draftCleared = request('POST', '/platform_brand_profiles?on_conflict=owner_user_id&select=*', {
+          ...full(owner, { accent_color: '#654321', hero_image_asset_id: null }),
+        }, owner, { Prefer: 'resolution=merge-duplicates,return=representation', Accept: 'application/vnd.pgrst.object+json' });
+        expect(draftCleared, 200, 'authorized draft save clears only draft selection');
+        assert.equal(json(draftCleared).hero_image_asset_id, null);
+        assert.equal(snapshot(), publicationBefore, 'draft clear does not silently unpublish');
+        const draftBefore = query(`select to_jsonb(d)::text from public.platform_brand_profiles d where owner_user_id=${literal(owner.user)};`);
+        const stillReferenced = request('PATCH', `/platform_brand_assets?id=eq.${assetId}&owner_user_id=eq.${owner.user}`, {
+          asset_state: 'archived', deleted_at: new Date().toISOString(),
+        }, owner, { Prefer: 'return=minimal' });
+        expect(stillReferenced, 400, 'publication alone still blocks owner archive');
+        assert.equal(json(stillReferenced).code, 'P0001');
+        assert.equal(json(stillReferenced).message, 'brand_asset_in_use');
+        assert.equal(query(`select to_jsonb(a)::text from public.platform_brand_assets a where id=${literal(assetId)};`), sourceBefore);
+        assert.equal(query(`select to_jsonb(d)::text from public.platform_brand_profiles d where owner_user_id=${literal(owner.user)};`), draftBefore);
+        assert.equal(snapshot(), publicationBefore, 'rejection preserves remaining publication reference');
+        const detached = request('POST', '/rpc/publish_platform_brand_profile', {
+          p_profile: full(owner, { accent_color: '#654321', hero_image_asset_id: null }),
+        });
+        expect(detached, 200, 'authorized explicit publish clears design selection');
+        assert.equal(query(`select count(*) from public.platform_brand_profiles d join public.platform_brand_publications p using(owner_user_id)
+          where d.owner_user_id=${literal(owner.user)} and d.hero_image_asset_id is null and p.hero_image_asset_id is null;`), '1');
+        assert.equal(query(`select deleted_at is null from public.platform_brand_assets where id=${literal(assetId)};`), 't', 'detaching never removes the media itself');
       }
       const archived = request('PATCH', `/platform_brand_assets?id=eq.${assetId}&owner_user_id=eq.${owner.user}`, {
         asset_state: 'archived', deleted_at: new Date().toISOString(),
@@ -223,7 +281,7 @@ export async function runStudioRollingHttp({ container, database, owner, request
         assert.equal(json(hidden).hero_image_asset_id, null);
       }
     }
-    pass('HTTP old minimal archive PATCH succeeds for draft/public assets while deleted media access stays denied');
+    pass('HTTP archive preserves referenced assets until explicit detach/publish; exact unreferenced removal denies media access');
   } finally {
     try {
       if (owned) output(invoke(['rm', '--force', name]), 'remove owned PostgREST container');

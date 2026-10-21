@@ -413,8 +413,19 @@ end $$;
 
 create function private.guard_platform_brand_retention_profile() returns trigger
 language plpgsql security definer set search_path='' as $$
-declare asset uuid;
+declare asset uuid; known_columns constant text[]:=array['owner_user_id','hero_image_asset_id','hero_video_asset_id','hero_poster_asset_id','background_image_asset_id','avatar_asset_id','logo_asset_id','watermark_asset_id','spotlight_video_id','theme_preset','accent_color','hero_fit_mode','hero_focal_x','hero_focal_y','hero_crop_scale','background_fit_mode','background_focal_x','background_focal_y','overlay_strength','blur_strength','published_at','created_at','updated_at'];
 begin
+ -- An exact known-shape design with no old or new Brand references cannot
+ -- race a Brand claim. Keep independent owners' reference-free writes local.
+ if tg_relid in (to_regclass('public.platform_brand_profiles'),to_regclass('public.platform_brand_publications'))
+   and tg_op in ('INSERT','UPDATE')
+   and to_jsonb(new) ?& known_columns and (to_jsonb(new)-known_columns)='{}'::jsonb
+   and private.deleted_media_locator_document(to_jsonb(new),tg_relid)='{}'::jsonb
+   and array_remove(array[new.hero_image_asset_id,new.hero_video_asset_id,new.hero_poster_asset_id,new.background_image_asset_id,new.avatar_asset_id,new.logo_asset_id,new.watermark_asset_id],null::uuid)='{}'::uuid[]
+   and (tg_op='INSERT' or (
+     to_jsonb(old) ?& known_columns and (to_jsonb(old)-known_columns)='{}'::jsonb
+     and private.deleted_media_locator_document(to_jsonb(old),tg_relid)='{}'::jsonb
+     and array_remove(array[old.hero_image_asset_id,old.hero_video_asset_id,old.hero_poster_asset_id,old.background_image_asset_id,old.avatar_asset_id,old.logo_asset_id,old.watermark_asset_id],null::uuid)='{}'::uuid[])) then return new; end if;
  perform private.platform_brand_retention_lock();
  foreach asset in array array[new.hero_image_asset_id,new.hero_video_asset_id,new.hero_poster_asset_id,new.background_image_asset_id,new.avatar_asset_id,new.logo_asset_id,new.watermark_asset_id] loop
    if exists(select 1 from private.platform_brand_expiry_claims where asset_id=asset) then raise exception 'brand_claimed_profile_reference_forbidden'; end if;
