@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import ts from "typescript";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 const assertIncludes = (haystack, needle, label) => {
@@ -29,7 +30,47 @@ assertIncludes(tabLayout, "title: 'Saved'", "bottom tab viewer Library label");
 assertIncludes(viewerLibrary, "My Library", "viewer Library screen header");
 assertIncludes(viewerLibrary, "Saved titles, unlocked creator videos, watch progress, followed Platforms, and saved replays live here.", "viewer Library scope copy");
 assertIncludes(studio, "Content Library", "Platform Studio Content Library copy");
-assertIncludes(studio, "A clean library of your uploads, drafts, paid videos, Circle media, replays, and events.", "Save Replay Content Library destination copy");
+// Guard the actual library controls and replay destination, not mutable
+// marketing copy. Scope these checks to live declarations rather than other
+// Studio tabs or historical strings elsewhere in the file.
+const studioAst = ts.createSourceFile("app/channel-settings.tsx", studio, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const nodesMatching = (root, predicate) => {
+  const nodes = [];
+  const visit = (node) => {
+    if (predicate(node)) nodes.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return nodes;
+};
+const declaration = (root, name) => {
+  const nodes = nodesMatching(root, (node) => ts.isVariableDeclaration(node) && node.name.getText(studioAst) === name);
+  if (nodes.length !== 1 || !nodes[0].initializer) throw new Error(`Content Library must declare ${name} exactly once`);
+  return nodes[0].initializer;
+};
+const filters = declaration(studioAst, "CONTENT_STATUS_FILTERS");
+if (!ts.isArrayLiteralExpression(filters)) throw new Error("Content Library filters must be an explicit array");
+const filterIds = filters.elements.flatMap((element) => ts.isObjectLiteralExpression(element)
+  ? element.properties.filter((property) => ts.isPropertyAssignment(property) && property.name.getText(studioAst) === "id" && ts.isStringLiteral(property.initializer)).map((property) => property.initializer.text)
+  : []);
+for (const id of ["all", "uploads", "replays", "drafts", "circle", "published", "paid", "events", "processing", "needs_attention"]) {
+  if (!filterIds.includes(id)) throw new Error(`Content Library must expose the ${id} filter`);
+}
+const contentPanel = declaration(studioAst, "renderContentPanel");
+const requireCall = (callee, args, root = contentPanel) => {
+  const found = nodesMatching(root, (node) => ts.isCallExpression(node)
+    && node.expression.getText(studioAst) === callee
+    && (!args || args.every((arg, index) => node.arguments[index]?.getText(studioAst) === arg)));
+  if (!found.length) throw new Error(`Content Library must call ${callee}${args ? `(${args.join(", ")})` : ""}`);
+};
+requireCall("CONTENT_STATUS_FILTERS.map");
+requireCall("setContentStatusFilter", ["filter.id"]);
+requireCall("renderReplayShelf", ['"Replays"', "searchedReplays"]);
+const replayShelf = declaration(contentPanel, "renderReplayShelf");
+requireCall("openReplayActions", ["replay"], replayShelf);
+const replayActions = declaration(contentPanel, "openReplayActions").getText(studioAst);
+assertIncludes(replayActions, 'pathname: "/player/replay/[replayId]"', "Content Library replay shelf Open route");
+assertIncludes(replayActions, "params: { replayId: replay.id }", "Content Library replay shelf exact replay identity");
 assertIncludes(studio, 'pathname: "/player/replay/[replayId]"', "Content Library replay Open route");
 
 [watchParty, liveStage].forEach((source, index) => {
