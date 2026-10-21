@@ -50,7 +50,7 @@ type ScanCandidate = {
 
 const JSON_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type, x-media-scan-operator-token",
+  "Access-Control-Allow-Headers": "content-type, x-media-scan-operator-token, x-media-scan-job-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
@@ -117,13 +117,24 @@ const timingSafeEqualHex = (left: string, right: string) => {
   return diff === 0;
 };
 
-const authenticateScanner = async (req: Request) => {
-  const expectedHash = toText(Deno.env.get("MEDIA_SCAN_OPERATOR_TOKEN_SHA256")).toLowerCase();
-  const token = toText(req.headers.get("x-media-scan-operator-token"));
-  if (!expectedHash || !/^[a-f0-9]{64}$/i.test(expectedHash)) return false;
-  if (!token || token.length < 32 || token.length > 512) return false;
+const authenticateScanner = async (req: Request): Promise<"operator" | "job" | null> => {
+  const operatorToken = toText(req.headers.get("x-media-scan-operator-token"));
+  const jobToken = toText(req.headers.get("x-media-scan-job-token"));
+  // Empty headers are absent. Never resolve two credentials or retry a failed
+  // dedicated credential against the broader operator credential.
+  if ((!operatorToken && !jobToken) || (operatorToken && jobToken)) return null;
+  const jobHash = toText(Deno.env.get("MEDIA_SCAN_JOB_TOKEN_SHA256")).toLowerCase();
+  const expectedHash = jobToken ? jobHash
+    : toText(Deno.env.get("MEDIA_SCAN_OPERATOR_TOKEN_SHA256")).toLowerCase();
+  const token = jobToken || operatorToken;
+  if (!/^[a-f0-9]{64}$/.test(expectedHash)) return null;
+  if (token.length < 32 || token.length > 512) return null;
   const actualHash = await sha256Hex(token);
-  return timingSafeEqualHex(actualHash, expectedHash);
+  if (!timingSafeEqualHex(actualHash, expectedHash)) return null;
+  // A dedicated credential must not gain operator powers through the legacy
+  // header, even if the two configured hashes were accidentally made identical.
+  if (!jobToken && /^[a-f0-9]{64}$/.test(jobHash) && timingSafeEqualHex(actualHash, jobHash)) return null;
+  return jobToken ? "job" : "operator";
 };
 
 const normalizeAction = (value: unknown): GatewayAction | null => {
@@ -564,13 +575,8 @@ Deno.serve(async (req): Promise<Response> => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   try {
-    if (!(await authenticateScanner(req))) return json(401, { error: "scanner_operator_token_required" });
-
-    const supabaseUrl = readRequiredEnv("SUPABASE_URL");
-    const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const scannerAuthority = await authenticateScanner(req);
+    if (!scannerAuthority) return json(401, { error: "scanner_operator_token_required" });
 
     const payload = await req.json().catch(() => null) as GatewayPayload | null;
     if (!payload || typeof payload !== "object") return json(400, { error: "invalid_body" });
@@ -579,6 +585,15 @@ Deno.serve(async (req): Promise<Response> => {
     const sourceType = toLowerText(payload.source_type || "creator_video");
     const sourceId = parseUuid(payload.source_id);
     if (!action) return json(400, { error: "invalid_action" });
+    if (scannerAuthority === "job" && action !== "download_scan_job") {
+      return json(403, { error: "scanner_job_action_forbidden" });
+    }
+
+    const supabaseUrl = readRequiredEnv("SUPABASE_URL");
+    const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     if (action === "download_scan_job") {
       const jobId = parseUuid(payload.job_id);
