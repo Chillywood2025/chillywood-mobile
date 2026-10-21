@@ -209,10 +209,29 @@ export async function runStudioRollingHttp({ container, database, owner, request
         const job = query(`select id from public.media_scan_jobs where target_table='platform_brand_assets' and target_id=${literal(assetId)};`);
         assert.match(job, /^[0-9a-f-]{36}$/u);
         query(`update public.media_scan_jobs set priority=-2147483648 where id=${literal(job)};`);
-        const claimed = query(`begin; set local request.jwt.claim.role='service_role';
+        const claimed = query(`begin; set local request.jwt.claim.role='service_role'; set local request.jwt.claims='{"role":"service_role"}';
           select id from public.claim_media_scan_jobs(1,'studio-rolling-fixture'); commit;`);
         assert.equal(claimed, job, 'actual worker claim owns the exact fixture job');
-        const completed = JSON.parse(query(`begin; set local request.jwt.claim.role='service_role';
+        const claimedState = query(`select to_jsonb(j)::text from public.media_scan_jobs j where id=${literal(job)};`);
+        assert.equal(JSON.parse(claimedState).status, 'scanning');
+        const preCompletionSource = query(`select to_jsonb(a)::text from public.platform_brand_assets a where id=${literal(assetId)};`);
+        // auth.role's legacy setting alone must not satisfy the actual
+        // completion wrapper's auth.jwt service-context requirement.
+        for (const deniedClaims of [{}, { role: 'authenticated' }]) {
+          query(`begin; set local request.jwt.claim.role='service_role';
+            set local request.jwt.claims=${literal(JSON.stringify(deniedClaims))};
+            do $fixture$ begin
+              begin
+                perform public.complete_media_scan_job(${literal(job)},'clean','clamav','synthetic fixture','fixture',null,null,1);
+                raise exception 'fixture_nonservice_completion_was_admitted';
+              exception when sqlstate 'P0001' then
+                if sqlerrm<>'media_scan_service_role_required' then raise; end if;
+              end;
+            end $fixture$; commit;`);
+          assert.equal(query(`select to_jsonb(j)::text from public.media_scan_jobs j where id=${literal(job)};`), claimedState, 'nonservice completion preserves exact claimed job');
+          assert.equal(query(`select to_jsonb(a)::text from public.platform_brand_assets a where id=${literal(assetId)};`), preCompletionSource, 'nonservice completion preserves exact source');
+        }
+        const completed = JSON.parse(query(`begin; set local request.jwt.claim.role='service_role'; set local request.jwt.claims='{"role":"service_role"}';
           select public.complete_media_scan_job(${literal(job)},'clean','clamav','synthetic fixture','fixture',null,null,1); commit;`));
         assert.equal(completed.targetPropagationComplete, true);
         assert.equal(query(`select scan_status from public.platform_brand_assets where id=${literal(assetId)};`), 'clean');
