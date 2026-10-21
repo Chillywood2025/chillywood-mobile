@@ -113,6 +113,30 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
+const originalCopyFiles = ['20261021022807_supabase_original_copy_receipts.sql'];
+const originalCopyFunctionKeys = new Set([
+ 'private.preserve_supabase_original_copy_receipt/0',
+ 'private.supabase_original_copy_snapshot_sha256/1',
+ 'private.read_supabase_original_copy_source/2',
+ 'private.supabase_original_copy_binding/2',
+ 'public.record_supabase_original_copy_receipt/8',
+ 'public.preflight_supabase_original_copy_cutover/1',
+]);
+
+const legacyRetentionFiles = ['20261021021025_deleted_media_legacy_provenance_adapter.sql'];
+const legacyRetentionFunctionKeys = new Set([
+  'private.preserve_deleted_media_legacy_provenance/0',
+  'private.deleted_media_legacy_source_binding/2',
+  'private.read_deleted_media_legacy_source/2',
+  'private.enroll_deleted_media_legacy_provenance/4',
+  'private.validate_deleted_media_legacy_provenance/1',
+  'private.deleted_media_legacy_source_supported/2',
+  'private.preserve_deleted_media_legacy_delivery_revocation/0',
+  'private.deleted_media_legacy_delivery_revoked/3',
+  'public.check_legacy_media_delivery_revocation/3',
+  'private.revoke_deleted_media_legacy_delivery/1',
+]);
+
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
 const explicitApiGrantFiles = ['20261021014627_explicit_service_api_grants.sql'];
 const collectionOrderingFunctionKeys = new Set([
@@ -207,7 +231,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>originalCopyFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...originalCopyFunctionKeys].sort());
+    assert.deepEqual(before.functions.filter(fn=>legacyRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...legacyRetentionFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>collectionOrderingFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...collectionOrderingFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>ownerSecurityFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
       [...ownerSecurityFunctionKeys].sort(),'exact Owner Security successor function inventory is present');
@@ -241,7 +267,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+explicitApiGrantFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+legacyRetentionFiles.length+explicitApiGrantFiles.length+originalCopyFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
+    assert.deepEqual(replayReport.files.filter(file=>legacyRetentionFiles.includes(file)),legacyRetentionFiles);
     assert.deepEqual(replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);
     assert.deepEqual(replayReport.files.filter(file=>collectionOrderingFiles.includes(file)),collectionOrderingFiles);
     assert.deepEqual(replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles,

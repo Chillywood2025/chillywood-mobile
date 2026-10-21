@@ -161,8 +161,12 @@ jobs:
           node scripts/test-content-inspection-postgres.mjs
           node scripts/test-deleted-content-retention-postgres.mjs
           node scripts/test-deleted-media-retirement-postgres.mjs
+          node scripts/test-legacy-provenance-postgres.mjs
+          node scripts/test-legacy-retention-runtime-postgres.mjs
+          node scripts/test-supabase-original-copy-receipts-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-content-inspection-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-deleted-content-retention-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-legacy-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-staff-permission-template-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-database-runtime-authority-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-studio-authority-concurrency.mjs
