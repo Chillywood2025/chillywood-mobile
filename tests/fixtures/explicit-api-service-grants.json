@@ -1,0 +1,232 @@
+[
+  {
+    "table": "admin_live_cost_guard_actions",
+    "privileges": ["INSERT","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/live-cost-guard.ts","operations":["insert","select"]}
+    ]
+  },
+  {
+    "table": "admin_live_cost_guard_events",
+    "privileges": ["INSERT","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/live-cost-guard.ts","operations":["insert","select"]},
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "admin_live_cost_guard_settings",
+    "privileges": ["SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/live-cost-guard.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "creator_payout_accounts",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["select","update","upsert"]}
+    ]
+  },
+  {
+    "table": "creator_payout_eligibility_records",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["upsert"]}
+    ]
+  },
+  {
+    "table": "creator_payout_onboarding_sessions",
+    "privileges": ["INSERT"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["insert"]}
+    ]
+  },
+  {
+    "table": "creator_payout_provider_transfers",
+    "privileges": ["SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["select","update"]}
+    ]
+  },
+  {
+    "table": "creator_payout_provider_webhook_events",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["insert","select","update"]}
+    ]
+  },
+  {
+    "table": "discovery_feed_item_blocks",
+    "privileges": ["SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/spectator-start-room/index.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "dmca_attachments",
+    "privileges": ["DELETE","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["delete","select"]}
+    ]
+  },
+  {
+    "table": "dmca_audit_log",
+    "privileges": ["DELETE","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["delete","select"]}
+    ]
+  },
+  {
+    "table": "dmca_cases",
+    "privileges": ["DELETE","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["delete","select","update"]}
+    ]
+  },
+  {
+    "table": "dmca_content_actions",
+    "privileges": ["DELETE","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["delete"]}
+    ]
+  },
+  {
+    "table": "dmca_counter_notices",
+    "privileges": ["DELETE","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["delete","select"]}
+    ]
+  },
+  {
+    "table": "dmca_strikes",
+    "privileges": ["DELETE","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["delete"]}
+    ]
+  },
+  {
+    "table": "livekit_room_assignments",
+    "privileges": ["INSERT","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/livekit-routing.ts","operations":["insert","select"]},
+      {"file":"supabase/functions/livekit-heartbeat-monitor/index.ts","operations":["select"]},
+      {"file":"supabase/functions/livekit-registry/index.ts","operations":["select"]},
+      {"file":"supabase/functions/livekit-token/index.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "livekit_routing_audit",
+    "privileges": ["INSERT","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/livekit-routing.ts","operations":["insert"]},
+      {"file":"supabase/functions/livekit-registry/index.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "livekit_server_heartbeats",
+    "privileges": ["INSERT"],
+    "consumers": [
+      {"file":"supabase/functions/livekit-heartbeat-monitor/index.ts","operations":["insert"]},
+      {"file":"supabase/functions/livekit-registry/index.ts","operations":["insert"]}
+    ]
+  },
+  {
+    "table": "livekit_servers",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/livekit-routing.ts","operations":["select","update"]},
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["select"]},
+      {"file":"supabase/functions/livekit-heartbeat-monitor/index.ts","operations":["select","update"]},
+      {"file":"supabase/functions/livekit-operator/index.ts","operations":["select"]},
+      {"file":"supabase/functions/livekit-registry/index.ts","operations":["select","update","upsert"]},
+      {"file":"supabase/functions/livekit-token/index.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "platform_staff_role_audit",
+    "privileges": ["SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["select"],"selector":"source.table"}
+    ]
+  },
+  {
+    "table": "provider_access_audit_events",
+    "privileges": ["INSERT","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/money-operator/index.ts","operations":["insert"]}
+    ]
+  },
+  {
+    "table": "provider_access_capabilities",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/money-operator/index.ts","operations":["select","upsert"]}
+    ]
+  },
+  {
+    "table": "provider_accounts",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/provider-usage-import/index.ts","operations":["insert","select","update"]}
+    ]
+  },
+  {
+    "table": "provider_dashboard_repair_requests",
+    "privileges": ["INSERT","SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/money-operator/index.ts","operations":["insert","select"]}
+    ]
+  },
+  {
+    "table": "provider_usage_daily",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/provider-billing-reconciliation/index.ts","operations":["select"]},
+      {"file":"supabase/functions/provider-usage-import/index.ts","operations":["insert","select","update"]}
+    ]
+  },
+  {
+    "table": "provider_usage_imports",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/provider-usage-import/index.ts","operations":["insert","update"]}
+    ]
+  },
+  {
+    "table": "provider_usage_reconciliation",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/provider-billing-reconciliation/index.ts","operations":["insert","select","update"]}
+    ]
+  },
+  {
+    "table": "room_broadcast_sessions",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/_shared/spectator-broadcast.ts","operations":["insert","select","update"]},
+      {"file":"supabase/functions/creator-replay-playback/index.ts","operations":["select"]},
+      {"file":"supabase/functions/request-save-replay/index.ts","operations":["select"]},
+      {"file":"supabase/functions/spectator-playback/index.ts","operations":["select","update"]},
+      {"file":"supabase/functions/spectator-start-room/index.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "spectator_hls_playback_records",
+    "privileges": ["INSERT","SELECT","UPDATE"],
+    "consumers": [
+      {"file":"supabase/functions/admin-owner-controls/index.ts","operations":["select"]},
+      {"file":"supabase/functions/creator-replay-playback/index.ts","operations":["select"]},
+      {"file":"supabase/functions/request-save-replay/index.ts","operations":["select"]},
+      {"file":"supabase/functions/spectator-playback/index.ts","operations":["select","upsert"]},
+      {"file":"supabase/functions/spectator-start-room/index.ts","operations":["select"]}
+    ]
+  },
+  {
+    "table": "usage_daily_summaries",
+    "privileges": ["SELECT"],
+    "consumers": [
+      {"file":"supabase/functions/provider-billing-reconciliation/index.ts","operations":["select"]}
+    ]
+  }
+]
