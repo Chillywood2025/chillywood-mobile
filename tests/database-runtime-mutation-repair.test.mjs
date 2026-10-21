@@ -41,6 +41,7 @@ const adminBackendFiles = [
 // Both reviewed successors are part of the current replay: new transactional
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
+const explicitApiGrantFiles = ['20261021014627_explicit_service_api_grants.sql'];
 const ownerSecurityFiles = [
   '20261020222318_transactional_owner_security_canary.sql',
   '20261020222325_staff_permission_null_actor_closure.sql',
@@ -218,7 +219,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
       }finally{await db.exec('rollback')}
     }
     // This remains a full-current-chain repair test, including reviewed successors.
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+explicitApiGrantFiles.length);
+    check('complete explicit service API grant successor',replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);
     check('complete collection ordering successor',replayReport.files.filter(file=>collectionOrderingFiles.includes(file)),collectionOrderingFiles);
     check('complete Owner Security and null-actor successors',replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles);
     check('complete retention recovery successors',replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles);

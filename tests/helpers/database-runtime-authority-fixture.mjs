@@ -53,9 +53,11 @@ export function splitSQL(source) {
   return statements;
 }
 
-export async function createDatabase({overlayLiveDrift = false, applyRepair = false, includeHeldStudio = false} = {}) {
+export async function createDatabase({overlayLiveDrift = false, applyRepair = false, includeHeldStudio = false,
+  implicitApiGrants = true, excludeMigrations = []} = {}) {
   const db = new PGlite({extensions: {pgcrypto}});
-  const replayReport = {files: [], statements: 0, skipped: [], infrastructure: 'Empty catalog-derived auth/storage; controlled cron/vault/realtime; no provider transport'};
+  const replayReport = {files: [], statements: 0, skipped: [], implicitApiGrants, excludedMigrations: [...excludeMigrations],
+    infrastructure: 'Empty catalog-derived auth/storage; controlled cron/vault/realtime; no provider transport'};
   try {
     await db.exec(`set check_function_bodies=false; set time zone 'UTC';
       create role anon; create role authenticated; create role service_role bypassrls;
@@ -63,8 +65,11 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
       create schema auth; create schema storage; create schema extensions; create schema vault;
       create schema cron; create schema net; create schema realtime;
       create extension pgcrypto with schema extensions; set search_path=public,extensions;
-      alter default privileges in schema public grant all on tables to anon,authenticated,service_role;
-      alter default privileges in schema public grant all on sequences to anon,authenticated,service_role;
+      -- False is the strict fresh-schema table/sequence opt-in fixture. Function
+      -- defaults are unchanged: their separate PUBLIC-execute boundary is not
+      -- part of the October 30 new-table readiness assertion.
+      ${implicitApiGrants ? `alter default privileges in schema public grant all on tables to anon,authenticated,service_role;
+      alter default privileges in schema public grant all on sequences to anon,authenticated,service_role;` : ''}
       alter default privileges in schema public grant all on functions to anon,authenticated,service_role;
       create table realtime.messages(id bigint,extension text,topic text,payload jsonb,event text,private boolean,inserted_at timestamptz,updated_at timestamptz);
       create function realtime.topic() returns text language sql stable as $$select current_setting('realtime.topic',true)$$;
@@ -100,6 +105,7 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
       create function vault.create_secret(text,text,text) returns uuid language sql as $$insert into vault.secrets(secret,name,description) values($1,$2,$3) returning id$$;
     `);
     const files = fs.readdirSync(migrationDirectory).filter(name => name.endsWith('.sql') && name !== repairName
+      && !excludeMigrations.includes(name)
       && (includeHeldStudio || !heldStudioBundleVersions.some(version => name.startsWith(`${version}_`)))).sort();
     for (const file of files) {
       const statements = splitSQL(fs.readFileSync(path.join(migrationDirectory, file), 'utf8'));
