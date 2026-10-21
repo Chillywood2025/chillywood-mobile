@@ -319,6 +319,9 @@ function useChatThreadOperationOwnership({
     };
   }, [contextKey, setCallBusy]);
   useLayoutEffect(() => {
+    // A ringing and terminal projection can both occur before this commit,
+    // leaving the same visible id as before. Always reconcile the synchronous
+    // event fence with the committed view, even when that id did not change.
     visibleInviteRef.current = visibleInviteId;
     if (visibleInviteId && startOperationRef.current) {
       // Realtime/native Answer may reveal a current call before Start's push
@@ -329,7 +332,7 @@ function useChatThreadOperationOwnership({
     if (!visibleInviteId || !operationRef.current || operationRef.current.inviteId === visibleInviteId) return;
     operationRef.current = null;
     setCallBusy(false);
-  }, [setCallBusy, visibleInviteId]);
+  });
 
   const captureCallOperation = useCallback(() => {
     const context = contextRef.current;
@@ -372,6 +375,16 @@ function useChatThreadOperationOwnership({
     startOperationRef.current = null;
     setCallBusy(false);
   }, [isStartOperationCurrent, setCallBusy]);
+  const observeIncomingCallProjection = useCallback((inviteId: string) => {
+    if (!inviteId || contextRef.current?.key !== contextKey) return;
+    // State updates can remain batched while a Start response settles. Fence
+    // both that response and retained Start callbacks at the event boundary,
+    // rather than waiting for the visible-invite layout effect to run.
+    visibleInviteRef.current = inviteId;
+    if (!startOperationRef.current) return;
+    startOperationRef.current = null;
+    setCallBusy(false);
+  }, [contextKey, setCallBusy]);
   const beginThreadRead = useCallback(() => {
     const context = contextRef.current;
     if (!context || context.key !== contextKey) return null;
@@ -383,7 +396,7 @@ function useChatThreadOperationOwnership({
     readRef.current === read && contextRef.current === read.context
   ), []);
   const invalidateThreadReads = useCallback(() => { readRef.current = null; }, []);
-  return { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginStartOperation, isStartOperationCurrent, finishStartOperation, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation };
+  return { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginStartOperation, isStartOperationCurrent, finishStartOperation, observeIncomingCallProjection, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation };
 }
 
 function useIosNativeMicrophoneAcknowledgements(contextKey: string, callUuid: string) {
@@ -558,7 +571,7 @@ export default function ChillyChatThreadScreen() {
   const { rememberNativeMicAck, consumeNativeMicAck, forgetNativeMicAck, isNativeMicContextCurrent } = useIosNativeMicrophoneAcknowledgements(
     JSON.stringify([currentUserId, threadId, authority?.sessionGeneration ?? "", isSignedIn, activeCallInvite?.id ?? "", activeCallInvite?.communicationRoomId ?? ""]), nativeControlCallUuid,
   );
-  const { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginStartOperation, isStartOperationCurrent, finishStartOperation, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation } = useChatThreadOperationOwnership({
+  const { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginStartOperation, isStartOperationCurrent, finishStartOperation, observeIncomingCallProjection, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation } = useChatThreadOperationOwnership({
     currentUserId, threadId, sessionGeneration: authority?.sessionGeneration ?? "", isSignedIn, setCallBusy,
     visibleInviteId: incomingCallInvite?.id ?? activeCallInvite?.id ?? outgoingCallInvite?.id ?? "",
   });
@@ -878,6 +891,7 @@ export default function ChillyChatThreadScreen() {
     if (!valid) return false;
     if (!fromCurrentRead) invalidateThreadReads();
 
+    observeIncomingCallProjection(invite.id);
     rememberHandledIncomingInvite(invite);
     activeCallInviteRef.current = invite;
     setActiveCallInvite(invite);
@@ -895,7 +909,7 @@ export default function ChillyChatThreadScreen() {
     setError(null);
     setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
     return true;
-  }, [currentUserId, invalidateThreadReads, rememberHandledIncomingInvite, threadId]);
+  }, [currentUserId, invalidateThreadReads, observeIncomingCallProjection, rememberHandledIncomingInvite, threadId]);
 
   const terminalIosNativeAnswerOperations = useMemo(() => ({
       delay: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -1112,6 +1126,7 @@ export default function ChillyChatThreadScreen() {
       const visibleIncomingInvite = latestInviteForCurrentUser && !latestInviteWasHandled
         ? latestInviteForCurrentUser
         : null;
+      if (visibleIncomingInvite) observeIncomingCallProjection(visibleIncomingInvite.id);
       setIncomingCallInvite(visibleIncomingInvite);
       const cleanupPending = !!activeCallInviteRef.current
         && TERMINAL_CHAT_CALL_INVITE_STATUSES.has(activeCallInviteRef.current.status);
@@ -1158,7 +1173,7 @@ export default function ChillyChatThreadScreen() {
       setError(getUserFacingErrorMessage(loadError, "Unable to load this Chi'lly Chat thread."));
       setLoading(false);
     }
-  }, [applyAcceptedIncomingInviteState, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, messageEntryKey, reconcileEndedCallState, stopOutgoingRingback, threadId]);
+  }, [applyAcceptedIncomingInviteState, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, messageEntryKey, observeIncomingCallProjection, reconcileEndedCallState, stopOutgoingRingback, threadId]);
 
   useFocusEffect(
     useCallback(() => {

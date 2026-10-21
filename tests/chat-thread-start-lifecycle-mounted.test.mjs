@@ -192,6 +192,76 @@ test("a newer incoming call owns the UI when an older outgoing Start rejects", a
   assert.equal(h.runtime.media.localStreams.length, 1);
 });
 
+for (const status of ["ringing", "accepted"]) {
+  test(`same-batch ${status} incoming projection cannot be overwritten by an old Start reply before layout`, async t => {
+    const { h, store } = await mountStart(t);
+    const completion = deferred();
+    h.runtime.startCall = () => completion.promise;
+    let operation;
+    await h.run(() => { operation = h.runtime.snapshot.handleStartCall("voice"); });
+    const oldReceipt = startReceipt(store);
+    const snapshotBeforeBatch = h.runtime.snapshot;
+    let newerInvite;
+    await h.run(async () => {
+      store.transition("local-user", store.invite, "canceled");
+      newerInvite = store.start("remote-user", store.threadId, "video");
+      if (status === "accepted") newerInvite = store.transition("local-user", newerInvite, "accepted");
+      await h.runtime.snapshot.loadThreadState();
+      assert.strictEqual(h.runtime.snapshot, snapshotBeforeBatch,
+        "the newer projection has run but React must not commit/layout before the stale completion");
+      completion.resolve(oldReceipt);
+      await operation;
+    });
+    assert.equal(h.runtime.snapshot.activeCallRoomId, newerInvite.communicationRoomId,
+      "the old Start reply cannot overwrite a newer call projection in the same batch");
+    if (status === "ringing") assert.equal(h.runtime.snapshot.incomingCallInvite?.id, newerInvite.id);
+    else assert.equal(h.runtime.snapshot.activeCallInvite?.id, newerInvite.id);
+    assert.notEqual(h.runtime.snapshot.activeCallInvite?.id, oldReceipt.invite.id);
+  });
+}
+
+test("same-batch incoming then End projection retires Start even when no invite reaches layout", async t => {
+  const { h, store } = await mountStart(t);
+  const completion = deferred();
+  h.runtime.startCall = () => completion.promise;
+  let operation;
+  await h.run(() => { operation = h.runtime.snapshot.handleStartCall("voice"); });
+  const oldReceipt = startReceipt(store);
+  const snapshotBeforeBatch = h.runtime.snapshot;
+  await h.run(async () => {
+    store.transition("local-user", store.invite, "canceled");
+    store.start("remote-user", store.threadId, "video");
+    await h.runtime.snapshot.loadThreadState();
+    store.transition("local-user", store.invite, "accepted");
+    store.transition("remote-user", store.invite, "ended");
+    await h.runtime.snapshot.loadThreadState();
+    assert.strictEqual(h.runtime.snapshot, snapshotBeforeBatch, "neither projection may reach layout first");
+    completion.resolve(oldReceipt);
+    await operation;
+  });
+  assert.equal(h.runtime.snapshot.activeCallRoomId, "", "the terminal projection must survive the old Start reply");
+  assert.equal(h.runtime.snapshot.activeCallInvite, null);
+  assert.equal(h.runtime.snapshot.incomingCallInvite, null);
+  assert.equal(h.runtime.snapshot.callPanelOpen, false);
+  h.runtime.startCall = null;
+  await h.run(() => h.runtime.snapshot.handleStartCall("voice"));
+  assert.equal(store.rooms.size, 3, "settled terminal projection still permits an explicit fresh Start");
+});
+
+test("a retained Start callback cannot race a same-batch incoming projection before layout", async t => {
+  const { h, store } = await mountStart(t);
+  const oldStart = h.runtime.snapshot.handleStartCall;
+  const before = h.runtime.snapshot;
+  await h.run(async () => {
+    store.start("remote-user", store.threadId, "video");
+    await h.runtime.snapshot.loadThreadState();
+    assert.strictEqual(h.runtime.snapshot, before);
+    await oldStart("voice");
+  });
+  assert.equal(h.runtime.startCalls.length, 0);
+  assert.equal(h.runtime.snapshot.incomingCallInvite.id, store.invite.id);
+});
+
 test("a retained Start callback cannot issue after its screen unmounts", async () => {
   const store = createDurableChatThreadFixture();
   const h = await mountFullChatThread({ durableThread: store });
@@ -211,6 +281,13 @@ for (const [name, pattern, mutate, assertion] of [
   ["retired completion fence", "retired Start failure cannot release a successor Start's busy state",
     source => source.replace("startOperationRef.current === operation && contextRef.current === operation.context", "true"),
     "retired finally must not release the successor Start latch"],
+  ["event-boundary retirement", "same-batch ringing incoming projection cannot be overwritten by an old Start reply before layout",
+    source => source.replace("if (visibleIncomingInvite) observeIncomingCallProjection(visibleIncomingInvite.id);", ""),
+    "the old Start reply cannot overwrite a newer call projection in the same batch"],
+  ["unchanged-id commit reconciliation", "same-batch incoming then End projection retires Start even when no invite reaches layout",
+    source => source.replace("    operationRef.current = null;\n    setCallBusy(false);\n  });",
+      "    operationRef.current = null;\n    setCallBusy(false);\n  }, [setCallBusy, visibleInviteId]);"),
+    "settled terminal projection still permits an explicit fresh Start"],
 ]) {
   test(`Start lifecycle oracle rejects removal of the ${name}`, () => {
     const source = fs.readFileSync("app/chat/[threadId].tsx", "utf8");
