@@ -1,7 +1,7 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
-import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import type { Tables, TablesInsert } from "../supabase/database.types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 import {
   captureAccountBoundSupabaseMutationSubject,
@@ -139,7 +139,6 @@ export type PlatformBrandReviewResult = {
 
 type PlatformBrandAssetRow = Tables<"platform_brand_assets">;
 type PlatformBrandAssetInsert = TablesInsert<"platform_brand_assets">;
-type PlatformBrandAssetUpdate = TablesUpdate<"platform_brand_assets">;
 type PlatformBrandProfileRow = Tables<"platform_brand_profiles">;
 type PlatformBrandProfileInsert = TablesInsert<"platform_brand_profiles">;
 
@@ -933,19 +932,40 @@ export async function uploadPlatformBrandAsset(input: {
   return parseAsset(data);
 }
 
+// A bounded recent-media list cannot prove deletion by omission. Only this
+// exact owner-scoped tombstone read can reconcile an uncertain acknowledgement.
+export async function readPlatformBrandAssetRemovalStatus(asset: PlatformBrandAsset): Promise<"removed" | "present" | "unknown"> {
+  const ownerId = toText(asset.ownerUserId);
+  const assetId = toText(asset.id);
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  const isCurrent = () => !!authority && authority.state === "ACTIVE" && !authority.restoreOnly
+    && authority.userId === ownerId
+    && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+  if (!assetId || !ownerId || !isCurrent()) return "unknown";
+  const { data, error } = await supabase.from("platform_brand_assets")
+    .select("id,owner_user_id,deleted_at,asset_state")
+    .eq("id", assetId).eq("owner_user_id", ownerId).maybeSingle();
+  if (!isCurrent() || error || !data || data.id !== assetId || data.owner_user_id !== ownerId) return "unknown";
+  if (data.deleted_at === null) return "present";
+  return data.asset_state === "archived" && typeof data.deleted_at === "string"
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(data.deleted_at) && Number.isFinite(Date.parse(data.deleted_at)) ? "removed" : "unknown";
+}
+
 export async function removePlatformBrandAsset(asset: PlatformBrandAsset): Promise<void> {
   const assetId = toText(asset.id);
   if (!assetId) return;
-  const update: PlatformBrandAssetUpdate = {
-    asset_state: "archived",
-    deleted_at: new Date().toISOString(),
-  };
-  const { error } = await supabase
-    .from("platform_brand_assets")
-    .update(update)
-    .eq("id", assetId)
-    .eq("owner_user_id", asset.ownerUserId);
-  if (error) throw error;
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<{ assetId?: string; deletedAt?: string }>(
+    "remove_platform_brand_asset", { p_asset_id: assetId }, asset.ownerUserId,
+  );
+  if (error) {
+    if (error.message === "brand_asset_in_use") {
+      throw new UserFacingError("brand_draft", "Remove this media from your Platform design and publish the change before deleting it.");
+    }
+    throw error;
+  }
+  if (toText(data?.assetId) !== assetId || typeof data?.deletedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(data.deletedAt) || !Number.isFinite(Date.parse(data.deletedAt))) {
+    throw new Error("Platform media could not be removed. Please try again.");
+  }
 }
 
 const parsePlatformBrandReviewResult = (value: unknown): PlatformBrandReviewResult => {

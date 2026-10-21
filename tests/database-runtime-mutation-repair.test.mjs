@@ -9,6 +9,12 @@ import {createDatabase,repairMigrationPath} from './helpers/database-runtime-aut
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
+const brandRetentionFiles = [
+  '20261021030421_platform_brand_exact_retention_lifecycle.sql',
+  '20261021031016_media_scan_exact_byte_receipts.sql',
+  '20261021032449_platform_brand_exact_expiry_transport.sql',
+];
+
 const inspectionBundleFiles = [
   '20261020124645_owner_content_inspection_disabled.sql',
   '20261020124904_content_inspection_verified_media.sql',
@@ -221,7 +227,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
       }finally{await db.exec('rollback')}
     }
     // This remains a full-current-chain repair test, including reviewed successors.
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+legacyRetentionFiles.length+explicitApiGrantFiles.length+originalCopyFiles.length);
+    check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length);
     check('complete original copy successor',replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
     check('complete legacy retention successor',replayReport.files.filter(file=>legacyRetentionFiles.includes(file)),legacyRetentionFiles);
     check('complete explicit service API grant successor',replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);

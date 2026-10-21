@@ -1,0 +1,16 @@
+begin;
+select plan(12);
+select ok(not has_function_privilege('anon','public.begin_media_scan_byte_observation(uuid,text,integer)','EXECUTE'),'anonymous cannot begin observation');
+select ok(not has_function_privilege('authenticated','public.begin_media_scan_byte_observation(uuid,text,integer)','EXECUTE'),'client cannot begin observation');
+select ok(not has_function_privilege('anon','public.record_media_scan_byte_receipt(uuid,uuid,text,text,bigint)','EXECUTE'),'anonymous cannot record receipt');
+select ok(not has_function_privilege('authenticated','public.record_media_scan_byte_receipt(uuid,uuid,text,text,bigint)','EXECUTE'),'client cannot record receipt');
+select ok(has_function_privilege('service_role','public.begin_media_scan_byte_observation(uuid,text,integer)','EXECUTE'),'existing scanner service can begin');
+select ok(has_function_privilege('service_role','public.record_media_scan_byte_receipt(uuid,uuid,text,text,bigint)','EXECUTE'),'existing scanner service can record');
+select ok(not has_function_privilege('service_role','private.platform_brand_scan_byte_receipt_matches(uuid,jsonb,text,bigint)','EXECUTE'),'verifier is internal only');
+select ok(not has_table_privilege('service_role','private.media_scan_byte_receipts','INSERT,UPDATE,DELETE,TRUNCATE'),'service cannot forge or mutate receipt table');
+select ok(not has_table_privilege('authenticated','private.media_scan_byte_observations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),'client cannot inspect or change observations');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.media_scan_byte_receipts'::regclass),'receipt RLS forced');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.media_scan_byte_observations'::regclass),'observation RLS forced');
+select is(private.platform_brand_scan_byte_receipt_matches(gen_random_uuid(),'{}'::jsonb,repeat('a',64),23),false,'unknown receipt is never authority');
+select * from finish();
+rollback;

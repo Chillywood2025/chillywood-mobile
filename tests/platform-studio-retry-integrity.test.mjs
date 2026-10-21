@@ -3,10 +3,16 @@ import test from 'node:test';
 import { loadStudioFunctions } from './helpers/studio-source-harness.mjs';
 import { mount, video, edit, deferred } from './platform-studio-mounted-harness.mjs';
 
+const { sameAccountSessionAuthority } = loadStudioFunctions('_lib/accountSessionAuthority.ts', ['sameAccountSessionAuthority'], {});
+
 // Production handlers/screens with synthetic picker, upload and save boundaries.
 // These probes do not exercise native devices or send provider/database requests.
 function fixture(initial, bindings) {
-  const state = { ...initial }, context = { Promise, Date, Map, Set, ...bindings };
+  const authority = { userId: 'owner', accountId: 'owner', state: 'ACTIVE', restoreOnly: false, sessionGeneration: 'fixture-session' };
+  const state = { ...initial }, context = { Promise, Date, Map, Set,
+    getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
+    replayActionsMountedRef: { current: true }, brandDraftOwnershipRef: { current: { revision: 0, dirty: false } },
+    ...bindings };
   for (const name of Object.keys(initial)) {
     Object.defineProperty(context, name, { get: () => state[name], configurable: true });
     context[`set${name[0].toUpperCase()}${name.slice(1)}`] = value => {

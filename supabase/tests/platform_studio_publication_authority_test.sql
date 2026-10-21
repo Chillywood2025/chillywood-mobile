@@ -88,6 +88,13 @@ select is((select count(*)::integer from public.user_profiles
 insert into public.channel_followers(channel_user_id,follower_user_id)
   values(pg_temp.studio_user(1)::text,pg_temp.studio_user(2)::text),
     (pg_temp.studio_user(1)::text,pg_temp.studio_user(3)::text);
+-- Real upload metadata must precede attachment. Retention binds this exact
+-- versioned Storage incarnation; keep the actual upload/scanner triggers active.
+insert into storage.objects(bucket_id,name,owner,owner_id,metadata,version)
+  select 'platform-brand-assets',pg_temp.studio_user(1)::text || '/studio-' || n || '.png',
+    pg_temp.studio_user(1),pg_temp.studio_user(1)::text,
+    '{"mimetype":"image/png","size":1024}'::jsonb,'studio-publication-fixture-v' || n
+  from generate_series(1,3) n;
 insert into public.platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_provider,storage_bucket,
   storage_object_key,storage_path,mime_type,moderation_status,scan_status)
   select pg_temp.studio_asset(n),pg_temp.studio_user(1)::text,'hero_image','draft','supabase','platform-brand-assets',
@@ -489,10 +496,113 @@ select is(public.read_public_channel_follower_count('platform_rachi_official_cop
 reset role;
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
-delete from public.platform_brand_assets where id=pg_temp.studio_asset(1);
+-- Retention no longer treats hard deletion as an implicit unpublish operation.
+-- Preserve the real source/object and clear references through the authorized
+-- atomic publication path before asking the owner removal RPC to tombstone it.
+select throws_ok($$delete from public.platform_brand_assets where id=pg_temp.studio_asset(1)$$,
+  'P0001','brand_retention_soft_delete_required','hard deletion cannot bypass retained Brand identity');
+select set_config('app.platform_brand_review_context','review_platform_brand_asset',true);
+select throws_ok($$update public.platform_brand_assets set deleted_at=clock_timestamp(),asset_state='archived',
+ moderation_status='removed',moderation_reason='service safety reason',moderated_by=pg_temp.studio_user(1)::text,moderated_at=clock_timestamp()
+ where id=pg_temp.studio_asset(1)$$,
+ 'P0001','brand_asset_in_use','service claims without an authenticated reviewer cannot archive references');
+select set_config('app.platform_brand_review_context','',true);
+
+select set_config('test.studio_before_remove_draft_refs',(select to_jsonb(array[
+  hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,background_image_asset_id,
+  avatar_asset_id,logo_asset_id,watermark_asset_id])::text from public.platform_brand_profiles
+  where owner_user_id=pg_temp.studio_user(1)::text),true);
+select set_config('test.studio_before_remove_public_refs',(select to_jsonb(array[
+  hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,background_image_asset_id,
+  avatar_asset_id,logo_asset_id,watermark_asset_id])::text from public.platform_brand_publications
+  where owner_user_id=pg_temp.studio_user(1)::text),true);
 select is((select hero_image_asset_id from public.platform_brand_publications
-  where owner_user_id=pg_temp.studio_user(1)::text),null::uuid,
-  'asset removal clears published pointer through its foreign key');
+  where owner_user_id=pg_temp.studio_user(1)::text),pg_temp.studio_asset(1),
+  'hard-delete rejection preserves the published asset pointer');
+update auth.sessions set not_after=clock_timestamp()+interval '1 day' where id=pg_temp.studio_session(1);
+select pg_temp.studio_login(1);
+set local role authenticated;
+select ok(public.has_active_premium_creator_tool_access(pg_temp.studio_user(1)::text),
+  'owner still has real finite Premium authority for removal and publication');
+select throws_ok($$select public.remove_platform_brand_asset(pg_temp.studio_asset(1))$$,
+  'P0001','brand_asset_in_use','owner removal rejects the asset while its published reference remains');
+select set_config('app.platform_brand_review_context','',true);
+select throws_ok($$update public.platform_brand_assets set deleted_at=clock_timestamp()
+  where id=pg_temp.studio_asset(1)$$,
+  'P0001','brand_asset_in_use','direct owner UPDATE cannot tombstone referenced media without review context');
+select throws_ok($$select public.review_platform_brand_asset(pg_temp.studio_asset(1),'archive','creator cleanup')$$,
+  'P0001','brand_asset_in_use','creator self-review archive cannot bypass referenced removal contract');
+select set_config('app.platform_brand_review_context','review_platform_brand_asset',true);
+select throws_ok($$update public.platform_brand_assets set deleted_at=clock_timestamp(),asset_state='archived',
+  moderation_status='removed',moderation_reason='spoofed safety reason',moderated_by=auth.uid()::text,moderated_at=clock_timestamp()
+  where id=pg_temp.studio_asset(1)$$,
+  'P0001','brand_asset_in_use','spoofed review context and metadata without reviewer authority cannot tombstone references');
+select set_config('app.platform_brand_review_context','',true);
+
+reset role;
+select is((select to_jsonb(array[hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,
+  background_image_asset_id,avatar_asset_id,logo_asset_id,watermark_asset_id]) from public.platform_brand_profiles
+  where owner_user_id=pg_temp.studio_user(1)::text),current_setting('test.studio_before_remove_draft_refs')::jsonb,
+  'rejected removal preserves every draft pointer');
+select is((select to_jsonb(array[hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,
+  background_image_asset_id,avatar_asset_id,logo_asset_id,watermark_asset_id]) from public.platform_brand_publications
+  where owner_user_id=pg_temp.studio_user(1)::text),current_setting('test.studio_before_remove_public_refs')::jsonb,
+  'rejected removal preserves every published pointer');
+select is((select deleted_at from public.platform_brand_assets where id=pg_temp.studio_asset(1)),null::timestamptz,
+  'rejected in-use removal does not create a tombstone');
+select pg_temp.studio_login(1);
+set local role authenticated;
+-- studio_payload supplies all seven asset fields explicitly as JSON null.
+select lives_ok($$select public.publish_platform_brand_profile(pg_temp.studio_payload(1))$$,
+  'authorized complete publication clears all seven references atomically');
+reset role;
+select is((select to_jsonb(array[hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,
+  background_image_asset_id,avatar_asset_id,logo_asset_id,watermark_asset_id]) from public.platform_brand_profiles
+  where owner_user_id=pg_temp.studio_user(1)::text),'[null,null,null,null,null,null,null]'::jsonb,
+  'real publication clears all seven draft references');
+select is((select to_jsonb(array[hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,
+  background_image_asset_id,avatar_asset_id,logo_asset_id,watermark_asset_id]) from public.platform_brand_publications
+  where owner_user_id=pg_temp.studio_user(1)::text),'[null,null,null,null,null,null,null]'::jsonb,
+  'real publication clears all seven published references');
+select pg_temp.studio_login(1);
+set local role authenticated;
+select lives_ok($$select public.remove_platform_brand_asset(pg_temp.studio_asset(1))$$,
+  'real owner removal succeeds after authorized reference clearing');
+reset role;
+select is((select count(*)::integer from public.platform_brand_assets where id=pg_temp.studio_asset(1)
+  and asset_state='archived' and deleted_at is not null),1,
+  'successful removal archives and tombstones the retained source');
+select is((select count(*)::integer from storage.objects where bucket_id='platform-brand-assets'
+  and name=pg_temp.studio_user(1)::text || '/studio-1.png' and version='studio-publication-fixture-v1'),1,
+  'successful logical removal retains the exact original storage incarnation');
+select set_config('test.studio_committed_tombstone',(select jsonb_build_object('id',id,'owner_user_id',owner_user_id,
+ 'asset_state',asset_state,'deleted_at',deleted_at)::text from public.platform_brand_assets where id=pg_temp.studio_asset(1)),true);
+select pg_temp.studio_login(1);
+set local role authenticated;
+select is((select jsonb_build_object('id',id,'owner_user_id',owner_user_id,'asset_state',asset_state,
+ 'deleted_at',deleted_at) from public.platform_brand_assets where id=pg_temp.studio_asset(1)),
+ current_setting('test.studio_committed_tombstone')::jsonb,
+ 'current owner exact SELECT reads committed archived tombstone rather than treating absence as deletion');
+reset role;
+select pg_temp.studio_login(2);
+set local role authenticated;
+select is((select count(*)::integer from public.platform_brand_assets where id=pg_temp.studio_asset(1)),0,
+ 'ordinary cross-owner cannot read retained tombstone');
+reset role;
+update auth.sessions set not_after=now()-interval '1 second' where id=pg_temp.studio_session(1);
+select pg_temp.studio_login(1);
+set local role authenticated;
+select is((select count(*)::integer from public.platform_brand_assets where id=pg_temp.studio_asset(1)),0,
+ 'expired owner session cannot read retained tombstone');
+reset role;
+update auth.sessions set not_after=clock_timestamp()+interval '1 day' where id=pg_temp.studio_session(1);
+select set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',pg_temp.studio_user(1),
+ 'session_id',pg_temp.studio_session(2))::text,true);
+set local role authenticated;
+select is((select count(*)::integer from public.platform_brand_assets where id=pg_temp.studio_asset(1)),0,
+ 'different account session generation cannot read owner retained tombstone');
+reset role;
+
 select pg_temp.studio_login(1);
 set local role authenticated;
 delete from public.platform_brand_profiles where owner_user_id=pg_temp.studio_user(1)::text;
@@ -500,6 +610,81 @@ reset role;
 select is((select count(*)::integer from public.platform_brand_publications
   where owner_user_id=pg_temp.studio_user(1)::text),0,
   'authorized draft deletion also removes its public publication');
+
+-- A separate real upload/reference proves the existing audited safety workflow
+-- remains available to authorized reviewers without granting creator deletion.
+select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+insert into storage.objects(bucket_id,name,owner,owner_id,metadata,version)
+values('platform-brand-assets',pg_temp.studio_user(1)::text || '/studio-review-4.png',
+ pg_temp.studio_user(1),pg_temp.studio_user(1)::text,'{"mimetype":"image/png","size":1024}'::jsonb,'studio-review-fixture-v4');
+insert into public.platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_provider,storage_bucket,
+ storage_object_key,storage_path,mime_type,moderation_status)
+values(pg_temp.studio_asset(4),pg_temp.studio_user(1)::text,'hero_image','draft','supabase','platform-brand-assets',
+ pg_temp.studio_user(1)::text || '/studio-review-4.png',pg_temp.studio_user(1)::text || '/studio-review-4.png','image/png','pending_review');
+-- Same trusted scan acknowledgement as the earlier upload fixtures; upload and
+-- scanner triggers remain installed and the queued job is not rewritten.
+update public.platform_brand_assets set scan_status='clean',scan_provider='pgtap',scan_result='clean',scanned_at=now()
+ where id=pg_temp.studio_asset(4);
+insert into public.platform_role_memberships(role,user_id,email,status,notes,granted_by)
+values('operator',pg_temp.studio_user(5)::text,'studio-reviewer@example.test','active','Disposable Brand reviewer fixture','pgtap');
+update auth.sessions set not_after=clock_timestamp()+interval '1 day' where id in(pg_temp.studio_session(1),pg_temp.studio_session(5));
+select pg_temp.studio_login(1);
+set local role authenticated;
+select lives_ok($$select public.publish_platform_brand_profile(pg_temp.studio_payload(1,
+ jsonb_build_object('hero_image_asset_id',pg_temp.studio_asset(4))))$$,
+ 'owner publishes separate reviewer fixture through actual authorized path');
+reset role;
+select pg_temp.studio_login(null);
+set local role anon;
+select is((select hero_image_asset_id from public.read_public_platform_brand_profile(pg_temp.studio_user(1)::text)),
+ pg_temp.studio_asset(4),'separate safety-review fixture begins publicly visible');
+reset role;
+select pg_temp.studio_login(5);
+set local role authenticated;
+select ok(public.has_platform_role(array['operator'::text]),'reviewer has real exact-session active operator authority');
+select lives_ok($$select public.review_platform_brand_asset(pg_temp.studio_asset(4),'reject','safety reason')$$,
+ 'authorized hide-only review remains allowed while referenced');
+reset role;
+select is((select deleted_at from public.platform_brand_assets where id=pg_temp.studio_asset(4)),null::timestamptz,
+ 'hide-only rejection does not tombstone the source');
+select pg_temp.studio_login(null);
+set local role anon;
+select is((select hero_image_asset_id from public.read_public_platform_brand_profile(pg_temp.studio_user(1)::text)),null::uuid,
+ 'hide-only rejection removes unsafe media from public projection');
+reset role;
+select pg_temp.studio_login(5);
+set local role authenticated;
+select lives_ok($$select public.review_platform_brand_asset(pg_temp.studio_asset(4),'approve','reviewed safe fixture')$$,
+ 'authorized reviewer restores moderation eligibility before archive control');
+reset role;
+select pg_temp.studio_login(5);
+set local role authenticated;
+select lives_ok($$select public.review_platform_brand_asset(pg_temp.studio_asset(4),'archive','safety reason')$$,
+ 'authorized reviewer can archive referenced media for safety');
+reset role;
+select is((select count(*)::integer from public.platform_brand_assets where id=pg_temp.studio_asset(4)
+ and deleted_at is not null and asset_state='archived' and moderation_status='removed'
+ and moderated_by=pg_temp.studio_user(5)::text and moderation_reason='safety reason'),1,
+ 'safety archive records exact reviewer attribution and retained tombstone');
+select is((select hero_image_asset_id from public.platform_brand_publications where owner_user_id=pg_temp.studio_user(1)::text),
+ pg_temp.studio_asset(4),'safety archive preserves reference identity rather than silently republishing');
+select is((select count(*)::integer from storage.objects where bucket_id='platform-brand-assets'
+ and name=pg_temp.studio_user(1)::text || '/studio-review-4.png' and version='studio-review-fixture-v4'),1,
+ 'safety archive preserves exact storage incarnation');
+select is((select count(*)::integer from public.platform_brand_asset_review_events where asset_id=pg_temp.studio_asset(4)
+ and actor_user_id=pg_temp.studio_user(5)::text and action='archive' and reason='safety reason'
+ and after_state->>'moderation_status'='removed' and after_state->>'deleted_at' is not null),1,
+ 'actual reviewer RPC writes immutable safety review event');
+select is((select count(*)::integer from public.platform_admin_audit_logs where target_id=pg_temp.studio_asset(4)::text
+ and actor_user_id=pg_temp.studio_user(5)::text and action='platform_brand_asset_archive' and reason='safety reason'
+ and metadata->>'reviewer_access'='true' and metadata->>'self_review'='false'),1,
+ 'actual reviewer RPC writes attributed archive audit event');
+select pg_temp.studio_login(null);
+set local role anon;
+select is((select hero_image_asset_id from public.read_public_platform_brand_profile(pg_temp.studio_user(1)::text)),null::uuid,
+ 'archived referenced asset stays hidden from anonymous public projection');
+reset role;
 
 select * from finish();
 rollback;

@@ -261,9 +261,10 @@ select ok((select relrowsecurity and relforcerowsecurity from pg_class
 
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
-insert into storage.objects(bucket_id,name,owner,owner_id,metadata)
+insert into storage.objects(bucket_id,name,owner,owner_id,metadata,version)
   select 'platform-brand-assets',pg_temp.rolling_user(1)::text || '/rolling-' || n || '.png',
-    pg_temp.rolling_user(1),pg_temp.rolling_user(1)::text,'{"mimetype":"image/png","size":1024}'::jsonb
+    pg_temp.rolling_user(1),pg_temp.rolling_user(1)::text,'{"mimetype":"image/png","size":1024}'::jsonb,
+    'studio-rolling-fixture-v' || n
   from generate_series(1,3) n;
 insert into public.platform_brand_assets(id,owner_user_id,asset_type,storage_provider,storage_bucket,
   storage_object_key,storage_path,mime_type)
@@ -313,29 +314,38 @@ set local role authenticated;
 select lives_ok($$update public.platform_brand_assets set asset_state='archived',deleted_at=clock_timestamp()
   where id='ac190002-0000-4000-8000-000000000003' and owner_user_id=pg_temp.rolling_user(1)::text$$,
   'actual owner archive request succeeds for a draft without RETURNING');
+select throws_ok($$update public.platform_brand_assets set asset_state='archived',deleted_at=clock_timestamp()
+  where id='ac190002-0000-4000-8000-000000000001' and owner_user_id=pg_temp.rolling_user(1)::text$$,
+  'P0001','brand_asset_in_use','direct owner archive rejects still-published reference');
+select is((select hero_image_asset_id from public.read_public_platform_brand_profile(pg_temp.rolling_user(1)::text)),
+ 'ac190002-0000-4000-8000-000000000001'::uuid,'rejected archive preserves committed public pointer');
+select lives_ok($$select public.publish_platform_brand_profile(pg_temp.rolling_payload())$$,
+ 'real authorized complete Publish clears design and public references before removal');
 select lives_ok($$update public.platform_brand_assets set asset_state='archived',deleted_at=clock_timestamp()
   where id='ac190002-0000-4000-8000-000000000001' and owner_user_id=pg_temp.rolling_user(1)::text$$,
-  'actual owner archive request succeeds for published media without RETURNING');
+  'actual owner archive succeeds for formerly published media after explicit publication clearing');
 select set_config('test.rolling_archive_time',(select deleted_at::text from public.platform_brand_assets
   where id='ac190002-0000-4000-8000-000000000001'),true);
-select lives_ok($$update public.platform_brand_assets set asset_state='archived',deleted_at='2000-01-01'
+select throws_ok($$update public.platform_brand_assets set asset_state='archived',deleted_at='2000-01-01'
   where id='ac190002-0000-4000-8000-000000000001' and owner_user_id=pg_temp.rolling_user(1)::text$$,
-  'archive retry is idempotent');
+  'P0001','brand_retention_tombstone_permanent','archive retry cannot rewrite permanent retention timestamp');
+select lives_ok($$select public.remove_platform_brand_asset('ac190002-0000-4000-8000-000000000001')$$,
+ 'authorized removal RPC retry is idempotent');
 select is((select deleted_at::text from public.platform_brand_assets where id='ac190002-0000-4000-8000-000000000001'),
   current_setting('test.rolling_archive_time'),'archive retry preserves the original retention timestamp');
 select throws_ok($$update public.platform_brand_assets set asset_state='published',deleted_at=null
   where id='ac190002-0000-4000-8000-000000000001'$$,
-  '42501','brand_archived_asset_restore_forbidden','owner cannot restore an archived publication through visible metadata');
+  'P0001','brand_retention_tombstone_permanent','owner cannot restore an archived publication through visible metadata');
 select throws_ok($$update public.platform_brand_assets set asset_state='draft',deleted_at=null
   where id='ac190002-0000-4000-8000-000000000003'$$,
-  '42501','brand_archived_asset_restore_forbidden','owner cannot restore an archived draft');
+  'P0001','brand_retention_tombstone_permanent','owner cannot restore an archived draft');
 select throws_ok($$update public.platform_brand_assets set deleted_at=null
   where id='ac190002-0000-4000-8000-000000000001'$$,
-  '42501','brand_archived_asset_restore_forbidden','owner cannot clear a deletion tombstone');
+  'P0001','brand_retention_tombstone_permanent','owner cannot clear a deletion tombstone');
 select set_config('app.platform_brand_review_context','review_platform_brand_asset',true);
 select throws_ok($$update public.platform_brand_assets set asset_state='published',deleted_at=null
   where id='ac190002-0000-4000-8000-000000000001'$$,
-  '42501','brand_archived_asset_restore_forbidden','caller-set review context cannot bypass archive authority');
+  'P0001','brand_retention_tombstone_permanent','caller-set review context cannot bypass archive authority');
 select set_config('app.platform_brand_review_context','',true);
 reset role;
 select is((select count(*)::integer from public.platform_brand_assets

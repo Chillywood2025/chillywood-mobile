@@ -89,7 +89,7 @@
   {"table":"paid_live_watch_party_passes","privileges":["SELECT"],"consumers":[{"file":"_lib/liveWatchPartyMoney.ts","privileges":["SELECT"]}]},
   {"table":"paid_watch_party_offers","privileges":["SELECT"],"consumers":[{"file":"_lib/paidWatchPartyTickets.ts","privileges":["SELECT"]}]},
   {"table":"platform_admin_audit_logs","privileges":["SELECT"],"consumers":[{"file":"_lib/platformAudit.ts","privileges":["SELECT"]}]},
-  {"table":"platform_brand_assets","privileges":["INSERT","SELECT","UPDATE"],"consumers":[{"file":"_lib/platformBranding.ts","privileges":["INSERT","SELECT","UPDATE"]}]},
+  {"table":"platform_brand_assets","privileges":["INSERT","SELECT"],"consumers":[{"file":"_lib/platformBranding.ts","privileges":["INSERT","SELECT"]}]},
   {"table":"platform_brand_profiles","privileges":["INSERT","SELECT","UPDATE"],"consumers":[{"file":"_lib/platformBranding.ts","privileges":["INSERT","SELECT","UPDATE"]}]},
   {"table":"platform_finance_ledger_events","privileges":["SELECT"],"consumers":[{"file":"_lib/moneyAuditEvents.ts","privileges":["SELECT"]},{"file":"_lib/platformFinance.ts","privileges":["SELECT"]}]},
   {"table":"platform_fraud_holds","privileges":["SELECT"],"consumers":[{"file":"_lib/moneyAuditEvents.ts","privileges":["SELECT"]},{"file":"_lib/platformFinance.ts","privileges":["SELECT"]}]},

@@ -6,6 +6,38 @@ import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
+const brandRetentionFiles = [
+  '20261021030421_platform_brand_exact_retention_lifecycle.sql',
+  '20261021031016_media_scan_exact_byte_receipts.sql',
+  '20261021032449_platform_brand_exact_expiry_transport.sql',
+];
+const brandRetentionFunctionKeys = new Set([
+  'private.platform_brand_review_evidence_matches/3',
+  'private.guard_platform_brand_retained_asset/0',
+  'private.guard_platform_brand_retention_hold/0',
+  'private.guard_platform_brand_retention_profile/0',
+  'private.guard_platform_brand_retention_references/0',
+  'private.guard_platform_brand_storage_incarnation/0',
+  'private.media_scan_brand_binding/1',
+  'private.media_scan_byte_immutable/0',
+  'private.media_scan_byte_result_binding/1',
+  'private.platform_brand_claimed_scan_evidence_matches/5',
+  'private.platform_brand_retention_immutable/0',
+  'private.platform_brand_retention_lock/0',
+  'private.platform_brand_retention_references_clear/1',
+  'private.platform_brand_scan_byte_receipt_matches/4',
+  'public.begin_media_scan_byte_observation/3',
+  'public.begin_platform_brand_retention_transport/1',
+  'public.claim_platform_brand_retention_expiry/1',
+  'public.finish_platform_brand_retention_expiry/2',
+  'public.read_platform_brand_retention_binding/1',
+  'public.read_platform_brand_retention_expiry_claim/2',
+  'public.record_media_scan_byte_receipt/5',
+  'public.record_platform_brand_retention_proof/3',
+  'public.record_platform_brand_retention_transport_result/3',
+  'public.remove_platform_brand_asset/1',
+]);
+
 const inspectionBundleFiles = [
   '20261020124645_owner_content_inspection_disabled.sql',
   '20261020124904_content_inspection_verified_media.sql',
@@ -231,7 +263,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>brandRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...brandRetentionFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>originalCopyFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...originalCopyFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>legacyRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...legacyRetentionFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>collectionOrderingFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...collectionOrderingFunctionKeys].sort());
@@ -267,10 +300,11 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+legacyRetentionFiles.length+explicitApiGrantFiles.length+originalCopyFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length);
     assert.deepEqual(replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
     assert.deepEqual(replayReport.files.filter(file=>legacyRetentionFiles.includes(file)),legacyRetentionFiles);
     assert.deepEqual(replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);
+    assert.deepEqual(replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
     assert.deepEqual(replayReport.files.filter(file=>collectionOrderingFiles.includes(file)),collectionOrderingFiles);
     assert.deepEqual(replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles,
       'entire Owner Security and null-actor successor bundle is replayed');

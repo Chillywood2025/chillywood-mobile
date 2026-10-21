@@ -135,35 +135,369 @@ test('mounted Brand load failure exposes Retry and no destructive editor or publ
  h.mocks.readPlatformBrandStudio=async()=>brandBundle(brandProfile());await h.press(h.button('Retry'));assert.ok(h.button('Publish Brand Studio Changes'));
  assert.doesNotMatch(h.text(),/Brand Studio could not load|Brand Studio unavailable/);
 });
-for(const outcome of ['rejected','saved']){
- test(`mounted Brand removal keeps truthful ${outcome} draft-save feedback`,async t=>{
-  let profile={...brandProfile(),heroImageAssetId:'hero-asset'},removes=0,saves=0;
-  const asset={id:'hero-asset',ownerUserId:'owner',assetType:'hero_image',assetState:'draft',moderationStatus:'clean',scanStatus:'clean',deletedAt:null,signedUrl:'fixture:hero-image',mimeType:'image/jpeg',fileSizeBytes:123};
-  const h=await mount(t,{route:{tab:'brand'},overrides:{
-   readPlatformBrandStudio:async()=>({...brandBundle(profile),assets:profile.heroImageAssetId?[asset]:[],heroImage:profile.heroImageAssetId?asset:null}),
-   formatPlatformBrandFileSize:()=> '123 bytes',
-   removePlatformBrandAsset:async value=>{assert.equal(value.id,asset.id);removes++;},
-   savePlatformBrandProfileDraft:async(owner,next)=>{
-    assert.equal(owner,'owner');assert.equal(next.heroImageAssetId,null);saves++;
-    if(outcome==='rejected')throw Error('modeled draft write rejection');
-    profile=next;return profile;
-   },
-  }});
-  await h.press(h.button('Open Hero Media'));await h.press(h.button('Remove Brand Studio Hero Image'));
-  const confirmation=h.alerts.at(-1);assert.equal(confirmation[0],'Remove Platform asset?');
-  await React.act(async()=>{confirmation[2].find(button=>button.text==='Remove').onPress();});
-  assert.equal(removes,1);assert.equal(saves,1);
+const uploadedBrandAsset=(id,assetType='hero_image')=>({id,ownerUserId:'owner',assetType,assetState:'published',moderationStatus:'clean',scanStatus:'clean',deletedAt:null,signedUrl:`fixture:${id}`,mimeType:'image/jpeg',fileSizeBytes:123,originalFileName:`${id}.jpg`});
+async function mountedBrandLibrary(t,{saveFails=false,removeFails=false,oldSelected=false,refreshFails=false,removeGate=null,uncertainOutcome=null,exactReadFails=false,exactReadGate=null,exactRow=undefined,omitFromRecent=false,staleBundle=false,profileSaveGate=null,profileSaveFails=false,brandSaveGate=null,brandPublishGate=null}={}){
+ const errors=loadStubbed(`${ROOT}/_lib/userFacingErrors.ts`);
+ const hero=uploadedBrandAsset('hero-asset'),background=uploadedBrandAsset('background-asset','background_image'),unused=uploadedBrandAsset('older-upload','logo');
+ let profile={...brandProfile(),heroImageAssetId:hero.id,backgroundImageAssetId:background.id},published={...profile};
+ let assets=[hero,background,unused],saves=0,publishes=0,removes=0,reads=0,exactReads=0,profileWrites=0,removed=false;const exactStatuses=[];
+ let authority={userId:'owner',accountId:'owner',state:'ACTIVE',restoreOnly:false,sessionGeneration:'first'};
+ const api=loadStubbed(`${ROOT}/_lib/platformBranding.ts`,{
+  './userFacingErrors':errors,
+  './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>a===b},
+  './supabase':{supabase:{from:table=>{
+   assert.equal(table,'platform_brand_assets');const filters={};
+   const chain={select:columns=>{assert.equal(columns,'id,owner_user_id,deleted_at,asset_state');return chain;},
+    eq:(key,value)=>{filters[key]=value;return chain;},maybeSingle:async()=>{
+     exactReads++;assert.equal(filters.owner_user_id,'owner');assert.equal(filters.id,'older-upload');
+     if(exactReadGate)await exactReadGate.promise;
+     if(exactReadFails)return {data:null,error:{message:'private_exact_read_failure'}};
+     return {data:exactRow===undefined?{id:filters.id,owner_user_id:filters.owner_user_id,deleted_at:removed?'2026-10-21T00:00:00Z':null,asset_state:removed?'archived':'draft'}:exactRow,error:null};
+    }};return chain;
+  }}},
+  './accountBoundSupabaseMutation':{runCurrentAccountBoundSupabaseMutationRpc:async(name,args,owner)=>{
+   assert.equal(name,'remove_platform_brand_asset');assert.equal(owner,'owner');removes++;if(removeGate)await removeGate.promise;
+   if([profile.heroImageAssetId,profile.backgroundImageAssetId,published.heroImageAssetId,published.backgroundImageAssetId].includes(args.p_asset_id))return {data:null,error:{message:'brand_asset_in_use'}};
+   if(removeFails)return {data:null,error:{message:'private_storage_detail'}};
+   assets=assets.filter(a=>a.id!==args.p_asset_id);removed=true;
+   if(uncertainOutcome==='lost-response')throw Error('account_bound_rpc_outcome_unknown');
+   if(uncertainOutcome==='unavailable')return {data:null,error:{message:'account_bound_rpc_unavailable'}};
+   if(uncertainOutcome==='numeric-ack')return {data:{assetId:args.p_asset_id,deletedAt:123},error:null};
+   if(uncertainOutcome==='object-ack')return {data:{assetId:args.p_asset_id,deletedAt:{}},error:null};
+   if(uncertainOutcome==='nondate-ack')return {data:{assetId:args.p_asset_id,deletedAt:'not-a-date'},error:null};
+   if(uncertainOutcome==='malformed-ack')return {data:{assetId:'wrong-target',deletedAt:null},error:null};
+   return {data:{assetId:args.p_asset_id,deletedAt:'2026-10-21T00:00:00Z'},error:null};
+  }},
+ });
+ const h=await mount(t,{route:{tab:'brand',focus:'theme'},overrides:{
+  getUserFacingErrorMessage:errors.getUserFacingErrorMessage,
+  getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>a===b,
+  readPlatformBrandStudio:async()=>{
+   reads++;if(refreshFails&&removed)throw Error('offline');
+   if(staleBundle&&removed)return {...brandBundle(profile),assets:[hero,background,unused],logo:unused};
+   return {...brandBundle(profile),assets:assets.filter(a=>(!omitFromRecent||!removes||a.id!=='older-upload')&&(!oldSelected||a.id!==hero.id||profile.heroImageAssetId===hero.id)),heroImage:assets.find(a=>a.id===profile.heroImageAssetId)??null,backgroundImage:assets.find(a=>a.id===profile.backgroundImageAssetId)??null};
+  },
+  formatPlatformBrandFileSize:()=> '123 bytes',removePlatformBrandAsset:api.removePlatformBrandAsset,
+  readPlatformBrandAssetRemovalStatus:async asset=>{const status=await api.readPlatformBrandAssetRemovalStatus(asset);exactStatuses.push(status);return status;},
+  savePlatformBrandProfileDraft:async(owner,next)=>{assert.equal(owner,'owner');saves++;if(brandSaveGate)await brandSaveGate.promise;if(saveFails)throw Error('modeled draft write rejection');profile={...next};return profile;},
+  publishPlatformBrandProfile:async(owner,next)=>{assert.equal(owner,'owner');publishes++;if(brandPublishGate)await brandPublishGate.promise;profile={...next,publishedAt:'2026-10-21T00:00:00Z'};published={...profile};return profile;},
+  resolveBrandPublishReadbackStatus:async()=>({selectedCount:0,publicReturnedCount:0}),saveUserProfileRemote:async p=>{profileWrites++;if(profileSaveGate)await profileSaveGate.promise;if(profileSaveFails)throw Error('profile save rejected');return p;},
+ }});
+ const removeButton=id=>h.find(n=>n.type==='TouchableOpacity'&&n.props.testID===`brand-uploaded-remove-${id}`);
+ const remove=async id=>{await h.press(removeButton(id));const alert=h.alerts.at(-1);assert.equal(alert[0],'Remove uploaded media?');await React.act(async()=>alert[2].find(b=>b.text==='Remove uploaded media').onPress());};
+ return {h,remove,removeButton,setAuthority:value=>{authority=value;},readExact:()=>api.readPlatformBrandAssetRemovalStatus(unused),authority:()=>authority,state:()=>({profile,published,assets,saves,publishes,removes,reads,exactReads,exactStatuses,profileWrites})};
+}
+for(const type of ['hero','background'])for(const outcome of ['rejected','saved']){
+ test(`mounted Brand ${type} remove from design keeps truthful ${outcome} draft feedback without deleting`,async t=>{
+  const f=await mountedBrandLibrary(t,{saveFails:outcome==='rejected'}),{h}=f;
+  await h.press(h.button(type==='hero'?'Open Hero Media':'Open Brand Studio Background'));await h.press(h.button(type==='hero'?'Remove Hero Image from design':'Remove Background Image from design'));
+  assert.equal(f.state().removes,0);assert.equal(f.state().publishes,0);assert.equal(f.state().saves,1);
   assert.equal(h.button('Save Brand Studio Draft').props.disabled,false);
+  const field=type==='hero'?'heroImageAssetId':'backgroundImageAssetId';
   if(outcome==='rejected'){
-   assert.match(h.text(),/Unable to save Brand Studio changes right now/);
-   assert.doesNotMatch(h.text(),/Platform asset removed from Brand Studio/);
-   assert.equal(profile.heroImageAssetId,'hero-asset');assert.ok(h.button('Remove Brand Studio Hero Image'));
+   assert.match(h.text(),/Unable to save Brand Studio changes right now/);assert.equal(f.state().profile[field],`${type}-asset`);
+   assert.ok(h.button(type==='hero'?'Remove Hero Image from design':'Remove Background Image from design'));
   }else{
-   assert.match(h.text(),/Platform asset removed from Brand Studio/);
-   assert.equal(profile.heroImageAssetId,null);assert.equal(h.button('Remove Brand Studio Hero Image'),undefined);
+   assert.match(h.text(),/Removed from your saved design.*upload is retained/);assert.equal(f.state().profile[field],null);
+   assert.ok(f.removeButton(`${type}-asset`),'cleared upload stays in owner library');
   }
+  assert.equal(f.state().published[field],`${type}-asset`,'public design changes only through explicit Publish');
  });
 }
+for(const type of ['hero','background']){
+ test(`mounted queued ${type} design-clear callback cannot dispatch into replacement session`,async t=>{
+  const f=await mountedBrandLibrary(t),{h}=f;
+  await h.press(h.button(type==='hero'?'Open Hero Media':'Open Brand Studio Background'));
+  const queued=h.button(type==='hero'?'Remove Hero Image from design':'Remove Background Image from design');
+  const replacement={...f.authority(),sessionGeneration:'replacement'};f.setAuthority(replacement);
+  await h.account({user:{id:'owner',email:'clear-replacement@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+  await React.act(async()=>queued.props.onPress());
+  assert.equal(f.state().saves,0,'not even one old draft write may dispatch');
+  assert.equal(f.state().publishes,0);assert.equal(f.state().removes,0);
+  assert.equal(f.state().profile.heroImageAssetId,'hero-asset');assert.equal(f.state().profile.backgroundImageAssetId,'background-asset');
+  assert.equal(h.button('Save Brand Studio Draft').props.disabled,false);
+  assert.doesNotMatch(h.text(),/Removed from your saved design|Draft changes saved/);
+ });
+ test(`mounted ${type} design-clear late read cannot release replacement save lock or show old success`,async t=>{
+  const f=await mountedBrandLibrary(t),{h}=f,oldRead=deferred(),newRead=deferred();
+  await h.press(h.button(type==='hero'?'Open Hero Media':'Open Brand Studio Background'));
+  const original=h.mocks.readPlatformBrandStudio;h.mocks.readPlatformBrandStudio=()=>oldRead.promise;
+  await h.press(h.button(type==='hero'?'Remove Hero Image from design':'Remove Background Image from design'));
+  assert.equal(f.state().saves,1,'the initiating session may dispatch exactly one authorized clear');
+  const replacement={...f.authority(),sessionGeneration:'replacement'};f.setAuthority(replacement);
+  h.mocks.readPlatformBrandStudio=original;
+  await h.account({user:{id:'owner',email:'clear-read-replacement@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+  await h.route({focus:'theme'});await h.change(h.input('Platform Name'),'Replacement edit');
+  h.mocks.readPlatformBrandStudio=()=>newRead.promise;await h.press(h.button('Save Brand Studio Draft'));
+  await h.resolve(oldRead,await original());
+  assert.equal(h.button('Save Brand Studio Draft').props.disabled,true);
+  assert.equal(h.input('Platform Name').props.value,'Replacement edit');
+  assert.doesNotMatch(h.text(),/Removed from your saved design|Draft changes saved|Account changed/);
+  assert.equal(f.state().profileWrites,0);assert.equal(f.state().saves,2);
+  await h.resolve(newRead,await original());assert.equal(f.state().profileWrites,1);
+  assert.equal(f.state().publishes,0);assert.equal(f.state().removes,0);
+ });
+}
+test('mounted Brand clears saved design, explicitly publishes, then removes older upload through real helper',async t=>{
+ const f=await mountedBrandLibrary(t,{oldSelected:true}),{h}=f;
+ assert.ok(f.removeButton('hero-asset'));assert.ok(f.removeButton('older-upload'));
+ await h.press(h.button('Open Hero Media'));await h.press(h.button('Remove Hero Image from design'));
+ assert.equal(f.state().saves,1);assert.equal(f.state().publishes,0);assert.equal(f.state().removes,0);
+ assert.ok(f.removeButton('hero-asset'),'old selection stays reachable after leaving the bounded recent list');
+ await f.remove('hero-asset');assert.match(h.text(),/Remove this media from your Platform design and publish/);
+ assert.equal(f.state().published.heroImageAssetId,'hero-asset');assert.ok(f.removeButton('hero-asset'));
+ await h.press(h.button('Publish Brand Studio Changes'));assert.equal(f.state().publishes,1);assert.equal(f.state().published.heroImageAssetId,null);
+ const saves=f.state().saves,reads=f.state().reads;await f.remove('hero-asset');
+ assert.equal(f.state().saves,saves,'library removal does not save draft');assert.equal(f.state().publishes,1,'library removal does not publish');
+ assert.equal(f.state().reads,reads+1,'successful removal refreshes bounded owner bundle');assert.equal(f.removeButton('hero-asset'),undefined);
+ assert.match(h.text(),/removed from your library and retained/);assert.ok(f.removeButton('older-upload'));
+});
+test('mounted Brand in-use upload removal preserves selected media and unsaved identity with actionable notice',async t=>{
+ const f=await mountedBrandLibrary(t),{h}=f;await h.route({focus:'theme'});await h.change(h.input('Platform Name'),'Unsaved identity');
+ await f.remove('hero-asset');assert.match(h.text(),/Remove this media from your Platform design and publish the change/);
+ assert.equal(h.input('Platform Name').props.value,'Unsaved identity');assert.equal(f.state().profile.heroImageAssetId,'hero-asset');
+ assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);assert.ok(f.removeButton('hero-asset'));
+ assert.doesNotMatch(h.text(),/brand_asset_in_use|Uploaded media removed from/);
+});
+test('mounted Brand library transport failure reconciles exact present row and does not expose backend details',async t=>{
+ const f=await mountedBrandLibrary(t,{removeFails:true}),{h}=f;await h.route({focus:'theme'});await h.change(h.input('Platform Name'),'Keep my edits');
+ const before=f.state();await f.remove('older-upload');assert.equal(h.input('Platform Name').props.value,'Keep my edits');
+ assert.deepEqual(f.state().assets,before.assets);assert.deepEqual(f.state().profile,before.profile);assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);
+ assert.equal(f.state().reads,before.reads+1);assert.equal(f.state().exactReads,1);assert.ok(f.removeButton('older-upload'));assert.match(h.text(),/Removal could not be confirmed.*still present/);assert.doesNotMatch(h.text(),/private_storage_detail|library are unchanged/);
+});
+test('mounted Brand removal refresh failure reports committed removal without discarding edits',async t=>{
+ const f=await mountedBrandLibrary(t,{refreshFails:true}),{h}=f;await h.route({focus:'theme'});await h.change(h.input('Platform Name'),'Keep through refresh');
+ await f.remove('older-upload');assert.match(h.text(),/removal was saved, but the library could not refresh/);
+ assert.equal(h.input('Platform Name').props.value,'Keep through refresh');assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);assert.equal(f.removeButton('older-upload'),undefined,'validated acknowledgement hides removed media even if refresh fails');
+});
+for(const uncertainOutcome of ['lost-response','malformed-ack','nondate-ack','numeric-ack','object-ack','unavailable'])test(`mounted real Brand helper reconciles committed ${uncertainOutcome} through exact tombstone without retry`,async t=>{
+ const f=await mountedBrandLibrary(t,{uncertainOutcome}),{h}=f;
+ await h.change(h.input('Platform Name'),'Keep uncertain edits');await h.press(h.button('Gold accent'));
+ const reads=f.state().reads;await f.remove('older-upload');
+ assert.equal(f.state().removes,1);assert.equal(f.state().reads,reads+1);assert.equal(f.state().exactReads,1);
+ assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);assert.equal(f.removeButton('older-upload'),undefined);
+ assert.match(h.text(),/removal was confirmed/);assert.doesNotMatch(h.text(),/library are unchanged|Please try again|account_bound_rpc/);
+ assert.equal(h.input('Platform Name').props.value,'Keep uncertain edits');
+ await h.press(h.button('Save Brand Studio Draft'));assert.equal(f.state().profile.accentColor,'#F2C25B');assert.equal(f.state().removes,1);
+});
+for(const uncertainOutcome of [null,'lost-response'])test(`mounted ${uncertainOutcome??'valid-ack'} removal overrides stale recent and selected bundle without changing design`,async t=>{
+ const f=await mountedBrandLibrary(t,{uncertainOutcome,staleBundle:true}),{h}=f;
+ await h.change(h.input('Platform Name'),'Keep race edits');await h.press(h.button('Gold accent'));
+ const before=f.state();await f.remove('older-upload');
+ assert.match(h.text(),/removal was confirmed|Uploaded media removed/);
+ assert.equal(f.removeButton('older-upload'),undefined,'stale list and selected logo must not restore removed row');
+ assert.ok(f.removeButton('hero-asset'));assert.ok(f.removeButton('background-asset'));
+ assert.equal(f.state().removes,1);assert.equal(f.state().exactReads,uncertainOutcome?1:0);
+ assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);
+ assert.deepEqual(f.state().profile,before.profile);assert.deepEqual(f.state().published,before.published);
+ assert.equal(h.input('Platform Name').props.value,'Keep race edits');
+ await h.press(h.button('Save Brand Studio Draft'));assert.equal(f.state().profile.accentColor,'#F2C25B');
+ assert.equal(f.state().removes,1);
+});
+for(const order of ['list-first','tombstone-first'])test(`mounted uncertain removal retains tombstone across ${order} reconciliation ordering`,async t=>{
+ const gate=deferred(),f=await mountedBrandLibrary(t,{uncertainOutcome:'lost-response',staleBundle:true,...(order==='list-first'?{exactReadGate:gate}:{})}),{h}=f;
+ const stale={...brandBundle(f.state().profile),assets:[...f.state().assets],logo:f.state().assets.find(a=>a.id==='older-upload')};
+ if(order==='tombstone-first')h.mocks.readPlatformBrandStudio=()=>gate.promise;
+ await f.remove('older-upload');await h.resolve(gate,stale);
+ assert.equal(f.removeButton('older-upload'),undefined);assert.match(h.text(),/removal was confirmed/);
+ assert.equal(f.state().removes,1);
+});
+for(const uncertainOutcome of [null,'lost-response'])test(`mounted ${uncertainOutcome??'valid-ack'} earlier in-flight owner read preserves tombstone and unsaved edits`,async t=>{
+ const f=await mountedBrandLibrary(t,{uncertainOutcome}),{h}=f,earlier=deferred();
+ const stale={...brandBundle(f.state().profile),assets:[...f.state().assets],logo:f.state().assets.find(a=>a.id==='older-upload')};
+ const read=h.mocks.readPlatformBrandStudio;let held=false;
+ h.mocks.readPlatformBrandStudio=()=>{if(!held){held=true;return earlier.promise;}return read();};
+ // Same session, updated email retriggers the real initial owner bundle load.
+ await h.account({user:{id:'owner',email:'updated@example.test'},isSignedIn:true,isLoading:false,authority:f.authority(),authorityStatus:'active'});
+ assert.equal(held,true);await h.change(h.input('Platform Name'),'Keep late read edits');await h.press(h.button('Gold accent'));
+ await f.remove('older-upload');assert.match(h.text(),/removal was confirmed|Uploaded media removed/);
+ await h.resolve(earlier,stale);
+ assert.ok(h.button('Gold accent').props.style[1],'late read preserves unrelated unsaved accent');
+ assert.equal(h.input('Platform Name').props.value,'Keep late read edits');
+ assert.equal(f.removeButton('older-upload'),undefined);assert.ok(f.removeButton('hero-asset'));
+ assert.equal(f.state().removes,1);assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);
+ // Replacement session must not inherit prior session's local tombstone IDs.
+ const replacement={...f.authority(),sessionGeneration:'replacement'};f.setAuthority(replacement);
+ h.mocks.readPlatformBrandStudio=async()=>stale;
+ await h.account({user:{id:'owner',email:'updated@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+ assert.ok(f.removeButton('older-upload'),'same-owner replacement session has fresh evidence scope');
+});
+for(const timing of ['before-edit','after-edit','after-failed-save'])test(`mounted owner read begun ${timing} preserves dirty Brand draft and refreshes media`,async t=>{
+ const f=await mountedBrandLibrary(t,{saveFails:timing==='after-failed-save'}),{h}=f,gate=deferred();
+ const fresh={...brandBundle(f.state().profile),assets:[...f.state().assets,uploadedBrandAsset('newly-read')]};
+ if(timing!=='before-edit')await h.press(h.button('Gold accent'));
+ if(timing==='after-failed-save')await h.press(h.button('Save Brand Studio Draft'));
+ h.mocks.readPlatformBrandStudio=()=>gate.promise;
+ await h.account({user:{id:'owner',email:`${timing}@example.test`},isSignedIn:true,isLoading:false,authority:f.authority(),authorityStatus:'active'});
+ if(timing==='before-edit')await h.press(h.button('Gold accent'));
+ await h.resolve(gate,fresh);
+ assert.ok(h.button('Gold accent').props.style[1],'dirty accent is not overwritten');
+ assert.ok(f.removeButton('newly-read'),'fresh media evidence is still rendered');
+ assert.equal(f.state().saves,timing==='after-failed-save'?1:0);
+ const replacement={...f.authority(),sessionGeneration:'next'};f.setAuthority(replacement);
+ h.mocks.readPlatformBrandStudio=async()=>fresh;
+ await h.account({user:{id:'owner',email:'next@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+ assert.equal(!!h.button('Gold accent').props.style[1],false,'replacement session does not inherit dirty edits');
+});
+for(const profileSaveFails of [false,true])test(`mounted same-session profile save overlap preserves local name on ${profileSaveFails?'failure':'success'}`,async t=>{
+ const saveGate=deferred(),f=await mountedBrandLibrary(t,{profileSaveGate:saveGate,profileSaveFails}),{h}=f;
+ await h.change(h.input('Platform Name'),'Keep overlapping name');await h.press(h.button('Gold accent'));
+ await h.press(h.button('Save Brand Studio Draft'));
+ // A fresh owner load while the explicit save is unresolved must not hydrate
+ // the older server name over the locally owned edit.
+ await h.account({user:{id:'owner',email:'during-save@example.test'},isSignedIn:true,isLoading:false,authority:f.authority(),authorityStatus:'active'});
+ assert.equal(h.input('Platform Name').props.value,'Keep overlapping name');
+ await h.resolve(saveGate);
+ assert.equal(h.input('Platform Name').props.value,'Keep overlapping name');
+ assert.ok(h.button('Gold accent').props.style[1]);
+});
+test('mounted older read cannot replace acknowledged same-session profile and Brand save',async t=>{
+ const f=await mountedBrandLibrary(t),{h}=f,readGate=deferred();
+ const stale={...brandBundle(f.state().profile),assets:[...f.state().assets]};
+ await h.change(h.input('Platform Name'),'Saved newer name');await h.press(h.button('Gold accent'));
+ const original=h.mocks.readPlatformBrandStudio;let held=false;
+ h.mocks.readPlatformBrandStudio=()=>{if(!held){held=true;return readGate.promise;}return original();};
+ await h.account({user:{id:'owner',email:'before-save@example.test'},isSignedIn:true,isLoading:false,authority:f.authority(),authorityStatus:'active'});
+ await h.press(h.button('Save Brand Studio Draft'));assert.equal(f.state().saves,1);
+ await h.resolve(readGate,stale);
+ assert.equal(h.input('Platform Name').props.value,'Saved newer name');
+ assert.ok(h.button('Gold accent').props.style[1]);
+});
+test('mounted replacement session discards pending profile edit but reads already saved Brand draft',async t=>{
+ const gate=deferred(),f=await mountedBrandLibrary(t,{profileSaveGate:gate}),{h}=f;
+ await h.change(h.input('Platform Name'),'Old session edits');await h.press(h.button('Gold accent'));
+ await h.press(h.button('Save Brand Studio Draft'));
+ const replacement={...f.authority(),sessionGeneration:'replacement'};f.setAuthority(replacement);
+ await h.account({user:{id:'owner',email:'new-session@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+ assert.equal(h.input('Platform Name').props.value,'Owner');assert.ok(h.button('Gold accent').props.style[1],'Brand save already committed before profile save began');
+ await h.resolve(gate);
+ assert.equal(h.input('Platform Name').props.value,'Owner');assert.ok(h.button('Gold accent').props.style[1],'Brand save already committed before profile save began');
+ assert.equal(f.state().saves,1,'late profile completion must not repeat the already committed Brand save');
+});
+for(const action of ['draft','publish'])test(`mounted stale ${action} Brand acknowledgement aborts chained profile write after same-owner session replacement`,async t=>{
+ const gate=deferred(),f=await mountedBrandLibrary(t,action==='draft'?{brandSaveGate:gate}:{brandPublishGate:gate}),{h}=f;
+ await h.change(h.input('Platform Name'),'Old session name');await h.press(h.button('Gold accent'));
+ await h.press(h.button(action==='draft'?'Save Brand Studio Draft':'Publish Brand Studio Changes'));
+ assert.equal(f.state().profileWrites,0);
+ const replacement={...f.authority(),sessionGeneration:'replacement'};f.setAuthority(replacement);
+ await h.account({user:{id:'owner',email:'replacement@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+ await h.resolve(gate);
+ assert.equal(f.state().profileWrites,0,'old Brand continuation cannot initiate profile mutation in replacement session');
+ assert.equal(h.input('Platform Name').props.value,'Owner');assert.equal(!!h.button('Gold accent').props.style[1],false);
+ assert.equal(f.state().saves,action==='draft'?1:0);assert.equal(f.state().publishes,action==='publish'?1:0);
+});
+for(const stage of ['draft-library','publish-library','publish-readback'])test(`mounted session replacement during ${stage} aborts remaining profile write`,async t=>{
+ const f=await mountedBrandLibrary(t),{h}=f,gate=deferred();
+ await h.change(h.input('Platform Name'),'Old readback name');await h.press(h.button('Gold accent'));
+ const original=h.mocks.readPlatformBrandStudio;
+ if(stage==='publish-readback')h.mocks.resolveBrandPublishReadbackStatus=()=>gate.promise;
+ else h.mocks.readPlatformBrandStudio=()=>gate.promise;
+ await h.press(h.button(stage==='draft-library'?'Save Brand Studio Draft':'Publish Brand Studio Changes'));
+ assert.equal(f.state().profileWrites,0);
+ const replacement={...f.authority(),sessionGeneration:'replacement'};f.setAuthority(replacement);
+ h.mocks.readPlatformBrandStudio=original;
+ await h.account({user:{id:'owner',email:'readback-replacement@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+ await h.change(h.input('Platform Name'),'New session edit');
+ const newRead=deferred();h.mocks.readPlatformBrandStudio=()=>newRead.promise;
+ await h.press(h.button('Save Brand Studio Draft'));
+ await h.resolve(gate,stage==='publish-readback'?{selectedCount:0,publicReturnedCount:0}:await original());
+ assert.equal(f.state().profileWrites,0,'readback continuation must not reacquire new authority');
+ assert.equal(h.input('Platform Name').props.value,'New session edit');
+ assert.equal(h.button('Save Brand Studio Draft').props.disabled,true,'old finally cannot release replacement session save lock');
+ assert.doesNotMatch(h.text(),/Platform name and tagline saved|Brand changes could not be published|Account changed/);
+ await h.resolve(newRead,await original());assert.equal(f.state().profileWrites,1,'new session can finish its independent authorized save');
+});
+for(const action of ['draft','publish'])test(`mounted detached queued ${action} callback cannot dispatch after session replacement`,async t=>{
+ const f=await mountedBrandLibrary(t),{h}=f;
+ await h.change(h.input('Platform Name'),'Detached callback edit');
+ const detached=h.button(action==='draft'?'Save Brand Studio Draft':'Publish Brand Studio Changes');
+ const replacement={...f.authority(),sessionGeneration:'replacement'};f.setAuthority(replacement);
+ await h.account({user:{id:'owner',email:'queued-replacement@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+ await React.act(async()=>detached.props.onPress());
+ assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);assert.equal(f.state().profileWrites,0);
+ assert.equal(h.input('Platform Name').props.value,'Owner');
+ assert.equal(h.button('Save Brand Studio Draft').props.disabled,false);
+});
+for(const options of [{exactReadFails:true},{refreshFails:true},{exactRow:null},
+ {exactRow:{id:'wrong',owner_user_id:'owner',deleted_at:'2026-10-21T00:00:00Z',asset_state:'archived'}},
+ {exactRow:{id:'older-upload',owner_user_id:'other',deleted_at:'2026-10-21T00:00:00Z',asset_state:'archived'}},
+ {exactRow:{id:'older-upload',owner_user_id:'owner',deleted_at:'invalid',asset_state:'archived'}}]) {
+ test(`mounted uncertain removal never treats recent-list absence as proof: ${JSON.stringify(options)}`,async t=>{
+  const f=await mountedBrandLibrary(t,{uncertainOutcome:'lost-response',...options}),{h}=f;
+  await h.change(h.input('Platform Name'),'Keep unknown edits');await f.remove('older-upload');
+  assert.equal(f.state().removes,1);assert.equal(f.state().exactReads,1);assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);
+  assert.match(h.text(),/removal outcome is unknown/i);assert.match(h.text(),/Reopen Brand Studio/);
+  assert.doesNotMatch(h.text(),/removal was confirmed|library are unchanged|private_exact_read_failure/);
+  assert.equal(h.input('Platform Name').props.value,'Keep unknown edits');
+ });
+}
+test('mounted uncertain removal with absent recent item but exact present row stays unconfirmed',async t=>{
+ const f=await mountedBrandLibrary(t,{removeFails:true,omitFromRecent:true}),{h}=f;
+ await f.remove('older-upload');assert.match(h.text(),/Removal could not be confirmed.*still present/);
+ assert.doesNotMatch(h.text(),/removal was confirmed/);assert.equal(f.state().removes,1);assert.equal(f.state().exactReads,1);
+ assert.match(h.text(),/Recent uploaded media/);assert.match(h.text(),/up to 50 recent uploads.*not your complete library/);
+});
+test('mounted uncertain tombstone read cannot cross a replacement account or session',async t=>{
+ const readGate=deferred(),f=await mountedBrandLibrary(t,{uncertainOutcome:'lost-response',exactReadGate:readGate}),{h}=f;
+ await f.remove('older-upload');assert.equal(f.state().exactReads,1);
+ const replacement={userId:'new-owner',accountId:'new-owner',sessionGeneration:'replacement',state:'ACTIVE',restoreOnly:false};
+ f.setAuthority(replacement);
+ const pending=deferred();h.mocks.readUserProfile=()=>pending.promise;h.mocks.readPlatformBrandStudio=()=>pending.promise;
+ await h.account({user:{id:'new-owner',email:'new@example.test'},isSignedIn:true,isLoading:false,authority:replacement,authorityStatus:'active'});
+ await h.resolve(readGate);
+ assert.deepEqual(f.state().exactStatuses,['unknown'],'real exact helper rejects authority changed during read');
+ assert.equal(f.removeButton('older-upload'),undefined);assert.equal(f.removeButton('hero-asset'),undefined);
+ assert.doesNotMatch(h.text(),/removal was confirmed|removal outcome is unknown/);assert.equal(f.state().removes,1);
+});
+test('mounted real exact helper refuses stale-owner or inactive authority before querying',async t=>{
+ const f=await mountedBrandLibrary(t);
+ for(const authority of [null,{userId:'other',state:'ACTIVE',restoreOnly:false},{userId:'owner',state:'LOCKED',restoreOnly:false},{userId:'owner',state:'ACTIVE',restoreOnly:true}]) {
+  f.setAuthority(authority);assert.equal(await f.readExact(),'unknown');
+ }
+ assert.equal(f.state().exactReads,0);assert.equal(f.state().removes,0);
+});
+for(const outcome of ['success','failure'])test(`mounted Brand library removal ${outcome} preserves unrelated unsaved brand accent`,async t=>{
+ const f=await mountedBrandLibrary(t,{removeFails:outcome==='failure'}),{h}=f;
+ await h.press(h.button('Gold accent'));await f.remove('older-upload');
+ assert.equal(f.state().profile.accentColor,'#DC143C','library removal never saves local draft');
+ assert.equal(f.state().saves,0);assert.equal(f.state().publishes,0);
+ await h.press(h.button('Save Brand Studio Draft'));
+ assert.equal(f.state().profile.accentColor,'#F2C25B','unsaved accent survives library success or failure');
+});
+for(const outcome of ['saved','rejected'])test(`mounted Brand design clear ${outcome} explicitly saves current draft and preserves unrelated edit on error`,async t=>{
+ const f=await mountedBrandLibrary(t,{saveFails:outcome==='rejected'}),{h}=f;
+ await h.press(h.button('Gold accent'));await h.press(h.button('Open Hero Media'));
+ assert.match(h.text(),/Saves your current draft without this image. Publish separately/);
+ await h.press(h.button('Remove Hero Image from design'));
+ assert.equal(f.state().publishes,0);assert.equal(f.state().removes,0);
+ if(outcome==='saved')assert.equal(f.state().profile.accentColor,'#F2C25B');
+ else {
+  let retried;h.mocks.savePlatformBrandProfileDraft=async(_owner,draft)=>{retried=draft;return draft;};
+  await h.press(h.button('Save Brand Studio Draft'));assert.equal(retried.accentColor,'#F2C25B');assert.equal(retried.heroImageAssetId,'hero-asset');
+ }
+});
+test('mounted Brand stale upload removal cannot refresh or expose media in replacement account',async t=>{
+ const gate=deferred(),f=await mountedBrandLibrary(t,{removeGate:gate}),{h}=f;
+ await f.remove('older-upload');assert.equal(f.state().removes,1);
+ const held=deferred();h.mocks.readUserProfile=()=>held.promise;h.mocks.readPlatformBrandStudio=()=>held.promise;
+ const reads=f.state().reads;
+ await h.account({user:{id:'new-owner',email:'new@example.test'},isSignedIn:true,isLoading:false,authority:{userId:'new-owner',accountId:'new-owner',sessionGeneration:'second',state:'ACTIVE',restoreOnly:false},authorityStatus:'active'});
+ await h.resolve(gate);
+ assert.equal(f.state().reads,reads);assert.equal(f.removeButton('older-upload'),undefined);assert.equal(f.removeButton('hero-asset'),undefined);
+ assert.doesNotMatch(h.text(),/Uploaded media removed from your library/);
+});
+test('mounted Brand old removal completion cannot release replacement session draft save lock',async t=>{
+ const removal=deferred(),saving=deferred(),f=await mountedBrandLibrary(t,{removeGate:removal}),{h}=f;
+ await f.remove('older-upload');
+ const oldConfirmation=h.alerts.at(-1)[2].find(b=>b.text==='Remove uploaded media');
+ await React.act(async()=>oldConfirmation.onPress());assert.equal(f.state().removes,1,'duplicate confirmation is single flight');
+ await h.account({user:{id:'owner',email:'owner@example.test'},isSignedIn:true,isLoading:false,authority:{userId:'owner',accountId:'owner',sessionGeneration:'replacement',state:'ACTIVE',restoreOnly:false},authorityStatus:'active'});
+ h.mocks.savePlatformBrandProfileDraft=async(_owner,draft)=>{await saving.promise;return draft;};
+ await h.press(h.button('Save Brand Studio Draft'));assert.equal(h.button('Save Brand Studio Draft').props.disabled,true);
+ await h.resolve(removal);assert.equal(h.button('Save Brand Studio Draft').props.disabled,true,'old operation cannot unlock new session save');
+ assert.doesNotMatch(h.text(),/Uploaded media removed from your library/);
+ await h.resolve(saving);assert.equal(h.button('Save Brand Studio Draft').props.disabled,false);
+});
 test('mounted same-tab Schedule and Moderation Live safety focus the real editor/defaults wrappers',async t=>{
  const h=await mount(t,{route:{tab:'live'}});
  await h.press(h.find(n=>n.type==='TouchableOpacity'&&textOf(n).startsWith('Schedule Event')));

@@ -155,7 +155,18 @@ async function rollingFixture(t) {
     finally { state.actor = prior; }
   };
   const atomic = patch => current.publishPlatformBrandProfile(ids.owner, { ...brand.createDefaultPlatformBrandProfile(ids.owner), ...patch });
-  const migrate = async () => { for (const name of migrations) await fixture.db.exec(read(`supabase/migrations/${name}`)); };
+  const migrate = async () => {
+    for (const name of migrations) await fixture.db.exec(read(`supabase/migrations/${name}`));
+    // Current removal requires the new server-timed, account-bound RPC. Execute
+    // its actual SQL here; full retention/storage behavior has a separate migrated fixture.
+    const retention = 'supabase/migrations/20261021030421_platform_brand_exact_retention_lifecycle.sql';
+    await fixture.db.exec('create schema if not exists private');
+    for (const signature of ['private.platform_brand_retention_lock', 'public.remove_platform_brand_asset']) {
+      const source=read(retention), start=source.indexOf(`create function ${signature}(`);
+      assert.ok(start>=0); await fixture.db.exec(source.slice(start,source.indexOf('$$;',start)+3));
+    }
+    await fixture.db.exec('revoke all on function private.platform_brand_retention_lock() from public,anon,authenticated; revoke all on function public.remove_platform_brand_asset(uuid) from public,anon; grant execute on function public.remove_platform_brand_asset(uuid) to authenticated;');
+  };
   const seedAsset = async () => {
     await fixture.db.query(`insert into platform_brand_assets(id,owner_user_id,asset_type,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type)
       values($1,$2,'hero_image','supabase','platform-brand-assets',$3,$3,'image/png')`, [assetId, ids.owner, `${ids.owner}/hero.png`]);
@@ -236,7 +247,7 @@ test('EXPECTED old UI limitation: rejected publication can still display success
   assert.equal((await f.live()).profile.accentColor, '#222222');
 });
 
-test('old upload creates a private draft; old and current removal archive without leaving media access', async t => {
+test('legacy baseline archives; current removal rejects referenced drafts before retaining media', async t => {
   const f = await rollingFixture(t); await f.migrate();
   for (const client of [f.brand, f.current]) {
     const asset = await f.brand.uploadPlatformBrandAsset({ ownerUserId: ids.owner, assetType: 'hero_image', file: { uri: 'file:///fixture.png', name: 'fixture.png', mimeType: 'image/png', size: 1 } });
@@ -245,8 +256,18 @@ test('old upload creates a private draft; old and current removal archive withou
     await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: asset.id });
     assert.equal((await f.draft()).heroImageAssetId, asset.id);
     assert.equal(await f.live(), null);
-    await client.removePlatformBrandAsset(asset);
-    await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: null });
+    if (client === f.current) {
+      await assert.rejects(client.removePlatformBrandAsset(asset), /brand_asset_in_use/);
+      assert.equal((await f.draft()).heroImageAssetId, asset.id, 'Rejected current removal preserves the selected draft');
+      assert.equal((await f.db.query('select deleted_at from platform_brand_assets where id=$1', [asset.id])).rows[0].deleted_at, null);
+      await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: null });
+      await client.removePlatformBrandAsset(asset);
+    } else {
+      // This historical fixture intentionally omits the new retention triggers;
+      // native full-schema tests cover the new direct-owner in-use rejection.
+      await client.removePlatformBrandAsset(asset);
+      await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: null });
+    }
     assert.equal((await f.draft()).heroImageAssetId, null);
     assert.equal((await f.db.query('select asset_state from platform_brand_assets where id=$1', [asset.id])).rows[0].asset_state, 'archived');
     assert.equal((await f.brand.readPlatformBrandStudio(ids.owner)).assets.length, 0, 'Studio filters deleted rows out');
