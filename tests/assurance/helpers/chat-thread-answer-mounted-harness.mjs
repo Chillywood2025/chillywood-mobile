@@ -160,7 +160,7 @@ export async function mountChatAnswer(options = {}) {
       const handledIncomingInviteIdsRef = useRef(new Set());
       const handledIncomingRoomIdsRef = useRef(new Set());
       const ownership = ${ownershipHook ? "useChatThreadOperationOwnership({currentUserId, threadId, sessionGeneration, isSignedIn, setCallBusy, visibleInviteId: incomingCallInvite?.id ?? ''})" : "{}"};
-      const { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation } = ownership;
+      const { beginAnswerOperation, isAnswerOperationCurrent, finishAnswerOperation, observeIncomingCallProjection, beginThreadRead, isThreadReadCurrent, invalidateThreadReads, captureCallOperation } = ownership;
       const microphone = ${microphoneHook ? "useIosNativeMicrophoneAcknowledgements(JSON.stringify([currentUserId, threadId, sessionGeneration, isSignedIn, activeCallInvite?.id, activeCallInvite?.communicationRoomId]), requestedNativeCallUuid)" : "{}"};
       const { rememberNativeMicAck, consumeNativeMicAck, forgetNativeMicAck, isNativeMicContextCurrent } = microphone;
       ${(options.terminalMode || options.nativeMode || options.endedMode) ? screen.body.statements.find(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => declaration.name.getText(tree) === "finishTerminalInviteCleanup")).getText(tree) : ""}

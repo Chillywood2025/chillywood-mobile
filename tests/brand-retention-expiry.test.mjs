@@ -69,3 +69,18 @@ test('actual handler-to-helper insecure configuration fails before RPC or provid
  const result=await handler(new Request('https://edge.test',{method:'POST',headers:{Authorization:'Bearer synthetic-service-key'},body:JSON.stringify({assetId:asset})}));
  assert.equal(result.status,503);assert.equal(clients,0);assert.equal(f.calls.length,0);assert.equal(JSON.stringify(await result.json()).includes('synthetic-service-key'),false);
 });
+
+test('actual Edge entrypoint awaits the Supabase thenable builder without broadening handler authority',async()=>{
+ let served;const calls=[];
+ const Deno={env:{get:name=>name==='SUPABASE_URL'?binding.providerOrigin:'synthetic-service-key'},serve:handler=>{served=handler;}};
+ const createClient=(url,key,options)=>{
+  assert.equal(url,binding.providerOrigin);assert.equal(key,'synthetic-service-key');
+  assert.deepEqual(options,{auth:{persistSession:false,autoRefreshToken:false}});
+  return {rpc:(name,args)=>{calls.push({name,args});return {then:resolve=>resolve({data:{status:'transport_unqualified_or_disabled'}})};}};
+ };
+ load('../supabase/functions/platform-brand-retention-expiry/index.ts',{Deno,createClient,createBrandExpiryHandler});
+ assert.equal(typeof served,'function');
+ const response=await served(new Request('https://edge.test',{method:'POST',headers:{Authorization:'Bearer synthetic-service-key'},body:JSON.stringify({assetId:asset})}));
+ assert.equal(response.status,200);assert.deepEqual(await response.json(),{status:'transport_unqualified_or_disabled',permanentlyAbsent:false});
+ assert.deepEqual(calls,[{name:'begin_platform_brand_retention_transport',args:{p_asset_id:asset}}]);
+});
