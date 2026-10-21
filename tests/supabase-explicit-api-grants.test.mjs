@@ -5,7 +5,7 @@ import ts from 'typescript';
 import {createDatabase, splitSQL} from './helpers/database-runtime-authority-fixture.mjs';
 
 const root = new URL('../', import.meta.url);
-const migrationName = '20261021014627_explicit_service_api_grants.sql';
+const migrationName = '20261021152932_explicit_service_api_grants.sql';
 const migration = fs.readFileSync(new URL(`supabase/migrations/${migrationName}`, root), 'utf8');
 const requirements = JSON.parse(fs.readFileSync(new URL('tests/fixtures/explicit-api-service-grants.json', root), 'utf8'));
 // Audited literal/constant table calls plus the closed finance/usage/DMCA read
