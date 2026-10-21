@@ -159,7 +159,7 @@ async function rollingFixture(t) {
     for (const name of migrations) await fixture.db.exec(read(`supabase/migrations/${name}`));
     // Current removal requires the new server-timed, account-bound RPC. Execute
     // its actual SQL here; full retention/storage behavior has a separate migrated fixture.
-    const retention = 'supabase/migrations/20261021030421_platform_brand_exact_retention_lifecycle.sql';
+    const retention = 'supabase/migrations/20261021134043_platform_brand_exact_retention_lifecycle.sql';
     await fixture.db.exec('create schema if not exists private');
     for (const signature of ['private.platform_brand_retention_lock', 'public.remove_platform_brand_asset']) {
       const source=read(retention), start=source.indexOf(`create function ${signature}(`);

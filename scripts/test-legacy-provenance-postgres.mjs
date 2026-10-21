@@ -21,7 +21,7 @@ create table private.media_object_storage_migration_audit(id bigserial primary k
  create table public.legal_holds(target_type text,target_id text,status text);`);
  const holdSql=readFileSync('supabase/migrations/20261020141458_deleted_content_retention.sql','utf8');
  await db.exec(holdSql.slice(holdSql.indexOf('create function private.deleted_content_hold_matches('),holdSql.indexOf('create function private.deleted_content_legal_hold_guard()')));
- await db.exec(readFileSync('supabase/migrations/20261021021025_deleted_media_legacy_provenance_adapter.sql','utf8').split('-- BEGIN LEGACY PROVENANCE\n')[1].split('-- BEGIN LEGACY RUNTIME\n')[0]);
+ await db.exec(readFileSync('supabase/migrations/20261021134020_deleted_media_legacy_provenance_adapter.sql','utf8').split('-- BEGIN LEGACY PROVENANCE\n')[1].split('-- BEGIN LEGACY RUNTIME\n')[0]);
  await db.query(`insert into videos(id,owner_id,created_at,storage_provider,storage_bucket,storage_object_key)
  values($1,$2,'2026-01-01Z','cloudflare_r2','chillywood-media-origin','legacy/video-one.mp4')`,[id,owner]);
  await db.query(`insert into private.media_object_storage_migration_audit(table_name,row_id,status,new_storage_provider,new_storage_bucket,new_storage_object_key,row_before,row_after) select 'videos',id::text,'updated',storage_provider,storage_bucket,storage_object_key,to_jsonb(v),to_jsonb(v) from videos v where id=$1`,[id]);

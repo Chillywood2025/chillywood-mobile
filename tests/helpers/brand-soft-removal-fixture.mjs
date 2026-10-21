@@ -51,6 +51,6 @@ export async function installBrandSoftRemovalFixture(db) {
  const holds=readMigration('20261020141458_deleted_content_retention.sql');
  const start=holds.indexOf('create function private.deleted_content_hold_matches(');
  await db.exec(holds.slice(start,holds.indexOf('$$;',start)+3));
- await applyBrandMigrationStatements(db,readMigration('20261021030421_platform_brand_exact_retention_lifecycle.sql'));
+ await applyBrandMigrationStatements(db,readMigration('20261021134043_platform_brand_exact_retention_lifecycle.sql'));
  await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
 }

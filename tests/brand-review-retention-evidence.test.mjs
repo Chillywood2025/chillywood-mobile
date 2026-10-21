@@ -136,7 +136,7 @@ test('canonical review history supports exact due claim and metadata-crash recov
   const f=await installBrandReviewRetentionFixture(db);
   const {applyBrandMigrationStatements}=await import('./helpers/apply-brand-migration-statements.mjs');
   const {readMigration}=await import('./helpers/brand-soft-removal-fixture.mjs');
-  await applyBrandMigrationStatements(db,readMigration('20261021032449_platform_brand_exact_expiry_transport.sql'));
+  await applyBrandMigrationStatements(db,readMigration('20261021134104_platform_brand_exact_expiry_transport.sql'));
   const a=await f.asset();await db.query("select review_platform_brand_asset($1,'archive','safety reason')",[a.id]);
   await f.service();
   await db.exec("update private.platform_brand_retention_settings set expiry_enabled=true,writer_drain_evidence_sha256=repeat('e',64),reference_review_evidence_sha256=repeat('f',64),provider_origin='https://fixture.supabase.co',provider_contract_sha256=repeat('c',64),version_delete_verified=true");

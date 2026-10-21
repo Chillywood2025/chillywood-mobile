@@ -21,7 +21,7 @@ const digest = 'a'.repeat(64);
 const target = (id, table, source) => `originals/supabase-migration/${id}/${table}/${source}`;
 const proof = { protocol: 'supabase-original-copy-v1', sourceSha256: digest, targetSha256: digest,
   sourceSizeBytes: 1024, targetSizeBytes: 1024, createOnly: true, independentReadback: true };
-const migration = 'supabase/migrations/20261021022807_supabase_original_copy_receipts.sql';
+const migration = 'supabase/migrations/20261021134033_supabase_original_copy_receipts.sql';
 const snapshot = async (table, id) => (await q(`select to_jsonb(x) s from ${table} x where id=$1`, [id])).s;
 const record = (table, id, rid, source, overrides = {}) => q(
   'select public.record_supabase_original_copy_receipt($1,$2,$3,$4,$5,$6,$7,$8) r',

@@ -10,9 +10,9 @@ import {createDatabase,repairMigrationPath} from './helpers/database-runtime-aut
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
 const brandRetentionFiles = [
-  '20261021030421_platform_brand_exact_retention_lifecycle.sql',
-  '20261021031016_media_scan_exact_byte_receipts.sql',
-  '20261021032449_platform_brand_exact_expiry_transport.sql',
+  '20261021134043_platform_brand_exact_retention_lifecycle.sql',
+  '20261021134053_media_scan_exact_byte_receipts.sql',
+  '20261021134104_platform_brand_exact_expiry_transport.sql',
 ];
 
 const inspectionBundleFiles = [
@@ -46,8 +46,8 @@ const adminBackendFiles = [
 
 // Both reviewed successors are part of the current replay: new transactional
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
-const originalCopyFiles = ['20261021022807_supabase_original_copy_receipts.sql'];
-const legacyRetentionFiles = ['20261021021025_deleted_media_legacy_provenance_adapter.sql'];
+const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
+const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
 const explicitApiGrantFiles = ['20261021014627_explicit_service_api_grants.sql'];
 const ownerSecurityFiles = [

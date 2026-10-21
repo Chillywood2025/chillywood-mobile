@@ -11,7 +11,7 @@ let checks = 0;
 const q = async (sql, params=[]) => (await db.query(sql, params)).rows[0];
 const check = (actual, expected, label) => { assert.deepEqual(actual, expected, label); checks++; };
 const deny = async (fn, pattern) => { await assert.rejects(fn, pattern); checks++; };
-const migration = '20261021030421_platform_brand_exact_retention_lifecycle.sql';
+const migration = '20261021134043_platform_brand_exact_retention_lifecycle.sql';
 const owner = '10000000-0000-4000-8000-000000000001';
 const read = name => readFileSync('supabase/migrations/'+name,'utf8');
 try {
@@ -44,7 +44,7 @@ try {
  const holdStart=holdsSql.indexOf('create function private.deleted_content_hold_matches(');
  await db.exec(holdsSql.slice(holdStart,holdsSql.indexOf('$$;',holdStart)+3));
  await applyBrandMigrationStatements(db,read(migration));
- await applyBrandMigrationStatements(db,read('20261021032449_platform_brand_exact_expiry_transport.sql'));
+ await applyBrandMigrationStatements(db,read('20261021134104_platform_brand_exact_expiry_transport.sql'));
  await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
  const fixture=async()=>{
    const id=(await q('select gen_random_uuid() id')).id,key=`${owner}/logo/${id}.png`;

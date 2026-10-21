@@ -3,7 +3,7 @@ import {applyBrandMigrationStatements} from './apply-brand-migration-statements.
 // definitions, then the new receipt migration. No synthetic receipt or verifier.
 import {readFileSync} from 'node:fs';
 const read = name => readFileSync(new URL(`../../supabase/migrations/${name}`, import.meta.url),'utf8');
-export const byteReceiptMigration = '20261021031016_media_scan_exact_byte_receipts.sql';
+export const byteReceiptMigration = '20261021134053_media_scan_exact_byte_receipts.sql';
 export async function installByteReceiptFixture(db) {
   const base = read('20260530191115_media_malware_scanning_pipeline.sql');
   await db.exec(base.slice(base.indexOf('create table if not exists'),base.indexOf('create unique index')));

@@ -11,7 +11,7 @@ let checks = 0;
 const q = async (sql, params=[]) => (await db.query(sql, params)).rows[0];
 const check = (actual, expected, label) => { assert.deepEqual(actual, expected, label); checks++; };
 const deny = async (fn, pattern) => { await assert.rejects(fn, pattern); checks++; };
-const migration = '20261021030421_platform_brand_exact_retention_lifecycle.sql';
+const migration = '20261021134043_platform_brand_exact_retention_lifecycle.sql';
 const owner = '10000000-0000-4000-8000-000000000001';
 const read = name => readFileSync('supabase/migrations/'+name,'utf8');
 try {
