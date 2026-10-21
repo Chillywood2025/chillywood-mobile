@@ -113,7 +113,7 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
-const collectionOrderingFiles = ['20261020223000_user_collection_revision_authority.sql'];
+const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
 const collectionOrderingFunctionKeys = new Set([
   'private.assert_user_collection_session/0', 'private.user_collection_projection_value/3',
   'public.read_my_collection_state/3', 'public.mutate_my_collection_state/5',
