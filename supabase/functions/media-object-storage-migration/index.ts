@@ -1,7 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { copySupabaseOriginal } from "../_shared/supabase-original-copy.ts";
 import { checkDeletedMediaRetirement } from "../_shared/deleted-media-retirement.ts";
 
 type MigrationAction =
+  | "copy_supabase_original"
   | "audit_inventory"
   | "classify_stale_refs"
   | "resolve_stale_refs_dry_run"
@@ -232,7 +234,8 @@ const authenticateMigrationOperator = async (req: Request) => {
 const normalizeAction = (value: unknown): MigrationAction | null => {
   const action = toLowerText(value);
   if (
-    action === "audit_inventory"
+    action === "copy_supabase_original"
+    || action === "audit_inventory"
     || action === "classify_stale_refs"
     || action === "resolve_stale_refs_dry_run"
     || action === "apply_stale_ref_resolutions"
@@ -1934,6 +1937,34 @@ const handler = async (req: Request): Promise<Response> => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    if (action === "copy_supabase_original") {
+      // Explicit one-original action; never expands the legacy batch manifest.
+      // Operator authority is unchanged. Deployment/invocation requires its own approval.
+      const target = readR2OriginConfig();
+      if (!target.config || target.config.bucket !== R2_ORIGIN_BUCKET) {
+        return json(409, { ok: false, reason: "supabase_copy_target_unavailable" });
+      }
+      const config = target.config;
+      let endpoint: URL;
+      try { endpoint = new URL(config.endpoint); }
+      catch { return json(409, {ok: false, reason: "supabase_copy_target_unavailable"}); }
+      if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password
+        || endpoint.search || endpoint.hash || !["", "/"].includes(endpoint.pathname)) {
+        return json(409, {ok: false, reason: "supabase_copy_target_unavailable"});
+      }
+      const result = await copySupabaseOriginal({
+        tableName: toText(payload.table_name), rowId: toText(payload.row_id), receiptId: toText(payload.receipt_id),
+      }, {
+        adminClient, supabaseUrl,
+        targetAllowed: async (key) => (await checkDeletedMediaRetirement(adminClient, {
+          provider: "cloudflare_r2", bucket: R2_ORIGIN_BUCKET, objectKey: key, purpose: "upload",
+        })).allowed,
+        targetUrl: (method, objectKey) => createPresignedS3Url({
+          ...config, method, objectKey, expiresSeconds: 120,
+        }),
+      });
+      return json(200, { ok: true, action, ...result });
+    }
     const references = await readInventoryReferences(adminClient);
     const manifest = buildManifest(references);
     const distinct = distinctManifest(manifest);
