@@ -37,7 +37,7 @@ to actual TypeScript consumers. No historical migration is edited.
 
 ## Regression coverage
 
-Run `node --test tests/supabase-explicit-api-grants.test.mjs`.
+Run `node --test tests/supabase-explicit-api-grants.test.mjs tests/client-api-grant-consumers.test.mjs`.
 
 The suite replays the full chain without legacy defaults, proves each missing
 operation receives SQLSTATE 42501 before the repair, and checks successful
@@ -51,7 +51,7 @@ minimality, all October-created public/private boundaries, future table and
 sequence denial, and explicitly classified new public tables. Private
 inspection/retention/canary data stays inaccessible, including to service_role.
 
-The client audit additionally covers 135 tables referenced by literal/imported
+The client audit additionally covers 134 tables referenced by literal/imported
 table constants and the closed finance, usage, money-audit, and DMCA read
 wrappers. Requested authenticated table and column privileges are identical
 with and without legacy defaults. Five write surfaces deliberately use
@@ -60,6 +60,15 @@ Anonymous reads that lose an unused legacy table grant have RLS enabled and
 no SELECT policy for anon, PUBLIC, or an inherited role. They were not public
 readable surfaces, so this repair adds no anonymous grants. This is ACL
 readiness coverage, not a claim that every client payload or UI flow is valid.
+
+`tests/client-api-grant-consumers.test.mjs` binds that inventory to actual client
+AST calls in TypeScript and JavaScript client files. It resolves lexical/imported
+constants and the eight reviewed finite wrappers, including their array/object
+source lists. New tables, per-file operations, unresolved dynamic selectors,
+mutated source lists, and escaping wrappers fail with source locations, without
+hashing unrelated file contents. Adversarial controls
+exercise new literal/imported tables, writes, and wrapper sources. The inventory
+excludes declared-but-unused table constants; adding a real call requires review.
 
 The focused pgTAP suite is
 `supabase/tests/explicit_service_api_grants_test.sql`; full integration remains
