@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { VideoView, useVideoPlayer } from "expo-video";
+import { VideoView, useVideoPlayer, type VideoPlayerStatus } from "expo-video";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -33,19 +33,34 @@ const emptyReadout = (state: CreatorReplayPlaybackReadout["state"], title: strin
 });
 
 export default function CreatorReplayPlayerScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams<{ replayId?: string }>();
   const replayId = String(Array.isArray(params.replayId) ? params.replayId[0] : params.replayId ?? "").trim();
+  // A newer replay must release the previous native player before its metadata
+  // resolves, including when the router reuses this screen instance.
+  return <CreatorReplayPlayer key={replayId} replayId={replayId} />;
+}
+
+function CreatorReplayPlayer({ replayId }: { replayId: string }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [readout, setReadout] = useState<CreatorReplayPlaybackReadout>(() => (
     emptyReadout("processing", "Checking replay", "Checking controlled replay playback.")
   ));
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      if (!active) return;
+      active = false;
+      controller.abort();
+      setReadout(emptyReadout("error", "Replay unavailable", "Replay details took too long to load. Please retry."));
+      setLoading(false);
+    }, 30_000);
     const load = async () => {
       setLoading(true);
-      const nextReadout = await resolveCreatorReplayPlayback(replayId).catch((error) => (
+      const nextReadout = await resolveCreatorReplayPlayback(replayId, controller.signal).catch((error) => (
         emptyReadout(
           "error",
           "Replay unavailable",
@@ -53,25 +68,82 @@ export default function CreatorReplayPlayerScreen() {
         )
       ));
       if (!active) return;
+      clearTimeout(timeout);
       setReadout(nextReadout);
       setLoading(false);
     };
     void load();
     return () => {
       active = false;
+      controller.abort();
+      clearTimeout(timeout);
     };
-  }, [replayId]);
+  }, [replayId, attempt]);
 
   const source = useMemo(() => (
-    readout.canRenderPlayback && readout.playbackUrl ? { uri: readout.playbackUrl } : null
-  ), [readout.canRenderPlayback, readout.playbackUrl]);
+    !loading && readout.canRenderPlayback && readout.playbackUrl ? { uri: readout.playbackUrl, contentType: "hls" as const } : null
+  ), [loading, readout.canRenderPlayback, readout.playbackUrl]);
 
   const player = useVideoPlayer(source, (createdPlayer) => {
     createdPlayer.loop = false;
     if (source) createdPlayer.play();
   });
 
-  const stateLabel = readout.state === "ready"
+  const [nativeReadout, setNativeReadout] = useState<{ player: typeof player; status: VideoPlayerStatus } | null>(null);
+  const [timedOutPlayer, setTimedOutPlayer] = useState<typeof player | null>(null);
+  const nativeStatus = nativeReadout?.player === player ? nativeReadout.status : player.status;
+  const playbackFailed = !!source && (nativeStatus === "error" || timedOutPlayer === player);
+  const playbackLoading = !!source && !playbackFailed && (nativeStatus === "idle" || nativeStatus === "loading");
+
+  useEffect(() => {
+    let active = true;
+    const subscription = player.addListener("statusChange", ({ status }) => {
+      if (active) setNativeReadout({ player, status });
+    });
+    setNativeReadout({ player, status: player.status });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [player]);
+
+  useEffect(() => {
+    if (!playbackLoading) return;
+    let active = true;
+    const timeout = setTimeout(() => {
+      if (!active || player.status === "readyToPlay") return;
+      player.pause();
+      setTimedOutPlayer(player);
+    }, 30_000);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [playbackLoading, player]);
+
+  const retry = () => {
+    // Unload even if the resolver returns the same URL on retry. expo-video
+    // creates native players by source identity, so a counter alone is not enough.
+    setLoading(true);
+    setAttempt((value) => value + 1);
+  };
+  const retryButton = (
+    <TouchableOpacity
+      testID="content-library-replay-retry-button"
+      accessibilityRole="button"
+      accessibilityLabel="Retry replay playback"
+      style={styles.retryButton}
+      onPress={retry}
+    >
+      <Text style={styles.retryText}>Retry</Text>
+    </TouchableOpacity>
+  );
+
+  const stateLabel = playbackFailed
+    ? "Unavailable"
+    : loading || playbackLoading
+      ? "Loading"
+      : readout.state === "ready"
     ? "Available"
     : readout.state === "processing"
       ? "Processing"
@@ -117,19 +189,34 @@ export default function CreatorReplayPlayerScreen() {
               <Text style={styles.stateTitle}>Checking replay</Text>
               <Text style={styles.stateCopy}>Loading controlled playback state.</Text>
             </View>
+          ) : playbackFailed ? (
+            <View style={styles.centerState}>
+              <Text style={styles.stateTitle}>Replay couldn&apos;t play</Text>
+              <Text style={styles.stateCopy}>The video did not load. Check your connection and try again.</Text>
+              {retryButton}
+            </View>
           ) : source ? (
-            <VideoView
-              allowsFullscreen
-              allowsPictureInPicture
-              contentFit="contain"
-              nativeControls
-              player={player}
-              style={styles.video}
-            />
+            <>
+              <VideoView
+                allowsFullscreen
+                allowsPictureInPicture
+                contentFit="contain"
+                nativeControls
+                player={player}
+                style={styles.video}
+              />
+              {playbackLoading ? (
+                <View style={[styles.centerState, styles.loadingOverlay]} pointerEvents="none">
+                  <ActivityIndicator color={ACCENT} />
+                  <Text style={styles.stateTitle}>Loading replay</Text>
+                </View>
+              ) : null}
+            </>
           ) : (
             <View style={styles.centerState}>
               <Text style={styles.stateTitle}>{readout.title}</Text>
               <Text style={styles.stateCopy}>{readout.copy}</Text>
+              {readout.state === "error" || readout.state === "unavailable" || readout.state === "processing" ? retryButton : null}
             </View>
           )}
         </View>
@@ -221,6 +308,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
     gap: 10,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  retryButton: {
+    minHeight: 44,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: ACCENT,
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
   stateTitle: {
     color: "#FFFFFF",

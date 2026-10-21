@@ -111,6 +111,26 @@ test('discovery includes new TS, TSX, JS, JSX, MJS and CJS client files', () => 
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
 });
 
+test('computed schema and method boundaries fail closed without rejecting ordinary computed calls', () => {
+  for (const source of [
+    `client['schema']('private').from('known_table').select('*');`,
+    `const schema = 'sch' + 'ema'; client[schema]('private').from('known_table').select('*');`,
+    `const method = 'fr' + 'om'; client[method]('new_table').select('*');`,
+    `const method = getMethod(); client[method]('new_table').select('*');`,
+    `const method = getMethod(); const scoped = client[method]('private'); scoped.from('known_table').select('*');`,
+    `const method = getMethod(); const query = client[method]('new_table'); query.select('*');`,
+    `const method = getMethod(); const query = client[method]('new_table'); const alias = query; alias.select('*');`,
+    `const {schema: scope} = client; const scoped = scope('private'); scoped.from('known_table').select('*');`,
+    `const {['sch' + 'ema']: scope} = client; scope('private').from('known_table').select('*');`,
+    `const scope = client.schema; scope('private').from('known_table').select('*');`,
+    `const scope = client.schema.bind(client); scope('private').from('known_table').select('*');`,
+    `const method = 'del' + 'ete'; client.from('known_table').select('*')[method]();`,
+  ]) assert.throws(() => check([['app/probe.ts', source]]), /unclassified client Data API boundary/u, source);
+  check([['app/probe.ts', `const method = getMethod(); formatters[method]('ordinary text');
+    const label = 'tit' + 'le'; labels[label];
+    client.schema('public').from('known_table').select('*');`]]);
+});
+
 test('finite table sources and wrapper parameters cannot be mutated behind the audit', () => {
   for (const body of [
     `const TABLES = ['known_table']; TABLES.push('new_table'); TABLES.map(table => readSourceRows(table));`,

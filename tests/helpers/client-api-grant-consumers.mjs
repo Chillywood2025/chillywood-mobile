@@ -173,31 +173,72 @@ export function discoverClientGrantConsumers(sources) {
     const node = unwrap(input);
     if (!node || seen.has(node)) return null;
     if (ts.isStringLiteralLike(node)) return node.text;
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      const next = new Set([...seen, node]);
+      const left = literalMethod(node.left, next), right = literalMethod(node.right, next);
+      return left !== null && right !== null ? left + right : null;
+    }
     if (!ts.isIdentifier(node)) return null;
     const declaration = symbol(node)?.valueDeclaration;
     return declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
       && ts.isVariableDeclarationList(declaration.parent) && declaration.parent.flags & ts.NodeFlags.Const
       ? literalMethod(declaration.initializer, new Set([...seen, node])) : null;
   }
+  const methodName = access => ts.isPropertyAccessExpression(access) ? access.name.text
+    : ts.isElementAccessExpression(access) ? literalMethod(access.argumentExpression) : null;
+  function chainMethods(call) {
+    const methods = [];
+    let cursor = call;
+    while ((ts.isPropertyAccessExpression(cursor.parent) || ts.isElementAccessExpression(cursor.parent))
+      && cursor.parent.expression === cursor && ts.isCallExpression(cursor.parent.parent)
+      && cursor.parent.parent.expression === cursor.parent) {
+      methods.push({name: methodName(cursor.parent), access: cursor.parent});
+      cursor = cursor.parent.parent;
+    }
+    return methods;
+  }
+  function checkReceiver(input, seen = new Set()) {
+    const node = unwrap(input);
+    if (!node || seen.has(node)) return;
+    const next = new Set([...seen, node]);
+    if (ts.isIdentifier(node)) {
+      const declaration = symbol(node)?.valueDeclaration;
+      if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer) checkReceiver(declaration.initializer, next);
+    } else if (ts.isElementAccessExpression(node)) fail(node, 'computed Data API receiver requires classification');
+    else if (ts.isPropertyAccessExpression(node)) checkReceiver(node.expression, next);
+    else if (ts.isCallExpression(node)) {
+      if (ts.isElementAccessExpression(node.expression)) fail(node, 'computed method producing a Data API receiver requires classification');
+      if (ts.isPropertyAccessExpression(node.expression)) checkReceiver(node.expression.expression, next);
+    }
+  }
   const consumers = [];
   for (const source of files.values()) walk(source, node => {
-    if (ts.isBindingElement(node) && (node.propertyName ?? node.name).getText() === 'from') fail(node, 'destructured from method requires classification');
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'schema'
+    if (ts.isBindingElement(node)) {
+      const property = node.propertyName ?? node.name;
+      const name = ts.isIdentifier(property) ? property.text
+        : ts.isComputedPropertyName(property) ? literalMethod(property.expression) : literalMethod(property);
+      if (['from', 'schema'].includes(name)) fail(node, 'destructured from/schema method requires classification');
+    }
+    if (ts.isCallExpression(node) && methodName(node.expression) === 'schema'
       && (!node.arguments[0] || !ts.isStringLiteralLike(node.arguments[0]) || node.arguments[0].text !== 'public')) fail(node, 'non-public or dynamic schema');
-    if (ts.isElementAccessExpression(node) && literalMethod(node.argumentExpression) === 'from') fail(node, 'computed from access requires classification');
-    if (ts.isPropertyAccessExpression(node) && node.name.text === 'from'
-      && !(ts.isCallExpression(node.parent) && node.parent.expression === node)) fail(node, 'extracted from method requires classification');
+    if (ts.isElementAccessExpression(node) && ['from', 'schema'].includes(methodName(node))) fail(node, 'computed from/schema access requires classification');
+    if (ts.isCallExpression(node) && ts.isElementAccessExpression(node.expression)
+      && chainMethods(node).some(({name}) => operations.has(name) || ['from', 'schema'].includes(name))) {
+      fail(node, 'computed method feeding a Data API chain requires classification');
+    }
+    // Also inspect a terminal operation's receiver. Splitting a computed query
+    // into a local variable must not turn an unknown API boundary into no calls.
+    if (ts.isCallExpression(node) && operations.has(methodName(node.expression))) checkReceiver(node.expression.expression);
+    if (ts.isPropertyAccessExpression(node) && ['from', 'schema'].includes(node.name.text)
+      && !(ts.isCallExpression(node.parent) && node.parent.expression === node)) fail(node, 'extracted from/schema method requires classification');
     if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)
       || node.expression.name.text !== 'from') return;
     const receiver = node.expression.expression;
     if (ts.isIdentifier(receiver) && ['Array', 'Uint8Array', 'Buffer'].includes(receiver.text) && !symbol(receiver)?.valueDeclaration) return;
-    const methods = [];
-    let cursor = node;
-    while (ts.isPropertyAccessExpression(cursor.parent) && cursor.parent.expression === cursor
-      && ts.isCallExpression(cursor.parent.parent) && cursor.parent.parent.expression === cursor.parent) {
-      methods.push(cursor.parent.name.text);
-      cursor = cursor.parent.parent;
-    }
+    checkReceiver(receiver);
+    const chain = chainMethods(node);
+    if (chain.some(({access}) => ts.isElementAccessExpression(access))) fail(node, 'computed operation in a Data API chain requires classification');
+    const methods = chain.map(({name}) => name);
     const used = methods.filter(method => operations.has(method));
     if (ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'storage' && !used.length) return;
     if (ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'storage') fail(node, 'database operation on a storage-shaped receiver');

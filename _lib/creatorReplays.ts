@@ -256,7 +256,7 @@ export async function updateCreatorReplayLibraryItem(
   }
 }
 
-export async function resolveCreatorReplayPlayback(replayId: string): Promise<CreatorReplayPlaybackReadout> {
+export async function resolveCreatorReplayPlayback(replayId: string, signal?: AbortSignal): Promise<CreatorReplayPlaybackReadout> {
   const normalizedReplayId = normalizeText(replayId);
   if (!normalizedReplayId) {
     return {
@@ -274,6 +274,7 @@ export async function resolveCreatorReplayPlayback(replayId: string): Promise<Cr
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   const response = await fetch(CREATOR_REPLAY_PLAYBACK_FUNCTION_URL, {
+    signal,
     body: JSON.stringify({ replayId: normalizedReplayId }),
     headers: {
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
