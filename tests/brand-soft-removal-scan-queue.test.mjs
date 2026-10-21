@@ -7,12 +7,20 @@ test('actual brand removal preserves queue state and exact running completion ca
  const db=new PGlite();const q=async(sql,args=[]) => (await db.query(sql,args)).rows[0];
  try {
   await installBrandSoftRemovalFixture(db);
+  await db.exec("insert into storage.objects(bucket_id,name,version) values('platform-brand-assets','invalid-pending.png','invalid-fixture-v1')");
+  await assert.rejects(db.query("insert into platform_brand_assets(owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type) values('platform_rachi_official','logo','published','invalid-pending.png','invalid-pending.png','image/png')"),e=>e.code==='23514'&&e.constraint==='platform_brand_assets_published_malware_clean_check','native-invalid published/pending fixture must fail locally too');
+  for(const status of ['pending_scan','manual_review',null,'']) {
+   assert.equal((await q('select media_scan_public_safe($1) safe',[status])).safe,false,'current publication predicate rejects non-clean status');
+   await assert.rejects(db.query("insert into platform_brand_assets(owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type,scan_status) values('platform_rachi_official','logo','published','invalid-pending.png','invalid-pending.png','image/png',$1)",[status]),e=>e.code==='23514'&&e.constraint==='platform_brand_assets_published_malware_clean_check');
+  }
+  assert.equal((await q("select media_scan_public_safe('clean') safe")).safe,true);
   const guarded=(await q("select pg_get_functiondef('public.enqueue_platform_brand_asset_scan()'::regprocedure) definition")).definition;
   assert.match(guarded,/if\s+new\.?"?deleted_at"?\s+is\s+not\s+null\s+then\s+return\s+new/i,'load actual migration guard, never a synthetic implementation');
   const fixture=async()=>{
    const id=(await q('select gen_random_uuid() id')).id,key=`platform_rachi_official/logo/${id}.png`;
    await db.query("insert into storage.objects(bucket_id,name,version) values('platform-brand-assets',$1,'v1')",[key]);
-   await db.query("insert into platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type) values($1,'platform_rachi_official','logo','published',$2,$2,'image/png')",[id,key]);
+   await db.query("insert into platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type) values($1,'platform_rachi_official','logo','draft',$2,$2,'image/png')",[id,key]);
+   assert.deepEqual(await q('select asset_state,scan_status from platform_brand_assets where id=$1',[id]),{asset_state:'draft',scan_status:'pending_scan'});
    const job=(await q("select id from media_scan_jobs where target_table='platform_brand_assets' and target_id=$1",[id])).id;
    return {id,key,job};
   };

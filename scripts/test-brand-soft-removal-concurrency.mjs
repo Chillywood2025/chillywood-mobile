@@ -49,7 +49,8 @@ try{
  const fixture=()=>{
   const id=randomUUID(),key=`brand_remove_fixture/logo/${id}.png`;
   query(`insert into storage.objects(bucket_id,name,version) values('platform-brand-assets',${lit(key)},${lit(randomUUID())});
-   insert into platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type) values(${lit(id)},'brand_remove_fixture','logo','published',${lit(key)},${lit(key)},'image/png')`);
+   insert into platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type) values(${lit(id)},'brand_remove_fixture','logo','draft',${lit(key)},${lit(key)},'image/png')`);
+  assert.equal(query(`select asset_state||':'||scan_status from platform_brand_assets where id=${lit(id)}`),'draft:pending_scan','real pending upload must not begin published');
   const job=query(`select id from media_scan_jobs where target_table='platform_brand_assets' and target_id=${lit(id)}`);assert.match(job,/^[0-9a-f-]{36}$/);
   query(`update media_scan_jobs set priority=-2147483648,metadata=metadata||'{"preserve":"native-fixture"}' where id=${lit(job)}`);
   return{id,job};

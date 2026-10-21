@@ -26,6 +26,15 @@ export async function installBrandSoftRemovalFixture(db) {
  await db.exec(readMigration('202605240001_platform_brand_studio_assets.sql'));
  await db.exec('create table public.platform_brand_publications(like public.platform_brand_profiles including all)');
  await installByteReceiptFixture(db);
+ // Preserve the actual publication constraint so pending fixtures cannot model
+ // a published object that the native migrated schema rejects.
+ const authoritySql=readMigration('202608250002_whole_app_media_authority_closure.sql');
+ const safetyStart=authoritySql.indexOf('create or replace function public.media_scan_public_safe(');
+ assert.ok(safetyStart>=0);
+ await db.exec(authoritySql.slice(safetyStart,authoritySql.indexOf('$$;',safetyStart)+3));
+ const publicationStart=authoritySql.indexOf('alter table public.platform_brand_assets\n  add constraint platform_brand_assets_published_malware_clean_check');
+ assert.ok(publicationStart>=0);
+ await db.exec(authoritySql.slice(publicationStart,authoritySql.indexOf(';',publicationStart)+1));
  const scanner=readMigration('20260530191115_media_malware_scanning_pipeline.sql');
  const indexStart=scanner.indexOf('create unique index if not exists "media_scan_jobs_target_object_unique"');
  await db.exec(scanner.slice(indexStart,scanner.indexOf(';',indexStart)+1));

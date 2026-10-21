@@ -27,7 +27,6 @@ export async function installBrandReviewRetentionFixture(db) {
  await db.exec(migratedFunction('202605140008_platform_staff_role_management.sql','platform_staff_actor_role'));
  await db.exec(migratedFunction('202605240007_platform_brand_review_rpc_trigger_context.sql','guard_platform_brand_asset_client_update'));
  await db.exec(migratedFunction('20260603033000_platform_brand_owner_publish_review_repair.sql','review_platform_brand_asset'));
- await db.exec(migratedFunction('20260530191115_media_malware_scanning_pipeline.sql','media_scan_public_safe'));
  await db.exec(migratedFunction('20261015073423_platform_studio_publication_and_audience_authority.sql','platform_brand_publication_asset_safe_internal'));
  // These tables were introduced after the reusable fixture applies retention.
  // Install the identical migration's generic guard, with no disabled triggers.
@@ -43,7 +42,7 @@ export async function installBrandReviewRetentionFixture(db) {
  const asset=async()=>{
   await service();const id=(await db.query('select gen_random_uuid() id')).rows[0].id,key=owner+'/review/'+id+'.png';
   await db.query("insert into storage.objects(bucket_id,name,version) values('platform-brand-assets',$1,'v1')",[key]);
-  await db.query("insert into platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type) values($1,$2,'hero_image','published',$3,$3,'image/png')",[id,owner,key]);
+  await db.query("insert into platform_brand_assets(id,owner_user_id,asset_type,asset_state,storage_object_key,storage_path,mime_type) values($1,$2,'hero_image','draft',$3,$3,'image/png')",[id,owner,key]);
   // Historical review evidence predates actual scanner completion. No rescan,
   // lease reset, fake scan result or transfer to a new generation is used.
   await login();
