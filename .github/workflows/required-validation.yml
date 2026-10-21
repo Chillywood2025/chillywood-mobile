@@ -162,7 +162,7 @@ jobs:
           node scripts/test-deleted-content-retention-postgres.mjs
           node scripts/test-deleted-media-retirement-postgres.mjs
           node scripts/test-platform-brand-retention-postgres.mjs
-          node --test tests/brand-soft-removal-scan-queue.test.mjs tests/brand-review-retention-evidence.test.mjs
+          node --test tests/brand-soft-removal-scan-queue.test.mjs tests/brand-review-retention-evidence.test.mjs tests/brand-permission-reduction-fence.test.mjs
           node scripts/test-platform-brand-expiry-transport-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-brand-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-soft-removal-concurrency.mjs

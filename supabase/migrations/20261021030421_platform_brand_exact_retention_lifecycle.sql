@@ -329,6 +329,19 @@ begin
    and doc='{"metadata":{}}'::jsonb
    and (tg_op='INSERT' or (tg_op='UPDATE' and old_doc='{"metadata":{}}'::jsonb
      and to_jsonb(old)->>'target_type' in ('profile_post','profile_post_comment','creator_video_comment','chat_message','room_message','watch_party_room_message','creator_video','video','social_attachment'))) then return new; end if;
+ -- Authority reduction on an exact empty-locator permission row cannot add a
+ -- Brand reference. Do not serialize this maintenance behind an unrelated
+ -- mutation's audit/receipt wait. Every other trigger still runs normally.
+ if tg_relid=to_regclass('public.platform_staff_permission_grants') and tg_op='UPDATE'
+   and doc='{"metadata":{}}'::jsonb and old_doc='{"metadata":{}}'::jsonb
+   and (to_jsonb(new)-array['status','expires_at','updated_at'])=(to_jsonb(old)-array['status','expires_at','updated_at'])
+   and ((to_jsonb(new)->>'status') is not distinct from (to_jsonb(old)->>'status')
+     or (to_jsonb(old)->>'status'='active' and to_jsonb(new)->>'status'='revoked'))
+   and ((to_jsonb(new)->>'expires_at') is not distinct from (to_jsonb(old)->>'expires_at')
+     or (to_jsonb(new)->>'expires_at' is not null
+       and pg_catalog.isfinite((to_jsonb(new)->>'expires_at')::timestamptz)
+       and (to_jsonb(old)->>'expires_at' is null
+         or (to_jsonb(new)->>'expires_at')::timestamptz<=(to_jsonb(old)->>'expires_at')::timestamptz))) then return new; end if;
  perform private.platform_brand_retention_lock();
  for r in select * from private.platform_brand_object_incarnations where removed_at is not null loop
    if private.deleted_media_mentions(doc,r.object_key) or private.deleted_media_mentions(doc,r.storage_path) then
