@@ -114,6 +114,7 @@ const adminBackendFunctionKeys = new Set([
 ]);
 
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
+const explicitApiGrantFiles = ['20261021014627_explicit_service_api_grants.sql'];
 const collectionOrderingFunctionKeys = new Set([
   'private.assert_user_collection_session/0', 'private.user_collection_projection_value/3',
   'public.read_my_collection_state/3', 'public.mutate_my_collection_state/5',
@@ -240,7 +241,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+explicitApiGrantFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);
     assert.deepEqual(replayReport.files.filter(file=>collectionOrderingFiles.includes(file)),collectionOrderingFiles);
     assert.deepEqual(replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles,
       'entire Owner Security and null-actor successor bundle is replayed');
