@@ -2,6 +2,7 @@
 // Real migration execution in disposable PGlite. No provider access or fake
 // production evidence; synthetic scan/due dates exist only inside this fixture.
 import assert from 'node:assert/strict';
+import {applyBrandMigrationStatements} from '../tests/helpers/apply-brand-migration-statements.mjs';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { installByteReceiptFixture, createByteReceipt } from '../tests/helpers/media-scan-byte-receipt-fixture.mjs';
@@ -51,7 +52,9 @@ try {
  await db.query(`insert into platform_brand_assets(id,owner_user_id,asset_type,storage_object_key,storage_path,mime_type,deleted_at)
  values('20000000-0000-4000-8000-000000000002','different-legacy-owner','logo',$1,'different-legacy-owner/alias.png','image/png','2020-01-01')`,[legacyKey]);
  const policiesBefore=(await db.query(`select policyname,qual,with_check from pg_policies where tablename in ('platform_brand_assets','platform_brand_profiles','objects') order by policyname`)).rows;
- await db.exec('begin'); await db.exec(read(migration)); await db.exec('commit');
+ // Negative control: the real lock outside migration-owned BEGIN must fail.
+ await deny(()=>db.exec('lock table public.platform_brand_assets, storage.objects in share row exclusive mode;'), error=>error.code==='25P01');
+ await applyBrandMigrationStatements(db,read(migration));
  await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
  check((await db.query(`select policyname,qual,with_check from pg_policies where tablename in ('platform_brand_assets','platform_brand_profiles','objects') order by policyname`)).rows,policiesBefore,'existing read/session/owner predicates unchanged');
  check((await q('select owner_id from private.platform_brand_object_incarnations where asset_id=$1',[legacyId])).owner_id,'platform_rachi_official','official TEXT owner retained');

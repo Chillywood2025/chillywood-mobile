@@ -1,3 +1,4 @@
+begin;
 -- Source-only transport successor. Provider version-delete qualification must
 -- be supplied separately; installation does not activate or delete anything.
 alter table private.platform_brand_retention_settings
@@ -169,3 +170,5 @@ begin
  end loop;
  return true;
 end $$;
+
+commit;

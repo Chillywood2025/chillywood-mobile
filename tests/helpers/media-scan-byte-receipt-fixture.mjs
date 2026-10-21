@@ -1,3 +1,4 @@
+import {applyBrandMigrationStatements} from './apply-brand-migration-statements.mjs';
 // Disposable database only: execute actual deployed queue/claim/completion
 // definitions, then the new receipt migration. No synthetic receipt or verifier.
 import {readFileSync} from 'node:fs';
@@ -22,7 +23,7 @@ export async function installByteReceiptFixture(db) {
   const wrapper=read('20260718214102_decouple_media_scan_audit_completion.sql');
   const start=wrapper.indexOf('create function public.complete_media_scan_job(');
   await db.exec(wrapper.slice(start,wrapper.indexOf('$$;',start)+3));
-  await db.exec(read(byteReceiptMigration));
+  await applyBrandMigrationStatements(db,read(byteReceiptMigration));
 }
 export async function createByteReceipt(db, {assetId, workerId='test-scanner', sha256='a'.repeat(64), sizeBytes=23}={}) {
   const one=async(sql,args=[]) => (await db.query(sql,args)).rows[0];

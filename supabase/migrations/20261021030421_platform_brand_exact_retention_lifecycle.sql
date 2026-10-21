@@ -1,3 +1,4 @@
+begin;
 -- SOURCE ONLY. No activation, provider calls, credential changes, or global
 -- readiness promotion. Brand identity is not a transcode job/reservation.
 -- Storage metadata is an incarnation observation, NOT byte/scan evidence.
@@ -360,3 +361,5 @@ do $$ declare p record; begin
  if p.nspname='public' then execute format('grant execute on function %s to service_role',p.signature); end if;
  end loop;
 end $$;
+
+commit;

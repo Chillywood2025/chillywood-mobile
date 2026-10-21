@@ -2,6 +2,7 @@
 // Transport successor migration in disposable PGlite. No provider access or fake
 // production evidence; synthetic scan/due dates exist only inside this fixture.
 import assert from 'node:assert/strict';
+import {applyBrandMigrationStatements} from '../tests/helpers/apply-brand-migration-statements.mjs';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { installByteReceiptFixture, createByteReceipt } from '../tests/helpers/media-scan-byte-receipt-fixture.mjs';
@@ -42,8 +43,8 @@ try {
  const holdsSql=read('20261020141458_deleted_content_retention.sql');
  const holdStart=holdsSql.indexOf('create function private.deleted_content_hold_matches(');
  await db.exec(holdsSql.slice(holdStart,holdsSql.indexOf('$$;',holdStart)+3));
- await db.exec('begin'); await db.exec(read(migration));
- await db.exec(read('20261021032449_platform_brand_exact_expiry_transport.sql')); await db.exec('commit');
+ await applyBrandMigrationStatements(db,read(migration));
+ await applyBrandMigrationStatements(db,read('20261021032449_platform_brand_exact_expiry_transport.sql'));
  await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
  const fixture=async()=>{
    const id=(await q('select gen_random_uuid() id')).id,key=`${owner}/logo/${id}.png`;

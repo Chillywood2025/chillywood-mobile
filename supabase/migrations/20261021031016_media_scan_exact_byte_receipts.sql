@@ -1,3 +1,4 @@
+begin;
 -- Source only: observed bytes are not clean/provenance authority on their own.
 -- Existing claim, completion, propagation, retry and recovery APIs are unchanged.
 create table private.media_scan_byte_observations (
@@ -147,3 +148,5 @@ revoke all on function public.begin_media_scan_byte_observation(uuid,text,intege
 revoke all on function public.record_media_scan_byte_receipt(uuid,uuid,text,text,bigint) from public,anon,authenticated;
 grant execute on function public.begin_media_scan_byte_observation(uuid,text,integer) to service_role;
 grant execute on function public.record_media_scan_byte_receipt(uuid,uuid,text,text,bigint) to service_role;
+
+commit;
