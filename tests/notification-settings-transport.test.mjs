@@ -115,12 +115,39 @@ test('preference helper cannot dispatch a save after its session-read await reti
   assert.equal(m.state.alerts.length, 0);
 });
 
-test('preference helper cannot create a missing row after a held read is retired', async t => {
-  const held = deferred(), m = await mount(t, { read: () => held.promise });
-  await m.act(() => {
-    m.authority.publishAccountSessionAuthoritySnapshot(null);
-    m.authority.publishAccountSessionAuthoritySnapshot(owner('session-b'));
-    held.resolve({ data: null, error: null });
-  });
-  assert.equal(m.state.writes.length, 0, 'retired missing-row insert must not dispatch');
+for (const lifecycle of ['blur', 'background']) test(`preference save cannot dispatch after held session capture retires on ${lifecycle}`, async t => {
+  const held = deferred(), entered = deferred(), m = await mount(t);
+  m.state.sessionReader = async () => { entered.resolve(); await held.promise; };
+  await m.act(() => m.toggle('Messages').onValueChange(false));
+  await entered.promise;
+  if (lifecycle === 'blur') await m.focus(false);
+  else await m.app('background');
+  await m.act(() => held.resolve());
+  assert.equal(m.state.writes.length, 0, 'unchanged session authority cannot revive a retired Settings save');
+  assert.equal(m.state.rows.get('owned-user').revision, '0');
+  assert.deepEqual(m.state.alerts, []);
+  m.state.sessionReader = null;
+  if (lifecycle === 'blur') await m.focus(true);
+  else await m.app('active');
+  await m.act(() => m.toggle('Messages').onValueChange(false));
+  assert.equal(m.state.writes.length, 1, 'a newly initiated current save remains allowed');
+  assert.equal(m.toggle('Messages').value, false);
+});
+
+for (const lifecycle of ['blur', 'background']) test(`preference read cannot dispatch after held authority capture retires on ${lifecycle}`, async t => {
+  const held = deferred(), entered = deferred(), m = await mount(t);
+  m.state.authorityReader = () => { entered.resolve(); return held.promise; };
+  await m.act(() => m.button('Refresh').onPress());
+  await entered.promise;
+  if (lifecycle === 'blur') await m.focus(false);
+  else await m.app('background');
+  await m.act(() => held.resolve({ ...owner(), authoritative: true }));
+  assert.equal(m.state.reads.length, 1, 'retired read cannot dispatch even though the same session is still valid');
+  assert.equal(m.state.writes.length, 0);
+  assert.deepEqual(m.state.alerts, []);
+  m.state.authorityReader = null;
+  if (lifecycle === 'blur') await m.focus(true);
+  else await m.app('active');
+  assert.equal(m.state.reads.length, 2, 'the current visit can perform its own fresh read');
+  assert.equal(m.toggle('Messages').value, true);
 });

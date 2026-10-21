@@ -178,6 +178,7 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-database-runtime-authority-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-studio-authority-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-user-collection-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-notification-preference-concurrency.mjs
           npm run test:communication-terminal-http
           npm run test:chat-message-call-lifecycle-http
           node scripts/test-chilly-chat-real-peer-http.mjs

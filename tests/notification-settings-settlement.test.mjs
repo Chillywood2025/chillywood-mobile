@@ -1,28 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mount, owner, deferred } from './helpers/notification-settings-mounted-harness.mjs';
+import { mount, owner, deferred, preferenceRead, preferenceRow } from './helpers/notification-settings-mounted-harness.mjs';
 
 test('pure manual refresh can be replaced on return while its stale read remains held', async t => {
   const held = deferred(), m = await mount(t);
   m.state.read = () => held.promise;
   await m.act(() => m.button('Refresh').onPress());
   await m.focus(false);
-  m.state.read = null; m.state.rows.set('owned-user', { messages_enabled: false });
+  m.state.read = null; m.state.rows.set('owned-user', preferenceRow({ ...m.state.rows.get('owned-user'), messages_enabled: false }));
   await m.focus(true);
   assert.equal(m.state.reads.length, 3, 'pure read does not retain a mutation lease');
   assert.equal(m.toggle('Messages').value, false);
   assert.equal(m.button('Refresh').disabled, false);
-  await m.act(() => held.resolve({ data: { messages_enabled: true }, error: null }));
+  await m.act(() => held.resolve(preferenceRead({ messages_enabled: true })));
   assert.equal(m.toggle('Messages').value, false);
 });
 
 for (const lifecycle of ['focus', 'background', 'same-user-keyed-root']) {
   for (const timing of ['before return', 'after return']) test(`durable preference settlement reconciles ${lifecycle}, ${timing}`, async t => {
     const held = deferred(); let m;
-    m = await mount(t, { write: async (request, row) => {
+    m = await mount(t, { write: async (_request, _row, commit) => {
       await held.promise;
-      const saved = { ...row, ...request.payload }; m.state.rows.set(request.userId, saved);
-      return { data: saved, error: null };
+      return commit();
     } });
     const captured = m.toggle('Messages');
     await m.act(() => captured.onValueChange(false));
@@ -74,22 +73,21 @@ test('dispatched FCM backend retains install lease after Expo result until disab
   assert.equal(m.section().props.value, 'Not registered');
 });
 
-test('missing-row insert retains its durable latch through same-user remount and settles current values', async t => {
+test('atomic missing-row read cannot overwrite a newer same-user remount save', async t => {
   const held = deferred(); let m;
-  m = await mount(t, { read: async () => ({ data: null, error: null }), write: async (request, row) => {
+  m = await mount(t, { read: async (_request, _row, commit) => {
     await held.promise;
-    const saved = { ...row, ...request.payload }; m.state.rows.set(request.userId, saved);
-    return { data: saved, error: null };
+    return commit();
   } });
-  assert.equal(m.state.writes.length, 1);
-  assert.equal(m.state.writes[0].mode, 'insert');
-  await m.replace(owner('session-b'));
-  assert.equal(m.button('Register Device').disabled, true);
-  await m.act(() => m.button('Register Device').onPress());
-  assert.equal(m.state.registrations, 0);
+  assert.equal(m.state.reads.length, 1);
+  assert.equal(m.state.rows.size, 0, 'initialization is held at the atomic server boundary');
   m.state.read = null;
+  await m.replace(owner('session-b'));
+  await m.act(() => m.toggle('Messages').onValueChange(false));
+  assert.equal(m.state.rows.get('owned-user').messages_enabled, false);
   await m.act(() => held.resolve());
-  assert.equal(m.toggle('Messages').value, true);
+  assert.equal(m.toggle('Messages').value, false);
+  assert.equal(m.state.rows.get('owned-user').messages_enabled, false, 'late initialization never replaces an existing row');
   assert.equal(m.button('Refresh').disabled, false);
   assert.equal(m.state.writes.length, 1);
 });

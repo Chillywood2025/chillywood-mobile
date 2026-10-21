@@ -337,7 +337,6 @@ type EventReminderInsert = TablesInsert<"event_reminders">;
 type EventReminderUpdate = TablesUpdate<"event_reminders">;
 type CreatorEventRow = Tables<"creator_events">;
 type NotificationPreferenceRow = Tables<"notification_preferences">;
-type NotificationPreferenceInsert = TablesInsert<"notification_preferences">;
 type NotificationPreferenceUpdate = TablesUpdate<"notification_preferences">;
 
 const CREATOR_EVENT_NOTIFICATION_SELECT =
@@ -1549,6 +1548,8 @@ export async function readPublicEventReminderSummaries(
 }
 
 export type NotificationPreferenceSettings = {
+  revision: string | null;
+  incarnation: string | null;
   socialActivityEnabled: boolean;
   circleActivityEnabled: boolean;
   messagesEnabled: boolean;
@@ -1573,7 +1574,32 @@ export type NotificationPreferenceSettings = {
   updatedAt: string | null;
 };
 
-export type NotificationPreferencePatch = Partial<Omit<NotificationPreferenceSettings, "updatedAt">>;
+export type NotificationPreferencePatch = Partial<Omit<NotificationPreferenceSettings, "updatedAt" | "revision" | "incarnation">>;
+
+export type NotificationPreferenceIntent = { expectedRevision: string; expectedIncarnation: string; operationId: string };
+const PREFERENCE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export class NotificationPreferenceWriteError extends Error {
+  constructor(readonly outcome: "conflict" | "unknown", readonly currentPreferences: NotificationPreferenceSettings | null = null) {
+    super(outcome === "conflict"
+      ? "Your change was not saved because notification settings changed elsewhere. Review the current settings before trying again."
+      : "This change could not be confirmed. Refresh notification settings before making another change.");
+  }
+}
+export function createNotificationPreferenceIntent(preferences: NotificationPreferenceSettings): NotificationPreferenceIntent {
+  if (typeof preferences.revision !== "string" || !/^(0|[1-9][0-9]{0,18})$/.test(preferences.revision)
+    || typeof preferences.incarnation !== "string" || !PREFERENCE_UUID.test(preferences.incarnation)) {
+    throw new Error("Refresh notification settings before making a change.");
+  }
+  if (typeof globalThis.crypto?.getRandomValues !== "function") {
+    throw new Error("Secure randomness is unavailable. Restart the app before changing notification settings.");
+  }
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  return { expectedRevision: preferences.revision, expectedIncarnation: preferences.incarnation,
+    operationId: `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}` };
+}
 
 export type PushPermissionState =
   | "unsupported"
@@ -1735,6 +1761,8 @@ const IOS_ORDINARY_PUSH_ENABLED = String(
 const handledNotificationResponseKeys = new Set<string>();
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
+  revision: null,
+  incarnation: null,
   socialActivityEnabled: true,
   circleActivityEnabled: true,
   messagesEnabled: true,
@@ -1890,6 +1918,8 @@ async function captureNotificationOperationTransport(owner: NotificationOperatio
 const parsePreferenceRow = (row: NotificationPreferenceRow | null): NotificationPreferenceSettings => {
   if (!row) return DEFAULT_NOTIFICATION_PREFERENCES;
   return {
+    revision: null,
+    incarnation: null,
     socialActivityEnabled: row.social_activity_enabled !== false,
     circleActivityEnabled: row.circle_activity_enabled !== false,
     messagesEnabled: row.messages_enabled !== false,
@@ -1967,69 +1997,104 @@ const buildPreferenceUpdate = (patch: NotificationPreferencePatch): Notification
   return update;
 };
 
+type PreferenceRpcBuilder = PromiseLike<{ data: unknown; error: unknown }> & {
+  setHeader(name: string, value: string): PreferenceRpcBuilder;
+};
+const preferenceRpc = (name: string, args: Record<string, unknown>) =>
+  (supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => PreferenceRpcBuilder)(name, args);
+
+const parsePreferenceEnvelope = (value: unknown, userId: string): NotificationPreferenceSettings => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid notification preference response.");
+  const envelope = value as Record<string, unknown>;
+  const row = envelope.preferences as Record<string, unknown> | undefined;
+  if (typeof envelope.revision !== "string" || !/^(0|[1-9][0-9]{0,18})$/.test(envelope.revision)
+    || BigInt(envelope.revision) > 9223372036854775807n || !row || Array.isArray(row)
+    || typeof envelope.incarnation !== "string" || !PREFERENCE_UUID.test(envelope.incarnation)
+    || row.user_id !== userId || row.revision !== envelope.revision || row.incarnation !== envelope.incarnation) throw new Error("Invalid notification preference binding.");
+  for (const key of Object.keys(buildPreferenceUpdate(DEFAULT_NOTIFICATION_PREFERENCES))) {
+    if (key.endsWith("_enabled") || key.endsWith("_vibrate_enabled")) {
+      if (typeof row[key] !== "boolean") throw new Error("Invalid notification preference value.");
+    }
+  }
+  if (typeof row.chilly_chat_call_sound_key !== "string"
+    || normalizeChillyChatRingtoneKey(row.chilly_chat_call_sound_key) !== row.chilly_chat_call_sound_key
+    || !(row.chilly_chat_call_custom_in_app_sound_uri === null || typeof row.chilly_chat_call_custom_in_app_sound_uri === "string")) {
+    throw new Error("Invalid notification preference sound.");
+  }
+  return { ...parsePreferenceRow(row as NotificationPreferenceRow), revision: envelope.revision, incarnation: envelope.incarnation };
+};
+
 export async function readNotificationPreferences(userId?: string, owner?: NotificationOperationOwner): Promise<NotificationPreferenceSettings> {
   const viewerUserId = await readSessionUserId(userId);
   if (owner && (!owner.isCurrent() || owner.authority?.userId !== viewerUserId)) {
     throw new Error("Notification preference read is no longer current.");
   }
   if (!viewerUserId) return DEFAULT_NOTIFICATION_PREFERENCES;
-  const transport = owner ? await captureNotificationOperationTransport(owner) : null;
+  const subject = await captureAccountBoundSupabaseMutationSubject(viewerUserId);
+  if (owner && !samePushSessionBinding(owner.authority, subject.authority)) throw new Error("Notification operation owner changed.");
   if (owner && !owner.isCurrent()) throw new Error("Notification preference read is no longer current.");
 
-  const read = supabase
-    .from("notification_preferences")
-    .select("*")
-    .eq("user_id", viewerUserId)
-    .returns<NotificationPreferenceRow>();
-  if (transport) read.setHeader("Authorization", `Bearer ${transport.accessToken}`);
-  const { data, error } = await read.maybeSingle();
-
+  // Atomic initialization only inserts an absent row; it never replaces or
+  // revises existing preferences. Reads therefore remain replaceable.
+  const { data, error } = await preferenceRpc("read_my_notification_preferences", {})
+    .setHeader("Authorization", `Bearer ${subject.accessToken}`);
+  if ((owner && !owner.isCurrent()) || !samePushSessionBinding(subject.authority, getCurrentAccountSessionAuthoritySnapshot())) {
+    throw new Error("Notification preference read is no longer current.");
+  }
   if (error) throw new Error("Unable to read notification preferences.");
-  if (data) return parsePreferenceRow(data);
-
-  if (owner && !owner.isCurrent()) throw new Error("Notification preference creation is no longer current.");
-  const settleWrite = owner ? beginNotificationPreferenceWrite(viewerUserId) : () => {};
-  try {
-    const insert: NotificationPreferenceInsert = { user_id: viewerUserId };
-    const create = supabase
-      .from("notification_preferences")
-      .insert(insert)
-      .select("*")
-      .returns<NotificationPreferenceRow>();
-    if (transport) create.setHeader("Authorization", `Bearer ${transport.accessToken}`);
-    const { data: created, error: createError } = await create.maybeSingle();
-
-    if (createError || !created) throw new Error("Unable to create notification preferences.");
-    return parsePreferenceRow(created);
-  } finally { settleWrite(); }
+  return parsePreferenceEnvelope(data, viewerUserId);
 }
 
 export async function updateNotificationPreferences(
   patch: NotificationPreferencePatch,
   userId?: string,
   owner?: NotificationOperationOwner,
+  intent?: NotificationPreferenceIntent,
 ): Promise<NotificationPreferenceSettings> {
+  // Freeze request identity before any asynchronous session work. An old
+  // intent must never acquire a newer revision by reading/rebasing here.
+  if (!intent || typeof intent.expectedRevision !== "string" || !/^(0|[1-9][0-9]{0,18})$/.test(intent.expectedRevision)
+    || typeof intent.expectedIncarnation !== "string" || !PREFERENCE_UUID.test(intent.expectedIncarnation)
+    || typeof intent.operationId !== "string"
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(intent.operationId)) {
+    throw new Error("Refresh notification settings before making a change.");
+  }
+  const request = { p_operation_id: intent.operationId, p_expected_revision: intent.expectedRevision, p_expected_incarnation: intent.expectedIncarnation,
+    p_patch: buildPreferenceUpdate(patch) };
   const viewerUserId = await readSessionUserId(userId);
   if (!viewerUserId) throw new Error("Notification preferences require a signed-in user.");
   if (owner && (!owner.isCurrent() || owner.authority?.userId !== viewerUserId)) {
     throw new Error("Notification preference update is no longer current.");
   }
-  const transport = owner ? await captureNotificationOperationTransport(owner) : null;
+  const subject = await captureAccountBoundSupabaseMutationSubject(viewerUserId);
+  if (owner && !samePushSessionBinding(owner.authority, subject.authority)) throw new Error("Notification operation owner changed.");
   if (owner && !owner.isCurrent()) throw new Error("Notification preference update is no longer current.");
 
-  const settleWrite = owner ? beginNotificationPreferenceWrite(viewerUserId) : () => {};
+  const settleWrite = beginNotificationPreferenceWrite(viewerUserId);
   try {
-    const update = buildPreferenceUpdate(patch);
-    const write = supabase
-      .from("notification_preferences")
-      .upsert({ ...update, user_id: viewerUserId }, { onConflict: "user_id" })
-      .select("*")
-      .returns<NotificationPreferenceRow>();
-    if (transport) write.setHeader("Authorization", `Bearer ${transport.accessToken}`);
-    const { data, error } = await write.maybeSingle();
-
-    if (error || !data) throw new Error("Unable to update notification preferences.");
-    return parsePreferenceRow(data);
+    let result: { data: unknown; error: unknown };
+    try {
+      result = await preferenceRpc("mutate_my_notification_preferences", request)
+        .setHeader("Authorization", `Bearer ${subject.accessToken}`);
+    } catch { throw new NotificationPreferenceWriteError("unknown"); }
+    if ((owner && !owner.isCurrent()) || !samePushSessionBinding(subject.authority, getCurrentAccountSessionAuthoritySnapshot())) {
+      throw new Error("Notification preference update is no longer current.");
+    }
+    if (result.error || !result.data || typeof result.data !== "object") throw new NotificationPreferenceWriteError("unknown");
+    const receipt = result.data as Record<string, unknown>;
+    let current: NotificationPreferenceSettings;
+    try {
+      current = parsePreferenceEnvelope(receipt, viewerUserId);
+      if (receipt.operationId !== request.p_operation_id || receipt.expectedRevision !== request.p_expected_revision
+        || receipt.expectedIncarnation !== request.p_expected_incarnation
+        || !["applied", "conflict"].includes(String(receipt.status))
+        || receipt.status === "applied" && (current.incarnation !== request.p_expected_incarnation
+          || BigInt(current.revision!) !== BigInt(request.p_expected_revision) + 1n)) {
+        throw new Error("Invalid preference receipt.");
+      }
+    } catch { throw new NotificationPreferenceWriteError("unknown"); }
+    if (receipt.status === "conflict") throw new NotificationPreferenceWriteError("conflict", current);
+    return current;
   } finally { settleWrite(); }
 }
 

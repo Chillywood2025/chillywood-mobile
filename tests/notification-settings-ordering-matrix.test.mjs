@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mount, owner, deferred } from './helpers/notification-settings-mounted-harness.mjs';
+import { mount, owner, deferred, preferenceRead, preferenceRow } from './helpers/notification-settings-mounted-harness.mjs';
 
 const register = (m, method) => method === 'explicit'
   ? m.notifications.requestPushPermissionAndRegister({ authority: m.state.authority,
@@ -12,7 +12,7 @@ test('automatic registration settlement behind an initial read coalesces one fre
   await m.act(() => m.notifications.refreshPushRegistrationIfGranted());
   assert.equal(m.state.reads.length, 1);
   m.state.read = null;
-  await m.act(() => held.resolve({ data: { push_enabled: true }, error: null }));
+  await m.act(() => held.resolve(preferenceRead({ push_enabled: true })));
   assert.equal(m.section().props.value, 'Registered');
   assert.equal(m.state.reads.length, 2);
 });
@@ -31,7 +31,7 @@ for (const action of ['disable', 'register']) test(`newer explicit ${action} fai
     await m.act(() => m.button('Register Device').onPress());
   }
   assert.equal(m.section().props.value, 'Unable to verify', 'a newer failed receipt wins over an older generic reconciliation request');
-  await m.act(() => held.resolve({ data: { push_enabled: true }, error: null }));
+  await m.act(() => held.resolve(preferenceRead({ push_enabled: true })));
   assert.equal(m.section().props.value, 'Unable to verify');
   assert.equal(m.state.reads.length, 2, 'no obsolete deferred read is dispatched after the newer explicit receipt');
 });
@@ -53,10 +53,9 @@ test('initiating permission failure preserves its error without an unrelated gen
 for (const phase of ['preference-held', 'save-settlement', 'revoke-held']) {
   for (const method of ['explicit', 'automatic']) test(`disable-first blocks ${method} registration at ${phase}`, async t => {
     const held = deferred(); let m, blocked;
-    m = await mount(t, { actualPush: true, write: phase === 'preference-held' ? async (request, row) => {
+    m = await mount(t, { actualPush: true, write: phase === 'preference-held' ? async (_request, _row, commit) => {
       await held.promise;
-      const saved = { ...row, ...request.payload }; m.state.rows.set(request.userId, saved);
-      return { data: saved, error: null };
+      return commit();
     } : undefined });
     if (phase === 'revoke-held') m.state.backendBarrier = body => body.action === 'revoke' ? held.promise : undefined;
     if (phase === 'save-settlement') {
@@ -84,10 +83,9 @@ for (const phase of ['preference-held', 'save-settlement', 'revoke-held']) {
 for (const transition of ['same-user-keyed-root', 'blur-return', 'background-return', 'authority-ABA']) {
   for (const phase of ['preference-held', 'revoke-held']) test(`disable debt survives ${transition} at ${phase} and blocks enable, disable and registration`, async t => {
     const held = deferred(); let m;
-    m = await mount(t, { actualPush: true, write: phase === 'preference-held' ? async (request, row) => {
+    m = await mount(t, { actualPush: true, write: phase === 'preference-held' ? async (_request, _row, commit) => {
       await held.promise;
-      const saved = { ...row, ...request.payload }; m.state.rows.set(request.userId, saved);
-      return { data: saved, error: null };
+      return commit();
     } : undefined });
     if (phase === 'revoke-held') m.state.backendBarrier = body => body.action === 'revoke' ? held.promise : undefined;
     const captured = m.toggle('Push alerts');
@@ -118,10 +116,12 @@ test('failed disable save never revokes and releases the boundary for a current 
   const m = await mount(t, { actualPush: true, write: async () => ({ data: null, error: {} }) });
   await m.act(() => m.toggle('Push alerts').onValueChange(false));
   assert.equal(m.state.revocations, 0);
-  assert.equal(m.toggle('Push alerts').value, true);
+  assert.ok(m.row('Notification settings unavailable'));
+  assert.equal(m.row('Messages').props.value, 'Loading');
   assert.equal(m.state.alerts.length, 1);
   assert.equal(m.state.authoritySubscriptions, 1);
   m.state.write = null;
+  await m.act(() => m.button('Refresh').onPress());
   await m.act(() => m.button('Register Device').onPress());
   assert.equal(m.section().props.value, 'Registered');
 });
@@ -171,13 +171,12 @@ for (const [label, order, fail] of [
     : `automatic registration reconciliation with ${label}, ${order}, failed-save=${fail}`;
   test(name, async t => {
     const save = deferred(), provider = deferred(); let m, registration;
-    m = await mount(t, { actualPush: true, write: async (request, row) => {
+    m = await mount(t, { actualPush: true, write: async (_request, _row, commit) => {
       await save.promise;
       if (fail) return { data: null, error: {} };
-      const saved = { ...row, ...request.payload }; m.state.rows.set(request.userId, saved);
-      return { data: saved, error: null };
+      return commit();
     } });
-    m.state.rows.set('owned-user', { push_enabled: false, messages_enabled: true });
+    m.state.rows.set('owned-user', preferenceRow({ ...m.state.rows.get('owned-user'), push_enabled: false, messages_enabled: true }));
     await m.act(() => m.button('Refresh').onPress());
     const reads = m.state.reads.length;
     m.state.backendBarrier = body => body.action === 'register' ? provider.promise : undefined;

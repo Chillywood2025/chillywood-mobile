@@ -6,7 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import React from "react";
 import ts from "typescript";
-import { mount as mountNotificationSettings } from "./helpers/notification-settings-mounted-harness.mjs";
+import { mount as mountNotificationSettings, owner, preferenceRead } from "./helpers/notification-settings-mounted-harness.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const read = (file) => process.env.NOTIFICATION_ACTIVITY_BASELINE === "1"
@@ -42,11 +42,11 @@ const names = [
   "normalizeTargetRoute", "normalizeNotificationTarget", "readContextText", "readContextTimestamp",
   "isTerminalNotificationStatus", "IMPORTANT_NOTIFICATION_CATEGORIES", "CREATOR_MONEY_BUYER_ACTION_LABELS",
   "CREATOR_MONEY_CREATOR_ACTION_LABELS", "classifyNotificationAction", "parseNotificationRow",
-  "DEFAULT_NOTIFICATION_PREFERENCES", "parsePreferenceRow", "buildPreferenceUpdate", "readNotificationPreferences", "updateNotificationPreferences",
+  "DEFAULT_NOTIFICATION_PREFERENCES", "parsePreferenceRow", "buildPreferenceUpdate",
   "normalizeNotificationPath", "resolveNotificationPath",
 ];
 const serviceSource = names.map((name) => declaration(notifications, name)).join("\n")
-  + "\nglobalThis.service = { parseNotificationRow, parsePreferenceRow, buildPreferenceUpdate, readNotificationPreferences, updateNotificationPreferences, resolveNotificationPath };";
+  + "\nglobalThis.service = { parseNotificationRow, parsePreferenceRow, buildPreferenceUpdate, resolveNotificationPath };";
 const identity = "00000000-0000-4000-8000-000000000111";
 const parseService = (extra = {}) => run(serviceSource, {
   normalizeProductNotificationCopy: productCopy.normalizeProductNotificationCopy,
@@ -108,68 +108,56 @@ test("new preferences preserve existing behavior and default view phone alerts o
 });
 
 for (const [field, column] of Object.entries(fields)) {
-  test(`actual preference update round-trips only ${field}`, async () => {
-    const writes = [];
-    const api = parseService({
-      readSessionUserId: async () => identity,
-      supabase: { from(table) {
-        assert.equal(table, "notification_preferences");
-        let payload;
-        const q = {
-          upsert(value, options) { payload = plain(value); writes.push(payload); assert.equal(options.onConflict, "user_id"); return q; },
-          select: () => q, returns: () => q,
-          maybeSingle: async () => ({ data: { ...payload, updated_at: "2026-10-10T12:00:00Z" }, error: null }),
-        };
-        return q;
-      } },
-    });
+  test(`actual preference update round-trips only ${field}`, async t => {
+    const m = await mountNotificationSettings(t, { authority: owner('session-a', identity) });
+    let preferences;
+    await m.act(async () => { preferences = await m.notifications.readNotificationPreferences(identity); });
     for (const value of [false, true]) {
-      assert.equal((await api.updateNotificationPreferences({ [field]: value }))[field], value);
-      assert.deepEqual(writes.at(-1), { [column]: value, user_id: identity });
+      const intent = m.notifications.createNotificationPreferenceIntent(preferences);
+      await m.act(async () => { preferences = await m.notifications.updateNotificationPreferences({ [field]: value }, identity, undefined, intent); });
+      assert.equal(preferences[field], value);
+      assert.deepEqual(m.state.writes.at(-1).payload, { [column]: value });
+      assert.equal(m.state.writes.at(-1).userId, identity, 'RPC subject is the pinned authenticated owner');
     }
-    assert.deepEqual(plain(api.buildPreferenceUpdate({ [field]: "false" })), {}, "malformed input is not a boolean update");
+    assert.deepEqual(plain(service.buildPreferenceUpdate({ [field]: "false" })), {}, "malformed input is not a boolean update");
   });
 }
 
-test("preference save failure stays a failure; signed-out saves cannot reach the database", async () => {
-  const api = parseService({ readSessionUserId: async () => identity, supabase: { from() {
-    const q = { upsert: () => q, select: () => q, returns: () => q,
-      maybeSingle: async () => ({ data: null, error: { message: "modeled storage failure" } }) };
-    return q;
-  } } });
-  await assert.rejects(api.updateNotificationPreferences({ viewSummaryPushEnabled: true }), /Unable to update/);
-  const signedOut = parseService({ readSessionUserId: async () => null, supabase: { from() { assert.fail("signed-out write"); } } });
-  await assert.rejects(signedOut.updateNotificationPreferences({ messagesEnabled: false }), /signed-in/);
+test("preference save failure stays a failure; signed-out saves cannot reach the database", async t => {
+  const m = await mountNotificationSettings(t, { write: () => ({ data: null, error: { message: 'modeled storage failure' } }) });
+  let preferences;
+  await m.act(async () => { preferences = await m.notifications.readNotificationPreferences(); });
+  const intent = m.notifications.createNotificationPreferenceIntent(preferences);
+  await m.act(() => assert.rejects(m.notifications.updateNotificationPreferences({ viewSummaryPushEnabled: true }, undefined, undefined, intent), /could not be confirmed/i));
+  assert.equal(m.state.rows.get('owned-user').view_summary_push_enabled, false);
+  const signedOut = await mountNotificationSettings(t, { authority: null });
+  await signedOut.act(() => assert.rejects(signedOut.notifications.updateNotificationPreferences({ messagesEnabled: false }, undefined, undefined, intent), /signed-in/));
+  assert.equal(signedOut.state.reads.length, 0);
+  assert.equal(signedOut.state.writes.length, 0);
 });
 
-test("preference read failure never creates a row or fabricates enabled saved settings", async () => {
-  let inserts = 0;
-  const api = parseService({ readSessionUserId: async () => identity, supabase: { from() {
-    const q = { select: () => q, eq: () => q, returns: () => q,
-      insert: () => { inserts++; return q; },
-      maybeSingle: async () => ({ data: null, error: { message: "modeled unavailable preferences" } }) };
-    return q;
-  } } });
-  await assert.rejects(api.readNotificationPreferences(), /Unable to read notification preferences/);
-  assert.equal(inserts, 0);
+test("preference read failure never creates a row or fabricates enabled saved settings", async t => {
+  const m = await mountNotificationSettings(t, { read: () => ({ data: null, error: { message: 'modeled unavailable preferences' } }) });
+  await m.act(() => assert.rejects(m.notifications.readNotificationPreferences(), /Unable to read notification preferences/));
+  assert.equal(m.state.writes.length, 0);
+  assert.equal(m.state.rows.size, 0);
+  assert.equal(m.row('Messages').props.value, 'Loading');
 });
 
-test("only a known missing preference row is created; failed creation is visible and retryable", async () => {
-  let fail = true;
-  let inserts = 0;
-  const api = parseService({ readSessionUserId: async () => identity, supabase: { from() {
-    let creating = false;
-    const q = { select: () => q, eq: () => q, returns: () => q,
-      insert: (value) => { assert.equal(value.user_id, identity); creating = true; inserts++; return q; },
-      maybeSingle: async () => !creating ? { data: null, error: null }
-        : fail ? { data: null, error: { message: "modeled failed insert" } }
-          : { data: { user_id: identity, view_summary_push_enabled: false, messages_enabled: false }, error: null } };
-    return q;
-  } } });
-  await assert.rejects(api.readNotificationPreferences(), /Unable to create notification preferences/);
-  fail = false;
-  const saved = await api.readNotificationPreferences();
-  assert.equal(inserts, 2);
+test("atomic missing-row initialization failure is visible and retryable without overwriting saved values", async t => {
+  const m = await mountNotificationSettings(t, { read: () => ({ data: null, error: { message: 'modeled failed initialization' } }) });
+  await m.act(() => assert.rejects(m.notifications.readNotificationPreferences(), /Unable to read notification preferences/));
+  assert.equal(m.state.rows.size, 0);
+  assert.ok(m.row('Notification settings unavailable'));
+  m.state.read = null;
+  await m.act(() => m.button('Refresh').onPress());
+  assert.equal(m.state.rows.size, 1);
+  assert.equal(m.state.rows.get('owned-user').revision, '0');
+  await m.act(() => m.toggle('Messages').onValueChange(false));
+  let saved;
+  await m.act(async () => { saved = await m.notifications.readNotificationPreferences(); });
+  assert.equal(m.state.writes.length, 1, 'subsequent read initialization cannot overwrite the accepted mutation');
+  assert.equal(saved.revision, '1');
   assert.equal(saved.messagesEnabled, false);
   assert.equal(saved.viewSummaryPushEnabled, false);
 });
@@ -196,7 +184,7 @@ test("actual settings refresh presents read failure and can reload saved prefere
   assert.equal(m.row("Messages").props.value, "Loading");
   assert.ok(m.row("Notification settings unavailable"));
   assert.equal(m.button("Refresh").disabled, false);
-  m.state.read = async () => ({ data: { social_activity_enabled: false }, error: null });
+  m.state.read = async () => preferenceRead({ social_activity_enabled: false });
   await m.act(() => m.button("Refresh").onPress());
   assert.equal(!!m.row("Notification settings unavailable"), false);
   assert.equal(m.toggle("Follows and content activity").value, false);

@@ -82,7 +82,6 @@
   {"table":"network_overage_events","privileges":["SELECT"],"consumers":[{"file":"_lib/platformFinance.ts","privileges":["SELECT"]}]},
   {"table":"network_plan_records","privileges":["SELECT"],"consumers":[{"file":"_lib/platformFinance.ts","privileges":["SELECT"]}]},
   {"table":"network_quota_records","privileges":["SELECT"],"consumers":[{"file":"_lib/platformFinance.ts","privileges":["SELECT"]}]},
-  {"table":"notification_preferences","privileges":["INSERT","SELECT","UPDATE"],"consumers":[{"file":"_lib/notifications.ts","privileges":["INSERT","SELECT","UPDATE"]}]},
   {"table":"notifications","privileges":["SELECT","UPDATE"],"consumers":[{"file":"_lib/notifications.ts","privileges":["SELECT","UPDATE"]}]},
   {"table":"paid_content_purchases","privileges":["SELECT"],"consumers":[{"file":"_lib/moneyAuditEvents.ts","privileges":["SELECT"]},{"file":"_lib/platformFinance.ts","privileges":["SELECT"]}]},
   {"table":"paid_live_watch_party_offers","privileges":["SELECT"],"consumers":[{"file":"_lib/liveWatchPartyMoney.ts","privileges":["SELECT"]}]},

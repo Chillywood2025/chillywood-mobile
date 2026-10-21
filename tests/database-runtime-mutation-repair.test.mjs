@@ -49,6 +49,7 @@ const adminBackendFiles = [
 const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
 const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
+const notificationPreferenceOrderingFiles = ['20261021221300_notification_preference_revision_authority.sql'];
 const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
 const ownerSecurityFiles = [
   '20261020222318_transactional_owner_security_canary.sql',
@@ -228,11 +229,12 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
     }
     // This remains a full-current-chain repair test, including reviewed successors.
     check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length);
     check('complete original copy successor',replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
     check('complete legacy retention successor',replayReport.files.filter(file=>legacyRetentionFiles.includes(file)),legacyRetentionFiles);
     check('complete explicit service API grant successor',replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);
     check('complete collection ordering successor',replayReport.files.filter(file=>collectionOrderingFiles.includes(file)),collectionOrderingFiles);
+    check('complete notification preference ordering successor',replayReport.files.filter(file=>notificationPreferenceOrderingFiles.includes(file)),notificationPreferenceOrderingFiles);
     check('complete Owner Security and null-actor successors',replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles);
     check('complete retention recovery successors',replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles);
     check('complete admin backend successors',replayReport.files.filter(file=>adminBackendFiles.includes(file)),adminBackendFiles);

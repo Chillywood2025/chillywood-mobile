@@ -5,6 +5,7 @@ import test from 'node:test';
 import { webcrypto } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import ts from 'typescript';
+import { createPreferenceBackend } from './helpers/notification-preference-cas-backend.mjs';
 
 const owner = (sessionGeneration = 'session-a', userId = 'owned-user') => ({ userId, accountId: userId, sessionGeneration, restoreOnly: false, state: 'ACTIVE' });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
@@ -14,7 +15,7 @@ const flush = async () => { for (let i = 0; i < 100; i++) await Promise.resolve(
 // Actual installed Supabase SDK query builders/auth-fetch, whole notifications,
 // authority, and account-bound token capture modules. Only HTTP/native/account
 // storage boundaries are modeled; no provider, production or device calls.
-async function harness() {
+async function harness(backend = createPreferenceBackend()) {
   const initial = owner(), requests = [];
   const state = { authority: initial, token: 'fixture-token-a', tokenOwners: new Map([['fixture-token-a', initial]]),
     tokenGate: null, registerGate: null, insertGate: null, missing: false, readHeld: null, sessionHeld: null };
@@ -25,13 +26,21 @@ async function harness() {
       const authority = state.tokenOwners.get(token);
       return json(authority ? { ...authority, authoritative: true } : null);
     }
-    if (url.pathname.endsWith('/notification_preferences') && options.method === 'GET') {
+    if (url.pathname.endsWith('/rpc/read_my_notification_preferences')) {
       if (state.readHeld) { state.readHeld.entered.resolve(); await state.readHeld.release.promise; }
-      if (state.insertGate) { state.tokenGate = state.insertGate; state.insertGate = null; }
-      return json(state.missing ? null : { user_id: initial.userId, messages_enabled: true });
+      const subject = state.tokenOwners.get(token);
+      requests.push({ payload: { user_id: subject?.userId, read: true }, authorization: headers.get('Authorization') });
+      return json(backend.read(subject.userId).data);
     }
     const payload = JSON.parse(options.body);
-    assert.ok(url.pathname.endsWith('/notification_preferences') || url.pathname.endsWith('/notification-device-tokens'));
+    if (url.pathname.endsWith('/rpc/mutate_my_notification_preferences')) {
+      const subject = state.tokenOwners.get(token);
+      requests.push({ payload: { ...payload, user_id: subject?.userId }, authorization: headers.get('Authorization') });
+      const commit = () => backend.mutate(subject.userId, payload);
+      const result = state.mutate ? await state.mutate(payload, commit) : commit();
+      return json(result.data);
+    }
+    assert.ok(url.pathname.endsWith('/notification-device-tokens'));
     requests.push({ payload, authorization: headers.get('Authorization') });
     return json(payload.action ? { ...payload, requestAccepted: true, disposition: 'revoked',
       status: payload.action === 'register' ? 'registered' : 'revoked', tokenFingerprint: '123456abcdef' } : payload);
@@ -43,7 +52,12 @@ async function harness() {
     }, global: { fetch }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   await flush(); // Finish the SDK's initial Realtime token lookup before gating.
-  const supabase = { from: client.from.bind(client), rpc: client.rpc.bind(client),
+  const supabase = { from: client.from.bind(client), rpc(name, args) {
+      if (name === 'read_my_notification_preferences' && state.insertGate) {
+        state.tokenGate = state.insertGate; state.insertGate = null;
+      }
+      return client.rpc(name, args);
+    },
     auth: { async getSession() {
       if (state.sessionHeld) { state.sessionHeld.entered.resolve(); await state.sessionHeld.release.promise; }
       return { data: { session: { access_token: state.token, user: { id: state.authority?.userId } } }, error: null };
@@ -83,7 +97,8 @@ async function harness() {
   const authority = load('_lib/accountSessionAuthority.ts'); authority.publishAccountSessionAuthoritySnapshot(initial);
   const api = load('_lib/notifications.ts');
   const operation = { authority: initial, isCurrent: () => authority.sameAccountSessionAuthority(initial, authority.getCurrentAccountSessionAuthoritySnapshot()) };
-  return { state, api, requests, operation,
+  return { state, api, requests, operation, backend,
+    intent() { const row = backend.ensure('owned-user'); return api.createNotificationPreferenceIntent({ revision: row.revision, incarnation: row.incarnation }); },
     gate() { return { entered: deferred(), release: deferred() }; },
     replace(next = owner('session-b'), token = 'fixture-token-b', publish = true) {
       state.authority = next; state.token = token; state.tokenOwners.set(token, next);
@@ -99,13 +114,17 @@ for (const action of ['save', 'register', 'insert']) {
       if (action === 'save') h.state.tokenGate = gate;
       else if (action === 'register') h.state.registerGate = gate;
       else { h.state.missing = true; h.state.insertGate = gate; }
-      const pending = action === 'save' ? h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation)
+      const pending = action === 'save' ? h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation, h.intent())
         : action === 'register' ? h.api.requestPushPermissionAndRegister(h.operation)
           : h.api.readNotificationPreferences('owned-user', h.operation);
+      const outcome = pending.then(value => ({ value }), error => ({ error }));
       await gate.entered.promise;
       h.replace(replacement === 'other account' ? owner('session-b', 'other-user')
         : replacement === 'same-session token refresh' ? owner() : owner('session-b'));
-      gate.release.resolve(); await pending;
+      gate.release.resolve(); const settled = await outcome;
+      if (action !== 'register' && replacement !== 'same-session token refresh') {
+        assert.match(settled.error?.message || '', /no longer current/);
+      } else assert.equal(settled.error, undefined);
       const writes = h.requests.filter(r => r.payload.action !== 'revoke');
       assert.equal(writes.length, 1);
       assert.equal(writes[0].authorization, 'Bearer fixture-token-a', 'SDK must not substitute the successor bearer');
@@ -117,7 +136,7 @@ for (const action of ['save', 'register', 'insert']) {
 
 test('SDK capture rejects a replacement session before any preference dispatch', async () => {
   const h = await harness(), gate = h.gate(); h.state.sessionHeld = gate;
-  const pending = h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation);
+  const pending = h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation, h.intent());
   const outcome = assert.rejects(pending, /account changed|owner changed|no longer current/i);
   await gate.entered.promise; h.replace(); gate.release.resolve(); await outcome;
   assert.equal(h.requests.length, 0);
@@ -125,6 +144,50 @@ test('SDK capture rejects a replacement session before any preference dispatch',
 
 test('SDK exact server readback rejects unpublished same-user session replacement', async () => {
   const h = await harness(); h.replace(owner('session-b'), 'fixture-token-b', false);
-  await assert.rejects(h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation), /account changed/i);
+  await assert.rejects(h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation, h.intent()), /account changed/i);
   assert.equal(h.requests.length, 0);
 });
+
+test('separate real SDK runtimes reject delayed older intent after a successful same-value save', async () => {
+  const backend = createPreferenceBackend(), first = await harness(backend), second = await harness(backend);
+  const older = first.intent(), newer = second.intent(), gate = first.gate();
+  first.state.mutate = async (_request, commit) => { gate.entered.resolve(); await gate.release.promise; return commit(); };
+  const pending = first.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', first.operation, older);
+  const rejected = assert.rejects(pending, error => error.outcome === 'conflict' && error.currentPreferences.messagesEnabled === true);
+  await gate.entered.promise;
+  const current = await second.api.updateNotificationPreferences({ messagesEnabled: true }, 'owned-user', second.operation, newer);
+  assert.equal(current.revision, '1', 'successful no-op expresses a new accepted intent');
+  gate.release.resolve(); await rejected;
+  assert.equal(backend.rows.get('owned-user').messages_enabled, true);
+  assert.equal(backend.rows.get('owned-user').revision, '1');
+  assert.equal(first.requests.length, 1, 'conflict is not silently rebased or retried');
+});
+
+test('real SDK lost acknowledgement remains unknown and exact retry does not increment twice', async () => {
+  const h = await harness(), intent = h.intent();
+  h.state.mutate = (_request, commit) => { commit(); throw new Error('synthetic transport loss'); };
+  await assert.rejects(h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation, intent),
+    error => error.outcome === 'unknown' && error.currentPreferences === null);
+  assert.equal(h.backend.rows.get('owned-user').revision, '1');
+  h.state.mutate = null;
+  const retried = await h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation, intent);
+  assert.equal(retried.revision, '1');
+  assert.equal(h.backend.rows.get('owned-user').revision, '1');
+});
+
+for (const damage of ['wrong subject', 'numeric revision', 'wrong operation', 'wrong incarnation']) {
+  test(`real SDK malformed acknowledgement stays unknown: ${damage}`, async () => {
+    const h = await harness(), intent = h.intent();
+    h.state.mutate = (_request, commit) => {
+      const result = commit();
+      if (damage === 'wrong subject') result.data.preferences.user_id = 'another-user';
+      if (damage === 'numeric revision') result.data.revision = 1;
+      if (damage === 'wrong operation') result.data.operationId = webcrypto.randomUUID();
+      if (damage === 'wrong incarnation') result.data.expectedIncarnation = webcrypto.randomUUID();
+      return result;
+    };
+    await assert.rejects(h.api.updateNotificationPreferences({ messagesEnabled: false }, 'owned-user', h.operation, intent),
+      error => error.outcome === 'unknown' && error.currentPreferences === null);
+    assert.equal(h.backend.rows.get('owned-user').messages_enabled, false, 'bad acknowledgement is not proof of noncommit');
+  });
+}

@@ -5,6 +5,8 @@ import React from 'react';
 import ts from 'typescript';
 import { createRoot } from 'react-dom/client';
 import { webcrypto } from 'node:crypto';
+import { createPreferenceBackend } from './notification-preference-cas-backend.mjs';
+export { createPreferenceBackend, preferenceRow, preferenceRead, holdPreferenceWrite } from './notification-preference-cas-backend.mjs';
 
 export const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 export const owner = (sessionGeneration = 'session-a', userId = 'owned-user') => ({ userId, accountId: userId, sessionGeneration, restoreOnly: false, state: 'ACTIVE' });
@@ -28,7 +30,10 @@ const compile = (text, captureScreen = false) => ts.transpileModule(text, {
       ts.factory.updateBlock(node.body, node.body.statements.map(visit)));
   }, context)] } : undefined,
 }).outputText;
-const settingsCode = compile(process.env.NOTIFICATION_SETTINGS_SOURCE ? fs.readFileSync(process.env.NOTIFICATION_SETTINGS_SOURCE, 'utf8') : source('app/settings.tsx'), true);
+const settingsSource = process.env.NOTIFICATION_SETTINGS_SOURCE ? fs.readFileSync(process.env.NOTIFICATION_SETTINGS_SOURCE, 'utf8') : source('app/settings.tsx');
+const settingsCode = compile(settingsSource, true);
+const notificationSource = process.env.NOTIFICATION_HELPER_SOURCE ? fs.readFileSync(process.env.NOTIFICATION_HELPER_SOURCE, 'utf8') : source('_lib/notifications.ts');
+const historicalPreferenceTransport = !!process.env.NOTIFICATION_HELPER_SOURCE && !notificationSource.includes('read_my_notification_preferences');
 const load = (code, mocks, extra = {}) => {
   const context = { exports: {}, console, process, crypto: webcrypto, setTimeout, clearTimeout, ...extra,
     require(name) { if (name.endsWith('.png')) return 1; assert.ok(name in mocks, `unmodeled import ${name}`); return mocks[name]; } };
@@ -46,11 +51,13 @@ const registration = (status = 'not_registered') => ({ status, permissionState: 
 // database transport and native registration facade are explicitly modeled.
 // The navigation host uses the same keyed child boundary as app/_layout.tsx;
 // this is not a full Router/native/provider/device integration test.
-export async function mount(t, { read, write, register, authority: initialAuthority = owner(), keyed = true, actualPush = false } = {}) {
+export async function mount(t, { read, write, register, authority: initialAuthority = owner(), keyed = true, actualPush = false,
+  preferenceBackend = createPreferenceBackend() } = {}) {
   const state = { authority: initialAuthority, focused: true, reads: [], writes: [], registrations: 0, revocations: 0, pushReads: 0,
-    alerts: [], rows: new Map(), read, write, register, registration: registration(), routes: [], transport: [], permissionReader: null,
+    alerts: [], rows: preferenceBackend.rows, read, write, register, registration: registration(), routes: [], transport: [], permissionReader: null,
     authorityReader: null, storageReader: null, nativeTokens: 0, tokenReader: null, authoritySubscriptions: 0, revokeReceipt: 'valid',
-    backendBarrier: null, backendCommits: [], installOwner: null };
+    backendBarrier: null, backendCommits: [], installOwner: null, preferenceBackend, preferenceRequests: [], sessionReader: null,
+    token: 'fixture-session-token-0', tokenOwners: new Map(initialAuthority ? [['fixture-session-token-0', initialAuthority]] : []) };
   const timers = new Map(); let timerId = 0;
   const deadline = load(compile(source('_lib/entitlementAuthority.ts')), {}, {
     setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
@@ -59,10 +66,35 @@ export async function mount(t, { read, write, register, authority: initialAuthor
   const permission = { granted: true, canAskAgain: true };
   const storage = new Map([['chillywood.notification.install_id.v1', 'fixture-install'],
     ['chillywood.notification.revoke_credential.v1', 'fixture-revocation-credential']]);
-  const database = { auth: { getSession: async () => ({ data: { session: state.authority ? { access_token: 'fixture-session-token', user: { id: state.authority.userId } } : null } }) },
-    rpc: async name => {
-      assert.equal(name, 'wave1_session_authority_readback');
-      return { data: state.authorityReader ? await state.authorityReader() : { ...state.authority, authoritative: true }, error: null };
+  const database = { auth: { getSession: async () => {
+    if (state.sessionReader) await state.sessionReader();
+    return { data: { session: state.authority ? { access_token: state.token, user: { id: state.authority.userId } } : null } };
+  } },
+    rpc(name, args = {}) {
+      const headers = new Map(); let pending;
+      const execute = async () => {
+        const token = headers.get('authorization')?.replace(/^Bearer /, '') || state.token;
+        const subject = state.tokenOwners.get(token);
+        if (name === 'wave1_session_authority_readback') {
+          return { data: state.authorityReader ? await state.authorityReader() : subject ? { ...subject, authoritative: true } : null, error: null };
+        }
+        assert.ok(['read_my_notification_preferences', 'mutate_my_notification_preferences'].includes(name), `unmodeled RPC ${name}`);
+        assert.ok(headers.has('authorization'), 'preference RPC must pin its initiating bearer');
+        if (!subject || subject.restoreOnly || subject.state !== 'ACTIVE') return { data: null, error: { code: '42501', message: 'active authenticated subject required' } };
+        const isRead = name === 'read_my_notification_preferences';
+        if (isRead) assert.deepEqual(plain(args), {});
+        const request = { userId: subject.userId, payload: isRead ? undefined : plain(args.p_patch), mode: isRead ? 'read' : 'write',
+          name, args: plain(args), authorization: `Bearer ${token}`, authority: plain(subject) };
+        state.preferenceRequests.push(request);
+        (isRead ? state.reads : state.writes).push(request);
+        const row = state.rows.has(subject.userId) ? plain(state.rows.get(subject.userId)) : null;
+        const commit = () => isRead ? preferenceBackend.read(subject.userId) : preferenceBackend.mutate(subject.userId, plain(args));
+        const handler = isRead ? state.read : state.write;
+        return handler ? handler(request, row, commit) : commit();
+      };
+      const query = { setHeader(key, value) { headers.set(key.toLowerCase(), value); return query; }, returns() { return query; },
+        then(resolve, reject) { pending ??= execute(); return pending.then(resolve, reject); } };
+      return query;
     },
     functions: { async invoke(name, { body }) {
       assert.equal(name, 'notification-device-tokens'); state.transport.push(plain(body));
@@ -81,22 +113,26 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     } },
     from(table) {
       assert.equal(table, 'notification_preferences');
+      assert.ok(historicalPreferenceTransport, 'current preference helper must use the authoritative RPC transport');
       let userId, payload, mode = 'read';
       const q = { select: () => q, returns: () => q, setHeader: () => q, eq(key, value) { assert.equal(key, 'user_id'); userId = value; return q; },
         upsert(value, options) { assert.equal(options.onConflict, 'user_id'); mode = 'write'; payload = plain(value); userId = payload.user_id; return q; },
         insert(value) { mode = 'insert'; payload = plain(value); userId = payload.user_id; return q; },
         async maybeSingle() {
           const request = { userId, payload, mode };
-          const row = { user_id: userId, push_enabled: true, messages_enabled: true, ...(state.rows.get(userId) || {}) };
+          const row = plain(preferenceBackend.ensure(userId));
           if (mode === 'read') {
             state.reads.push(request);
-            if (state.read) return state.read(request, row);
+            if (state.read) return state.read(request, row, () => ({ data: row, error: null }));
             return { data: row, error: null };
           }
           state.writes.push(request);
-          if (state.write) return state.write(request, row);
-          const saved = { ...row, ...payload }; state.rows.set(userId, saved);
-          return { data: saved, error: null };
+          const commit = () => {
+            const saved = { ...row, ...payload }; state.rows.set(userId, saved);
+            return { data: saved, error: null };
+          };
+          if (state.write) return state.write(request, row, commit);
+          return commit();
         } };
       return q;
     } };
@@ -107,9 +143,9 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     return () => { state.authoritySubscriptions--; unsubscribe(); };
   };
   authority.publishAccountSessionAuthoritySnapshot(initialAuthority);
-  const rpc = load(compile(source('_lib/accountBoundSupabaseRpc.mjs')), {}, { URL, fetch: async (url) => {
+  const rpc = load(compile(source('_lib/accountBoundSupabaseRpc.mjs')), {}, { URL, fetch: async (url, options) => {
     assert.equal(new URL(url).pathname, '/rest/v1/rpc/wave1_session_authority_readback');
-    const result = await database.rpc('wave1_session_authority_readback');
+    const result = await database.rpc('wave1_session_authority_readback').setHeader('Authorization', new Headers(options.headers).get('Authorization'));
     return new Response(JSON.stringify(result.data), { status: 200 });
   } });
   const mutation = load(compile(source('_lib/accountBoundSupabaseMutation.ts')), {
@@ -118,7 +154,7 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     './supabase': { supabase: database, SUPABASE_URL: 'https://fixture.invalid', SUPABASE_ANON_KEY: 'fixture-anon' },
     'react-native': { Platform: { OS: 'android' } },
   });
-  const realNotifications = load(compile(process.env.NOTIFICATION_HELPER_SOURCE ? fs.readFileSync(process.env.NOTIFICATION_HELPER_SOURCE, 'utf8') : source('_lib/notifications.ts')), {
+  const realNotifications = load(compile(notificationSource), {
     '@react-native-async-storage/async-storage': { getItem: async key => state.storageReader ? state.storageReader(key, storage.get(key) || null) : storage.get(key) || null,
       setItem: async (key, value) => { storage.set(key, value); } },
     'expo-constants': { easConfig: { projectId: 'fixture-project' } }, 'expo-device': { isDevice: actualPush }, 'expo-application': {},
@@ -134,18 +170,36 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     './entitlementAuthority': deadline,
   });
   const notifications = { ...realNotifications,
-    // Original-source controls predate these observation-only exports. They
-    // must reach the intended race assertion, not fail with a missing fixture.
-    hasPendingNotificationPreferenceWrite: realNotifications.hasPendingNotificationPreferenceWrite || (() => false),
-    subscribeToNotificationPreferenceWrites: realNotifications.subscribeToNotificationPreferenceWrites || (() => noop),
-    hasPendingNotificationPushRegistration: realNotifications.hasPendingNotificationPushRegistration || (() => false),
-    subscribeToNotificationPushRegistrations: realNotifications.subscribeToNotificationPushRegistrations || (() => noop),
-    withNotificationPushPreferenceChange: realNotifications.withNotificationPushPreferenceChange || ((_owner, operation) => operation()),
     async readCurrentPushRegistration() { state.pushReads++; return state.registration; },
     async requestPushPermissionAndRegister(...args) { state.registrations++; return actualPush ? realNotifications.requestPushPermissionAndRegister(...args)
       : state.register ? state.register() : registration('registered'); },
     async revokeCurrentPushInstall(...args) { state.revocations++; return actualPush ? realNotifications.revokeCurrentPushInstall(...args) : registration('not_registered'); },
   };
+  // Explicit historical sources predate CAS. These API-shape adapters allow
+  // those controls to reach their original lifecycle/transport fault, not a
+  // missing-export/argument error. Current sources and single-guard mutants
+  // never receive these adapters. They do not simulate CAS in old helpers.
+  if (historicalPreferenceTransport && !realNotifications.createNotificationPreferenceIntent) {
+    notifications.hasPendingNotificationPreferenceWrite ??= () => false;
+    notifications.subscribeToNotificationPreferenceWrites ??= () => noop;
+    notifications.hasPendingNotificationPushRegistration ??= () => false;
+    notifications.subscribeToNotificationPushRegistrations ??= () => noop;
+    notifications.withNotificationPushPreferenceChange ??= (_owner, operation) => operation();
+    notifications.createNotificationPreferenceIntent = () => {
+      const row = preferenceBackend.ensure(state.authority.userId);
+      return { expectedRevision: row.revision, expectedIncarnation: row.incarnation, operationId: webcrypto.randomUUID() };
+    };
+    notifications.NotificationPreferenceWriteError = class HistoricalPreferenceWriteError extends Error {};
+  }
+  if (process.env.NOTIFICATION_SETTINGS_SOURCE && !settingsSource.includes('createNotificationPreferenceIntent')
+    && !settingsSource.includes('NotificationPreferenceWriteError')
+    && realNotifications.createNotificationPreferenceIntent) {
+    notifications.updateNotificationPreferences = (patch, userId, binding, intent) => {
+      const row = preferenceBackend.ensure(userId);
+      return realNotifications.updateNotificationPreferences(patch, userId, binding,
+        intent ?? realNotifications.createNotificationPreferenceIntent({ revision: row.revision, incarnation: row.incarnation }));
+    };
+  }
   let tree, unmounted = false;
   const appListeners = new Set(), router = { push: route => state.routes.push(route), replace: route => state.routes.push(route), back: noop, canGoBack: () => true };
   const appState = { currentState: 'active', addEventListener(_, listener) { appListeners.add(listener); return { remove: () => appListeners.delete(listener) }; } };
@@ -200,6 +254,11 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     }); },
     async focus(focused) { state.focused = focused; await render(); },
     async app(next) { appState.currentState = next; await act(() => { for (const listener of appListeners) listener(next); }); },
-    async replace(next) { state.authority = next; await act(() => authority.publishAccountSessionAuthoritySnapshot(next)); await render(); },
+    async replace(next) {
+      state.authority = next;
+      state.token = `fixture-session-token-${state.tokenOwners.size}`;
+      if (next) state.tokenOwners.set(state.token, next);
+      await act(() => authority.publishAccountSessionAuthoritySnapshot(next)); await render();
+    },
   };
 }

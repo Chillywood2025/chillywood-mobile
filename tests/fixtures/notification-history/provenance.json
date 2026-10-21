@@ -5,7 +5,14 @@
     "commit": "28a625179970c4caa8a0d1f40c66b54ab4cce37e",
     "baseline": "c164ae241e81ce90e2b51f8bad86556cc23c2a78",
     "baselineSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
-    "targetSha256": "7dd4b554a8455b0f934883b264ad2530e06f1a1da356d744ea66254d85e5997d"
+    "targetSha256": "7dd4b554a8455b0f934883b264ad2530e06f1a1da356d744ea66254d85e5997d",
+    "contextWitness": {
+      "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
+      "baseSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
+      "targetSha256": "7dd4b554a8455b0f934883b264ad2530e06f1a1da356d744ea66254d85e5997d",
+      "rebasedSourceSha256": "b7db017b76f1502319ed2523c92efefe1bab6812d57925138baac7d46bc3ae33",
+      "originalByteIdentityVerified": true
+    }
   },
   {
     "name": "original-helper",
@@ -13,7 +20,14 @@
     "commit": "28a625179970c4caa8a0d1f40c66b54ab4cce37e",
     "baseline": "c164ae241e81ce90e2b51f8bad86556cc23c2a78",
     "baselineSha256": "d5512cc5072af428b4322daa8ef48b9caa72dc1eacc594a400afc6e50c193b54",
-    "targetSha256": "323b558fca9a792e89eda6030b97634af07100abcd915f064c0ee25da81caec8"
+    "targetSha256": "323b558fca9a792e89eda6030b97634af07100abcd915f064c0ee25da81caec8",
+    "contextWitness": {
+      "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
+      "baseSha256": "fbe34323bdc7eb5446e8530cba2b4a92f9b6945a6b6a8cbef470ad4800020bb1",
+      "targetSha256": "ba037a239cf809b993b8ddd65e1d6e9bcb6f0b9fdcc945085f5947e05038c263",
+      "rebasedSourceSha256": "b107175344473f8c465beb6f5b15c38225fcbc320ecc1e83e56eb8a6b4ca4e8d",
+      "originalByteIdentityVerified": false
+    }
   },
   {
     "name": "first-settings",
@@ -21,7 +35,14 @@
     "commit": "93ee830d19664cae0c4b2b770cf6195c189f57ba",
     "baseline": "c164ae241e81ce90e2b51f8bad86556cc23c2a78",
     "baselineSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
-    "targetSha256": "9fe0dc633b7503db5a731ed94c70b574c04450e92def6b5e94d2ea01953e69a9"
+    "targetSha256": "9fe0dc633b7503db5a731ed94c70b574c04450e92def6b5e94d2ea01953e69a9",
+    "contextWitness": {
+      "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
+      "baseSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
+      "targetSha256": "9fe0dc633b7503db5a731ed94c70b574c04450e92def6b5e94d2ea01953e69a9",
+      "rebasedSourceSha256": "b7db017b76f1502319ed2523c92efefe1bab6812d57925138baac7d46bc3ae33",
+      "originalByteIdentityVerified": true
+    }
   },
   {
     "name": "first-helper",
@@ -29,7 +50,14 @@
     "commit": "93ee830d19664cae0c4b2b770cf6195c189f57ba",
     "baseline": "c164ae241e81ce90e2b51f8bad86556cc23c2a78",
     "baselineSha256": "d5512cc5072af428b4322daa8ef48b9caa72dc1eacc594a400afc6e50c193b54",
-    "targetSha256": "18b4e3a2143b9bf6037dff060f515e3eb828c9904a146f825f9ffdf801cc6866"
+    "targetSha256": "18b4e3a2143b9bf6037dff060f515e3eb828c9904a146f825f9ffdf801cc6866",
+    "contextWitness": {
+      "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
+      "baseSha256": "fbe34323bdc7eb5446e8530cba2b4a92f9b6945a6b6a8cbef470ad4800020bb1",
+      "targetSha256": "1d055f6dc6c90e143b48d4ead1456c2ee26b94e760023b195897e3e2b5cc86b1",
+      "rebasedSourceSha256": "b107175344473f8c465beb6f5b15c38225fcbc320ecc1e83e56eb8a6b4ca4e8d",
+      "originalByteIdentityVerified": false
+    }
   },
   {
     "name": "settlement-settings",
@@ -37,6 +65,13 @@
     "commit": "482c27356ac3ebdf66abea92c5410e54ee688629",
     "baseline": "c164ae241e81ce90e2b51f8bad86556cc23c2a78",
     "baselineSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
-    "targetSha256": "e0e4a46c21fa80df3f0be98bfd545cb8f19736fa6c83ecaebd26e89f6ae6f642"
+    "targetSha256": "e0e4a46c21fa80df3f0be98bfd545cb8f19736fa6c83ecaebd26e89f6ae6f642",
+    "contextWitness": {
+      "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
+      "baseSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
+      "targetSha256": "e0e4a46c21fa80df3f0be98bfd545cb8f19736fa6c83ecaebd26e89f6ae6f642",
+      "rebasedSourceSha256": "b7db017b76f1502319ed2523c92efefe1bab6812d57925138baac7d46bc3ae33",
+      "originalByteIdentityVerified": true
+    }
   }
 ]
