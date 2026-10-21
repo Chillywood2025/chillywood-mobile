@@ -155,7 +155,18 @@ async function rollingFixture(t) {
     finally { state.actor = prior; }
   };
   const atomic = patch => current.publishPlatformBrandProfile(ids.owner, { ...brand.createDefaultPlatformBrandProfile(ids.owner), ...patch });
-  const migrate = async () => { for (const name of migrations) await fixture.db.exec(read(`supabase/migrations/${name}`)); };
+  const migrate = async () => {
+    for (const name of migrations) await fixture.db.exec(read(`supabase/migrations/${name}`));
+    // Current removal requires the new server-timed, account-bound RPC. Execute
+    // its actual SQL here; full retention/storage behavior has a separate migrated fixture.
+    const retention = 'supabase/migrations/20261021030421_platform_brand_exact_retention_lifecycle.sql';
+    await fixture.db.exec('create schema if not exists private');
+    for (const signature of ['private.platform_brand_retention_lock', 'public.remove_platform_brand_asset']) {
+      const source=read(retention), start=source.indexOf(`create function ${signature}(`);
+      assert.ok(start>=0); await fixture.db.exec(source.slice(start,source.indexOf('$$;',start)+3));
+    }
+    await fixture.db.exec('revoke all on function private.platform_brand_retention_lock() from public,anon,authenticated; revoke all on function public.remove_platform_brand_asset(uuid) from public,anon; grant execute on function public.remove_platform_brand_asset(uuid) to authenticated;');
+  };
   const seedAsset = async () => {
     await fixture.db.query(`insert into platform_brand_assets(id,owner_user_id,asset_type,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type)
       values($1,$2,'hero_image','supabase','platform-brand-assets',$3,$3,'image/png')`, [assetId, ids.owner, `${ids.owner}/hero.png`]);

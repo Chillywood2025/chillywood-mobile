@@ -127,7 +127,7 @@ jobs:
           npm run guard:chilly-chat-call-push-policy
           npm run test:chilly-chat-livekit-authority
           DENO_NO_PACKAGE_JSON=1 deno test --node-modules-dir=none --no-lock --allow-read --allow-env supabase/functions/_shared/content-inspection-*.test.mjs supabase/functions/_shared/deleted-content-retention.test.mjs supabase/functions/_shared/deleted-content-media-expiry.test.mjs supabase/functions/_shared/deleted-media-retirement.test.mjs
-          DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/admin-content-inspection/index.ts supabase/functions/deleted-content-retention-expiry/index.ts
+          DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/admin-content-inspection/index.ts supabase/functions/deleted-content-retention-expiry/index.ts supabase/functions/platform-brand-retention-expiry/index.ts supabase/functions/_shared/brand-retention-origin.ts
           deno test --node-modules-dir=none --no-lock --allow-env supabase/functions/revenuecat-premium-reconcile/authority.test.ts supabase/functions/revenuecat-premium-reconcile/index_test.ts
       - name: Run canonical Live Stage and Watch-Party Edge authority checks
         shell: bash --noprofile --norc -eo pipefail {0}
@@ -161,6 +161,11 @@ jobs:
           node scripts/test-content-inspection-postgres.mjs
           node scripts/test-deleted-content-retention-postgres.mjs
           node scripts/test-deleted-media-retirement-postgres.mjs
+          node scripts/test-platform-brand-retention-postgres.mjs
+          node scripts/test-platform-brand-expiry-transport-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-brand-retention-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-media-scan-byte-receipt-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-media-scan-byte-receipt-concurrency.mjs --negative-control
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-content-inspection-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-deleted-content-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-staff-permission-template-concurrency.mjs

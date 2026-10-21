@@ -1,0 +1,16 @@
+begin;
+select plan(12);
+select has_function('public','begin_platform_brand_retention_transport',array['uuid'],'bounded transport entry exists');
+select has_function('public','read_platform_brand_retention_expiry_claim',array['uuid','uuid'],'exact-token transport authority exists');
+select has_function('public','record_platform_brand_retention_transport_result',array['uuid','uuid','text'],'bounded outcome recording exists');
+select has_table('private','platform_brand_expiry_transport_results','immutable transport audit relation exists');
+select ok(not (select version_delete_verified from private.platform_brand_retention_settings),'provider version contract is unqualified by default');
+select ok((select provider_origin is null from private.platform_brand_retention_settings),'migration never supplies a production origin');
+select ok(not has_function_privilege('authenticated','public.begin_platform_brand_retention_transport(uuid)','EXECUTE'),'client cannot begin provider transport');
+select ok(not has_function_privilege('anon','public.read_platform_brand_retention_expiry_claim(uuid,uuid)','EXECUTE'),'anonymous cannot read provider authority');
+select ok(not has_table_privilege('service_role','private.platform_brand_expiry_transport_results','INSERT'),'service role cannot bypass bounded outcome RPC');
+select is(public.begin_platform_brand_retention_transport('f7600000-0000-4000-8000-000000000001')->>'status','transport_unqualified_or_disabled','source installation never enables physical cleanup');
+select is(public.read_platform_brand_retention_expiry_claim('f7600000-0000-4000-8000-000000000001','f7600000-0000-4000-8000-000000000002')->>'status','disabled','disabled authority stays fail-closed');
+select throws_ok($$select public.record_platform_brand_retention_transport_result('f7600000-0000-4000-8000-000000000001','f7600000-0000-4000-8000-000000000002','observed_absent')$$,'P0001','brand_exact_claim_required','absence outcome cannot invent a claim');
+select * from finish();
+rollback;

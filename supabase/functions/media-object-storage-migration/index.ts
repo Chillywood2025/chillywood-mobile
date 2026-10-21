@@ -1,6 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyPlatformBrandRetentionOrigin } from "../_shared/brand-retention-origin.ts";
 
 type MigrationAction =
+  | "verify_brand_retention_origin"
+  | "record_brand_retention_proof"
   | "audit_inventory"
   | "classify_stale_refs"
   | "resolve_stale_refs_dry_run"
@@ -231,7 +234,9 @@ const authenticateMigrationOperator = async (req: Request) => {
 const normalizeAction = (value: unknown): MigrationAction | null => {
   const action = toLowerText(value);
   if (
-    action === "audit_inventory"
+    action === "verify_brand_retention_origin"
+    || action === "record_brand_retention_proof"
+    || action === "audit_inventory"
     || action === "classify_stale_refs"
     || action === "resolve_stale_refs_dry_run"
     || action === "apply_stale_ref_resolutions"
@@ -1922,6 +1927,35 @@ const handler = async (req: Request): Promise<Response> => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    if (action === "verify_brand_retention_origin" || action === "record_brand_retention_proof") {
+      try {
+        const scanReceiptId = toText(payload.scanReceiptId);
+        if (action === "record_brand_retention_proof" && !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(scanReceiptId)) {
+          return json(400, {ok: false, error: "brand_scan_receipt_required"});
+        }
+        const result = await verifyPlatformBrandRetentionOrigin(toText(payload.assetId), {
+          projectUrl: supabaseUrl, adminClient,
+        });
+        if (action === "record_brand_retention_proof") {
+          const receipt = await adminClient.rpc("record_platform_brand_retention_proof", {
+            p_asset_id: result.binding.assetId, p_binding: result.binding,
+            p_proof: {originSha256: result.readback.sha256, originSizeBytes: result.readback.sizeBytes, scanReceiptId},
+          });
+          if (receipt.error || !receipt.data || Array.isArray(receipt.data)
+            || receipt.data.recorded !== true || receipt.data.assetId !== result.binding.assetId) {
+            return json(409, {ok: false, error: "brand_retention_proof_not_confirmed"});
+          }
+        }
+        // No keys, owner identifiers, private URLs or file bytes leave this worker.
+        // SQL independently binds a supplied actual scan receipt. Caller hash,
+        // scan status and provider metadata are never accepted as evidence.
+        return json(200, {ok: true, action, assetId: result.binding.assetId,
+          sha256: result.readback.sha256, sizeBytes: result.readback.sizeBytes,
+          fullReadback: true, recorded: action === "record_brand_retention_proof", expiryActivated: false});
+      } catch {
+        return json(409, {ok: false, error: "brand_origin_verification_unavailable"});
+      }
+    }
     const references = await readInventoryReferences(adminClient);
     const manifest = buildManifest(references);
     const distinct = distinctManifest(manifest);

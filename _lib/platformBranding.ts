@@ -1,7 +1,7 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
-import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import type { Tables, TablesInsert } from "../supabase/database.types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 import {
   captureAccountBoundSupabaseMutationSubject,
@@ -139,7 +139,6 @@ export type PlatformBrandReviewResult = {
 
 type PlatformBrandAssetRow = Tables<"platform_brand_assets">;
 type PlatformBrandAssetInsert = TablesInsert<"platform_brand_assets">;
-type PlatformBrandAssetUpdate = TablesUpdate<"platform_brand_assets">;
 type PlatformBrandProfileRow = Tables<"platform_brand_profiles">;
 type PlatformBrandProfileInsert = TablesInsert<"platform_brand_profiles">;
 
@@ -936,16 +935,13 @@ export async function uploadPlatformBrandAsset(input: {
 export async function removePlatformBrandAsset(asset: PlatformBrandAsset): Promise<void> {
   const assetId = toText(asset.id);
   if (!assetId) return;
-  const update: PlatformBrandAssetUpdate = {
-    asset_state: "archived",
-    deleted_at: new Date().toISOString(),
-  };
-  const { error } = await supabase
-    .from("platform_brand_assets")
-    .update(update)
-    .eq("id", assetId)
-    .eq("owner_user_id", asset.ownerUserId);
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<{ assetId?: string; deletedAt?: string }>(
+    "remove_platform_brand_asset", { p_asset_id: assetId }, asset.ownerUserId,
+  );
   if (error) throw error;
+  if (toText(data?.assetId) !== assetId || !toText(data?.deletedAt)) {
+    throw new Error("Platform media could not be removed. Please try again.");
+  }
 }
 
 const parsePlatformBrandReviewResult = (value: unknown): PlatformBrandReviewResult => {
