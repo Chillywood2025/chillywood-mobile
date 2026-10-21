@@ -86,7 +86,7 @@ from public.platform_brand_assets a left join storage.objects o
 
 create function private.guard_platform_brand_retained_asset() returns trigger
 language plpgsql security definer set search_path='' as $$
-declare o storage.objects%rowtype; r private.platform_brand_object_incarnations%rowtype; t timestamptz;
+declare o storage.objects%rowtype; r private.platform_brand_object_incarnations%rowtype; t timestamptz; referenced boolean;
 begin
  perform private.platform_brand_retention_lock();
  if tg_op='DELETE' then raise exception 'brand_retention_soft_delete_required'; end if;
@@ -108,6 +108,25 @@ begin
      raise exception 'brand_retention_asset_identity_immutable'; end if;
    if old.deleted_at is not null and new.deleted_at is distinct from old.deleted_at then raise exception 'brand_retention_tombstone_permanent'; end if;
    if old.deleted_at is null and new.deleted_at is not null then
+     referenced:=exists(select 1 from public.platform_brand_profiles p where old.id=any(array[p.hero_image_asset_id,p.hero_video_asset_id,p.hero_poster_asset_id,p.background_image_asset_id,p.avatar_asset_id,p.logo_asset_id,p.watermark_asset_id]));
+     if to_regclass('public.platform_brand_publications') is not null then
+       referenced:=referenced or exists(select 1 from public.platform_brand_publications p where old.id=any(array[p.hero_image_asset_id,p.hero_video_asset_id,p.hero_poster_asset_id,p.background_image_asset_id,p.avatar_asset_id,p.logo_asset_id,p.watermark_asset_id]));
+     end if;
+     -- Preserve the established, audited reviewer safety archive, not creator
+     -- self-review, a caller-supplied context alone, or a service-role bypass.
+     if referenced then
+     if not coalesce(
+       auth.uid() is not null
+       and current_setting('app.platform_brand_review_context',true)='review_platform_brand_asset'
+       and new.moderation_status='removed' and new.asset_state='archived'
+       and new.moderated_by=auth.uid()::text and new.moderated_at is not null
+       and length(btrim(coalesce(new.moderation_reason,'')))>=6
+       and (public.has_platform_role(array['owner'::text,'operator'::text])
+         or public.has_platform_permission('content_moderation')
+         or public.has_platform_permission('reports_review')),false) then
+       raise exception 'brand_asset_in_use';
+     end if;
+     end if;
      t:=clock_timestamp(); new.deleted_at:=t; new.asset_state:='archived';
      update private.platform_brand_object_incarnations set removed_at=t,retain_until=t+interval '720 hours',removal_clock='server_observed_removal' where asset_id=old.id and removed_at is null;
    end if;
@@ -117,6 +136,34 @@ end $$;
 -- Before generic deletion capture, so it sees the server's timestamp.
 create trigger aaa_platform_brand_retention before insert or update or delete on public.platform_brand_assets
 for each row execute function private.guard_platform_brand_retained_asset();
+
+create or replace function public."enqueue_platform_brand_asset_scan"()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Removed assets retain the existing job unchanged; never enqueue a new scan.
+  if new.deleted_at is not null then return new; end if;
+  if new."scan_status" = 'pending_scan' then
+    perform public."enqueue_media_scan_job"(
+      'platform_brand_assets',
+      new."asset_type",
+      new."id"::text,
+      new."owner_user_id",
+      new."storage_provider",
+      new."storage_bucket",
+      coalesce(nullif(new."storage_object_key", ''), new."storage_path"),
+      new."mime_type",
+      new."file_size_bytes",
+      30,
+      jsonb_build_object('assetType', new."asset_type")
+    );
+  end if;
+  return new;
+end;
+$$;
 
 create function public.remove_platform_brand_asset(p_asset_id uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
@@ -144,6 +191,14 @@ begin
    or (storage.foldername(a.storage_path))[1] is distinct from a.owner_user_id then
    raise exception 'brand_remove_current_owner_access_required'; end if;
  if a.deleted_at is null then
+   if exists(select 1 from public.platform_brand_profiles p where a.id=any(array[p.hero_image_asset_id,p.hero_video_asset_id,p.hero_poster_asset_id,p.background_image_asset_id,p.avatar_asset_id,p.logo_asset_id,p.watermark_asset_id])) then
+     raise exception 'brand_asset_in_use';
+   end if;
+   if to_regclass('public.platform_brand_publications') is not null then
+     if exists(select 1 from public.platform_brand_publications p where a.id=any(array[p.hero_image_asset_id,p.hero_video_asset_id,p.hero_poster_asset_id,p.background_image_asset_id,p.avatar_asset_id,p.logo_asset_id,p.watermark_asset_id])) then
+       raise exception 'brand_asset_in_use';
+     end if;
+   end if;
    update public.platform_brand_assets set deleted_at=clock_timestamp(),asset_state='archived' where id=a.id returning * into a;
  end if;
  return jsonb_build_object('assetId',a.id,'deletedAt',a.deleted_at);
@@ -194,6 +249,70 @@ begin
  return jsonb_build_object('recorded',true,'assetId',p_asset_id);
 end $$;
 
+-- Exact historical review evidence is not a media delivery reference. Unknown
+-- fields or another source/key remain blockers; this grants no read authority.
+create function private.platform_brand_review_evidence_matches(p_table oid,p_row jsonb,p_asset_id uuid) returns boolean
+language plpgsql volatile security definer set search_path='' as $$
+declare r private.platform_brand_object_incarnations%rowtype; a public.platform_brand_assets%rowtype;
+ b jsonb:=p_row->'before_state'; z jsonb:=p_row->'after_state'; snapshot jsonb; e jsonb; action text;
+ snapshot_keys text[]:=array['id','owner_user_id','asset_type','asset_state','storage_provider','storage_bucket','storage_object_key','storage_path','mime_type','width','height','duration_ms','file_size_bytes','original_file_name','moderation_status','moderation_reason','moderated_at','moderated_by','created_at','updated_at','deleted_at','scan_status','scan_provider','scan_result','scanned_at','scan_error','quarantined_at'];
+begin
+ if p_table is null or p_row is null or jsonb_typeof(p_row) is distinct from 'object' then return false; end if;
+ select * into r from private.platform_brand_object_incarnations where asset_id=p_asset_id;
+ select * into a from public.platform_brand_assets where id=p_asset_id;
+ if r.asset_id is null or a.id is null or (a.owner_user_id,a.created_at,a.storage_provider,a.storage_bucket,a.storage_object_key,a.storage_path)
+   is distinct from (r.owner_id,r.source_created_at,r.provider,r.bucket,r.object_key,r.storage_path) then return false; end if;
+ if not exists(select 1 from storage.objects o where o.id=r.storage_object_id and o.bucket_id=r.bucket and o.name=r.object_key and to_jsonb(o)->>'version'=r.storage_version)
+   and not (exists(select 1 from private.platform_brand_expiry_claims c where c.asset_id=r.asset_id)
+     and not exists(select 1 from storage.objects o where o.id=r.storage_object_id or (o.bucket_id=r.bucket and o.name=r.object_key))) then return false; end if;
+ if p_table=to_regclass('public.platform_admin_audit_logs') then
+   if (p_row-array['id','actor_user_id','actor_email','actor_role','action','action_category','target_type','target_id','target_user_id','target_channel_user_id','reason','severity','before_state','after_state','metadata','ip_hash','user_agent_hash','request_id','created_at','security_context_id'])<>'{}'::jsonb
+     or p_row->>'action_category' is distinct from 'moderation' or p_row->>'target_type' is distinct from 'platform_brand_asset'
+     or p_row->>'target_id' is distinct from r.asset_id::text or p_row->>'target_user_id' is distinct from r.owner_id
+     or p_row->>'target_channel_user_id' is distinct from r.owner_id
+     or jsonb_typeof(p_row->'metadata') is distinct from 'object'
+     or ((p_row->'metadata')-array['surface','asset_type','review_event_id','public_asset_state','moderation_status','raw_storage_path_logged','fake_approval','self_review','reviewer_access','review_context'])<>'{}'::jsonb then return false; end if;
+   select to_jsonb(v) into e from public.platform_brand_asset_review_events v where v.id::text=p_row->'metadata'->>'review_event_id';
+   if e is null then return false; end if;
+   return coalesce(private.platform_brand_review_evidence_matches(to_regclass('public.platform_brand_asset_review_events'),e,p_asset_id)
+     and p_row->>'action'='platform_brand_asset_'||(e->>'action')
+     and (p_row->>'actor_user_id',p_row->>'actor_email',p_row->>'actor_role',p_row->>'reason',b,z)
+       is not distinct from (e->>'actor_user_id',e->>'actor_email',e->>'actor_role',coalesce(e->>'reason',z->>'moderation_reason'),e->'before_state',e->'after_state')
+     and p_row->>'severity'=case when e->>'action'='approve' then 'notice' else 'warning' end
+     and p_row->'metadata'->>'surface'='platform_brand_studio'
+     and p_row->'metadata'->>'asset_type'=z->>'asset_type'
+     and p_row->'metadata'->>'public_asset_state'=z->>'asset_state'
+     and p_row->'metadata'->>'moderation_status'=z->>'moderation_status'
+     and p_row->'metadata'->'raw_storage_path_logged'='false'::jsonb
+     and p_row->'metadata'->'fake_approval'='false'::jsonb
+     and p_row->'metadata'->'self_review'=to_jsonb((e->>'actor_user_id')=r.owner_id)
+     and jsonb_typeof(p_row->'metadata'->'reviewer_access')='boolean'
+     and p_row->'metadata'->>'review_context'='review_platform_brand_asset',false);
+ elsif p_table is distinct from to_regclass('public.platform_brand_asset_review_events') then return false; end if;
+ if (p_row-array['id','asset_id','owner_user_id','actor_user_id','actor_email','actor_role','action','reason','before_state','after_state','created_at'])<>'{}'::jsonb
+   or p_row->>'asset_id' is distinct from r.asset_id::text or p_row->>'owner_user_id' is distinct from r.owner_id
+   or nullif(btrim(p_row->>'actor_user_id'),'') is null then return false; end if;
+ foreach snapshot in array array[b,z] loop
+   if jsonb_typeof(snapshot) is distinct from 'object' or (snapshot-snapshot_keys)<>'{}'::jsonb
+     or not (snapshot ?& array['id','owner_user_id','asset_type','asset_state','storage_provider','storage_bucket','storage_object_key','storage_path','mime_type','width','height','duration_ms','file_size_bytes','original_file_name','moderation_status','moderation_reason','moderated_at','moderated_by','created_at','updated_at','deleted_at'])
+     or (snapshot->>'id',snapshot->>'owner_user_id',(snapshot->>'created_at')::timestamptz,snapshot->>'storage_provider',snapshot->>'storage_bucket',snapshot->>'storage_object_key',snapshot->>'storage_path',snapshot->>'asset_type')
+       is distinct from (r.asset_id::text,r.owner_id,r.source_created_at,r.provider,r.bucket,r.object_key,r.storage_path,a.asset_type) then return false; end if;
+ end loop;
+ if (b-array['asset_state','moderation_status','moderation_reason','moderated_at','moderated_by','updated_at','deleted_at'])
+   is distinct from (z-array['asset_state','moderation_status','moderation_reason','moderated_at','moderated_by','updated_at','deleted_at'])
+   or b->>'deleted_at' is not null or z->>'moderated_by' is distinct from p_row->>'actor_user_id'
+   or z->>'moderated_at' is null
+   or z->>'moderation_reason' is distinct from coalesce(p_row->>'reason','Approved for public Platform display.') then return false; end if;
+ action:=p_row->>'action';
+ return coalesce((action='approve' and z->>'moderation_status'='clean' and z->>'deleted_at' is null and z->>'asset_state'=b->>'asset_state')
+   or (action='reject' and length(btrim(p_row->>'reason'))>=6 and z->>'moderation_status'='rejected' and z->>'deleted_at' is null
+     and z->>'asset_state'=case when b->>'asset_state'='published' then 'draft' else b->>'asset_state' end)
+   or (action='archive' and length(btrim(p_row->>'reason'))>=6 and z->>'moderation_status'='removed' and z->>'asset_state'='archived'
+     and (z->>'deleted_at')::timestamptz=r.removed_at),false);
+exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow then return false;
+end $$;
+revoke all on function private.platform_brand_review_evidence_matches(oid,jsonb,uuid) from public,anon,authenticated,service_role;
+
 -- Every known generic key/URL/JSON reference participates in the same latch.
 -- New locator-bearing tables block claims until reviewed and guarded.
 create function private.guard_platform_brand_retention_references() returns trigger
@@ -206,6 +325,56 @@ begin
  for r in select * from private.platform_brand_object_incarnations where removed_at is not null loop
    if private.deleted_media_mentions(doc,r.object_key) or private.deleted_media_mentions(doc,r.storage_path) then
      if tg_table_name='platform_brand_assets' and to_jsonb(new)->>'id'=r.asset_id::text then continue; end if;
+     if tg_relid in (to_regclass('public.platform_brand_asset_review_events'),to_regclass('public.platform_admin_audit_logs')) then
+     if tg_op='INSERT' and private.platform_brand_review_evidence_matches(tg_relid,to_jsonb(new),r.asset_id)
+       and auth.uid() is not null and to_jsonb(new)->>'actor_user_id'=auth.uid()::text
+       and current_setting('app.platform_brand_review_context',true)='review_platform_brand_asset'
+       and to_jsonb(new)->>'action' in ('archive','platform_brand_asset_archive')
+       and (public.has_platform_role(array['owner'::text,'operator'::text]) or public.has_platform_permission('content_moderation') or public.has_platform_permission('reports_review'))
+       and exists(select 1 from public.platform_brand_assets a where a.id=r.asset_id and a.asset_state='archived' and a.deleted_at=r.removed_at and to_jsonb(a)=to_jsonb(new)->'after_state') then continue; end if;
+     end if;
+     -- Completing the exact existing Brand scan changes outcome metadata, not
+     -- its locator. This is not an INSERT, enqueue, retry or lease-reset path.
+     if tg_table_schema='public' and tg_table_name='media_scan_jobs' and tg_op='UPDATE' then
+       if coalesce(
+         to_jsonb(old)->>'target_table'='platform_brand_assets'
+         and to_jsonb(old)->>'target_id'=r.asset_id::text
+         and to_jsonb(old)->>'owner_user_id'=r.owner_id
+         and to_jsonb(old)->>'storage_provider'=r.provider
+         and to_jsonb(old)->>'storage_bucket'=r.bucket
+         and to_jsonb(old)->>'storage_object_key'=r.object_key
+         and (to_jsonb(old)->>'created_at')::timestamptz>=r.source_created_at
+         and (to_jsonb(old)->>'created_at')::timestamptz<=r.removed_at
+         and to_jsonb(old)->>'status'='scanning'
+         and nullif(btrim(to_jsonb(old)->>'claimed_by'),'') is not null
+         and (to_jsonb(old)->>'claimed_at')::timestamptz<=clock_timestamp()
+         and (to_jsonb(old)->>'claimed_at')::timestamptz+interval '20 minutes'>clock_timestamp()
+         and to_jsonb(new)->>'status' in ('clean','malware_detected','scan_failed','manual_review','quarantined')
+         and (to_jsonb(new)-array['status','completed_at','scanner_provider','scanner_version','signature_version','finding_name','error_message','metadata','updated_at','claimed_by','claimed_at'])
+           =(to_jsonb(old)-array['status','completed_at','scanner_provider','scanner_version','signature_version','finding_name','error_message','metadata','updated_at','claimed_by','claimed_at'])
+         and ((to_jsonb(new)->'claimed_by'=to_jsonb(old)->'claimed_by' and to_jsonb(new)->'claimed_at'=to_jsonb(old)->'claimed_at')
+           or (to_jsonb(new)->>'claimed_by' is null and to_jsonb(new)->>'claimed_at' is null))
+         and ((to_jsonb(new)->'metadata')-array['durationMs','completedAt','targetPropagationComplete','targetPropagationFailure','targetPropagationFailedAt'])
+           =((to_jsonb(old)->'metadata')-array['durationMs','completedAt','targetPropagationComplete','targetPropagationFailure','targetPropagationFailedAt'])
+         and jsonb_typeof(to_jsonb(new)->'metadata'->'durationMs') in ('number','null')
+         and (to_jsonb(new)->'metadata'->>'completedAt')::timestamptz=(to_jsonb(new)->>'updated_at')::timestamptz
+         and ((to_jsonb(new)->'metadata'->'targetPropagationComplete') is not distinct from (to_jsonb(old)->'metadata'->'targetPropagationComplete')
+           or to_jsonb(new)->'metadata'->'targetPropagationComplete'='false'::jsonb)
+         and ((to_jsonb(new)->'metadata'->'targetPropagationFailure') is not distinct from (to_jsonb(old)->'metadata'->'targetPropagationFailure')
+           or to_jsonb(new)->'metadata'->>'targetPropagationFailure'='target_update_blocked')
+         and ((to_jsonb(new)->'metadata'->'targetPropagationFailedAt') is not distinct from (to_jsonb(old)->'metadata'->'targetPropagationFailedAt')
+           or (to_jsonb(new)->'metadata'->>'targetPropagationFailedAt')::timestamptz=(to_jsonb(new)->>'updated_at')::timestamptz)
+         and not exists(select 1 from private.platform_brand_expiry_claims c where c.asset_id=r.asset_id)
+         and exists(select 1 from public.platform_brand_assets a join storage.objects o
+           on o.id=r.storage_object_id and o.bucket_id=r.bucket and o.name=r.object_key
+           where a.id=r.asset_id and a.owner_user_id=r.owner_id and a.created_at=r.source_created_at
+             and a.asset_type=to_jsonb(old)->>'target_column'
+             and a.deleted_at=r.removed_at and a.asset_state='archived'
+             and (a.storage_provider,a.storage_bucket,a.storage_object_key,a.storage_path)
+               is not distinct from (r.provider,r.bucket,r.object_key,r.storage_path)
+             and to_jsonb(o)->>'version'=r.storage_version),false)
+       then continue; end if;
+     end if;
      if tg_op='UPDATE' and doc=old_doc
        and private.deleted_media_reference_identity(to_jsonb(new))=private.deleted_media_reference_identity(to_jsonb(old))
        and not exists(select 1 from private.platform_brand_expiry_claims where asset_id=r.asset_id) then continue; end if;
@@ -252,6 +421,7 @@ begin
    if not exists(select 1 from pg_trigger g where g.tgrelid=t.oid and g.tgfoid='private.guard_platform_brand_retention_references()'::regprocedure
      and g.tgenabled in ('O','A') and (g.tgtype::int & 23)=23 and g.tgqual is null) then return false; end if;
    predicate:='true';
+   if t.oid in (to_regclass('public.platform_brand_asset_review_events'),to_regclass('public.platform_admin_audit_logs')) then predicate:=format('not private.platform_brand_review_evidence_matches(%s::oid,to_jsonb(x),%L::uuid)',t.oid,r.asset_id); end if;
    if t.relname='platform_brand_assets' then predicate:=format('id<>%L::uuid',r.asset_id); end if;
    -- Only the exact proved terminal scan is evidence, not a live delivery alias.
    -- All other scans/reservations and unexpected references remain blockers.
@@ -267,6 +437,10 @@ end $$;
 
 create function private.guard_platform_brand_retention_hold() returns trigger
 language plpgsql security definer set search_path='' as $$ begin
+ -- These recognized scopes cannot match a brand asset or its (absent) parent.
+ -- Unknown scopes and account/brand holds remain conservatively serialized.
+ if new.target_type in ('profile_post','profile_post_comment','creator_video_comment','chat_message','room_message',
+  'watch_party_room_message','creator_video','video','social_attachment') then return new; end if;
  perform private.platform_brand_retention_lock();
  if new.status='active' and exists(select 1 from private.platform_brand_expiry_claims c
    join private.platform_brand_object_incarnations r on r.asset_id=c.asset_id
@@ -322,7 +496,10 @@ begin
    if tg_op='DELETE' then return old; else return new; end if;
  end if;
  perform private.platform_brand_retention_lock();
- if tg_op='UPDATE' and (old_doc-'last_accessed_at')=(new_doc-'last_accessed_at') then return new; end if;
+ -- Storage path_tokens is generated from the still-fenced name and is NULL
+ -- in a BEFORE UPDATE NEW record. Read timestamps may change automatically.
+ if tg_op='UPDATE' and (old_doc-array['last_accessed_at','updated_at','path_tokens'])
+  =(new_doc-array['last_accessed_at','updated_at','path_tokens']) then return new; end if;
  for r in select * from private.platform_brand_object_incarnations where provider='supabase' and bucket='platform-brand-assets'
    and (object_key in (old_doc->>'name',new_doc->>'name') or storage_path in (old_doc->>'name',new_doc->>'name')) loop
    if tg_op='DELETE' and auth.role()='service_role' and r.storage_object_id=old.id

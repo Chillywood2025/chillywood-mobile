@@ -1,9 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyPlatformBrandRetentionOrigin } from "../_shared/brand-retention-origin.ts";
+import { copySupabaseOriginal } from "../_shared/supabase-original-copy.ts";
+import { checkDeletedMediaRetirement } from "../_shared/deleted-media-retirement.ts";
 
 type MigrationAction =
   | "verify_brand_retention_origin"
   | "record_brand_retention_proof"
+  | "copy_supabase_original"
   | "audit_inventory"
   | "classify_stale_refs"
   | "resolve_stale_refs_dry_run"
@@ -236,6 +239,7 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
   if (
     action === "verify_brand_retention_origin"
     || action === "record_brand_retention_proof"
+    || action === "copy_supabase_original"
     || action === "audit_inventory"
     || action === "classify_stale_refs"
     || action === "resolve_stale_refs_dry_run"
@@ -382,13 +386,17 @@ const createPresignedS3Url = async (input: {
     Boolean(input.forcePathStyle),
   );
   const credentialScope = `${dateStamp}/${input.region}/s3/aws4_request`;
+  // Every migration/backup PUT is create-only. Signing the condition prevents
+  // removing it from a previously issued request to overwrite enrolled bytes.
+  const signedHeaders = input.method === "PUT" ? "host;if-none-match" : "host";
+  const canonicalHeaders = `host:${host}\n` + (input.method === "PUT" ? "if-none-match:*\n" : "");
   const queryParams: Record<string, string> = {
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
     "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
     "X-Amz-Credential": `${input.accessKeyId}/${credentialScope}`,
     "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(input.expiresSeconds),
-    "X-Amz-SignedHeaders": "host",
+    "X-Amz-SignedHeaders": signedHeaders,
   };
   const canonicalQuery = Object.entries(queryParams)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -398,8 +406,8 @@ const createPresignedS3Url = async (input: {
     input.method,
     canonicalUri,
     canonicalQuery,
-    `host:${host}\n`,
-    "host",
+    canonicalHeaders,
+    signedHeaders,
     "UNSIGNED-PAYLOAD",
   ].join("\n");
   const canonicalRequestHash = await sha256Hex(canonicalRequest);
@@ -775,7 +783,7 @@ const putR2TextObject = async (
   const response = await fetch(url, {
     method: "PUT",
     body,
-    headers: { "Content-Type": contentType },
+    headers: { "Content-Type": contentType, "If-None-Match": "*" },
   });
   if (!response.ok) throw new Error(`r2_origin_backup_upload_failed_${response.status}`);
   const head = await headObject(config, objectKey);
@@ -999,6 +1007,7 @@ const reconcileObjects = async (
 };
 
 const copyObject = async (
+  adminClient: SupabaseClient,
   entry: ManifestEntry,
   sourceConfig: S3Config,
   targetConfig: S3Config,
@@ -1031,6 +1040,11 @@ const copyObject = async (
   }
 
   const sourceHead = reconciliation.sourceHead;
+  const admission = await checkDeletedMediaRetirement(adminClient, {
+    provider: "cloudflare_r2", bucket: targetConfig.bucket,
+    objectKey: entry.targetObjectKey, purpose: "upload",
+  });
+  if (!admission.allowed) throw new Error("migration_target_retired_or_unavailable");
 
   const sourceUrl = await createPresignedS3Url({
     method: "GET",
@@ -1060,6 +1074,7 @@ const copyObject = async (
     method: "PUT",
     body: sourceResponse.body,
     headers: {
+      "If-None-Match": "*",
       "Content-Type": sourceHead.contentType || sourceResponse.headers.get("content-type") || "application/octet-stream",
     },
   });
@@ -1956,6 +1971,34 @@ const handler = async (req: Request): Promise<Response> => {
         return json(409, {ok: false, error: "brand_origin_verification_unavailable"});
       }
     }
+    if (action === "copy_supabase_original") {
+      // Explicit one-original action; never expands the legacy batch manifest.
+      // Operator authority is unchanged. Deployment/invocation requires its own approval.
+      const target = readR2OriginConfig();
+      if (!target.config || target.config.bucket !== R2_ORIGIN_BUCKET) {
+        return json(409, { ok: false, reason: "supabase_copy_target_unavailable" });
+      }
+      const config = target.config;
+      let endpoint: URL;
+      try { endpoint = new URL(config.endpoint); }
+      catch { return json(409, {ok: false, reason: "supabase_copy_target_unavailable"}); }
+      if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password
+        || endpoint.search || endpoint.hash || !["", "/"].includes(endpoint.pathname)) {
+        return json(409, {ok: false, reason: "supabase_copy_target_unavailable"});
+      }
+      const result = await copySupabaseOriginal({
+        tableName: toText(payload.table_name), rowId: toText(payload.row_id), receiptId: toText(payload.receipt_id),
+      }, {
+        adminClient, supabaseUrl,
+        targetAllowed: async (key) => (await checkDeletedMediaRetirement(adminClient, {
+          provider: "cloudflare_r2", bucket: R2_ORIGIN_BUCKET, objectKey: key, purpose: "upload",
+        })).allowed,
+        targetUrl: (method, objectKey) => createPresignedS3Url({
+          ...config, method, objectKey, expiresSeconds: 120,
+        }),
+      });
+      return json(200, { ok: true, action, ...result });
+    }
     const references = await readInventoryReferences(adminClient);
     const manifest = buildManifest(references);
     const distinct = distinctManifest(manifest);
@@ -2250,7 +2293,7 @@ const handler = async (req: Request): Promise<Response> => {
           targetEtagPresent: !!targetHead.etag,
         });
       }
-      const result = await copyObject(entry, sourceConfig.config, targetConfig.config);
+      const result = await copyObject(adminClient, entry, sourceConfig.config, targetConfig.config);
       return json(result.verified ? 200 : 409, {
         ok: result.verified,
         action,
@@ -2296,11 +2339,11 @@ const handler = async (req: Request): Promise<Response> => {
       const results: CopyResult[] = [];
       for (const reconciled of reconciliation) {
         if (!isExistingSourceStatus(reconciled.status)) {
-          results.push(await copyObject(reconciled.entry, sourceConfig.config, targetConfig.config, reconciled));
+          results.push(await copyObject(adminClient, reconciled.entry, sourceConfig.config, targetConfig.config, reconciled));
           continue;
         }
         try {
-          results.push(await copyObject(reconciled.entry, sourceConfig.config, targetConfig.config, reconciled));
+          results.push(await copyObject(adminClient, reconciled.entry, sourceConfig.config, targetConfig.config, reconciled));
         } catch (error) {
           const failureReason = sanitizeFailureReason(error);
           if (

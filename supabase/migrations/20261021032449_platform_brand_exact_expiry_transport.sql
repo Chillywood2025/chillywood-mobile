@@ -158,6 +158,7 @@ begin
    if not exists(select 1 from pg_trigger g where g.tgrelid=t.oid and g.tgfoid='private.guard_platform_brand_retention_references()'::regprocedure
      and g.tgenabled in ('O','A') and (g.tgtype::int & 23)=23 and g.tgqual is null) then return false; end if;
    predicate:='true';
+   if t.oid in (to_regclass('public.platform_brand_asset_review_events'),to_regclass('public.platform_admin_audit_logs')) then predicate:=format('not private.platform_brand_review_evidence_matches(%s::oid,to_jsonb(x),%L::uuid)',t.oid,r.asset_id); end if;
    if t.relname='platform_brand_assets' then predicate:=format('id<>%L::uuid',r.asset_id); end if;
    -- Only the exact proved terminal scan is evidence, not a live delivery alias.
    -- All other scans/reservations and unexpected references remain blockers.

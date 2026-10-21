@@ -44,7 +44,10 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
   Object.assign(native,{StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:'android',select:x=>x.android??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
   const config={branding:{appDisplayName:"Chi'llywood"},features:{creatorSettingsEnabled:true},runtimeControls:{uploads_enabled:true,creator_posting_enabled:true,max_upload_size_mb:500}};
   const snapshot={targets:{premium_subscription:{hasEntitlement:true}}};
+  const authorityApi=productionFunctions('_lib/accountSessionAuthority.ts',['sameAccountSessionAuthority'],{});
   const base={
+    getCurrentAccountSessionAuthoritySnapshot:()=>session.authority??null,
+    sameAccountSessionAuthority:authorityApi.sameAccountSessionAuthority,
     useSession:()=>session,useBetaProgram:()=>({isLoading:false,isActive:true,accessState:{status:'active'}}),getBetaAccessBlockCopy:()=>({title:'Beta required',body:'Blocked'}),
     DEFAULT_APP_CONFIG:config,readAppConfig:async()=>config,resolveFeatureConfig:x=>x.features,resolveBrandingConfig:x=>x.branding,
     readUserProfile:async()=>({username:'Owner',displayName:'Owner',avatarIndex:0,platformAccessVisibility:'public',watchPartyAccessRule:'open',communicationAccessRule:'open'}),normalizeUserProfile:x=>x,saveUserProfile:async x=>x,

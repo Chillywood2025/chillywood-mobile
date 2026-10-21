@@ -1,0 +1,14 @@
+begin;
+select plan(10);
+select has_table('private','supabase_original_copy_receipts','private copy receipt table exists');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.supabase_original_copy_receipts'::regclass),'receipts force row level security');
+select ok(not has_table_privilege('anon','private.supabase_original_copy_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),'anonymous role has no receipt table access');
+select ok(not has_table_privilege('authenticated','private.supabase_original_copy_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),'authenticated role has no receipt table access');
+select ok(not has_table_privilege('service_role','private.supabase_original_copy_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),'service role uses bounded RPC rather than direct receipt mutation');
+select ok(not has_function_privilege('authenticated','public.record_supabase_original_copy_receipt(uuid,text,uuid,jsonb,text,text,bigint,jsonb)','execute'),'authenticated cannot assert provider receipts');
+select ok(not has_function_privilege('anon','public.record_supabase_original_copy_receipt(uuid,text,uuid,jsonb,text,text,bigint,jsonb)','execute'),'anonymous cannot assert provider receipts');
+select ok(has_function_privilege('service_role','public.record_supabase_original_copy_receipt(uuid,text,uuid,jsonb,text,text,bigint,jsonb)','execute'),'service worker may record strictly checked copy assertions');
+select ok(not exists(select 1 from information_schema.columns where table_schema='private' and table_name='supabase_original_copy_receipts' and column_name='source_snapshot'),'permanent receipt does not retain plaintext content snapshot');
+select ok(not exists(select 1 from private.deleted_content_retention_settings where capture_enabled or media_expiry_enabled or text_expiry_enabled),'installing receipts leaves retention off');
+select * from finish();
+rollback;

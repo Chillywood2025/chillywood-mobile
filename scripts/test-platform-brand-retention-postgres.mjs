@@ -22,7 +22,7 @@ try {
  create table auth.users(id uuid primary key,deleted_at timestamptz);
  create table auth.sessions(id uuid primary key,user_id uuid,not_after timestamptz);
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
- create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,version text,created_at timestamptz default now(),last_accessed_at timestamptz,metadata jsonb,unique(bucket_id,name));
+ create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,version text,created_at timestamptz default now(),last_accessed_at timestamptz,updated_at timestamptz default now(),path_tokens text[] generated always as (string_to_array(name,'/')) stored,metadata jsonb,unique(bucket_id,name));
  create table public.videos(id text primary key,owner_id text,visibility text,moderation_status text);
  create table public.legal_holds(id uuid primary key default gen_random_uuid(),target_type text,target_id text,status text);
  create table public.brand_url_consumers(id uuid primary key default gen_random_uuid(),media_url text,metadata jsonb);
@@ -56,6 +56,15 @@ try {
  await deny(()=>db.exec('lock table public.platform_brand_assets, storage.objects in share row exclusive mode;'), error=>error.code==='25P01');
  await applyBrandMigrationStatements(db,read(migration));
  await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
+ for (const isolation of ['repeatable read','serializable']) {
+  await db.exec(`begin isolation level ${isolation}`);
+  await db.exec("insert into public.legal_holds(target_type,target_id,status) values('room_message',gen_random_uuid()::text,'active')"); checks++;
+  await db.exec('rollback');
+  await db.exec(`begin isolation level ${isolation}`);
+  await deny(()=>db.exec("insert into public.legal_holds(target_type,target_id,status) values('unknown_scope',gen_random_uuid()::text,'active')"),/brand_retention_read_committed_required/);
+  await db.exec('rollback');
+ }
+
  check((await db.query(`select policyname,qual,with_check from pg_policies where tablename in ('platform_brand_assets','platform_brand_profiles','objects') order by policyname`)).rows,policiesBefore,'existing read/session/owner predicates unchanged');
  check((await q('select owner_id from private.platform_brand_object_incarnations where asset_id=$1',[legacyId])).owner_id,'platform_rachi_official','official TEXT owner retained');
  check((await q('select count(*)::int n from private.platform_brand_object_proofs')).n,0,'migration never copies a legacy scan or fabricates evidence');
@@ -66,7 +75,8 @@ try {
  await deny(()=>db.query('delete from storage.objects where name=$1',[legacyKey]),/brand_storage_attached_incarnation_fenced/);
  await deny(()=>db.query("update storage.objects set version='replaced' where name=$1",[legacyKey]),/brand_storage_attached_incarnation_fenced/);
  await deny(()=>db.query("update platform_brand_assets set owner_user_id='changed' where id=$1",[legacyId]),/brand_retention_asset_identity_immutable/);
- await db.query('update storage.objects set last_accessed_at=clock_timestamp() where name=$1',[legacyKey]); checks++;
+ await db.query('update storage.objects set last_accessed_at=clock_timestamp(),updated_at=clock_timestamp() where name=$1',[legacyKey]); checks++;
+ await deny(()=>db.query("update storage.objects set metadata='{\"size\":999}'::jsonb where name=$1",[legacyKey]),/brand_storage_attached_incarnation_fenced/);
  await db.exec("insert into storage.objects(bucket_id,name,version) values('platform-brand-assets','unattached/upload.png','v1'); delete from storage.objects where name='unattached/upload.png';"); checks++;
  const fixture=async ({provider='supabase'}={}) => {
    const id=(await q('select gen_random_uuid() id')).id, key=`${owner}/logo/${id}.png`;

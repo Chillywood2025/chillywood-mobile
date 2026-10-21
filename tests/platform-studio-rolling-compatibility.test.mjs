@@ -247,7 +247,7 @@ test('EXPECTED old UI limitation: rejected publication can still display success
   assert.equal((await f.live()).profile.accentColor, '#222222');
 });
 
-test('old upload creates a private draft; old and current removal archive without leaving media access', async t => {
+test('legacy baseline archives; current removal rejects referenced drafts before retaining media', async t => {
   const f = await rollingFixture(t); await f.migrate();
   for (const client of [f.brand, f.current]) {
     const asset = await f.brand.uploadPlatformBrandAsset({ ownerUserId: ids.owner, assetType: 'hero_image', file: { uri: 'file:///fixture.png', name: 'fixture.png', mimeType: 'image/png', size: 1 } });
@@ -256,8 +256,18 @@ test('old upload creates a private draft; old and current removal archive withou
     await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: asset.id });
     assert.equal((await f.draft()).heroImageAssetId, asset.id);
     assert.equal(await f.live(), null);
-    await client.removePlatformBrandAsset(asset);
-    await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: null });
+    if (client === f.current) {
+      await assert.rejects(client.removePlatformBrandAsset(asset), /brand_asset_in_use/);
+      assert.equal((await f.draft()).heroImageAssetId, asset.id, 'Rejected current removal preserves the selected draft');
+      assert.equal((await f.db.query('select deleted_at from platform_brand_assets where id=$1', [asset.id])).rows[0].deleted_at, null);
+      await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: null });
+      await client.removePlatformBrandAsset(asset);
+    } else {
+      // This historical fixture intentionally omits the new retention triggers;
+      // native full-schema tests cover the new direct-owner in-use rejection.
+      await client.removePlatformBrandAsset(asset);
+      await f.brand.savePlatformBrandProfileDraft(ids.owner, { heroImageAssetId: null });
+    }
     assert.equal((await f.draft()).heroImageAssetId, null);
     assert.equal((await f.db.query('select asset_state from platform_brand_assets where id=$1', [asset.id])).rows[0].asset_state, 'archived');
     assert.equal((await f.brand.readPlatformBrandStudio(ids.owner)).assets.length, 0, 'Studio filters deleted rows out');

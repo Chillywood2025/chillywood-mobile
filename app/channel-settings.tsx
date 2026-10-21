@@ -271,6 +271,7 @@ import {
   normalizePlatformBrandThemePreset,
   publishPlatformBrandProfile,
   readPlatformBrandStudio,
+  readPlatformBrandAssetRemovalStatus,
   resolveBrandPublishReadbackStatus,
   removePlatformBrandAsset,
   savePlatformBrandProfileDraft,
@@ -1363,11 +1364,40 @@ export function ChannelStudioScreen() {
   const contentVisibility = contentStatusFilter === "published" ? "public" : contentStatusFilter === "drafts" ? "draft" : contentStatusFilter === "circle" ? "circle" : undefined;
   const contentUsesQuery = !!contentSearchQuery.trim() || !!contentVisibility || contentSort === "oldest";
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const profileDraftOwnershipRef = useRef({ revision: 0, dirty: false });
   const [platformVisibilitySaving, setPlatformVisibilitySaving] = useState<AccessVisibility | null>(null);
   const [platformVisibilityNotice, setPlatformVisibilityNotice] = useState<string | null>(null);
   const savedProfilePublishSnapshotRef = useRef<string | null>(null);
-  const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
+  const [rawPlatformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
+  const [confirmedBrandRemovals, setConfirmedBrandRemovals] = useState<{
+    authority: ReturnType<typeof getCurrentAccountSessionAuthoritySnapshot>;
+    ids: ReadonlySet<string>;
+  } | null>(null);
+  const currentBrandAuthority = confirmedBrandRemovals ? getCurrentAccountSessionAuthoritySnapshot() : null;
+  const confirmedBrandRemovalIds = confirmedBrandRemovals
+    && currentBrandAuthority?.userId === String(user?.id ?? "")
+    && sameAccountSessionAuthority(confirmedBrandRemovals.authority, currentBrandAuthority)
+    ? confirmedBrandRemovals.ids : null;
+  // Apply exact tombstones to every displayed read, including older in-flight
+  // responses. Keep saved/local design IDs intact and scope evidence to session.
+  const platformBranding = useMemo(() => {
+    if (!rawPlatformBranding || !confirmedBrandRemovalIds) return rawPlatformBranding;
+    const visible = (asset: PlatformBrandAsset | null) => asset && confirmedBrandRemovalIds.has(asset.id) ? null : asset;
+    return {
+      ...rawPlatformBranding,
+      assets: rawPlatformBranding.assets.filter((asset) => !confirmedBrandRemovalIds.has(asset.id)),
+      heroImage: visible(rawPlatformBranding.heroImage),
+      heroVideo: visible(rawPlatformBranding.heroVideo),
+      heroPoster: visible(rawPlatformBranding.heroPoster),
+      backgroundImage: visible(rawPlatformBranding.backgroundImage),
+      avatar: visible(rawPlatformBranding.avatar),
+      logo: visible(rawPlatformBranding.logo),
+      watermark: visible(rawPlatformBranding.watermark),
+    };
+  }, [rawPlatformBranding, confirmedBrandRemovalIds]);
   const [brandDraft, setBrandDraft] = useState<PlatformBrandProfile | null>(null);
+  const brandDraftOwnershipRef = useRef({ revision: 0, dirty: false });
+  const [brandClearedDesignAssets, setBrandClearedDesignAssets] = useState<PlatformBrandAsset[]>([]);
   const [brandLoading, setBrandLoading] = useState(false);
   const [brandSaving, setBrandSaving] = useState(false);
   const [brandNotice, setBrandNotice] = useState<string | null>(null);
@@ -1707,6 +1737,7 @@ export function ChannelStudioScreen() {
       setPlatformVisibilitySaving(null);
       setPlatformVisibilityNotice(null);
       setBrandDraft(null);
+      setBrandClearedDesignAssets([]);
       setPlatformRoleMemberships([]);
       setPremiumEntitlement(null);
       setPremiumSnapshotActive(false);
@@ -1717,6 +1748,9 @@ export function ChannelStudioScreen() {
       return;
     }
     let active = true;
+    const brandReadAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    const brandReadRevision = brandDraftOwnershipRef.current.revision;
+    const profileReadRevision = profileDraftOwnershipRef.current.revision;
 
     Promise.all([
       readUserProfile(),
@@ -1786,8 +1820,11 @@ export function ChannelStudioScreen() {
       ]) => {
         if (!active) return;
         const normalizedProfile = normalizeUserProfile(resolvedProfile);
-        setProfile(normalizedProfile);
-        savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(normalizedProfile);
+        if (sameAccountSessionAuthority(brandReadAuthority, getCurrentAccountSessionAuthoritySnapshot())
+          && !profileDraftOwnershipRef.current.dirty && profileDraftOwnershipRef.current.revision === profileReadRevision) {
+          setProfile(normalizedProfile);
+          savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(normalizedProfile);
+        }
         setSettingsEnabled(resolveFeatureConfig(resolvedConfig).creatorSettingsEnabled);
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
         setUploadsEnabled(resolvedConfig.runtimeControls.uploads_enabled);
@@ -1821,7 +1858,10 @@ export function ChannelStudioScreen() {
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
-        setBrandDraft(resolvedPlatformBranding?.profile ?? null);
+        if (sameAccountSessionAuthority(brandReadAuthority, getCurrentAccountSessionAuthoritySnapshot())
+          && !brandDraftOwnershipRef.current.dirty && brandDraftOwnershipRef.current.revision === brandReadRevision) {
+          setBrandDraft(resolvedPlatformBranding?.profile ?? null);
+        }
         if (!resolvedPlatformBranding) setBrandNotice("Brand Studio could not load. Retry before editing or publishing.");
         setPlatformRoleMemberships(resolvedPlatformRoleMemberships);
         setPremiumEntitlement(resolvedPremiumEntitlement);
@@ -1831,8 +1871,11 @@ export function ChannelStudioScreen() {
       .catch(() => {
         if (!active) return;
         const fallbackProfile = normalizeUserProfile({ username: "", avatarIndex: 0 });
-        setProfile(fallbackProfile);
-        savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(fallbackProfile);
+        if (sameAccountSessionAuthority(brandReadAuthority, getCurrentAccountSessionAuthoritySnapshot())
+          && !profileDraftOwnershipRef.current.dirty && profileDraftOwnershipRef.current.revision === profileReadRevision) {
+          setProfile(fallbackProfile);
+          savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(fallbackProfile);
+        }
         setUploadsEnabled(DEFAULT_APP_CONFIG.runtimeControls.uploads_enabled);
         setCreatorPostingEnabled(DEFAULT_APP_CONFIG.runtimeControls.creator_posting_enabled);
         setMaxUploadSizeMb(DEFAULT_APP_CONFIG.runtimeControls.max_upload_size_mb);
@@ -2741,6 +2784,7 @@ export function ChannelStudioScreen() {
 
   const updateProfile = (patch: Partial<UserProfile>) => {
     if (saving || brandSaving || brandProfileSaveInFlightRef.current) return;
+    profileDraftOwnershipRef.current = { revision: profileDraftOwnershipRef.current.revision + 1, dirty: true };
     setProfile((prev) => normalizeUserProfile({ ...(prev ?? {}), ...patch }));
     setNotice(null);
   };
@@ -3246,21 +3290,29 @@ export function ChannelStudioScreen() {
     if (!ownerUserId) {
       setPlatformBranding(null);
       setBrandDraft(null);
+      setBrandClearedDesignAssets([]);
       return null;
     }
 
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const revision = brandDraftOwnershipRef.current.revision;
+    const isCurrent = () => replayActionsMountedRef.current
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
     setBrandLoading(true);
     setBrandNotice(null);
     try {
       const bundle = await readPlatformBrandStudio(ownerUserId, { throwOnUnavailable: true });
+      if (!isCurrent()) return null;
       setPlatformBranding(bundle);
-      setBrandDraft(bundle.profile);
+      if (!brandDraftOwnershipRef.current.dirty && brandDraftOwnershipRef.current.revision === revision) {
+        setBrandDraft(bundle.profile);
+      }
       return bundle;
     } catch {
-      setBrandNotice("Brand Studio could not load Platform media right now.");
+      if (isCurrent()) setBrandNotice("Brand Studio could not load Platform media right now.");
       return null;
     } finally {
-      setBrandLoading(false);
+      if (isCurrent()) setBrandLoading(false);
     }
   }, [user?.id]);
 
@@ -3580,6 +3632,7 @@ export function ChannelStudioScreen() {
 
   const updateBrandDraft = (patch: Partial<PlatformBrandProfile>) => {
     if (brandSaving || brandBusyAssetType || brandProfileSaveInFlightRef.current) return;
+    brandDraftOwnershipRef.current = { revision: brandDraftOwnershipRef.current.revision + 1, dirty: true };
     setBrandDraft((current) => {
       const source = current ?? platformBranding?.profile;
       if (!source) return current;
@@ -3662,8 +3715,15 @@ export function ChannelStudioScreen() {
   const saveCurrentProfileSettings = async () => {
     const normalized = getNormalizedProfileForSave();
     if (!normalized) throw new Error("Platform profile unavailable.");
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const revision = profileDraftOwnershipRef.current.revision;
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before profile save.");
     await saveUserProfileRemote(normalized, String(user?.id ?? ""));
-    setProfile((current) => current === profile ? normalized : current);
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before profile save confirmation.");
+    if (profileDraftOwnershipRef.current.revision === revision) {
+      profileDraftOwnershipRef.current = { revision: revision + 1, dirty: false };
+      setProfile(normalized);
+    }
     savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(normalized);
     return normalized;
   };
@@ -3672,11 +3732,19 @@ export function ChannelStudioScreen() {
     const normalized = getNormalizedProfileForSave();
     if (!normalized) throw new Error("Platform profile unavailable.");
     const nextSnapshot = getProfilePublishSnapshot(normalized);
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const revision = profileDraftOwnershipRef.current.revision;
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before profile save.");
     if (savedProfilePublishSnapshotRef.current === nextSnapshot) {
+      profileDraftOwnershipRef.current = { revision: revision + 1, dirty: false };
       return { saved: false, profile: normalized };
     }
     await saveUserProfileRemote(normalized, String(user?.id ?? ""));
-    setProfile((current) => current === profile ? normalized : current);
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before profile save confirmation.");
+    if (profileDraftOwnershipRef.current.revision === revision) {
+      profileDraftOwnershipRef.current = { revision: revision + 1, dirty: false };
+      setProfile(normalized);
+    }
     savedProfilePublishSnapshotRef.current = nextSnapshot;
     return { saved: true, profile: normalized };
   };
@@ -3696,27 +3764,43 @@ export function ChannelStudioScreen() {
       themePreset: normalizePlatformBrandThemePreset(patch?.themePreset ?? draft.themePreset),
     };
 
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const revision = brandDraftOwnershipRef.current.revision;
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before Brand save.");
     const savedProfile = await savePlatformBrandProfileDraft(ownerUserId, nextDraft);
-    setBrandDraft(savedProfile);
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before Brand save confirmation.");
+    if (brandDraftOwnershipRef.current.revision === revision) {
+      brandDraftOwnershipRef.current = { revision: revision + 1, dirty: false };
+      setBrandDraft(savedProfile);
+    }
     await loadPlatformBranding();
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed during Brand save readback.");
     return savedProfile;
   };
 
   const saveBrandDraftPatch = async (patch?: Partial<PlatformBrandProfile>) => {
     if (brandProfileSaveInFlightRef.current) return null;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return null;
     brandProfileSaveInFlightRef.current = true;
     setBrandSaving(true);
     setBrandNotice(null);
     try {
       const savedProfile = await persistBrandDraftPatch(patch);
+      if (!isCurrent()) return null;
       setBrandNotice("Draft changes saved. Publish Changes when you are ready to update your public Platform.");
       return savedProfile;
     } catch (error) {
+      if (!isCurrent()) return null;
       setBrandNotice(getUserFacingErrorMessage(error, "Unable to save Brand Studio changes right now."));
       return null;
     } finally {
-      brandProfileSaveInFlightRef.current = false;
-      setBrandSaving(false);
+      if (isCurrent()) {
+        brandProfileSaveInFlightRef.current = false;
+        setBrandSaving(false);
+      }
     }
   };
 
@@ -3728,15 +3812,27 @@ export function ChannelStudioScreen() {
     }
 
     const selectedAssetIds = getBrandSelectedAssetIds(draft);
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const revision = brandDraftOwnershipRef.current.revision;
     const savedProfile = await publishPlatformBrandProfile(ownerUserId, draft);
-    setBrandDraft(savedProfile);
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before Brand publish confirmation.");
+    if (brandDraftOwnershipRef.current.revision === revision) {
+      brandDraftOwnershipRef.current = { revision: revision + 1, dirty: false };
+      setBrandDraft(savedProfile);
+    }
     const bundle = await loadPlatformBranding();
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed during Brand publish readback.");
     const readback = await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds).catch(() => null);
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed during Brand publish readback.");
     return { bundle, readback };
   };
 
   const saveBrandStudioDraftAndProfile = async () => {
     if (brandProfileSaveInFlightRef.current) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
     brandProfileSaveInFlightRef.current = true;
     setBrandSaving(true);
     setSaving(true);
@@ -3745,6 +3841,7 @@ export function ChannelStudioScreen() {
     try {
       await persistBrandDraftPatch();
     } catch (error) {
+      if (!isCurrent()) return;
       setBrandNotice(`${getUserFacingErrorMessage(error, "Unable to save Brand Studio changes.")} Platform name and tagline were not saved from this action.`);
       brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
@@ -3753,19 +3850,28 @@ export function ChannelStudioScreen() {
     }
 
     try {
+      if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before profile save.");
       await saveCurrentProfileSettings();
+      if (!isCurrent()) return;
       setBrandNotice("Draft changes saved. Platform name and tagline saved. Publish Changes when you are ready to update your public Platform.");
     } catch {
+      if (!isCurrent()) return;
       setBrandNotice("Brand Studio draft saved, but Platform name or tagline changes could not be saved. Retry Save Draft to finish profile details.");
     } finally {
-      brandProfileSaveInFlightRef.current = false;
-      setBrandSaving(false);
-      setSaving(false);
+      if (isCurrent()) {
+        brandProfileSaveInFlightRef.current = false;
+        setBrandSaving(false);
+        setSaving(false);
+      }
     }
   };
 
   const publishBrandStudioAndProfile = async () => {
     if (brandProfileSaveInFlightRef.current) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
     brandProfileSaveInFlightRef.current = true;
     setBrandSaving(true);
     setSaving(true);
@@ -3775,6 +3881,7 @@ export function ChannelStudioScreen() {
     try {
       publishResult = await persistBrandPublish();
     } catch (error) {
+      if (!isCurrent()) return;
       setBrandNotice(getUserFacingErrorMessage(error, "Brand changes could not be published. Your edits are preserved; retry after checking the media and connection."));
       brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
@@ -3783,14 +3890,19 @@ export function ChannelStudioScreen() {
     }
 
     try {
+      if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before profile save.");
       await saveCurrentProfileSettingsIfNeeded();
+      if (!isCurrent()) return;
       setBrandNotice(getBrandPublishNotice(publishResult?.readback, true));
     } catch {
+      if (!isCurrent()) return;
       setBrandNotice(getBrandPublishNotice(publishResult?.readback, false));
     } finally {
-      brandProfileSaveInFlightRef.current = false;
-      setBrandSaving(false);
-      setSaving(false);
+      if (isCurrent()) {
+        brandProfileSaveInFlightRef.current = false;
+        setBrandSaving(false);
+        setSaving(false);
+      }
     }
   };
 
@@ -3914,40 +4026,99 @@ export function ChannelStudioScreen() {
     }
   };
 
-  const confirmRemoveBrandAsset = (assetType: PlatformBrandAssetType, asset: PlatformBrandAsset | null) => {
-    if (!asset) {
-      setBrandNotice("No Platform asset is selected for that section.");
-      return;
+  const removeBrandAssetFromDesign = async (assetType: "hero_image" | "background_image") => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
+    const asset = assetType === "hero_image" ? platformBranding?.heroImage : platformBranding?.backgroundImage;
+    const patch: Partial<PlatformBrandProfile> = assetType === "hero_image"
+      ? { heroImageAssetId: null } : { backgroundImageAssetId: null };
+    const savedProfile = await saveBrandDraftPatch(patch);
+    if (!isCurrent()) return;
+    if (savedProfile) {
+      // Keep a just-cleared older selection reachable through explicit publish
+      // and removal, even when it falls outside the recent-media read window.
+      if (asset) setBrandClearedDesignAssets((current) => [asset, ...current.filter((item) => item.id !== asset.id)].slice(0, 7));
+      setBrandNotice("Removed from your saved design. The upload is retained. Publish Changes to update your public Platform.");
     }
+  };
 
+  const confirmRemoveUploadedBrandAsset = (asset: PlatformBrandAsset) => {
+    if (brandSaving || brandBusyAssetType || brandProfileSaveInFlightRef.current) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
     Alert.alert(
-      "Remove Platform asset?",
-      "This removes the asset from Brand Studio drafts. Public assets already reviewed may stop appearing after you publish.",
+      "Remove uploaded media?",
+      "This removes the upload from your library, not from a design. Clear any design references and publish those changes first. Removed uploads are retained under the retention policy, not immediately erased.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Remove",
+          text: "Remove uploaded media",
           style: "destructive",
           onPress: () => {
+            if (!isCurrent() || brandProfileSaveInFlightRef.current) return;
+            brandProfileSaveInFlightRef.current = true;
+            setBrandSaving(true);
+            setBrandNotice(null);
             void (async () => {
+              let removed = false;
               try {
-                setBrandSaving(true);
                 await removePlatformBrandAsset(asset);
-                const patch: Partial<PlatformBrandProfile> = {};
-                if (assetType === "hero_image") patch.heroImageAssetId = null;
-                if (assetType === "hero_video") patch.heroVideoAssetId = null;
-                if (assetType === "hero_poster") patch.heroPosterAssetId = null;
-                if (assetType === "background_image") patch.backgroundImageAssetId = null;
-                if (assetType === "avatar") patch.avatarAssetId = null;
-                if (assetType === "logo") patch.logoAssetId = null;
-                if (assetType === "watermark") patch.watermarkAssetId = null;
-                const savedProfile = await saveBrandDraftPatch(patch);
-                if (!savedProfile) return;
-                setBrandNotice("Platform asset removed from Brand Studio.");
-              } catch {
-                setBrandNotice("Unable to remove that Platform asset right now.");
+                removed = true;
+                if (!isCurrent()) return;
+                setConfirmedBrandRemovals((current) => ({
+                  authority,
+                  ids: new Set([...(current && sameAccountSessionAuthority(current.authority, authority) ? current.ids : []), asset.id]),
+                }));
+                const bundle = await readPlatformBrandStudio(asset.ownerUserId, { throwOnUnavailable: true });
+                if (!isCurrent()) return;
+                // Refresh the owner library without discarding unsaved design edits.
+                setPlatformBranding(bundle);
+                setBrandClearedDesignAssets((current) => current.filter((item) => item.id !== asset.id));
+                setBrandNotice("Uploaded media removed from your library and retained under the retention policy. Your design and public Platform were not changed.");
+              } catch (error) {
+                if (!isCurrent()) return;
+                if (removed) {
+                  setBrandNotice("Media removal was saved, but the library could not refresh. Reopen Brand Studio to refresh; your design edits are preserved.");
+                  return;
+                }
+                // The helper surfaces a known in-use rejection as a safe,
+                // actionable error. Other failures may follow a committed RPC.
+                if (error && typeof error === "object" && "code" in error && error.code === "brand_draft") {
+                  setBrandNotice(getUserFacingErrorMessage(error, "Remove this media from your design and publish the change before deleting it."));
+                  return;
+                }
+                try {
+                  const [bundle, removalStatus] = await Promise.all([
+                    readPlatformBrandStudio(asset.ownerUserId, { throwOnUnavailable: true }),
+                    readPlatformBrandAssetRemovalStatus(asset),
+                  ]);
+                  if (!isCurrent()) return;
+                  // Recent-list absence is NOT proof: only the exact owner's
+                  // returned tombstone can confirm an uncertain removal.
+                  setPlatformBranding(bundle);
+                  if (removalStatus === "removed") {
+                    setConfirmedBrandRemovals((current) => ({
+                      authority,
+                      ids: new Set([...(current && sameAccountSessionAuthority(current.authority, authority) ? current.ids : []), asset.id]),
+                    }));
+                    setBrandClearedDesignAssets((current) => current.filter((item) => item.id !== asset.id));
+                    setBrandNotice("Uploaded media removal was confirmed. The upload is retained under the retention policy. Your unsaved design edits are preserved.");
+                  } else if (removalStatus === "present") {
+                    setBrandNotice("Removal could not be confirmed. This upload is still present. Reopen Brand Studio to check its status before trying again; your design edits are preserved.");
+                  } else {
+                    setBrandNotice("The removal outcome is unknown. Reopen Brand Studio to check its status before trying again; your design edits are preserved.");
+                  }
+                } catch {
+                  if (isCurrent()) setBrandNotice("The removal outcome is unknown and its status could not be refreshed. Reopen Brand Studio before trying again; your design edits are preserved.");
+                }
               } finally {
-                setBrandSaving(false);
+                if (isCurrent()) {
+                  brandProfileSaveInFlightRef.current = false;
+                  setBrandSaving(false);
+                }
               }
             })();
           },
@@ -5285,6 +5456,12 @@ export function ChannelStudioScreen() {
     && asset.assetState !== "archived"
     && ["hero_image", "background_image", "avatar", "logo"].includes(asset.assetType)
   ));
+  const brandUploadedAssets = Array.from(new Map([
+    ...brandClearedDesignAssets, ...(platformBranding?.assets ?? []), platformBranding?.heroImage, platformBranding?.heroVideo,
+    platformBranding?.heroPoster, platformBranding?.backgroundImage, platformBranding?.avatar,
+    platformBranding?.logo, platformBranding?.watermark,
+  ].filter((asset): asset is PlatformBrandAsset => !!asset && !asset.deletedAt
+    && asset.ownerUserId === String(user?.id ?? "") && !confirmedBrandRemovalIds?.has(asset.id)).map((asset) => [asset.id, asset])).values());
   const brandCheckingCount = brandStudioAssets.filter((asset) => asset.scanStatus === "pending_scan" || asset.scanStatus === "scanning").length;
   const brandBlockedCount = brandStudioAssets.filter((asset) => asset.scanStatus === "malware_detected" || asset.scanStatus === "scan_failed" || asset.scanStatus === "quarantined").length;
   const brandReadyToPublishCount = brandStudioAssets.filter((asset) => (
@@ -7337,11 +7514,13 @@ export function ChannelStudioScreen() {
                       <TouchableOpacity
                         style={styles.eventSecondaryButton}
                         activeOpacity={0.88}
-                        onPress={() => confirmRemoveBrandAsset("hero_image", platformBranding.heroImage)}
+                        disabled={heroBusy || brandSaving || saving}
+                        onPress={() => void removeBrandAssetFromDesign("hero_image")}
                         testID="brand-hero-remove-image-button"
-                        accessibilityLabel="Remove Brand Studio Hero Image"
+                        accessibilityLabel="Remove Hero Image from design"
                       >
-                        <Text style={styles.eventSecondaryButtonText}>Remove</Text>
+                        <Text style={styles.eventSecondaryButtonText}>Remove from design</Text>
+                        <Text style={styles.studioActionButtonCopy}>Saves your current draft without this image. Publish separately.</Text>
                       </TouchableOpacity>
                     </View>
                   </>
@@ -7428,11 +7607,13 @@ export function ChannelStudioScreen() {
                       <TouchableOpacity
                         style={styles.eventSecondaryButton}
                         activeOpacity={0.88}
-                        onPress={() => confirmRemoveBrandAsset("background_image", platformBranding.backgroundImage)}
+                        disabled={backgroundBusy || brandSaving || saving}
+                        onPress={() => void removeBrandAssetFromDesign("background_image")}
                         testID="brand-background-remove-image-button"
-                        accessibilityLabel="Remove Brand Studio Background Image"
+                        accessibilityLabel="Remove Background Image from design"
                       >
-                        <Text style={styles.eventSecondaryButtonText}>Remove</Text>
+                        <Text style={styles.eventSecondaryButtonText}>Remove from design</Text>
+                        <Text style={styles.studioActionButtonCopy}>Saves your current draft without this image. Publish separately.</Text>
                       </TouchableOpacity>
                     </View>
                   </>
@@ -7615,6 +7796,38 @@ export function ChannelStudioScreen() {
             <Text style={styles.permissionCopy}>
               Save Draft keeps media owner-only. Preview Platform is the reviewed visitor view; use Preview Brand Draft to check saved draft media before publish. Publish Changes is required before eligible safe assets can appear publicly.
             </Text>
+          </View>
+        </View>
+
+        <View style={styles.studioAccordionCard} testID="brand-uploaded-media-library">
+          <View style={styles.studioAccordionBody}>
+            <Text style={styles.studioAccordionTitle}>Recent uploaded media</Text>
+            <Text style={styles.permissionCopy}>
+              Shows up to 50 recent uploads plus selected and just-cleared media, not your complete library. Remove from design saves a draft only. Publish Changes updates your public Platform. Remove uploaded media is separate; retained uploads are not immediately erased.
+            </Text>
+            {brandUploadedAssets.length === 0 ? <Text style={styles.permissionCopy}>No recent or selected uploads to show.</Text> : null}
+            {brandUploadedAssets.map((asset) => (
+              <View key={asset.id} style={styles.brandUploadedMediaRow}>
+                <View style={styles.studioAccordionCopy}>
+                  <Text style={styles.studioAccordionTitle} numberOfLines={1}>
+                    {asset.originalFileName || asset.assetType.replace(/_/g, " ")}
+                  </Text>
+                  <Text style={styles.permissionCopy}>
+                    {formatPlatformBrandAssetStatus(asset)}{getBrandSelectedAssetIds(activeBrandProfile).includes(asset.id) ? " · Selected in design" : ""}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  activeOpacity={0.88}
+                  disabled={brandSaving || saving || !!brandBusyAssetType}
+                  onPress={() => confirmRemoveUploadedBrandAsset(asset)}
+                  testID={`brand-uploaded-remove-${asset.id}`}
+                  accessibilityLabel={`Remove uploaded media ${asset.originalFileName || asset.assetType.replace(/_/g, " ")} ${asset.id}`}
+                >
+                  <Text style={styles.eventSecondaryButtonText}>Remove uploaded media</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
         </View>
 
@@ -10971,6 +11184,13 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  brandUploadedMediaRow: {
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.12)",
+    alignItems: "flex-start",
   },
   brandAssetThumb: {
     width: 46,

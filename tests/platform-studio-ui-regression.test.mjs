@@ -14,9 +14,14 @@ const file = "app/channel-settings.tsx";
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const settle = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const noop = () => {};
+const { sameAccountSessionAuthority } = loadStudioFunctions('_lib/accountSessionAuthority.ts', ['sameAccountSessionAuthority'], {});
 function fixture(initial, bindings = {}) {
   const state = { ...initial };
-  const context = { React, Promise, Date, Map, Set, console, useCallback: callback => callback, ...bindings };
+  const authority = { userId: 'owner', accountId: 'owner', state: 'ACTIVE', restoreOnly: false, sessionGeneration: 'fixture-session' };
+  const context = { React, Promise, Date, Map, Set, console, useCallback: callback => callback,
+    getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
+    replayActionsMountedRef: { current: true }, brandDraftOwnershipRef: { current: { revision: 0, dirty: false } },
+    ...bindings };
   for (const name of Object.keys(initial)) {
     Object.defineProperty(context, name, { get: () => state[name], configurable: true });
     context[`set${name[0].toUpperCase()}${name.slice(1)}`] = value => { state[name] = typeof value === "function" ? value(state[name]) : value; };
@@ -151,6 +156,29 @@ test("rejected Brand publication cannot acknowledge previous live media or a med
     const api = h.load(names); await api.publishBrandStudioAndProfile();
     assert.match(h.state.brandNotice, /not changed/); assert.equal(h.state.brandDraft, draft); assert.equal(h.context.brandProfileSaveInFlightRef.current, false);
   }
+});
+
+test("extracted Brand rejection cannot release replacement-session lock or replace its notice", async () => {
+  const gate = deferred();
+  const first = { userId: 'owner', accountId: 'owner', state: 'ACTIVE', restoreOnly: false, sessionGeneration: 'first' };
+  let authority = first, writes = 0;
+  const h = fixture({ brandSaving: false, saving: false, brandNotice: null, notice: null }, {
+    brandProfileSaveInFlightRef: { current: false },
+    getCurrentAccountSessionAuthoritySnapshot: () => authority,
+    persistBrandPublish: async () => { writes++; await gate.promise; },
+  });
+  const api = h.load(['publishBrandStudioAndProfile']);
+  const pending = api.publishBrandStudioAndProfile();
+  assert.equal(writes, 1);
+  authority = { ...first, sessionGeneration: 'replacement' };
+  h.state.brandNotice = 'Replacement operation';
+  gate.reject(Error('old rejection')); await pending;
+  assert.equal(h.state.brandNotice, 'Replacement operation');
+  assert.equal(h.state.brandSaving, true); assert.equal(h.context.brandProfileSaveInFlightRef.current, true);
+  h.context.replayActionsMountedRef.current = false;
+  h.context.brandProfileSaveInFlightRef.current = false;
+  await api.publishBrandStudioAndProfile();
+  assert.equal(writes, 1, 'detached callback cannot begin another write');
 });
 
 test("Paid setup rejects mismatched readback and acknowledges only the exact creator/video/price", async () => {
