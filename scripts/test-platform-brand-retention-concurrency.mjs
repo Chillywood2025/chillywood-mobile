@@ -133,14 +133,28 @@ try{
   query(`delete from legal_holds where target_id=${lit(owner)}`);
   await ordered(claim,hold,r=>{assert.notEqual(r.code,0);assert.match(r.stderr,/preservation_unavailable/);});
   await ordered(claim,`insert into public.brand_retention_native_consumer(media_url) values(${lit('https://example.invalid/'+f.key)})`,r=>{assert.notEqual(r.code,0);assert.match(r.stderr,/retained_reference_forbidden/);});
-  await ordered(claim,`set request.jwt.claim.role='authenticated';delete from storage.objects where name=${lit(f.key)}`,r=>{assert.notEqual(r.code,0);assert.match(r.stderr,/incarnation_fenced/);});
+  // Native Storage rejects direct SQL DELETE at statement level, before Brand
+  // row triggers can join the latch queue. Preserve that boundary explicitly;
+  // this is not evidence of Storage API/provider deletion behavior.
+  const metadataBefore=query(`select to_jsonb(o)::text from storage.objects o where name=${lit(f.key)}`);
+  assert.ok(metadataBefore);
+  const deletion=docker(args(),`\\set VERBOSITY verbose\nbegin;set request.jwt.claims='{"role":"authenticated"}';set request.jwt.claim.role='authenticated';delete from storage.objects where name=${lit(f.key)};rollback;`);
+  assert.equal(deletion.status,3,'native direct SQL deletion must fail');
+  assert.match(deletion.stderr,/42501/);
+  assert.match(deletion.stderr,/Direct deletion from storage tables is not allowed/);
+  assert.match(deletion.stderr,/storage\.protect_delete/);
+  assert.equal(query(`select to_jsonb(o)::text from storage.objects o where name=${lit(f.key)}`),metadataBefore,'denied direct deletion preserves exact metadata');checks++;
+  // A version UPDATE really reaches the row guard. Observe its independent
+  // backend queued behind the claim, then reject the incarnation replacement.
+  await ordered(claim,`set request.jwt.claim.role='authenticated';update storage.objects set version='claim-race-replacement' where name=${lit(f.key)}`,r=>{assert.notEqual(r.code,0);assert.match(r.stderr,/brand_storage_attached_incarnation_fenced/);});
+  assert.equal(query(`select to_jsonb(o)::text from storage.objects o where name=${lit(f.key)}`),metadataBefore,'queued replacement also preserves exact metadata');
  }
  {
   const f=fixture({reference:true});due(f);
   await ordered(`update brand_retention_native_consumer set media_url=media_url where media_url=${lit('https://example.invalid/'+f.key)}`,
    `select public.claim_platform_brand_retention_expiry(${lit(f.id)})`,r=>{assert.equal(r.code,0,r.stderr);assert.match(r.stdout,/references_or_coverage_blocked/);});
  }
- console.log(`Brand retention native PostgreSQL: ${checks} observed competing-transaction checks passed; no provider operations.`);
+ console.log(`Brand retention native PostgreSQL: ${checks} native controls passed, including observed competing-transaction queues and direct SQL deletion denial; Storage API/provider deletion unproved.`);
 } finally {
  if(cloned)ok(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');
  if(before!==undefined)assert.equal(query(fingerprint,'postgres'),before,'local source unchanged');
