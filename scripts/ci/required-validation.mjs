@@ -209,6 +209,25 @@ export async function evaluateWorkflowRun({ repository, runId, token }) {
   const [owner, repo] = repository.split("/");
   const run = await githubJson(`/repos/${owner}/${repo}/actions/runs/${runId}`, token);
   const pulls = Array.isArray(run.pull_requests) ? run.pull_requests : [];
+  // GitHub can remove the run's PR association after merge. This path may
+  // suppress obsolete reporting only; it must never issue merge authority.
+  if (pulls.length === 0 && run.event === "pull_request"
+    && run.name === policy.workflowName && run.path === policy.workflowPath
+    && run.status === "completed" && run.conclusion === "success" && SHA.test(run.head_sha)) {
+    const associated = await githubPages(`/repos/${owner}/${repo}/commits/${run.head_sha}/pulls`, token);
+    if (associated.length === 1) {
+      const candidate = associated[0];
+      const pull = await githubJson(`/repos/${owner}/${repo}/pulls/${candidate.number}`, token);
+      if (pull.number === candidate.number && Number.isInteger(pull.number) && pull.number > 0
+        && pull.state === "closed" && pull.merged === true && typeof pull.merged_at === "string"
+        && Number.isFinite(Date.parse(pull.merged_at)) && SHA.test(pull.merge_commit_sha)
+        && pull.head?.sha === run.head_sha && pull.head?.ref === run.head_branch
+        && pull.head?.repo?.full_name === repository && pull.base?.repo?.full_name === repository
+        && pull.base?.ref === policy.baseBranch) {
+        return { disposition: "skipped", reason: "SOURCE_PULL_REQUEST_ALREADY_MERGED", prNumber: pull.number, headSha: run.head_sha, repository };
+      }
+    }
+  }
   if (pulls.length !== 1) throw new Error("VALIDATION_PULL_REQUEST_IDENTITY_INVALID");
   const prNumber = pulls[0].number;
   const [repositoryMetadata, pull, files, runJobs, reviews] = await Promise.all([
@@ -324,6 +343,10 @@ async function main() {
     const runId = process.env.SOURCE_RUN_ID;
     if (!repository || !token || !runId) throw new Error("VALIDATION_PUBLISH_CONTEXT_MISSING");
     const result = await evaluateWorkflowRun({ repository, runId, token });
+    if (result.disposition === "skipped") {
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      return;
+    }
     const appToken = await publisherToken(repository);
     try {
       await publishCheck({ repository, token: appToken, result, detailsUrl: `${process.env.GITHUB_SERVER_URL}/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}` });
