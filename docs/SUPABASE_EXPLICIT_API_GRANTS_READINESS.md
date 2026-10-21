@@ -18,7 +18,7 @@ evidence of a current outage or an October 30 revocation of existing access.
 
 ## Forward-only source repair
 
-`20261021014627_explicit_service_api_grants.sql` adds only the named operations
+`20261021152932_explicit_service_api_grants.sql` adds only the named operations
 consumed by existing server code. The independently checked inventory in
 `tests/fixtures/explicit-api-service-grants.json` ties every table and operation
 to actual TypeScript consumers. No historical migration is edited.

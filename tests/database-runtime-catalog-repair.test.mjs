@@ -170,7 +170,7 @@ const legacyRetentionFunctionKeys = new Set([
 ]);
 
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
-const explicitApiGrantFiles = ['20261021014627_explicit_service_api_grants.sql'];
+const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
 const collectionOrderingFunctionKeys = new Set([
   'private.assert_user_collection_session/0', 'private.user_collection_projection_value/3',
   'public.read_my_collection_state/3', 'public.mutate_my_collection_state/5',
