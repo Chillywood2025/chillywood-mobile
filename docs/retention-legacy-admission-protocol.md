@@ -2,7 +2,7 @@
 
 ## Source scope
 
-The forward-only migration `20261021021025_deleted_media_legacy_provenance_adapter.sql`
+The forward-only migration `20261021134020_deleted_media_legacy_provenance_adapter.sql`
 adds a distinct immutable legacy-provenance identity. It does not fabricate upload
 reservations or verified/attached timestamps. Enrollment is privileged database
 work, not a consumer or service-role RPC, and requires separately reviewed exact

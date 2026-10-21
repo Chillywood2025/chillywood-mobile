@@ -7,9 +7,9 @@ import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
 const brandRetentionFiles = [
-  '20261021030421_platform_brand_exact_retention_lifecycle.sql',
-  '20261021031016_media_scan_exact_byte_receipts.sql',
-  '20261021032449_platform_brand_exact_expiry_transport.sql',
+  '20261021134043_platform_brand_exact_retention_lifecycle.sql',
+  '20261021134053_media_scan_exact_byte_receipts.sql',
+  '20261021134104_platform_brand_exact_expiry_transport.sql',
 ];
 const brandRetentionFunctionKeys = new Set([
   'private.platform_brand_review_evidence_matches/3',
@@ -145,7 +145,7 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
-const originalCopyFiles = ['20261021022807_supabase_original_copy_receipts.sql'];
+const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
 const originalCopyFunctionKeys = new Set([
  'private.preserve_supabase_original_copy_receipt/0',
  'private.supabase_original_copy_snapshot_sha256/1',
@@ -155,7 +155,7 @@ const originalCopyFunctionKeys = new Set([
  'public.preflight_supabase_original_copy_cutover/1',
 ]);
 
-const legacyRetentionFiles = ['20261021021025_deleted_media_legacy_provenance_adapter.sql'];
+const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
 const legacyRetentionFunctionKeys = new Set([
   'private.preserve_deleted_media_legacy_provenance/0',
   'private.deleted_media_legacy_source_binding/2',

@@ -52,7 +52,7 @@ for(const file of [
  '20261020201937_deleted_content_terminal_source_cleanup.sql']) {
  try {await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));} catch(e){console.error('migration',file);throw e;}
 }
-await db.exec(readFileSync('supabase/migrations/20261021021025_deleted_media_legacy_provenance_adapter.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261021134020_deleted_media_legacy_provenance_adapter.sql','utf8'));
 
 await db.query(`insert into videos(id,owner_id,created_at,storage_provider,storage_bucket,storage_object_key)
  values($1,$2,'2026-01-01','cloudflare_r2','chillywood-media-origin','originals/legacy-one.mp4')`,[target,owner]);
