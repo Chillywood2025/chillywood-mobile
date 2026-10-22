@@ -53,10 +53,12 @@ import {
   getChatThread,
   listChatMessages,
   markChatThreadRead,
+  readChatCallStartRecovery,
   sendChatMessage,
   startChatThreadCall,
   subscribeToThread,
   type ChatCallType,
+  type ChatCallStartReceipt,
   type ChatMessage,
   type ChatThreadMember,
   type ChatThreadSummary,
@@ -576,6 +578,31 @@ export default function ChillyChatThreadScreen() {
     visibleInviteId: incomingCallInvite?.id ?? activeCallInvite?.id ?? outgoingCallInvite?.id ?? "",
   });
   const [callDeliveryStatus, setCallDeliveryStatus] = useState<string | null>(null);
+  type PendingCallStartRecovery = { operation: OutgoingCallStartOperation; receipt: ChatCallStartReceipt; error?: string };
+  const [pendingCallStartRecovery, setPendingCallStartRecovery] = useState<PendingCallStartRecovery | null>(null);
+  const pendingCallStartRecoveryRef = useRef<PendingCallStartRecovery | null>(null);
+  const [callStartRecoveryBusy, setCallStartRecoveryBusy] = useState(false);
+  const callStartRecoveryReadRef = useRef<object | null>(null);
+  const [settledCallStartRecovery, setSettledCallStartRecovery] = useState<OutgoingCallStartOperation | null>(null);
+  const settledCallStartRecoveryRef = useRef<OutgoingCallStartOperation | null>(null);
+  useLayoutEffect(() => {
+    // The fresh thread projection and its new Start callback now own the view.
+    // Earlier callbacks remain retired even after the operation is released.
+    if (settledCallStartRecovery) finishStartOperation(settledCallStartRecovery);
+  }, [finishStartOperation, settledCallStartRecovery]);
+  useLayoutEffect(() => {
+    const pending = pendingCallStartRecoveryRef.current;
+    if (!pending || isStartOperationCurrent(pending.operation)) return;
+    // A newer projection or route/account/session owner has superseded this
+    // request. Neither its receipt nor an old recovery read may reopen it.
+    pendingCallStartRecoveryRef.current = null;
+    callStartRecoveryReadRef.current = null;
+    setPendingCallStartRecovery(null);
+    setCallStartRecoveryBusy(false);
+  }, [activeCallInvite, callBusy, incomingCallInvite, isStartOperationCurrent, messageSendContext, outgoingCallInvite, pendingCallStartRecovery]);
+  const displayedCallDeliveryStatus = pendingCallStartRecovery
+    ? `${getChillyChatCallDeliveryMessage(pendingCallStartRecovery.receipt.delivery)} Current call state is unavailable. Refresh call status before starting another call.`
+    : callDeliveryStatus;
   const [callControlError, setCallControlError] = useState<string | null>(null);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
@@ -2338,7 +2365,50 @@ export default function ChillyChatThreadScreen() {
     }
   }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, markThreadReadWithThrottle, messageSendContext, sending, thread, threadId]);
 
+  const handleRecoverCallStart = useCallback(async () => {
+    const pending = pendingCallStartRecoveryRef.current;
+    if (!pending || pending.operation !== pendingCallStartRecovery?.operation
+      || !isStartOperationCurrent(pending.operation) || callStartRecoveryReadRef.current) return;
+    const read = beginThreadRead();
+    if (!read) return;
+    callStartRecoveryReadRef.current = read;
+    setCallStartRecoveryBusy(true);
+    const isCurrent = () => pendingCallStartRecoveryRef.current?.operation === pending.operation
+      && isStartOperationCurrent(pending.operation) && isThreadReadCurrent(read);
+    try {
+      const latest = await readChatCallStartRecovery(pending.receipt);
+      if (!isCurrent()) return;
+      invalidateThreadReads();
+      // Retire pre-recovery Start closures before releasing any barrier. They
+      // still capture an empty room and could otherwise reopen accepted media.
+      settledCallStartRecoveryRef.current = pending.operation;
+      setSettledCallStartRecovery(pending.operation);
+      // Only fresh server state is projected. In particular, do not install the
+      // cached begin invite, open the panel or acquire media from this recovery.
+      setThread(latest.thread);
+      pendingCallStartRecoveryRef.current = null;
+      setPendingCallStartRecovery(null);
+      const recoveredInviteIsActive = latest.invite.status === "ringing" || latest.invite.status === "accepted";
+      setCallDeliveryStatus(latest.thread.activeCommunicationRoomId
+        ? recoveredInviteIsActive
+          ? "Call state refreshed. Open Call to check its current state."
+          : "The requested call has ended. A call entry remains. Open Call to check its current state."
+        : "Call state refreshed. This call has ended.");
+    } catch (recoveryError) {
+      if (!isCurrent()) return;
+      const next = { ...pending, error: getUserFacingErrorMessage(recoveryError, "Call status is still unavailable. Refresh call status to try again.") };
+      pendingCallStartRecoveryRef.current = next;
+      setPendingCallStartRecovery(next);
+    } finally {
+      if (callStartRecoveryReadRef.current === read) {
+        callStartRecoveryReadRef.current = null;
+        setCallStartRecoveryBusy(false);
+      }
+    }
+  }, [beginThreadRead, invalidateThreadReads, isStartOperationCurrent, isThreadReadCurrent, pendingCallStartRecovery?.operation]);
+
   const handleStartCall = useCallback(async (mode: ChatCallType) => {
+    if (settledCallStartRecoveryRef.current !== settledCallStartRecovery) return;
     logChatCall("handle_start_call", {
       threadId,
       mode,
@@ -2349,7 +2419,7 @@ export default function ChillyChatThreadScreen() {
       setError("Open a valid Chi'lly Chat thread before starting a call.");
       return;
     }
-    if (callBusy) return;
+    if (callBusy || pendingCallStartRecoveryRef.current) return;
     if (activeCallRoomId) {
       setCallDeliveryStatus("A call is already active in this thread. Open Call to continue.");
       return;
@@ -2373,6 +2443,17 @@ export default function ChillyChatThreadScreen() {
         : refreshPushRegistrationIfGranted());
       const result = await startChatThreadCall(threadId, mode);
       if (!isStartOperationCurrent(operation)) return;
+      if (result.disposition === "readback_pending") {
+        if (result.receipt.threadId !== threadId
+          || result.receipt.authority.userId !== currentUserId
+          || result.receipt.authority.sessionGeneration !== authority?.sessionGeneration) return;
+        const pending = { operation, receipt: result.receipt };
+        pendingCallStartRecoveryRef.current = pending;
+        setPendingCallStartRecovery(pending);
+        // Keep the original synchronous Start barrier. The successful begin and
+        // dispatch are known; only a read is allowed until state is reconciled.
+        return;
+      }
       // Dispatch can outlive Answer/End. The refreshed thread is authoritative;
       // the begin-call invite in this result may still say ringing from before
       // that await. Never reopen it or retain it as a barrier to the next call.
@@ -2437,15 +2518,15 @@ export default function ChillyChatThreadScreen() {
       });
       const message = getUserFacingErrorMessage(callStartError, "Unable to start Chi'lly Chat call.");
       setError(message);
-      setCallDeliveryStatus("Delivery status: invite failed. Call was not started and receiver notification was not sent.");
+      setCallDeliveryStatus("Unable to confirm call setup. Refresh the thread before trying again.");
       reportRuntimeError("chat-thread-start-call", callStartError, {
         threadId,
         mode,
       });
     } finally {
-      finishStartOperation(operation);
+      if (pendingCallStartRecoveryRef.current?.operation !== operation) finishStartOperation(operation);
     }
-  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, beginStartOperation, callBusy, finishStartOperation, invalidateThreadReads, isStartOperationCurrent, loadThreadState, officialAccount, stopOutgoingRingback, threadId]);
+  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, authority?.sessionGeneration, beginStartOperation, callBusy, currentUserId, finishStartOperation, invalidateThreadReads, isStartOperationCurrent, loadThreadState, officialAccount, settledCallStartRecovery, stopOutgoingRingback, threadId]);
 
   const readAcceptableIncomingInvite = useCallback(async (
     invite: ChillyChatCallInvite,
@@ -2995,6 +3076,7 @@ export default function ChillyChatThreadScreen() {
     expectedInviteId = "",
     allowForegroundRingingAccept = true,
   ) => {
+    if (pendingCallStartRecoveryRef.current) return;
     const ownsContext = captureCallOperation();
     const isCurrent = () => ownsContext() && isNativeMicContextCurrent() && isIosNativeMediaAuthorityCurrent();
     if (!isCurrent()) return;
@@ -3726,9 +3808,9 @@ export default function ChillyChatThreadScreen() {
         <TouchableOpacity
           testID="chat-thread-voice-call-button"
           accessibilityLabel="Start Chi'lly Chat voice call"
-          style={[styles.callBtn, callBusy && styles.callBtnDisabled]}
+          style={[styles.callBtn, (callBusy || !!pendingCallStartRecovery) && styles.callBtnDisabled]}
           activeOpacity={0.86}
-          disabled={callBusy || !!activeCallRoomId}
+          disabled={callBusy || !!pendingCallStartRecovery || !!activeCallRoomId}
           onPress={() => void handleStartCall("voice")}
         >
           <Text style={styles.callBtnText}>Voice Call</Text>
@@ -3736,9 +3818,9 @@ export default function ChillyChatThreadScreen() {
         <TouchableOpacity
           testID="chat-thread-video-call-button"
           accessibilityLabel="Start Chi'lly Chat video call"
-          style={[styles.callBtn, callBusy && styles.callBtnDisabled]}
+          style={[styles.callBtn, (callBusy || !!pendingCallStartRecovery) && styles.callBtnDisabled]}
           activeOpacity={0.86}
-          disabled={callBusy || !!activeCallRoomId}
+          disabled={callBusy || !!pendingCallStartRecovery || !!activeCallRoomId}
           onPress={() => void handleStartCall("video")}
         >
           <Text style={styles.callBtnText}>Video Call</Text>
@@ -3749,7 +3831,7 @@ export default function ChillyChatThreadScreen() {
             accessibilityLabel={callActionLabel}
             style={[styles.joinBtn, (callBusy || (!activeCallRoomId && !callPanelOpen)) && styles.callBtnDisabled]}
             activeOpacity={0.86}
-            disabled={callBusy || (!activeCallRoomId && !callPanelOpen)}
+            disabled={callBusy || !!pendingCallStartRecovery || (!activeCallRoomId && !callPanelOpen)}
             onPress={() => void handleJoinOrCloseCall()}
           >
             <ChillywoodPrimaryActionFill />
@@ -3771,14 +3853,30 @@ export default function ChillyChatThreadScreen() {
         </View>
       ) : null}
 
-      {callDeliveryStatus ? (
+      {displayedCallDeliveryStatus ? (
         <View
           style={styles.callDeliveryStatusCard}
           testID="chat-call-delivery-status"
           accessibilityLabel="Chi'lly Chat call delivery status"
         >
           <MaterialIcons name="notifications-active" size={16} color="#A9F6D2" />
-          <Text style={styles.callDeliveryStatusText}>{callDeliveryStatus}</Text>
+          <Text style={styles.callDeliveryStatusText}>{displayedCallDeliveryStatus}</Text>
+        </View>
+      ) : null}
+
+      {pendingCallStartRecovery ? (
+        <View>
+          {pendingCallStartRecovery.error ? <Text style={styles.callDeliveryStatusText} accessibilityRole="alert">{pendingCallStartRecovery.error}</Text> : null}
+          <TouchableOpacity
+            testID="chat-call-refresh-start-status"
+            accessibilityLabel="Refresh call status without starting another call"
+            accessibilityRole="button"
+            style={[styles.callBtn, callStartRecoveryBusy && styles.callBtnDisabled]}
+            disabled={callStartRecoveryBusy}
+            onPress={() => void handleRecoverCallStart()}
+          >
+            <Text style={styles.callBtnText}>{callStartRecoveryBusy ? "Refreshing call status..." : "Refresh call status"}</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
 

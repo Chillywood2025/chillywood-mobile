@@ -52,6 +52,7 @@ const collectionOrderingFiles = ['20261020233652_user_collection_revision_author
 const notificationPreferenceOrderingFiles = ['20261021221300_notification_preference_revision_authority.sql'];
 const notificationRegistrationOrderingFiles = ['20261022030357_notification_registration_revision_authority.sql'];
 const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
+const realtimeIdentityFiles = ['20261022025600_message_realtime_replica_identity.sql'];
 const ownerSecurityFiles = [
   '20261020222318_transactional_owner_security_canary.sql',
   '20261020222325_staff_permission_null_actor_closure.sql',
@@ -230,7 +231,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
     }
     // This remains a full-current-chain repair test, including reviewed successors.
     check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length);
+    check('complete message identity successor',replayReport.files.filter(file=>realtimeIdentityFiles.includes(file)),realtimeIdentityFiles);
     check('complete original copy successor',replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
     check('complete legacy retention successor',replayReport.files.filter(file=>legacyRetentionFiles.includes(file)),legacyRetentionFiles);
     check('complete explicit service API grant successor',replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);

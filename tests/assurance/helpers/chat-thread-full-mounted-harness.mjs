@@ -280,7 +280,8 @@ export async function mountFullChatThread(options = {}) {
     listChillyChatCallEvents: async () => [],
     readChillyChatCallInvite: async (id) => runtime.readInvite ? runtime.readInvite(id)
       : runtime.invite?.id === id ? ({ ...runtime.invite }) : null,
-    readLatestChillyChatCallInviteForRoom: async (roomId) => runtime.invite?.communicationRoomId === roomId ? ({ ...runtime.invite }) : null,
+    readLatestChillyChatCallInviteForRoom: async (roomId) => runtime.readLatestInvite ? runtime.readLatestInvite(roomId)
+      : runtime.invite?.communicationRoomId === roomId ? ({ ...runtime.invite }) : null,
     readLatestRingingChillyChatCallInvite: async (threadId) => runtime.invite?.threadId === threadId
       && runtime.invite?.status === "ringing" ? { ...runtime.invite } : null,
     subscribeToChillyChatCallInvite: (_id, fn) => { runtime.subscriptions.add(fn); return () => runtime.subscriptions.delete(fn); },
@@ -373,13 +374,16 @@ export async function mountFullChatThread(options = {}) {
         const invite = durableThread.start(runtime.userId, id, callType);
         runtime.roomId = invite.communicationRoomId;
         media.roomId = runtime.roomId;
-        return { thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite, delivery: {} };
+        return { disposition: "ready", thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite, delivery: {} };
       }
       runtime.thread.activeCommunicationRoomId = runtime.roomId;
       runtime.thread.activeCallType = runtime.invite.callType;
-      return { thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite: { ...runtime.invite }, delivery: {} };
+      return { disposition: "ready", thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite: { ...runtime.invite }, delivery: {} };
     },
   };
+  // API-composition cases can execute the real chat helpers with controlled
+  // backend boundaries instead of replacing the screen's decision logic.
+  Object.assign(chat, options.chatApi);
   const nativeListeners = new Set();
   const retainedNativeMedia = new Map();
   const nativeAudioReady = new Set();
@@ -461,7 +465,7 @@ export async function mountFullChatThread(options = {}) {
     "../../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
     "../../_lib/chillyChatNativeCallRoutes.mjs": nativeRoutes,
     "../../_lib/communicationRoomIdentifier.mjs": { normalizeCommunicationRoomIdentifier: (v) => String(v ?? "").trim() },
-    "../../_lib/chillyChatCallDeliveryCopy": { isChillyChatCallDeviceAlertConfirmed: () => false, getChillyChatCallDeliveryMessage: () => "Waiting for answer" },
+    "../../_lib/chillyChatCallDeliveryCopy": options.deliveryCopy ?? { isChillyChatCallDeviceAlertConfirmed: () => false, getChillyChatCallDeliveryMessage: () => "Waiting for answer" },
     "../../_lib/chillyChatCallSoundAssets": { playChillyChatCallSound: async () => null, stopChillyChatCallSound: async () => {} },
     "../../_lib/displayText": { decodeVisiblePercentEscapes: (v) => v },
     "../../_lib/friendGraph": { readFriendRelationshipState: async () => null, ...options.friendGraph },
@@ -478,7 +482,7 @@ export async function mountFullChatThread(options = {}) {
     "../../_lib/officialAccounts": { getOfficialPlatformAccount: () => null },
     "../../_lib/performancePolicy": { READ_RECEIPT_THROTTLE_MS: 500 },
     "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }, session: { access_token: runtime.accessToken ?? "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration, runtime.accessToken]) },
-    "../../_lib/userFacingErrors": { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
+    "../../_lib/userFacingErrors": options.userFacingErrors ?? { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
     "../../_lib/usernameHandles": { formatUsernameHandle: () => "" },
     "../../_lib/socialAttachmentPicker": {},
     "../../hooks/use-chat-call-media-session": adapter,
@@ -529,6 +533,7 @@ export async function mountFullChatThread(options = {}) {
   const messageScrollBindings = new Map();
   let messageLayoutBinding;
   let circleToggle;
+  let recoveryControl;
   const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave", "onToggleAudioRoute", "speakerEnabled", "mediaControlMessage"];
   const visit = node => {
     if (ts.isJsxElement(node)) {
@@ -545,6 +550,11 @@ export async function mountFullChatThread(options = {}) {
         circleBindings.set(action, `{ visible: Boolean(${branch.parent.condition.getText(parsedScreen)}), disabled: (${disabled.getText(parsedScreen)}), onPress: (${press.getText(parsedScreen)}) }`);
       }
       const testId = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "testID")?.initializer?.text;
+      if (testId === "chat-call-refresh-start-status") {
+        const disabled = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "disabled")?.initializer?.expression;
+        assert.ok(disabled && press, "actual recovery button must retain its action and busy gate");
+        recoveryControl = `{ disabled: (${disabled.getText(parsedScreen)}), onPress: (${press.getText(parsedScreen)}) }`;
+      }
       if (testId === "chat-thread-messages-scroll") {
         for (const name of ["key", "ref", "onLayout", "onContentSizeChange", "onScrollBeginDrag"]) {
           const expression = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === name)?.initializer?.expression;
@@ -586,6 +596,7 @@ export async function mountFullChatThread(options = {}) {
   assert.ok(circleToggle, "actual header action must remain observable");
   assert.equal(messageScrollBindings.size, 5);
   assert.ok(messageLayoutBinding, "actual message bubble layout binding");
+  assert.ok(recoveryControl, "actual confirmed-Start recovery action must be observable");
   const messageBindingSource = [...messageScrollBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   const circleBindingSource = [...circleBindings].map(([name, expression]) => `${name}: ${expression}`).join(",");
   const panelBindingSource = [...panelBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
@@ -607,6 +618,9 @@ export async function mountFullChatThread(options = {}) {
       messageBindings: { ${messageBindingSource}, bubble: message => (${messageLayoutBinding}) },
       presentation: { ${presentationBindingSource} },
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
+      callDeliveryStatus, displayedCallDeliveryStatus, outgoingCallDeviceAlertSent, outgoingCallInvite, thread,
+      pendingCallStartRecovery, callStartRecoveryBusy, handleRecoverCallStart,
+      recoveryControl: ${recoveryControl},
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,
       nativeSpeakerEnabled, canSetCallMediaSpeaker,
       callTitle, callBody, initialCallMediaPreferences, messages, renderedMessages, draft, sending, setDraft,
