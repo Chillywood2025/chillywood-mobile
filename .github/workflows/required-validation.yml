@@ -76,9 +76,8 @@ jobs:
         # historical Git source; they never fetch or replace release receipts.
         with: { persist-credentials: false, fetch-depth: 0 }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: 22, cache: npm }
+        with: { node-version: 20, cache: npm }
       - run: npm ci
-      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix isolated-runtime/notification-edge-sdk
       - run: npm ci --prefix tests/integration/real-peer-browser --ignore-scripts
       - name: Install pinned browser for real paired call negotiation
         run: node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
@@ -98,6 +97,14 @@ jobs:
           node --test tests/assurance/chat-call-sdk-contract.test.mjs
           npm run test:communication-terminal-postgres
           npm run test:chilly-chat-real-peer
+      # The official Edge SDK requires Node >=22. Keep existing product checks on Node20.
+      - name: Set up isolated notification Edge SDK runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22, cache: npm }
+      - name: Install exact notification Edge SDK fixture
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix isolated-runtime/notification-edge-sdk
+      - name: Test exact notification Edge SDK transport
+        run: node --test tests/edge-sdk/notification-registration-sdk-transport.test.mjs
 
   sensitive:
     name: Validation / Sensitive

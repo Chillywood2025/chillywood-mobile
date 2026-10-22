@@ -5,7 +5,7 @@ import { setImmediate as flushTransport } from 'node:timers/promises';
 import {
   createNotificationRegistrationTransportHarness, makeNotificationRegistrationSqlFixture,
   notificationTransportAuthority, notificationTransportGate, notificationTransportJson,
-} from './helpers/notification-registration-transport-harness.mjs';
+} from '../helpers/notification-registration-transport-harness.mjs';
 
 const fingerprint = token => createHash('sha256').update(`expo:${token}`).digest('hex').slice(0, 12);
 const writes = runtime => runtime.state.requests.filter(request => request.payload.action === 'register');
