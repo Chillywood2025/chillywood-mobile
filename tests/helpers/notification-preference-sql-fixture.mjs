@@ -1,7 +1,7 @@
 import { makeFixture, read, table, sqlPolicy, sqlFunction, ids, sessionId } from './studio-authority-fixture.mjs';
 import { splitSQL } from './database-runtime-authority-fixture.mjs';
 export { ids, sessionId };
-export const preferenceMigration = 'supabase/migrations/20261021221300_notification_preference_revision_authority.sql';
+export const preferenceMigration = 'supabase/migrations/20261022204942_notification_preference_revision_authority.sql';
 export const preferenceBaseline = 'supabase/migrations/202605120003_d9_notifications_activity_production.sql';
 
 // Load the actual table and every additive preference schema change. This is

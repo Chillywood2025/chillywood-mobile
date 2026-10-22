@@ -6,7 +6,7 @@ import { createDatabase } from './helpers/database-runtime-authority-fixture.mjs
 
 const root = new URL('../', import.meta.url);
 const read = path => fs.readFileSync(new URL(path, root), 'utf8');
-const migrationName = '20261022025600_message_realtime_replica_identity.sql';
+const migrationName = '20261022204956_message_realtime_replica_identity.sql';
 const migration = read(`supabase/migrations/${migrationName}`);
 const targets = ['chat_messages', 'watch_party_room_messages'];
 const preserved = ['chat_thread_members', 'chat_threads', 'communication_room_memberships',

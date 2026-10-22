@@ -49,10 +49,10 @@ const adminBackendFiles = [
 const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
 const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
-const notificationPreferenceOrderingFiles = ['20261021221300_notification_preference_revision_authority.sql'];
-const notificationRegistrationOrderingFiles = ['20261022030357_notification_registration_revision_authority.sql'];
+const notificationPreferenceOrderingFiles = ['20261022204942_notification_preference_revision_authority.sql'];
+const notificationRegistrationOrderingFiles = ['20261022205003_notification_registration_revision_authority.sql'];
 const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
-const realtimeIdentityFiles = ['20261022025600_message_realtime_replica_identity.sql'];
+const realtimeIdentityFiles = ['20261022204956_message_realtime_replica_identity.sql'];
 const ownerSecurityFiles = [
   '20261020222318_transactional_owner_security_canary.sql',
   '20261020222325_staff_permission_null_actor_closure.sql',

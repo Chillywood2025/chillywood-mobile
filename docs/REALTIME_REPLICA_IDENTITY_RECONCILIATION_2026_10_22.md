@@ -100,7 +100,7 @@ project behavior as a universal hosted-version guarantee.
 ## Patch, validation and limits
 
 Forward migration:
-[20261022025600_message_realtime_replica_identity.sql](../supabase/migrations/20261022025600_message_realtime_replica_identity.sql).
+[20261022204956_message_realtime_replica_identity.sql](../supabase/migrations/20261022204956_message_realtime_replica_identity.sql).
 
 The focused Node test replays the repository's migrations in PGlite with the
 existing managed-service fixture, applies the runtime repair separately, and
