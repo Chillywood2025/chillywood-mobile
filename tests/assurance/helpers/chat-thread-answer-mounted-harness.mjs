@@ -18,6 +18,9 @@ if (declarations.length !== names.size) throw new Error("Chat Answer source sele
 const ownershipHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useChatThreadOperationOwnership");
 const microphoneHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useIosNativeMicrophoneAcknowledgements");
 const presentationHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useExpiredIncomingCallPresentation");
+const startRecoveryRef = screen.body.statements.find((node) => ts.isVariableStatement(node)
+  && node.declarationList.declarations.some(({ name }) => name.getText(tree) === "pendingCallStartRecoveryRef"));
+if (!startRecoveryRef) throw new Error("Chat Start recovery ref source selection changed; review harness.");
 const messageEntryNames = new Set(["routeMessageId", "messageOwnerKey", "messageEntryKey", "loadedMessageEntryKey"]);
 const messageEntryDeclarations = screen.body.statements.filter((node) => ts.isVariableStatement(node)
   && node.declarationList.declarations.some(({ name }) => ts.isArrayBindingPattern(name)
@@ -156,6 +159,7 @@ export async function mountChatAnswer(options = {}) {
       const incomingCallSoundRef = useRef(null);
       const incomingCallTimeoutRef = useRef(null);
       const activeCallInviteRef = useRef(null);
+      ${startRecoveryRef.getText(tree)}
       if (runtime.controlsMode || runtime.endedMode || runtime.joinMode || runtime.nativeMode || runtime.settlementMode || runtime.terminalMode || runtime.activeReadInvite) activeCallInviteRef.current = runtime.noActiveInvite ? null : activeCallInvite;
       const handledIncomingInviteIdsRef = useRef(new Set());
       const handledIncomingRoomIdsRef = useRef(new Set());

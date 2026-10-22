@@ -6,6 +6,7 @@ import vm from "node:vm";
 import * as mediaPolicy from "../../../_lib/communicationCallMediaPolicy.mjs";
 import * as nativeRoutes from "../../../_lib/chillyChatNativeCallRoutes.mjs";
 import * as nativeProvenance from "../../../_lib/nativeCallTransitionProvenance.mjs";
+import { loadStubbed } from "../../customer-experience-adversarial-helpers.mjs";
 
 const require = createRequire(import.meta.url);
 const React = require("react");
@@ -13,6 +14,9 @@ const { createRoot } = require("react-dom/client");
 const ts = require("typescript");
 const noop = () => undefined;
 const settle = async () => { for (let i = 0; i < 160; i += 1) await Promise.resolve(); };
+const actualChatErrors = loadStubbed("_lib/chat.ts", {
+  "./userFacingErrors": loadStubbed("_lib/userFacingErrors.ts"),
+});
 
 function compile(source, filename, modules, globals = {}) {
   const module = { exports: {} };
@@ -280,7 +284,8 @@ export async function mountFullChatThread(options = {}) {
     listChillyChatCallEvents: async () => [],
     readChillyChatCallInvite: async (id) => runtime.readInvite ? runtime.readInvite(id)
       : runtime.invite?.id === id ? ({ ...runtime.invite }) : null,
-    readLatestChillyChatCallInviteForRoom: async (roomId) => runtime.invite?.communicationRoomId === roomId ? ({ ...runtime.invite }) : null,
+    readLatestChillyChatCallInviteForRoom: async (roomId) => runtime.readLatestInvite ? runtime.readLatestInvite(roomId)
+      : runtime.invite?.communicationRoomId === roomId ? ({ ...runtime.invite }) : null,
     readLatestRingingChillyChatCallInvite: async (threadId) => runtime.invite?.threadId === threadId
       && runtime.invite?.status === "ringing" ? { ...runtime.invite } : null,
     subscribeToChillyChatCallInvite: (_id, fn) => { runtime.subscriptions.add(fn); return () => runtime.subscriptions.delete(fn); },
@@ -350,6 +355,7 @@ export async function mountFullChatThread(options = {}) {
     "./use-legacy-android-audio-route": ownedAudio.hook,
   });
   const chat = {
+    ChatCallStartReadbackError: actualChatErrors.ChatCallStartReadbackError,
     getChatThread: async (id) => runtime.readThread ? runtime.readThread(id)
       : durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
     listChatMessages: async (id) => runtime.readMessages ? runtime.readMessages(id)
@@ -380,6 +386,9 @@ export async function mountFullChatThread(options = {}) {
       return { thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite: { ...runtime.invite }, delivery: {} };
     },
   };
+  // API-composition cases can execute the real chat helpers with controlled
+  // backend boundaries instead of replacing the screen's decision logic.
+  Object.assign(chat, options.chatApi);
   const nativeListeners = new Set();
   const retainedNativeMedia = new Map();
   const nativeAudioReady = new Set();
@@ -461,7 +470,7 @@ export async function mountFullChatThread(options = {}) {
     "../../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
     "../../_lib/chillyChatNativeCallRoutes.mjs": nativeRoutes,
     "../../_lib/communicationRoomIdentifier.mjs": { normalizeCommunicationRoomIdentifier: (v) => String(v ?? "").trim() },
-    "../../_lib/chillyChatCallDeliveryCopy": { isChillyChatCallDeviceAlertConfirmed: () => false, getChillyChatCallDeliveryMessage: () => "Waiting for answer" },
+    "../../_lib/chillyChatCallDeliveryCopy": options.deliveryCopy ?? { isChillyChatCallDeviceAlertConfirmed: () => false, getChillyChatCallDeliveryMessage: () => "Waiting for answer" },
     "../../_lib/chillyChatCallSoundAssets": { playChillyChatCallSound: async () => null, stopChillyChatCallSound: async () => {} },
     "../../_lib/displayText": { decodeVisiblePercentEscapes: (v) => v },
     "../../_lib/friendGraph": { readFriendRelationshipState: async () => null, ...options.friendGraph },
@@ -529,6 +538,7 @@ export async function mountFullChatThread(options = {}) {
   const messageScrollBindings = new Map();
   let messageLayoutBinding;
   let circleToggle;
+  let recoveryControl;
   const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave", "onToggleAudioRoute", "speakerEnabled", "mediaControlMessage"];
   const visit = node => {
     if (ts.isJsxElement(node)) {
@@ -545,6 +555,11 @@ export async function mountFullChatThread(options = {}) {
         circleBindings.set(action, `{ visible: Boolean(${branch.parent.condition.getText(parsedScreen)}), disabled: (${disabled.getText(parsedScreen)}), onPress: (${press.getText(parsedScreen)}) }`);
       }
       const testId = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "testID")?.initializer?.text;
+      if (testId === "chat-call-refresh-start-status") {
+        const disabled = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "disabled")?.initializer?.expression;
+        assert.ok(disabled && press, "actual recovery button must retain its action and busy gate");
+        recoveryControl = `{ disabled: (${disabled.getText(parsedScreen)}), onPress: (${press.getText(parsedScreen)}) }`;
+      }
       if (testId === "chat-thread-messages-scroll") {
         for (const name of ["key", "ref", "onLayout", "onContentSizeChange", "onScrollBeginDrag"]) {
           const expression = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === name)?.initializer?.expression;
@@ -586,6 +601,7 @@ export async function mountFullChatThread(options = {}) {
   assert.ok(circleToggle, "actual header action must remain observable");
   assert.equal(messageScrollBindings.size, 5);
   assert.ok(messageLayoutBinding, "actual message bubble layout binding");
+  assert.ok(recoveryControl, "actual confirmed-Start recovery action must be observable");
   const messageBindingSource = [...messageScrollBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   const circleBindingSource = [...circleBindings].map(([name, expression]) => `${name}: ${expression}`).join(",");
   const panelBindingSource = [...panelBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
@@ -607,6 +623,9 @@ export async function mountFullChatThread(options = {}) {
       messageBindings: { ${messageBindingSource}, bubble: message => (${messageLayoutBinding}) },
       presentation: { ${presentationBindingSource} },
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
+      callDeliveryStatus, displayedCallDeliveryStatus, outgoingCallDeviceAlertSent, outgoingCallInvite, thread,
+      pendingCallStartRecovery, callStartRecoveryBusy, handleRecoverCallStart,
+      recoveryControl: ${recoveryControl},
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,
       nativeSpeakerEnabled, canSetCallMediaSpeaker,
       callTitle, callBody, initialCallMediaPreferences, messages, renderedMessages, draft, sending, setDraft,

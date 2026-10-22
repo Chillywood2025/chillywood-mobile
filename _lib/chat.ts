@@ -13,6 +13,7 @@ import {
   CHAT_CALL_INVITES_TABLE,
   beginChillyChatCall,
   dispatchChillyChatCallPush,
+  readChillyChatCallInvite,
   readLatestChillyChatCallInviteForRoom,
   type BegunChillyChatCall,
   type ChillyChatCallInvite,
@@ -604,7 +605,10 @@ export async function listChatThreads(): Promise<ChatThreadSummary[]> {
   return reconciled;
 }
 
-export async function getChatThread(threadId: string): Promise<ChatThreadSummary | null> {
+export async function getChatThread(
+  threadId: string,
+  options: { reconcileCallState?: boolean } = {},
+): Promise<ChatThreadSummary | null> {
   const binding = captureChatReadBinding();
   const currentUserId = await getRequiredChatUserId();
   assertChatReadBindingCurrent(binding);
@@ -625,6 +629,9 @@ export async function getChatThread(threadId: string): Promise<ChatThreadSummary
   if (!thread) return null;
   const enriched = (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
   assertChatReadBindingCurrent(binding);
+  // Start recovery must only observe. In particular, an old receipt cannot
+  // authorize cleanup of a call that may already have been answered/replaced.
+  if (options.reconcileCallState === false) return enriched;
   const reconciled = await reconcileActiveChatThreadCallState([enriched], binding);
   assertChatReadBindingCurrent(binding);
   return reconciled[0] ?? enriched;
@@ -987,6 +994,51 @@ export async function clearEndedChatThreadCall(
   };
 }
 
+export type ChatCallStartReceipt = {
+  authority: AccountSessionAuthorityBinding;
+  threadId: string;
+  requestRoomId: string;
+  invite: ChillyChatCallInvite;
+  role: "caller" | "callee";
+  delivery: ChillyChatCallInviteDelivery;
+};
+
+export class ChatCallStartReadbackError extends UserFacingError {
+  readonly receipt: ChatCallStartReceipt;
+
+  constructor(receipt: ChatCallStartReceipt) {
+    super("chat_action", "The call was requested, but its current state could not be refreshed.");
+    this.name = "ChatCallStartReadbackError";
+    this.receipt = receipt;
+  }
+}
+
+export async function readChatCallStartRecovery(receipt: ChatCallStartReceipt) {
+  assertChatReadBindingCurrent(receipt.authority);
+  const thread = await getChatThread(receipt.threadId, { reconcileCallState: false });
+  assertChatReadBindingCurrent(receipt.authority);
+  const invite = await readChillyChatCallInvite(receipt.invite.id);
+  assertChatReadBindingCurrent(receipt.authority);
+  if (!thread || thread.threadId !== receipt.threadId
+    || thread.currentMember?.userId !== receipt.authority.userId
+    || !invite || invite.id !== receipt.invite.id || invite.threadId !== receipt.threadId
+    || invite.communicationRoomId !== receipt.invite.communicationRoomId
+    || invite.callType !== receipt.invite.callType
+    || invite.callerUserId !== receipt.invite.callerUserId
+    || invite.calleeUserId !== receipt.invite.calleeUserId) {
+    throw new UserFacingError("chat_action", "The call's current state is still unavailable. Refresh call status to try again.");
+  }
+  const inviteIsActive = invite.status === "ringing" || invite.status === "accepted";
+  // Separate reads can straddle a transition. An active invite without a thread
+  // link is unresolved. A terminal invite with a remaining link is not: terminal
+  // cleanup deliberately preserves rooms owned by another active invite. Keep
+  // that raw link without claiming the remaining room is either active or ended.
+  if (!thread.activeCommunicationRoomId && inviteIsActive) {
+    throw new UserFacingError("chat_action", "The call is changing state. Refresh call status to try again.");
+  }
+  return { thread, invite };
+}
+
 export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<{
   delivery: ChillyChatCallInviteDelivery | null;
   invite: ChillyChatCallInvite | null;
@@ -995,7 +1047,9 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   roomId: string;
   callType: ChatCallType;
 }> {
+  const authority = captureChatReadBinding();
   const currentUserId = await getRequiredChatUserId();
+  assertChatReadBindingCurrent(authority);
   logChatCall("thread_call_start", {
     currentUserId,
     threadId: toText(threadId),
@@ -1093,7 +1147,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       && String(inviteError.message).trim().toLowerCase() === "rate_limited") {
       throw new UserFacingError("chat_action", "Too many attempts. Wait a few minutes, then try again.");
     }
-    throw new UserFacingError("chat_action", "Unable to start Chi'lly Chat call. The receiver invite could not be saved.");
+    throw new UserFacingError("chat_action", "Unable to confirm whether this Chi'lly Chat call was started. Refresh the thread before trying again.");
   }
 
   if (begunCall.created) {
@@ -1130,15 +1184,26 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
     });
   }
 
-  const updated = await getChatThread(thread.threadId);
-  if (!updated) {
+  let updated: ChatThreadSummary | null;
+  try {
+    updated = await getChatThread(thread.threadId);
+    if (!updated) throw new UserFacingError("chat_action", "Unable to refresh Chi'lly Chat call state.");
+  } catch (readbackError) {
     logChatCall("thread_call_refresh_failed", {
       currentUserId,
       threadId: thread.threadId,
       roomId,
       mode,
     });
-    throw new UserFacingError("chat_action", "Unable to refresh Chi'lly Chat call state.");
+    // This receipt is only created after a positive begin response and a known
+    // dispatch outcome. A rejected/unknown begin response is not a confirmed receipt.
+    if (begunCall.created && delivery) {
+      throw new ChatCallStartReadbackError({
+        authority, threadId: thread.threadId, requestRoomId: roomId,
+        invite: begunCall.invite, role: begunCall.role, delivery,
+      });
+    }
+    throw readbackError;
   }
 
   logChatCall("thread_call_start_success", {
