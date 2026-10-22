@@ -170,8 +170,8 @@ const legacyRetentionFunctionKeys = new Set([
 ]);
 
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
-const notificationPreferenceOrderingFiles = ['20261021221300_notification_preference_revision_authority.sql'];
-const notificationRegistrationOrderingFiles = ['20261022030357_notification_registration_revision_authority.sql'];
+const notificationPreferenceOrderingFiles = ['20261022204942_notification_preference_revision_authority.sql'];
+const notificationRegistrationOrderingFiles = ['20261022205003_notification_registration_revision_authority.sql'];
 const notificationRegistrationFunctionKeys = new Set(['private.assert_push_registration_subject/7','private.push_registration_current/1','public.read_my_push_registration_intent/7','public.register_my_push_token/16']);
 const notificationPreferenceFunctionKeys = new Set([
   'private.advance_notification_preference_revision/0',
@@ -180,7 +180,7 @@ const notificationPreferenceFunctionKeys = new Set([
   'public.mutate_my_notification_preferences/4',
 ]);
 const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
-const realtimeIdentityFiles = ['20261022025600_message_realtime_replica_identity.sql'];
+const realtimeIdentityFiles = ['20261022204956_message_realtime_replica_identity.sql'];
 const collectionOrderingFunctionKeys = new Set([
   'private.assert_user_collection_session/0', 'private.user_collection_projection_value/3',
   'public.read_my_collection_state/3', 'public.mutate_my_collection_state/5',

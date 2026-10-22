@@ -30,7 +30,7 @@ const transpile = input => ts.transpileModule(input, { fileName: 'module.ts', co
 } }).outputText;
 const flush = async () => { for (let index = 0; index < 100; index++) await Promise.resolve(); };
 
-export const registrationRevisionMigration = 'supabase/migrations/20261022030357_notification_registration_revision_authority.sql';
+export const registrationRevisionMigration = 'supabase/migrations/20261022205003_notification_registration_revision_authority.sql';
 
 // Minimal real-SQL schema used by the transport tests. Infrastructure-only
 // auth tables are modeled; all push ownership, authority, CAS and revoke

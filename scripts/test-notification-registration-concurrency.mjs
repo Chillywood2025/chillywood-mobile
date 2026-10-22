@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { sqlFunction, table } from '../tests/helpers/studio-authority-fixture.mjs';
 import { splitSQL } from '../tests/helpers/database-runtime-authority-fixture.mjs';
-const migration = 'supabase/migrations/20261022030357_notification_registration_revision_authority.sql';
+const migration = 'supabase/migrations/20261022205003_notification_registration_revision_authority.sql';
 const legacy = 'supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql';
 const negative = process.argv.includes('--negative-control');
 
