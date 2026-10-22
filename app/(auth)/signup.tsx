@@ -1,5 +1,5 @@
-import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, type Href, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Keyboard,
@@ -85,6 +85,9 @@ export default function Signup() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
   const signUpLatchRef = useRef(createActionSingleFlightLatch());
+  const signupGenerationRef = useRef(0);
+  const signupFocusedRef = useRef(false);
+  const createdAccountsRef = useRef(new Map<string, "confirmation" | "session">());
   const redirectId = String(params.redirectId ?? "").trim();
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -122,6 +125,7 @@ export default function Signup() {
     });
   };
   const showSignupConfirmationSuccess = () => {
+    const generation = signupGenerationRef.current;
     Alert.alert(
       "Success",
       isClosedBetaEnvironment()
@@ -131,6 +135,7 @@ export default function Signup() {
         {
           text: "Go to login",
           onPress: () => {
+            if (!signupFocusedRef.current || signupGenerationRef.current !== generation) return;
             resetSignupForm();
             router.replace({
               pathname: "/(auth)/login",
@@ -142,7 +147,18 @@ export default function Signup() {
     );
   };
 
+  useFocusEffect(useCallback(() => {
+    signupFocusedRef.current = true;
+    signupGenerationRef.current += 1;
+    setLoading(signUpLatchRef.current.isActive());
+    return () => {
+      signupFocusedRef.current = false;
+      signupGenerationRef.current += 1;
+    };
+  }, []));
+
   useEffect(() => {
+    let current = true;
     const local = validateUsernameHandle(username);
     setUsernameAvailability(local);
     if (!local.available) return;
@@ -150,8 +166,9 @@ export default function Signup() {
     setUsernameAvailability({ ...local, status: "checking", available: false, message: "Checking..." });
     const timeout = setTimeout(() => {
       void checkUsernameAvailability(local.username)
-        .then(setUsernameAvailability)
+        .then((result) => { if (current) setUsernameAvailability(result); })
         .catch(() => {
+          if (!current) return;
           setUsernameAvailability({
             username: local.username,
             available: false,
@@ -161,7 +178,7 @@ export default function Signup() {
         });
     }, 400);
 
-    return () => clearTimeout(timeout);
+    return () => { current = false; clearTimeout(timeout); };
   }, [username]);
 
   useEffect(() => {
@@ -183,6 +200,16 @@ export default function Signup() {
     const normalizedUsername = normalizeUsernameHandle(username);
     const normalizedEmail = email.trim().toLowerCase();
     let signupCreatedUser = false;
+    let signupHasSession = false;
+    const generation = signupGenerationRef.current;
+    const isCurrent = () => signupFocusedRef.current && signupGenerationRef.current === generation;
+    if (!isCurrent()) return;
+    const createdAccount = createdAccountsRef.current.get(normalizedEmail);
+    if (createdAccount) {
+      if (createdAccount === "confirmation") showSignupConfirmationSuccess();
+      else Alert.alert("Account created", "Your account was created. Continue account setup or sign in; you do not need to create it again.");
+      return;
+    }
 
     if (!normalizedDisplayName) {
       Alert.alert("Choose your display name", "Add the name people should see on your Profile.");
@@ -225,6 +252,7 @@ export default function Signup() {
 
     try {
       const appConfig = await readAppConfig();
+      if (!isCurrent()) return;
 
       if (appConfig.runtimeControls.new_accounts_enabled === false) {
         trackEvent("auth_sign_up_blocked", {
@@ -249,6 +277,11 @@ export default function Signup() {
         },
       });
 
+      signupCreatedUser = !error && !!data.user?.id;
+      signupHasSession = !error && !!data.session?.user?.id;
+      if (signupCreatedUser) createdAccountsRef.current.set(normalizedEmail, signupHasSession ? "session" : "confirmation");
+      if (!isCurrent()) return;
+
       if (error) {
         reportRuntimeError("auth-signup-submit", error, {
           code: error.code ?? error.name ?? "auth_error",
@@ -260,7 +293,10 @@ export default function Signup() {
         return;
       }
 
-      signupCreatedUser = !!data.user?.id;
+      if (!signupCreatedUser) {
+        Alert.alert("Signup Error", "Account creation could not be confirmed. Try signing in before creating an account again.");
+        return;
+      }
       trackEvent("auth_sign_up_success", {
         hasSession: !!data.session,
       });
@@ -271,8 +307,9 @@ export default function Signup() {
           username: normalizedUsername,
           displayName: normalizedDisplayName,
         });
+        if (!isCurrent()) return;
         if (!profileResult.ok) {
-          Alert.alert("Choose your username", profileResult.message);
+          Alert.alert("Account created", `Your account was created, but setup is incomplete. ${profileResult.message} Sign in to continue; do not create another account.`);
           return;
         }
 
@@ -280,6 +317,7 @@ export default function Signup() {
           supabase,
           data.session.user.id,
         );
+        if (!isCurrent()) return;
 
         if (!acceptanceResult.ok) {
           reportRuntimeError(
@@ -314,6 +352,7 @@ export default function Signup() {
 
       showSignupConfirmationSuccess();
     } catch (error) {
+      if (!isCurrent()) return;
       reportRuntimeError("auth-signup", error, {
         hasRedirect: !!redirectId,
       });
@@ -321,13 +360,15 @@ export default function Signup() {
         reason: "runtime_error",
       });
       if (signupCreatedUser) {
-        showSignupConfirmationSuccess();
+        if (signupHasSession) {
+          Alert.alert("Account created", "Your account was created, but setup could not finish. Continue account setup or sign in; you do not need to create it again.");
+        } else showSignupConfirmationSuccess();
         return;
       }
       Alert.alert("Signup Error", getSignupErrorMessage(error));
     } finally {
       signUpLatchRef.current.release();
-      setLoading(false);
+      if (signupFocusedRef.current) setLoading(false);
     }
   };
 
@@ -425,6 +466,7 @@ export default function Signup() {
             autoCorrect
             returnKeyType="next"
             testID="signup-display-name-input"
+            editable={!loading}
             value={displayName}
             onChangeText={setDisplayName}
             onFocus={scrollSignupIdentityIntoView}
@@ -440,6 +482,7 @@ export default function Signup() {
               autoCorrect={false}
               returnKeyType="next"
               testID="signup-username-input"
+              editable={!loading}
               value={username}
               onChangeText={(value) => setUsername(normalizeUsernameHandle(value))}
               onFocus={scrollSignupIdentityIntoView}
@@ -493,6 +536,7 @@ export default function Signup() {
           keyboardType="email-address"
           returnKeyType="next"
           testID="signup-email-input"
+          editable={!loading}
           value={email}
           onChangeText={setEmail}
           onFocus={scrollSignupEmailIntoView}
@@ -506,6 +550,7 @@ export default function Signup() {
           secureTextEntry
           returnKeyType="done"
           testID="signup-password-input"
+          editable={!loading}
           value={password}
           onChangeText={setPassword}
           onFocus={scrollSignupPasswordIntoView}

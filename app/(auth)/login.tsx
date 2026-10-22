@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import { Link, type Href, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,8 @@ import {
   ChillywoodBrandReserve,
   ChillywoodGlassPanel,
 } from "../../components/ui/chillywood-branded-surface";
+
+const PENDING_CONFIRMATION_MESSAGE = "A previous confirmation request is still pending. Check your inbox. You can sign in, but another email request must wait.";
 
 function NeonSignInButton({ loading, onPress }: { loading: boolean; onPress: () => void }) {
   return (
@@ -69,19 +71,128 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
   const signInLatchRef = useRef(createActionSingleFlightLatch());
+  const resendLatchRef = useRef(createActionSingleFlightLatch());
+  const resendGenerationRef = useRef(0);
+  const resendFocusedRef = useRef(false);
+  const resendEmailRef = useRef("");
+  const resendAttemptTimesRef = useRef(new Map<string, number>());
+  const resendWaitExpiredRef = useRef(false);
+  const resendWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const redirectId = String(params.redirectId ?? "").trim();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendWaitExpired, setResendWaitExpired] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
   const closedBeta = isClosedBetaEnvironment();
 
+  useFocusEffect(useCallback(() => {
+    resendFocusedRef.current = true;
+    resendGenerationRef.current += 1;
+    setResending(resendLatchRef.current.isActive());
+    setResendWaitExpired(resendWaitExpiredRef.current);
+    setResendMessage(resendLatchRef.current.isActive() && resendWaitExpiredRef.current
+      ? PENDING_CONFIRMATION_MESSAGE
+      : "");
+    return () => {
+      resendFocusedRef.current = false;
+      resendGenerationRef.current += 1;
+    };
+  }, []));
+
+  useEffect(() => () => {
+    if (resendWaitTimerRef.current !== null) clearTimeout(resendWaitTimerRef.current);
+  }, []);
+
+  const changeEmail = (value: string) => {
+    resendEmailRef.current = value;
+    resendGenerationRef.current += 1;
+    setResendMessage(resendLatchRef.current.isActive() && resendWaitExpiredRef.current
+      ? PENDING_CONFIRMATION_MESSAGE
+      : "");
+    setEmail(value);
+  };
+
+  const resendConfirmation = async () => {
+    if (!resendFocusedRef.current || signInLatchRef.current.isActive()) return;
+    const targetEmail = resendEmailRef.current.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setResendMessage("Enter your account email above, then request a confirmation link.");
+      return;
+    }
+    if (!resendLatchRef.current.tryAcquire()) return;
+    const generation = resendGenerationRef.current;
+    const isCurrent = () => resendFocusedRef.current && resendGenerationRef.current === generation;
+    const now = Date.now();
+    const previousAttempt = resendAttemptTimesRef.current.get(targetEmail);
+    if (previousAttempt !== undefined && now - previousAttempt < 60_000) {
+      resendLatchRef.current.release();
+      setResendMessage("Wait at least a minute between requests and check your inbox and spam before trying again.");
+      return;
+    }
+    resendAttemptTimesRef.current.set(targetEmail, now);
+    setResending(true);
+    resendWaitExpiredRef.current = false;
+    setResendWaitExpired(false);
+    setResendMessage("");
+    // This bounds the UI wait only. Keep the send latch until actual settlement:
+    // a timeout does not prove the email request was canceled or never received.
+    resendWaitTimerRef.current = setTimeout(() => {
+      resendWaitExpiredRef.current = true;
+      if (resendFocusedRef.current) {
+        setResendWaitExpired(true);
+        if (isCurrent()) {
+          setResendMessage("The confirmation request is taking longer than expected. Its outcome is not confirmed; check your inbox. You can sign in, but another email request must wait.");
+        } else setResendMessage(PENDING_CONFIRMATION_MESSAGE);
+      }
+    }, 15_000);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: targetEmail,
+        options: { emailRedirectTo: "https://chillywoodstream.com/auth-callback" },
+      });
+      if (!isCurrent()) return;
+      const code = String(error?.code ?? "").toLowerCase();
+      const message = String(error?.message ?? "").toLowerCase();
+      if (error?.status === 429 || code.includes("rate_limit") || message.includes("rate limit") || message.includes("security purposes")) {
+        setResendMessage("Too many email requests. Wait a few minutes and check your inbox before trying again.");
+      } else if (error && ((error.status ?? 0) >= 500 || message.includes("network") || message.includes("fetch") || message.includes("timeout") || message.includes("timed out"))) {
+        setResendMessage("We couldn't confirm whether an email was sent. Check your inbox and connection, then wait before trying again.");
+      } else {
+        // Do not reveal whether this email has an account or is already verified.
+        setResendMessage("If this email is eligible for signup confirmation, check its inbox and spam for a new link. If nothing arrives, wait before trying again.");
+      }
+    } catch {
+      if (isCurrent()) {
+        setResendMessage("We couldn't confirm whether an email was sent. Check your inbox and connection, then wait before trying again.");
+      }
+    } finally {
+      if (resendWaitTimerRef.current !== null) clearTimeout(resendWaitTimerRef.current);
+      resendWaitTimerRef.current = null;
+      resendWaitExpiredRef.current = false;
+      resendLatchRef.current.release();
+      if (resendFocusedRef.current) {
+        setResending(false);
+        setResendWaitExpired(false);
+        if (!isCurrent()) {
+          setResendMessage((current) => current === PENDING_CONFIRMATION_MESSAGE ? "" : current);
+        }
+      }
+    }
+  };
+
   const signIn = async () => {
+    if (resendLatchRef.current.isActive() && !resendWaitExpiredRef.current) return;
     if (!email || !password) {
       Alert.alert("Error", "Enter email and password");
       return;
     }
 
     if (!signInLatchRef.current.tryAcquire()) return;
+    resendGenerationRef.current += 1;
+    setResendMessage("");
     setLoading(true);
 
     try {
@@ -175,7 +286,7 @@ export default function Login() {
                 returnKeyType="next"
                 testID="auth-login-email-input"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={changeEmail}
                 onFocus={() => {
                   setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
                 }}
@@ -204,7 +315,22 @@ export default function Login() {
               />
             </View>
 
-            <NeonSignInButton loading={loading} onPress={() => { void signIn(); }} />
+            <NeonSignInButton loading={loading || (resending && !resendWaitExpired)} onPress={() => { void signIn(); }} />
+
+            <Text style={styles.muted}>Need to confirm your account? Send a new signup link to the email entered above.</Text>
+            <AppActionButton
+              accessibilityLabel="Resend signup confirmation email"
+              label={resending ? (resendWaitExpired ? "Confirmation request pending" : "Requesting confirmation...") : "Resend confirmation email"}
+              disabled={loading || resending}
+              onPress={() => { void resendConfirmation(); }}
+              testID="login-resend-confirmation-button"
+              variant="secondary"
+            />
+            {resendMessage ? (
+              <Text style={styles.muted} accessibilityLiveRegion="polite" testID="login-resend-confirmation-message">
+                {resendMessage}
+              </Text>
+            ) : null}
 
             <AppActionButton
               accessibilityLabel="Forgot password"

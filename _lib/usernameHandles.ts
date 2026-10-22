@@ -156,13 +156,13 @@ export function getUsernameErrorMessage(error: unknown) {
   return "Couldn't update username. Try again.";
 }
 
-export async function updateMyUsername(value: unknown): Promise<{ username: string; message: string }> {
+export async function updateMyUsername(value: unknown, expectedUserId?: string): Promise<{ username: string; message: string }> {
   const local = validateUsernameHandle(value);
   if (!local.available) throw new Error(local.message);
 
   const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("update_my_username", {
     p_username: local.username,
-  });
+  }, expectedUserId);
 
   if (error) throw new Error(getUsernameErrorMessage(error));
 

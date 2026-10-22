@@ -30,7 +30,7 @@ export async function completePendingSignupProfile(
   const user = input.user ?? sessionUser;
   const userId = toText(user?.id);
   if (!userId || !sessionUser?.id || sessionUser.id !== userId) {
-    return { ok: true, completed: false };
+    return { ok: false, message: "Sign in again to finish account setup." };
   }
 
   const metadata = user?.user_metadata ?? {};
@@ -73,7 +73,7 @@ export async function completePendingSignupProfile(
   }
 
   try {
-    await updateMyUsername(local.username);
+    await updateMyUsername(local.username, userId);
   } catch (error) {
     return { ok: false, message: getUsernameErrorMessage(error) };
   }
