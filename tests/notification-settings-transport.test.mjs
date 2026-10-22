@@ -55,7 +55,7 @@ test('actual registration rechecks ownership after held storage before backend d
   const held = deferred(), entered = deferred(), m = await mount(t, { actualPush: true });
   let installReads = 0;
   m.state.storageReader = (key, value) => {
-    if (key.endsWith('install_id.v1') && ++installReads > 1) { entered.resolve(); return held.promise; }
+    if (key.endsWith('install_id.v1') && ++installReads === 1) { entered.resolve(); return held.promise; }
     return value;
   };
   await m.act(() => m.button('Register Device').onPress()); await entered.promise;
@@ -63,6 +63,8 @@ test('actual registration rechecks ownership after held storage before backend d
   await m.act(() => held.resolve('fixture-install'));
   assert.equal(m.state.transport.filter(r => r.action === 'register').length, 0,
     'storage completion must not dispatch a retired registration');
+  assert.equal(m.state.transport.filter(r => r.action === 'registration-intent').length, 0,
+    'storage completion must not initialize a retired registration snapshot');
 });
 
 test('same-owner registration still permits a slower native provider after Expo succeeds', async t => {

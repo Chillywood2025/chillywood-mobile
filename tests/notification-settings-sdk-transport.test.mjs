@@ -42,8 +42,14 @@ async function harness(backend = createPreferenceBackend()) {
     }
     assert.ok(url.pathname.endsWith('/notification-device-tokens'));
     requests.push({ payload, authorization: headers.get('Authorization') });
+    // Envelope-only transport double. Registration CAS behavior is exercised
+    // against real SQL in notification-registration-sdk-transport.test.mjs.
+    if (payload.action === 'registration-intent') return json({ ...payload, requestAccepted: true, status: 'ready',
+      incarnation: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision: '0', registered: false, tokenFingerprint: null });
     return json(payload.action ? { ...payload, requestAccepted: true, disposition: 'revoked',
-      status: payload.action === 'register' ? 'registered' : 'revoked', tokenFingerprint: '123456abcdef' } : payload);
+      status: payload.action === 'register' ? 'registered' : 'revoked', tokenFingerprint: '123456abcdef',
+      ...(payload.action === 'register' ? { registered: true, incarnation: payload.expectedIncarnation,
+        revision: String(BigInt(payload.expectedRevision) + 1n) } : {}) } : payload);
   };
   const client = createClient('https://notification-sdk.invalid', 'fixture-anon-key', {
     accessToken: async () => {
@@ -125,11 +131,13 @@ for (const action of ['save', 'register', 'insert']) {
       if (action !== 'register' && replacement !== 'same-session token refresh') {
         assert.match(settled.error?.message || '', /no longer current/);
       } else assert.equal(settled.error, undefined);
-      const writes = h.requests.filter(r => r.payload.action !== 'revoke');
+      const writes = h.requests.filter(r => !['revoke', 'registration-intent'].includes(r.payload.action));
       assert.equal(writes.length, 1);
       assert.equal(writes[0].authorization, 'Bearer fixture-token-a', 'SDK must not substitute the successor bearer');
       assert.equal(writes[0].payload.user_id || writes[0].payload.userId, 'owned-user');
       if (action === 'register') assert.equal(writes[0].payload.sessionGeneration, 'session-a');
+      if (action === 'register') assert.ok(h.requests.filter(r => r.payload.action === 'registration-intent')
+        .every(r => r.authorization === 'Bearer fixture-token-a'), 'snapshot and mutation share the initiating bearer');
     });
   }
 }

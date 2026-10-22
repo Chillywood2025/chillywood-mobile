@@ -99,6 +99,10 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     functions: { async invoke(name, { body }) {
       assert.equal(name, 'notification-device-tokens'); state.transport.push(plain(body));
       if (state.backendBarrier) await state.backendBarrier(body);
+      // This mounted UI fixture models envelopes, not registration CAS. The
+      // dedicated exact-SDK suite executes the real registration SQL instead.
+      if (body.action === 'registration-intent') return { data: { ...body, requestAccepted: true, status: 'ready',
+        incarnation: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision: '0', registered: false, tokenFingerprint: null }, error: null };
       state.backendCommits.push(plain(body));
       if (body.action === 'register') {
         state.installOwner = { userId: body.userId, sessionGeneration: body.sessionGeneration };
@@ -108,6 +112,8 @@ export async function mount(t, { read, write, register, authority: initialAuthor
         state.installOwner = null; state.registration = registration('not_registered');
       }
       return { data: { ...body, requestAccepted: true, status: body.action === 'register' ? 'registered' : 'revoked',
+        ...(body.action === 'register' ? { registered: true, incarnation: body.expectedIncarnation,
+          revision: String(BigInt(body.expectedRevision ?? '0') + 1n) } : {}),
         disposition: state.revokeReceipt === 'valid' ? 'revoked' : undefined, tokenFingerprint: '123456abcdef' },
         error: body.action === 'revoke' && state.revokeReceipt === 'rejected' ? {} : null };
     } },

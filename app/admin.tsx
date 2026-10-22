@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminReadLifecycle } from "../hooks/use-admin-read-lifecycle";
+import { useAdminScopedRead } from "../hooks/use-admin-scoped-read";
 import { useAdminHistoryRead } from "../hooks/use-admin-history-read";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { buildAdminNavigation, getAdminContentInsets } from "../_lib/adminNavigation";
@@ -3639,14 +3640,14 @@ export default function AdminStudioScreen() {
   const [legalHoldResult, setLegalHoldResult] = useState<Record<string, unknown> | null>(null);
   const [legalSubsection, setLegalSubsection] = useState<LegalSubsection>("intake");
   const [ownerControlNotice, setOwnerControlNotice] = useState<string | null>(null);
-  const [ownerControlLoading, setOwnerControlLoading] = useState(false);
+  const [, setOwnerControlLoading] = useState(false);
   const [storedAuditExplorerRows, setAuditExplorerRows] = useState<OwnerControlAuditRow[]>([]);
   const [auditExplorerActionFilter, setAuditExplorerActionFilter] = useState("");
   const [auditExplorerTargetFilter, setAuditExplorerTargetFilter] = useState("");
   const [auditExplorerBreakGlassOnly, setAuditExplorerBreakGlassOnly] = useState(false);
   const [auditExplorerNetworkFilter, setAuditExplorerNetworkFilter] =
     useState<AuditExplorerNetworkFilter>("all");
-  const [permissionTemplates, setPermissionTemplates] = useState<OwnerControlPermissionTemplate[]>([]);
+  const [storedPermissionTemplates, setPermissionTemplates] = useState<OwnerControlPermissionTemplate[]>([]);
   const [permissionTemplateKey, setPermissionTemplateKey] = useState("support_agent");
   const [permissionTemplateEmail, setPermissionTemplateEmail] = useState("");
   const [permissionTemplateDuration, setPermissionTemplateDuration] = useState("until_revoked");
@@ -3698,8 +3699,8 @@ export default function AdminStudioScreen() {
   const [legalRequestTargetId, setLegalRequestTargetId] = useState("");
   const [legalRequestTargetType, setLegalRequestTargetType] = useState<"targetUserId" | "targetContentId" | "targetThreadId" | "targetRoomId" | "targetReportId">("targetUserId");
   const [legalRequestBusy, setLegalRequestBusy] = useState(false);
-  const [ownerSecurityStatus, setOwnerSecurityStatus] = useState<OwnerControlSecurityStatus | null>(null);
-  const [ownerSafetyDashboard, setOwnerSafetyDashboard] = useState<OwnerControlSafetyDashboard | null>(null);
+  const [storedOwnerSecurityStatus, setOwnerSecurityStatus] = useState<OwnerControlSecurityStatus | null>(null);
+  const [storedOwnerSafetyDashboard, setOwnerSafetyDashboard] = useState<OwnerControlSafetyDashboard | null>(null);
   const [ownerSecurityAuditFilter, setOwnerSecurityAuditFilter] = useState<OwnerSecurityAuditFilter>("all");
   const [ownerSecurityActionBusy, setOwnerSecurityActionBusy] = useState<string | null>(null);
   const [ownerSecurityConfirmVisible, setOwnerSecurityConfirmVisible] = useState(false);
@@ -3962,6 +3963,18 @@ export default function AdminStudioScreen() {
       ])
     );
   const canAccessOwnerSecurity = isOwnerStaff;
+  const clearPermissionTemplateRead = useCallback(() => setPermissionTemplates([]), []);
+  const clearOwnerSecurityRead = useCallback(() => {
+    setOwnerSecurityStatus(null);
+    setOwnerSafetyDashboard(null);
+  }, []);
+  const permissionTemplateRead = useAdminScopedRead(canManagePermissionTemplates ? adminReadAuthorityKey : null, authority, clearPermissionTemplateRead);
+  const ownerSecurityRead = useAdminScopedRead(canAccessOwnerSecurity ? adminReadAuthorityKey : null, authority, clearOwnerSecurityRead);
+  const runPermissionTemplateRead = permissionTemplateRead.run;
+  const runOwnerSecurityRead = ownerSecurityRead.run;
+  const permissionTemplates = permissionTemplateRead.visible ? storedPermissionTemplates : [];
+  const ownerSecurityStatus = ownerSecurityRead.visible ? storedOwnerSecurityStatus : null;
+  const ownerSafetyDashboard = ownerSecurityRead.visible ? storedOwnerSafetyDashboard : null;
   const canAccessCanaryChecks = isSignedIn && isActive && platformRolesChecked && canRunAdminCanaryChecks(platformRoles);
   const canaryReadAuthorityKey = canAccessCanaryChecks ? adminReadAuthorityKey : null;
   const canaryAuthorityRef = useRef({ authorityKey: canaryReadAuthorityKey, readGeneration: 0, actionPending: false });
@@ -7981,21 +7994,12 @@ export default function AdminStudioScreen() {
   }, [auditExplorerActionFilter, auditExplorerBreakGlassOnly, auditExplorerNetworkFilter, auditExplorerTargetFilter, loadAuditHistoryPage]);
 
   const loadPermissionTemplates = useCallback(async () => {
-    if (!canManagePermissionTemplates) return;
-    try {
-      setOwnerControlLoading(true);
-      setOwnerControlNotice(null);
-      const templates = await listPermissionTemplates();
+    await runPermissionTemplateRead(listPermissionTemplates, (templates) => {
       setPermissionTemplates(templates);
-      if (templates.length && !templates.some((template) => template.key === permissionTemplateKey)) {
-        setPermissionTemplateKey(templates[0].key);
-      }
-    } catch (err: any) {
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load permission templates."));
-    } finally {
-      setOwnerControlLoading(false);
-    }
-  }, [canManagePermissionTemplates, permissionTemplateKey]);
+      setPermissionTemplateKey((selected) => templates.length && !templates.some((template) => template.key === selected)
+        ? templates[0].key : selected);
+    }, (error) => formatAdminOperationFailure(error, "Failed to load permission templates."));
+  }, [runPermissionTemplateRead]);
 
   const runPermissionTemplateAction = useCallback(async (action: "apply" | "revoke") => {
     const email = permissionTemplateEmail.trim().toLowerCase();
@@ -8489,19 +8493,11 @@ export default function AdminStudioScreen() {
   }, [canAccessLegalEvidence, isOwnerStaff, legalBusy, legalReason, loadLegalIntake, openLegalRequestDetail]);
 
   const loadOwnerSecurity = useCallback(async () => {
-    if (!canAccessOwnerSecurity) return;
-    try {
-      setOwnerControlLoading(true);
-      setOwnerControlNotice(null);
-      const result = await readOwnerSecurityStatus();
+    await runOwnerSecurityRead(readOwnerSecurityStatus, (result) => {
       setOwnerSecurityStatus(result.security);
       setOwnerSafetyDashboard(result.safetyDashboard);
-    } catch (err: any) {
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load owner security panel."));
-    } finally {
-      setOwnerControlLoading(false);
-    }
-  }, [canAccessOwnerSecurity]);
+    }, (error) => formatAdminOperationFailure(error, "Failed to load owner security panel."));
+  }, [runOwnerSecurityRead]);
 
   const runOwnerSecurityTrustCurrentDevice = useCallback(async () => {
     if (!canAccessOwnerSecurity || ownerSecurityActionBusy) return;
@@ -17716,12 +17712,26 @@ export default function AdminStudioScreen() {
         {operatorTab === "permission-templates" ? (
         <View style={styles.configCard}>
           <OwnerControlPanelHeader
+            actions={(
+              <OwnerAdminActionButton
+                label="Refresh templates"
+                loading={permissionTemplateRead.loading}
+                disabled={!permissionTemplateRead.visible || permissionTemplateRead.loading}
+                onPress={() => void loadPermissionTemplates()}
+              />
+            )}
             badgeLabel={canManagePermissionTemplates ? "Authorized" : "Locked"}
             badgeTone={canManagePermissionTemplates ? "success" : "locked"}
             kicker="PERMISSION TEMPLATES"
             subtitle="Optional presets for Step 2 scoped permissions. Templates never create Admin, Moderator, Owner, payout, room, or publish authority."
             title="Scoped Permission Presets"
           />
+
+          {permissionTemplateRead.error ? (
+            <View testID="permission-template-read-error" style={[styles.notice, styles.noticeWarn]}>
+              <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.noticeText}>{permissionTemplateRead.error} Use Refresh templates to try again.</Text>
+            </View>
+          ) : null}
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -17801,14 +17811,14 @@ export default function AdminStudioScreen() {
                 />
               </OwnerStickyActionBar>
               {!canManagePermissionTemplates ? (
-                <OwnerDisabledReason reason="Template actions require Owner or staff_permission_template_manage permission. Admins cannot apply templates to themselves." />
+                <OwnerDisabledReason reason="Template actions require an active Owner session, or an active Admin or Moderator session with staff_permission_templates or admin_grants permission. Ask an Owner to review your access. Admins cannot apply templates to themselves." />
               ) : null}
             </View>
           </OwnerAdminSection>
 
           <OwnerAdminSection
             defaultExpanded
-            statusLabel={`${permissionTemplates.length} templates`}
+            statusLabel={permissionTemplateRead.loading ? "Loading templates..." : permissionTemplateRead.error ? "Templates unavailable" : `${permissionTemplates.length} templates`}
             statusTone="info"
             subtitle="Templates are selectable bundles only; role membership is managed separately."
             title="Template Permissions"
@@ -18150,14 +18160,14 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.ownerSecurityHeroMetaRow}>
               <Text style={styles.ownerSecurityHeroMeta}>
-                {ownerSecurityLastRefresh ? `Last checked ${formatModerationTimestamp(ownerSecurityLastRefresh)}` : ownerControlLoading ? "Refreshing security state..." : "Last checked: Not connected"}
+                {ownerSecurityLastRefresh ? `Last checked ${formatModerationTimestamp(ownerSecurityLastRefresh)}` : ownerSecurityRead.loading ? "Refreshing security state..." : "Last checked: Not connected"}
               </Text>
               <TouchableOpacity
-                style={[styles.ownerSecurityIconButton, ownerControlLoading && styles.configSaveBtnDisabled]}
+                style={[styles.ownerSecurityIconButton, ownerSecurityRead.loading && styles.configSaveBtnDisabled]}
                 onPress={() => void loadOwnerSecurity()}
-                disabled={ownerControlLoading}
+                disabled={!ownerSecurityRead.visible || ownerSecurityRead.loading}
               >
-                <Text style={styles.ownerSecurityIconButtonText}>{ownerControlLoading ? "Refreshing" : "Refresh"}</Text>
+                <Text style={styles.ownerSecurityIconButtonText}>{ownerSecurityRead.loading ? "Refreshing" : "Refresh"}</Text>
               </TouchableOpacity>
             </View>
             {ownerSecurityLoaded && Number(ownerSecurityOpenAlerts ?? 0) > 0 ? (
@@ -18172,6 +18182,12 @@ export default function AdminStudioScreen() {
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
               <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          {ownerSecurityRead.error ? (
+            <View testID="owner-security-read-error" style={[styles.notice, styles.noticeWarn]}>
+              <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.noticeText}>{ownerSecurityRead.error} Use Refresh to try again.</Text>
             </View>
           ) : null}
 
@@ -18198,7 +18214,7 @@ export default function AdminStudioScreen() {
             />
           </View>
 
-          {ownerControlLoading && !ownerSecurityLoaded ? (
+          {ownerSecurityRead.loading && !ownerSecurityLoaded ? (
             <View style={styles.ownerSecurityPanel}>
               <View style={styles.configLoadingRow}>
                 <ActivityIndicator color="#DC143C" />
@@ -18760,12 +18776,25 @@ export default function AdminStudioScreen() {
         {operatorTab === "safety-dashboard" ? (
         <View style={styles.configCard}>
           <OwnerControlPanelHeader
+            actions={(
+              <OwnerAdminActionButton
+                label="Refresh safety dashboard"
+                loading={ownerSecurityRead.loading}
+                disabled={!ownerSecurityRead.visible || ownerSecurityRead.loading}
+                onPress={() => void loadOwnerSecurity()}
+              />
+            )}
             badgeLabel={canAccessOwnerSecurity ? "Owner" : "Locked"}
             badgeTone={canAccessOwnerSecurity ? "success" : "locked"}
             kicker="OWNER SAFETY"
             subtitle="Real counts only. Missing aggregations show Manual Required instead of simulated zeroes."
             title="Safety Dashboard"
           />
+          {ownerSecurityRead.error ? (
+            <View testID="owner-safety-read-error" style={[styles.notice, styles.noticeWarn]}>
+              <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.noticeText}>{ownerSecurityRead.error} Use Refresh safety dashboard to try again.</Text>
+            </View>
+          ) : null}
           <View style={styles.dashboardGrid}>
             <OwnerMetricTile label="Open Reports" tone={ownerAttentionCountTone(ownerSafetyDashboard?.openReports)} value={ownerMetricValue(ownerSafetyDashboard?.openReports)} />
             <OwnerMetricTile label="Legal Holds" tone={ownerAttentionCountTone(ownerSafetyDashboard?.activeLegalHolds)} value={ownerMetricValue(ownerSafetyDashboard?.activeLegalHolds)} />

@@ -171,6 +171,8 @@ const legacyRetentionFunctionKeys = new Set([
 
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
 const notificationPreferenceOrderingFiles = ['20261021221300_notification_preference_revision_authority.sql'];
+const notificationRegistrationOrderingFiles = ['20261022030357_notification_registration_revision_authority.sql'];
+const notificationRegistrationFunctionKeys = new Set(['private.assert_push_registration_subject/7','private.push_registration_current/1','public.read_my_push_registration_intent/7','public.register_my_push_token/16']);
 const notificationPreferenceFunctionKeys = new Set([
   'private.advance_notification_preference_revision/0',
   'private.assert_notification_preference_session/0',
@@ -178,6 +180,7 @@ const notificationPreferenceFunctionKeys = new Set([
   'public.mutate_my_notification_preferences/4',
 ]);
 const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
+const realtimeIdentityFiles = ['20261022025600_message_realtime_replica_identity.sql'];
 const collectionOrderingFunctionKeys = new Set([
   'private.assert_user_collection_session/0', 'private.user_collection_projection_value/3',
   'public.read_my_collection_state/3', 'public.mutate_my_collection_state/5',
@@ -270,8 +273,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size);
     assert.deepEqual(before.functions.filter(fn=>notificationPreferenceFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationPreferenceFunctionKeys].sort());
+    assert.deepEqual(before.functions.filter(fn=>notificationRegistrationFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationRegistrationFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>brandRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...brandRetentionFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>originalCopyFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...originalCopyFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>legacyRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...legacyRetentionFunctionKeys].sort());
@@ -308,13 +312,15 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>realtimeIdentityFiles.includes(file)),realtimeIdentityFiles);
     assert.deepEqual(replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
     assert.deepEqual(replayReport.files.filter(file=>legacyRetentionFiles.includes(file)),legacyRetentionFiles);
     assert.deepEqual(replayReport.files.filter(file=>explicitApiGrantFiles.includes(file)),explicitApiGrantFiles);
     assert.deepEqual(replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
     assert.deepEqual(replayReport.files.filter(file=>collectionOrderingFiles.includes(file)),collectionOrderingFiles);
     assert.deepEqual(replayReport.files.filter(file=>notificationPreferenceOrderingFiles.includes(file)),notificationPreferenceOrderingFiles);
+    assert.deepEqual(replayReport.files.filter(file=>notificationRegistrationOrderingFiles.includes(file)),notificationRegistrationOrderingFiles);
     assert.deepEqual(replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles,
       'entire Owner Security and null-actor successor bundle is replayed');
     assert.deepEqual(replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles,

@@ -54,7 +54,8 @@ for (const stage of ["room", "invite"]) {
 test("unknown invite backend text remains private and cannot become rate-limit success", async () => {
   const { api, calls } = fixture({ message: "private_internal_failure" });
   await assert.rejects(api.startChatThreadCall("thread", "video"), error => {
-    assert.equal(error.message, "Unable to start Chi'lly Chat call. The receiver invite could not be saved.");
+    assert.equal(error.message, "Unable to confirm whether this Chi'lly Chat call was started. Refresh the thread before trying again.");
+    assert.doesNotMatch(error.message, /private_internal_failure|could not be saved/);
     return true;
   });
   assert.equal(calls.cleanup, 1);
@@ -65,6 +66,7 @@ for (const created of [true, false]) {
   test(`authoritative ${created ? "created" : "reused"} invite preserves canonical dispatch and cleanup behavior`, async () => {
     const { api, calls } = fixture({ stage: "success", created });
     const result = await api.startChatThreadCall("thread", "voice");
+    assert.equal(result.disposition, "ready");
     assert.equal(result.invite.id, "invite");
     assert.equal(result.roomId, "ROOM");
     assert.equal(calls.create, 1);
