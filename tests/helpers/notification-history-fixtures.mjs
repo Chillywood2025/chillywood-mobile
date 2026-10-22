@@ -35,5 +35,13 @@ export function notificationHistoricalSource(name) {
   // At the reviewed baseline, require byte-exact equivalence to the original
   // local blob. Unrelated later edits remain current rather than being reverted.
   if (sha256(current) === fixture.baselineSha256) assert.equal(sha256(result), fixture.targetSha256, `${name}: original blob SHA-256`);
+  // A later source context is a separately named behavioral witness, not a
+  // claim that an unavailable historical helper blob has been recovered.
+  if (fixture.contextWitness && sha256(current) === fixture.contextWitness.rebasedSourceSha256) {
+    assert.equal(sha256(result), fixture.contextWitness.targetSha256, `${name}: exact current-context witness SHA-256`);
+    if (fixture.contextWitness.originalByteIdentityVerified) {
+      assert.equal(sha256(result), fixture.targetSha256, `${name}: verified original target bytes`);
+    }
+  }
   return result;
 }

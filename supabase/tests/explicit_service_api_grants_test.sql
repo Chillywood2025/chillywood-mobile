@@ -51,9 +51,9 @@ select is((select count(*)::integer from pg_class relation
   where namespace.nspname='private' and relation.relkind='r'
     and (relation.relname like 'content_inspection_%' or relation.relname like 'deleted_content_%'
       or relation.relname like 'deleted_media_%' or relation.relname like 'admin_canary_%'
-      or relation.relname in ('owner_security_revocation_receipts','user_collection_states','user_collection_operation_receipts'))
+      or relation.relname in ('owner_security_revocation_receipts','user_collection_states','user_collection_operation_receipts','notification_preference_operation_receipts'))
     and has_table_privilege(api.role_name,relation.oid,privilege)), 0,
-  'inspection, retention, canary and collection internals remain denied to all API roles');
+  'inspection, retention, canary, collection and preference internals remain denied to all API roles');
 
 select is((select count(*)::integer
   from (values ('public.ios_native_call_state_issuances'),('public.ios_native_call_state_connections')) protected(name)

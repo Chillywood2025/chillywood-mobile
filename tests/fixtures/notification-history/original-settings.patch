@@ -9,10 +9,12 @@
  import {
    readNotificationPreferences,
    readCurrentPushRegistration,
-@@ -30,11 +30,6 @@
+@@ -30,13 +30,6 @@
    openNativeCallAlertSettings,
    revokeCurrentPushInstall,
    updateNotificationPreferences,
+-  createNotificationPreferenceIntent,
+-  NotificationPreferenceWriteError,
 -  hasPendingNotificationPreferenceWrite,
 -  subscribeToNotificationPreferenceWrites,
 -  hasPendingNotificationPushRegistration,
@@ -21,10 +23,13 @@
    type NativeCallAlertStatus,
    type NotificationPreferencePatch,
    type NotificationPreferenceSettings,
-@@ -121,18 +116,6 @@
- 
- type NotificationPreferenceKey = keyof Omit<NotificationPreferenceSettings, "updatedAt">;
- 
+@@ -121,19 +114,7 @@
+   return "cover" as const;
+ };
+-
++
+-type NotificationPreferenceKey = keyof NotificationPreferencePatch;
+-
 -type NotificationSettingsView = {
 -  preferences: NotificationPreferenceSettings | null;
 -  loading: boolean;
@@ -36,11 +41,12 @@
 -const EMPTY_NOTIFICATION_SETTINGS: NotificationSettingsView = {
 -  preferences: null, loading: false, error: null, savingKey: null, registration: null, callAlertStatus: null,
 -};
++type NotificationPreferenceKey = keyof Omit<NotificationPreferenceSettings, "updatedAt">;
 -
++
  type NotificationPreferenceItem = {
    key: NotificationPreferenceKey;
-   label: string;
-@@ -591,38 +574,12 @@
+@@ -593,38 +574,12 @@
      file: ProfileMediaImageFile;
      fitMode: ProfileAppearanceFitMode;
    } | null>(null);
@@ -85,10 +91,11 @@
    const ringtonePreviewSoundRef = useRef<ChillyChatPlayingSound | null>(null);
    const [canOpenAdminDashboard, setCanOpenAdminDashboard] = useState(false);
    const [adminAccessLoading, setAdminAccessLoading] = useState(false);
-@@ -900,175 +857,71 @@
+@@ -902,189 +857,71 @@
      return () => clearTimeout(timeout);
    }, [myProfile?.username, usernameDraft]);
- 
+-
++
 -  const retireNotificationOperation = useCallback(() => {
 -    notificationScope.generation += 1;
 -    notificationScope.reading = false;
@@ -216,10 +223,20 @@
 -    });
 -    return () => subscription.remove();
 -  }, [refreshNotifications, retireNotificationOperation]);
+-
+-  const presentNotificationPreferenceFailure = useCallback((error: unknown, fallback: string) => {
+-    if (error instanceof NotificationPreferenceWriteError) {
+-      patchNotificationSettings({ preferences: error.currentPreferences, error: error.message });
+-      return error.message;
+-    }
+-    return getUserFacingErrorMessage(error, fallback);
+-  }, [patchNotificationSettings]);
 +  }, [isLoading, isSignedIn, refreshNotifications]);
- 
+-
++
    const onToggleNotificationPreference = useCallback(async (
-     key: keyof Omit<NotificationPreferenceSettings, "updatedAt">,
+-    key: NotificationPreferenceKey,
++    key: keyof Omit<NotificationPreferenceSettings, "updatedAt">,
      value: boolean,
    ) => {
 -    if (!notificationPreferences) return;
@@ -229,9 +246,10 @@
 +
 +    setNotificationSavingKey(key);
      try {
+-      const intent = createNotificationPreferenceIntent(notificationPreferences);
 -      const save = async () => {
 -        const updated = await updateNotificationPreferences({ [key]: value } as NotificationPreferencePatch, notificationAuthority?.userId,
--          { authority: notificationAuthority, isCurrent: operation.current });
+-          { authority: notificationAuthority, isCurrent: operation.current }, intent);
 -        if (!operation.current()) return;
 -        patchNotificationSettings({ preferences: updated, error: null });
 -        if (key === "pushEnabled" && !value) {
@@ -254,29 +272,36 @@
 +      }
      } catch (error) {
 -      if (!operation.current()) return;
-       const message = getUserFacingErrorMessage(error, "Unable to update notification preferences.");
+-      const message = presentNotificationPreferenceFailure(error, "Unable to update notification preferences.");
++      const message = getUserFacingErrorMessage(error, "Unable to update notification preferences.");
        Alert.alert("Notifications", message);
      } finally {
 -      operation.finish();
 -    }
--  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, notificationScope, patchNotificationSettings]);
+-  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, notificationScope, patchNotificationSettings, presentNotificationPreferenceFailure]);
 +      setNotificationSavingKey(null);
 +    }
 +  }, [notificationPreferences, notificationSavingKey]);
- 
+-
++
    const onPressRegisterPush = useCallback(async () => {
+-    if (!notificationPreferences) return;
 -    const operation = beginNotificationOperation("push-register");
 -    if (!operation) return;
 +    if (notificationSavingKey) return;
 +
 +    setNotificationSavingKey("push-register");
      try {
+-      const intent = createNotificationPreferenceIntent(notificationPreferences);
 -      const result = await requestPushPermissionAndRegister({ authority: notificationAuthority, isCurrent: operation.current });
 -      if (!operation.current()) return;
+-      // Registration has its own confirmed outcome. A later preference CAS
+-      // conflict must not misrepresent that completed provider operation.
+-      patchNotificationSettings({ registration: result });
 +      const result = await requestPushPermissionAndRegister();
        let nextRegistration = result;
        if (result.status === "registered") {
--        const updated = await updateNotificationPreferences({ pushEnabled: true }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current });
+-        const updated = await updateNotificationPreferences({ pushEnabled: true }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current }, intent);
 -        if (!operation.current()) return;
 -        patchNotificationSettings({ preferences: updated, error: null });
 +        const updated = await updateNotificationPreferences({ pushEnabled: true });
@@ -288,21 +313,23 @@
 -        patchNotificationSettings({ registration: nextRegistration });
 -      }
 -    } catch (error) {
--      if (operation.current()) Alert.alert("Notifications", getUserFacingErrorMessage(error, "Unable to register this device for push alerts."));
+-      if (operation.current()) Alert.alert("Notifications", presentNotificationPreferenceFailure(error, "Unable to register this device for push alerts."));
 +      setPushRegistration(nextRegistration);
      } finally {
 -      operation.finish();
 -    }
--  }, [notificationAuthority, beginNotificationOperation, notificationScope, patchNotificationSettings]);
+-  }, [notificationAuthority, beginNotificationOperation, notificationScope, notificationPreferences, patchNotificationSettings, presentNotificationPreferenceFailure]);
 +      setNotificationSavingKey(null);
 +    }
 +  }, [notificationSavingKey]);
- 
+-
++
    const onPressOpenNotificationSettings = useCallback(async () => {
      await Linking.openSettings().catch(() => {
-@@ -1077,8 +930,35 @@
+@@ -1093,8 +930,35 @@
    }, []);
- 
+-
++
    const onPressRefreshPushRegistration = useCallback(async () => {
 -    await refreshNotifications(true);
 -  }, [refreshNotifications]);
@@ -335,12 +362,14 @@
 +      setNotificationSavingKey(null);
 +    }
 +  }, [notificationSavingKey]);
- 
+-
++
    const onPressNativeCallAlertSettings = useCallback(async () => {
      const opened = await openNativeCallAlertSettings();
-@@ -1091,23 +971,21 @@
+@@ -1107,24 +971,21 @@
    }, []);
- 
+-
++
    const onSelectChillyChatRingtone = useCallback(async (key: ChillyChatRingtoneKey) => {
 -    if (!notificationPreferences) return;
 -    const operation = beginNotificationOperation("chillyChatCallSoundKey");
@@ -348,57 +377,66 @@
 +    if (!notificationPreferences || notificationSavingKey) return;
 +    setNotificationSavingKey("chillyChatCallSoundKey");
      try {
--      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: key }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current });
+-      const intent = createNotificationPreferenceIntent(notificationPreferences);
+-      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: key }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current }, intent);
 -      if (operation.current()) patchNotificationSettings({ preferences: updated, error: null });
 +      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: key });
 +      setNotificationPreferences(updated);
      } catch (error) {
 -      if (!operation.current()) return;
-       const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call sound.");
+-      const message = presentNotificationPreferenceFailure(error, "Unable to update Chi'lly Chat call sound.");
++      const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call sound.");
        Alert.alert("Chi'lly Chat calls", message);
      } finally {
 -      operation.finish();
 -    }
--  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, patchNotificationSettings]);
+-  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, patchNotificationSettings, presentNotificationPreferenceFailure]);
 +      setNotificationSavingKey(null);
 +    }
 +  }, [notificationPreferences, notificationSavingKey]);
- 
+-
++
    const onToggleChillyChatCallRing = useCallback(async (enabled: boolean) => {
 -    if (!notificationPreferences) return;
 +    if (!notificationPreferences || notificationSavingKey) return;
- 
+-
++
      const nextSoundKey: ChillyChatRingtoneKey = enabled
        ? notificationPreferences.chillyChatCallSoundKey === "silent_vibrate"
-@@ -1115,19 +993,17 @@
+@@ -1132,20 +993,17 @@
          : notificationPreferences.chillyChatCallSoundKey
        : "silent_vibrate";
- 
+-
++
 -    const operation = beginNotificationOperation("chillyChatCallSoundKey");
 -    if (!operation) return;
 +    setNotificationSavingKey("chillyChatCallSoundKey");
      try {
--      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: nextSoundKey }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current });
+-      const intent = createNotificationPreferenceIntent(notificationPreferences);
+-      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: nextSoundKey }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current }, intent);
 -      if (operation.current()) patchNotificationSettings({ preferences: updated, error: null });
 +      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: nextSoundKey });
 +      setNotificationPreferences(updated);
      } catch (error) {
 -      if (!operation.current()) return;
-       const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call ring.");
+-      const message = presentNotificationPreferenceFailure(error, "Unable to update Chi'lly Chat call ring.");
++      const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call ring.");
        Alert.alert("Chi'lly Chat calls", message);
      } finally {
 -      operation.finish();
 -    }
--  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, patchNotificationSettings]);
+-  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, patchNotificationSettings, presentNotificationPreferenceFailure]);
 +      setNotificationSavingKey(null);
 +    }
 +  }, [notificationPreferences, notificationSavingKey]);
- 
+-
++
    const onPreviewChillyChatRingtone = useCallback(async () => {
      if (!notificationPreferences) return;
-@@ -1202,14 +1078,13 @@
+@@ -1220,14 +1078,13 @@
      : "Premium purchases are temporarily unavailable while setup is being finalized.";
- 
+-
++
    const pushStatusLabel = useMemo(() => {
 -    if (notificationPushPending) return "Device change pending";
      if (pushRegistration?.status === "registered") return "Registered";
@@ -412,7 +450,7 @@
    const showRegisterPushButton = !pushRegistration
      || pushRegistration.status === "not_registered"
      || pushRegistration.status === "denied"
-@@ -2353,9 +2228,7 @@
+@@ -2371,9 +2228,7 @@
        >
          <SettingsRow
            title="Device push status"
@@ -423,4 +461,16 @@
            value={pushStatusLabel}
          >
            {pushRegistration?.tokenFingerprint ? (
+@@ -2399,9 +2254,9 @@
+               </TouchableOpacity>
+             ) : showRegisterPushButton ? (
+               <TouchableOpacity
+-                style={[styles.utilityButton, (!!notificationSavingKey || !notificationPreferences) && styles.utilityButtonDisabled]}
++                style={[styles.utilityButton, !!notificationSavingKey && styles.utilityButtonDisabled]}
+                 activeOpacity={0.86}
+-                disabled={!!notificationSavingKey || !notificationPreferences}
++                disabled={!!notificationSavingKey}
+                 onPress={() => {
+                   void onPressRegisterPush();
+                 }}
 
