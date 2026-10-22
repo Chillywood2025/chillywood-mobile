@@ -27,6 +27,7 @@ const compiled = ts.transpileModule([
     "readCurrentPushSessionBinding", "samePushSessionBinding", "registerPushTokenWithBackend",
     "pendingNotificationPushRegistrations", "notificationPushRegistrationListeners", "hasPendingNotificationPushRegistration",
     "beginNotificationPushRegistration", "captureNotificationOperationTransport",
+    "registrationUuidPattern", "registrationRevisionValid", "capturePushRegistrationIntents",
     "registerAndroidNativeFcmToken", "mergeAndroidPushRegistrationResults",
     "PUSH_REGISTRATION_PROVIDER_DEADLINE_MS", "buildPushRegistrationProviderError",
     "registerCurrentPushProvidersWithDeadline", "requestPushPermissionAndRegister", "refreshPushRegistrationIfGranted",
@@ -46,6 +47,7 @@ function load(options = {}) {
   const storage = new Map();
   const writes = [];
   const registrations = [];
+  const intents = [];
   const revocations = [];
   const reads = { expo: 0, fcm: 0 };
   const timers = new Map();
@@ -67,21 +69,32 @@ function load(options = {}) {
     captureAccountBoundSupabaseMutationSubject: async () => ({ authority: current, accessToken: 'fixture-only-token' }),
     revokePushOwnershipForSession: async (old) => { revocations.push({ ...old }); },
     AsyncStorage: {
-      getItem: async (key) => storage.get(key) ?? null,
+      getItem: async (key) => options.storageRead ? options.storageRead(key, storage.get(key) ?? null) : storage.get(key) ?? null,
       setItem: async (key, value) => { writes.push({ key, value }); storage.set(key, value); },
     },
     Notifications: {
-      getPermissionsAsync: async () => ({ granted: true }),
+      getPermissionsAsync: async () => { if (options.permission) await options.permission(); return { granted: true }; },
       getExpoPushTokenAsync: async () => { reads.expo += 1; return options.expo ? options.expo() : { data: "expo-test-token" }; },
       getDevicePushTokenAsync: async () => { reads.fcm += 1; return options.fcm ? options.fcm() : { data: "fcm-test-token" }; },
     },
     supabase: { functions: { invoke: async (name, { body }) => {
       assert.equal(name, "notification-device-tokens");
+      // Provider/lifecycle fixture only; real CAS lives in the SQL SDK suite.
+      if (body.action === "registration-intent") {
+        intents.push({ ...body });
+        if (options.intent) await options.intent(body);
+        const data = { ...body, requestAccepted: true, status: "ready",
+          incarnation: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", revision: "0", registered: false, tokenFingerprint: null };
+        if (options.intentReceipt) options.intentReceipt(data);
+        return { data, error: null };
+      }
       registrations.push({ ...body });
       if (options.backend) await options.backend(body);
-      const data = { requestAccepted: true, status: "registered", userId: body.userId,
+      const data = { requestAccepted: true, status: "registered", registered: true, userId: body.userId,
         accountId: body.accountId, sessionGeneration: body.sessionGeneration,
         installId: body.installId, platform: body.platform, provider: body.provider,
+        operationId: body.operationId, expectedIncarnation: body.expectedIncarnation, expectedRevision: body.expectedRevision,
+        incarnation: body.expectedIncarnation, revision: String(BigInt(body.expectedRevision) + 1n),
         operationKey: body.operationKey, tokenFingerprint: body.provider === "expo" ? "111111111111" : "222222222222" };
       if (options.receipt) options.receipt(data);
       return { data, error: null };
@@ -91,7 +104,7 @@ function load(options = {}) {
   });
   new vm.Script(compiled).runInContext(context);
   return {
-    reads, registrations, revocations, storage, writes, timers,
+    reads, registrations, intents, revocations, storage, writes, timers,
     changeAuthority(value) { current = value; for (const listener of authorityListeners) listener(value); },
     start(method = "refreshPushRegistrationIfGranted") {
       const observed = { settled: false, result: null };
@@ -222,4 +235,73 @@ test("iOS held Expo still releases at the existing deadline without native work"
   const observed = h.start(); await flush(); await h.advance(15_000);
   assert.equal(observed.result.status, "error"); assert.equal(h.reads.fcm, 0);
   h.changeAuthority(null); hold.resolve({ data: "late" }); await flush(); assert.equal(h.registrations.length, 0);
+});
+
+
+for (const heldProvider of ["expo", "fcm"]) for (const method of ["requestPushPermissionAndRegister", "refreshPushRegistrationIfGranted"]) {
+  test(`${method} keeps a ready ${heldProvider === "expo" ? "fcm" : "expo"} snapshot when its peer times out`, async () => {
+    const held = deferred();
+    const healthy = heldProvider === "expo" ? "fcm" : "expo";
+    const h = load({ intent: body => body.provider === heldProvider ? held.promise : undefined,
+      intentReceipt: data => { if (data.provider === heldProvider) data.revision = "99"; } });
+    const observed = h.start(method);
+    await flush();
+    assert.equal(h.intents.length, 2);
+    assert.deepEqual(h.reads, { expo: 0, fcm: 0 }, "permission/provider phase waits for a closed immutable capture window");
+    await h.advance(15000);
+    assert.equal(observed.settled, true);
+    assert.equal(observed.result.status, "registered", "a timed-out peer cannot discard a ready snapshot");
+    assert.equal(observed.result.provider, healthy);
+    assert.equal(h.reads[healthy], 1);
+    assert.equal(h.reads[heldProvider], 0);
+    assert.equal(h.registrations.length, 1);
+    assert.equal(h.registrations[0].expectedRevision, "0");
+    held.resolve(); await flush();
+    assert.equal(h.registrations.length, 1, "late capture cannot dispatch or rebase provider work");
+    assert.equal(h.reads[heldProvider], 0);
+  });
+}
+
+for (const method of ["requestPushPermissionAndRegister", "refreshPushRegistrationIfGranted"]) {
+  test(`${method} fences all late snapshots after an empty capture deadline`, async () => {
+    const held = deferred(); const h = load({ intent: () => held.promise });
+    const observed = h.start(method); await flush(); await h.advance(15000);
+    assert.equal(observed.result.registrationOutcome, "unknown");
+    held.resolve(); await flush();
+    assert.deepEqual(h.reads, { expo: 0, fcm: 0 });
+    assert.equal(h.registrations.length, 0);
+  });
+  test(`${method} discards captured and late snapshots after exact owner retirement`, async () => {
+    const held = deferred(); const h = load({ intent: body => body.provider === "expo" ? held.promise : undefined });
+    const observed = h.start(method); await flush();
+    h.changeAuthority(binding("b")); await h.advance(15000); held.resolve(); await flush();
+    assert.equal(observed.result.status, "error");
+    assert.deepEqual(h.reads, { expo: 0, fcm: 0 });
+    assert.equal(h.registrations.length, 0);
+  });
+}
+
+test("storage completing after the capture deadline cannot start snapshot or provider work", async () => {
+  const held = deferred();
+  const h = load({ storageRead: (key, value) => key.endsWith("install_id.v1") ? held.promise : value });
+  const observed = h.start(); await flush(); await h.advance(15000);
+  assert.equal(observed.result.registrationOutcome, "unknown");
+  held.resolve("fixture-install"); await flush();
+  assert.equal(h.intents.length, 0);
+  assert.equal(h.registrations.length, 0);
+  assert.deepEqual(h.reads, { expo: 0, fcm: 0 });
+});
+
+test("a late snapshot during permission work cannot join or rebase the frozen provider set", async () => {
+  const held = deferred(), permission = deferred();
+  const h = load({ intent: body => body.provider === "expo" ? held.promise : undefined,
+    permission: () => permission.promise, intentReceipt: data => { if (data.provider === "expo") data.revision = "99"; } });
+  const observed = h.start(); await flush(); await h.advance(15000);
+  held.resolve(); await flush();
+  assert.deepEqual(h.reads, { expo: 0, fcm: 0 });
+  permission.resolve(); await flush();
+  assert.equal(observed.result.status, "registered");
+  assert.deepEqual(h.reads, { expo: 0, fcm: 1 });
+  assert.equal(h.registrations.length, 1);
+  assert.equal(h.registrations[0].expectedRevision, "0");
 });

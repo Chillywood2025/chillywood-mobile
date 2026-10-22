@@ -76,8 +76,9 @@ jobs:
         # historical Git source; they never fetch or replace release receipts.
         with: { persist-credentials: false, fetch-depth: 0 }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: 20, cache: npm }
+        with: { node-version: 22, cache: npm }
       - run: npm ci
+      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix isolated-runtime/notification-edge-sdk
       - run: npm ci --prefix tests/integration/real-peer-browser --ignore-scripts
       - name: Install pinned browser for real paired call negotiation
         run: node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
@@ -134,6 +135,8 @@ jobs:
         run: |
           deno test --node-modules-dir=none --no-lock supabase/functions/_shared/livekit-seat-session-enforcement_test.ts supabase/functions/_shared/watch-party-livekit-authority_test.ts
           deno check --node-modules-dir=none --no-lock supabase/functions/livekit-token/index.ts supabase/functions/livekit-heartbeat-monitor/index.ts
+      - name: Typecheck the versioned notification registration Edge endpoint
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/notification-device-tokens/index.ts
       - name: Run exact role and explicit permission checks
         run: deno test --node-modules-dir=none --no-lock supabase/functions/_shared/exact-subject-authority_test.ts supabase/functions/_shared/platform-role-authority_test.ts
 
@@ -179,6 +182,8 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-studio-authority-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-user-collection-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-notification-preference-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-notification-registration-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-notification-registration-concurrency.mjs --negative-control
           npm run test:communication-terminal-http
           npm run test:chat-message-call-lifecycle-http
           node scripts/test-chilly-chat-real-peer-http.mjs

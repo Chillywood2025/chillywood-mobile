@@ -18,6 +18,13 @@ passing negative control: the child must reach the named intended assertion,
 exit 1 with `ERR_ASSERTION`, and have no loader/type/syntax/unhandled or cancelled
 failures. `NODE_TEST_CONTEXT` is removed from nested runners.
 
+The registration-only protocol change rebases the two helper reverse patches
+against the reviewed new helper source. Their prior current-context behavioral
+witness SHA-256 targets are unchanged. The updated provenance explicitly retains
+`originalByteIdentityVerified: false`: those witnesses are not claimed to be
+byte-identical copies of the original historical Git blobs. Settings fixtures
+and the strict single-match reconstruction checks are unchanged.
+
 Portability validation uses an invalid `GIT_DIR` while running the complete
 negative-control suite, so no unpublished object can satisfy a test:
 

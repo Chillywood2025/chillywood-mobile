@@ -1617,6 +1617,7 @@ export type PushRegistrationState = {
   tokenFingerprint: string | null;
   nativeTokenFingerprint?: string | null;
   message: string;
+  registrationOutcome?: "conflict" | "retired" | "unknown";
 };
 
 export const PUSH_OWNERSHIP_STATES = ["UNBOUND", "ACCOUNT_BOUND", "REVOCATION_PENDING", "REVOKED", "INVALID"] as const;
@@ -2373,8 +2374,64 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
   };
 }
 
+type PushRegistrationIntent = Readonly<{
+  installId: string;
+  revocationCredential: string;
+  operationId: string;
+  incarnation: string;
+  revision: string;
+}>;
+type PushRegistrationIntents = Readonly<Partial<Record<PushTokenProvider, PushRegistrationIntent>>>;
+const registrationUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const registrationRevisionValid = (value: unknown): value is string => typeof value === "string"
+  && /^(0|[1-9][0-9]{0,18})$/u.test(value) && BigInt(value) <= 9223372036854775807n;
+
+async function capturePushRegistrationIntents(owner: NotificationOperationTransport): Promise<PushRegistrationIntents> {
+  // Freeze each ready provider independently when this capture window closes.
+  // A stalled provider must not erase the other's completed baseline, and a
+  // late capture must not join/rebase the later permission or token work.
+  const authority = owner.authority;
+  if (!authority) return Object.freeze({});
+  const captured: Partial<Record<PushTokenProvider, PushRegistrationIntent>> = {};
+  let accepting = true;
+  const isOpen = () => accepting && owner.isCurrent();
+  const capture = (async () => {
+    const installId = await getNotificationInstallId();
+    if (!isOpen()) return;
+    const revocationCredential = await getNotificationRevocationCredential();
+    if (!isOpen()) return;
+    const providers: PushTokenProvider[] = Platform.OS === "android" ? ["expo", "fcm"] : ["expo"];
+    await Promise.all(providers.map(async (provider) => {
+      const random = randomHex(16);
+      const operationId = `${random.slice(0, 8)}-${random.slice(8, 12)}-4${random.slice(13, 16)}-${((parseInt(random[16], 16) & 3) | 8).toString(16)}${random.slice(17, 20)}-${random.slice(20)}`;
+      try {
+        if (!isOpen()) return;
+        const { data, error } = await supabase.functions.invoke("notification-device-tokens", {
+          headers: { Authorization: `Bearer ${owner.accessToken}` },
+          body: { action: "registration-intent", platform: Platform.OS, provider, installId, revocationCredential,
+            userId: authority.userId, accountId: authority.accountId,
+            sessionGeneration: authority.sessionGeneration },
+        });
+        const response = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null;
+        if (error || !isOpen() || response?.status !== "ready" || response.requestAccepted !== true
+          || response.userId !== authority.userId || response.accountId !== authority.accountId
+          || response.sessionGeneration !== authority.sessionGeneration || response.installId !== installId
+          || response.platform !== Platform.OS || response.provider !== provider
+          || typeof response.incarnation !== "string" || !registrationUuidPattern.test(response.incarnation)
+          || !registrationRevisionValid(response.revision)) return;
+        captured[provider] = Object.freeze({ installId, revocationCredential, operationId,
+          incarnation: response.incarnation, revision: response.revision });
+      } catch { /* This provider stays unavailable without discarding its peer. */ }
+    }));
+  })();
+  await withAuthorityReadDeadline(capture, undefined, PUSH_REGISTRATION_PROVIDER_DEADLINE_MS);
+  accepting = false;
+  return Object.freeze({ ...captured });
+}
+
 async function registerPushTokenWithBackend(input: {
   authority: Omit<PushSessionBinding, "reason">;
+  intent: PushRegistrationIntent;
   permissionStatus: PushPermissionState;
   provider: PushTokenProvider;
   token: string;
@@ -2391,14 +2448,12 @@ async function registerPushTokenWithBackend(input: {
       nativeTokenFingerprint: null,
     };
   }
-  const installId = await getNotificationInstallId();
-  const revocationCredential = await getNotificationRevocationCredential();
-  // Storage can yield after the authority read. Recheck the initiating screen
-  // immediately before dispatch; never turn a retired action into a new write.
+  const { installId, revocationCredential, operationId, incarnation, revision } = input.intent;
+  // Never replace the captured baseline after an asynchronous provider result.
   if (input.isCurrent?.() === false) {
     return buildPushRegistrationProviderError(input.permissionStatus, "Notification registration was canceled.");
   }
-  const operationKey = `register:${randomHex(16)}`;
+  const operationKey = `register:${operationId}`;
   const { data, error } = await supabase.functions.invoke("notification-device-tokens", {
     ...(input.accessToken ? { headers: { Authorization: `Bearer ${input.accessToken}` } } : {}),
     body: {
@@ -2411,6 +2466,9 @@ async function registerPushTokenWithBackend(input: {
         nativeCallStyle: input.provider === "fcm",
       },
       operationKey,
+      operationId,
+      expectedIncarnation: incarnation,
+      expectedRevision: revision,
       permissionStatus: input.permissionStatus,
       platform: Platform.OS,
       provider: input.provider,
@@ -2424,8 +2482,7 @@ async function registerPushTokenWithBackend(input: {
   const response = data && typeof data === "object" && !Array.isArray(data)
     ? data as Record<string, unknown>
     : null;
-  const exactResponse = !error && response?.requestAccepted === true
-    && normalizeText(response.status) === "registered"
+  const exactBinding = !error && response !== null
     && normalizeText(response.userId) === input.authority.userId
     && normalizeText(response.accountId) === input.authority.accountId
     && normalizeText(response.sessionGeneration) === input.authority.sessionGeneration
@@ -2433,6 +2490,15 @@ async function registerPushTokenWithBackend(input: {
     && normalizeText(response.platform) === Platform.OS
     && normalizeText(response.provider) === input.provider
     && normalizeText(response.operationKey) === operationKey
+    && response.operationId === operationId && response.expectedIncarnation === incarnation && response.expectedRevision === revision
+    && typeof response.incarnation === "string" && registrationUuidPattern.test(response.incarnation)
+    && registrationRevisionValid(response.revision)
+    && ["registered", "conflict", "retired"].includes(String(response.status))
+    && response.requestAccepted === (response.status === "registered")
+    && typeof response.registered === "boolean"
+    && (response.registered ? /^[0-9a-f]{12}$/u.test(normalizeText(response.tokenFingerprint)) : response.tokenFingerprint === null);
+  const exactResponse = exactBinding && response?.requestAccepted === true && response.status === "registered"
+    && response.registered === true && response.incarnation === incarnation && BigInt(String(response.revision)) === BigInt(revision) + 1n
     && /^[0-9a-f]{12}$/u.test(normalizeText(response.tokenFingerprint));
   const currentAuthority = await readCurrentPushSessionBinding();
   if (!samePushSessionBinding(input.authority, currentAuthority)) {
@@ -2444,7 +2510,13 @@ async function registerPushTokenWithBackend(input: {
 
   if (!exactResponse || !samePushSessionBinding(input.authority, currentAuthority) || input.isCurrent?.() === false) {
     return {
-      message: "Unable to register this device for notifications.",
+      message: exactBinding && response?.status === "conflict"
+        ? "Another registration was accepted first. Refresh device status before trying again."
+        : exactBinding && response?.status === "retired"
+          ? "This registration is no longer current. Refresh device status before trying again."
+          : "Notification registration could not be confirmed. Refresh device status before trying again.",
+      registrationOutcome: exactBinding && (response?.status === "conflict" || response?.status === "retired")
+        ? response.status : "unknown",
       permissionState: input.permissionStatus,
       provider: input.provider,
       status: "error",
@@ -2471,21 +2543,24 @@ async function registerPushTokenWithBackend(input: {
 async function registerAndroidNativeFcmToken(
   permissionStatus: PushPermissionState,
   authority: Omit<PushSessionBinding, "reason">,
+  intent: PushRegistrationIntent | undefined,
   isCurrent?: () => boolean,
   accessToken?: string,
 ): Promise<PushRegistrationState | null> {
   if (Platform.OS !== "android") return null;
   try {
+    if (!intent) throw new Error("Native registration snapshot unavailable.");
     const token = await Notifications.getDevicePushTokenAsync();
     const rawToken = normalizeText(token.data);
     if (!rawToken) return null;
-    return registerPushTokenWithBackend({ authority, permissionStatus, provider: "fcm", token: rawToken, isCurrent, accessToken });
+    return registerPushTokenWithBackend({ authority, intent, permissionStatus, provider: "fcm", token: rawToken, isCurrent, accessToken });
   } catch {
     return {
       message: "Unable to register the native Android call-alert token. Standard push registration may still work.",
       permissionState: permissionStatus,
       provider: "fcm",
       status: "error",
+      registrationOutcome: "unknown",
       tokenFingerprint: null,
       nativeTokenFingerprint: null,
     };
@@ -2532,6 +2607,7 @@ async function registerCurrentPushProvidersWithDeadline(
   projectId: string,
   failureMessage: string,
   owner: NotificationOperationTransport,
+  intents: PushRegistrationIntents,
   onSettled: () => void,
 ): Promise<PushRegistrationState> {
   const fallback = buildPushRegistrationProviderError(permissionState, failureMessage);
@@ -2541,21 +2617,17 @@ async function registerCurrentPushProvidersWithDeadline(
       const authority = await readCurrentPushSessionBinding();
       if (!authority) throw new Error("Push registration requires an active session binding.");
       if (!owner.isCurrent() || !samePushSessionBinding(owner.authority, authority)) return fallback;
-      if (Platform.OS === "android") {
-        // Both providers must reuse one installation identity even on first run.
-        await getNotificationInstallId();
-        await getNotificationRevocationCredential();
-      }
       const expoRegistration = (async () => {
+        if (!intents.expo) return { ...fallback, registrationOutcome: "unknown" as const };
         const token = await Notifications.getExpoPushTokenAsync({ projectId });
         const rawToken = normalizeText(token.data);
         if (!rawToken) throw new Error("Expo returned an empty push token.");
-        return registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken,
+        return registerPushTokenWithBackend({ authority, intent: intents.expo, permissionStatus: permissionState, provider: "expo", token: rawToken,
           isCurrent: owner.isCurrent, accessToken: owner.accessToken });
       })();
       if (Platform.OS !== "android") return await expoRegistration;
 
-      const nativeRegistration = registerAndroidNativeFcmToken(permissionState, authority, owner.isCurrent, owner.accessToken).catch(() => null);
+      const nativeRegistration = registerAndroidNativeFcmToken(permissionState, authority, intents.fcm, owner.isCurrent, owner.accessToken).catch(() => null);
       providersOwnSettlement = true;
       void Promise.allSettled([expoRegistration, nativeRegistration]).then(onSettled);
 
@@ -2613,6 +2685,9 @@ export async function requestPushPermissionAndRegister(owner?: NotificationOpera
       return buildPushRegistrationProviderError("error", "An earlier device revocation is still unresolved. Retry registration after it can be confirmed.");
     }
     if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+    const intents = await capturePushRegistrationIntents(transport);
+    if (!Object.keys(intents).length) return { ...buildPushRegistrationProviderError("error", "Notification registration is unavailable. Try again after refreshing device status."), registrationOutcome: "unknown" };
+    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
     const current = await Notifications.getPermissionsAsync();
     if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
     const currentPermissionState = resolvePushPermissionState(current);
@@ -2656,6 +2731,7 @@ export async function requestPushPermissionAndRegister(owner?: NotificationOpera
       projectId,
       `Unable to get a production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
       transport,
+      intents,
       lease.finish,
     );
   } finally {
@@ -2684,6 +2760,9 @@ export async function refreshPushRegistrationIfGranted(owner?: NotificationOpera
     if ((await readPendingPushRevocations()).length) {
       return buildPushRegistrationProviderError("error", "An earlier device revocation is still unresolved. Retry registration after it can be confirmed.");
     }
+    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+    const intents = await capturePushRegistrationIntents(transport);
+    if (!Object.keys(intents).length) return { ...buildPushRegistrationProviderError("error", "Notification registration is unavailable. Try again after refreshing device status."), registrationOutcome: "unknown" };
     if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
     const current = await Notifications.getPermissionsAsync();
     if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
@@ -2715,6 +2794,7 @@ export async function refreshPushRegistrationIfGranted(owner?: NotificationOpera
       projectId,
       `Unable to refresh the production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
       transport,
+      intents,
       lease.finish,
     );
   } finally {

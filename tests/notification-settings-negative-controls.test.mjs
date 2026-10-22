@@ -31,7 +31,7 @@ const controls = [
   ['removed register owner handoff', 'NOTIFICATION_SETTINGS_SOURCE', 'transport', 'held permission cannot register after blur',
     () => replaceOnce(settings(), 'requestPushPermissionAndRegister({ authority: notificationAuthority, isCurrent: operation.current })', 'requestPushPermissionAndRegister()')],
   ['removed pre-dispatch storage retirement', 'NOTIFICATION_HELPER_SOURCE', 'transport', 'actual registration rechecks ownership after held storage before backend dispatch',
-    () => replaceOnce(helper(), '  if (input.isCurrent?.() === false) {\n    return buildPushRegistrationProviderError(input.permissionStatus, "Notification registration was canceled.");\n  }', '')],
+    () => replaceOnce(helper(), '  const isOpen = () => accepting && owner.isCurrent();', '  const isOpen = () => accepting;')],
   ['removed revoke owner comparison', 'NOTIFICATION_HELPER_SOURCE', 'transport', 'actual revocation cannot select a replacement owner while its authority read is held',
     () => replaceOnce(helper(), '  if (owner && (!owner.isCurrent() || !samePushSessionBinding(owner.authority, authority))) {\n    return buildPushRegistrationProviderError("error", "Notification ownership changed before revocation.");\n  }', '')],
   ['premature provider retirement on UI completion', 'NOTIFICATION_SETTINGS_SOURCE', 'transport', 'same-owner registration still permits a slower native provider after Expo succeeds',

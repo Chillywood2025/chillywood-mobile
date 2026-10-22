@@ -127,7 +127,7 @@ test('actual provider deadline retains unresolved transport debt and later recon
 
 test('never-settled provider stays explicitly uncertain across unmount and releases subscription only on settlement', async t => {
   const held = deferred(), m = await mount(t, { actualPush: true });
-  m.state.backendBarrier = () => held.promise;
+  m.state.backendBarrier = body => body.action === 'register' ? held.promise : undefined;
   await m.act(() => m.button('Register Device').onPress());
   await m.expireProviderDeadline();
   await m.app('background'); await m.app('active');
@@ -162,7 +162,7 @@ for (const replacement of [owner('session-b'), owner('session-b', 'other-user')]
 
 test('same-session screen retirement cannot queue cleanup that revokes a newer legitimate registration', async t => {
   const held = deferred(), m = await mount(t, { actualPush: true });
-  m.state.backendBarrier = body => body.provider === 'fcm' ? held.promise : undefined;
+  m.state.backendBarrier = body => body.action === 'register' && body.provider === 'fcm' ? held.promise : undefined;
   await m.act(() => m.button('Register Device').onPress());
   await m.focus(false); await m.focus(true);
   await m.act(() => held.resolve());
@@ -176,7 +176,7 @@ test('same-session screen retirement cannot queue cleanup that revokes a newer l
 
 test('queued exact cleanup blocks ABA registration until receipt is confirmed then cannot revoke its retry', async t => {
   const held = deferred(), m = await mount(t, { actualPush: true });
-  m.state.backendBarrier = body => body.provider === 'fcm' ? held.promise : undefined;
+  m.state.backendBarrier = body => body.action === 'register' && body.provider === 'fcm' ? held.promise : undefined;
   await m.act(() => m.button('Register Device').onPress());
   await m.replace(owner('session-b', 'other-user'));
   m.state.revokeReceipt = 'rejected';

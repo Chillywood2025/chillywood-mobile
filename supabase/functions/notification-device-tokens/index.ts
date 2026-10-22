@@ -21,6 +21,9 @@ type TokenPayload = {
   deviceId?: unknown;
   installId?: unknown;
   metadata?: unknown;
+  operationId?: unknown;
+  expectedIncarnation?: unknown;
+  expectedRevision?: unknown;
   operationKey?: unknown;
   permissionStatus?: unknown;
   platform?: unknown;
@@ -84,7 +87,7 @@ const parseJsonPayload = async (req: Request): Promise<{ value?: TokenPayload; e
 
 const normalizeAction = (value: unknown) => {
   const normalized = toText(value).toLowerCase();
-  if (normalized === "register" || normalized === "revoke" || normalized === "status") return normalized;
+  if (normalized === "register" || normalized === "revoke" || normalized === "status" || normalized === "registration-intent") return normalized;
   return null;
 };
 
@@ -244,48 +247,75 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    const rawToken = toText(body.token);
-    const permissionStatus = toText(body.permissionStatus) || "unknown";
-    if (!isValidToken(provider, rawToken)) {
-      return jsonResponse(400, { error: "invalid_token" });
-    }
     const accountId = toText(body.accountId);
     const operationKey = toText(body.operationKey);
     const revocationCredential = toText(body.revocationCredential);
     const sessionGeneration = toText(body.sessionGeneration);
     const userId = toText(body.userId);
     if (!installId || userId !== auth.user.id || accountId !== userId || !sessionGeneration
-      || !operationKey || operationKey.length > 160 || !/^[0-9a-f]{64}$/u.test(revocationCredential)) {
+      || !/^[0-9a-f]{64}$/u.test(revocationCredential)) {
       return jsonResponse(400, { error: "session_binding_invalid" });
     }
-    const { data: registered, error: registerError } = await userClient.rpc("wave1_register_push_token", {
+    const subject = {
+      p_expected_account_id: accountId, p_expected_user_id: userId, p_install_id: installId,
+      p_platform: platform, p_provider: provider, p_session_generation: sessionGeneration,
+      p_revocation_credential_hash: await sha256Hex(revocationCredential),
+    };
+    const exactCurrent = (value: unknown): value is JsonObject => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+      const result = value as JsonObject;
+      return result.userId === userId && result.accountId === accountId && result.installId === installId
+        && result.platform === platform && result.provider === provider && result.sessionGeneration === sessionGeneration
+        && typeof result.incarnation === "string" && UUID_PATTERN.test(result.incarnation)
+        && typeof result.revision === "string" && /^(0|[1-9][0-9]{0,18})$/u.test(result.revision)
+        && BigInt(result.revision) <= 9223372036854775807n
+        && typeof result.registered === "boolean"
+        && (result.registered ? typeof result.tokenFingerprint === "string" && /^[0-9a-f]{12}$/u.test(result.tokenFingerprint)
+          : result.tokenFingerprint === null);
+    };
+    if (action === "registration-intent") {
+      const { data: intent, error } = await userClient.rpc("read_my_push_registration_intent", subject);
+      if (error || !exactCurrent(intent) || intent.status !== "ready" || intent.requestAccepted !== true) {
+        return jsonResponse(503, { error: "registration_intent_unavailable", status: "unknown", requestAccepted: false });
+      }
+      return jsonResponse(200, intent);
+    }
+    const rawToken = toText(body.token);
+    const permissionStatus = toText(body.permissionStatus) || "unknown";
+    const operationId = toText(body.operationId);
+    const expectedIncarnation = toText(body.expectedIncarnation);
+    const expectedRevision = body.expectedRevision;
+    if (!isValidToken(provider, rawToken)) return jsonResponse(400, { error: "invalid_token" });
+    if (!UUID_PATTERN.test(operationId) || !UUID_PATTERN.test(expectedIncarnation)
+      || operationKey !== `register:${operationId}` || typeof expectedRevision !== "string"
+      || !/^(0|[1-9][0-9]{0,18})$/u.test(expectedRevision) || BigInt(expectedRevision) > 9223372036854775807n) {
+      return jsonResponse(400, { error: "registration_snapshot_required", status: "unknown", requestAccepted: false });
+    }
+    const { data: registered, error: registerError } = await userClient.rpc("register_my_push_token", {
+      ...subject,
       p_app_version: toText(body.appVersion) || null,
       p_build_version: toText(body.buildVersion) || null,
-      p_expected_account_id: accountId,
-      p_expected_user_id: userId,
-      p_install_id: installId,
       p_metadata: safeMetadata(body.metadata, permissionStatus),
+      p_operation_id: operationId,
+      p_expected_incarnation: expectedIncarnation,
+      p_expected_revision: expectedRevision,
       p_operation_key: operationKey,
       p_permission_status: permissionStatus,
-      p_platform: platform,
-      p_provider: provider,
-      p_revocation_credential_hash: await sha256Hex(revocationCredential),
-      p_session_generation: sessionGeneration,
       p_token: rawToken,
     });
-    if (registerError || !registered || typeof registered !== "object") {
-      return jsonResponse(500, { error: "register_failed", message: sanitizeErrorMessage(registerError) });
+    if (registerError || !exactCurrent(registered)) {
+      return jsonResponse(503, { error: "register_outcome_unknown", status: "unknown", requestAccepted: false });
     }
-    const result = registered as JsonObject;
-    const tokenFingerprint = toText(result.tokenFingerprint);
-    if (result.status !== "registered" || result.ownershipState !== "ACCOUNT_BOUND"
-      || result.sessionGeneration !== sessionGeneration || !/^[0-9a-f]{12}$/u.test(tokenFingerprint)) {
-      return jsonResponse(503, { error: "register_confirmation_failed" });
+    if (!["registered", "conflict", "retired"].includes(String(registered.status))
+      || registered.operationId !== operationId || registered.operationKey !== operationKey
+      || registered.expectedIncarnation !== expectedIncarnation || registered.expectedRevision !== expectedRevision
+      || registered.requestAccepted !== (registered.status === "registered")
+      || (registered.status === "registered" && (registered.registered !== true
+        || registered.incarnation !== expectedIncarnation || BigInt(String(registered.revision)) !== BigInt(expectedRevision) + 1n
+        || registered.tokenFingerprint !== (await sha256Hex(`${provider}:${rawToken}`)).slice(0, 12)))) {
+      return jsonResponse(503, { error: "register_confirmation_failed", status: "unknown", requestAccepted: false });
     }
-    return jsonResponse(200, {
-      accountId, installId, operationKey, platform, provider, requestAccepted: true,
-      sessionGeneration, status: "registered", tokenFingerprint, userId,
-    });
+    return jsonResponse(200, registered);
   } catch (error) {
     return jsonResponse(500, { error: "notification_token_error", message: sanitizeErrorMessage(error) });
   }
