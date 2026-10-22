@@ -22,6 +22,22 @@ const unknownScenario = "controlled unknown begin response never gains a confirm
 // They never replace a product callback with an invented successful fixture.
 const controls = [
   {
+    name: "recovery-result error separation",
+    scenario: "confirmed Start returns only typed recovery state, never the internal readback error",
+    assertion: "pending result must carry domain state, not a raw error or customer-copy object",
+    helper: () => replace(helper(),
+      'disposition: "readback_pending",\n        receipt: {',
+      'disposition: "readback_pending",\n        error: readbackError,\n        receipt: {'),
+  },
+  {
+    name: "sanitized recovery error copy",
+    scenario: "persistent read failures and incoherent rows preserve the confirmed receipt and remain read-only retryable",
+    assertion: "recovery error copy must not expose the internal provider failure",
+    screen: () => replace(screen(),
+      'error: getUserFacingErrorMessage(recoveryError, "Call status is still unavailable. Refresh call status to try again.")',
+      'error: recoveryError.message'),
+  },
+  {
     name: "reconciled Start callback retirement",
     scenario: "recovery retires pre-recovery Start callbacks for accepted after projection commit",
     assertion: "retired Start cannot read, replay setup, or reopen recovered media",

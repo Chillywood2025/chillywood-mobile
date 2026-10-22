@@ -6,7 +6,6 @@ import vm from "node:vm";
 import * as mediaPolicy from "../../../_lib/communicationCallMediaPolicy.mjs";
 import * as nativeRoutes from "../../../_lib/chillyChatNativeCallRoutes.mjs";
 import * as nativeProvenance from "../../../_lib/nativeCallTransitionProvenance.mjs";
-import { loadStubbed } from "../../customer-experience-adversarial-helpers.mjs";
 
 const require = createRequire(import.meta.url);
 const React = require("react");
@@ -14,9 +13,6 @@ const { createRoot } = require("react-dom/client");
 const ts = require("typescript");
 const noop = () => undefined;
 const settle = async () => { for (let i = 0; i < 160; i += 1) await Promise.resolve(); };
-const actualChatErrors = loadStubbed("_lib/chat.ts", {
-  "./userFacingErrors": loadStubbed("_lib/userFacingErrors.ts"),
-});
 
 function compile(source, filename, modules, globals = {}) {
   const module = { exports: {} };
@@ -355,7 +351,6 @@ export async function mountFullChatThread(options = {}) {
     "./use-legacy-android-audio-route": ownedAudio.hook,
   });
   const chat = {
-    ChatCallStartReadbackError: actualChatErrors.ChatCallStartReadbackError,
     getChatThread: async (id) => runtime.readThread ? runtime.readThread(id)
       : durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
     listChatMessages: async (id) => runtime.readMessages ? runtime.readMessages(id)
@@ -379,11 +374,11 @@ export async function mountFullChatThread(options = {}) {
         const invite = durableThread.start(runtime.userId, id, callType);
         runtime.roomId = invite.communicationRoomId;
         media.roomId = runtime.roomId;
-        return { thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite, delivery: {} };
+        return { disposition: "ready", thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite, delivery: {} };
       }
       runtime.thread.activeCommunicationRoomId = runtime.roomId;
       runtime.thread.activeCallType = runtime.invite.callType;
-      return { thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite: { ...runtime.invite }, delivery: {} };
+      return { disposition: "ready", thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite: { ...runtime.invite }, delivery: {} };
     },
   };
   // API-composition cases can execute the real chat helpers with controlled
@@ -487,7 +482,7 @@ export async function mountFullChatThread(options = {}) {
     "../../_lib/officialAccounts": { getOfficialPlatformAccount: () => null },
     "../../_lib/performancePolicy": { READ_RECEIPT_THROTTLE_MS: 500 },
     "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }, session: { access_token: runtime.accessToken ?? "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration, runtime.accessToken]) },
-    "../../_lib/userFacingErrors": { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
+    "../../_lib/userFacingErrors": options.userFacingErrors ?? { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
     "../../_lib/usernameHandles": { formatUsernameHandle: () => "" },
     "../../_lib/socialAttachmentPicker": {},
     "../../hooks/use-chat-call-media-session": adapter,

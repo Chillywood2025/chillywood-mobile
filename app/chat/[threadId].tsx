@@ -49,7 +49,6 @@ import {
   type ChillyChatPlayingSound,
 } from "../../_lib/chillyChatCallSoundAssets";
 import {
-  ChatCallStartReadbackError,
   clearEndedChatThreadCall,
   getChatThread,
   listChatMessages,
@@ -2444,6 +2443,17 @@ export default function ChillyChatThreadScreen() {
         : refreshPushRegistrationIfGranted());
       const result = await startChatThreadCall(threadId, mode);
       if (!isStartOperationCurrent(operation)) return;
+      if (result.disposition === "readback_pending") {
+        if (result.receipt.threadId !== threadId
+          || result.receipt.authority.userId !== currentUserId
+          || result.receipt.authority.sessionGeneration !== authority?.sessionGeneration) return;
+        const pending = { operation, receipt: result.receipt };
+        pendingCallStartRecoveryRef.current = pending;
+        setPendingCallStartRecovery(pending);
+        // Keep the original synchronous Start barrier. The successful begin and
+        // dispatch are known; only a read is allowed until state is reconciled.
+        return;
+      }
       // Dispatch can outlive Answer/End. The refreshed thread is authoritative;
       // the begin-call invite in this result may still say ringing from before
       // that await. Never reopen it or retain it as a barrier to the next call.
@@ -2500,17 +2510,6 @@ export default function ChillyChatThreadScreen() {
       });
     } catch (callStartError) {
       if (!isStartOperationCurrent(operation)) return;
-      if (callStartError instanceof ChatCallStartReadbackError
-        && callStartError.receipt.threadId === threadId
-        && callStartError.receipt.authority.userId === currentUserId
-        && callStartError.receipt.authority.sessionGeneration === authority?.sessionGeneration) {
-        const pending = { operation, receipt: callStartError.receipt };
-        pendingCallStartRecoveryRef.current = pending;
-        setPendingCallStartRecovery(pending);
-        // Keep the original synchronous Start barrier. The successful begin and
-        // dispatch are known; only a read is allowed until state is reconciled.
-        return;
-      }
       setOutgoingCallInvite(null);
       logChatCall("handle_start_call_failed", {
         threadId,

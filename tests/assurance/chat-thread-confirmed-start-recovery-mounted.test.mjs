@@ -17,6 +17,7 @@ const deferred = () => {
 };
 
 function createStartBoundary({ readback = "error", beginFailure, afterDispatch } = {}) {
+  const userFacingErrors = loadStubbed("_lib/userFacingErrors.ts");
   const store = createDurableChatThreadFixture({ userIds: [LOCAL, REMOTE] });
   // Model lost Realtime delivery. A read retry must recover independently of
   // any idealized store notification that would mask the original defect.
@@ -25,8 +26,8 @@ function createStartBoundary({ readback = "error", beginFailure, afterDispatch }
   const requests = { begin: [], confirmedBegins: [], dispatch: [], reads: [], cleanup: [] };
   const readActions = [];
   const inviteActions = [];
-  const state = { readback, beginFailure, runtime: null };
-  const authority = () => ({ state: "ACTIVE", restoreOnly: false,
+  const state = { readback, beginFailure, runtime: null, authorityOverride: undefined };
+  const authority = () => state.authorityOverride !== undefined ? state.authorityOverride : ({ state: "ACTIVE", restoreOnly: false,
     userId: state.runtime?.userId ?? LOCAL, accountId: state.runtime?.userId ?? LOCAL,
     sessionGeneration: state.runtime?.sessionGeneration ?? "session-1" });
   const threadRow = () => {
@@ -129,16 +130,16 @@ function createStartBoundary({ readback = "error", beginFailure, afterDispatch }
     },
     "./communicationCallMediaPolicy.mjs": mediaPolicy,
     "./logger": { reportRuntimeError: () => {} },
-    "./userFacingErrors": loadStubbed("_lib/userFacingErrors.ts"),
+    "./userFacingErrors": userFacingErrors,
   });
-  return { api, counts, requests, readActions, inviteActions, state, store, threadRow };
+  return { api, counts, requests, readActions, inviteActions, state, store, threadRow, userFacingErrors };
 }
 
 async function mountStartBoundary(options = {}) {
   const boundary = createStartBoundary(options);
   const h = await mountFullChatThread({ durableThread: boundary.store, deliveryCopy, userId: LOCAL, remoteUserId: REMOTE,
+    userFacingErrors: boundary.userFacingErrors,
     chatApi: {
-      ...(boundary.api.ChatCallStartReadbackError ? { ChatCallStartReadbackError: boundary.api.ChatCallStartReadbackError } : {}),
       readChatCallStartRecovery: boundary.api.readChatCallStartRecovery,
     } });
   boundary.state.runtime = h.runtime;
@@ -211,6 +212,40 @@ for (const readback of ["error", "null", "throw"]) {
   }
 }
 
+test("Start rejects invalid authority with the direct public error before any read or write", async () => {
+  const valid = { state: "ACTIVE", restoreOnly: false, userId: LOCAL, accountId: LOCAL, sessionGeneration: "session-1" };
+  for (const authority of [null, { ...valid, state: "LOCKED" }, { ...valid, restoreOnly: true }, { ...valid, accountId: REMOTE }]) {
+    const h = createStartBoundary();
+    h.state.authorityOverride = authority;
+    await assert.rejects(h.api.startChatThreadCall(h.store.threadId, "video"), error => {
+      assert.ok(error instanceof h.userFacingErrors.UserFacingError);
+      assert.equal(error.code, "chat_action");
+      assert.equal(h.userFacingErrors.getUserFacingErrorMessage(error, "fallback"), error.message);
+      assert.match(error.message, /account changed/i);
+      assert.equal(error.receipt, undefined, "invalid authority cannot become a recovery result");
+      return true;
+    });
+    assert.deepEqual(h.counts, { create: 0, begin: 0, dispatch: 0, threadReads: 0, inviteReads: 0, cleanup: 0 });
+  }
+});
+
+test("confirmed Start returns only typed recovery state, never the internal readback error", async () => {
+  for (const readback of ["error", "null", "throw"]) {
+    const h = createStartBoundary({ readback });
+    const result = await h.api.startChatThreadCall(h.store.threadId, "video");
+    assert.equal(result.disposition, "readback_pending");
+    assert.deepEqual(Object.keys(result).sort(), ["disposition", "receipt"],
+      "pending result must carry domain state, not a raw error or customer-copy object");
+    assert.deepEqual(Object.keys(result.receipt).sort(), ["authority", "delivery", "invite", "requestRoomId", "role", "threadId"]);
+    assert.deepEqual(result.receipt.authority, h.requests.confirmedBegins[0].authority);
+    assert.equal(result.receipt.threadId, h.store.threadId);
+    assert.equal(result.receipt.invite.id, h.store.invite.id);
+    assert.equal(result.receipt.delivery.status, "sent");
+    assert.doesNotMatch(JSON.stringify(result), /controlled post-commit|readbackError|stack|UserFacingError/);
+    assert.deepEqual(h.counts, { create: 1, begin: 1, dispatch: 1, threadReads: 2, inviteReads: 0, cleanup: 0 });
+  }
+});
+
 test("mounted recovery button performs only fresh reads and never opens media from its cached receipt", async () => {
   const h = await mountStartBoundary();
   try {
@@ -248,6 +283,8 @@ test("persistent read failures and incoherent rows preserve the confirmed receip
       expectPending(h);
       assert.equal(h.runtime.snapshot.pendingCallStartRecovery.receipt, receipt);
       assert.ok(h.runtime.snapshot.pendingCallStartRecovery.error);
+      assert.doesNotMatch(h.runtime.snapshot.pendingCallStartRecovery.error, /controlled recovery transport failure/,
+        "recovery error copy must not expose the internal provider failure");
       assert.equal(h.runtime.snapshot.callStartRecoveryBusy, false);
       assert.equal(h.runtime.snapshot.recoveryControl.disabled, false);
       assert.deepEqual([h.counts.create, h.counts.begin, h.counts.dispatch], [1, 1, 1]);
@@ -326,6 +363,7 @@ test("original successful Start readback can request stale accepted-room cleanup
   };
   const normal = createStartBoundary({ readback: null, afterDispatch });
   const result = await normal.api.startChatThreadCall(normal.store.threadId, "video");
+  assert.equal(result.disposition, "ready");
   assert.equal(result.invite.status, "ringing", "begin's original receipt predates the acceptance");
   assert.equal(normal.store.invite.status, "accepted");
   assert.equal(normal.store.rooms.get(result.roomId).status, "ended");
@@ -341,12 +379,9 @@ test("original successful Start readback can request stale accepted-room cleanup
     "an unauthorized cleanup result cannot clear the returned thread link");
 
   const recovery = createStartBoundary({ afterDispatch });
-  let receipt;
-  await assert.rejects(recovery.api.startChatThreadCall(recovery.store.threadId, "video"), error => {
-    assert.ok(error instanceof recovery.api.ChatCallStartReadbackError);
-    receipt = error.receipt;
-    return true;
-  });
+  const pending = await recovery.api.startChatThreadCall(recovery.store.threadId, "video");
+  assert.equal(pending.disposition, "readback_pending");
+  const { receipt } = pending;
   assert.deepEqual(recovery.counts, { create: 1, begin: 1, dispatch: 1, threadReads: 2, inviteReads: 0, cleanup: 0 });
   const latest = await recovery.api.readChatCallStartRecovery(receipt);
   assert.equal(latest.invite.status, "accepted");

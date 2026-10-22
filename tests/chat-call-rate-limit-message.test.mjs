@@ -66,6 +66,7 @@ for (const created of [true, false]) {
   test(`authoritative ${created ? "created" : "reused"} invite preserves canonical dispatch and cleanup behavior`, async () => {
     const { api, calls } = fixture({ stage: "success", created });
     const result = await api.startChatThreadCall("thread", "voice");
+    assert.equal(result.disposition, "ready");
     assert.equal(result.invite.id, "invite");
     assert.equal(result.roomId, "ROOM");
     assert.equal(calls.create, 1);

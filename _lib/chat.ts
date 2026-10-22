@@ -211,7 +211,7 @@ const assertChatMutationAuthorityCurrent = (authority: ChatMutationAuthority) =>
   }
 };
 
-const captureChatReadBinding = () => {
+function captureChatReadBinding(): AccountSessionAuthorityBinding {
   const binding = getCurrentAccountSessionAuthoritySnapshot();
   if (
     !binding
@@ -220,7 +220,7 @@ const captureChatReadBinding = () => {
     || binding.accountId !== binding.userId
   ) throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
   return binding;
-};
+}
 
 const assertChatReadBindingCurrent = (binding: AccountSessionAuthorityBinding) => {
   if (!sameAccountSessionAuthority(binding, getCurrentAccountSessionAuthoritySnapshot())) {
@@ -1003,15 +1003,18 @@ export type ChatCallStartReceipt = {
   delivery: ChillyChatCallInviteDelivery;
 };
 
-export class ChatCallStartReadbackError extends UserFacingError {
-  readonly receipt: ChatCallStartReceipt;
-
-  constructor(receipt: ChatCallStartReceipt) {
-    super("chat_action", "The call was requested, but its current state could not be refreshed.");
-    this.name = "ChatCallStartReadbackError";
-    this.receipt = receipt;
-  }
-}
+export type ChatThreadCallStartResult = {
+  disposition: "ready";
+  delivery: ChillyChatCallInviteDelivery | null;
+  invite: ChillyChatCallInvite | null;
+  role: "caller" | "callee";
+  thread: ChatThreadSummary;
+  roomId: string;
+  callType: ChatCallType;
+} | {
+  disposition: "readback_pending";
+  receipt: ChatCallStartReceipt;
+};
 
 export async function readChatCallStartRecovery(receipt: ChatCallStartReceipt) {
   assertChatReadBindingCurrent(receipt.authority);
@@ -1039,14 +1042,7 @@ export async function readChatCallStartRecovery(receipt: ChatCallStartReceipt) {
   return { thread, invite };
 }
 
-export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<{
-  delivery: ChillyChatCallInviteDelivery | null;
-  invite: ChillyChatCallInvite | null;
-  role: "caller" | "callee";
-  thread: ChatThreadSummary;
-  roomId: string;
-  callType: ChatCallType;
-}> {
+export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<ChatThreadCallStartResult> {
   const authority = captureChatReadBinding();
   const currentUserId = await getRequiredChatUserId();
   assertChatReadBindingCurrent(authority);
@@ -1077,6 +1073,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       });
       const existingInvite = await readLatestChillyChatCallInviteForRoom(existingRoomId).catch(() => null);
       return {
+        disposition: "ready",
         delivery: null,
         invite: existingInvite,
         role: existingInvite?.calleeUserId === currentUserId ? "callee" : "caller",
@@ -1184,10 +1181,26 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
     });
   }
 
-  let updated: ChatThreadSummary | null;
   try {
-    updated = await getChatThread(thread.threadId);
+    const updated = await getChatThread(thread.threadId);
     if (!updated) throw new UserFacingError("chat_action", "Unable to refresh Chi'lly Chat call state.");
+
+    logChatCall("thread_call_start_success", {
+      currentUserId,
+      threadId: updated.threadId,
+      roomId,
+      mode,
+    });
+
+    return {
+      disposition: "ready",
+      delivery,
+      invite: begunCall.invite,
+      role: begunCall.role,
+      thread: updated,
+      roomId: begunCall.invite.communicationRoomId ?? roomId,
+      callType: begunCall.invite.callType,
+    };
   } catch (readbackError) {
     logChatCall("thread_call_refresh_failed", {
       currentUserId,
@@ -1196,31 +1209,19 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       mode,
     });
     // This receipt is only created after a positive begin response and a known
-    // dispatch outcome. A rejected/unknown begin response is not a confirmed receipt.
+    // dispatch outcome. It is domain state, not customer copy or an error object.
+    // A rejected/unknown begin response is not a confirmed receipt.
     if (begunCall.created && delivery) {
-      throw new ChatCallStartReadbackError({
-        authority, threadId: thread.threadId, requestRoomId: roomId,
-        invite: begunCall.invite, role: begunCall.role, delivery,
-      });
+      return {
+        disposition: "readback_pending",
+        receipt: {
+          authority, threadId: thread.threadId, requestRoomId: roomId,
+          invite: begunCall.invite, role: begunCall.role, delivery,
+        },
+      };
     }
     throw readbackError;
   }
-
-  logChatCall("thread_call_start_success", {
-    currentUserId,
-    threadId: updated.threadId,
-    roomId,
-    mode,
-  });
-
-  return {
-    delivery,
-    invite: begunCall.invite,
-    role: begunCall.role,
-    thread: updated,
-    roomId: begunCall.invite.communicationRoomId ?? roomId,
-    callType: begunCall.invite.callType,
-  };
 }
 
 export function subscribeToInbox(onChange: () => void) {
