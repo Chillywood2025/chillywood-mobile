@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -140,6 +141,7 @@ function runGuardWithStub(t, { status, stdout = "", stderr = "" }) {
   const scratch = path.join(temporary, "tmp");
   for (const directory of [fixture, bin, scratch]) mkdirSync(directory);
   for (const relative of [
+    "scripts/cognitive-security-runtime-probe.ts",
     "_lib/cognitivePlatformFoundation.ts",
     "_lib/cognitivePolicyEngine.ts",
     "config/intelligence/cognitive-security-classification-policy.json",
@@ -151,7 +153,7 @@ function runGuardWithStub(t, { status, stdout = "", stderr = "" }) {
     copyFileSync(path.join(root, relative), destination);
   }
   const observationPath = path.join(temporary, "invocation.json");
-  writeFileSync(path.join(bin, "deno"), `#!${process.execPath}\nconst fs = require("node:fs");\nfs.writeFileSync(${JSON.stringify(observationPath)}, JSON.stringify({args:process.argv.slice(2),cwd:process.cwd()}));\nprocess.stdout.write(${JSON.stringify(stdout)});\nprocess.stderr.write(${JSON.stringify(stderr)});\nprocess.exitCode = ${status};\n`, { mode: 0o700 });
+  writeFileSync(path.join(bin, "deno"), `#!${process.execPath}\nconst fs = require("node:fs");\nfs.writeFileSync(${JSON.stringify(observationPath)}, JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),noPackageJson:process.env.DENO_NO_PACKAGE_JSON}));\nprocess.stdout.write(${JSON.stringify(stdout)});\nprocess.stderr.write(${JSON.stringify(stderr)});\nprocess.exitCode = ${status};\n`, { mode: 0o700 });
   const result = spawnSync(process.execPath, [path.join(root, "scripts/guard-cognitive-security-policy-parity.mjs")], {
     cwd: fixture,
     env: { PATH: bin, TMPDIR: scratch },
@@ -159,8 +161,9 @@ function runGuardWithStub(t, { status, stdout = "", stderr = "" }) {
   });
   assert.equal(result.error, undefined);
   assert.deepEqual(JSON.parse(readFileSync(observationPath, "utf8")), {
-    args: ["run", "--quiet", "--no-lock", "--node-modules-dir=auto", "scripts/cognitive-security-runtime-probe.ts"],
+    args: ["run", "--quiet", "--no-lock", "--no-config", "--no-npm", "--no-remote", "--node-modules-dir=none", "scripts/cognitive-security-runtime-probe.ts"],
     cwd: fixture,
+    noPackageJson: "1",
   });
   return result;
 }

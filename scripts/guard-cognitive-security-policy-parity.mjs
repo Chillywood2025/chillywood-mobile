@@ -6,13 +6,17 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import ts from "typescript";
 import { formatRuntimeProbeFailure } from "./lib/runtime-probe-diagnostics.mjs";
+import { auditLocalSecurityProbe } from "./lib/local-security-probe-graph.mjs";
 
 const root = process.cwd();
+// Fail closed before either Node or Deno evaluates classifier source. Compile
+// and parse the audited bytes, not a separate unchecked read of the graph.
+const probeSources = auditLocalSecurityProbe(root);
 const temporaryRoot = fs.mkdtempSync(
   path.join(os.tmpdir(), "chillywood-security-parity-"),
 );
 const compile = (relative, output, replacements = []) => {
-  let source = fs.readFileSync(path.join(root, relative), "utf8");
+  let source = probeSources.get(relative);
   for (const [from, to] of replacements) source = source.replace(from, to);
   fs.writeFileSync(
     path.join(temporaryRoot, output),
@@ -35,22 +39,10 @@ const sourceBoundary = await import(
   `file://${path.join(temporaryRoot, "policy.mjs")}`
 );
 const policy = JSON.parse(
-  fs.readFileSync(
-    path.join(
-      root,
-      "config/intelligence/cognitive-security-classification-policy.json",
-    ),
-    "utf8",
-  ),
+  probeSources.get("config/intelligence/cognitive-security-classification-policy.json"),
 );
 const corpus = JSON.parse(
-  fs.readFileSync(
-    path.join(
-      root,
-      "config/intelligence/cognitive-security-regression-corpus.json",
-    ),
-    "utf8",
-  ),
+  probeSources.get("config/intelligence/cognitive-security-regression-corpus.json"),
 );
 
 assert.equal(corpus.policyId, policy.policyId, "corpus policy identity must match");
@@ -176,17 +168,26 @@ for (let index = 0; index < ownerControlRegressions.length; index += 1) {
   );
 }
 
+const runtimeSources = auditLocalSecurityProbe(root);
+assert.ok(
+  [...probeSources].every(([relative, source]) => runtimeSources.get(relative) === source),
+  "Local security probe source must not change between Node and Deno evaluation",
+);
 const runtime = spawnSync(
   "deno",
   [
     "run",
     "--quiet",
     "--no-lock",
-    "--node-modules-dir=auto",
+    "--no-config",
+    "--no-npm",
+    "--no-remote",
+    "--node-modules-dir=none",
     "scripts/cognitive-security-runtime-probe.ts",
   ],
   {
     cwd: root,
+    env: { ...process.env, DENO_NO_PACKAGE_JSON: "1" },
     encoding: "utf8",
     maxBuffer: 1024 * 1024,
     timeout: 30_000,
