@@ -108,8 +108,10 @@ const expectedSupabasePresenceBackport = Object.freeze({
 // identities remain in this digest and are also bound by their focused test.
 // The two Supabase Presence backport paths also have an exact identity witness;
 // every other Supabase identity remains in this unchanged-rest digest.
+// Includes the reviewed 2026-10-21 Expo SDK 54 expo-asset 12.0.13 -> 12.0.14
+// compatibility patch; no other package identity changed in that update.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "5608bdfbc11c252d9ae8335558d4e0362ba86c3ee0a1d8e909c9dd9ec9d531b3";
+const expectedUnrelatedPackageGraphSha256 = "909f9c8e8651ab78d30d67e49e3ed65266c65a6e8a9e922626e5da984641ce76";
 const compatibilityClosurePaths = new Set([
   "node_modules/@supabase/realtime-js",
   "node_modules/@supabase/supabase-js",
@@ -439,6 +441,34 @@ function killNegativeControls(base) {
     ["RESTORE_JS_YAML_4_3_1", "DEPENDENCY_ADVISORY_CLOSURE_INVALID", (m) => { m.dependencyAdvisoryClosure["node_modules/js-yaml"] = "4.3.1"; }],
     ["CHANGE_UNRELATED_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => { m.unrelatedPackageGraphSha256 = "0".repeat(64); }],
   ];
+  // Mutate real lock entries, not just the resulting digest, so these controls
+  // prove both the reviewed Expo package and an unchanged dependency stay bound.
+  for (const entryPath of ["node_modules/expo-asset", "node_modules/expo-constants"]) {
+    for (const [field, value] of Object.entries({
+      version: "0.0.0-unreviewed",
+      resolved: "https://example.invalid/unreviewed.tgz",
+      integrity: "sha512-unreviewed",
+      link: true,
+    })) {
+      controls.push([`CHANGE_LOCK_${entryPath}_${field}`, "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => {
+        const mutantLock = clone(lock);
+        mutantLock.packages[entryPath][field] = value;
+        m.unrelatedPackageGraphSha256 = unrelatedPackageGraphSha256(mutantLock);
+      }]);
+    }
+  }
+  controls.push(
+    ["REMOVE_UNRELATED_LOCK_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => {
+      const mutantLock = clone(lock);
+      delete mutantLock.packages["node_modules/expo-constants"];
+      m.unrelatedPackageGraphSha256 = unrelatedPackageGraphSha256(mutantLock);
+    }],
+    ["ADD_UNRELATED_LOCK_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => {
+      const mutantLock = clone(lock);
+      mutantLock.packages["node_modules/unreviewed-package"] = { version: "0.0.0-unreviewed" };
+      m.unrelatedPackageGraphSha256 = unrelatedPackageGraphSha256(mutantLock);
+    }],
+  );
   return controls.map(([id, expectedCode, mutate]) => {
     const mutant = clone(base);
     mutate(mutant);
