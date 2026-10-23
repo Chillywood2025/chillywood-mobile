@@ -7,6 +7,8 @@ const session = '22222222-2222-4222-8222-222222222222';
 const receipt = '33333333-3333-4333-8333-333333333333';
 const authorizationId = '44444444-4444-4444-8444-444444444444';
 const fingerprint = 'a'.repeat(32);
+const publicOrigin = 'https://synthetic.example.invalid';
+const endpoint = `${publicOrigin}/functions/v1/admin-content-inspection`;
 const payload = { action: 'prepare_media', contextId: actorId, targetType: 'creator_video', targetId: session, reason: 'Review reported content', requestId: authorizationId };
 const post = (body = payload) => new Request('https://synthetic.example.invalid/functions/v1/admin-content-inspection', {
   method: 'POST', headers: { Authorization: 'Bearer synthetic' }, body: JSON.stringify(body),
@@ -36,6 +38,7 @@ function fixture(options = {}) {
     return { data: { allowed: true, authorizationId, receiptId: receipt, storedVersion: fingerprint }, error: null };
   };
   const dependencies = {
+    supabaseUrl: publicOrigin,
     authenticate: async () => { calls.push('authenticate'); return options.stale ? null : { userId: actorId, sessionGeneration: session, rpc }; },
     resolve: async (name, args) => {
       calls.push(name);
@@ -74,9 +77,72 @@ test('prepare exposes safe descriptor only, with noncredential version URL', asy
   assert.equal(body.receiptId, receipt);
   assert.equal(body.objectKey, undefined);
   assert.equal(body.signedUrl, undefined);
-  assert.equal(new URL(body.streamUrl).search, `?v=${fingerprint}`);
+  assert.equal(body.streamUrl, `${endpoint}?v=${fingerprint}`);
   assert.equal(body.streamUrl.includes(receipt), false);
   assert.deepEqual(calls, ['authenticate', 'admin_prepare_content_inspection_media']);
+});
+
+test('prepare derives public endpoint only from trusted configuration, not runtime URL or forwarded headers', async () => {
+  for (const supabaseUrl of [publicOrigin, `${publicOrigin}/`, 'https://another-project.supabase.co', 'https://custom-api.example.invalid']) {
+    for (const runtimeUrl of [endpoint, 'http://edge-runtime:9000/admin-content-inspection', `https://internal.invalid/rewritten/path?v=${'b'.repeat(32)}#untrusted-fragment`]) {
+      const { dependencies, calls } = fixture();
+      dependencies.supabaseUrl = supabaseUrl;
+      const response = await createContentInspectionHandler(dependencies)(new Request(runtimeUrl, {
+        method: 'POST', headers: {
+          Authorization: 'Bearer synthetic', Host: 'attacker.invalid',
+          Forwarded: 'host=attacker.invalid;proto=http', 'X-Forwarded-Host': 'attacker.invalid',
+          'X-Forwarded-Proto': 'http', 'X-Forwarded-Prefix': '/attacker-path',
+        }, body: JSON.stringify(payload),
+      }));
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.streamUrl, `${new URL(supabaseUrl).origin}/functions/v1/admin-content-inspection?v=${fingerprint}`);
+      const stream = new URL(body.streamUrl);
+      assert.equal(stream.username, ''); assert.equal(stream.password, ''); assert.equal(stream.hash, '');
+      assert.deepEqual(calls, ['authenticate', 'admin_prepare_content_inspection_media']);
+    }
+  }
+});
+
+test('missing, unsafe or noncanonical public configuration fails closed before receipt creation', async () => {
+  for (const supabaseUrl of [undefined, '', 'not-a-url', '//fixture.invalid', 'http://edge-runtime:9000',
+    'https://user:password@fixture.invalid', 'https://@fixture.invalid', `${publicOrigin}/path`, `${publicOrigin}/a/..`,
+    `${publicOrigin}?token=private`, `${publicOrigin}#private`, `${publicOrigin}?`, `${publicOrigin}#`,
+    ` ${publicOrigin}`, `${publicOrigin}\n`, `${publicOrigin}//`]) {
+    const { dependencies, calls } = fixture();
+    dependencies.supabaseUrl = supabaseUrl;
+    const response = await createContentInspectionHandler(dependencies)(post());
+    assert.equal(response.status, 503, String(supabaseUrl));
+    assert.deepEqual(await response.json(), { error: 'content_inspection_unavailable' });
+    assert.deepEqual(calls, ['authenticate']);
+  }
+});
+
+test('request query cannot inject stream credentials or duplicate version and never reaches authorization', async () => {
+  for (const query of [`?v=${fingerprint}&v=${fingerprint}`, `?v=${fingerprint}&token=private`, `?receipt=${receipt}`, '?redirect=https://attacker.invalid']) {
+    const { handler, calls } = fixture();
+    const response = await handler(new Request(`${endpoint}${query}`, { method: 'POST', body: JSON.stringify(payload) }));
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'invalid_request' });
+    assert.deepEqual(calls, []);
+  }
+});
+
+test('only a canonical database version is returned, never request-supplied or credential-bearing version', async () => {
+  for (const storedVersion of ['a'.repeat(31), 'a'.repeat(65), 'A'.repeat(32), `${fingerprint}&token=private`, '%61'.repeat(32), null]) {
+    const { dependencies, calls } = fixture();
+    const authenticate = dependencies.authenticate;
+    dependencies.authenticate = async request => {
+      const actor = await authenticate(request);
+      const prepare = actor.rpc;
+      actor.rpc = async (name, args) => { const result = await prepare(name, args); result.data.storedVersion = storedVersion; return result; };
+      return actor;
+    };
+    const response = await createContentInspectionHandler(dependencies)(post());
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: 'content_inspection_unavailable' });
+    assert.deepEqual(calls, ['authenticate', 'admin_prepare_content_inspection_media']);
+  }
 });
 
 test('arbitrary path/URL/owner fields and unsupported targets are rejected', async () => {
