@@ -281,6 +281,7 @@ import {
   type PlatformBrandAsset,
   type PlatformBrandAssetFile,
   type PlatformBrandAssetType,
+  type PlatformBrandUploadAttempt,
   type PlatformBrandFitMode,
   type PlatformBrandPublishReadbackStatus,
   type PlatformBrandingBundle,
@@ -1518,6 +1519,13 @@ export function ChannelStudioScreen() {
   const paidVideoRouteGenerationRef = useRef(0);
   const eventSaveInFlightRef = useRef(false);
   const brandProfileSaveInFlightRef = useRef(false);
+  const brandUploadInFlightRef = useRef(false);
+  const brandUploadAttemptRef = useRef<{
+    authority: ReturnType<typeof getCurrentAccountSessionAuthoritySnapshot>;
+    assetType: PlatformBrandAssetType;
+    file: PlatformBrandAssetFile;
+    attempt: PlatformBrandUploadAttempt;
+  } | null>(null);
   const sourceVideoEventPrefillRef = useRef<string | null>(null);
   const spotlightRouteAppliedRef = useRef<string | null>(null);
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
@@ -3980,9 +3988,26 @@ export function ChannelStudioScreen() {
   }, [creatorVideos, publishSpotlightVideo, routeParams.spotlightVideoId, router, videosLoading]);
 
   const pickPlatformBrandAsset = async (assetType: PlatformBrandAssetType) => {
+    if (brandUploadInFlightRef.current) return;
     const ownerUserId = String(user?.id ?? "").trim();
     if (!ownerUserId) {
       setBrandNotice("Sign in before choosing Platform media.");
+      return;
+    }
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && !!authority
+      && authority.state === "ACTIVE" && !authority.restoreOnly && authority.userId === ownerUserId
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
+    const assertOperationCurrent = () => {
+      if (!isCurrent()) throw new Error("The account changed before Platform media could be saved.");
+    };
+    if (brandUploadAttemptRef.current
+      && !sameAccountSessionAuthority(brandUploadAttemptRef.current.authority, authority)) {
+      brandUploadAttemptRef.current = null;
+    }
+    if (brandUploadAttemptRef.current && brandUploadAttemptRef.current.assetType !== assetType) {
+      setBrandNotice("Retry the previous media selection first so its upload can be confirmed.");
       return;
     }
 
@@ -3991,37 +4016,47 @@ export function ChannelStudioScreen() {
       : ["image/jpeg", "image/png", "image/webp"];
 
     try {
+      brandUploadInFlightRef.current = true;
       setBrandBusyAssetType(assetType);
       setBrandNotice(null);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: documentTypes,
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
+      let pickedFile = brandUploadAttemptRef.current?.file;
+      if (!pickedFile) {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: documentTypes,
+          copyToCacheDirectory: true,
+          multiple: false,
+        });
+        assertOperationCurrent();
 
-      if (result.canceled) {
-        setBrandNotice("No Platform media selected.");
-        return;
+        if (result.canceled) {
+          setBrandNotice("No Platform media selected.");
+          return;
+        }
+
+        const asset = result.assets[0];
+        pickedFile = {
+          uri: asset?.uri ?? "",
+          name: asset?.name,
+          mimeType: asset?.mimeType,
+          size: asset?.size,
+        };
       }
-
-      const asset = result.assets[0];
-      const pickedFile: PlatformBrandAssetFile = {
-        uri: asset?.uri ?? "",
-        name: asset?.name,
-        mimeType: asset?.mimeType,
-        size: asset?.size,
-      };
       const validationMessage = getPlatformBrandAssetValidationMessage(pickedFile, assetType);
       if (validationMessage) {
         setBrandNotice(validationMessage);
         return;
       }
+      brandUploadAttemptRef.current ??= { authority, assetType, file: pickedFile, attempt: {} };
 
       const uploadedAsset = await uploadPlatformBrandAsset({
         ownerUserId,
         assetType,
         file: pickedFile,
+        attempt: brandUploadAttemptRef.current.attempt,
+        assertOperationCurrent,
       });
+      assertOperationCurrent();
+      brandUploadAttemptRef.current = null;
       const assetPatch: Partial<PlatformBrandProfile> = {};
       if (assetType === "hero_image") assetPatch.heroImageAssetId = uploadedAsset.id;
       if (assetType === "hero_video") assetPatch.heroVideoAssetId = uploadedAsset.id;
@@ -4032,12 +4067,17 @@ export function ChannelStudioScreen() {
       if (assetType === "watermark") assetPatch.watermarkAssetId = uploadedAsset.id;
 
       const savedProfile = await saveBrandDraftPatch(assetPatch);
+      assertOperationCurrent();
       if (!savedProfile) return;
       setBrandNotice("Platform media saved as draft. Use Preview Brand Draft now; Publish Changes applies eligible safe media publicly.");
     } catch {
-      setBrandNotice("Unable to choose or save that Platform media right now.");
+      if (isCurrent()) setBrandNotice(brandUploadAttemptRef.current?.attempt.payload
+        ? "This upload could not be confirmed yet. Choose the same media option again to retry the existing upload."
+        : "Unable to choose or save that Platform media right now.");
     } finally {
-      setBrandBusyAssetType(null);
+      if (!brandUploadAttemptRef.current?.attempt.payload) brandUploadAttemptRef.current = null;
+      brandUploadInFlightRef.current = false;
+      if (replayActionsMountedRef.current) setBrandBusyAssetType(null);
     }
   };
 

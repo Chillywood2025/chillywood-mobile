@@ -2,6 +2,28 @@
 
 Updated: 2026-10-15
 
+## Upload registration ordering repair (October 23, 2026)
+
+New Brand uploads first store immutable bytes, then register the private draft,
+then request an owner preview URL. Registration requires the existing storage
+object and captures its exact incarnation while atomically queuing the safety
+scan. Signing before registration cannot work: the private storage read policy
+requires the matching asset row. A missing preview URL does not undo a saved
+draft, mark a scan clean, or make media public. Public safety gates are unchanged.
+
+If the insert acknowledgement is lost, the client reads back the exact asset ID,
+owner and storage tuple. It does not delete uploaded bytes or create a replacement
+row based on an uncertain response. The screen retains the original file and
+attempt identity within its initiating account/session lifetime. Retrying the
+same media option checks that same upload before any insert; a failed readback
+does not permit another upload or registration. These are source-only changes, not
+a deployment, scanner activation, installed-device proof, or a retention purge.
+An unacknowledged native storage upload can still leave an unregistered object;
+this repair does not claim storage-transport idempotency. Once registration is
+confirmed, a later design-selection save failure is a separate retry boundary.
+
+Regression: `node --test tests/platform-brand-upload-registration.test.mjs`.
+
 ## Held-migration draft compatibility guard
 
 New clients must not save Brand drafts to the legacy database contract. Before
