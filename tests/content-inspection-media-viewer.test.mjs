@@ -55,6 +55,24 @@ test("production helper rejects external, credential-bearing and malformed sourc
   const h = helper(); const version = "a".repeat(32);
   for (const value of [`https://evil.invalid/?v=${version}`, `${endpoint}?v=${version}&token=secret`, `${endpoint}?receipt=${contextId}&v=${version}`, `${endpoint}/extra?v=${version}`, `http://fixture.invalid/functions/v1/admin-content-inspection?v=${version}`]) assert.throws(() => h.validatedInspectionStreamUrl(value, version));
 });
+test("actual prepare handler returns a client-valid public endpoint after gateway URL rewriting", async () => {
+  const globals = { Response, Headers, TextDecoder };
+  const media = compile("supabase/functions/_shared/content-inspection-media.ts", {}, globals);
+  const { createContentInspectionHandler } = compile("supabase/functions/_shared/content-inspection-handler.ts", { "./content-inspection-media.ts": media }, globals);
+  const handler = createContentInspectionHandler({
+    supabaseUrl: "https://fixture.invalid",
+    authenticate: async () => ({ userId: authority.userId, sessionGeneration: contextId, rpc: async () => ({ data: ready(), error: null }) }),
+    resolve: async () => { throw new Error("prepare must not resolve private origins"); },
+    origin: async () => { throw new Error("prepare must not read private origins"); },
+  });
+  const h = helper();
+  for (const runtimeUrl of [endpoint, "http://edge-runtime:9000/admin-content-inspection", "https://internal.invalid/rewritten/path"]) {
+    const response = await handler(new Request(runtimeUrl, { method: "POST", body: JSON.stringify({ action: "prepare_media", contextId, ...target, reason: "Inspect synthetic fixture", requestId: contextId }) }));
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(h.validatedInspectionStreamUrl(data.streamUrl, data.storedVersion), `${endpoint}?v=${data.storedVersion}`);
+  }
+});
 test("deferred capture/session change and background abort cannot expose source", async () => {
   const pending = deferred(); const h = helper({ capture: () => pending.promise }); const result = h.prepare(); h.change(null);
   pending.resolve({ authority, accessToken: "synthetic-jwt" }); await assert.rejects(result, error => error.code === "account_changed"); assert.equal(h.calls.length, 0);

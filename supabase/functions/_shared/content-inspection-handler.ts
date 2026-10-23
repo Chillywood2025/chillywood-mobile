@@ -20,6 +20,8 @@ export type InspectionActor = {
   rpc: Rpc;
 };
 export type InspectionDependencies = {
+  // Trusted server configuration, never request/forwarded host headers.
+  supabaseUrl: string;
   authenticate: (request: Request) => Promise<InspectionActor | null>;
   resolve: Rpc;
   origin: (
@@ -45,6 +47,19 @@ const json = (status: number, body: Record<string, unknown>) => {
   headers.set("Content-Type", "application/json");
   return new Response(JSON.stringify(body), { status, headers });
 };
+function publicInspectionEndpoint(supabaseUrl: string): URL {
+  const base = new URL(supabaseUrl);
+  // Require a canonical HTTPS origin (with at most its root slash). Reject
+  // credentials, paths, query, fragments and URL-parser normalization rather
+  // than silently incorporating or stripping unsafe configuration.
+  if (
+    base.protocol !== "https:" ||
+    (supabaseUrl !== base.origin && supabaseUrl !== `${base.origin}/`)
+  ) {
+    throw new InspectionMediaError(503, "content_inspection_unavailable");
+  }
+  return new URL("/functions/v1/admin-content-inspection", base);
+}
 async function rpc(client: Rpc, name: string, args: Record<string, unknown>) {
   const result = await client(name, args);
   if (result.error) {
@@ -143,6 +158,9 @@ export function createContentInspectionHandler(
         ) {
           throw new InspectionMediaError(400, "invalid_request");
         }
+        // Gateways may rewrite request.url to an internal origin/path. The
+        // client only accepts the configured public function endpoint.
+        const streamUrl = publicInspectionEndpoint(dependencies.supabaseUrl);
         const prepared = await rpc(
           actor.rpc,
           "admin_prepare_content_inspection_media",
@@ -177,8 +195,7 @@ export function createContentInspectionHandler(
         ) {
           throw new InspectionMediaError(503, "content_inspection_unavailable");
         }
-        url.search = "";
-        url.searchParams.set("v", prepared.storedVersion);
+        streamUrl.searchParams.set("v", prepared.storedVersion);
         return json(200, {
           availability: "ready",
           receiptId: prepared.receiptId,
@@ -187,7 +204,7 @@ export function createContentInspectionHandler(
           mimeType: mime,
           sizeBytes: prepared.sizeBytes,
           expiresAt: prepared.expiresAt,
-          streamUrl: url.toString(),
+          streamUrl: streamUrl.toString(),
         });
       }
       const receipt = request.headers.get("X-Inspection-Receipt");

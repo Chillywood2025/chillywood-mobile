@@ -15,6 +15,7 @@ Deno.serve((request: Request) => {
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const handler = createContentInspectionHandler({
+    supabaseUrl: url,
     authenticate: async (req) => {
       const authorization = req.headers.get("Authorization") ?? "";
       if (!/^Bearer\s+\S+$/i.test(authorization) || !url || !anon) return null;
