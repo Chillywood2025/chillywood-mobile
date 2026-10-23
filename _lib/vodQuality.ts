@@ -1,5 +1,5 @@
 import type { Json, Tables } from "../supabase/database.types";
-import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { runCurrentAccountBoundSupabaseMutationRpc, invokeAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import {
   VOD_FREE_MAX_HEIGHT_V1,
   VOD_PREMIUM_MAX_HEIGHT_V1,
@@ -261,14 +261,14 @@ export async function resolveVideoPlayback(videoId: string): Promise<VodPlayback
   }
 }
 
-export async function recordOriginalVideoRendition(videoId: string): Promise<void> {
+export async function recordOriginalVideoRendition(videoId: string, subject?: AccountBoundSupabaseMutationSubject): Promise<void> {
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return;
   try {
-    await runCurrentAccountBoundSupabaseMutationRpc<unknown>(
-      "record_video_original_rendition",
-      { p_video_id: normalizedVideoId },
-    );
+    const args = { p_video_id: normalizedVideoId };
+    await (subject
+      ? invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "record_video_original_rendition", args)
+      : runCurrentAccountBoundSupabaseMutationRpc<unknown>("record_video_original_rendition", args));
   } catch {
     // The migration may not be applied in older environments; upload should not fail because status recording is pending.
   }

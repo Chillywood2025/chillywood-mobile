@@ -20,7 +20,7 @@ function fixture(initial, bindings = {}) {
   const authority = { userId: 'owner', accountId: 'owner', state: 'ACTIVE', restoreOnly: false, sessionGeneration: 'fixture-session' };
   const context = { React, Promise, Date, Map, Set, console, useCallback: callback => callback,
     getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
-    replayActionsMountedRef: { current: true }, brandDraftOwnershipRef: { current: { revision: 0, dirty: false } },
+    replayActionsMountedRef: { current: true }, clipUploadAttemptRef: { current: null }, brandDraftOwnershipRef: { current: { revision: 0, dirty: false } },
     ...bindings };
   for (const name of Object.keys(initial)) {
     Object.defineProperty(context, name, { get: () => state[name], configurable: true });

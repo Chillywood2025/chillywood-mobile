@@ -153,6 +153,36 @@ The preview reflects title/subtitle text, placement, style, selected template, f
 
 ## Save Draft Contract
 
+### Interrupted save ownership and uncertain uploads
+
+Clip save/publish captures its initiating account/session and editor generation.
+Retiring that editor or replacing the session stops subsequent mutation stages
+and late UI settlement. Requests already sent may still commit; this is not a
+rollback or a guarantee that every nested read is canceled. Ordinary token refresh
+within the same session does not retire the operation.
+
+The upload, cover and metadata paths carry the initiating token through their
+mutation requests. Local temporary-file cleanup still runs after interruption;
+remote cleanup must not start under a replacement session. Bound operations leave
+legacy Supabase old-cover cleanup for later qualified reconciliation rather than
+using an SDK call that cannot pin that operation's token.
+
+An unavailable read after an ambiguous write is not evidence that the write
+failed. Source and cover bytes are preserved unless the relevant current state
+is positively established. An exact owned source-row readback can recover a lost
+upload response. Once storage upload is confirmed, explicit metadata retries
+within the same editor retain the generated video/object identity instead of
+creating another video. An unconfirmed storage upload has not started a video
+INSERT; its retry uses a fresh immutable key rather than overwriting a reservation.
+A different source,
+editor reset or account/session replacement discards that retry context. This
+in-memory identity does not survive process loss and is not a cross-device
+transaction protocol; unknown states remain failures, not fabricated success.
+
+Production-screen and real helper regression tests exercise these boundaries
+with synthetic IO, including old-source failing controls. They do not establish
+native picker, device, live scanner, provider or installed-build qualification.
+
 Save Draft uses an explicit state model:
 
 - idle

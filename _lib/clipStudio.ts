@@ -353,8 +353,8 @@ const parseClipEdit = (row: ClipStudioEditRow): ClipStudioEdit => ({
   updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
 });
 
-async function getRequiredUserId() {
-  const { data, error } = await supabase.auth.getUser();
+async function getRequiredUserId(accessToken?: string) {
+  const { data, error } = await supabase.auth.getUser(accessToken);
   const userId = toText(data.user?.id);
   if (error || !userId) throw new Error("Sign in before using Clip Studio.");
   return userId;
@@ -419,18 +419,25 @@ export async function readClipStudioEditsForVideos(videoIds: string[]): Promise<
 export async function saveClipStudioEdit(
   videoId: string,
   patch: ClipStudioEditPatch,
+  options?: { assertOperationCurrent?: () => void; accessToken?: string },
 ): Promise<ClipStudioEdit> {
-  const ownerUserId = await getRequiredUserId();
+  const assertOperationCurrent = options?.assertOperationCurrent;
+  assertOperationCurrent?.();
+  const ownerUserId = await getRequiredUserId(options?.accessToken);
+  assertOperationCurrent?.();
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) throw new Error("Choose or save a video before saving Clip Studio settings.");
 
   const payload = toUpsertPayload(ownerUserId, normalizedVideoId, patch);
-  const { data, error } = await supabase
+  const request = supabase
     .from("creator_clip_edits")
     .upsert(payload, { onConflict: "video_id" })
-    .select(CLIP_STUDIO_EDIT_SELECT)
+    .select(CLIP_STUDIO_EDIT_SELECT);
+  if (options?.accessToken) request.setHeader("Authorization", `Bearer ${options.accessToken}`);
+  const { data, error } = await request
     .returns<ClipStudioEditRow>()
     .single();
+  assertOperationCurrent?.();
 
   if (error || !data) throw error ?? new Error("Unable to save Clip Studio settings.");
   return parseClipEdit(data);
@@ -439,20 +446,28 @@ export async function saveClipStudioEdit(
 export async function uploadClipStudioCoverImage(input: {
   videoId: string;
   file: CreatorVideoFile;
+  assertOperationCurrent?: () => void;
+  accessToken?: string;
 }): Promise<ClipStudioCoverUpload> {
-  const ownerUserId = await getRequiredUserId();
+  const assertOperationCurrent = input.assertOperationCurrent;
+  assertOperationCurrent?.();
+  const ownerUserId = await getRequiredUserId(input.accessToken);
+  assertOperationCurrent?.();
   const normalizedVideoId = toText(input.videoId);
   if (!normalizedVideoId) throw new Error("Save the video before choosing a cover image.");
 
   const validationMessage = getClipStudioCoverValidationMessage(input.file);
   if (validationMessage) throw new Error(validationMessage);
 
-  const { data: videoRow, error: videoError } = await supabase
+  const ownerRequest = supabase
     .from("videos")
     .select("id,owner_id,thumb_storage_path,storage_provider,storage_bucket")
-    .eq("id", normalizedVideoId)
+    .eq("id", normalizedVideoId);
+  if (input.accessToken) ownerRequest.setHeader("Authorization", `Bearer ${input.accessToken}`);
+  const { data: videoRow, error: videoError } = await ownerRequest
     .single()
     .returns<CreatorVideoOwnerRow>();
+  assertOperationCurrent?.();
   if (videoError || !videoRow || toText(videoRow.owner_id) !== ownerUserId) {
     throw new Error("This account cannot update that creator video cover.");
   }
@@ -467,6 +482,7 @@ export async function uploadClipStudioCoverImage(input: {
   let uploadedObject: Awaited<ReturnType<typeof uploadFileToMediaStorage>> | null = null;
 
   try {
+    assertOperationCurrent?.();
     uploadedObject = await uploadFileToMediaStorage({
       surfaceType: "creator_video",
       objectKey: storagePath,
@@ -476,20 +492,28 @@ export async function uploadClipStudioCoverImage(input: {
       sizeBytes: input.file.size,
       maximumSizeBytes: CLIP_STUDIO_COVER_MAX_BYTES,
       tooLargeMessage: `Cover images support up to ${getClipStudioCoverLimitLabel()}.`,
+      assertOperationCurrent,
+      accessToken: input.accessToken,
     });
+    assertOperationCurrent?.();
   } catch (error) {
+    assertOperationCurrent?.();
     if (uploadedObject) {
       await deleteStoredMediaObject({
         surfaceType: "creator_video",
         provider: uploadedObject.provider,
         bucket: uploadedObject.bucket,
         objectKey: uploadedObject.objectKey,
+        assertOperationCurrent,
+        accessToken: input.accessToken,
       }).catch(() => undefined);
+      assertOperationCurrent?.();
     }
     throw error;
   } finally {
     await preparedCover.cleanup();
   }
+  assertOperationCurrent?.();
   if (!uploadedObject) throw new Error("Cover upload failed. Try again.");
 
   const previousCoverPath = toText(videoRow.thumb_storage_path);
@@ -507,24 +531,37 @@ export async function uploadClipStudioCoverImage(input: {
     const guardedUpdateRequest = previousCoverPath
       ? updateRequest.eq("thumb_storage_path", previousCoverPath)
       : updateRequest.is("thumb_storage_path", null);
+    if (input.accessToken) guardedUpdateRequest.setHeader("Authorization", `Bearer ${input.accessToken}`);
     const { data: updatedVideo, error: updateError } = await guardedUpdateRequest
       .select("thumb_storage_path")
       .single()
       .returns<{ thumb_storage_path: string | null }>();
+    assertOperationCurrent?.();
     if (updateError || toText(updatedVideo?.thumb_storage_path) !== uploadedObject.objectKey) {
       throw updateError ?? new Error("The creator video cover changed before this upload completed.");
     }
     coverMetadataCommitted = true;
   } catch (error) {
+    assertOperationCurrent?.();
     // A response can fail after Postgres commits. Re-read before deleting the
     // new object so a lost response cannot leave the row pointing at bytes we
     // then remove.
-    const { data: currentVideo } = await supabase
+    const readbackRequest = supabase
       .from("videos")
       .select("thumb_storage_path")
-      .eq("id", normalizedVideoId)
+      .eq("id", normalizedVideoId);
+    if (input.accessToken) readbackRequest.setHeader("Authorization", `Bearer ${input.accessToken}`);
+    const { data: currentVideo, error: readbackError } = await readbackRequest
       .maybeSingle()
       .returns<{ thumb_storage_path: string | null }>();
+    assertOperationCurrent?.();
+    // A missing or failed read cannot prove that the uploaded object is
+    // detached. Preserve its bytes when the write's outcome remains unknown.
+    if (readbackError || !currentVideo || typeof currentVideo !== "object" || Array.isArray(currentVideo)
+      || !Object.prototype.hasOwnProperty.call(currentVideo, "thumb_storage_path")
+      || (currentVideo.thumb_storage_path !== null && typeof currentVideo.thumb_storage_path !== "string")) {
+      throw error;
+    }
     coverMetadataCommitted = toText(currentVideo?.thumb_storage_path) === uploadedObject.objectKey;
     if (!coverMetadataCommitted) {
       await deleteStoredMediaObject({
@@ -532,7 +569,10 @@ export async function uploadClipStudioCoverImage(input: {
         provider: uploadedObject.provider,
         bucket: uploadedObject.bucket,
         objectKey: uploadedObject.objectKey,
+        assertOperationCurrent,
+        accessToken: input.accessToken,
       }).catch(() => undefined);
+      assertOperationCurrent?.();
       throw error;
     }
   }
@@ -555,12 +595,19 @@ export async function uploadClipStudioCoverImage(input: {
         bucket: previousBucket,
         objectKey: previousCoverPath,
         recordId: normalizedVideoId,
+        assertOperationCurrent,
+        accessToken: input.accessToken,
       }).catch(() => undefined);
-    } else if (previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
+      assertOperationCurrent?.();
+    } else if (!input.accessToken && previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
+      // The legacy storage client cannot pin this call's initiating token.
+      // Bound saves leave detached old bytes for later cleanup rather than
+      // allowing an old operation to delete through a replacement session.
       await supabase.storage
         .from(CREATOR_VIDEO_BUCKET)
         .remove([previousCoverPath])
         .catch(() => undefined);
+      assertOperationCurrent?.();
     }
   }
 

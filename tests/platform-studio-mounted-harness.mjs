@@ -46,6 +46,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
   const snapshot={targets:{premium_subscription:{hasEntitlement:true}}};
   const authorityApi=productionFunctions('_lib/accountSessionAuthority.ts',['sameAccountSessionAuthority'],{});
   const base={
+    captureAccountBoundSupabaseMutationSubject:async()=>({accessToken:'synthetic-clip-token',authority:session.authority}),
     getCurrentAccountSessionAuthoritySnapshot:()=>session.authority??null,
     sameAccountSessionAuthority:authorityApi.sameAccountSessionAuthority,
     useSession:()=>session,useBetaProgram:()=>({isLoading:false,isActive:true,accessState:{status:'active'}}),getBetaAccessBlockCopy:()=>({title:'Beta required',body:'Blocked'}),
@@ -90,6 +91,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name==='react-native-safe-area-context')return {useSafeAreaInsets:()=>({top:0,bottom:0,left:0,right:0})};
       if(name==='expo-router')return {useLocalSearchParams:()=>params,useRouter:()=>router};
       if(name==='expo-av')return {Video:native.Video,ResizeMode:{CONTAIN:'contain',COVER:'cover'}};
+      if(name==='expo-document-picker')return {getDocumentAsync:(...args)=>{calls.push(['getDocumentAsync',...args]);return mocks.getDocumentAsync(...args);}};
       if(name.endsWith('.jpg'))return 1;
       if(name.endsWith('/creator-video-card'))return evaluate('components/creator-media/creator-video-card.tsx');
       if(name.endsWith('/creatorVideoPreview'))return evaluate('_lib/creatorVideoPreview.ts');
