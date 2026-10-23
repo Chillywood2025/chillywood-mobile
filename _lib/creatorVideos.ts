@@ -17,7 +17,7 @@ import {
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
 import { resolveCreatorVipVideoAccess, type CreatorVipVideoAccess } from "./creatorVipPasses";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
-import { runCurrentAccountBoundSupabaseMutationRpc, invokeAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
+import { captureAccountBoundSupabaseMutationSubject, assertAccountBoundSupabaseMutationSubjectCurrent, runCurrentAccountBoundSupabaseMutationRpc, invokeAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import {
   resolveCreatorContentAccess,
   type CreatorContentAccessResolution,
@@ -1100,6 +1100,43 @@ export async function deleteCreatorVideo(
   const provider = normalizeMediaStorageProvider(video.storageProvider);
   const objectKey = toText(video.storageObjectKey) || toText(video.storagePath);
   const thumbnailPath = toText(video.thumbStoragePath);
+  if (!objectKey && !thumbnailPath) {
+    const sourceCreatedAt = video.createdAt;
+    const storageBucket = toText(video.storageBucket);
+    // External references and empty drafts have no provider object to delete.
+    // The existing actor RPC alone decides whether exact reviewed retention
+    // applies; a URL pattern or missing key never grants that authority.
+    if (!sourceCreatedAt || !Number.isFinite(Date.parse(sourceCreatedAt))) {
+      throw new Error("Refresh this content before deleting it.");
+    }
+    const subject = await captureAccountBoundSupabaseMutationSubject();
+    const { data, error } = await invokeAccountBoundSupabaseMutationRpc<{
+      status?: unknown; retentionHandled?: unknown;
+    }>(subject, "delete_retained_content", {
+      p_type: "creator_video", p_target: videoId, p_provider: provider,
+      p_bucket: storageBucket, p_object_key: null,
+      p_source_created_at: sourceCreatedAt,
+    });
+    if (error) throw new Error("Content deletion could not be confirmed. Refresh and try again.");
+    if (data?.retentionHandled === true && (data.status === "deleted" || data.status === "already_deleted")) return;
+    // Only the authoritative disabled result preserves pre-activation behavior.
+    // Freeze the initiating token and constrain the legacy delete to this exact
+    // owner/incarnation with no newly attached owned locators. Activation racing
+    // this request is still rejected by the database's explicit-intent guard.
+    if (data?.status !== "disabled" || data.retentionHandled !== false) {
+      throw new Error("Content deletion could not be confirmed. Refresh and try again.");
+    }
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    const result = await supabase.from("videos").delete()
+      .eq("id", videoId).eq("owner_id", subject.authority.userId).eq("created_at", sourceCreatedAt)
+      .is("storage_object_key", null).is("storage_path", null).is("thumb_storage_path", null)
+      .select("id").setHeader("Authorization", `Bearer ${subject.accessToken}`);
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (result.error || !Array.isArray(result.data) || result.data.length !== 1 || result.data[0]?.id !== videoId) {
+      throw new Error("Content deletion could not be confirmed. Refresh and try again.");
+    }
+    return;
+  }
   if (usesPrivateOriginMediaGateway(provider) && objectKey) {
     if (await deleteRetainedMediaContent({
       surfaceType: "creator_video", provider, bucket: toText(video.storageBucket),
