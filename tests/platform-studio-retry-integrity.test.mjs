@@ -12,6 +12,7 @@ function fixture(initial, bindings) {
   const state = { ...initial }, context = { Promise, Date, Map, Set,
     getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
     replayActionsMountedRef: { current: true }, brandDraftOwnershipRef: { current: { revision: 0, dirty: false } },
+    brandUploadAttemptRef: { current: null }, brandUploadInFlightRef: { current: false },
     ...bindings };
   for (const name of Object.keys(initial)) {
     Object.defineProperty(context, name, { get: () => state[name], configurable: true });

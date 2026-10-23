@@ -178,7 +178,10 @@ assertIncludes(publicChannel, `showDraftBranding = isOwner && brandDraftPreviewM
 assertIncludes(publicChannel, `readPlatformBrandStudio(routeUserId, { throwOnUnavailable: true })`, "owner draft preview reports unavailable reads");
 assertIncludes(platformBranding, `preparePlatformBrandUploadUri`, "Android content URI staging");
 assertIncludes(platformBranding, `FileSystem.uploadAsync`, "Brand Studio robust Android upload");
-assertIncludes(platformBranding, `assertPlatformBrandUploadReadable`, "Brand Studio upload read-back verification");
+// Private owner preview requires the registered asset. The executable upload
+// regression covers storage -> registration -> preview against the SQL gates.
+assertNotIncludes(platformBranding, `assertPlatformBrandUploadReadable`, "Brand Studio pre-registration private read");
+assertIncludes(platformBranding, `const matchesUpload`, "Brand Studio exact registration reconciliation");
 assertIncludes(platformBranding, `.eq("asset_state", "published")`, "public asset state filter");
 assertIncludes(platformBranding, `formatPlatformBrandScanStatus`, "scan status formatter");
 assertIncludes(platformBranding, `scanStatus: normalizeScanStatus`, "scan status parsing");

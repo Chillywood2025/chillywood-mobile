@@ -409,7 +409,8 @@ async function createPlatformBrandSignedUrl(asset: Pick<PlatformBrandAssetRow, "
   if (!path) return "";
   const { data, error } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(path, PLATFORM_BRAND_SIGNED_URL_SECONDS);
+    .createSignedUrl(path, PLATFORM_BRAND_SIGNED_URL_SECONDS)
+    .catch(() => ({ data: null, error: true }));
   if (error || !data?.signedUrl) return "";
   return data.signedUrl;
 }
@@ -509,8 +510,11 @@ async function uploadPlatformBrandFileToStorage(input: {
   storagePath: string;
   uri: string;
   mimeType: string;
+  accessToken: string;
+  assertOperationCurrent?: () => void;
 }) {
-  const accessToken = await getSignedInAccessToken();
+  const accessToken = input.accessToken;
+  input.assertOperationCurrent?.();
   const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PLATFORM_BRAND_BUCKET}/${encodeStoragePath(input.storagePath)}`;
 
   try {
@@ -528,36 +532,22 @@ async function uploadPlatformBrandFileToStorage(input: {
       PLATFORM_BRAND_UPLOAD_TIMEOUT_MS,
       "Platform media upload took too long. Try again.",
     );
+    input.assertOperationCurrent?.();
     if (result.status >= 200 && result.status < 300) return;
   } catch {
     // Fall back to the SDK path below; some platforms handle Expo File bodies better than uploadAsync.
   }
 
+  input.assertOperationCurrent?.();
   const localFile = new File(input.uri);
   const upload = await supabase.storage
     .from(PLATFORM_BRAND_BUCKET)
     .upload(input.storagePath, localFile as unknown as Blob, {
       contentType: input.mimeType,
       upsert: false,
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
   if (upload.error) throw upload.error;
-}
-
-async function assertPlatformBrandUploadReadable(storagePath: string, expectedSize: number) {
-  if (expectedSize <= 0) return;
-  const { data, error } = await supabase.storage
-    .from(PLATFORM_BRAND_BUCKET)
-    .createSignedUrl(storagePath, 60);
-  if (error || !data?.signedUrl) throw new Error("Platform media could not be verified after upload.");
-
-  const response = await withTimeout(
-    fetch(data.signedUrl, { headers: { Range: "bytes=0-0" } }),
-    20000,
-    "Platform media verification took too long. Try again.",
-  );
-  if (!response.ok) throw new Error("Platform media could not be verified after upload.");
-  const body = await response.arrayBuffer();
-  if (body.byteLength <= 0) throw new Error("Platform media could not be verified after upload.");
 }
 
 const createBundle = (profile: PlatformBrandProfile, assets: PlatformBrandAsset[]): PlatformBrandingBundle => {
@@ -872,36 +862,53 @@ export async function publishPlatformBrandProfile(
   return parseProfile(data as PlatformBrandProfileRow, normalizedOwnerId);
 }
 
+// Retained only by the initiating screen/session, never persisted or shared.
+export type PlatformBrandUploadAttempt = {
+  fileUri?: string;
+  payload?: PlatformBrandAssetInsert;
+};
+
 export async function uploadPlatformBrandAsset(input: {
   ownerUserId: string;
   assetType: PlatformBrandAssetType;
   file: PlatformBrandAssetFile;
+  attempt?: PlatformBrandUploadAttempt;
+  assertOperationCurrent?: () => void;
 }): Promise<PlatformBrandAsset> {
+  input.assertOperationCurrent?.();
   const ownerUserId = toText(input.ownerUserId);
   if (!ownerUserId) throw new Error("Sign in before choosing Platform media.");
   const validationMessage = getPlatformBrandAssetValidationMessage(input.file, input.assetType);
   if (validationMessage) throw new Error(validationMessage);
+  const accessToken = await getSignedInAccessToken();
+  input.assertOperationCurrent?.();
 
-  const id = createClientId();
+  const pending = input.attempt?.payload;
+  if (pending && (pending.owner_user_id !== ownerUserId || pending.asset_type !== input.assetType
+    || input.attempt?.fileUri !== input.file.uri)) {
+    throw new Error("The Platform media source changed before this upload could be retried.");
+  }
+  const id = pending?.id ?? createClientId();
   const mimeType = inferMimeType(input.file, input.assetType);
   const extension = getFileExtension(input.file, input.assetType);
   const storagePath = `${ownerUserId}/${input.assetType}/${id}.${extension}`;
-  const prepared = await preparePlatformBrandUploadUri(input.file, input.assetType);
-
-  let fileSizeBytes = Math.max(0, Number(input.file.size ?? 0) || 0);
-  try {
-    fileSizeBytes = await getPreparedPlatformBrandFileSize(prepared.uri, fileSizeBytes);
-    await uploadPlatformBrandFileToStorage({
-      storagePath,
-      uri: prepared.uri,
-      mimeType,
-    });
-    await assertPlatformBrandUploadReadable(storagePath, fileSizeBytes);
-  } finally {
-    await prepared.cleanup();
+  let fileSizeBytes = pending?.file_size_bytes ?? Math.max(0, Number(input.file.size ?? 0) || 0);
+  if (!pending) {
+    const prepared = await preparePlatformBrandUploadUri(input.file, input.assetType);
+    try {
+      input.assertOperationCurrent?.();
+      fileSizeBytes = await getPreparedPlatformBrandFileSize(prepared.uri, fileSizeBytes);
+      input.assertOperationCurrent?.();
+      await uploadPlatformBrandFileToStorage({ storagePath, uri: prepared.uri, mimeType,
+        accessToken, assertOperationCurrent: input.assertOperationCurrent });
+      input.assertOperationCurrent?.();
+    } finally {
+      await prepared.cleanup();
+    }
   }
+  input.assertOperationCurrent?.();
 
-  const payload: PlatformBrandAssetInsert = {
+  const payload: PlatformBrandAssetInsert = pending ?? {
     id,
     owner_user_id: ownerUserId,
     asset_type: input.assetType,
@@ -916,20 +923,65 @@ export async function uploadPlatformBrandAsset(input: {
     moderation_status: "pending_review",
     updated_at: new Date().toISOString(),
   };
-
-  const { data, error } = await supabase
-    .from("platform_brand_assets")
-    .insert(payload)
-    .select(PLATFORM_BRAND_ASSET_SELECT)
-    .returns<PlatformBrandAssetRow>()
-    .single();
-
-  if (error || !data) {
-    await supabase.storage.from(PLATFORM_BRAND_BUCKET).remove([storagePath]).catch(() => undefined);
-    throw error ?? new Error("Unable to save Platform media right now.");
+  if (input.attempt) {
+    input.attempt.fileUri = input.file.uri;
+    input.attempt.payload = payload;
   }
 
-  return parseAsset(data);
+  const matchesUpload = (row: PlatformBrandAssetRow | null | undefined) => !!row
+    && row.id === id && row.owner_user_id === ownerUserId
+    && row.asset_type === input.assetType && row.storage_provider === "supabase"
+    && row.storage_bucket === PLATFORM_BRAND_BUCKET
+    && row.storage_object_key === storagePath && row.storage_path === storagePath
+    && row.deleted_at === null;
+  const readUpload = async () => {
+    input.assertOperationCurrent?.();
+    const result = await supabase.from("platform_brand_assets")
+      .select(PLATFORM_BRAND_ASSET_SELECT)
+      .eq("id", id).eq("owner_user_id", ownerUserId)
+      .setHeader("Authorization", `Bearer ${accessToken}`)
+      .maybeSingle().returns<PlatformBrandAssetRow | null>();
+    input.assertOperationCurrent?.();
+    return result;
+  };
+  const unconfirmed = () => new Error("Platform media registration could not be confirmed. Retry to check the same upload.");
+  let data: PlatformBrandAssetRow | null = null;
+  if (pending) {
+    const readback = await readUpload();
+    if (readback.error || (readback.data !== null && !matchesUpload(readback.data))) throw unconfirmed();
+    data = readback.data;
+  }
+
+  // Registration captures the uploaded object's immutable incarnation and
+  // queues scanning. Private storage SELECT requires this row, so signing (or
+  // range-reading) before registration can never verify a new upload.
+  if (!data) {
+    input.assertOperationCurrent?.();
+    const { data: insertedData, error } = await Promise.resolve(supabase
+      .from("platform_brand_assets")
+      .insert(payload)
+      .setHeader("Authorization", `Bearer ${accessToken}`)
+      .select(PLATFORM_BRAND_ASSET_SELECT)
+      .returns<PlatformBrandAssetRow>()
+      .single())
+      .catch((error: unknown) => ({ data: null, error }));
+    input.assertOperationCurrent?.();
+    data = insertedData;
+    if (error || !matchesUpload(data)) {
+      // A lost acknowledgement does not prove the transaction failed. Never
+      // delete these bytes or create a replacement row on that inference.
+      const readback = await readUpload();
+      if (readback.error || !matchesUpload(readback.data)) throw unconfirmed();
+      data = readback.data;
+    }
+  }
+
+  // Preview failure is not registration failure. parseAsset may return an
+  // empty signed URL; neither this nor successful signing marks media clean
+  // or publishes it. Only the scanner and publication gates establish safety.
+  const asset = await parseAsset(data!);
+  input.assertOperationCurrent?.();
+  return asset;
 }
 
 // A bounded recent-media list cannot prove deletion by omission. Only this
