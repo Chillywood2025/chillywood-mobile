@@ -205,7 +205,7 @@ if (!creatorVideoCard.includes("const ownerClipEdit = ownerMode ? clipEdit ?? nu
   throw new Error("Clip Studio guard failed: Content Library title/template display must stay owner-mode only.");
 }
 
-if (!creatorVideoCard.includes("const playable = ownerMode ? hasPlayableSource(video) : shareable;")) {
+if (!creatorVideoCard.includes("const playable = ownerMode ? hasCreatorVideoPreviewSource(video) : shareable;")) {
   throw new Error("Clip Studio guard failed: public creator-video cards must not depend on raw storage paths for playability.");
 }
 

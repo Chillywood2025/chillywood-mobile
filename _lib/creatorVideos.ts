@@ -12,11 +12,12 @@ import {
   uploadFileToMediaStorage,
   usesPrivateOriginMediaGateway,
   type MediaStorageProvider,
+  type MediaStorageOperation,
 } from "./mediaStorage";
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
 import { resolveCreatorVipVideoAccess, type CreatorVipVideoAccess } from "./creatorVipPasses";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
-import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { runCurrentAccountBoundSupabaseMutationRpc, invokeAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import {
   resolveCreatorContentAccess,
   type CreatorContentAccessResolution,
@@ -517,8 +518,8 @@ async function attachRenditionStatuses(videos: CreatorVideo[]): Promise<CreatorV
   }));
 }
 
-async function getRequiredUserId() {
-  const { data, error } = await supabase.auth.getUser();
+async function getRequiredUserId(accessToken?: string) {
+  const { data, error } = await supabase.auth.getUser(accessToken);
   const userId = toText(data.user?.id);
   if (error || !userId) {
     throw new Error("Sign in before managing creator videos.");
@@ -796,14 +797,32 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   return { ...parsedWithAccess, vipAccess: vipAccess.vipRequired ? vipAccess : null, playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl, playbackResolution, playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null), playbackDelivery: playbackResolution.deliveryMetadata, paidContentAccess, renditionStatuses: playbackResolution.renditionStatuses.length ? playbackResolution.renditionStatuses : parsed.renditionStatuses };
 }
 
+type CreatorVideoOperation = MediaStorageOperation & { subject?: AccountBoundSupabaseMutationSubject };
+
+// The editor may retain this attempt only for its exact source and initiating
+// account/session lifetime. It contains no credentials and is not durable.
+export type CreatorVideoUploadAttempt = {
+  id?: string;
+  ownerId?: string;
+  uploadedObject?: {
+    provider: MediaStorageProvider;
+    bucket: string;
+    objectKey: string;
+    sizeBytes: number;
+  };
+};
+
 export async function uploadCreatorVideo(input: {
   file: CreatorVideoFile;
   title: string;
   description?: string;
   visibility: CreatorVideoVisibility;
   maxUploadSizeMb?: number | null;
-}): Promise<CreatorVideo> {
-  const ownerId = await getRequiredUserId();
+  attempt?: CreatorVideoUploadAttempt;
+} & CreatorVideoOperation): Promise<CreatorVideo> {
+  input.assertOperationCurrent?.();
+  const ownerId = await getRequiredUserId(input.accessToken);
+  input.assertOperationCurrent?.();
   const title = toText(input.title);
   const fileUri = toText(input.file.uri);
   if (!title) throw new Error("Video title is required.");
@@ -811,47 +830,91 @@ export async function uploadCreatorVideo(input: {
   const runtimeUploadLimitMb = typeof input.maxUploadSizeMb === "number" && Number.isFinite(input.maxUploadSizeMb)
     ? input.maxUploadSizeMb
     : (await readAppConfig().catch(() => DEFAULT_APP_CONFIG)).runtimeControls.max_upload_size_mb;
+  input.assertOperationCurrent?.();
   if (isCreatorVideoFileOverChannelMovieLimit(input.file, runtimeUploadLimitMb)) {
     throw new Error(getCreatorVideoTooLargeMessage(input.file.size, runtimeUploadLimitMb));
   }
 
-  const id = createClientId();
+  const attempt = input.attempt;
+  const reusingUploadedObject = !!attempt?.uploadedObject;
+  if (reusingUploadedObject && (!attempt?.id || attempt.ownerId !== ownerId)) {
+    throw new Error("The account changed before this video upload could be retried.");
+  }
+  const id = reusingUploadedObject ? attempt!.id! : createClientId();
+  if (attempt && !reusingUploadedObject) {
+    // Failed or unacknowledged storage may leave an immutable reservation.
+    // No video INSERT has begun, so explicit retry uses a fresh object key.
+    delete attempt.id;
+    delete attempt.ownerId;
+  }
   const mimeType = toText(input.file.mimeType) || "video/mp4";
   const storagePath = `${ownerId}/${id}/source.${getFileExtension(input.file)}`;
-  let uploadedObject: {
-    provider: MediaStorageProvider;
-    bucket: string;
-    objectKey: string;
-    sizeBytes: number;
-  } | null = null;
+  let uploadedObject = attempt?.uploadedObject ?? null;
 
-  try {
-    logCreatorVideoUpload("storage_upload_start", {
-      id,
-      name: toText(input.file.name) || "unnamed",
-      mimeType,
-      size: input.file.size ?? null,
-      visibility: normalizeVisibility(input.visibility),
-    });
-    uploadedObject = await uploadFileToMediaStorage({
-      surfaceType: "creator_video",
-      uri: fileUri,
-      objectKey: storagePath,
-      mimeType,
-      fileName: input.file.name,
-      sizeBytes: input.file.size,
-      maximumSizeBytes: getCreatorVideoUploadLimitBytes(runtimeUploadLimitMb),
-      tooLargeMessage: getCreatorVideoTooLargeMessage(null, runtimeUploadLimitMb),
-    });
-  } catch (error) {
-    logCreatorVideoUpload("storage_upload_failed", {
-      message: error instanceof Error ? error.message : "unknown",
-    });
-    throw error;
+  if (!uploadedObject) {
+    try {
+      logCreatorVideoUpload("storage_upload_start", {
+        id,
+        name: toText(input.file.name) || "unnamed",
+        mimeType,
+        size: input.file.size ?? null,
+        visibility: normalizeVisibility(input.visibility),
+      });
+      uploadedObject = await uploadFileToMediaStorage({
+        assertOperationCurrent: input.assertOperationCurrent,
+        accessToken: input.accessToken,
+        surfaceType: "creator_video",
+        uri: fileUri,
+        objectKey: storagePath,
+        mimeType,
+        fileName: input.file.name,
+        sizeBytes: input.file.size,
+        maximumSizeBytes: getCreatorVideoUploadLimitBytes(runtimeUploadLimitMb),
+        tooLargeMessage: getCreatorVideoTooLargeMessage(null, runtimeUploadLimitMb),
+      });
+      input.assertOperationCurrent?.();
+      if (attempt) {
+        attempt.id = id;
+        attempt.ownerId = ownerId;
+        attempt.uploadedObject = { ...uploadedObject };
+      }
+    } catch (error) {
+      logCreatorVideoUpload("storage_upload_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      throw error;
+    }
   }
 
   logCreatorVideoUpload("storage_upload_succeeded", { id });
   if (!uploadedObject) throw new Error("Video upload could not be completed. Try again.");
+  if (uploadedObject.objectKey !== storagePath) {
+    throw new Error("The video source changed before this upload could be retried.");
+  }
+
+  const uploadedIdentity = uploadedObject;
+  const matchesUploadedIdentity = (row: CreatorVideoRow | null | undefined) => !!row
+    && toText(row.id) === id && toText(row.owner_id) === ownerId
+    && row.storage_provider === uploadedIdentity.provider
+    && toText(row.storage_bucket) === uploadedIdentity.bucket
+    && toText(row.storage_object_key) === uploadedIdentity.objectKey;
+  const readUploadedVideo = async () => {
+    input.assertOperationCurrent?.();
+    const request = supabase.from("videos").select(CREATOR_VIDEO_SELECT)
+      .eq("id", id).eq("owner_id", ownerId);
+    if (input.accessToken) request.setHeader("Authorization", `Bearer ${input.accessToken}`);
+    const result = await request.maybeSingle().returns<CreatorVideoRow | null>();
+    input.assertOperationCurrent?.();
+    return result;
+  };
+  let data: CreatorVideoRow | null = null;
+  if (reusingUploadedObject) {
+    const readback = await readUploadedVideo();
+    if (readback.error || (readback.data !== null && !matchesUploadedIdentity(readback.data))) {
+      throw new Error("Uploaded video metadata could not be confirmed. Refresh Content Library before retrying.");
+    }
+    data = readback.data;
+  }
 
   const payload: CreatorVideoInsert = {
     id,
@@ -872,33 +935,50 @@ export async function uploadCreatorVideo(input: {
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
-    .from("videos")
-    .insert(payload)
-    .select(CREATOR_VIDEO_SELECT)
-    .returns<CreatorVideoRow>()
-    .single();
+  if (!data) {
+    const insertRequest = supabase
+      .from("videos")
+      .insert(payload);
+    if (input.accessToken) insertRequest.setHeader("Authorization", `Bearer ${input.accessToken}`);
+    const { data: insertedData, error } = await insertRequest
+      .select(CREATOR_VIDEO_SELECT)
+      .returns<CreatorVideoRow>()
+      .single();
+    input.assertOperationCurrent?.();
+    data = insertedData;
 
-  if (error || !data) {
-    logCreatorVideoUpload("metadata_insert_failed", {
-      id,
-      message: error instanceof Error ? error.message : "missing data",
-    });
-    await deleteStoredMediaObject({
-      surfaceType: "creator_video",
-      provider: uploadedObject.provider,
-      bucket: uploadedObject.bucket,
-      objectKey: uploadedObject.objectKey,
-    }).catch(() => undefined);
-    throw error ?? new Error("Unable to save uploaded video metadata.");
+    if (error || !data) {
+      logCreatorVideoUpload("metadata_insert_failed", {
+        id,
+        message: error instanceof Error ? error.message : "missing data",
+      });
+      // A failed response is not proof that the INSERT failed to commit. Never
+      // delete uploaded bytes on that inference. Recover only an exact owned row;
+      // unknown outcomes retain the object for later qualified reconciliation.
+      const readback = await readUploadedVideo();
+      const recovered = readback.data;
+      if (readback.error || !matchesUploadedIdentity(recovered)) {
+        throw error ?? new Error("Uploaded video metadata could not be confirmed. Refresh Content Library before retrying.");
+      }
+      data = recovered;
+    }
   }
+  if (!data || !matchesUploadedIdentity(data)) throw new Error("Uploaded video metadata could not be confirmed.");
 
   logCreatorVideoUpload("metadata_insert_succeeded", { id, visibility: payload.visibility });
-  await recordOriginalVideoRendition(id);
+  await recordOriginalVideoRendition(id, input.subject);
+  input.assertOperationCurrent?.();
 
-  const createdVideo = await parseCreatorVideo(data);
+  const currentEditsDiffer = toText(data.title) !== title
+    || toText(data.description) !== toText(input.description)
+    || normalizeVisibility(data.visibility) !== normalizeVisibility(input.visibility);
+  const createdVideo = currentEditsDiffer
+    ? await updateCreatorVideoMetadata(id, { title, description: toText(input.description), visibility: input.visibility }, input)
+    : await parseCreatorVideo(data);
+  input.assertOperationCurrent?.();
   try {
-    const usageResult = await recordCreatorVideoUploadUsage(createdVideo.id);
+    const usageResult = await recordCreatorVideoUploadUsage(createdVideo.id, input.subject);
+    input.assertOperationCurrent?.();
     logCreatorVideoUpload("usage_metering_recorded", {
       id: createdVideo.id,
       status: usageResult.status,
@@ -912,6 +992,7 @@ export async function uploadCreatorVideo(input: {
     });
   }
 
+  input.assertOperationCurrent?.();
   return createdVideo;
 }
 
@@ -922,7 +1003,9 @@ export async function updateCreatorVideoMetadata(
     description?: string;
     visibility?: CreatorVideoVisibility;
   },
+  operation?: CreatorVideoOperation,
 ): Promise<CreatorVideo> {
+  operation?.assertOperationCurrent?.();
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) throw new Error("Missing creator video id.");
 
@@ -933,20 +1016,26 @@ export async function updateCreatorVideoMetadata(
   if (patch.description !== undefined) update.description = toText(patch.description) || null;
   if (patch.visibility !== undefined) update.visibility = normalizeVisibility(patch.visibility);
 
-  const { data, error } = await supabase
+  const updateRequest = supabase
     .from("videos")
     .update(update)
-    .eq("id", normalizedVideoId)
+    .eq("id", normalizedVideoId);
+  if (operation?.accessToken) updateRequest.setHeader("Authorization", `Bearer ${operation.accessToken}`);
+  const { data, error } = await updateRequest
     .select(CREATOR_VIDEO_SELECT)
     .returns<CreatorVideoRow>()
     .single();
+  operation?.assertOperationCurrent?.();
 
   if (error || !data) throw error ?? new Error("Unable to update creator video.");
-  await syncCreatorVideoFeedItems(normalizedVideoId).catch(() => undefined);
-  return parseCreatorVideo(data);
+  await syncCreatorVideoFeedItems(normalizedVideoId, operation?.subject).catch(() => undefined);
+  operation?.assertOperationCurrent?.();
+  const parsed = await parseCreatorVideo(data);
+  operation?.assertOperationCurrent?.();
+  return parsed;
 }
 
-export async function syncCreatorVideoFeedItems(videoId: string): Promise<{
+export async function syncCreatorVideoFeedItems(videoId: string, subject?: AccountBoundSupabaseMutationSubject): Promise<{
   videoId: string;
   visibility: CreatorVideoVisibility;
   followersActive: boolean;
@@ -955,9 +1044,12 @@ export async function syncCreatorVideoFeedItems(videoId: string): Promise<{
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return null;
 
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("sync_creator_video_feed_items", {
+  const args = {
     p_video_id: normalizedVideoId,
-  });
+  };
+  const { data, error } = await (subject
+    ? invokeAccountBoundSupabaseMutationRpc<Record<string, unknown>>(subject, "sync_creator_video_feed_items", args)
+    : runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("sync_creator_video_feed_items", args));
   if (error) throw error;
   const row = data && typeof data === "object" ? data as Record<string, unknown> : {};
   return {

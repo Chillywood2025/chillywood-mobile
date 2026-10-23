@@ -7,6 +7,11 @@ import { SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 export type MediaStorageProvider = "supabase" | "s3" | "cloudflare_r2";
 export type MediaStorageSurfaceType = "creator_video" | "social_attachment";
 
+export type MediaStorageOperation = {
+  assertOperationCurrent?: () => void;
+  accessToken?: string;
+};
+
 export type MediaStorageObject = {
   provider: MediaStorageProvider;
   bucket: string;
@@ -145,8 +150,10 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, tim
   }
 }
 
-async function callMediaStorageFunction<T>(body: Record<string, unknown>): Promise<T> {
-  const accessToken = await getSignedInAccessToken();
+async function callMediaStorageFunction<T>(body: Record<string, unknown>, operation?: MediaStorageOperation): Promise<T> {
+  operation?.assertOperationCurrent?.();
+  const accessToken = operation?.accessToken ?? await getSignedInAccessToken();
+  operation?.assertOperationCurrent?.();
   const response = await fetchWithTimeout(
     MEDIA_STORAGE_FUNCTION_URL,
     {
@@ -161,10 +168,12 @@ async function callMediaStorageFunction<T>(body: Record<string, unknown>): Promi
     "Media upload took too long. Try again.",
   );
 
+  operation?.assertOperationCurrent?.();
   const payload = await response.json().catch(() => null) as {
     error?: unknown;
     message?: unknown;
   } | T | null;
+  operation?.assertOperationCurrent?.();
 
   if (!response.ok) {
     // Compatibility with an older gateway is permitted only for its explicit
@@ -190,14 +199,14 @@ export async function createSignedMediaUpload(input: {
   objectKey: string;
   mimeType: string;
   sizeBytes?: number | null;
-}): Promise<SignedUploadResponse> {
+} & MediaStorageOperation): Promise<SignedUploadResponse> {
   const payload = await callMediaStorageFunction<SignedUploadResponse>({
     action: "create_upload_url",
     surfaceType: input.surfaceType,
     objectKey: input.objectKey,
     mimeType: input.mimeType,
     sizeBytes: input.sizeBytes ?? null,
-  });
+  }, input);
 
   const provider = normalizeMediaStorageProvider(payload.provider);
   const bucket = toText(payload.bucket);
@@ -245,13 +254,13 @@ export async function createSignedMediaUpload(input: {
 
 async function verifySignedMediaUpload(input: MediaStorageObject & {
   surfaceType: MediaStorageSurfaceType;
-}): Promise<VerifiedUploadResponse> {
+} & MediaStorageOperation): Promise<VerifiedUploadResponse> {
   const payload = await callMediaStorageFunction<VerifiedUploadResponse>({
     action: "verify_upload",
     surfaceType: input.surfaceType,
     bucket: input.bucket,
     objectKey: input.objectKey,
-  });
+  }, input);
   const provider = normalizeMediaStorageProvider(payload.provider);
   const bucket = toText(payload.bucket);
   const objectKey = toText(payload.objectKey);
@@ -307,7 +316,7 @@ export async function deleteStoredMediaObject(input: {
   bucket: string;
   objectKey: string;
   recordId?: string | null;
-}): Promise<void> {
+} & MediaStorageOperation): Promise<void> {
   if (input.provider !== "s3" && input.provider !== "cloudflare_r2") return;
 
   await callMediaStorageFunction<{ ok?: boolean }>({
@@ -316,7 +325,7 @@ export async function deleteStoredMediaObject(input: {
     bucket: input.bucket,
     objectKey: input.objectKey,
     recordId: input.recordId ?? null,
-  });
+  }, input);
 }
 
 export async function deleteRetainedMediaContent(input: {
@@ -404,11 +413,13 @@ async function uploadPreparedFileToSignedUrl(input: {
   mimeType: string;
   fileName?: string | null;
   sizeBytes?: number | null;
-}) {
+} & MediaStorageOperation) {
+  input.assertOperationCurrent?.();
   const uploadTimeoutMs = getMediaUploadTimeoutMs(input.sizeBytes);
 
   try {
     for (let attemptIndex = 0; attemptIndex <= SLOW_DOWN_RETRY_DELAYS_MS.length; attemptIndex += 1) {
+      input.assertOperationCurrent?.();
       const result = await withTimeout(
         FileSystem.uploadAsync(input.uploadUrl, input.uri, {
           httpMethod: "PUT",
@@ -419,18 +430,21 @@ async function uploadPreparedFileToSignedUrl(input: {
         "Media upload took too long. Try again.",
       );
 
+      input.assertOperationCurrent?.();
       if (result.status >= 200 && result.status < 300) break;
       if (await waitForSlowDownRetry(attemptIndex, result.status, toText(result.body))) continue;
       throw new Error(toText(result.body) || "Unable to upload this media file.");
     }
     return;
   } catch (error) {
+    input.assertOperationCurrent?.();
     if (error instanceof SlowDownUploadError) throw error;
     // Android content/file URI handling can vary; try the Blob-style uploader next.
   }
 
   try {
     for (let attemptIndex = 0; attemptIndex <= SLOW_DOWN_RETRY_DELAYS_MS.length; attemptIndex += 1) {
+      input.assertOperationCurrent?.();
       try {
         const localFile = new File(input.uri);
         const response = await fetchWithTimeout(
@@ -443,7 +457,9 @@ async function uploadPreparedFileToSignedUrl(input: {
           uploadTimeoutMs,
           "Media upload took too long. Try again.",
         );
+        input.assertOperationCurrent?.();
         await assertUploadResponseOk(response, attemptIndex);
+        input.assertOperationCurrent?.();
         break;
       } catch (error) {
         if (error instanceof SlowDownUploadError && error.message === "retry") continue;
@@ -452,11 +468,13 @@ async function uploadPreparedFileToSignedUrl(input: {
     }
     return;
   } catch (error) {
+    input.assertOperationCurrent?.();
     if (error instanceof SlowDownUploadError) throw error;
     // Keep one final fetch fallback for platforms that accept React Native file bodies.
   }
 
   for (let attemptIndex = 0; attemptIndex <= SLOW_DOWN_RETRY_DELAYS_MS.length; attemptIndex += 1) {
+    input.assertOperationCurrent?.();
     try {
       const response = await fetchWithTimeout(
         input.uploadUrl,
@@ -472,7 +490,9 @@ async function uploadPreparedFileToSignedUrl(input: {
         uploadTimeoutMs,
         "Media upload took too long. Try again.",
       );
+      input.assertOperationCurrent?.();
       await assertUploadResponseOk(response, attemptIndex);
+      input.assertOperationCurrent?.();
       return;
     } catch (error) {
       if (error instanceof SlowDownUploadError && error.message === "retry") continue;
@@ -490,13 +510,15 @@ export async function uploadFileToMediaStorage(input: {
   sizeBytes?: number | null;
   maximumSizeBytes?: number | null;
   tooLargeMessage?: string;
-}): Promise<UploadedMediaStorageObject> {
+} & MediaStorageOperation): Promise<UploadedMediaStorageObject> {
+  input.assertOperationCurrent?.();
   const preparedUpload = await prepareUploadUri(input);
   let upload: SignedUploadResponse | null = null;
   let verifiedSizeBytes: number | null = null;
   let putCompleted = false;
 
   try {
+    input.assertOperationCurrent?.();
     const sizeBytes = await resolveMediaUploadSizeBytes({
       providedSizeBytes: input.sizeBytes,
       readSizeBytes: async () => {
@@ -506,13 +528,18 @@ export async function uploadFileToMediaStorage(input: {
       maximumSizeBytes: input.maximumSizeBytes,
       tooLargeMessage: input.tooLargeMessage,
     });
+    input.assertOperationCurrent?.();
     upload = await createSignedMediaUpload({
+      assertOperationCurrent: input.assertOperationCurrent,
+      accessToken: input.accessToken,
       surfaceType: input.surfaceType,
       objectKey: input.objectKey,
       mimeType: input.mimeType,
       sizeBytes,
     });
+    input.assertOperationCurrent?.();
     await uploadPreparedFileToSignedUrl({
+      assertOperationCurrent: input.assertOperationCurrent,
       uploadUrl: upload.uploadUrl,
       uploadHeaders: upload.uploadHeaders,
       uri: preparedUpload.uri,
@@ -521,13 +548,17 @@ export async function uploadFileToMediaStorage(input: {
       sizeBytes,
     });
     putCompleted = true;
+    input.assertOperationCurrent?.();
 
     const verified = await verifySignedMediaUpload({
+      assertOperationCurrent: input.assertOperationCurrent,
+      accessToken: input.accessToken,
       surfaceType: input.surfaceType,
       provider: upload.provider,
       bucket: upload.bucket,
       objectKey: upload.objectKey,
     });
+    input.assertOperationCurrent?.();
     const expectedMimeType = toText(input.mimeType).toLowerCase().split(";", 1)[0]?.trim();
     if (
       verified.observedMimeType !== expectedMimeType
@@ -538,8 +569,11 @@ export async function uploadFileToMediaStorage(input: {
     verifiedSizeBytes = verified.observedSizeBytes;
 
   } catch (error) {
+    input.assertOperationCurrent?.();
     if (putCompleted && upload) {
       await deleteStoredMediaObject({
+        assertOperationCurrent: input.assertOperationCurrent,
+        accessToken: input.accessToken,
         surfaceType: input.surfaceType,
         provider: upload.provider,
         bucket: upload.bucket,
@@ -550,6 +584,8 @@ export async function uploadFileToMediaStorage(input: {
   } finally {
     await preparedUpload.cleanup();
   }
+
+  input.assertOperationCurrent?.();
 
   if (!upload || verifiedSizeBytes === null) throw new Error("Media upload is not available right now.");
 

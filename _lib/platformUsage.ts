@@ -1,7 +1,7 @@
 import type { Tables } from "../supabase/database.types";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "./performancePolicy";
 import { supabase } from "./supabase";
-import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { runCurrentAccountBoundSupabaseMutationRpc, invokeAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 
 export const PLATFORM_USAGE_METERING_EVENTS_TABLE = "platform_usage_metering_events";
 export const PLATFORM_USAGE_DAILY_ROLLUPS_TABLE = "platform_usage_daily_rollups";
@@ -502,7 +502,7 @@ export const formatUsageMinutes = (minutes?: number | null) => {
   return `${Math.round(minutes)} participant-minutes`;
 };
 
-export async function recordCreatorVideoUploadUsage(videoId: string): Promise<CreatorVideoUploadUsageResult> {
+export async function recordCreatorVideoUploadUsage(videoId: string, subject?: AccountBoundSupabaseMutationSubject): Promise<CreatorVideoUploadUsageResult> {
   const targetVideoId = toUsageText(videoId);
   if (!targetVideoId) {
     return {
@@ -513,9 +513,10 @@ export async function recordCreatorVideoUploadUsage(videoId: string): Promise<Cr
     };
   }
 
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>(RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC, {
-    target_video_id: targetVideoId,
-  });
+  const args = { target_video_id: targetVideoId };
+  const { data, error } = await (subject
+    ? invokeAccountBoundSupabaseMutationRpc<unknown>(subject, RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC, args)
+    : runCurrentAccountBoundSupabaseMutationRpc<unknown>(RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC, args));
   if (error) throw error;
 
   return normalizeCreatorVideoUploadUsageResult(data, targetVideoId);

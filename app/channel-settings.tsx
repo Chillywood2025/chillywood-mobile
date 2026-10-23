@@ -32,6 +32,7 @@ import {
 } from "../_lib/appConfig";
 import { trackEvent } from "../_lib/analytics";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+import { captureAccountBoundSupabaseMutationSubject } from "../_lib/accountBoundSupabaseMutation";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import {
   readChannelAudienceSummary,
@@ -220,6 +221,7 @@ import {
   type CreatorVideo,
   type CreatorVideoFile,
   type CreatorVideoVisibility,
+  type CreatorVideoUploadAttempt,
 } from "../_lib/creatorVideos";
 import {
   buildCreatorVideoDeepLink,
@@ -1504,6 +1506,12 @@ export function ChannelStudioScreen() {
   const [clipLoading, setClipLoading] = useState(false);
   const [clipLoadError, setClipLoadError] = useState<string | null>(null);
   const clipEditorGenerationRef = useRef(0);
+  const clipUploadAttemptRef = useRef<{
+    generation: number;
+    authority: ReturnType<typeof getCurrentAccountSessionAuthoritySnapshot>;
+    file: CreatorVideoFile;
+    attempt: CreatorVideoUploadAttempt;
+  } | null>(null);
   const clipSaveInFlightRef = useRef(false);
   const paidVideoSaveInFlightRef = useRef(false);
   const [selectedPaidVideo, setSelectedPaidVideo] = useState<CreatorVideo | null>(null);
@@ -2780,7 +2788,7 @@ export function ChannelStudioScreen() {
     return () => { clearTimeout(timer); contentQueryGenerationRef.current += 1; };
   }, [canUseChannelSettings, contentSearchQuery, contentSearchRetry, contentVisibility, contentSort, contentUsesQuery, user?.id]);
 
-  useEffect(() => () => { clipEditorGenerationRef.current += 1; }, []);
+  useEffect(() => () => { clipEditorGenerationRef.current += 1; clipUploadAttemptRef.current = null; }, []);
 
   const updateProfile = (patch: Partial<UserProfile>) => {
     if (saving || brandSaving || brandProfileSaveInFlightRef.current) return;
@@ -2852,6 +2860,7 @@ export function ChannelStudioScreen() {
   const openClipStudioForNew = () => {
     if (clipSaveInFlightRef.current) return;
     clipEditorGenerationRef.current += 1;
+    clipUploadAttemptRef.current = null;
     setClipLoading(false);
     setClipLoadError(null);
     setSelectedVideoFile(null);
@@ -2867,6 +2876,7 @@ export function ChannelStudioScreen() {
   const openClipStudioForVideo = (video: CreatorVideo) => {
     if (clipSaveInFlightRef.current) return;
     const generation = ++clipEditorGenerationRef.current;
+    clipUploadAttemptRef.current = null;
     setClipLoading(true);
     setClipLoadError(null);
     setClipEditor({
@@ -3211,7 +3221,8 @@ export function ChannelStudioScreen() {
     }
   };
 
-  const loadCreatorVideos = async (confirmedVideo?: CreatorVideo) => {
+  const loadCreatorVideos = async (confirmedVideo?: CreatorVideo, isOperationCurrent: () => boolean = () => true) => {
+    if (!isOperationCurrent()) return [];
     // Mutations refresh this library. Invalidate any cached filtered/search page
     // as well, including a query that changed while the mutation was in flight.
     contentQueryGenerationRef.current += 1;
@@ -3230,6 +3241,7 @@ export function ChannelStudioScreen() {
         readCreatorVideos(String(user.id), { includeDrafts: true, limit: CONTENT_PAGE_SIZE + 1, throwOnUnavailable: true }),
         readCreatorReplayLibraryItems(String(user.id)),
       ]);
+      if (!isOperationCurrent()) return [];
       const visibleVideos = videos.slice(0, CONTENT_PAGE_SIZE);
       if (confirmedVideo && !visibleVideos.some((video) => video.id === confirmedVideo.id)) visibleVideos.push(confirmedVideo);
       setCreatorVideos(visibleVideos);
@@ -3237,16 +3249,18 @@ export function ChannelStudioScreen() {
       setCreatorVideosHasMore(videos.length > CONTENT_PAGE_SIZE);
       setCreatorReplays(replays);
       const editMap = await readClipStudioEditsForVideos(videos.map((video) => video.id)).catch(() => new Map());
+      if (!isOperationCurrent()) return [];
       setCreatorVideoClipEdits(Object.fromEntries(editMap));
       return visibleVideos;
     } catch (error) {
+      if (!isOperationCurrent()) return [];
       setVideosLoadError(formatCreatorVideoUiError(
         error,
         "Unable to load creator videos right now. Check your connection and retry.",
       ));
       return [];
     } finally {
-      setVideosLoading(false);
+      if (isOperationCurrent()) setVideosLoading(false);
     }
   };
 
@@ -3396,6 +3410,7 @@ export function ChannelStudioScreen() {
 
     setSelectedClipVideoFile(pickedFile);
     clipEditorGenerationRef.current += 1;
+    clipUploadAttemptRef.current = null;
     setClipLoading(false);
     setClipLoadError(null);
     setSelectedClipCoverFile(null);
@@ -4269,6 +4284,12 @@ export function ChannelStudioScreen() {
   };
 
   const saveClipStudio = async (targetVisibility: CreatorVideoVisibility) => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const generation = clipEditorGenerationRef.current;
+    const isCurrent = () => replayActionsMountedRef.current
+      && generation === clipEditorGenerationRef.current
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
     if (clipSaveInFlightRef.current) return;
     if (clipLoading || clipLoadError) {
       setClipNotice(clipLoadError ?? "Wait for this video's settings to load before saving.");
@@ -4338,22 +4359,41 @@ export function ChannelStudioScreen() {
         hasCover: !!selectedClipCoverFile,
       });
       let coverUpload: ClipStudioCoverUpload | null = null;
+      const subject = await captureAccountBoundSupabaseMutationSubject(String(user?.id ?? ""));
+      if (!isCurrent()) return;
+      const operation = {
+        subject,
+        accessToken: subject.accessToken,
+        assertOperationCurrent: () => {
+          if (!isCurrent()) throw new Error("The Clip Studio session changed before this action finished.");
+        },
+      };
 
       if (savedVideoId) {
         const updatedVideo = await updateCreatorVideoMetadata(savedVideoId, {
           title,
           description: clipEditor.description,
           visibility: targetVisibility,
-        });
+        }, operation);
+        if (!isCurrent()) return;
         savedVideoId = updatedVideo.id;
       } else {
+        const pending = clipUploadAttemptRef.current;
+        if (!pending || pending.generation !== generation || pending.file !== selectedClipVideoFile
+          || !sameAccountSessionAuthority(pending.authority, authority)) {
+          clipUploadAttemptRef.current = { generation, authority, file: selectedClipVideoFile!, attempt: {} };
+        }
         const uploadedVideo = await uploadCreatorVideo({
+          ...operation,
+          attempt: clipUploadAttemptRef.current!.attempt,
           file: selectedClipVideoFile!,
           title,
           description: clipEditor.description,
           visibility: targetVisibility,
           maxUploadSizeMb,
         });
+        if (!isCurrent()) return;
+        clipUploadAttemptRef.current = null;
         savedVideoId = uploadedVideo.id;
         setClipEditor((current) => ({
           ...current,
@@ -4367,15 +4407,19 @@ export function ChannelStudioScreen() {
 
       if (selectedClipCoverFile && savedVideoId) {
         coverUpload = await uploadClipStudioCoverImage({
+          ...operation,
           videoId: savedVideoId,
           file: selectedClipCoverFile,
         });
+        if (!isCurrent()) return;
       }
 
       if (!savedVideoId) throw new Error("Clip Studio could not resolve a saved video.");
       intendedEditPatch = buildClipStudioEditPatch(coverUpload);
-      await saveClipStudioEdit(savedVideoId, intendedEditPatch);
+      await saveClipStudioEdit(savedVideoId, intendedEditPatch, operation);
+      if (!isCurrent()) return;
       const confirmedVideo = await readCreatorVideoForOwner(savedVideoId);
+      if (!isCurrent()) return;
       if (!confirmedVideo) {
         throw new Error("Clip Studio could not confirm the saved draft.");
       }
@@ -4383,6 +4427,7 @@ export function ChannelStudioScreen() {
         throw new Error("Clip Studio saved state could not be confirmed.");
       }
       const confirmedEdit = await readClipStudioEdit(savedVideoId);
+      if (!isCurrent()) return;
       if (!confirmedEdit) {
         throw new Error("Clip Studio settings could not be confirmed.");
       }
@@ -4390,13 +4435,15 @@ export function ChannelStudioScreen() {
         throw new Error("Clip Studio settings could not be confirmed.");
       }
       const confirmedPlayerVideo = await readCreatorVideoForPlayer(savedVideoId).catch(() => null);
+      if (!isCurrent()) return;
       if (coverUpload && confirmedVideo.thumbStoragePath !== coverUpload.storagePath) {
         throw new Error("Clip Studio cover could not be confirmed.");
       }
       if (coverUpload && confirmedEdit.coverStoragePath !== coverUpload.storagePath) {
         throw new Error("Clip Studio cover settings could not be confirmed.");
       }
-      const refreshedVideos = await loadCreatorVideos(confirmedVideo);
+      const refreshedVideos = await loadCreatorVideos(confirmedVideo, isCurrent);
+      if (!isCurrent()) return;
       const contentLibraryContainsDraft = refreshedVideos.some((video) => (
         video.id === savedVideoId && video.visibility === targetVisibility
       ));
@@ -4465,12 +4512,17 @@ export function ChannelStudioScreen() {
       );
       logClipStudioUi("clip_save_draft_succeeded", { targetVisibility });
     } catch (error) {
+      if (!isCurrent()) return;
       if (savedVideoId && videoMutationComplete) {
         const confirmedPartialVideo = await readCreatorVideoForOwner(savedVideoId).catch(() => null);
+        if (!isCurrent()) return;
         if (confirmedPartialVideo) {
           const confirmedPartialEdit = await readClipStudioEdit(savedVideoId).catch(() => null);
+          if (!isCurrent()) return;
           const confirmedPartialPlayerVideo = await readCreatorVideoForPlayer(savedVideoId).catch(() => null);
-          const refreshedVideos = await loadCreatorVideos().catch(() => []);
+          if (!isCurrent()) return;
+          const refreshedVideos = await loadCreatorVideos(undefined, isCurrent).catch(() => []);
+          if (!isCurrent()) return;
           const partialDraftIsVisible = refreshedVideos.some((video) => video.id === confirmedPartialVideo.id);
           const partialSaveConfirmed =
             confirmedPartialVideo.visibility === targetVisibility
@@ -4544,8 +4596,10 @@ export function ChannelStudioScreen() {
         targetVisibility,
       });
     } finally {
-      setClipSaving(false);
-      clipSaveInFlightRef.current = false;
+      if (isCurrent()) {
+        setClipSaving(false);
+        clipSaveInFlightRef.current = false;
+      }
     }
   };
 
