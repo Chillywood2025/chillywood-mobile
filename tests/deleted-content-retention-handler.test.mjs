@@ -52,7 +52,9 @@ function request(authorization=`Bearer ${serviceKey}`,options={}) {
   });
 }
 
-async function denied(f,req,reason) {
+async function denied(f,req,reason,boundary={
+  authorizationPresent:true,authorizationMatchesApiKey:false,apiKeyMatchesServiceRoleKey:false,
+}) {
   const response=await f.handler(req),body=await response.json();
   assert.equal(response.status,403);
   assert.equal(response.headers.get('cache-control'),'no-store');
@@ -64,6 +66,7 @@ async function denied(f,req,reason) {
     event:'deleted_content_retention_auth_denied',requestId:body.requestId,reason,
     serviceRoleKeyConfigured:Boolean(f.env.SUPABASE_SERVICE_ROLE_KEY),
     supabaseUrlConfigured:Boolean(f.env.SUPABASE_URL),
+    ...boundary,
   }]);
   assert.deepEqual(f.calls,[],'denial must precede client, work claims, heartbeat and provider access');
   assert.deepEqual(f.envReads,['SUPABASE_SERVICE_ROLE_KEY','SUPABASE_URL']);
@@ -82,8 +85,41 @@ test('entrypoint distinguishes all missing configuration combinations only in se
 test('entrypoint preserves exact bearer equality and does not accept apikey, user or malformed authority',async()=>{
   for(const auth of [null,'','Bearer ordinary-user','Basic synthetic-service-key',
     'bearer synthetic-service-key','Bearer  synthetic-service-key','Bearer synthetic-service-key, Bearer ordinary-user']) {
-    await denied(fixture(),request(auth,{headers:{apikey:serviceKey}}),'bearer_mismatch');
+    await denied(fixture(),request(auth,{headers:{apikey:serviceKey}}),'bearer_mismatch',{
+      authorizationPresent:auth!==null,authorizationMatchesApiKey:false,apiKeyMatchesServiceRoleKey:true,
+    });
   }
+});
+
+test('denial-only boundary booleans distinguish matching caller headers from runtime-key mismatch',async()=>{
+  const otherKey='synthetic-other-key';
+  const cases=[
+    [null,undefined,false,false,false],
+    ['',undefined,true,false,false],
+    ['Bearer',undefined,true,false,false],
+    ['Bearer', '',true,false,false],
+    ['Bearer', ' \t ',true,false,false],
+    [null,serviceKey,false,false,true],
+    ['',serviceKey,true,false,true],
+    [`Bearer ${otherKey}`,serviceKey,true,false,true],
+    [`Bearer ${otherKey}`,otherKey,true,true,false],
+    [`bearer ${otherKey}`,otherKey,true,false,false],
+    [`Bearer  ${otherKey}`,otherKey,true,false,false],
+    [`Bearer ${otherKey}, Bearer ${otherKey}`,otherKey,true,false,false],
+  ];
+  for(const [auth,apiKey,authorizationPresent,authorizationMatchesApiKey,apiKeyMatchesServiceRoleKey] of cases) {
+    await denied(fixture(),request(auth,{headers:apiKey===undefined?{}:{apikey:apiKey}}),'bearer_mismatch',{
+      authorizationPresent,authorizationMatchesApiKey,apiKeyMatchesServiceRoleKey,
+    });
+  }
+  for(const apiKey of [undefined,'',' \t ']) {
+    await denied(fixture({env:{SUPABASE_SERVICE_ROLE_KEY:''}}),
+      request('Bearer',{headers:apiKey===undefined?{}:{apikey:apiKey}}),'configuration_missing');
+  }
+  await denied(fixture({env:{SUPABASE_URL:''}}),request(undefined,{headers:{apikey:serviceKey}}),
+    'configuration_missing',{
+      authorizationPresent:true,authorizationMatchesApiKey:true,apiKeyMatchesServiceRoleKey:true,
+    });
 });
 
 test('denial diagnostics contain only categorical fields and server-generated correlation',async()=>{
@@ -91,13 +127,28 @@ test('denial diagnostics contain only categorical fields and server-generated co
   const body=await denied(f,request('Bearer synthetic-private-token',{
     headers:{'x-request-id':'synthetic-private-request-id',apikey:serviceKey,
       cookie:'private=synthetic-private-cookie'},body:'synthetic-private-body',
-  }),'bearer_mismatch');
+  }),'bearer_mismatch',{
+    authorizationPresent:true,authorizationMatchesApiKey:false,apiKeyMatchesServiceRoleKey:true,
+  });
   const serialized=JSON.stringify({body,logs:f.logs});
   for(const value of [serviceKey,projectUrl,'synthetic-private','Bearer','apikey','cookie']) {
     assert.equal(serialized.includes(value),false);
   }
-  const second=fixture(),other=await denied(second,request(null),'bearer_mismatch');
+  const second=fixture(),other=await denied(second,request(null),'bearer_mismatch',{
+    authorizationPresent:false,authorizationMatchesApiKey:false,apiKeyMatchesServiceRoleKey:false,
+  });
   assert.notEqual(body.requestId,other.requestId);
+});
+
+test('diagnostic apikey comparisons do not add or relax any successful authorization condition',async()=>{
+  for(const apiKey of [undefined,'','synthetic-unrelated-key',serviceKey]) {
+    const f=fixture();
+    const response=await f.handler(request(undefined,{headers:apiKey===undefined?{}:{apikey:apiKey}}));
+    assert.equal(response.status,200);
+    assert.equal(f.calls[0],'createClient');
+    assert.equal(f.calls.at(-1),'record_deleted_content_worker_heartbeat');
+    assert.deepEqual(f.logs,[]);
+  }
 });
 
 test('synthetic trailing env-key whitespace reproduces mismatch without normalizing credentials',async()=>{

@@ -11,14 +11,18 @@ Deno.serve(async (req) => {
   const key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const url=Deno.env.get("SUPABASE_URL") ?? "";
   if(!key || !url || req.headers.get("Authorization")!==`Bearer ${key}`) {
-    // Keep denial details server-side. Never log credentials, request fields,
+    // Keep denial details server-side. Never log credentials, request values,
     // token derivatives, or exceptions; correlation is generated here, not supplied.
     let requestId:string|undefined;
     try {
       requestId=crypto.randomUUID();
+      const authorization=req.headers.get("Authorization"),apiKey=req.headers.get("apikey");
       console.warn(JSON.stringify({event:"deleted_content_retention_auth_denied",requestId,
         reason:!key || !url ? "configuration_missing" : "bearer_mismatch",
-        serviceRoleKeyConfigured:Boolean(key),supabaseUrlConfigured:Boolean(url)}));
+        serviceRoleKeyConfigured:Boolean(key),supabaseUrlConfigured:Boolean(url),
+        authorizationPresent:authorization!==null,
+        authorizationMatchesApiKey:Boolean(apiKey) && authorization===`Bearer ${apiKey}`,
+        apiKeyMatchesServiceRoleKey:Boolean(apiKey) && Boolean(key) && apiKey===key}));
     } catch {/* Diagnostics must not change the denial or reach worker side effects. */}
     return reply(403,{error:"not_allowed",...(requestId ? {requestId} : {})});
   }
