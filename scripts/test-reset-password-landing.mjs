@@ -39,14 +39,16 @@ function load(url = valid, { agent = android, scrubThrows = false, launchThrows 
   const launches = [];
   const scrubs = [];
   const status = { textContent: "" };
+  const iosLink = { hidden: true, removeAttribute: () => {} };
   const button = {
     disabled: true, textContent: "Open Chi'llywood",
     addEventListener: (name, handler) => events.set(`button:${name}`, handler),
   };
   const context = {
     URL,
+    URLSearchParams,
     navigator: { userAgent: agent },
-    document: { getElementById: (id) => ({ "open-app": button, status })[id] },
+    document: { getElementById: (id) => ({ "open-app": button, "open-ios": iosLink, status })[id], addEventListener: (name, handler) => events.set(`document:${name}`, handler) },
     window: {
       location: { href: url, assign: (value) => {
         assert.deepEqual(scrubs, [[null, "", signup ? "/auth-callback" : "/reset-password"]], "scrub precedes every launch");
@@ -120,7 +122,7 @@ assert.equal(failedScrub.launches.length, 0);
 const failedLaunch = load(valid, { launchThrows: true });
 failedLaunch.click(); failedLaunch.flush();
 assert.equal(failedLaunch.button.disabled, false);
-assert.ok(failedLaunch.status.textContent.includes("could not open"));
+assert.ok(failedLaunch.status.textContent.includes("could not continue"));
 for (const suffix of ["/", "/index.html"]) {
   assert.equal(load(valid.replace("/reset-password?", `/reset-password${suffix}?`)).button.disabled, false);
 }

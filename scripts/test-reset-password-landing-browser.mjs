@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { once } from "node:events";
 import { Buffer } from "node:buffer";
-import { resetPasswordCsp, renderResetPasswordPage } from "../public-site/legal-site/reset-password-page.mjs";
+import { resetPasswordCsp, renderResetPasswordPage, renderIosHandoffPage, renderSignupConfirmationPage } from "../public-site/legal-site/reset-password-page.mjs";
 
 // Real Chromium executes the generated page with every navigation intercepted.
 // All credentials here are synthetic. No live host, Auth API, or app is used.
@@ -74,10 +74,14 @@ try {
   const errors = [];
   const consoleMessages = [];
   let expectedDocument = null;
+  let currentHtml = html;
+  let currentCsp = resetPasswordCsp;
+  const httpsNavigations = [];
   on("Runtime.exceptionThrown", () => errors.push("Uncaught browser exception"));
   on("Runtime.consoleAPICalled", ({ args }) => consoleMessages.push(JSON.stringify(args)));
   on("Page.frameRequestedNavigation", ({ url }) => {
     if (url.startsWith("intent:")) launches.push(url);
+    if (url.startsWith("https:")) httpsNavigations.push(url);
   });
   on("Fetch.requestPaused", ({ requestId, resourceType, request }) => {
     if (resourceType !== "Document" || request.url !== expectedDocument) {
@@ -90,14 +94,16 @@ try {
       requestId, responseCode: 200,
       responseHeaders: [
         { name: "Content-Type", value: "text/html; charset=utf-8" },
-        { name: "Content-Security-Policy", value: resetPasswordCsp },
+        { name: "Content-Security-Policy", value: currentCsp },
         { name: "Referrer-Policy", value: "no-referrer" },
         { name: "Cache-Control", value: "no-store" },
       ],
-      body: Buffer.from(html).toString("base64"),
+      body: Buffer.from(currentHtml).toString("base64"),
     });
   });
-  const load = async (url, agent = android, before = "") => {
+  const load = async (url, agent = android, before = "", markup = html) => {
+    currentHtml = markup;
+    currentCsp = markup.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
     await send("Emulation.setUserAgentOverride", { userAgent: agent });
     let identifier;
     if (before) ({ identifier } = await send("Page.addScriptToEvaluateOnNewDocument", { source: before }));
@@ -114,8 +120,8 @@ try {
     assert.equal(await evaluate("window.__landingCspViolations.length"), 0, "no CSP violations");
     checks += 3;
   };
-  const click = async () => {
-    const rect = await evaluate("(() => { const r = document.getElementById('open-app').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()");
+  const click = async (id = "open-app") => {
+    const rect = await evaluate(`(() => { const r = document.getElementById('${id}').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
     await send("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1, ...rect });
     await send("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1, ...rect });
     await timeout(30);
@@ -168,10 +174,38 @@ try {
   await load(valid, android, "history.replaceState = () => { throw new Error('denied'); };");
   // Failed scrub is separately asserted below because this document retains URL.
   assert.equal(await evaluate("document.getElementById('open-app').disabled"), true);
+  // Chromium with Safari UA proves native-anchor default URL capture, NOT iOS
+  // dispatch. Every authorized document is fulfilled locally, never requested.
+  const safari = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1";
+  for (const type of ["recovery", "email"]) for (const hash of [token, `pkce_${token}`]) {
+    const route = type === "email" ? "/auth-callback" : "/reset-password";
+    const canonical = `https://chillywoodstream.com${route}?token_hash=${hash}&type=${type}`;
+    const intermediate = `https://chillywood-legal.pages.dev/auth-handoff#token_hash=${hash}&type=${type}`;
+    await load(canonical, safari, "", type === "email" ? renderSignupConfirmationPage() : html);
+    currentHtml = renderIosHandoffPage();
+    currentCsp = currentHtml.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+    expectedDocument = intermediate.split("#")[0];
+    const firstCount = httpsNavigations.length;
+    await click();
+    await timeout(150);
+    assert.equal(httpsNavigations[firstCount], intermediate, "first gesture transports fragment only");
+    assert.equal(await evaluate("location.search + location.hash"), "");
+    assert.equal(await evaluate("document.getElementById('open-ios').href"), canonical.split("?")[0]);
+    const secondCount = httpsNavigations.length;
+    await evaluate("document.getElementById('open-ios').click()");
+    assert.equal(httpsNavigations.length, secondCount, "synthetic anchor click is prevented");
+    expectedDocument = canonical;
+    currentHtml = "<!doctype html><title>Locally intercepted final navigation</title>";
+    currentCsp = "default-src 'none'";
+    await click("open-ios");
+    await timeout(150);
+    assert.equal(httpsNavigations[secondCount], canonical, "native default captures href set by trusted listener");
+    checks += 5;
+  }
   assert.equal(unexpected.length, 0, "generated page made no external/subresource requests");
   assert.equal(errors.length, 0, "no browser exceptions");
   assert.equal(consoleMessages.some((message) => message.includes(token)), false, "no token in console");
-  console.log(`Reset password landing Chromium behavior passed (${checks + 2} checks; no installed-app proof).`);
+  console.log(`Auth landing Chromium behavior passed (${checks + 2} checks; includes native iOS-anchor ordering, NOT Safari or installed-app proof).`);
 } finally {
   socket?.close();
   browser.kill("SIGTERM");

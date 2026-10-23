@@ -2,57 +2,85 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KhzkeSzAWOJ8JgMjaPJ0q025+I1piWxrOHilaSiV8x4='; style-src 'sha256-h4I/ukPHWW2eZvTtxIAtp+5vbWDvxqPqwVAq4M0eGcM='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-RgZOnMles/eaFEUxSMr5QGGFWyMaogwNfh6mcDWfcaM='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Open Chi'llywood password reset</title>
-<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f3;color:#17181c;font:18px/1.65 system-ui,sans-serif}header{background:#101217;color:#fff;padding:1.25rem;font-weight:800}main{max-width:36rem;margin:6vh auto;padding:1.5rem;background:#fff;border:1px solid #dfe3df;border-radius:1rem}h1{font-size:2rem;line-height:1.2}button{padding:1rem;border:0;border-radius:.6rem;background:#b4172a;color:#fff;font:inherit;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:default}button:focus-visible{outline:3px solid #17181c;outline-offset:4px}p{overflow-wrap:anywhere}.note{font-size:1rem;color:#5c6370}@media(max-width:40rem){main{margin:1rem}}</style>
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f3;color:#17181c;font:18px/1.65 system-ui,sans-serif}header{background:#101217;color:#fff;padding:1.25rem;font-weight:800}main{max-width:36rem;margin:6vh auto;padding:1.5rem;background:#fff;border:1px solid #dfe3df;border-radius:1rem}h1{font-size:2rem;line-height:1.2}button,#open-ios{padding:1rem;border:0;border-radius:.6rem;background:#b4172a;color:#fff;font:inherit;font-weight:700;cursor:pointer;text-decoration:none}#open-ios:not([hidden]){display:inline-block}button:disabled,#open-ios[aria-disabled=true]{opacity:.55;cursor:default}button:focus-visible,#open-ios:focus-visible{outline:3px solid #17181c;outline-offset:4px}p{overflow-wrap:anywhere}.note{font-size:1rem;color:#5c6370}summary{cursor:pointer;font-weight:700}@media(max-width:40rem){main{margin:1rem}}</style>
 </head><body><header>Chi'llywood</header><main>
 <h1>Continue your password reset</h1>
-<p>This page does not reset your password or check your link. Continue in the official Chi'llywood Android app.</p>
+<p>This page does not reset your password or check your link. Continue in the installed official Chi'llywood app.</p>
 <button id="open-app" type="button" disabled>Open Chi'llywood</button>
-<p id="status" role="status" aria-live="polite">Enable JavaScript in Chrome on your Android phone to continue. Do not copy or share your link.</p>
-<p class="note">App missing? Install the official Chi'llywood app through your usual Google Play listing, then reopen the newest password reset email. If the app says the link is expired or already used, return to the app for help requesting a fresh email. This page never sends an email.</p>
+<a id="open-ios" hidden rel="noreferrer" referrerpolicy="no-referrer">Open Chi'llywood (step 2 of 2)</a>
+<p id="status" role="status" aria-live="polite">Enable JavaScript in Safari on iPhone or iPad, or Chrome on Android. Do not share your link.</p>
+<details class="note"><summary>iPhone or iPad help</summary>
+<p>Safari uses two taps through our chillywood-legal.pages.dev page. It receives your private link in the browser, clears the address bar, and waits for your next tap. It never verifies your account or opens the app automatically.</p>
+<p>If Safari returns here, do not repeat the steps. Reopen the email, touch and hold its direct chillywoodstream.com link, and choose Open in Chi'llywood if offered. If that option is missing, your installed app or its website association may not support this link. Use your existing official installation or TestFlight invitation for help.</p></details>
+<p class="note">App missing? Use your existing official installation instructions (Google Play on Android or your existing TestFlight invitation on iPhone), then reopen the newest email. If the app says the link is expired or already used, return to the app for help requesting a fresh email. This page never sends an email.</p>
 <noscript><p>JavaScript is off, so this page cannot open the app or clear the link from the address bar. Close this page when finished.</p></noscript>
-</main><script>(function authLanding(signup) {
-  const route = signup ? "/auth-callback" : "/reset-password";
+</main><script>(function authLanding(signup, bridge = false) {
+  const route = bridge ? "/auth-handoff" : signup ? "/auth-callback" : "/reset-password";
   const type = signup ? "email" : "recovery";
-  const purpose = signup ? "signup confirmation" : "reset";
+  const purpose = bridge ? "account" : signup ? "signup confirmation" : "reset";
   const button = document.getElementById("open-app");
   const status = document.getElementById("status");
+  const iosLink = document.getElementById("open-ios");
   let target = null;
   let pending = false;
+  const clear = () => {
+    target = null;
+    button.disabled = true;
+    iosLink.removeAttribute("href");
+    iosLink.hidden = true;
+    status.textContent = "For your privacy, this page has cleared the link. Reopen the original email if you need to try again.";
+  };
+  window.addEventListener("pagehide", clear);
+  // Hiding after a native anchor activation happens after its default action.
+  // A backgrounded/restored page must not retain a usable credential or href.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") clear();
+  });
+  window.addEventListener("pageshow", (event) => { if (event.persisted) clear(); });
   let source;
   try {
     source = new URL(window.location.href);
     // Scrub before enabling any action. A failed scrub must fail closed.
     window.history.replaceState(null, "", route);
   } catch {
-    status.textContent = `Close this page and open the newest ${purpose} email in Chrome on your Android phone.`;
+    source = null;
+    status.textContent = "Close this page and reopen the newest email on your phone. The private link could not be cleared safely.";
     return;
   }
 
-  const params = source.searchParams;
-  const hash = params.get("token_hash");
-  const valid = source.origin === "https://chillywoodstream.com"
+  // Keep parsed credential locals out of event-handler closures.
+  target = (() => {
+    const raw = bridge ? source.hash.slice(1) : source.search.slice(1);
+    if (raw.split("&").length !== 2) return null;
+    if (/%(?![0-9a-f]{2})/i.test(raw)) return null;
+    try { decodeURIComponent(raw); } catch { return null; }
+    const params = new URLSearchParams(raw);
+    const hash = params.get("token_hash");
+    const suppliedType = params.get("type");
+    const valid = source.origin === (bridge ? "https://chillywood-legal.pages.dev" : "https://chillywoodstream.com")
     && [route, `${route}/`, `${route}/index.html`].includes(source.pathname)
-    && !source.username && !source.password && !source.hash
+    && !source.username && !source.password && (bridge ? !source.href.split("#")[0].includes("?") : !source.href.includes("#"))
     && [...params.keys()].length === 2
     && params.getAll("token_hash").length === 1
     && params.getAll("type").length === 1
-    && params.get("type") === type
+    && (bridge ? ["email", "recovery"].includes(suppliedType) : suppliedType === type)
     // Supabase GenerateTokenHash uses SHA-224 (56 lowercase hex); PKCE
     // mailers retain a literal pkce_ prefix. Never normalize or strip it.
     // Explicit length also rejects the terminal-newline behavior of JS `$`.
     && typeof hash === "string" && (hash.length === 56 || hash.length === 61)
     && /^(?:pkce_)?[a-f0-9]{56}$/.test(hash);
-  if (valid) {
-    const canonical = new URL(`https://chillywoodstream.com${route}`);
+    if (!valid) return null;
+    const canonical = new URL(`https://chillywoodstream.com${suppliedType === "email" ? "/auth-callback" : "/reset-password"}`);
     canonical.searchParams.set("token_hash", hash);
-    canonical.searchParams.set("type", type);
-    target = `intent://${canonical.host}${canonical.pathname}${canonical.search}#Intent;scheme=https;package=com.chillywood.mobile;end`;
-  }
+    canonical.searchParams.set("type", suppliedType);
+    return canonical.href;
+  })();
   source = null;
+  if (document.visibilityState === "hidden") { clear(); return; }
 
   if (!target) {
     status.textContent = `This page is missing a supported ${purpose} link. Open the newest ${purpose} email. If it no longer works, return to the app for help requesting a fresh email.`;
@@ -61,38 +89,66 @@
   // Conservative browser support. In-app mail browsers and other platforms
   // receive instructions, not an untested or custom-scheme credential handoff.
   const agent = navigator.userAgent;
+  const iosSafari = (/iPhone|iPad|iPod/.test(agent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
+    && /AppleWebKit\//.test(agent) && /Version\//.test(agent) && /Safari\//.test(agent)
+    && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA|DuckDuckGo|Android/.test(agent);
   const supported = /Android/.test(agent) && /Chrome\//.test(agent)
     && !/; wv\)|\bwv\b|EdgA\/|OPR\/|SamsungBrowser\//.test(agent);
-  if (!supported) {
-    target = null;
-    status.textContent = `Open the original ${purpose} email link in Chrome on your Android phone. This browser cannot open the app from this page. Do not copy or share the link.`;
+  if (bridge && iosSafari) {
+    const plainHref = new URL(target).origin + new URL(target).pathname;
+    iosLink.href = plainHref;
+    iosLink.hidden = false;
+    iosLink.addEventListener("auxclick", (event) => event.preventDefault());
+    iosLink.addEventListener("contextmenu", (event) => event.preventDefault());
+    iosLink.addEventListener("click", (event) => {
+      if (!event.isTrusted || pending || !target || event.metaKey || event.ctrlKey
+        || event.altKey || event.shiftKey || event.button > 0) { event.preventDefault(); return; }
+      pending = true;
+      iosLink.href = target;
+      iosLink.setAttribute("aria-disabled", "true");
+      status.textContent = "If this returns to the browser, stop here. Reopen the original email, touch and hold its Chi'llywood link, and choose Open in Chi'llywood if offered. Only the app can check whether the link is valid.";
+      // Do not remove href or cancel default here: Safari must activate the
+      // real cross-origin HTTPS anchor, not a script-generated navigation.
+      window.setTimeout(() => {
+        if (target) { pending = false; iosLink.href = plainHref; iosLink.removeAttribute("aria-disabled"); }
+      }, 1500);
+    });
+    status.textContent = "Step 2 of 2: tap Open Chi'llywood. This page has not verified your link. If the app does not open, use the iPhone help below instead of repeating the two steps.";
     return;
   }
+  if (bridge || (!supported && !iosSafari)) {
+    target = null;
+    status.textContent = "Use Safari on iPhone or iPad, or Chrome on Android. In-app email browsers and other browsers are not supported by this handoff. Reopen the original email in a supported browser. Do not share the link.";
+    return;
+  }
+  if (iosSafari) {
+    target = `https://chillywood-legal.pages.dev/auth-handoff#${new URL(target).search.slice(1)}`;
+    button.textContent = "Continue with Safari (step 1 of 2)";
+  } else {
+    const canonical = new URL(target);
+    target = `intent://${canonical.host}${canonical.pathname}${canonical.search}#Intent;scheme=https;package=com.chillywood.mobile;end`;
+  }
   button.disabled = false;
-  status.textContent = "Ready to open the app. This page has not checked whether your link is valid or expired.";
+  status.textContent = iosSafari ? "Step 1 of 2: continue to our handoff page, then tap Open Chi'llywood there. This page has not checked your link." : "Ready to open the app. This page has not checked whether your link is valid or expired.";
 
   button.addEventListener("click", (event) => {
     if (!event.isTrusted || pending || !target) return;
     pending = true;
     button.disabled = true;
-    status.textContent = "Choose Chi'llywood if prompted. If nothing opens or you cancel, make sure the official app is installed and try again. Only the app can check whether this link is still valid.";
+    status.textContent = iosSafari ? "Continue on our handoff page, then tap Open Chi'llywood for step 2. If you return to this page, use the iPhone help below instead of repeating the steps." : "Choose Chi'llywood if prompted. If nothing opens or you cancel, make sure the official app is installed and try again. Only the app can check whether this link is still valid.";
     try {
       window.location.assign(target);
     } catch {
-      status.textContent = "The browser could not open Chi'llywood. Make sure the official app is installed, then reopen the original email link in Chrome.";
+      status.textContent = "The browser could not continue. Make sure the official app is installed, then reopen the original email in Safari on iPhone or Chrome on Android.";
     }
     // This timer only unlocks a fresh user gesture; it never launches anything.
     window.setTimeout(() => {
       pending = false;
       if (target) {
         button.disabled = false;
-        button.textContent = "Try opening Chi'llywood again";
+        button.textContent = iosSafari ? "Try continuing with Safari again" : "Try opening Chi'llywood again";
       }
     }, 1500);
   });
-  window.addEventListener("pagehide", () => {
-    target = null;
-    button.disabled = true;
-    status.textContent = `For your privacy, this page has cleared the ${purpose} link. Reopen the original email if you need to try again.`;
-  });
-})(false);</script></body></html>
+})(false, false);</script></body></html>

@@ -6,53 +6,98 @@
 /reset-password
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-KhzkeSzAWOJ8JgMjaPJ0q025+I1piWxrOHilaSiV8x4='; style-src 'sha256-h4I/ukPHWW2eZvTtxIAtp+5vbWDvxqPqwVAq4M0eGcM='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-RgZOnMles/eaFEUxSMr5QGGFWyMaogwNfh6mcDWfcaM='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
 
 /reset-password/
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-KhzkeSzAWOJ8JgMjaPJ0q025+I1piWxrOHilaSiV8x4='; style-src 'sha256-h4I/ukPHWW2eZvTtxIAtp+5vbWDvxqPqwVAq4M0eGcM='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-RgZOnMles/eaFEUxSMr5QGGFWyMaogwNfh6mcDWfcaM='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
 
 /reset-password/index.html
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-KhzkeSzAWOJ8JgMjaPJ0q025+I1piWxrOHilaSiV8x4='; style-src 'sha256-h4I/ukPHWW2eZvTtxIAtp+5vbWDvxqPqwVAq4M0eGcM='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-RgZOnMles/eaFEUxSMr5QGGFWyMaogwNfh6mcDWfcaM='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
 
 /auth-callback
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-dS+4rA+uNrExhcoMjnAAqGBGhxKXrrkt/XEUYGl23qw='; style-src 'sha256-h4I/ukPHWW2eZvTtxIAtp+5vbWDvxqPqwVAq4M0eGcM='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-aTbFxfUp4iAdAXp+02uL36RyXaESxD1YlxsoEdHYSZo='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
 
 /auth-callback/
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-dS+4rA+uNrExhcoMjnAAqGBGhxKXrrkt/XEUYGl23qw='; style-src 'sha256-h4I/ukPHWW2eZvTtxIAtp+5vbWDvxqPqwVAq4M0eGcM='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-aTbFxfUp4iAdAXp+02uL36RyXaESxD1YlxsoEdHYSZo='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
 
 /auth-callback/index.html
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-dS+4rA+uNrExhcoMjnAAqGBGhxKXrrkt/XEUYGl23qw='; style-src 'sha256-h4I/ukPHWW2eZvTtxIAtp+5vbWDvxqPqwVAq4M0eGcM='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-aTbFxfUp4iAdAXp+02uL36RyXaESxD1YlxsoEdHYSZo='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
+
+/auth-handoff
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-WyVfpsRFP/39Q6IQWJ39x58Z7d8HFyRgk3T/JWL7U1E='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
+
+/auth-handoff/
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-WyVfpsRFP/39Q6IQWJ39x58Z7d8HFyRgk3T/JWL7U1E='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
+
+/auth-handoff/index.html
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-WyVfpsRFP/39Q6IQWJ39x58Z7d8HFyRgk3T/JWL7U1E='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  X-Robots-Tag: noindex, nofollow
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  ! NEL
+  ! Report-To
