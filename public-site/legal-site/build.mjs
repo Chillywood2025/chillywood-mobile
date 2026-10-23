@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderResetPasswordPage, resetPasswordHeaders, renderSignupConfirmationPage, signupConfirmationHeaders, renderIosHandoffPage, iosHandoffHeaders } from "./reset-password-page.mjs";
 
 import {
   LEGAL_POLICIES,
@@ -534,6 +535,9 @@ function writeAppleAppSiteAssociation() {
 
 function writeHostingHeaders() {
   const contents = fs.readFileSync(headersSourcePath, "utf8");
+  if (![resetPasswordHeaders, signupConfirmationHeaders, iosHandoffHeaders].every((section) => contents.includes(section.trim()))) {
+    throw new Error("Auth landing CSP headers are stale. Update the canonical _headers from the generated header exports before building.");
+  }
   writeFile(path.join(siteRoot, "_headers"), contents);
 }
 
@@ -654,6 +658,9 @@ fs.rmSync(siteRoot, { force: true, recursive: true });
 writeAssetLinks();
 writeAppleAppSiteAssociation();
 writeHostingHeaders();
+writeFile(path.join(siteRoot, "reset-password", "index.html"), renderResetPasswordPage());
+writeFile(path.join(siteRoot, "auth-callback", "index.html"), renderSignupConfirmationPage());
+writeFile(path.join(siteRoot, "auth-handoff", "index.html"), renderIosHandoffPage());
 writeStyles();
 const index = renderIndex();
 assertPublicOutput(index, "index");
@@ -669,4 +676,4 @@ const copyrightReport = renderCopyrightReportPage();
 assertPublicOutput(copyrightReport, publicDmcaReportSlug);
 writeFile(path.join(siteRoot, publicDmcaReportSlug, "index.html"), copyrightReport);
 
-console.log(`Built ${pages.length + 2} public legal pages into ${siteRoot}`);
+console.log(`Built ${pages.length + 2} public legal pages and reset/signup handoffs into ${siteRoot}`);

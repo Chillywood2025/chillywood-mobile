@@ -38,7 +38,7 @@ test("Sign In keeps the real controls accessible, keyboard-safe, and automation-
     'void signIn()',
   ]) assert.ok(login.includes(marker), `missing preserved Sign In contract: ${marker}`);
   assert.match(login, /accessibilityState=\{\{ busy: loading, disabled: loading \}\}/);
-  assert.match(login, /<NeonSignInButton loading=\{loading\}/);
+  assert.match(login, /<NeonSignInButton loading=\{loading \|\| \(resending && !resendWaitExpired\)\}/);
   assert.match(appSurface, /accessibilityState=\{\{ disabled: disabled \|\| loading, busy: loading \}\}/);
 });
 
