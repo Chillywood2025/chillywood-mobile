@@ -31,9 +31,11 @@ test('failure and malformed decisions fail closed', async () => {
 });
 test('actual expiry worker has service authentication and uses bounded claim-controlled helpers', () => {
   const source=readFileSync(new URL('../deleted-content-retention-expiry/index.ts',import.meta.url),'utf8');
-  assert.ok(source.includes('req.headers.get("Authorization")!==`Bearer ${key}`'));
+  assert.ok(source.includes('RETENTION_WORKER_SERVICE_KEY_SHA256'));
+  assert.ok(source.includes('timingSafeEqual(actual,expected)'));
+  assert.ok(!source.includes('SUPABASE_SERVICE_ROLE_KEY'));
   assert.ok(source.includes('runDeletedContentRetentionWorker'));
-  assert.ok(!source.includes('fetch(') && !source.includes('createPresignedS3Url'));
+  assert.ok(source.includes('redirect:"error"') && !source.includes('createPresignedS3Url'));
 });
 test('actual gateway retains authorization, stages before revocation and conditionally deletes', () => {
   const source=readFileSync(new URL('../media-storage/index.ts',import.meta.url),'utf8');
