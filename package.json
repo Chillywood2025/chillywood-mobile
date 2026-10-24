@@ -724,7 +724,7 @@
     "postcss": "8.5.23",
     "shell-quote": "1.11.0",
     "source-map-js": "1.2.2",
-    "undici": "6.28.1",
+    "undici": "6.29.1",
     "xcode@3.0.1": {
       "uuid": "11.1.1"
     }
