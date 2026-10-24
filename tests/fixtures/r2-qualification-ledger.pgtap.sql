@@ -18,7 +18,7 @@ select ok(has_function_privilege('service_role','public.read_r2_qualification_te
 select ok((select bool_and(prosecdef and proconfig=array['search_path=""']) from pg_proc
  where oid in ('public.read_r2_qualification_test_run(text,text)'::regprocedure,'public.cas_r2_qualification_test_run(text,text,integer,jsonb)'::regprocedure)),
  'definer RPC search paths remain empty');
-with a as (select '{"schema":1,"runId":"r2-retention-qualification-20261023-01","manifestHash":"b01b7f40adab7a6f830dd38282550d70b3f18adb84c790d0d7fd7522ff014bd8","revision":0,"phase":"new","pending":null,"completed":[],"reconciliations":0,"requestBudgetReserved":0,"observations":[],"updatedAt":"2026-10-23T00:00:00.000Z"}'::jsonb s),
+with a as (select '{"schema":1,"runId":"r2-retention-qualification-20261023-01","manifestHash":"2e3acd9b1075aa82d485dfb543776e7f72ff709ba03c2bd3f016a74e6a662201","revision":0,"phase":"new","pending":null,"completed":[],"reconciliations":0,"requestBudgetReserved":0,"observations":[],"updatedAt":"2026-10-23T00:00:00.000Z"}'::jsonb s),
 b as (select s,s||'{"revision":1,"pending":"put_control","requestBudgetReserved":2}'::jsonb n from a)
 select ok(r2_qualification_test_private.valid_transition(s,n,false,'2026-10-24T19:59:59.999Z')
  and not r2_qualification_test_private.valid_transition(s,n,false,'2026-10-24T20:00:00.000Z')

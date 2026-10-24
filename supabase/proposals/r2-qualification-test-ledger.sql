@@ -14,7 +14,7 @@ begin
       array['completed','manifestHash','observations','pending','phase','reconciliations','requestBudgetReserved','revision','runId','schema','updatedAt']
     or s->'schema' is distinct from '1'::jsonb
     or s->>'runId' is distinct from 'r2-retention-qualification-20261023-01'
-    or s->>'manifestHash' is distinct from 'b01b7f40adab7a6f830dd38282550d70b3f18adb84c790d0d7fd7522ff014bd8'
+    or s->>'manifestHash' is distinct from '2e3acd9b1075aa82d485dfb543776e7f72ff709ba03c2bd3f016a74e6a662201'
     or jsonb_typeof(s->'completed') <> 'array' or jsonb_typeof(s->'observations') <> 'array'
     or jsonb_typeof(s->'revision') <> 'number' or (s->>'revision') !~ '^[0-9]{1,2}$'
     or jsonb_typeof(s->'reconciliations') <> 'number' or (s->>'reconciliations') !~ '^[0-3]$'
@@ -175,7 +175,7 @@ declare result jsonb;
 begin
   if current_setting('role',true) is distinct from 'service_role' then raise exception 'qualification_service_required'; end if;
   if p_run_id is distinct from 'r2-retention-qualification-20261023-01' or
-    p_manifest_hash is distinct from 'b01b7f40adab7a6f830dd38282550d70b3f18adb84c790d0d7fd7522ff014bd8' then
+    p_manifest_hash is distinct from '2e3acd9b1075aa82d485dfb543776e7f72ff709ba03c2bd3f016a74e6a662201' then
     raise exception 'qualification_binding_invalid'; end if;
   select state into result from r2_qualification_test_private.run where singleton;
   if result is not null and (result->>'runId' is distinct from p_run_id or result->>'manifestHash' is distinct from p_manifest_hash) then
@@ -189,7 +189,7 @@ declare result jsonb;
 begin
   if current_setting('role',true) is distinct from 'service_role' then raise exception 'qualification_service_required'; end if;
   if p_run_id is distinct from 'r2-retention-qualification-20261023-01' or
-    p_manifest_hash is distinct from 'b01b7f40adab7a6f830dd38282550d70b3f18adb84c790d0d7fd7522ff014bd8' then
+    p_manifest_hash is distinct from '2e3acd9b1075aa82d485dfb543776e7f72ff709ba03c2bd3f016a74e6a662201' then
     raise exception 'qualification_binding_invalid'; end if;
   if current_setting('transaction_isolation')<>'read committed' then raise exception 'qualification_requires_read_committed'; end if;
   if p_expected_revision is null or p_expected_revision<0 then raise exception 'qualification_revision_invalid'; end if;
