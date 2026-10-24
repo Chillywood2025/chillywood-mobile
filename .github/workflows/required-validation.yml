@@ -172,6 +172,9 @@ jobs:
           node scripts/test-deleted-content-retention-postgres.mjs
           node scripts/test-deleted-media-retirement-postgres.mjs
           node scripts/test-platform-brand-retention-postgres.mjs
+          node --test supabase/functions/_shared/r2-disposable-qualification.test.mjs supabase/functions/_shared/r2-disposable-qualification-store.test.mjs
+          node --test supabase/functions/_shared/r2-disposable-qualification-fence.test.mjs
+          node scripts/test-r2-qualification-ledger-postgres.mjs
           node --test tests/brand-soft-removal-scan-queue.test.mjs tests/brand-review-retention-evidence.test.mjs tests/brand-permission-reduction-fence.test.mjs tests/brand-reference-free-profile.test.mjs
           node scripts/test-platform-brand-expiry-transport-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-brand-retention-concurrency.mjs
@@ -184,6 +187,7 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-content-inspection-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-deleted-content-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-legacy-retention-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-r2-qualification-ledger-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-staff-permission-template-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-database-runtime-authority-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-studio-authority-concurrency.mjs
