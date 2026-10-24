@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {loadQualificationModule} from '../../../tests/helpers/r2-qualification-fixture.mjs';
 // Keep runtime confinement covered by the existing Required Validation command.
 import './r2-disposable-qualification-runtime.test.mjs';
+import './r2-disposable-qualification-cleanup.test.mjs';
 const {BUCKET, CLEANUP_APPROVED, CONFLICT_PAYLOAD, DEADLINE, MUTATION_RECEIPTS, OBJECTS, R2_ENDPOINT, RUN_APPROVED, RUN_ID, manifestHash, sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
 const {createQualificationOrigin, readBoundedBody}=loadQualificationModule('r2-disposable-qualification-origin.ts');
 const {createQualificationHandler}=loadQualificationModule('r2-disposable-qualification-handler.ts');
@@ -47,8 +48,8 @@ async function qualified(f) {
   assert.equal((await f.run('conflict')).status, 'conflict_verified');
 }
 
-test('fixed manifest permits only the bounded non-delete run and keeps cleanup closed', () => {
-  assert.equal(RUN_APPROVED, true); assert.equal(CLEANUP_APPROVED, false);
+test('fixed manifest enables only the same bounded run and separately SQL-approved cleanup', () => {
+  assert.equal(RUN_APPROVED, true); assert.equal(CLEANUP_APPROVED, true);
   assert.equal(BUCKET, 'chillywood-media-origin');
   assert.equal(Object.keys(OBJECTS).length, 2);
   for (const item of Object.values(OBJECTS)) {
@@ -61,7 +62,7 @@ test('verified account binding pins the complete manifest without extending the 
   assert.equal(RUN_ID,'r2-retention-qualification-20261023-01');
   assert.equal(DEADLINE,'2026-10-24T20:00:00.000Z');
   assert.equal(await manifestHash(),'2e3acd9b1075aa82d485dfb543776e7f72ff709ba03c2bd3f016a74e6a662201');
-  assert.equal(RUN_APPROVED,true);assert.equal(CLEANUP_APPROVED,false);
+  assert.equal(RUN_APPROVED,true);assert.equal(CLEANUP_APPROVED,true);
 });
 test('prepare/read/conflict is create-only and preserves the control and original bytes', async () => {
   const f = await fixture(); await qualified(f);
@@ -202,14 +203,13 @@ test('handler preserves exact service authority, denies wrong auth without touch
   }
   assert.equal(calls, 0);
 });
-test('handler refuses extra keys, arbitrary payload/URL/fixture and unapproved cleanup', async () => {
+test('handler refuses extra keys and arbitrary payload/URL/fixture before storage', async () => {
   let calls=0; const fail=()=>{calls++; throw Error('must not construct');};
   const handler = createQualificationHandler({env:k=>environment[k], store:fail, origin:fail});
   const call = body => handler(new Request('https://synthetic.invalid', {method:'POST', headers:{Authorization:'Bearer synthetic-service'}, body:JSON.stringify(body)}));
   for (const body of [{runId:RUN_ID, action:'prepare', key:OBJECTS.target.key}, {runId:RUN_ID, action:'prepare', payload:'x'},
     {runId:RUN_ID, action:'prepare', url:'https://example.com'}, {runId:'c8ffaa91-0017-4646-98df-8392e170e7ae', action:'prepare'},
     {runId:RUN_ID, action:'list'}, {runId:RUN_ID, action:'prepare', huge:'x'.repeat(1024)}]) assert.equal((await call(body)).status, 400);
-  assert.equal((await call({runId:RUN_ID,action:'cleanup'})).status, 403);
   assert.equal(calls, 0);
 });
 test('R2 transport independently verifies SigV4, signed create-only headers, allowlist and fixed payloads', async () => {

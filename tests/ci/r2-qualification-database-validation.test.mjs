@@ -44,7 +44,7 @@ test('qualification gate rejects omission, optionality, swallowed failure, wrong
 });
 test('test clock adaptation changes no gate, deadline or canonical proposal and loader is bounded',()=>{
   const manifest=loadQualificationModule('r2-disposable-qualification-manifest.ts');
-  assert.equal(manifest.RUN_APPROVED,true);assert.equal(manifest.CLEANUP_APPROVED,false);
+  assert.equal(manifest.RUN_APPROVED,true);assert.equal(manifest.CLEANUP_APPROVED,true);
   assert.equal(manifest.DEADLINE,'2026-10-24T20:00:00.000Z');
   assert.equal(proposalSource.includes('clock_timestamp()'),true);assert.equal(fixtureProposalSQL.includes('clock_timestamp()'),false);
   assertProposalUnchanged();assert.throws(()=>loadQualificationModule('../deleted-content-retention-expiry/index.ts'));
