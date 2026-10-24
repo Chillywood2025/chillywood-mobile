@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v16",
+  "generation": "internal-native-v17",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v16",
-    "ios": "1.0.0-ios-production-v16"
+    "android": "1.0.0-android-production-v17",
+    "ios": "1.0.0-ios-production-v17"
   },
   "supersedes": {
-    "generation": "internal-native-v15",
-    "androidRuntimeVersion": "1.0.0-android-production-v15",
-    "iosRuntimeVersion": "1.0.0-ios-production-v15",
-    "androidCompatibilityDigest": "514df5eb89ad4c29643aa8733da77afbdd20822d7b5b96da619e3107370aab3c",
-    "iosCompatibilityDigest": "b61e26f8176467abfca7b287fa516600d80167ea7fa2482e2f109cd3e3e6557f"
+    "generation": "internal-native-v16",
+    "androidRuntimeVersion": "1.0.0-android-production-v16",
+    "iosRuntimeVersion": "1.0.0-ios-production-v16",
+    "androidCompatibilityDigest": "37c6b96c66ce64121a9c134fdca58d919a757868f70feebd02928c4d694259d3",
+    "iosCompatibilityDigest": "3609267e9486d0eddcd426f974b24b773b32c24977dbbad69a4a6eec07a72932"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "37c6b96c66ce64121a9c134fdca58d919a757868f70feebd02928c4d694259d3",
-    "iosDigest": "3609267e9486d0eddcd426f974b24b773b32c24977dbbad69a4a6eec07a72932"
+    "androidDigest": "28e24d43df2d6c787874d3e7e4854017f74bab5a0311504f548cedebf982b623",
+    "iosDigest": "bc52288a220e86ed22d7ce0b4f30a99e68969b1f8545450fab6968c7fe8658cf"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V16 is a prospective source cohort for the reviewed Expo SDK 54 expo-asset 12.0.13 to 12.0.14 package and lockfile update. V15 runtime identities and native input digests remain immutable; no assumption is made about whether V15 binaries were built or distributed. V16 retains V15's standalone application-only LiteRT models, compiled-out unused Expo Camera and Expo Dev Launcher scanners, all five camera effects, notification repairs, and unchanged iOS Apple Vision and Core Image implementation. ML Kit diagnostic transmission remains refused. Any future V16 native delivery requires fresh matching signed binaries and separate authorization; those builds are not a prerequisite for the separately authorized malware-scanner server deployment. Held Android106 belongs to V14 and remains barred from distribution and execution. Prior generations, signed artifacts and historical physical evidence remain immutable. Source checks do not establish signed binaries, installed or remotely received effect quality, or physical qualification. Future delivery stays limited to the existing Google Play internal track and TestFlight Chillywood Internal group. Native automatic activation remains disabled; the app owns update activation. This source generation grants no build, submission, server activation, OTA or public-release authority."
+    "reason": "V17 is a prospective source cohort for the reviewed root Undici 6.28.1 to 6.29.1 advisory repair used by Expo CLI tooling. The unchanged conservative native-input contract binds the root manifest and lockfile even though this repair does not change mobile runtime code. V16 runtime identities and native input digests remain immutable; no assumption is made about whether V16 binaries were built or distributed. V17 retains V16's standalone application-only LiteRT models, compiled-out unused Expo Camera and Expo Dev Launcher scanners, all five camera effects, notification repairs, and unchanged iOS Apple Vision and Core Image implementation. ML Kit diagnostic transmission remains refused. Any future V17 native delivery requires fresh matching signed binaries, applicable qualification and separate authorization; this tooling repair does not itself require mobile delivery or block the independent alert-service rollout. Held Android106 belongs to V14 and remains barred from distribution and execution. Prior generations, signed artifacts and historical physical evidence remain immutable. Source checks do not establish signed binaries, installed or remotely received effect quality, or physical qualification. Future delivery stays limited to the existing Google Play internal track and TestFlight Chillywood Internal group. Native automatic activation remains disabled; the app owns update activation. This source generation grants no build, submission, server activation, OTA or public-release authority."
   }
 }

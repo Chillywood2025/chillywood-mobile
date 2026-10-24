@@ -110,8 +110,10 @@ const expectedSupabasePresenceBackport = Object.freeze({
 // every other Supabase identity remains in this unchanged-rest digest.
 // Includes the reviewed 2026-10-21 Expo SDK 54 expo-asset 12.0.13 -> 12.0.14
 // compatibility patch; no other package identity changed in that update.
+// Includes the reviewed 2026-10-24 root Undici 6.28.1 -> 6.29.1 advisory
+// repair; only that lock entry changed, and it remains bound by this digest.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "909f9c8e8651ab78d30d67e49e3ed65266c65a6e8a9e922626e5da984641ce76";
+const expectedUnrelatedPackageGraphSha256 = "8d01d114466a6e69b6e7cabb3984e50e0d6769aed17e7272c2357c72cc544fa4";
 const compatibilityClosurePaths = new Set([
   "node_modules/@supabase/realtime-js",
   "node_modules/@supabase/supabase-js",
@@ -442,8 +444,8 @@ function killNegativeControls(base) {
     ["CHANGE_UNRELATED_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => { m.unrelatedPackageGraphSha256 = "0".repeat(64); }],
   ];
   // Mutate real lock entries, not just the resulting digest, so these controls
-  // prove both the reviewed Expo package and an unchanged dependency stay bound.
-  for (const entryPath of ["node_modules/expo-asset", "node_modules/expo-constants"]) {
+  // prove reviewed Expo/Undici packages and an unchanged dependency stay bound.
+  for (const entryPath of ["node_modules/expo-asset", "node_modules/expo-constants", "node_modules/undici"]) {
     for (const [field, value] of Object.entries({
       version: "0.0.0-unreviewed",
       resolved: "https://example.invalid/unreviewed.tgz",
@@ -458,6 +460,11 @@ function killNegativeControls(base) {
     }
   }
   controls.push(
+    ["RESTORE_UNDICI_6_28_1", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => {
+      const mutantLock = clone(lock);
+      mutantLock.packages["node_modules/undici"].version = "6.28.1";
+      m.unrelatedPackageGraphSha256 = unrelatedPackageGraphSha256(mutantLock);
+    }],
     ["REMOVE_UNRELATED_LOCK_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => {
       const mutantLock = clone(lock);
       delete mutantLock.packages["node_modules/expo-constants"];
