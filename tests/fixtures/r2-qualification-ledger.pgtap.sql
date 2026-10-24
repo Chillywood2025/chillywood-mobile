@@ -1,5 +1,5 @@
--- Only the native generated clone harness installs the proposal before this.
--- NOT under supabase/tests: normal schema replay must never discover the ledger.
+-- Native generated-clone harness verifies the migrated canonical ledger first.
+-- Kept in fixtures because its admission clock is frozen only in that clone.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path=public,extensions;
@@ -11,8 +11,10 @@ select is((select count(*)::integer from pg_policy where polrelid='r2_qualificat
 select ok(not has_schema_privilege('anon','r2_qualification_test_private','USAGE'),'anon has no private schema access');
 select ok(not has_schema_privilege('authenticated','r2_qualification_test_private','USAGE'),'authenticated has no private schema access');
 select ok(not has_schema_privilege('service_role','r2_qualification_test_private','USAGE'),'service has no direct ledger access');
-select ok(not has_function_privilege('anon','public.read_r2_qualification_test_run(text,text)','EXECUTE'),'anon cannot read run');
-select ok(not has_function_privilege('authenticated','public.cas_r2_qualification_test_run(text,text,integer,jsonb)','EXECUTE'),'authenticated cannot CAS run');
+select ok(not has_function_privilege('anon','public.read_r2_qualification_test_run(text,text)','EXECUTE')
+ and not has_function_privilege('anon','public.cas_r2_qualification_test_run(text,text,integer,jsonb)','EXECUTE'),'anon cannot read or CAS run');
+select ok(not has_function_privilege('authenticated','public.read_r2_qualification_test_run(text,text)','EXECUTE')
+ and not has_function_privilege('authenticated','public.cas_r2_qualification_test_run(text,text,integer,jsonb)','EXECUTE'),'authenticated cannot read or CAS run');
 select ok(has_function_privilege('service_role','public.read_r2_qualification_test_run(text,text)','EXECUTE')
  and has_function_privilege('service_role','public.cas_r2_qualification_test_run(text,text,integer,jsonb)','EXECUTE'),'only proposed service RPC grants exist');
 select ok((select bool_and(prosecdef and proconfig=array['search_path=""']) from pg_proc

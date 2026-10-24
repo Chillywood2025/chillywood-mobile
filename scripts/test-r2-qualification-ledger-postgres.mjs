@@ -1,27 +1,34 @@
 #!/usr/bin/env node
-// Actual proposal SQL on disposable local PGlite. No network, live client,
-// provider, migration or credentials. NOT a multi-backend concurrency claim.
+// Canonical migration SQL on disposable local PGlite. No network, live client,
+// provider, live migration or credentials. NOT a multi-backend concurrency claim.
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
-import {join} from 'node:path';
+import {mkdtemp,readdir,rm} from 'node:fs/promises';
+import {basename,join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {PGlite} from '@electric-sql/pglite';
-import {loadQualificationModule,fixtureProposalSQL,fixtureNow,assertProposalUnchanged,existingDatabaseFingerprintSQL} from '../tests/helpers/r2-qualification-fixture.mjs';
-import {createDatabase} from '../tests/helpers/database-runtime-authority-fixture.mjs';
+import {loadQualificationModule,fixtureNow,assertProposalUnchanged,existingDatabaseFingerprintSQL,
+  qualificationMigrationName,qualificationMigrationSource,fixtureAdmissionClockSQL,
+  qualificationCatalogFingerprintSQL,assertClockOnlyCatalogChange} from '../tests/helpers/r2-qualification-fixture.mjs';
+import {createDatabase,splitSQL,repairMigrationPath} from '../tests/helpers/database-runtime-authority-fixture.mjs';
 const {createQualificationRunStore,validateQualificationState}=loadQualificationModule('r2-disposable-qualification-store.ts');
 const {initialState,runQualification}=loadQualificationModule('r2-disposable-qualification.ts');
 const {DEADLINE,OBJECTS,RUN_ID,manifestHash,sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
 
-const sql=fixtureProposalSQL;
 const hash=await manifestHash(), now=()=>Date.parse(fixtureNow);
-let checks=0;
+let checks=0,canonicalCatalog;
 const check=(value,label)=>{assert.ok(value,label);checks++;};
 const denied=async(promise,pattern)=>{await assert.rejects(promise,pattern);checks++;};
 async function fixture({disk=false}={}) {
   const directory=disk?await mkdtemp(join(tmpdir(),'r2-qualification-ledger-')):undefined;
   let db=new PGlite(directory);
   await db.exec('create role anon;create role authenticated;create role service_role;');
-  await db.exec(sql);
+  // Apply the exact canonical migration once before the test-only clock change.
+  await db.exec(qualificationMigrationSource);
+  const catalog=(await db.query(qualificationCatalogFingerprintSQL)).rows[0].v;
+  canonicalCatalog??=catalog;
+  assert.equal(catalog,canonicalCatalog,'minimal canonical catalog and unseeded rows');
+  await db.exec(fixtureAdmissionClockSQL);
+  assertClockOnlyCatalogChange(catalog,(await db.query(qualificationCatalogFingerprintSQL)).rows[0].v);
   const owner=async fn=>{await db.exec('reset role');try{return await fn();}finally{await db.exec('set role service_role');}};
   const seed=async()=>owner(async()=>db.query('insert into r2_qualification_test_private.run(state,setup_approval_ref) values($1,$2)',[await initialState(),'approved:offline-synthetic-setup']));
   const approveCleanup=async()=>owner(()=>db.query("update r2_qualification_test_private.run set cleanup_approval_ref='approved:offline-synthetic-cleanup'"));
@@ -62,12 +69,23 @@ async function qualified(f){for(const action of ['prepare','read','conflict'])aw
       await f.db.exec(`set role ${role}`);
       await denied(f.db.exec('select * from r2_qualification_test_private.run'),/permission denied/);
       await denied(f.db.query('insert into r2_qualification_test_private.run(state,setup_approval_ref) values($1,$2)',[initial,'approved:forged']),/permission denied/);
-      if(role!=='service_role')await denied(f.scalar('select public.read_r2_qualification_test_run($1,$2) v',[RUN_ID,hash]),/permission denied/);
+      if(role!=='service_role'){
+        await denied(f.scalar('select public.read_r2_qualification_test_run($1,$2) v',[RUN_ID,hash]),/permission denied/);
+        await denied(f.scalar('select public.cas_r2_qualification_test_run($1,$2,$3,$4) v',[RUN_ID,hash,0,next]),/permission denied/);
+      }
     });
     await f.owner(async()=>{
       check(await f.scalar("select relrowsecurity and relforcerowsecurity v from pg_class where oid='r2_qualification_test_private.run'::regclass"),'RLS and FORCE RLS enabled');
       check(await f.scalar("select count(*)=0 v from pg_policy where polrelid='r2_qualification_test_private.run'::regclass"),'no permissive table policies');
       await denied(f.scalar('select public.read_r2_qualification_test_run($1,$2) v',[RUN_ID,hash]),/qualification_service_required/);
+      const before=await f.scalar(qualificationCatalogFingerprintSQL);
+      // Adversarial disposable-only control: table ACL checks alone miss column
+      // grants. Catalog parity must detect these even without schema USAGE.
+      await f.db.exec('grant select(state) on r2_qualification_test_private.run to authenticated');
+      check(await f.scalar("select has_column_privilege('authenticated','r2_qualification_test_private.run','state','SELECT') v"),'column-only privilege drift is real');
+      check(await f.scalar(qualificationCatalogFingerprintSQL)!==before,'catalog fingerprint rejects column-only privilege drift');
+      await f.db.exec('revoke select(state) on r2_qualification_test_private.run from authenticated');
+      check(await f.scalar(qualificationCatalogFingerprintSQL)===before,'column ACL negative control restores exact original catalog');
     });
     await f.seed();await denied(f.approveCleanup(),/qualification_run_immutable/);
     await denied(f.seed(),/duplicate key/);
@@ -179,20 +197,35 @@ for(const lostOn of [1,2]){
 }
 // Also replay the repository's entire schema with the established managed-service
 // doubles. This is not the native Supabase/pgTAP suite or live migration parity.
-const {db:full,replayReport}=await createDatabase({applyRepair:true,includeHeldStudio:true});
+// Explicit all-other-migrations baseline, then the exact target ONCE. This
+// preserves before/after existing-object fingerprints without double execution.
+const {db:full,replayReport,repairSql}=await createDatabase({applyRepair:true,includeHeldStudio:true,
+  excludeMigrations:[qualificationMigrationName]});
+const appliedMigrationFiles=[...replayReport.files,basename(repairMigrationPath),qualificationMigrationName].sort();
 try {
+  assert.deepEqual(appliedMigrationFiles,(await readdir(new URL('../supabase/migrations/',import.meta.url))).filter(n=>n.endsWith('.sql')).sort(),
+    'every migration is accounted for exactly once, including the existing forward repair and new canonical target');
+  assert.equal(new Set(appliedMigrationFiles).size,appliedMigrationFiles.length);
+  assert.deepEqual(replayReport.excludedMigrations,[qualificationMigrationName]);
+  assert.ok(!replayReport.files.includes(qualificationMigrationName));
+  check((await full.query("select to_regnamespace('r2_qualification_test_private') v")).rows[0].v===null,'only target migration excluded from full baseline');
   const before=(await full.query(existingDatabaseFingerprintSQL)).rows[0];
-  await full.exec(sql);
+  await full.exec(qualificationMigrationSource);
   check(JSON.stringify((await full.query(existingDatabaseFingerprintSQL)).rows[0])===JSON.stringify(before),'existing migrated schema, ACLs and protected state unchanged');
-  check((await full.query('select count(*)::int n from r2_qualification_test_private.run')).rows[0].n===0,'full schema proposal is unseeded');
+  check((await full.query(qualificationCatalogFingerprintSQL)).rows[0].v===canonicalCatalog,'full schema exactly matches canonical ledger definitions, ACLs, RLS and unseeded rows');
+  check((await full.query('select count(*)::int n from r2_qualification_test_private.run')).rows[0].n===0,'full schema migration is unseeded');
   for(const role of ['anon','authenticated']){
     await full.exec(`set role ${role}`);
     await denied(full.query('select public.read_r2_qualification_test_run($1,$2)',[RUN_ID,hash]),/permission denied/);
+    await denied(full.query('select public.cas_r2_qualification_test_run($1,$2,$3,$4)',[RUN_ID,hash,0,await initialState()]),/permission denied/);
     await full.exec('reset role');
   }
   await full.exec('set role service_role');
   check((await full.query('select public.read_r2_qualification_test_run($1,$2) v',[RUN_ID,hash])).rows[0].v===null,'only intended service RPC remains callable with full default grants');
 } finally {await full.close();}
 assertProposalUnchanged();
+const statementCount=source=>splitSQL(source).filter(s=>!/^\s*(begin|commit)\s*;?\s*$/i.test(s.replace(/--[^\n]*/g,''))).length;
 console.log(JSON.stringify({status:'passed',checks,engine:'PGlite actual PostgreSQL',multiBackendConcurrency:false,syntheticClock:true,
-  schemaReplayFiles:replayReport.files.length,schemaReplayStatements:replayReport.statements,managedInfrastructureDoubles:true,pgTap:false,networkCalls:0,liveDatabaseWrites:0}));
+  schemaReplayFiles:appliedMigrationFiles.length,schemaReplayStatements:replayReport.statements+statementCount(repairSql)+statementCount(qualificationMigrationSource),
+  canonicalTargetApplications:1,targetMigration:qualificationMigrationName,baselineExcludedMigrations:replayReport.excludedMigrations,
+  managedInfrastructureDoubles:true,pgTap:false,networkCalls:0,liveDatabaseWrites:0}));

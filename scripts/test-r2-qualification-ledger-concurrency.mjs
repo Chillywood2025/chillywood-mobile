@@ -7,7 +7,8 @@ import {spawn,spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
-import {loadQualificationModule,fixtureProposalSQL,fixtureNow,assertProposalUnchanged,
+import {loadQualificationModule,fixtureNow,assertProposalUnchanged,qualificationMigrationSource,
+  fixtureAdmissionClockSQL,qualificationCatalogFingerprintSQL,assertClockOnlyCatalogChange,
   existingDatabaseFingerprintSQL} from '../tests/helpers/r2-qualification-fixture.mjs';
 import {createSyntheticQualificationR2,assertRestoredQualificationFence} from '../tests/helpers/r2-qualification-r2-fixture.mjs';
 const {initialState,runQualification}=loadQualificationModule('r2-disposable-qualification.ts');
@@ -23,7 +24,7 @@ const container=process.env.SUPABASE_DB_CONTAINER||`supabase_db_${project}`;
 assert.equal(container,`supabase_db_${project}`,'exact local checkout container');
 const prefix=`r2_qual_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}`;
 const baseline=`${prefix}_base`,marker=`r2-qualification-disposable:${randomUUID()}`;
-const created=new Set(),sessions=new Set();let serial=0,checks=0,sourceBefore,crashContainer;
+const created=new Set(),sessions=new Set();let serial=0,checks=0,sourceBefore,sourceQualificationBefore,crashContainer;
 const hash=await manifestHash(),initial=await initialState();
 const lit=x=>`'${String(x).replaceAll("'","''")}'`;
 const json=x=>`${lit(JSON.stringify(x))}::jsonb`;
@@ -38,8 +39,8 @@ const admin=(command,input,encoding='utf8')=>docker(['exec',...(input===undefine
 const dump=db=>checked(admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault',
   '--exclude-extension=pg_graphql','--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime',
   '--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public',db],undefined,null),'read-only local dump');
-function create(template) {
-  const db=template?`${prefix}_${++serial}`:baseline;
+function create(template,{empty=false}={}) {
+  const db=template||empty?`${prefix}_${++serial}`:baseline;
   assert.match(db,/^r2_qual_[0-9]+_[0-9a-f]{12}_(base|[0-9]+)$/);
   if(template)allowed(template);
   checked(docker(['exec',container,'createdb','-U','postgres','-T',template||'template0',db]),'create generated disposable database');
@@ -197,7 +198,9 @@ async function clusterCrashProof() {
   crashContainer.verified=true;
   checked(docker(['start',name]),'start owned cluster');await clusterReady();
   clusterQuery(null,'create role anon;create role authenticated;create role service_role;');
-  clusterQuery(null,fixtureProposalSQL);
+  clusterQuery(null,qualificationMigrationSource);
+  assert.equal(clusterQuery(null,'select count(*) from r2_qualification_test_private.run;'),'0');
+  clusterQuery(null,fixtureAdmissionClockSQL);
   assert.equal(clusterQuery(null,"select current_setting('fsync')||','||current_setting('synchronous_commit')||','||current_setting('full_page_writes');"),'on,on,on');
   clusterQuery(null,`insert into r2_qualification_test_private.run(state,setup_approval_ref) values(${json(initial)},'approved:offline-crash-setup');`);
   const pending={...initial,revision:1,pending:'put_control',requestBudgetReserved:2};
@@ -214,7 +217,9 @@ async function clusterCrashProof() {
     return checked(docker(['exec','-i',name,'psql','-h','/tmp','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d','terminal_fixture'],
       `set statement_timeout='15s';${sql}`),'isolated terminal SQL').trim();
   };
-  terminalQuery(null,fixtureProposalSQL);
+  terminalQuery(null,qualificationMigrationSource);
+  assert.equal(terminalQuery(null,'select count(*) from r2_qualification_test_private.run;'),'0');
+  terminalQuery(null,fixtureAdmissionClockSQL);
   terminalQuery(null,`insert into r2_qualification_test_private.run(state,setup_approval_ref) values(${json(initial)},'approved:offline-crash-setup');`);
   const terminal=fixture(null,terminalQuery);
   for(const action of ['prepare','read','conflict'])await terminal.run(action);
@@ -229,10 +234,22 @@ try {
   assert.match(checked(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker required').trim(),/^(unix|npipe):\/\//);
   assert.ok(checked(docker(['ps','--filter','label=com.supabase.cli.project','--format','{{.Names}}']),'local CLI discovery').split('\n').includes(container));
   sourceBefore=query('postgres',existingDatabaseFingerprintSQL);
+  sourceQualificationBefore=query('postgres',qualificationCatalogFingerprintSQL);
   create();query(baseline,'create schema vault;create extension supabase_vault with schema vault;');
   checked(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',baseline],dump('postgres'),null),'restore full migrated baseline');
   const before=query(baseline,existingDatabaseFingerprintSQL);
-  query(baseline,fixtureProposalSQL);
+  // Full local reset already applied the migration. Compare the restored ledger
+  // to a pristine canonical install; never reapply CREATEs or drop its schema.
+  const canonicalDB=create(undefined,{empty:true});
+  query(canonicalDB,qualificationMigrationSource);
+  assert.equal(query(canonicalDB,'select count(*) from r2_qualification_test_private.run;'),'0');
+  assert.equal(query(baseline,qualificationCatalogFingerprintSQL),query(canonicalDB,qualificationCatalogFingerprintSQL),
+    'full-reset clone contains exact canonical definitions, grants, RLS and no approval/run rows');checks++;
+  // Only the generated clone receives the one admission-clock replacement.
+  // Original Supabase remains unmodified and retains its real deadline clock.
+  const canonicalCatalog=query(baseline,qualificationCatalogFingerprintSQL);
+  query(baseline,fixtureAdmissionClockSQL);
+  assertClockOnlyCatalogChange(canonicalCatalog,query(baseline,qualificationCatalogFingerprintSQL));
   assert.equal(query(baseline,existingDatabaseFingerprintSQL),before);checks++;
   const tap=query(baseline,readFileSync('tests/fixtures/r2-qualification-ledger.pgtap.sql','utf8'));
   assert.match(tap,/(^|\n)1\.\.12(\n|$)/);assert.doesNotMatch(tap,/(^|\n)not ok|Looks like you failed/);
@@ -293,5 +310,6 @@ try {
     checked(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',db]),'drop own disposable database');created.delete(db);
   }
   if(sourceBefore!==undefined)assert.equal(query('postgres',existingDatabaseFingerprintSQL),sourceBefore,'original local source unchanged');
+  if(sourceQualificationBefore!==undefined)assert.equal(query('postgres',qualificationCatalogFingerprintSQL),sourceQualificationBefore,'original local qualification schema, clock and rows unchanged');
   assertProposalUnchanged();
 }
