@@ -96,10 +96,14 @@ test('disabled complete pass records liveness without constructing or calling an
  const calls=[];
  const result=await runDeletedContentRetentionWorker(async(name)=>{
   calls.push(name);
+  if(name==='list_platform_brand_retention_expiry_work')return {data:{enabled:false,qualified:false,assetIds:[],limit:25},error:null};
+  if(name==='record_platform_brand_retention_worker_heartbeat')return {data:{status:'recorded',enabled:false,qualified:false,permanentlyAbsent:false},error:null};
   return {data:name==='record_deleted_content_worker_heartbeat'?null:{enabled:false},error:null};
- },()=>{throw Error('disabled provider');});
+ },()=>{throw Error('disabled provider');},()=>{throw Error('disabled Brand provider');});
  assert.deepEqual(calls,['list_deleted_content_expiry_work','list_deleted_content_media_expiry_work',
-  'list_deleted_content_stage_cleanup_work','record_deleted_content_worker_heartbeat']);
+  'list_deleted_content_stage_cleanup_work','list_platform_brand_retention_expiry_work',
+  'record_platform_brand_retention_worker_heartbeat','record_deleted_content_worker_heartbeat']);
+ assert.equal(result.brand.enabled,false);assert.equal(result.brand.qualified,false);assert.equal(result.success,true);
  assert.equal(result.permanentPhysicalAbsenceGuaranteed,false);
 });
 test('provider or receipt failure cannot refresh a successful worker heartbeat',async()=>{
@@ -112,7 +116,7 @@ test('provider or receipt failure cannot refresh a successful worker heartbeat',
    }
    if(failReceipt&&name==='record_deleted_content_media_expiry_result')return {data:null,error:{message:'synthetic unavailable'}};
    return f.rpc(name,args);
-  },async()=>new Response(null,{status:failReceipt?404:503})),/failed/);
+  },async()=>new Response(null,{status:failReceipt?404:503}),()=>{throw Error('must not dispatch Brand');}),/failed/);
   assert.ok(!calls.includes('record_deleted_content_worker_heartbeat'));
  }
 });

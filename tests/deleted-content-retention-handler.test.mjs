@@ -15,16 +15,18 @@ function load(path,imports={}) {
   new Function('exports',...Object.keys(imports),js)(exports,...Object.values(imports));
   return exports;
 }
+const brandDependencies=load('../supabase/functions/_shared/brand-retention-expiry.ts');
 const workerDependencies={
   ...load('../supabase/functions/_shared/deleted-content-retention.ts'),
   ...load('../supabase/functions/_shared/deleted-content-media-expiry.ts'),
+  ...load('../supabase/functions/_shared/brand-retention-worker.ts',brandDependencies),
 };
 const {runDeletedContentRetentionWorker}=load('../supabase/functions/_shared/deleted-content-retention-worker.ts',workerDependencies);
 
 function fixture(options={}) {
   const env={RETENTION_WORKER_SERVICE_KEY_SHA256:pin(serviceKey),SUPABASE_URL:projectUrl,
     SUPABASE_SERVICE_ROLE_KEY:'synthetic-different-injected-key',...options.env};
-  const calls=[],logs=[],envReads=[],comparisons=[],fetches=[];let handler,clientSettings;
+  const calls=[],logs=[],envReads=[],comparisons=[],fetches=[],brandRequests=[];let handler,clientSettings;
   const Deno={env:{get:name=>{envReads.push(name);return env[name];}},serve:value=>{handler=value;}};
   const createClient=(url,key,settings)=>{
     calls.push('createClient');assert.equal(url,projectUrl);assert.equal(key,options.expectedKey??serviceKey);
@@ -33,13 +35,40 @@ function fixture(options={}) {
     assert.deepEqual(Object.keys(settings.global),['fetch']);
     assert.equal(typeof settings.global.fetch,'function');clientSettings=settings;
     return {rpc:(name,args)=>{
-      calls.push(name);assert.deepEqual(args,{});
+      calls.push(name);
       if(options.rpcError)throw Error('synthetic-private-rpc-error');
-      const data=name==='record_deleted_content_worker_heartbeat'?{}:{enabled:false};
+      if(name===options.brandRpcErrorAt)throw Error('synthetic-private-brand-rpc-error');
+      let data;
+      if(name==='list_platform_brand_retention_expiry_work') {
+        assert.deepEqual(args,{});
+        data=options.brandWork??{enabled:false,qualified:false,assetIds:[],limit:25};
+      } else if(name==='record_platform_brand_retention_worker_heartbeat') {
+        assert.deepEqual(args,{p_enabled:options.brandWork?.enabled??false,p_qualified:options.brandWork?.qualified??false});
+        data={status:'recorded',enabled:args.p_enabled,qualified:args.p_qualified,permanentlyAbsent:false};
+      } else if(name==='begin_platform_brand_retention_batch_transport') {
+        data={status:'claimed',assetId:args.p_asset_id,claimToken:'22222222-2222-4222-8222-222222222222'};
+      } else if(name==='read_platform_brand_retention_batch_claim') {
+        data={status:'authorized',assetId:args.p_asset_id,claimToken:args.p_claim_token,
+          provider:'supabase',bucket:'platform-brand-assets',objectKey:`owner/logo/${args.p_asset_id}.png`,
+          storageObjectId:'33333333-3333-4333-8333-333333333333',storageVersion:'exact-version',
+          providerOrigin:projectUrl,providerContractSha256:'a'.repeat(64),exactVersionDelete:true,permanentlyAbsent:false};
+      } else if(name==='record_platform_brand_retention_transport_result') {
+        data={status:args.p_outcome,assetId:args.p_asset_id,claimToken:args.p_claim_token,permanentlyAbsent:false};
+      } else {
+        assert.deepEqual(args,{});
+        data=name==='record_deleted_content_worker_heartbeat'?{}:{enabled:false};
+      }
       return {then:resolve=>resolve({data,error:null})};
     }};
   };
   const origin=()=>{calls.push('origin');throw Error('unexpected_provider_access');};
+  const brandOrigin=(url,key)=>{
+    calls.push('brandOrigin');assert.equal(url,projectUrl);assert.equal(key,options.expectedKey??serviceKey);
+    return brandDependencies.createBrandExpiryOrigin(url,key,async(input,init)=>{
+      brandRequests.push({input:String(input),init});
+      return new Response(null,{status:init.method==='DELETE'?(options.brandDeleteStatus??204):404});
+    });
+  };
   const logger={warn:value=>{if(options.loggerError)throw Error('synthetic-private-log-error');logs.push(JSON.parse(value));}};
   const crypto={
     randomUUID:()=>{if(options.idError)throw Error('synthetic-private-id-error');return randomUUID();},
@@ -49,7 +78,8 @@ function fixture(options={}) {
     }},
   };
   load('../supabase/functions/deleted-content-retention-expiry/index.ts',{
-    Deno,createClient,runDeletedContentRetentionWorker,createRetiredMediaOriginCleanup:origin,console:logger,crypto,
+    Deno,createClient,runDeletedContentRetentionWorker,createRetiredMediaOriginCleanup:origin,
+    createBrandExpiryOrigin:brandOrigin,console:logger,crypto,
     timingSafeEqual:(actual,expected)=>{
       comparisons.push([actual.byteLength,expected.byteLength]);
       if(options.compareError)throw Error('synthetic-private-comparison-error');
@@ -58,7 +88,7 @@ function fixture(options={}) {
     fetch:async(input,init)=>{fetches.push({input,init});return new Response('{}');},
   });
   assert.equal(typeof handler,'function');
-  return {handler,calls,logs,envReads,env,comparisons,fetches,get clientSettings(){return clientSettings;}};
+  return {handler,calls,logs,envReads,env,comparisons,fetches,brandRequests,get clientSettings(){return clientSettings;}};
 }
 
 function request(authorization='Bearer '+serviceKey,options={}) {
@@ -142,12 +172,58 @@ test('disabled authenticated pass runs the real worker and heartbeat without pro
   assert.equal(response.status,200,'Fetch normalizes outer header whitespace before the handler');
   assert.deepEqual(await response.json(),{
     text:{enabled:false,results:[]},media:{enabled:false,results:[]},stages:{enabled:false,results:[]},
+    brand:{enabled:false,qualified:false,success:true,results:[],heartbeatRecorded:true,permanentPhysicalAbsenceGuaranteed:false},
+    success:true,
     permanentPhysicalAbsenceGuaranteed:false,
   });
   assert.deepEqual(f.calls,['createClient','list_deleted_content_expiry_work',
     'list_deleted_content_media_expiry_work','list_deleted_content_stage_cleanup_work',
+    'list_platform_brand_retention_expiry_work','record_platform_brand_retention_worker_heartbeat',
     'record_deleted_content_worker_heartbeat']);
   assert.deepEqual(f.logs,[]);
+});
+
+test('actual worker entrypoint lazily uses a separate exact Brand origin with the verified project and key',async()=>{
+  const asset='11111111-1111-4111-8111-111111111111';
+  const f=fixture({brandWork:{enabled:true,qualified:true,assetIds:[asset],limit:25}});
+  const response=await f.handler(request()),body=await response.json();
+  assert.equal(response.status,200);assert.equal(body.success,true);
+  assert.deepEqual(body.brand.results,[{assetId:asset,status:'observed_absent',permanentlyAbsent:false}]);
+  assert.equal(f.calls.filter(name=>name==='brandOrigin').length,1);
+  assert.equal(f.calls.includes('origin'),false,'Brand must never use the R2 cleanup origin');
+  assert.deepEqual(f.brandRequests.map(call=>call.init.method),['DELETE','HEAD']);
+  for(const call of f.brandRequests) {
+    const url=new URL(call.input);assert.equal(url.origin,projectUrl);assert.equal(url.search,'?versionId=exact-version');
+    assert.equal(call.init.headers.Authorization,'Bearer '+serviceKey);assert.equal(call.init.redirect,'error');
+  }
+  assert.deepEqual(f.envReads,['RETENTION_WORKER_SERVICE_KEY_SHA256','SUPABASE_URL']);
+  assert.equal(body.permanentPhysicalAbsenceGuaranteed,false);
+});
+
+test('unqualified or malformed Brand dispatch never constructs either provider origin',async()=>{
+  for(const malformed of [false,true]) {
+    const f=fixture({brandWork:{enabled:true,qualified:false,assetIds:malformed?['invalid']:[],limit:25}});
+    const response=await f.handler(request()),body=await response.json();
+    assert.equal(response.status,malformed?503:200);assert.equal(body.success,!malformed);
+    assert.equal(f.calls.includes('brandOrigin'),false);assert.equal(f.calls.includes('origin'),false);
+    assert.deepEqual(f.brandRequests,[]);
+    if(malformed) assert.equal(f.calls.some(name=>name.includes('heartbeat')),false);
+    else {assert.equal(body.brand.enabled,true);assert.equal(body.brand.qualified,false);}
+  }
+});
+
+test('entrypoint reports Brand provider and RPC failure as 503 with safe partial outcomes, never R2 success',async()=>{
+  const asset='11111111-1111-4111-8111-111111111111';
+  for(const options of [{brandDeleteStatus:503},{brandRpcErrorAt:'record_platform_brand_retention_transport_result'}]) {
+    const f=fixture({...options,brandWork:{enabled:true,qualified:true,assetIds:[asset],limit:25}});
+    const response=await f.handler(request()),body=await response.json();
+    assert.equal(response.status,503);assert.equal(body.success,false);assert.equal(body.error,'retention_work_failed');
+    assert.equal(body.brand.results[0].status,options.brandDeleteStatus?'failed':'unconfirmed');
+    assert.equal(body.brand.heartbeatRecorded,false);
+    assert.equal(f.calls.some(name=>name.includes('heartbeat')),false);
+    assert.equal(body.permanentPhysicalAbsenceGuaranteed,false);
+    assert.equal(JSON.stringify(body).includes('synthetic-private'),false);
+  }
 });
 
 test('pin is read per request and removal or replacement immediately denies the previous key',async()=>{

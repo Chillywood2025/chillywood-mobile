@@ -145,6 +145,19 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
+const brandGlobalRetentionFiles = ['20261024171258_platform_brand_global_retention_integration.sql'];
+const brandGlobalRetentionFunctionKeys = new Set([
+  'private.deleted_content_brand_source_coverage/2',
+  'private.guard_deleted_content_brand_admission/0',
+  'private.deleted_content_brand_guards_ready/0',
+  'private.deleted_content_brand_transport_qualified/0',
+  'private.capture_deleted_content_row_before_brand/3',
+  'private.expire_deleted_content_text_before_brand/1',
+  'public.list_platform_brand_retention_expiry_work/0',
+  'public.record_platform_brand_retention_worker_heartbeat/2',
+  'public.begin_platform_brand_retention_batch_transport/1',
+  'public.read_platform_brand_retention_batch_claim/2',
+]);
 const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];
 const externalReferenceFunctionKeys = new Set([
   'private.deleted_content_external_sha256/1',
@@ -298,9 +311,10 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size);
     assert.deepEqual(before.functions.filter(fn=>r2QualificationFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
       [...r2QualificationFunctionIdentities].sort(),'exact isolated R2 qualification public RPC keys and signatures are present');
+    assert.deepEqual(before.functions.filter(fn=>brandGlobalRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...brandGlobalRetentionFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>externalReferenceFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...externalReferenceFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>notificationPreferenceFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationPreferenceFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>notificationRegistrationFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationRegistrationFunctionKeys].sort());
@@ -340,9 +354,10 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length);
     assert.deepEqual(replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles,
       'exact isolated R2 qualification migration is replayed in both Studio scenarios');
+    assert.deepEqual(replayReport.files.filter(file=>brandGlobalRetentionFiles.includes(file)),brandGlobalRetentionFiles);
     assert.deepEqual(replayReport.files.filter(file=>externalReferenceFiles.includes(file)),externalReferenceFiles);
     assert.deepEqual(replayReport.files.filter(file=>realtimeIdentityFiles.includes(file)),realtimeIdentityFiles);
     assert.deepEqual(replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
