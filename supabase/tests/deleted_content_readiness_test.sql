@@ -8,7 +8,7 @@ select ok((public.deleted_content_expiry_readiness()->'blockers') ? 'worker_sche
 select ok((public.deleted_content_expiry_readiness()->'blockers') ? 'origin_cleanup_not_qualified','heartbeat cannot certify provider cleanup');
 select ok((public.deleted_content_expiry_readiness()->'blockers') ? 'legacy_object_delete_gate_open','preactivation legacy gateway gate defaults open for compatibility');
 select is(public.deleted_content_expiry_readiness()->>'scheduleObservedByDatabase','false','database does not pretend to observe external scheduling');
-select is(public.deleted_content_expiry_readiness()->>'supabaseDirectStorageCoverage','unsupported','Supabase direct deletion remains uncovered');
+select is(public.deleted_content_expiry_readiness()->>'supabaseDirectStorageCoverage','exact_brand_only_other_direct_storage_unsupported','only exact Brand is delegated; other direct Supabase storage remains uncovered');
 select throws_ok($$update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true$$,
  '55000',null,'old readiness boolean cannot bypass qualification');
 select ok((select not armed from private.deleted_media_reference_fence),'failed enable rolls back latch arming');
