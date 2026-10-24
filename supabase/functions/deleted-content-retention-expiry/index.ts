@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {timingSafeEqual} from "node:crypto";
 import {runDeletedContentRetentionWorker} from "../_shared/deleted-content-retention-worker.ts";
 import {createRetiredMediaOriginCleanup} from "../_shared/deleted-content-origin.ts";
+import {createBrandExpiryOrigin} from "../_shared/brand-retention-expiry.ts";
 
 const projectUrl="https://bmkkhihfbmsnnmcqkoly.supabase.co";
 
@@ -39,8 +40,9 @@ Deno.serve(async (req) => {
     } catch {/* Diagnostics must not change the denial or reach worker side effects. */}
     return reply(403,{error:"not_allowed",...(requestId ? {requestId} : {})});
   }
+  const verifiedKey=key;
   try {
-    const client=createClient(projectUrl,key,{
+    const client=createClient(projectUrl,verifiedKey,{
       auth:{persistSession:false,autoRefreshToken:false},
       global:{fetch:async(input,init)=>{
         const target=new URL(input instanceof Request ? input.url : String(input));
@@ -51,11 +53,17 @@ Deno.serve(async (req) => {
     });
     // Lazy origin construction: disabled media does not require provider setup.
     let cleanup:ReturnType<typeof createRetiredMediaOriginCleanup>|undefined;
+    let brandCleanup:ReturnType<typeof createBrandExpiryOrigin>|undefined;
     const result=await runDeletedContentRetentionWorker(async (name,args)=>await client.rpc(name,args),(binding,method)=>{
       cleanup??=createRetiredMediaOriginCleanup(name=>Deno.env.get(name));
       return cleanup(binding,method);
+    },(binding,method)=>{
+      // Brand uses the same verified Supabase project/key, never R2 credentials.
+      // Construct only after the database-selected asset passes exact rechecks.
+      brandCleanup??=createBrandExpiryOrigin(projectUrl,verifiedKey);
+      return brandCleanup(binding,method);
     });
-    return reply(200,result);
+    return reply(result.success?200:503,result.success?result:{...result,error:"retention_work_failed"});
   } catch {
     return reply(503,{error:"retention_work_failed",permanentPhysicalAbsenceGuaranteed:false});
   }
