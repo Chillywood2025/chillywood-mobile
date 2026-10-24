@@ -20,6 +20,36 @@ export const OBJECTS = Object.freeze({
   }),
 });
 export const CONFLICT_PAYLOAD = "Synthetic R2 retention qualification target. No user content. Revision B.\n";
+// Permanent, disjoint mutation receipts. These are NOT disposable test objects.
+// Commissioning requires verified indefinite provider protection for this exact
+// prefix; source cannot infer that a lock exists from this manifest declaration.
+export const RECEIPT_PROTECTION = Object.freeze({
+  prefix: "qualification/retention/r2-retention-qualification-20261023-01/receipts/",
+  lockRuleId: "r2-retention-qualification-20261023-01-receipts",
+  condition: "Indefinite",
+});
+export const MUTATION_RECEIPTS = Object.freeze({
+  put_control: Object.freeze({
+    key: "qualification/retention/r2-retention-qualification-20261023-01/receipts/put_control.txt",
+    payload: "Permanent qualification receipt r2-retention-qualification-20261023-01 put_control. Never delete.\n",
+  }),
+  put_target: Object.freeze({
+    key: "qualification/retention/r2-retention-qualification-20261023-01/receipts/put_target.txt",
+    payload: "Permanent qualification receipt r2-retention-qualification-20261023-01 put_target. Never delete.\n",
+  }),
+  conflict_target: Object.freeze({
+    key: "qualification/retention/r2-retention-qualification-20261023-01/receipts/conflict_target.txt",
+    payload: "Permanent qualification receipt r2-retention-qualification-20261023-01 conflict_target. Never delete.\n",
+  }),
+  delete_target: Object.freeze({
+    key: "qualification/retention/r2-retention-qualification-20261023-01/receipts/delete_target.txt",
+    payload: "Permanent qualification receipt r2-retention-qualification-20261023-01 delete_target. Never delete.\n",
+  }),
+  delete_control: Object.freeze({
+    key: "qualification/retention/r2-retention-qualification-20261023-01/receipts/delete_control.txt",
+    payload: "Permanent qualification receipt r2-retention-qualification-20261023-01 delete_control. Never delete.\n",
+  }),
+});
 export const MAX_OBJECT_BYTES = 1024;
 export const MAX_RECONCILIATIONS = 3;
 export type ObjectName = keyof typeof OBJECTS;
@@ -33,4 +63,5 @@ export const manifestHash = () => sha256(new TextEncoder().encode(JSON.stringify
   runId: RUN_ID, deadline: DEADLINE, bucket: BUCKET, endpoint: R2_ENDPOINT, objects: OBJECTS,
   conflictPayload: CONFLICT_PAYLOAD, maxObjectBytes: MAX_OBJECT_BYTES,
   maxReconciliations: MAX_RECONCILIATIONS,
+  mutationReceipts: MUTATION_RECEIPTS, receiptProtection: RECEIPT_PROTECTION,
 })));

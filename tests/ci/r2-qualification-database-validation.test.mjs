@@ -15,15 +15,17 @@ function assertGate(candidate) {
   assert.ok(start>=0&&start<reset&&reset<tap&&tap<commands.indexOf(command));
   assert.ok(commands.includes('node scripts/test-r2-qualification-ledger-postgres.mjs'));
   assert.ok(commands.includes('node --test supabase/functions/_shared/r2-disposable-qualification.test.mjs supabase/functions/_shared/r2-disposable-qualification-store.test.mjs'));
+  assert.ok(commands.includes('node --test supabase/functions/_shared/r2-disposable-qualification-fence.test.mjs'));
 }
 test('qualification native commissioning is required after full local schema/pgTAP without new CI policy',()=>{
   assertGate(workflow);
   assert.equal(computeValidationPlan(['supabase/proposals/r2-qualification-test-ledger.sql']).categories.database,true);
 });
 test('qualification gate rejects omission, optionality, swallowed failure, wrong target and wrong order',()=>{
-  for(const mode of ['omit','skip','swallow','wrong-target','before-reset']){
+  for(const mode of ['omit','omit-fence','skip','swallow','wrong-target','before-reset']){
     const changed=structuredClone(workflow),step=changed.jobs.database.steps.find(s=>s.run?.includes(command));
     if(mode==='omit')step.run=step.run.replace(command,'');
+    if(mode==='omit-fence')step.run=step.run.replace('node --test supabase/functions/_shared/r2-disposable-qualification-fence.test.mjs','');
     if(mode==='skip')step.if='false';
     if(mode==='swallow')step['continue-on-error']=true;
     if(mode==='wrong-target')step.run=step.run.replace(command,command.replace('supabase_db_chillywood-mobile','supabase_db_other'));

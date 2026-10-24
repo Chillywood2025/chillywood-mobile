@@ -173,6 +173,7 @@ jobs:
           node scripts/test-deleted-media-retirement-postgres.mjs
           node scripts/test-platform-brand-retention-postgres.mjs
           node --test supabase/functions/_shared/r2-disposable-qualification.test.mjs supabase/functions/_shared/r2-disposable-qualification-store.test.mjs
+          node --test supabase/functions/_shared/r2-disposable-qualification-fence.test.mjs
           node scripts/test-r2-qualification-ledger-postgres.mjs
           node --test tests/brand-soft-removal-scan-queue.test.mjs tests/brand-review-retention-evidence.test.mjs tests/brand-permission-reduction-fence.test.mjs tests/brand-reference-free-profile.test.mjs
           node scripts/test-platform-brand-expiry-transport-postgres.mjs

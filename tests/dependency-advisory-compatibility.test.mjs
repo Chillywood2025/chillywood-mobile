@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { finished } from "node:stream/promises";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
@@ -18,8 +19,8 @@ test("patched advisory leaves are resolved independently in all three package tr
   assert.equal(rootLock.packages["node_modules/shell-quote"].version, "1.11.0");
   assert.equal(rootManifest.overrides["fast-uri"], "3.1.7");
   assert.equal(rootLock.packages["node_modules/fast-uri"].version, "3.1.7");
-  assert.equal(rootManifest.overrides.undici, "6.28.1");
-  assert.equal(rootLock.packages["node_modules/undici"].version, "6.28.1");
+  assert.equal(rootManifest.overrides.undici, "6.29.1");
+  assert.equal(rootLock.packages["node_modules/undici"].version, "6.29.1");
   assert.equal(
     rootManifest.dependencies["decode-uri-component"],
     "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
@@ -71,7 +72,7 @@ test("patched fast-uri preserves URI references used by both Expo Ajv consumers"
 test("patched undici preserves Expo's fetch and response contract without network access", async () => {
   const expoRequire = createRequire(require.resolve("expo/package.json"));
   const cliRequire = createRequire(expoRequire.resolve("@expo/cli/package.json"));
-  assert.equal(cliRequire("undici/package.json").version, "6.28.1");
+  assert.equal(cliRequire("undici/package.json").version, "6.29.1");
   const { fetch, MockAgent, Response, Agent, RetryAgent, EnvHttpProxyAgent } = cliRequire("undici");
   for (const constructor of [Agent, RetryAgent, EnvHttpProxyAgent]) assert.equal(typeof constructor, "function");
   const dispatcher = new MockAgent();
@@ -87,6 +88,92 @@ test("patched undici preserves Expo's fetch and response contract without networ
   } finally {
     await dispatcher.close();
   }
+});
+
+test("Expo's undici rejects excessive encodings without an uncaught early-close error", { timeout: 15_000 }, () => {
+  const expoRequire = createRequire(require.resolve("expo/package.json"));
+  const cliRequire = createRequire(expoRequire.resolve("@expo/cli/package.json"));
+  // Isolate a possible uncaught exception so a dependency regression cannot
+  // terminate the parent test runner. All traffic stays on loopback.
+  const probe = `
+    const assert = require("node:assert/strict");
+    const { once } = require("node:events");
+    const { createServer } = require("node:net");
+    const { gzipSync } = require("node:zlib");
+    const { fetch, Client } = require(${JSON.stringify(cliRequire.resolve("undici"))});
+    (async () => {
+      const goodBody = gzipSync(Buffer.from('{"ok":true}'));
+      for (const codingCount of [6, 20]) {
+        let resolveBadSocketClosed;
+        const badSocketClosed = new Promise((resolve) => { resolveBadSocketClosed = resolve; });
+        const server = createServer((socket) => {
+          socket.on("error", () => {});
+          socket.once("data", (request) => {
+            if (request.toString().startsWith("GET /safe ")) {
+              socket.end(Buffer.concat([
+                Buffer.from("HTTP/1.1 200 OK\\r\\nContent-Encoding: gzip\\r\\nContent-Length: " + goodBody.length + "\\r\\nConnection: close\\r\\n\\r\\n"),
+                goodBody
+              ]));
+            } else {
+              socket.once("close", resolveBadSocketClosed);
+              socket.end("HTTP/1.1 200 OK\\r\\nContent-Encoding: " + Array(codingCount).fill("gzip").join(", ") + "\\r\\nContent-Length: 1\\r\\nConnection: close\\r\\n\\r\\n");
+            }
+          });
+        });
+        await once(server.listen(0, "127.0.0.1"), "listening");
+        const origin = "http://127.0.0.1:" + server.address().port;
+        const client = new Client(origin);
+        try {
+          await assert.rejects(fetch(origin + "/excessive", { dispatcher: client }),
+            (error) => /too many content-encodings/.test(error.cause?.message));
+          await badSocketClosed;
+          const response = await fetch(origin + "/safe", { dispatcher: client });
+          assert.equal(response.status, 200);
+          assert.deepEqual(await response.json(), { ok: true });
+        } finally {
+          await client.close();
+          await new Promise((resolve) => server.close(resolve));
+        }
+      }
+    })().catch((error) => { console.error(error); process.exitCode = 1; });
+  `;
+  const result = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", timeout: 10_000 });
+  assert.equal(result.error, undefined, result.error?.message);
+  assert.equal(result.signal, null, result.stderr);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("Expo's undici bounds retained EventSource state and preserves ordinary events", async () => {
+  const expoRequire = createRequire(require.resolve("expo/package.json"));
+  const cliRequire = createRequire(expoRequire.resolve("@expo/cli/package.json"));
+  const { EventSourceStream } = cliRequire("undici/lib/web/eventsource/eventsource-stream.js");
+  async function parse(chunks, maxEventSize) {
+    const events = [];
+    const parser = new EventSourceStream({ maxEventSize, eventSourceSettings: { origin: "https://fixture.example.invalid" } });
+    parser.on("data", (event) => events.push(event));
+    const complete = finished(parser, { cleanup: true });
+    for (const chunk of chunks) {
+      if (parser.destroyed) break;
+      parser.write(Buffer.from(chunk));
+    }
+    parser.end();
+    await complete;
+    return events;
+  }
+  // Each collection is far below the byte limit but exceeds the retained
+  // item bound. Also cover unfinished lines and aggregate metadata bytes.
+  await assert.rejects(parse(["data:\n".repeat(1025)], 128 * 1024), /EventSource message size exceeded/);
+  await assert.rejects(parse(Array(1025).fill("x"), 128 * 1024), /EventSource message size exceeded/);
+  await assert.rejects(parse(["data: " + "x".repeat(150)], 128), /EventSource message size exceeded/);
+  await assert.rejects(parse(["event: " + "x".repeat(96) + "\ndata: " + "y".repeat(64) + "\n"], 128), /EventSource message size exceeded/);
+  const atItemLimit = await parse(["data:\n".repeat(1024) + "\n"], 128 * 1024);
+  assert.equal(atItemLimit[0].options.data, "\n".repeat(1023));
+  const atByteLimit = await parse([Buffer.from([0xef]), Buffer.from([0xbb, 0xbf]), "data: " + "x".repeat(128) + "\r", "\n\r\n"], 128);
+  assert.equal(atByteLimit[0].options.data, "x".repeat(128));
+  const events = await parse(["id: 7\nevent: update\ndata: hel", "lo\ndata: world\n\n", ...Array(1100).fill("data: next\n\n")], 128);
+  assert.equal(events.length, 1101);
+  assert.deepEqual(events[0], { type: "update", options: { data: "hello\nworld", lastEventId: "7", origin: "https://fixture.example.invalid" } });
+  assert.equal(events.at(-1).options.data, "next");
 });
 
 test("React Native devtools resolves shell-quote that rejects post-comment line terminators", () => {

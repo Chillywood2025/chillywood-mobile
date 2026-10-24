@@ -12,7 +12,7 @@ const timestamp = (v: unknown) => typeof v === "string" && /^2026-\d\d-\d\dT\d\d
 export async function validateQualificationState(value: unknown): Promise<RunState> {
   if (!isObject(value) || JSON.stringify(value).length > 4096 || Object.keys(value).sort().join(",") !== keys.join(",") ||
     value.schema !== 1 || value.runId !== RUN_ID || value.manifestHash !== await manifestHash() ||
-    !integer(value.revision, 99) || !integer(value.reconciliations, 3) || !integer(value.requestBudgetReserved, 17) ||
+    !integer(value.revision, 99) || !integer(value.reconciliations, 3) || !integer(value.requestBudgetReserved, 22) ||
     (value.pending !== null && (typeof value.pending !== "string" || !steps.includes(value.pending))) ||
     !timestamp(value.updatedAt) || !Array.isArray(value.completed) || value.completed.length > 7 ||
     value.completed.some((v, i) => v !== steps[i]) || !Array.isArray(value.observations) || value.observations.length > 2) throw Error("qualification_state_invalid");

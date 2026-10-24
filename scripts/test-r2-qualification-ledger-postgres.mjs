@@ -53,7 +53,7 @@ async function qualified(f){for(const action of ['prepare','read','conflict'])aw
 {
   const f=await fixture();try{
     check(await f.store.read()===null,'schema has no seeded run');
-    const initial=await initialState(),next={...initial,revision:1,pending:'put_control',requestBudgetReserved:1};
+    const initial=await initialState(),next={...initial,revision:1,pending:'put_control',requestBudgetReserved:2};
     check(await f.store.compareAndSwap(0,next)===false,'CAS cannot create a missing row');
     await denied(f.run('prepare'),/durable_run_unavailable/);check(f.calls.length===0,'missing setup has no provider operations');
     await denied(f.scalar('select public.read_r2_qualification_test_run($1,$2) v',['wrong',hash]),/qualification_binding_invalid/);
@@ -92,6 +92,7 @@ async function qualified(f){for(const action of ['prepare','read','conflict'])aw
     check((await f.run('prepare')).status==='cleaned','disk restart retains permanent no-recreate tombstone');
     check(f.calls.length===count,'restart emits no new provider operation');
     const final=await f.store.read();
+    check(final.requestBudgetReserved===16,'happy-path budget includes all five independent receipt acquisitions');
     await f.owner(async()=>{
       await denied(f.db.exec('delete from r2_qualification_test_private.run'),/qualification_run_permanent/);
       await denied(f.db.exec('truncate r2_qualification_test_private.run'),/qualification_run_permanent/);
@@ -130,7 +131,7 @@ for(const lostOn of [1,2]){
 {
   const f=await fixture();try{
     await f.seed();const base=await f.store.read();
-    for(const change of [{runId:null},{manifestHash:null},{phase:null},{revision:1.5},{pending:'arbitrary'},
+    for(const change of [{runId:null},{manifestHash:null},{phase:null},{revision:1.5},{pending:'arbitrary'},{requestBudgetReserved:23},
       {updatedAt:'2026-01-01T24:00:00.000Z'},{updatedAt:'2026-10-23T22:00:60.000Z'},
       {observations:[{status:404,observedAt:'2026-01-01T24:00:00.000Z'}]},
       {observations:[{status:404,observedAt:'2026-10-23T22:00:60.000Z'}]},
@@ -139,10 +140,10 @@ for(const lostOn of [1,2]){
       await denied(f.owner(()=>f.db.query('select r2_qualification_test_private.validate_state($1)',[{...base,...change}])),/qualification_state_invalid/);
       await denied(validateQualificationState({...base,...change}),/qualification_state_invalid/);
     }
-    const next={...base,revision:1,pending:'put_control',requestBudgetReserved:1};
+    const next={...base,revision:1,pending:'put_control',requestBudgetReserved:2};
     check(await f.owner(()=>f.scalar('select r2_qualification_test_private.valid_transition($1,$2,false,$3) v',[base,next,DEADLINE]))===false,'server-side exact deadline blocks new requests');
     check(await f.owner(()=>f.scalar('select r2_qualification_test_private.valid_transition($1,$2,false,$3) v',[base,next,'2026-10-23T22:00:00Z']))===true,'valid pre-deadline operation allowed');
-    await denied(f.store.compareAndSwap(0,{...next,requestBudgetReserved:2}),/qualification_store_unconfirmed/);
+    for(const requestBudgetReserved of [1,3])await denied(f.store.compareAndSwap(0,{...next,requestBudgetReserved}),/qualification_store_unconfirmed/);
     await denied(f.store.compareAndSwap(0,{...base,revision:1,phase:'cleanup_started',completed:['put_control','put_target','read','conflict_target']}),/qualification_store_unconfirmed/);
     check((await f.store.read()).revision===0,'invalid transitions leave ledger untouched');
   }finally{await f.close();}
@@ -156,6 +157,24 @@ for(const lostOn of [1,2]){
     check((await f.run('reconcile')).status==='delete_absence_reconciled','exact 404 reconciles unknown DELETE under permanent fence');
     check((await f.run('cleanup')).status==='cleaned','remaining approved cleanup finishes');
     check(f.calls.filter(c=>c==='delete_target').length===1,'reconciled DELETE not repeated');
+  }finally{await f.close();}
+}
+{
+  const f=await fixture();try{
+    await f.seed();await qualified(f);await f.approveCleanup();f.deps.cleanupApproved=true;
+    const original=f.deps.origin;let lost=true,unresolvedReads=4;
+    f.deps.origin=async op=>{
+      const result=await original(op);
+      if(op==='get_control'&&lost){lost=false;throw Error('lost cleanup verification');}
+      if(op.startsWith('get_')&&unresolvedReads-->0)return {status:503,observedAt:fixtureNow};
+      return result;
+    };
+    await denied(f.run('cleanup'),/lost cleanup verification/);
+    check((await f.store.read()).requestBudgetReserved===16,'lost verification preserves full happy-path reservation');
+    for(let i=0;i<2;i++)check((await f.run('reconcile')).status==='write_or_delete_outcome_unresolved','inconclusive read-only reconciliation remains pending');
+    const final=await f.run('reconcile');
+    check(final.status==='cleaned'&&final.requestBudgetReserved===22&&final.reconciliationCount===3,'all three read-only reconciliations fit the exact 22-request ceiling');
+    check(f.calls.filter(c=>c.startsWith('put_')||c==='conflict_target'||c.startsWith('delete_')).length===5,'maximum budget does not replay protected mutations');
   }finally{await f.close();}
 }
 // Also replay the repository's entire schema with the established managed-service

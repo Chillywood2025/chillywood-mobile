@@ -90,9 +90,9 @@ export async function runQualification(action: Action, deps: {
   };
   if (action === "prepare") {
     if (current.phase !== "new") return output(current);
-    await step("put_control", 1, async () => ({ ok: (await deps.origin("put_control")).status === 200 }), "new");
+    await step("put_control", 2, async () => ({ ok: (await deps.origin("put_control")).status === 200 }), "new");
     if (blocked()) return output(current);
-    await step("put_target", 1, async () => ({ ok: (await deps.origin("put_target")).status === 200 }), "prepared");
+    await step("put_target", 2, async () => ({ ok: (await deps.origin("put_target")).status === 200 }), "prepared");
   } else if (action === "read") {
     if (current.phase !== "prepared") return output(current);
     await step("read", 2, async () => {
@@ -100,7 +100,7 @@ export async function runQualification(action: Action, deps: {
     }, "read_verified");
   } else if (action === "conflict") {
     if (current.phase !== "read_verified") return output(current);
-    await step("conflict_target", 3, async () => {
+    await step("conflict_target", 4, async () => {
       const response = await deps.origin("conflict_target"), observations = await pair();
       return { ok: response.status === 412 && await originalPair(observations), observations };
     }, "conflict_verified");
@@ -109,7 +109,7 @@ export async function runQualification(action: Action, deps: {
     // Permanent fence commits before the first DELETE. No later phase permits PUT.
     if (current.phase !== "cleanup_started") await commit({ phase: "cleanup_started" });
     for (const name of ["delete_target", "delete_control"] as const) {
-      await step(name, 1, async () => ({ ok: (await deps.origin(name)).status === 204 }), "cleanup_started");
+      await step(name, 2, async () => ({ ok: (await deps.origin(name)).status === 204 }), "cleanup_started");
       if (blocked()) return output(current);
     }
     // Both DELETE receipts plus bounded full GET/404 observations, not a

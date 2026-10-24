@@ -12,7 +12,7 @@ test('store construction is inert and missing reads never seed',async()=>{
   assert.deepEqual(Object.keys(store).sort(),['compareAndSwap','read']);
 });
 test('CAS binds exact run/hash/revision and requires a literal boolean receipt',async()=>{
-  const calls=[];let receipt=true;const next={...await initialState(),revision:1,pending:'put_control',requestBudgetReserved:1};
+  const calls=[];let receipt=true;const next={...await initialState(),revision:1,pending:'put_control',requestBudgetReserved:2};
   const store=createQualificationRunStore(async(name,args)=>{calls.push([name,args]);return {data:receipt};});
   assert.equal(await store.compareAndSwap(0,next),true);
   assert.deepEqual(calls[0],['cas_r2_qualification_test_run',{p_run_id:RUN_ID,p_manifest_hash:await manifestHash(),p_expected_revision:0,p_next_state:next}]);
@@ -21,7 +21,7 @@ test('CAS binds exact run/hash/revision and requires a literal boolean receipt',
 });
 test('invalid proposed states or revisions never reach RPC',async()=>{
   let calls=0;const store=createQualificationRunStore(async()=>{calls++;return {data:true};});
-  const next={...await initialState(),revision:1,pending:'put_control',requestBudgetReserved:1};
+  const next={...await initialState(),revision:1,pending:'put_control',requestBudgetReserved:2};
   for(const change of [{runId:'wrong'},{manifestHash:'wrong'},{extra:'secret'},{pending:'arbitrary'}])await assert.rejects(store.compareAndSwap(0,{...next,...change}),/qualification_state_invalid/);
   for(const revision of [-1,0.5,99,1])await assert.rejects(store.compareAndSwap(revision,next),/qualification_revision_invalid/);
   assert.equal(calls,0);
@@ -30,6 +30,13 @@ test('unknown RPC outcomes are sanitized and never retried',async()=>{
   for(const mode of ['error','throw']){
     let calls=0;const store=createQualificationRunStore(async()=>{calls++;if(mode==='throw')throw Error('private provider credentials');return {data:null,error:{message:'private provider credentials'}};});
     await assert.rejects(store.read(),e=>e.message==='qualification_store_unconfirmed');assert.equal(calls,1);
+  }
+});
+test('request budget ceiling includes five receipts and three read-only reconciliations',async()=>{
+  const state={...await initialState(),requestBudgetReserved:22};
+  assert.equal((await validateQualificationState(state)).requestBudgetReserved,22);
+  for(const requestBudgetReserved of [-1,22.5,23]){
+    await assert.rejects(validateQualificationState({...state,requestBudgetReserved}),/qualification_state_invalid/);
   }
 });
 test('read validation copies data and rejects extra/private content',async()=>{

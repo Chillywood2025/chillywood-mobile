@@ -96,6 +96,12 @@ const recordedV15Source = {
   sha: "191ffb8e610c81204f1d114ba39a80235ec58031",
   tree: "d482493bae0a43038b689eb1034e8cc5be8883e2",
 };
+// Reviewed V16 source before the root Undici repair. This preserves source
+// identity without asserting whether matching binaries were built or delivered.
+const recordedV16Source = {
+  sha: "35d85e893ebb1c35a065248ee6820716b8cdcfd2",
+  tree: "dbe21f55a0afe68635efe6ee4cef9706bb3a23fd",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -261,8 +267,8 @@ test("recorded local camera inference v15 preserves the held v14 source cohort",
   }
 });
 
-test("Expo asset patch uses prospective v16 without rewriting the v15 source cohort", () => {
-  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+test("recorded Expo asset patch v16 preserves the v15 source cohort", () => {
+  const generation = JSON.parse(git(repo, "show", `${recordedV16Source.sha}:config/release/internal-native-generation.json`));
   const recorded = JSON.parse(git(repo, "show", `${recordedV15Source.sha}:config/release/internal-native-generation.json`));
   assert.equal(generation.generation, "internal-native-v16");
   assert.equal(generation.supersedes.generation, recorded.generation);
@@ -272,6 +278,28 @@ test("Expo asset patch uses prospective v16 without rewriting the v15 source coh
       repositoryRoot: repo, platform, sourceSha: recordedV15Source.sha, sourceTree: recordedV15Source.tree,
     }).digest);
     assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v16`);
+    assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
+    assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.equal(generation.channels[platform], recorded.channels[platform]);
+  }
+  const { reason: currentReason, ...currentPolicy } = generation.policy;
+  const { reason: recordedReason, ...recordedPolicy } = recorded.policy;
+  assert.deepEqual(currentPolicy, recordedPolicy, "new source identity must not expand release authority");
+  assert.notEqual(currentReason, recordedReason);
+});
+
+test("Undici tooling repair uses prospective v17 without rewriting the v16 source cohort", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV16Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v17");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV16Source.sha, sourceTree: recordedV16Source.tree,
+    }).digest);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v17`);
     assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
     assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
@@ -488,9 +516,26 @@ for (const [change, changedPaths] of Object.entries({
 }
 
 for (const platform of ["android", "ios"]) {
+  test(`${platform}: Undici tooling repair cannot reuse the v16 binary or runtime`, (t) => {
+    const { root, baseline, publish } = fixture(t, recordedV16Source.sha);
+    for (const name of ["package.json", "package-lock.json"]) write(root, name, fs.readFileSync(path.join(repo, name)));
+    const changedSource = commit(root);
+    assert.notEqual(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: baseline.sha }).digest,
+      nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: changedSource.sha }).digest);
+    const oldBinary = publish(platform);
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "v16 binary must stop before Expo or provider calls");
+    const rebuiltInOldRuntime = publish(platform, changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.doesNotMatch(rebuiltInOldRuntime.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "changed source inputs cannot repurpose the v16 cohort");
+  });
+
   test(`${platform}: Expo asset patch cannot reuse the v15 binary or runtime`, (t) => {
     const { root, baseline, publish } = fixture(t, recordedV15Source.sha);
-    for (const name of ["package.json", "package-lock.json"]) write(root, name, fs.readFileSync(path.join(repo, name)));
+    for (const name of ["package.json", "package-lock.json"]) write(root, name, git(repo, "show", `${recordedV16Source.sha}:${name}`) + "\n");
     const changedSource = commit(root);
     assert.notEqual(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: baseline.sha }).digest,
       nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: changedSource.sha }).digest);
@@ -501,6 +546,7 @@ for (const platform of ["android", "ios"]) {
     const rebuiltInOldRuntime = publish(platform, changedSource);
     assert.notEqual(rebuiltInOldRuntime.status, 0);
     assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.doesNotMatch(rebuiltInOldRuntime.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
     assert.deepEqual(rebuiltInOldRuntime.calls, [], "changed native inputs cannot repurpose the v15 cohort");
   });
 

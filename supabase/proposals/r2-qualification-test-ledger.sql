@@ -14,12 +14,12 @@ begin
       array['completed','manifestHash','observations','pending','phase','reconciliations','requestBudgetReserved','revision','runId','schema','updatedAt']
     or s->'schema' is distinct from '1'::jsonb
     or s->>'runId' is distinct from 'r2-retention-qualification-20261023-01'
-    or s->>'manifestHash' is distinct from 'f93701090ba98aa8696421b0e14fb9be6cc36b0ef293061dd751e82cdb8db9f9'
+    or s->>'manifestHash' is distinct from 'b01b7f40adab7a6f830dd38282550d70b3f18adb84c790d0d7fd7522ff014bd8'
     or jsonb_typeof(s->'completed') <> 'array' or jsonb_typeof(s->'observations') <> 'array'
     or jsonb_typeof(s->'revision') <> 'number' or (s->>'revision') !~ '^[0-9]{1,2}$'
     or jsonb_typeof(s->'reconciliations') <> 'number' or (s->>'reconciliations') !~ '^[0-3]$'
     or jsonb_typeof(s->'requestBudgetReserved') <> 'number' or (s->>'requestBudgetReserved') !~ '^[0-9]{1,2}$'
-    or (s->>'requestBudgetReserved')::int > 17
+    or (s->>'requestBudgetReserved')::int > 22
     or (s->>'updatedAt') !~ '^2026-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
     or jsonb_typeof(s->'updatedAt') <> 'string'
     or jsonb_typeof(s->'phase') <> 'string'
@@ -87,7 +87,8 @@ begin
   if b->>'phase' in ('cleanup_started','cleaned') and not cleanup_approved then return false; end if;
   -- Reserve exactly one new operation before its first request. Never reset it.
   if ap is null and bp is not null then
-    budget:=case bp when 'read' then 2 when 'conflict_target' then 3 when 'cleanup_verify' then 2 else 1 end;
+    -- Every protected mutation includes its independent receipt acquisition.
+    budget:=case bp when 'conflict_target' then 4 else 2 end;
     return server_time<'2026-10-24T20:00:00.000Z'::timestamptz
       and b->>'phase'=a->>'phase' and b->'completed'=a->'completed' and b->'observations'=a->'observations'
       and b->'reconciliations'=a->'reconciliations'
@@ -174,7 +175,7 @@ declare result jsonb;
 begin
   if current_setting('role',true) is distinct from 'service_role' then raise exception 'qualification_service_required'; end if;
   if p_run_id is distinct from 'r2-retention-qualification-20261023-01' or
-    p_manifest_hash is distinct from 'f93701090ba98aa8696421b0e14fb9be6cc36b0ef293061dd751e82cdb8db9f9' then
+    p_manifest_hash is distinct from 'b01b7f40adab7a6f830dd38282550d70b3f18adb84c790d0d7fd7522ff014bd8' then
     raise exception 'qualification_binding_invalid'; end if;
   select state into result from r2_qualification_test_private.run where singleton;
   if result is not null and (result->>'runId' is distinct from p_run_id or result->>'manifestHash' is distinct from p_manifest_hash) then
@@ -188,7 +189,7 @@ declare result jsonb;
 begin
   if current_setting('role',true) is distinct from 'service_role' then raise exception 'qualification_service_required'; end if;
   if p_run_id is distinct from 'r2-retention-qualification-20261023-01' or
-    p_manifest_hash is distinct from 'f93701090ba98aa8696421b0e14fb9be6cc36b0ef293061dd751e82cdb8db9f9' then
+    p_manifest_hash is distinct from 'b01b7f40adab7a6f830dd38282550d70b3f18adb84c790d0d7fd7522ff014bd8' then
     raise exception 'qualification_binding_invalid'; end if;
   if current_setting('transaction_isolation')<>'read committed' then raise exception 'qualification_requires_read_committed'; end if;
   if p_expected_revision is null or p_expected_revision<0 then raise exception 'qualification_revision_invalid'; end if;

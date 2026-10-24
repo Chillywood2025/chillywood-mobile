@@ -1,6 +1,6 @@
 import { inspectionOriginConfig } from "./content-inspection-private-origin.ts";
 import { buildCanonicalSignedHeaders } from "./media-upload-integrity.ts";
-import { BUCKET, CONFLICT_PAYLOAD, DEADLINE, MAX_OBJECT_BYTES, OBJECTS, R2_ENDPOINT, sha256 } from "./r2-disposable-qualification-manifest.ts";
+import { BUCKET, CONFLICT_PAYLOAD, DEADLINE, MAX_OBJECT_BYTES, MUTATION_RECEIPTS, OBJECTS, R2_ENDPOINT, sha256 } from "./r2-disposable-qualification-manifest.ts";
 import type { Operation } from "./r2-disposable-qualification-manifest.ts";
 
 export type Observation = { status: number; byteCount?: number; sha256?: string; observedAt: string };
@@ -58,8 +58,7 @@ export function createQualificationOrigin(
     endpoint.search || endpoint.hash || !["", "/"].includes(endpoint.pathname) ||
     !/^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(endpoint.hostname)) throw Error("origin_unsupported");
   const host = `${BUCKET}.${endpoint.hostname}`;
-  return async (operation) => {
-    const specs = {
+  const specs = {
       put_control: { method: "PUT", object: OBJECTS.control, payload: OBJECTS.control.payload },
       put_target: { method: "PUT", object: OBJECTS.target, payload: OBJECTS.target.payload },
       conflict_target: { method: "PUT", object: OBJECTS.target, payload: CONFLICT_PAYLOAD },
@@ -67,9 +66,11 @@ export function createQualificationOrigin(
       get_target: { method: "GET", object: OBJECTS.target, payload: "" },
       delete_target: { method: "DELETE", object: OBJECTS.target, payload: "" },
       delete_control: { method: "DELETE", object: OBJECTS.control, payload: "" },
-    } as const;
-    if (!Object.hasOwn(specs, operation)) throw Error("operation_not_allowlisted");
-    const spec = specs[operation], started = now(), remaining = Date.parse(DEADLINE) - started;
+  } as const;
+  // Private transport accepts only factory-owned specs. No receipt GET/DELETE,
+  // permit adoption, raw transport export or caller-selected key exists.
+  const dispatch = async (spec: { method: string; object: { key: string }; payload: string }): Promise<Observation> => {
+    const started = now(), remaining = Date.parse(DEADLINE) - started;
     if (!Number.isFinite(started) || remaining <= 0) throw Error("deadline_passed");
     const path = `/${spec.object.key.split("/").map(encode).join("/")}`;
     const dateTime = new Date(started).toISOString().replace(/[:-]|\.\d{3}/g, ""), date = dateTime.slice(0, 8);
@@ -99,5 +100,17 @@ export function createQualificationOrigin(
       await response.body?.cancel().catch(() => {});
       return { status: response.status, observedAt: new Date(now()).toISOString() };
     } catch { throw Error("qualification_origin_unconfirmed"); }
+  };
+  return async (operation) => {
+    if (!Object.hasOwn(specs, operation)) throw Error("operation_not_allowlisted");
+    if (Object.hasOwn(MUTATION_RECEIPTS, operation)) {
+      const receipt = MUTATION_RECEIPTS[operation as keyof typeof MUTATION_RECEIPTS];
+      // Only this call's fresh acknowledged create can authorize this dispatch.
+      // Never persist/reuse a permit or interpret a receipt 412 as the tested
+      // conflict response. Unknown/duplicate/locked receipts dispatch nothing.
+      const acquired = await dispatch({ method: "PUT", object: receipt, payload: receipt.payload });
+      if (acquired.status !== 200) throw Error("qualification_fence_not_acquired");
+    }
+    return dispatch(specs[operation]);
   };
 }

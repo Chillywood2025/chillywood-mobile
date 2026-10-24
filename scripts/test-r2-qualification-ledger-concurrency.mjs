@@ -9,9 +9,10 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {loadQualificationModule,fixtureProposalSQL,fixtureNow,assertProposalUnchanged,
   existingDatabaseFingerprintSQL} from '../tests/helpers/r2-qualification-fixture.mjs';
+import {createSyntheticQualificationR2,assertRestoredQualificationFence} from '../tests/helpers/r2-qualification-r2-fixture.mjs';
 const {initialState,runQualification}=loadQualificationModule('r2-disposable-qualification.ts');
 const {createQualificationRunStore}=loadQualificationModule('r2-disposable-qualification-store.ts');
-const {RUN_ID,OBJECTS,manifestHash,sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
+const {RUN_ID,OBJECTS,MUTATION_RECEIPTS,manifestHash,sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset and pgTAP. Generated disposable local clones only; no remote database URL or provider transport.');process.exit(0);
 }
@@ -82,7 +83,7 @@ async function terminate(s) {
   if(s.child.exitCode===null){s.child.kill('SIGTERM');await Promise.race([s.done,delay(1000)]);}
 }
 async function race(db,mode) {
-  const next={...initial,revision:1,pending:'put_control',requestBudgetReserved:1};let h,w;
+  const next={...initial,revision:1,pending:'put_control',requestBudgetReserved:2};let h,w;
   try {
     h=session(db,`${cas(0,next)};select 'HOLDER_READY'`);
     await until(()=>h.output().includes('HOLDER_READY'),'holder owns intent row',[h]);
@@ -115,6 +116,50 @@ function fixture(db,execute=query) {
   };
   const deps={store,origin,now:()=>Date.parse(fixtureNow),cleanupApproved:false};
   return {calls,store,deps,rpc,run:action=>runQualification(action,deps)};
+}
+async function fencedRestoreProof() {
+  // Actual SQL/adapter and pg_dump/restore, but a synthetic external R2 store.
+  // Never restore/recreate that store alongside the database it is fencing.
+  const db=create(baseline);seed(db);const p=createSyntheticQualificationR2(),f=fixture(db);
+  const approval=target=>query(target,'select cleanup_approval_ref is not null from r2_qualification_test_private.run;')==='t';
+  const snapshot=()=>({bytes:dump(db),state:read(db),cleanupApproved:approval(db)});
+  const snapshots=[snapshot()];f.deps.origin=p.origin;
+  f.deps.store=createQualificationRunStore(async(name,args)=>{
+    const result=await f.rpc(name,args);
+    if(name.startsWith('cas_')&&result.data===true)snapshots.push(snapshot());
+    return result;
+  });
+  for(const action of ['prepare','read','conflict'])await f.run(action);
+  query(db,"update r2_qualification_test_private.run set cleanup_approval_ref='approved:offline-native-fenced-cleanup';");
+  snapshots.push(snapshot());f.deps.cleanupApproved=true;await f.run('cleanup');
+  assert.equal(read(db).phase,'cleaned');assert.equal(p.protectedMutations.length,5);
+  for(const saved of snapshots){
+    const restoredDB=createRestored(saved.bytes),restored=fixture(restoredDB);
+    restored.deps.origin=p.newOrigin();restored.deps.cleanupApproved=true;
+    assert.deepEqual(await restored.store.read(),saved.state,'exact restored SQL state, not a broken adapter');
+    assert.equal(approval(restoredDB),saved.cleanupApproved,'exact restored cleanup authority');
+    await assertRestoredQualificationFence({provider:p,state:saved.state,run:restored.run,cleanupApproved:saved.cleanupApproved});
+    assert.equal(p.protectedMutations.length,5,'no protected mutation is redispatched after any valid prefix restore');
+    for(const o of Object.values(OBJECTS))assert.equal(p.objects.has(o.key),false);
+    for(const r of Object.values(MUTATION_RECEIPTS))assert.equal(p.objects.get(r.key),r.payload);
+    checks++;
+  }
+  assert.equal(snapshots.length,17,'initial, every committed CAS prefix, and cleanup approval snapshot');
+
+  // Two independently restored databases cannot coordinate through their own
+  // row locks. Their concrete signed origins must contend on the external model.
+  const aDB=create(baseline),bDB=create(baseline);seed(aDB);seed(bDB);
+  const shared=createSyntheticQualificationR2(),a=fixture(aDB),b=fixture(bDB);
+  a.deps.origin=shared.origin;b.deps.origin=shared.newOrigin();
+  let release,entered,first=true;
+  const barrier=new Promise(resolve=>release=resolve),seen=new Promise(resolve=>entered=resolve);
+  shared.before=async r=>{if(r.receipt&&first){first=false;entered();await barrier;}};
+  const delayed=a.run('prepare');await seen;await b.run('prepare');release();
+  await assert.rejects(delayed,/qualification_fence_not_acquired/);
+  assert.equal(shared.protectedMutations.filter(r=>r.op==='put_control').length,1);
+  assert.equal(shared.protectedMutations.filter(r=>r.op==='put_target').length,1);checks++;
+  return {fencedPrefixRestores:snapshots.length,divergentDatabaseRaces:1,
+    externalPreservationModel:true,liveReceiptProtectionQualified:false};
 }
 function clusterQuery(_db,sql) {
   assert.ok(crashContainer?.verified,'only our verified disposable cluster');
@@ -155,7 +200,7 @@ async function clusterCrashProof() {
   clusterQuery(null,fixtureProposalSQL);
   assert.equal(clusterQuery(null,"select current_setting('fsync')||','||current_setting('synchronous_commit')||','||current_setting('full_page_writes');"),'on,on,on');
   clusterQuery(null,`insert into r2_qualification_test_private.run(state,setup_approval_ref) values(${json(initial)},'approved:offline-crash-setup');`);
-  const pending={...initial,revision:1,pending:'put_control',requestBudgetReserved:1};
+  const pending={...initial,revision:1,pending:'put_control',requestBudgetReserved:2};
   clusterQuery(null,`set role service_role;${cas(0,pending)};`);
   await crashAndRestart();
   const pendingFixture=fixture(null,clusterQuery);
@@ -197,7 +242,7 @@ try {
   // Commit an intent, terminate its client, then reconnect through the real
   // adapter. No subsequent caller may recreate or infer a completed provider PUT.
   const pendingDB=create(baseline);seed(pendingDB);
-  const pending={...initial,revision:1,pending:'put_control',requestBudgetReserved:1};
+  const pending={...initial,revision:1,pending:'put_control',requestBudgetReserved:2};
   const client=session(pendingDB,`${cas(0,pending)};commit;select 'INTENT_COMMITTED'`);
   await until(()=>client.output().includes('INTENT_COMMITTED'),'committed intent',[client]);await terminate(client);
   const pendingFixture=fixture(pendingDB);
@@ -228,11 +273,12 @@ try {
   const restoredStale=createRestored(staleSnapshot),stale=fixture(restoredStale);
   assert.equal(read(restoredStale).phase,'new');await stale.run('prepare');
   assert.deepEqual(stale.calls,['put_control','put_target']);checks++;
+  const fenced=await fencedRestoreProof();
   await clusterCrashProof();
   assertProposalUnchanged();
   console.log(JSON.stringify({status:'passed',checks,independentBackends:true,observedLockEdges:3,
     terminatedSessionCases:3,clusterCrashTest:true,clusterCrashCases:2,powerLossTest:false,syntheticClock:true,
-    currentSnapshotPreserved:true,staleSnapshotReopensDemonstrated:true,restoreSafeNonreuse:false,
+    currentSnapshotPreserved:true,staleSnapshotReopensDemonstrated:true,restoreSafeNonreuse:false,...fenced,
     providerRequests:0,liveDatabaseWrites:0}));
 } finally {
   if(crashContainer){

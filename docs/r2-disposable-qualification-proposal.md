@@ -1,8 +1,10 @@
 # Offline disposable R2 qualification proposal
 
-Status: executable offline core, isolated ledger proposal, adapter and tests,
-**not a deployed route or provider qualification**. Rebased on source
-`333f7b63c0c2aee3dde342a324be5c8afeed207c`. The only existing file change adds
+Status: offline restore-fence extension of PR 607 head
+`ab0a0c2bc094929b3d954d06380f8ba3fed4d1a9`, **not a deployed route or provider
+qualification**. It adds five permanent R2-backed mutation receipts, conditional
+on separately approved and verified provider protection of their exact prefix.
+No such protection has been configured or verified by this work. The CI change adds
 required tests to the existing Database CI job. No runtime or deployment
 configuration, live database schema/ACL, credential, provider object,
 scan job, retention flag, schedule or source row is changed.
@@ -39,6 +41,13 @@ redirects, matching the current worker's outbound credential confinement.
   `qualification/retention/r2-retention-qualification-20261023-01/control.txt`
   and `qualification/retention/r2-retention-qualification-20261023-01/target.txt`.
 - Fixed short synthetic text, plus a fixed different target conflict payload.
+- Five additional permanent receipt objects, one for each mutation, under the
+  exact `qualification/retention/r2-retention-qualification-20261023-01/receipts/`
+  prefix. Their literal keys and payloads are in `MUTATION_RECEIPTS`; they are
+  included in the manifest hash and are NEVER disposable or cleanup targets.
+  They require their own approval and indefinite preservation. The declared
+  `RECEIPT_PROTECTION` rule identity is a commissioning requirement, not evidence
+  that a provider lock exists.
 - Deadline: `2026-10-24T20:00:00.000Z`. Every provider request is bounded by this
   deadline and a maximum 15-second request budget. No phase runs after expiry;
   status-only ledger inspection remains possible.
@@ -73,10 +82,56 @@ upper bounds on attempts, not an invented count of confirmed provider execution.
    invoke the two exact DELETEs. First persist `cleanup_started`, permanently
    forbidding every write phase. Verify both objects return 404 afterward.
 
-The happy path has at most 11 provider requests: three PUTs, six GETs and two
-DELETEs. Up to three explicitly invoked reconciliations reserve two GETs each.
+The happy path has at most 16 provider requests: five permanent receipt PUTs,
+three disposable-object PUTs, six GETs and two DELETEs. Up to three explicitly
+invoked reconciliations reserve two GETs each, for a normal maximum of 22.
 Repeated completed phases do not repeat provider operations. There is no cron,
 automatic retry, arbitrary probe, prefix delete or listing capability.
+These are budgets within one continuous ledger history, not a lifetime cap across
+arbitrary stale restores. Restores can cause more rejected receipt attempts or
+reads; the independent fence limits protected mutation dispatch, not every
+provider request. Neither counter nor reconciliation cap is magically immune to
+database rollback.
+
+## Minimal R2-backed restore fence
+
+The concrete signed origin, not a caller-supplied permit or database flag, first
+PUTs the matching permanent receipt with `If-None-Match: *`. Only that same
+invocation's fresh HTTP 200 acknowledgment permits its single protected mutation.
+The protected request checks its deadline again. A duplicate, lock denial,
+unexpected status or exception stops before that mutation. A receipt's 412 is
+never returned as the target conflict's 412. There is no receipt GET/adopt,
+delete/overwrite, retry loop, returned reusable token or persisted permit.
+
+The receipt namespace is fixed by the protected object namespace and operation,
+not a changing manifest hash or revision. Never rotate receipt keys while
+reusing protected keys. Every first/live binary for this run must contain the
+mandatory fence; an old unfenced implementation can bypass it and must never be
+commissioned. Neither a receipt nor a bucket lock prevents an administrator from
+deploying code that omits the fence.
+
+Before commissioning, approve and verify an indefinite R2 lock covering ONLY
+the receipt prefix, not target/control. Its rule must remain intact permanently.
+Cloudflare documents that such a lock prevents receipt overwrite/deletion and
+lifecycle removal while allowing initial creation. Removing the rule remains
+an administrative capability: this is not administrator-proof WORM.
+[R2 bucket locks](https://developers.cloudflare.com/r2/buckets/bucket-locks/)
+
+The narrowly supported invariant is: R2-backed, Supabase-restore-independent
+at-most-once dispatch of each of the five fixed mutations, subject to documented
+R2 behavior, permanent receipt protection and mandatory fenced source. This is
+not provider-independent empirical proof of R2 atomicity. Conditional create is
+a documented safety assumption while the disposable run checks this route's
+integration behavior. A negative read cannot clear an unknown receipt or write.
+[R2 conditional operations](https://developers.cloudflare.com/r2/api/s3/extensions/)
+
+If an unknown receipt request never commits, a stale database restore may permit
+another receipt attempt. That later acknowledged winner can dispatch once; a
+late original request then loses. If the first request committed but its response
+was lost, no later request can acquire the receipt, so no protected mutation is
+replayed. This deliberately sacrifices liveness rather than adopting an existing
+receipt. Do not describe it as permanent refusal of every receipt retry across
+all restores, or as proof that an unknown provider request drained.
 
 ## Isolated durable ledger proposal
 
@@ -127,21 +182,22 @@ the ledger can make safe. Do not expose these RPCs or grant a new endpoint acces
 without the separate review/approval described above.
 
 A privileged administrator can still disable triggers/drop objects or restore an
-old backup. This source cannot establish restore-safe nonreuse alone. The native
-test deliberately restores an old pre-intent snapshot and requires that its
-synthetic runner reopens: this is a negative control demonstrating the missing
-anti-rollback guarantee, NOT permission to do so in production. Current pending
-and terminal snapshots are separately restored and must remain fenced.
+old backup. The native ledger-only negative control deliberately restores an old
+pre-intent snapshot and requires an UNFENCED synthetic runner to reopen. It remains
+`restoreSafeNonreuse:false`; a database-only guarantee must not be claimed.
+Additional native cases retain the external synthetic receipt store while
+restoring 17 real database snapshots, including every committed CAS prefix and
+the independent cleanup approval. They exercise the concrete signed origin and
+actual SQL adapter and require zero repeated protected mutations. A separate race
+uses two independently restored databases, not a shared row-lock winner.
 
-Production commissioning must preserve/replay terminal and pending ledger state
-from an independently durable authority across every restore and prevent
-operational reuse of the fixed object keys. Merely restoring a database backup
-or checking that the row is absent is insufficient. The approved namespace and
-run identity must never be recycled. Stop the endpoint before rollback/restore;
-keep it disabled until recovered state has been reconciled with independent
-provider-operation/tombstone evidence. This proposal does not implement that
-external recovery authority. No cleanup or recreation may proceed from a
-restored pre-intent snapshot, even with the original approval reference.
+The external fixture is a model, not an existing production authority. An
+inventory found no already verified independent immutable ledger or receipt lock.
+The new source therefore implements the consuming fence but live readiness still
+requires the approved provider lock and its exact readback evidence. No new
+general recovery system is proposed. Do not resume a restored run blindly:
+stop it, preserve receipts forever, and reconcile actual uncertainty before any
+separately approved action. A lost/blocked run may remain permanently incomplete.
 
 CAS serializes the run. A lost receipt or crash leaves `pending` and does not
 replay its mutation. Read-only reconciliation observes the exact two objects.
@@ -178,6 +234,7 @@ preserve it permanently. No credential/provider/security setting change is
 authorized by this proposal.
 
 Before any live use, separately approve the real endpoint/run/keys/deadline,
+the five permanent receipts and exact provider lock configuration,
 the ledger design and new isolated grants, new endpoint access/security scope,
 production migration and setup seed, minimal client/entrypoint, deployment, and
 non-destructive provider operations. Validate the frozen exact source first.
@@ -197,6 +254,18 @@ control integrity, cleanup approval/fence, bounded reads, missing/mismatched
 state, concurrent prepare, lost durable receipts and ambiguous provider results.
 Node tests and Deno type checking are focused offline evidence, not the protected
 exact-head CI result or live R2 evidence.
+
+`node --test supabase/functions/_shared/r2-disposable-qualification-fence.test.mjs`
+
+This separate suite runs the concrete signed transport over a strictly bounded
+synthetic R2 model and independently verifies both request signatures. It covers
+all five receipt/dispatch paths, non-success and unknown receipts, receipt-412
+separation, concurrent divergent state, late acquisition, deadline after receipt,
+lost protected outcomes and all restored in-memory prefixes. Four additional
+PGlite data-directory restores use actual SQL and adapter state while retaining
+the same external fixture. Negative controls remove receipt preservation or
+break both conditional creation and lock behavior and must demonstrate replay.
+These tests prove source behavior under stated assumptions, not live R2 locks.
 
 `node scripts/test-r2-qualification-ledger-postgres.mjs`
 
@@ -233,6 +302,10 @@ migration discovery. It performs:
   completion acknowledgment readback, and no duplicate synthetic provider call.
 - Current pending/terminal logical backup restore plus the explicitly unsafe
   stale-snapshot negative control described above.
+- Seventeen fenced full logical snapshots restored after cleanup, keeping the
+  external synthetic R2 receipt store intact, and a race between two independent
+  database instances using the concrete signed transport. The model's provider
+  preservation remains explicitly unqualified in the test output.
 - Two actual postmaster SIGKILL/restart cases for committed pending and terminal
   state, in a separately owned generated container. It reuses the already-present
   local PostgreSQL image by immutable image ID, never pulls an image, uses no

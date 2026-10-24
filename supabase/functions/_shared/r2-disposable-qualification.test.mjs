@@ -3,7 +3,7 @@ import test from 'node:test';
 import {createHash, createHmac} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {loadQualificationModule} from '../../../tests/helpers/r2-qualification-fixture.mjs';
-const {BUCKET, CLEANUP_APPROVED, CONFLICT_PAYLOAD, DEADLINE, OBJECTS, R2_ENDPOINT, RUN_APPROVED, RUN_ID, sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
+const {BUCKET, CLEANUP_APPROVED, CONFLICT_PAYLOAD, DEADLINE, MUTATION_RECEIPTS, OBJECTS, R2_ENDPOINT, RUN_APPROVED, RUN_ID, sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
 const {createQualificationOrigin, readBoundedBody}=loadQualificationModule('r2-disposable-qualification-origin.ts');
 const {createQualificationHandler}=loadQualificationModule('r2-disposable-qualification-handler.ts');
 const {initialState, runQualification}=loadQualificationModule('r2-disposable-qualification.ts');
@@ -59,7 +59,7 @@ test('prepare/read/conflict is create-only and preserves the control and origina
   assert.deepEqual(f.calls, ['put_control', 'put_target', 'get_control', 'get_target', 'conflict_target', 'get_control', 'get_target']);
   assert.equal(f.objects.get('control'), OBJECTS.control.payload);
   assert.equal(f.objects.get('target'), OBJECTS.target.payload);
-  assert.equal(f.state().requestBudgetReserved, 7);
+  assert.equal(f.state().requestBudgetReserved, 10);
   assert.equal(f.state().observations.length, 2);
 });
 test('repeated phases do not replay actions or permit prepare after cleanup', async () => {
@@ -221,11 +221,13 @@ test('R2 transport independently verifies SigV4, signed create-only headers, all
     if(init.method==='PUT') {assert.equal(header['if-none-match'],'*'); assert.ok(names.includes('if-none-match')); assert.ok(names.includes('content-length'));}
     if(init.method==='DELETE') assert.equal(header['if-match'],undefined);
     const name=url.pathname.endsWith('/control.txt')?'control':'target';
-    return init.method==='GET'?new Response(OBJECTS[name].payload,{status:200}):new Response(null,{status:204});
+    return init.method==='GET'?new Response(OBJECTS[name].payload,{status:200}):new Response(null,{status:init.method==='PUT'?200:204});
   };
   const origin=createQualificationOrigin(k=>environment[k],request,()=>at);
   for(const op of ['put_control','put_target','conflict_target','get_control','get_target','delete_target','delete_control']) await origin(op);
-  assert.equal(requests[0][1].body,OBJECTS.control.payload); assert.equal(requests[2][1].body,CONFLICT_PAYLOAD);
+  assert.equal(requests[0][1].body,MUTATION_RECEIPTS.put_control.payload);
+  assert.equal(requests[1][1].body,OBJECTS.control.payload); assert.equal(requests[5][1].body,CONFLICT_PAYLOAD);
+  assert.equal(requests.length,12);
   const count=requests.length;
   for(const op of ['list','DELETE','put_arbitrary','__proto__','constructor',OBJECTS.target.key]) await assert.rejects(origin(op),/operation_not_allowlisted/);
   assert.equal(requests.length,count);
