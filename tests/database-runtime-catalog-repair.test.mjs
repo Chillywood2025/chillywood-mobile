@@ -212,7 +212,7 @@ const notificationPreferenceFunctionKeys = new Set([
 ]);
 const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
 const realtimeIdentityFiles = ['20261022204956_message_realtime_replica_identity.sql'];
-const r2QualificationFiles = ['20261024160321_r2_qualification_test_ledger.sql'];
+const r2QualificationFiles = ['20261024175231_r2_qualification_test_ledger.sql'];
 // Only these two public RPCs enter this catalog's existing schema scope; the
 // isolated ledger helpers remain in r2_qualification_test_private, not Studio.
 const r2QualificationFunctionIdentities = new Map([

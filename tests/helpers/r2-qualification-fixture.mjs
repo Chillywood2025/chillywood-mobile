@@ -40,7 +40,7 @@ export const proposalSource=readFileSync(proposalPath,'utf8');
 export const proposalSha256=createHash('sha256').update(proposalSource).digest('hex');
 assert.equal(proposalSha256,'e7020770b9bb8799ee7bfd34b62d836452684cbf511c013e4606f4a61a774bf3',
   'approved canonical proposal bytes must remain unchanged');
-export const qualificationMigrationName='20261024160321_r2_qualification_test_ledger.sql';
+export const qualificationMigrationName='20261024175231_r2_qualification_test_ledger.sql';
 export const qualificationMigrationPath=new URL(`../../supabase/migrations/${qualificationMigrationName}`,import.meta.url);
 export const qualificationMigrationSource=readFileSync(qualificationMigrationPath,'utf8');
 assert.equal(qualificationMigrationSource,proposalSource,'one byte-identical canonical forward migration');

@@ -1,6 +1,6 @@
 project_id = "chillywood-mobile"
 
-# Manually invoked non-delete qualification. No scheduler or cleanup approval.
+# Manually invoked fixed-object qualification. No scheduler or broad cleanup.
 [functions.r2-disposable-qualification]
 verify_jwt = true
 

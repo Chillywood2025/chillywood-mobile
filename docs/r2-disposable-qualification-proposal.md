@@ -1,15 +1,19 @@
-# Bounded non-delete R2 qualification
+# Bounded R2 qualification and exact-object cleanup
 
-Status: source commissioning for the bounded setup approved on 2026-10-24,
-**not deployment or live provider qualification evidence**. The approved run
+Status: source boundaries for the bounded setup approved on 2026-10-24,
+**not live cleanup evidence or deletion authority**. The non-delete run
 creates two synthetic objects, reads their complete contents and verifies that
 an overwrite attempt is rejected. It retains three permanent mutation receipts.
-Deletion, real-media changes and retention activation are not approved.
+Cleanup requires separate approval for the same two fixtures and two additional
+permanent receipts, plus the owner-recorded SQL approval. This source candidate
+does not grant that approval. Real-media changes and retention activation remain
+outside scope; all five receipt objects must remain permanently preserved.
 
 The source now includes a private endpoint with JWT verification retained and a
-literal non-delete run gate. The approved receipt-prefix protection was verified
+literal fixed-run gate. The approved receipt-prefix protection was verified
 by exact provider readback at 2026-10-24 11:39:44 UTC, as detailed below. Live ledger
-setup, validated source deployment and invocation verification remain pending.
+setup, source deployment and invocation results require their own evidence;
+this document is not proof of a live cleanup outcome.
 No provider protection, live schema/ACL, credential, object, scan job, retention
 flag, schedule or source row is changed by this source preparation. The existing
 Database validation remains mandatory; the existing Sensitive Deno check gains
@@ -28,9 +32,11 @@ Matching an existing worker's authentication code alone does NOT authorize a
 new endpoint. The bounded endpoint/setup/non-delete scope was explicitly
 approved before this source change. Its `Deno.serve` entrypoint composes the
 existing handler with an inert runtime factory; `config.toml` explicitly keeps
-`verify_jwt = true`. `RUN_APPROVED` is compile-time true; `CLEANUP_APPROVED` stays
-compile-time false. Request/environment fields cannot enable or change either
-gate. Cleanup is rejected before client construction, even with valid auth.
+`verify_jwt = true`. `RUN_APPROVED` and `CLEANUP_APPROVED` are compile-time true
+in this cleanup source candidate. Request/environment fields cannot enable or
+change either gate. Valid auth reaches the exact ledger, but without the separate
+owner-recorded cleanup approval after conflict verification, SQL rejects the
+cleanup fence before any deletion receipt or provider DELETE.
 
 The runtime constructs no client or origin and reads no environment variable at
 import time. Only authenticated, validated actions can reach a lazily created
@@ -72,8 +78,8 @@ must validate the exact source import; a local substitute is not that evidence.
   prefix. Their literal keys and payloads are in `MUTATION_RECEIPTS`; they are
   included in the manifest hash and are NEVER disposable or cleanup targets.
   The approved non-delete run may create only the `put_control`, `put_target`
-  and `conflict_target` receipts. The two deletion receipts remain unused because
-  cleanup is not approved. All created receipts require indefinite preservation.
+  and `conflict_target` receipts. Separately approved exact-object cleanup may
+  create only the two deletion receipts. All five require indefinite preservation.
   Keeping all five definitions preserves the reviewed manifest binding; it does
   not grant permission to create deletion receipts or delete objects. The declared
   `RECEIPT_PROTECTION` rule identity is a commissioning requirement, not evidence
@@ -92,8 +98,9 @@ must validate the exact source import; a local substitute is not that evidence.
   the deadline. If an attempted run expires, stop and preserve its state.
 - Never touch scan fixture `c8ffaa91-0017-4646-98df-8392e170e7ae` or any actual
   media/source/scan row. No user account is needed by this proposal.
-- The run ID/keys/deadline are not authority merely by appearing here. Only the
-  explicitly approved non-delete scope is enabled. If
+- The run ID/keys/deadline are not authority merely by appearing here. Both source
+  gates are true in this candidate, but non-delete and cleanup actions retain
+  separate approval scopes; cleanup also requires owner-recorded SQL approval. If
   the approved window changes, use a newly reviewed never-used run ID and new
   literal keys, not an extension/reset of an attempted run.
 
@@ -124,7 +131,8 @@ upper bounds on attempts, not an invented count of confirmed provider execution.
 
 The approved non-delete happy path has 10 provider requests: three permanent
 receipt PUTs, three disposable-object PUT attempts and four GETs. It leaves the
-two original synthetic objects and three receipts in place. Cleanup is denied.
+two original synthetic objects and three receipts in place, without granting
+cleanup authority.
 The complete modeled path, only after a separate future cleanup approval, would
 have 16 requests: five receipt PUTs, three object PUTs, six GETs and two DELETEs.
 Up to three explicitly invoked reconciliations reserve two GETs each; the source
@@ -196,7 +204,7 @@ run-state adapter was identified in the reviewed source.
 
 `supabase/proposals/r2-qualification-test-ledger.sql` remains the canonical reviewed
 SQL reference. Its byte-identical forward migration is
-`supabase/migrations/20261024160321_r2_qualification_test_ledger.sql`.
+`supabase/migrations/20261024175231_r2_qualification_test_ledger.sql`.
 The proposal SHA-256 remains
 `e7020770b9bb8799ee7bfd34b62d836452684cbf511c013e4606f4a61a774bf3`.
 The preserved SQL header describes the original offline proposal: the migration
@@ -229,16 +237,17 @@ script. Together with `r2-disposable-qualification-store.ts`, it implements:
   on the exact run, only after conflict verification. The service role cannot
   change that field. This is not inferred from a generic work request or prior
   worker approval. The independent compile-time cleanup gate remains necessary.
-- This source change adds exactly one forward migration after
-  `20261024093048_deleted_content_reviewed_external_reference`. It creates no run,
-  setup approval or cleanup approval row. It does not deploy or apply anything
-  live; production apply and setup remain separate authorized operations. The
-  canonical SQL, run ID, manifest hash and deadline are unchanged. Read-only catalog
-  checks on 2026-10-24 found 458 installed migrations, ending
-  `20261024093048_deleted_content_reviewed_external_reference`. Earlier scoped
-  catalog checks found no proposed schema/RPC names; fresh absence/parity checks
-  remain required before any live application. Migration-list readback alone is
-  not statement-hash parity or deployment readiness.
+- The separately approved live apply on 2026-10-24 installed version
+  `20261024175231`, name `r2_qualification_test_ledger`. Its single 15,028-byte
+  statement matches the canonical SQL and SHA-256 above exactly; readback found
+  an empty table with the intended ACLs, RLS and FORCE RLS. Git now aligns the
+  existing migration filename to that immutable installed identity, rather than
+  generating new DDL, creating a second migration, reapplying it or editing live
+  history. The canonical SQL, run ID, manifest hash and deadline are unchanged.
+  No setup or cleanup approval row was created by the migration. Exact run setup,
+  private endpoint deployment/readback and provider qualification are separate
+  prerequisites, not established by migration statement/hash parity. This source
+  alignment performs no live operation.
 
 The database validates ordering, binding and immutability, not external provider
 truth. Its service worker is trusted to record actual PUT/412/DELETE receipts.
@@ -307,8 +316,9 @@ lock. Validate the frozen exact source first, including the new route and actual
 literal gate values. Earlier no-route/false-gate test results are not validation
 of this commissioned build. This source work does not establish that those live
 prerequisites are complete or authorize additional provider actions.
-Keep cleanup false until the later exact-object deletion approval and ledger
-approval recording. Updating either gate is a source change requiring review and
+Do not publish/deploy this cleanup-enabled source candidate before exact-object
+deletion approval; live invocation also requires owner-recorded SQL approval.
+Updating either gate is a source change requiring review and
 validation, not a mutable feature flag. Leave retention flags/schedules off and
 held shared-master/secondary-copy work untouched.
 
@@ -332,8 +342,12 @@ The runtime tests are imported by the existing main qualification suite, so the
 protected Database command selects them without a second optional test command.
 They exercise the actual handler/runtime/installed SDK/store/core/signed-origin
 composition on a synthetic transport: prepare, read and conflict leave exactly
-two original objects and three receipts, repeated actions dispatch nothing, and
-cleanup is denied before any database/provider access. Wrong auth, missing state,
+two original objects and three receipts, and repeated actions dispatch nothing.
+The cleanup integration suite uses the actual handler/runtime, canonical SQL
+ledger and signed origin: missing SQL approval prevents deletion receipts and
+DELETEs; synthetic owner approval permits exactly two DELETEs and two receipts,
+then bounded 404 readback. All five receipts remain; completed or uncertain
+DELETEs are never automatically replayed. Wrong auth, missing state,
 origin configuration errors, unknown outcomes and deadline expiry remain closed.
 The loader's hard-denied default fetch is unchanged; there is no injected or
 environment-controlled approval gate.
