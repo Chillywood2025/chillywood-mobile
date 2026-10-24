@@ -1,5 +1,9 @@
 project_id = "chillywood-mobile"
 
+# Manually invoked non-delete qualification. No scheduler or cleanup approval.
+[functions.r2-disposable-qualification]
+verify_jwt = true
+
 [functions.livekit-token]
 verify_jwt = false
 
