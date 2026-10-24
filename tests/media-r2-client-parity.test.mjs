@@ -27,9 +27,14 @@ test("creator source, cover, and delete paths route R2 through the authority gat
   assert.match(creatorVideos, /usesPrivateOriginMediaGateway\(input\.storageProvider\)/u);
   assert.match(creatorVideos, /usesPrivateOriginMediaGateway\(provider\)/u);
   assert.equal(creatorVideos.includes('provider === "s3"'), false);
+  // Scope ordering to the owned-object branch, not the separate no-locator RPC path.
+  const ownedDeleteStart = creatorVideos.indexOf("if (usesPrivateOriginMediaGateway(provider) && objectKey)");
+  assert.ok(ownedDeleteStart >= 0, "owned-object deletion branch must exist");
+  const ownedDelete = creatorVideos.slice(ownedDeleteStart);
+  const providerDelete = ownedDelete.indexOf("await deleteStoredMediaObject");
+  const metadataDelete = ownedDelete.indexOf('.from("videos").delete()');
   assert.ok(
-    creatorVideos.indexOf("await deleteStoredMediaObject")
-      < creatorVideos.indexOf('.from("videos").delete()'),
+    providerDelete >= 0 && metadataDelete > providerDelete,
     "delivery authority/object deletion must finish before video metadata deletion",
   );
   assert.match(clipStudio, /usesPrivateOriginMediaGateway\(previousProvider\)/u);
