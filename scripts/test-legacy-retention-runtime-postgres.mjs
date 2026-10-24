@@ -53,6 +53,10 @@ for(const file of [
  try {await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));} catch(e){console.error('migration',file);throw e;}
 }
 await db.exec(readFileSync('supabase/migrations/20261021134020_deleted_media_legacy_provenance_adapter.sql','utf8'));
+// Exercise the preserved original-media path after the external-text successor,
+// not merely the historical implementation in isolation.
+await db.exec(readFileSync('supabase/migrations/20261021134033_supabase_original_copy_receipts.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261023221500_deleted_content_reviewed_external_reference.sql','utf8'));
 
 await db.query(`insert into videos(id,owner_id,created_at,storage_provider,storage_bucket,storage_object_key)
  values($1,$2,'2026-01-01','cloudflare_r2','chillywood-media-origin','originals/legacy-one.mp4')`,[target,owner]);

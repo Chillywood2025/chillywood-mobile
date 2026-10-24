@@ -145,6 +145,24 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
+const externalReferenceFiles = ['20261023221500_deleted_content_reviewed_external_reference.sql'];
+const externalReferenceFunctionKeys = new Set([
+  'private.deleted_content_external_sha256/1',
+  'private.preserve_deleted_content_external_reference/0',
+  'private.invalidate_deleted_content_external_source/0',
+  'private.deleted_content_external_reference_binding/1',
+  'private.deleted_content_external_reference_blocker/1',
+  'private.read_deleted_content_external_reference_source/1',
+  'private.record_deleted_content_external_reference/3',
+  'private.guard_deleted_content_external_ownership/0',
+  'private.deleted_content_external_guards_ready/0',
+  'private.guard_deleted_content_external_archive/0',
+  'private.deleted_content_external_archive_supported/1',
+  'private.deleted_content_source_coverage_before_external/2',
+  'private.capture_deleted_content_row_before_external/3',
+  'private.delete_retained_content_before_external/6',
+  'private.expire_deleted_content_text_before_external/1',
+]);
 const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
 const originalCopyFunctionKeys = new Set([
  'private.preserve_supabase_original_copy_receipt/0',
@@ -273,7 +291,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>externalReferenceFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...externalReferenceFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>notificationPreferenceFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationPreferenceFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>notificationRegistrationFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationRegistrationFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>brandRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...brandRetentionFunctionKeys].sort());
@@ -312,7 +331,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>externalReferenceFiles.includes(file)),externalReferenceFiles);
     assert.deepEqual(replayReport.files.filter(file=>realtimeIdentityFiles.includes(file)),realtimeIdentityFiles);
     assert.deepEqual(replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
     assert.deepEqual(replayReport.files.filter(file=>legacyRetentionFiles.includes(file)),legacyRetentionFiles);

@@ -1,5 +1,49 @@
 # Deleted-content retention: disabled source implementation
 
+## Reviewed external references (source-only)
+
+Creator-video rows with no owned object or thumbnail key may use the distinct
+`reviewed_external_reference` disposition only after privileged, row-specific
+evidence recording. An external URL, placeholder hostname, missing key, zero
+size, or another row with the same URL is not evidence. The new evidence ledger
+starts empty; this migration does not classify any existing row or change
+quarantine, scan status, visibility, rollout qualification, schedules or flags.
+
+Evidence binds the exact owner/incarnation, complete locator/reference
+fingerprints and schema. It is dormant evidence, not permanent admission:
+disabled-period binding edits or new ownership/secondary references invalidate
+current coverage. Binding edits, deletion and truncation permanently invalidate
+the old evidence, so reverting fields does not restore it. Source
+deletion/recreation cannot inherit an old proof even when a
+caller reuses the same UUID and timestamp. The existing secondary-first checks
+and producer hooks remain unchanged; no shared-master or HLS support is added.
+
+Only the exact authenticated content-delete RPC can capture this class, using a
+private transaction-bound intent. Capture retains application text/history for
+720 elapsed hours, respects ordinary legal holds, and creates no media stage,
+key retirement, download entitlement, clean-scan result or provider deletion
+authority. Soft deletion and unknown historical archive conversion are not
+supported. Text expiry checks the immutable capture/evidence binding and never
+requests third-party media or invokes provider cleanup.
+
+The no-owned-locator creator-video client path calls that RPC with the initiating
+account session and exact source incarnation. Generic, authentication, timeout
+and malformed failures never authorize fallback. Only an explicit disabled
+response permits the legacy table-delete path, constrained to the initiating
+token, owner, incarnation and still-null owned locators; this does not claim a
+new server-side session-revocation guarantee for the preexisting disabled path.
+
+Source merge is not rollout: applying the new migration, reviewing and recording
+genuine per-row evidence, and delivering the client through an approved app
+build/OTA are separate prerequisites. Global scan, secondary, Brand, provider,
+client/drain, heartbeat and schedule gates remain in force. This feature retains
+application metadata, not externally hosted bytes.
+
+Verification includes actual source-client tests, executable SQL/schema replay,
+ordinary retained-original regression coverage and the native disposable-clone
+runner `scripts/test-external-reference-retention-concurrency.mjs`. PGlite or
+transport-framing tests alone are not two-backend concurrency qualification.
+
 This source change does not activate retention, schedule a worker, deploy a
 function, change providers, or change production legal/privacy policy.
 
