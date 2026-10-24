@@ -152,6 +152,10 @@ test('global Brand integration preserves exact lifecycle, admission and independ
    await db.exec('alter table public.platform_brand_assets enable trigger zzz_deleted_content_brand_admission');
    await db.exec('create table public.brand_unknown_locator(id uuid,media_url text)');
    assert.equal((await readiness()).platformBrandGuardCoverage,false);
+   await db.exec('create trigger zzz_deleted_media_reference_guard before insert or update on public.brand_unknown_locator for each row execute function private.guard_deleted_media_references()');
+   assert.equal((await readiness()).platformBrandGuardCoverage,false,'generic reference coverage alone cannot authorize Brand references');
+   await db.exec('create trigger zzz_platform_brand_retention_reference before insert or update on public.brand_unknown_locator for each row execute function private.guard_platform_brand_retention_references()');
+   assert.equal((await readiness()).platformBrandGuardCoverage,true,'both actual guards restore fully covered public locator inventory');
    await db.exec('drop table public.brand_unknown_locator');
    await db.exec('alter table public.platform_brand_assets add column future_media_url text');
    assert.equal((await readiness()).platformBrandGuardCoverage,false,'future source locator column requires explicit lifecycle review, even NULL');

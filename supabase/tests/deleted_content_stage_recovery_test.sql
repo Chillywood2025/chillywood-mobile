@@ -156,6 +156,8 @@ update public.legal_holds set status='released',released_at=clock_timestamp(),re
 create table public.retention_recovery_alias(id uuid primary key default gen_random_uuid(),object_path text);
 create trigger zzz_deleted_media_reference_guard before insert or update on public.retention_recovery_alias
  for each row execute function private.guard_deleted_media_references();
+create trigger zzz_platform_brand_retention_reference before insert or update on public.retention_recovery_alias
+ for each row execute function private.guard_platform_brand_retention_references();
 insert into public.retention_recovery_alias(object_path)
  values('d3100000-0000-4000-8000-000000000001/'||md5('recovery-target-2')::uuid||'/source.mp4');
 select is(public.reconcile_deleted_content_stage(md5('recovery-stage-2')::uuid)->>'status','unsupported_or_live_reference',

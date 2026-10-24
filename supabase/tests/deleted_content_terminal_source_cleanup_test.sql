@@ -24,6 +24,10 @@ insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
 create table public.retention_terminal_alias(id uuid primary key default gen_random_uuid(),object_path text);
 create trigger zzz_deleted_media_reference_guard before insert or update on public.retention_terminal_alias
  for each row execute function private.guard_deleted_media_references();
+-- Every public locator fixture participates in both real reference protocols.
+-- Keep global readiness strict rather than bypassing Brand guard coverage.
+create trigger zzz_platform_brand_retention_reference before insert or update on public.retention_terminal_alias
+ for each row execute function private.guard_platform_brand_retention_references();
 
 -- Exercise a current parent deletion through the real capture/stage/revoke
 -- chain before introducing aged expiry fixtures. No archive or stage is seeded.

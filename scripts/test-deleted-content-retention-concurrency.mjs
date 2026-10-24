@@ -69,21 +69,28 @@ try{
  assert.equal(query('select not capture_enabled from private.deleted_content_retention_settings;'),'t');
  assert.equal(query('select not armed from private.deleted_media_reference_fence;'),'t');
  query(readFileSync('tests/fixtures/deleted-content-local-qualification.sql','utf8'));
- query(`create table public.retirement_inactive_consumer(id uuid primary key default gen_random_uuid(),metadata jsonb);
- create trigger zzz_deleted_media_reference_guard before insert or update on public.retirement_inactive_consumer
+ // Isolate the generic inactive-latch contract from public Brand admission.
+ // Move this same fixture, with its rows and real generic guard, into public
+ // and add the real Brand guard before exercising public reference discovery.
+ query(`create schema retention_native_probe;
+ create table retention_native_probe.retirement_inactive_consumer(id uuid primary key default gen_random_uuid(),metadata jsonb);
+ create trigger zzz_deleted_media_reference_guard before insert or update on retention_native_probe.retirement_inactive_consumer
  for each row execute function private.guard_deleted_media_references();`);
  // Actual PostgreSQL isolation, not a mock of the snapshot/row-lock behavior.
  for(const isolation of ['repeatable read','serializable']){
-  assert.equal(query(`begin isolation level ${isolation};insert into public.retirement_inactive_consumer(metadata) values('{"unrelated":true}');
-   update public.retirement_inactive_consumer set metadata='{"unrelated":"updated"}';
+  assert.equal(query(`begin isolation level ${isolation};insert into retention_native_probe.retirement_inactive_consumer(metadata) values('{"unrelated":true}');
+   update retention_native_probe.retirement_inactive_consumer set metadata='{"unrelated":"updated"}';
    insert into public.legal_holds(target_type,target_id,reason,status) values('room_message',gen_random_uuid()::text,'Synthetic inactive hold','active');
    update public.legal_holds set reason='Synthetic inactive hold updated' where reason='Synthetic inactive hold';
    select not exists(select 1 from pg_locks where pid=pg_backend_pid() and locktype='advisory' and classid=176214 and objid=30);commit;`),'t');checks++;
   // An uncommitted enable that rolls back must not strand writers or arm them.
   await ordered('update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true',
-   `set transaction isolation level ${isolation};insert into public.retirement_inactive_consumer(metadata) values('{"rollback":true}')`,
+   `set transaction isolation level ${isolation};insert into retention_native_probe.retirement_inactive_consumer(metadata) values('{"rollback":true}')`,
    r=>{assert.equal(r.code,0,r.stderr);assert.equal(query('select not armed from private.deleted_media_reference_fence;'),'t');},{rollback:true});
  }
+ query(`alter table retention_native_probe.retirement_inactive_consumer set schema public;
+ create trigger zzz_platform_brand_retention_reference before insert or update on public.retirement_inactive_consumer
+ for each row execute function private.guard_platform_brand_retention_references();`);
  const author=randomUUID();query(`insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values(${lit(author)},${lit(`retention-${author}@example.test`)},now(),false,false);`);
  // Provider verification rows are synthetic setup; their binding and scan
  // projection use the real database functions before any activation/restart.

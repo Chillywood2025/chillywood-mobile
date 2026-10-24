@@ -55,6 +55,7 @@ const notificationPreferenceOrderingFiles = ['20261022204942_notification_prefer
 const notificationRegistrationOrderingFiles = ['20261022205003_notification_registration_revision_authority.sql'];
 const explicitApiGrantFiles = ['20261021152932_explicit_service_api_grants.sql'];
 const realtimeIdentityFiles = ['20261022204956_message_realtime_replica_identity.sql'];
+const r2QualificationFiles = ['20261024160321_r2_qualification_test_ledger.sql'];
 const ownerSecurityFiles = [
   '20261020222318_transactional_owner_security_canary.sql',
   '20261020222325_staff_permission_null_actor_closure.sql',
@@ -233,7 +234,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
     }
     // This remains a full-current-chain repair test, including reviewed successors.
     check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+brandGlobalRetentionFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length);
+    check('complete isolated R2 qualification successor in both Studio scenarios',replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles);
     check('complete global Brand retention successor',replayReport.files.filter(file=>brandGlobalRetentionFiles.includes(file)),brandGlobalRetentionFiles);
     check('complete reviewed external reference successor',replayReport.files.filter(file=>externalReferenceFiles.includes(file)),externalReferenceFiles);
     check('complete message identity successor',replayReport.files.filter(file=>realtimeIdentityFiles.includes(file)),realtimeIdentityFiles);

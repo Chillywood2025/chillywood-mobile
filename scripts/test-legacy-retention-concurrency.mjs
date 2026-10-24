@@ -71,7 +71,9 @@ try{
  query(readFileSync('tests/fixtures/deleted-content-local-qualification.sql','utf8'));
  query(`create table public.retirement_inactive_consumer(id uuid primary key default gen_random_uuid(),metadata jsonb);
  create trigger zzz_deleted_media_reference_guard before insert or update on public.retirement_inactive_consumer
- for each row execute function private.guard_deleted_media_references();`);
+ for each row execute function private.guard_deleted_media_references();
+ create trigger zzz_platform_brand_retention_reference before insert or update on public.retirement_inactive_consumer
+ for each row execute function private.guard_platform_brand_retention_references();`);
 
  const owner=randomUUID();query(`insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
  values(${lit(owner)},${lit(`legacy-retention-${owner}@example.test`)},now(),false,false);`);

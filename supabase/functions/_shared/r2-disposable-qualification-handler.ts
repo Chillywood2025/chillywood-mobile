@@ -5,8 +5,8 @@ import type { Origin } from "./r2-disposable-qualification-origin.ts";
 import { timingSafeEqual } from "node:crypto";
 const projectUrl = "https://bmkkhihfbmsnnmcqkoly.supabase.co";
 
-// Factory only: no Deno.serve, deployment config, imports with side effects,
-// credential alternatives, registration, scheduler, or live store adapter.
+// Factory only: no import-time side effects, credential alternatives or scheduler.
+// The dedicated entrypoint supplies the fixed-project runtime dependencies.
 export function createQualificationHandler(deps: {
   env: (name: string) => string | undefined; store: (verifiedKey: string) => DurableRunStore;
   origin: () => Origin; now?: () => number;
