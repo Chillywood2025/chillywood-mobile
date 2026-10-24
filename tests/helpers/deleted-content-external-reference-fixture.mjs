@@ -48,6 +48,6 @@ for(const file of [
 await db.exec(readFileSync('supabase/migrations/20261021134020_deleted_media_legacy_provenance_adapter.sql','utf8'));
 
  await db.exec(readFileSync('supabase/migrations/20261021134033_supabase_original_copy_receipts.sql','utf8'));
- await db.exec(readFileSync('supabase/migrations/20261023221500_deleted_content_reviewed_external_reference.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20261024093048_deleted_content_reviewed_external_reference.sql','utf8'));
  return db;
 }
