@@ -196,7 +196,7 @@ run-state adapter was identified in the reviewed source.
 
 `supabase/proposals/r2-qualification-test-ledger.sql` remains the canonical reviewed
 SQL reference. Its byte-identical forward migration is
-`supabase/migrations/20261024160321_r2_qualification_test_ledger.sql`.
+`supabase/migrations/20261024175231_r2_qualification_test_ledger.sql`.
 The proposal SHA-256 remains
 `e7020770b9bb8799ee7bfd34b62d836452684cbf511c013e4606f4a61a774bf3`.
 The preserved SQL header describes the original offline proposal: the migration
@@ -229,16 +229,17 @@ script. Together with `r2-disposable-qualification-store.ts`, it implements:
   on the exact run, only after conflict verification. The service role cannot
   change that field. This is not inferred from a generic work request or prior
   worker approval. The independent compile-time cleanup gate remains necessary.
-- This source change adds exactly one forward migration after
-  `20261024093048_deleted_content_reviewed_external_reference`. It creates no run,
-  setup approval or cleanup approval row. It does not deploy or apply anything
-  live; production apply and setup remain separate authorized operations. The
-  canonical SQL, run ID, manifest hash and deadline are unchanged. Read-only catalog
-  checks on 2026-10-24 found 458 installed migrations, ending
-  `20261024093048_deleted_content_reviewed_external_reference`. Earlier scoped
-  catalog checks found no proposed schema/RPC names; fresh absence/parity checks
-  remain required before any live application. Migration-list readback alone is
-  not statement-hash parity or deployment readiness.
+- The separately approved live apply on 2026-10-24 installed version
+  `20261024175231`, name `r2_qualification_test_ledger`. Its single 15,028-byte
+  statement matches the canonical SQL and SHA-256 above exactly; readback found
+  an empty table with the intended ACLs, RLS and FORCE RLS. Git now aligns the
+  existing migration filename to that immutable installed identity, rather than
+  generating new DDL, creating a second migration, reapplying it or editing live
+  history. The canonical SQL, run ID, manifest hash and deadline are unchanged.
+  No setup or cleanup approval row was created by the migration. Exact run setup,
+  private endpoint deployment/readback and provider qualification are separate
+  prerequisites, not established by migration statement/hash parity. This source
+  alignment performs no live operation.
 
 The database validates ordering, binding and immutability, not external provider
 truth. Its service worker is trusted to record actual PUT/412/DELETE receipts.
