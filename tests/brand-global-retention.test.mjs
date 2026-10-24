@@ -2,8 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {createDatabase,splitSQL} from './helpers/database-runtime-authority-fixture.mjs';
 import {applyBrandMigrationStatements} from './helpers/apply-brand-migration-statements.mjs';
+
+const genericDispatchDefinition=file=>{
+ const marker='create or replace function public.list_deleted_content_expiry_work()';
+ const statements=splitSQL(readFileSync(file,'utf8')).filter(sql=>sql.includes(marker));
+ assert.equal(statements.length,1,'one authoritative generic dispatcher definition');
+ return statements[0].slice(statements[0].indexOf(marker)).trim();
+};
+const genericDispatch=genericDispatchDefinition('supabase/migrations/20261024171258_platform_brand_global_retention_integration.sql');
+
+test('Brand integration changes the existing generic dispatcher only by excluding Brand archives',()=>{
+ const predecessor=genericDispatchDefinition('supabase/migrations/20261020201310_deleted_content_stage_recovery.sql');
+ const expected=predecessor.replace('where r.expires_at<=',"where r.target_type<>'platform_brand_asset' and r.expires_at<=");
+ assert.notEqual(expected,predecessor,'the exact Brand filter must be present');
+ assert.equal(genericDispatch,expected,'preserve every non-Brand branch, gate, lease and function attribute');
+});
 
 // Full actual migration composition, not an isolated Brand implementation.
 // Auth/storage infrastructure is the existing local PGlite test double; all
@@ -214,5 +229,92 @@ test('forward integration adopts legacy bookkeeping without rewriting or restart
   assert.equal(result.removedAt,clock.removed_at);assert.equal(result.retainUntil,clock.retain_until);
   assert.equal((await q('select public.deleted_content_expiry_readiness() r')).r.platformBrandUnboundArchiveCount,0);
   assert.deepEqual((await q('select public.list_platform_brand_retention_expiry_work() r')).r,{enabled:false,qualified:false,assetIds:[],limit:25});
+ }finally{await db.close();}
+});
+
+test('generic text dispatch cannot steal cleanup leases or fail open without settings, including mutation controls', {timeout:240000},async t=>{
+ const {db}=await createDatabase({includeHeldStudio:true});
+ const q=async(sql,args=[])=>(await db.query(sql,args)).rows[0];
+ const textWork=async()=>(await q('select public.list_deleted_content_expiry_work() r')).r;
+ const stageWork=async()=>(await q('select public.list_deleted_content_stage_cleanup_work() r')).r;
+ const dispatch=async(kind)=>(await q("select coalesce(jsonb_agg(to_jsonb(d) order by work_id),'[]'::jsonb) rows from private.deleted_content_work_dispatch d where kind=$1",[kind])).rows;
+ const rollbackCase=async(run)=>{await db.exec('begin');try{await run();}finally{await db.exec('rollback');}};
+ const disabled={enabled:false,deletionIds:[],stageIds:[]};
+ try{
+  await db.exec("select set_config('request.jwt.claims','{\"role\":\"service_role\"}',false)");
+  await db.exec(readFileSync('tests/fixtures/deleted-content-local-qualification.sql','utf8'));
+  await db.exec('update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true,text_expiry_enabled=true,media_expiry_enabled=true');
+  const owner=randomUUID();
+  await db.query("insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values($1,'brand-dispatch@example.test',now(),false,false)",[owner]);
+  const stages=[];
+  for(let n=0;n<3;n++){
+   const target=randomUUID(),reservation=randomUUID(),stage=randomUUID(),key=`${owner}/${target}/source.mp4`;
+   await db.query("insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,attached_record_id,attached_at) values($1,$2,'creator_video','cloudflare_r2','chillywood-media-origin',$3,'video/mp4',23,'verified',now()+interval '1 hour',now(),$4,now())",[reservation,owner,key,target]);
+   await db.query("insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes) values($1,$2,'Synthetic stage dispatch','draft','clean','cloudflare_r2','chillywood-media-origin',$3,$3,'video/mp4',23)",[target,owner,key]);
+   await db.query("update media_scan_jobs set status='clean' where target_table='videos' and target_id=$1",[target]);
+   // The real registration trigger, with all guards enabled, creates provenance.
+   // Queue selection is not a provider claim and the attached parent stays live.
+   await db.query("insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id,staged_at,reconcile_after) values($1,'creator_video',$2,$3,'cloudflare_r2','chillywood-media-origin',$4,$5,clock_timestamp()-interval '2 hours',clock_timestamp()-interval '1 hour')",[stage,target,owner,key,reservation]);
+   assert.equal((await q('select status from private.deleted_media_key_retirements where stage_id=$1',[stage])).status,'staged');
+   stages.push(stage);
+  }
+  await db.query("insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at) values('stage',$1,clock_timestamp()-interval '1 hour'),('stage',$2,clock_timestamp()+interval '1 hour')",[stages[1],stages[2]]);
+  const records=[];
+  for(let n=0;n<25;n++){
+   const id=randomUUID();records.push(id);
+   await db.query("insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at,media_disposition) values($1,'profile_post',$2,$3,'{}','hard',now()-interval '721 hours',now()-interval '1 hour','text_only')",[id,randomUUID(),owner]);
+  }
+  const brand=randomUUID();
+  await db.query("insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at,media_disposition) values($1,'platform_brand_asset',$2,'platform_owner_text',null,'soft',now()-interval '722 hours',now()-interval '2 hours','text_only')",[brand,randomUUID()]);
+  const assertTextLeavesStages=async()=>{
+   const before=await dispatch('stage');
+   const result=await textWork();
+   assert.deepEqual(result.stageIds,[],'text dispatch must never expose orphan-stage work');
+   assert.deepEqual(await dispatch('stage'),before,'text dispatch must not lease or refresh stage work');
+   assert.equal(result.enabled,true);
+   assert.equal(result.deletionIds.length,20);
+   assert.ok(result.deletionIds.every(id=>records.includes(id)),'only non-Brand due archives enter the bounded text queue');
+   assert.equal(result.deletionIds.includes(brand),false);
+  };
+  await t.test('full migrated text-first ordering leaves fresh, expired and future stage leases intact',()=>rollbackCase(async()=>{
+   await assertTextLeavesStages();
+   assert.deepEqual(new Set((await stageWork()).stageIds),new Set(stages.slice(0,2)),
+    'the real cleanup queue can select the same fresh/expired work immediately after text');
+   const second=await textWork();
+   assert.equal(second.deletionIds.length,5,'text lease and batch limit preserve the original bounded scheduling');
+   assert.equal((await stageWork()).stageIds.length,0,'cleanup, not text, owns the one-minute stage lease');
+  }));
+  await t.test('missing singleton returns disabled with due work present and changes no leases',()=>rollbackCase(async()=>{
+   await db.exec('delete from private.deleted_content_retention_settings');
+   const before={text:await dispatch('text'),stage:await dispatch('stage')};
+   assert.deepEqual(await textWork(),disabled,'missing configuration must fail closed');
+   assert.deepEqual({text:await dispatch('text'),stage:await dispatch('stage')},before);
+  }));
+  await t.test('mutation control catches stage leasing even if returned stageIds stays empty',()=>rollbackCase(async()=>{
+   const marker=" return jsonb_build_object('enabled',true,";
+   const steal=` insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
+ select 'stage',s.id,clock_timestamp()+interval '1 minute' from private.deleted_content_media_stages s
+ left join private.deleted_content_work_dispatch d on d.kind='stage' and d.work_id=s.id
+ where s.deletion_id is null and s.reconcile_after<=clock_timestamp()
+ and (d.work_id is null or d.next_attempt_at<=clock_timestamp())
+ and exists(select 1 from private.deleted_content_retention_settings where media_staging_enabled)
+ on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
+`;
+   const mutant=genericDispatch.replace(marker,steal+marker);assert.notEqual(mutant,genericDispatch);
+   await db.exec(mutant);
+   await assert.rejects(assertTextLeavesStages,{name:'AssertionError',message:/must not lease/});
+   assert.deepEqual((await stageWork()).stageIds,[],'the rejected mutation really starves the later cleanup pass');
+  }));
+  await t.test('mutation control catches nullable settings fail-open and unauthorized dispatch',()=>rollbackCase(async()=>{
+   const mutant=genericDispatch.replace('declare ids uuid[];','declare ids uuid[]; enabled boolean;')
+    .replace(' if not exists(select 1 from private.deleted_content_retention_settings where text_expiry_enabled) then',
+     ' select text_expiry_enabled into enabled from private.deleted_content_retention_settings;\n if not enabled then');
+   assert.notEqual(mutant,genericDispatch);await db.exec(mutant);
+   await db.exec('delete from private.deleted_content_retention_settings');
+   await assert.rejects(async()=>assert.deepEqual(await textWork(),disabled),{name:'AssertionError'});
+   assert.equal((await dispatch('text')).length,20,'the rejected mutation actually dispatches work without settings');
+  }));
+  assert.equal((await q('select count(*)::int n from private.deleted_content_stage_cleanup_claims')).n,0,
+   'queue tests never claim or contact a provider');
  }finally{await db.close();}
 });

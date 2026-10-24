@@ -18,6 +18,12 @@ Generic text expiry reports `delegated_brand_lifecycle`; it never hard-deletes
 Brand sources, proof, claims, or permanent key-nonreuse tombstones. The generic
 text queue excludes delegated Brand work to avoid starving unrelated text work.
 
+The generic dispatcher otherwise preserves the prior text-only implementation
+exactly. It never selects, returns, creates or refreshes orphan-stage leases;
+those belong only to `list_deleted_content_stage_cleanup_work()`. Missing global
+settings fail closed, just like a disabled text gate. The global worker runs the
+text pass before cleanup, so leasing stage work here would starve the later pass.
+
 ## Admission and coverage
 
 Only the Brand table's former secondary-coverage trigger is replaced. The shared
@@ -76,6 +82,22 @@ observed lock queues for activation/re-enable versus upload, removal, proof,
 holds and references. Native results are supplied by Required Validation, not
 inferred from PGlite or static source tests. Provider capability, writer drain,
 fresh real scanner evidence, deployment and scheduling remain separately required.
+
+### Pre-deployment correction
+
+The first source integration accidentally restored obsolete stage dispatch in
+the generic text reader and changed its missing-settings guard to a nullable
+Boolean check. Initial review and tests missed both differences. Read-only live
+preflight found them before the Brand migration or worker was deployed. The
+unapplied migration was corrected to the predecessor body plus only the Brand
+filter; no deployed migration or live setting was changed for that correction.
+
+Regression coverage now compares that complete function definition, exercises
+text-first then real cleanup-queue ordering on the full migrated schema, checks
+missing-settings behavior with due work, and deliberately reintroduces each bug
+in disposable mutation controls. Native pgTAP also checks that fresh and expired
+stage leases remain available to their own cleanup queue. These controls test
+dispatch isolation, not provider deletion or live qualification.
 
 ## Abort and recovery
 
