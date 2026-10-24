@@ -54,6 +54,8 @@ test('Brand/global gate rejects missing, duplicate, skipped, swallowed, wrong-ta
 test('native harness is clone-only with observed queues, cleanup and no guard/provider qualification substitute', () => {
   const source = readFileSync('scripts/test-brand-global-retention-concurrency.mjs', 'utf8');
   const migration = readFileSync('supabase/migrations/20261024171258_platform_brand_global_retention_integration.sql', 'utf8');
+  assert.ok(source.includes("pg_get_triggerdef(t.oid)||':'||t.tgenabled::text"),
+    'native catalog fingerprint must cast PostgreSQL internal char before text concatenation');
   const drain = 'lock table public.platform_brand_assets in access exclusive mode;';
   assert.ok(source.includes(drain), 'native drain control uses the actual migration lock mode');
   const drainIndex = migration.indexOf(drain);

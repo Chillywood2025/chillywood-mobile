@@ -49,7 +49,7 @@ const fingerprintTables = ['auth.users', 'auth.sessions', 'public.user_profiles'
 const fingerprint = `select jsonb_build_object(${fingerprintTables.map(table => `${lit(table)},(select md5(coalesce(string_agg(md5(to_jsonb(x)::text),'' order by md5(to_jsonb(x)::text)),'')) from ${table} x)`).join(',')})::text;`;
 const secondaryFingerprint = `select jsonb_build_object(
   'function',md5(pg_get_functiondef('private.guard_deleted_content_secondary_coverage()'::regprocedure)),
-  'triggers',(select md5(string_agg(pg_get_triggerdef(t.oid)||':'||t.tgenabled,',' order by t.tgrelid,t.tgname))
+  'triggers',(select md5(string_agg(pg_get_triggerdef(t.oid)||':'||t.tgenabled::text,',' order by t.tgrelid,t.tgname))
     from pg_trigger t where not t.tgisinternal and t.tgrelid=any(array[
       'public.video_renditions'::regclass,'public.media_renditions'::regclass,'public.media_transcode_jobs'::regclass])))::text;`;
 const fenceUpdate = 'select armed from private.deleted_media_reference_fence where singleton for update';
