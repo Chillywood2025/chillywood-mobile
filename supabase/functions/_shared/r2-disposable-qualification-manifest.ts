@@ -5,10 +5,11 @@ export const CLEANUP_APPROVED = false;
 export const RUN_ID = "r2-retention-qualification-20261023-01";
 export const DEADLINE = "2026-10-24T20:00:00.000Z";
 export const BUCKET = "chillywood-media-origin";
-// Synthetic placeholder, not a production account. Commissioning must replace
-// this with the specifically approved non-secret endpoint before the first run.
-// It is part of the durable manifest: account drift must never retarget cleanup.
-export const R2_ENDPOINT = "https://00000000000000000000000000000000.r2.cloudflarestorage.com";
+// Non-secret account/bucket metadata verified read-only on 2026-10-24. This
+// binding is NOT commissioning approval; both gates above remain closed.
+// Default jurisdiction, ENAM placement; SigV4 region remains auto. Account drift
+// must fail closed, never retarget operations or change runtime credentials.
+export const R2_ENDPOINT = "https://4771291298ef43dbe09e51f2900e04dc.r2.cloudflarestorage.com";
 export const OBJECTS = Object.freeze({
   target: Object.freeze({
     key: "qualification/retention/r2-retention-qualification-20261023-01/target.txt",

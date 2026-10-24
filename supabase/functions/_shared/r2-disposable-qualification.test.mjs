@@ -3,7 +3,7 @@ import test from 'node:test';
 import {createHash, createHmac} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {loadQualificationModule} from '../../../tests/helpers/r2-qualification-fixture.mjs';
-const {BUCKET, CLEANUP_APPROVED, CONFLICT_PAYLOAD, DEADLINE, MUTATION_RECEIPTS, OBJECTS, R2_ENDPOINT, RUN_APPROVED, RUN_ID, sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
+const {BUCKET, CLEANUP_APPROVED, CONFLICT_PAYLOAD, DEADLINE, MUTATION_RECEIPTS, OBJECTS, R2_ENDPOINT, RUN_APPROVED, RUN_ID, manifestHash, sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
 const {createQualificationOrigin, readBoundedBody}=loadQualificationModule('r2-disposable-qualification-origin.ts');
 const {createQualificationHandler}=loadQualificationModule('r2-disposable-qualification-handler.ts');
 const {initialState, runQualification}=loadQualificationModule('r2-disposable-qualification.ts');
@@ -53,6 +53,13 @@ test('fixed manifest has two disposable literal keys and closed approval gates',
     assert.ok(item.key.includes(RUN_ID)); assert.ok(!item.key.includes('c8ffaa91-0017-4646-98df-8392e170e7ae'));
     assert.ok(item.payload.length < 1024);
   }
+});
+test('verified account binding pins the complete manifest without extending the unused run', async () => {
+  assert.equal(R2_ENDPOINT,'https://4771291298ef43dbe09e51f2900e04dc.r2.cloudflarestorage.com');
+  assert.equal(RUN_ID,'r2-retention-qualification-20261023-01');
+  assert.equal(DEADLINE,'2026-10-24T20:00:00.000Z');
+  assert.equal(await manifestHash(),'2e3acd9b1075aa82d485dfb543776e7f72ff709ba03c2bd3f016a74e6a662201');
+  assert.equal(RUN_APPROVED,false);assert.equal(CLEANUP_APPROVED,false);
 });
 test('prepare/read/conflict is create-only and preserves the control and original bytes', async () => {
   const f = await fixture(); await qualified(f);
@@ -234,15 +241,25 @@ test('R2 transport independently verifies SigV4, signed create-only headers, all
 });
 test('transport refuses non-R2, wrong bucket, endpoint injection, deadline, and sanitized failure', async () => {
   for(const change of [{MEDIA_ORIGIN_BUCKET:'wrong'}, {MEDIA_ORIGIN_R2_ENDPOINT:'https://example.com'},
+    {MEDIA_ORIGIN_R2_ENDPOINT:'https://00000000000000000000000000000000.r2.cloudflarestorage.com'},
     {MEDIA_ORIGIN_R2_ENDPOINT:`https://${'a'.repeat(32)}.r2.cloudflarestorage.com`},
     {MEDIA_ORIGIN_R2_ENDPOINT:environment.MEDIA_ORIGIN_R2_ENDPOINT+'/path'}, {MEDIA_ORIGIN_R2_ENDPOINT:environment.MEDIA_ORIGIN_R2_ENDPOINT+'?x=1'},
-    {MEDIA_ORIGIN_R2_REGION:'wrong'}, {MEDIA_ORIGIN_PRIVATE_ONLY:'false'}]) {
+    {MEDIA_ORIGIN_R2_REGION:'wrong'}, {MEDIA_ORIGIN_R2_REGION:'ENAM'}, {MEDIA_ORIGIN_PRIVATE_ONLY:'false'}]) {
     assert.throws(()=>createQualificationOrigin(k=>({...environment,...change})[k],()=>{throw Error('must not call');},()=>at));
   }
   const expired=createQualificationOrigin(k=>environment[k],()=>{throw Error('must not call');},()=>Date.parse(DEADLINE));
   await assert.rejects(expired('put_target'),/deadline_passed/);
   const failed=createQualificationOrigin(k=>environment[k],()=>{throw Error('sensitive provider response or credential');},()=>at);
   await assert.rejects(failed('get_target'),e=>e.message==='qualification_origin_unconfirmed');
+});
+test('offline loader refuses default network transport even with the verified account binding', async () => {
+  const originalFetch=globalThis.fetch;let networkCalls=0;
+  globalThis.fetch=()=>{networkCalls++;return Promise.resolve(new Response(null,{status:200}));};
+  try {
+    const origin=createQualificationOrigin(k=>environment[k],undefined,()=>at);
+    for(const op of ['get_target','put_control'])await assert.rejects(origin(op),/qualification_origin_unconfirmed/);
+    assert.equal(networkCalls,0,'offline TypeScript modules cannot inherit global fetch');
+  } finally {globalThis.fetch=originalFetch;}
 });
 test('bounded full body rejects partial, oversized, compressed, and length-mismatched reads', async () => {
   for(const response of [new Response('x',{status:206}), new Response('x',{headers:{'content-range':'bytes 0-0/4'}}),

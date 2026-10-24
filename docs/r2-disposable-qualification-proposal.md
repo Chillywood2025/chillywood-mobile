@@ -1,8 +1,8 @@
 # Offline disposable R2 qualification proposal
 
-Status: offline restore-fence extension of PR 607 head
-`ab0a0c2bc094929b3d954d06380f8ba3fed4d1a9`, **not a deployed route or provider
-qualification**. It adds five permanent R2-backed mutation receipts, conditional
+Status: account-bound offline follow-up to merged PR 607, **not a deployed route
+or provider qualification**. The non-secret account binding below does not open
+either source gate. The design has five permanent R2-backed mutation receipts, conditional
 on separately approved and verified provider protection of their exact prefix.
 No such protection has been configured or verified by this work. The CI change adds
 required tests to the existing Database CI job. No runtime or deployment
@@ -32,11 +32,17 @@ redirects, matching the current worker's outbound credential confinement.
 
 - Candidate run ID: `r2-retention-qualification-20261023-01`.
 - Bucket: `chillywood-media-origin`.
-- R2 account endpoint: the immutable manifest presently contains an all-zero
-  synthetic account placeholder, NOT a known live endpoint. Commissioning must
-  replace it with the approved non-secret endpoint before the first attempt.
-  The endpoint is part of the durable manifest hash; runtime account/config drift
-  is rejected before any request and cannot retarget cleanup into another account.
+- R2 account endpoint:
+  `https://4771291298ef43dbe09e51f2900e04dc.r2.cloudflarestorage.com`.
+  An owner-scoped read-only account/bucket lookup on 2026-10-24 verified account
+  `4771291298ef43dbe09e51f2900e04dc`, this bucket, default jurisdiction and ENAM
+  placement. ENAM is not the SigV4 region; signing remains `auto`. No credentials
+  were exposed and no provider setting changed. This replaces the prior synthetic
+  placeholder, not the separate approval required for commissioning. The endpoint
+  is bound by manifest hash
+  `2e3acd9b1075aa82d485dfb543776e7f72ff709ba03c2bd3f016a74e6a662201`;
+  all SQL bindings and the offline pgTAP fixture match. Runtime account/config
+  drift is rejected before any request, never repaired by changing credentials.
 - Exactly two literal keys from `r2-disposable-qualification-manifest.ts`:
   `qualification/retention/r2-retention-qualification-20261023-01/control.txt`
   and `qualification/retention/r2-retention-qualification-20261023-01/target.txt`.
@@ -48,9 +54,18 @@ redirects, matching the current worker's outbound credential confinement.
   They require their own approval and indefinite preservation. The declared
   `RECEIPT_PROTECTION` rule identity is a commissioning requirement, not evidence
   that a provider lock exists.
-- Deadline: `2026-10-24T20:00:00.000Z`. Every provider request is bounded by this
-  deadline and a maximum 15-second request budget. No phase runs after expiry;
-  status-only ledger inspection remains possible.
+- Deadline: `2026-10-24T20:00:00.000Z`. No new provider request is dispatched at
+  or after this deadline; each has a maximum 15-second client request budget.
+  Earlier requests may still complete late: expiry/abort is not writer-drain
+  evidence. Ledger inspection and recording an already-admitted completion remain
+  possible without dispatching another request.
+  This includes reconciliation and later separately approved cleanup. The
+  account-binding update does not extend the deadline or change any run/key.
+  About nine hours remained when prepared at 11:00 UTC. Do not start unless
+  source validation, exact live approvals and provider-lock verification leave
+  sufficient time; CI timing is not guaranteed. If an unattempted candidate no
+  longer fits, review a fresh never-used run/key namespace rather than relaxing
+  the deadline. If an attempted run expires, stop and preserve its state.
 - Never touch scan fixture `c8ffaa91-0017-4646-98df-8392e170e7ae` or any actual
   media/source/scan row. No user account is needed by this proposal.
 - The candidate ID/keys/deadline are NOT approved merely by appearing here. If
@@ -171,9 +186,11 @@ run-state adapter was identified in the reviewed source.
 - SQL is deliberately outside migration discovery, creates no run rows and is
   exercised only against disposable test databases. No live migration,
   security change or setup/cleanup approval was applied. Fresh read-only catalog
-  checks on 2026-10-23 found 457 installed migrations, ending
-  `20261022205003_notification_registration_revision_authority`, and no proposed
-  schema/RPC names. This is not statement-hash parity or deployment readiness.
+  checks on 2026-10-24 found 458 installed migrations, ending
+  `20261024093048_deleted_content_reviewed_external_reference`. Earlier scoped
+  catalog checks found no proposed schema/RPC names; fresh absence/parity checks
+  remain required before any live application. Migration-list readback alone is
+  not statement-hash parity or deployment readiness.
 
 The database validates ordering, binding and immutability, not external provider
 truth. Its service worker is trusted to record actual PUT/412/DELETE receipts.
@@ -252,6 +269,10 @@ signature independently, and never contact a network/provider. They cover wrong
 auth, non-allowlisted inputs, deadline, repeated actions, conditional conflicts,
 control integrity, cleanup approval/fence, bounded reads, missing/mismatched
 state, concurrent prepare, lost durable receipts and ambiguous provider results.
+The allowlisted TypeScript test loader replaces its default `fetch` with a hard
+failure, so even a missing synthetic transport cannot contact the now account-bound
+endpoint. Regression tests pin the account/full manifest, reject the old placeholder
+and prove the loader cannot inherit global network access.
 Node tests and Deno type checking are focused offline evidence, not the protected
 exact-head CI result or live R2 evidence.
 
@@ -321,11 +342,12 @@ is weakened. CI regression tests reject omitted/skipped/swallowed/wrong-target
 or pre-reset native invocation. Source review remains separate from publication,
 exact-head protected validation and every live approval listed above.
 
-At preparation time the dot workspace has no Docker executable; native execution
-fails before any database access with `spawnSync docker ENOENT`. Therefore native
-pgTAP, independent-backend, process-crash and logical-restore tests are **prepared
-but not claimed passed** until the frozen head's required CI runs them. Hardware
-power loss, production restore/anti-rollback authority and live R2 remain unproved.
+The merged PR 607 passed both full validation runs, including 5,214 pgTAP tests,
+42 native commissioning checks and 17 fenced snapshot restores. Those historical
+passes do not validate this account-binding follow-up: its frozen head must run
+the selected protected checks again. The dot workspace still lacks Docker, so
+local tests are not native concurrency proof. Hardware power loss, production
+restore/anti-rollback authority and live R2 remain unproved.
 
 Implementation references reviewed: [PostgreSQL row locking](https://www.postgresql.org/docs/17/sql-select.html),
 [secure function definition](https://www.postgresql.org/docs/17/sql-createfunction.html),

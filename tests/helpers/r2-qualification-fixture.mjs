@@ -26,7 +26,10 @@ export function loadQualificationModule(name) {
     assert.ok(specifier.startsWith('./'),'no external test dependency substitution');
     return loadQualificationModule(specifier.slice(2));
   };
-  new Function('exports','require','crypto',compiled.outputText)(exports,localRequire,webcrypto);
+  // The manifest can name the actual non-secret account, but this loader must
+  // never inherit a real transport. Explicit synthetic request adapters only.
+  const denyNetwork=()=>{throw Error('qualification_test_network_forbidden');};
+  new Function('exports','require','crypto','fetch',compiled.outputText)(exports,localRequire,webcrypto,denyNetwork);
   return exports;
 }
 
