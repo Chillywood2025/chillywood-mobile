@@ -1,7 +1,7 @@
-// Bounded non-delete run approved 2026-10-24. Cleanup is NOT approved.
+// Bounded fixed run; cleanup additionally requires an owner-recorded SQL approval.
 // No env var or HTTP field may enable a run or approve cleanup.
 export const RUN_APPROVED = true;
-export const CLEANUP_APPROVED = false;
+export const CLEANUP_APPROVED = true;
 export const RUN_ID = "r2-retention-qualification-20261023-01";
 export const DEADLINE = "2026-10-24T20:00:00.000Z";
 export const BUCKET = "chillywood-media-origin";

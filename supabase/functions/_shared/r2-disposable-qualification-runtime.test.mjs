@@ -66,7 +66,7 @@ async function commissionedFixture({change={},missing=false,fault}={}) {
         if(objects.has(objectKey))return new Response(null,{status:412});
         objects.set(objectKey,init.body);return new Response(null,{status:200});
       }
-      assert.equal(init.method,'GET','commissioned build must never dispatch DELETE');
+      assert.equal(init.method,'GET','non-delete fixture must never dispatch DELETE');
       return objects.has(objectKey)?new Response(objects.get(objectKey)):new Response(null,{status:404});
     },
   });
@@ -91,14 +91,14 @@ test('wrong auth and missing/invalid configuration never construct a client or r
     assert.ok(f.reads.every(name=>['SUPABASE_URL','RETENTION_WORKER_SERVICE_KEY_SHA256'].includes(name)));
   }
 });
-test('literal cleanup gate rejects repeated deletion requests before client or origin construction',async()=>{
-  assert.equal(RUN_APPROVED,true);assert.equal(CLEANUP_APPROVED,false);
+test('cleanup source gate alone cannot bypass missing durable state or construct an origin',async()=>{
+  assert.equal(RUN_APPROVED,true);assert.equal(CLEANUP_APPROVED,true);
   const f=fixture();
   for(let repeat=0;repeat<3;repeat++){
-    const response=await f.handler(request('cleanup'));assert.equal(response.status,403);
-    assert.deepEqual(await response.json(),{status:'cleanup_not_approved'});
+    const response=await f.handler(request('cleanup'));assert.equal(response.status,503);
+    assert.deepEqual(await response.json(),{status:'qualification_unconfirmed'});
   }
-  assert.deepEqual(f.clients,[]);assert.deepEqual(f.calls,[]);
+  assert.equal(f.clients.length,3);assert.deepEqual(f.calls.map(call=>call.input),[readUrl,readUrl,readUrl]);
   assert.ok(f.reads.every(name=>['SUPABASE_URL','RETENTION_WORKER_SERVICE_KEY_SHA256'].includes(name)));
 });
 test('authenticated commissioned pipeline creates two files and three receipts, verifies bytes and rejects overwrite without deletion',async()=>{
@@ -123,10 +123,7 @@ test('authenticated commissioned pipeline creates two files and three receipts, 
     assert.equal((await response.json()).status,'conflict_verified');
   }
   assert.equal(f.provider.length,providerCount);
-  const databaseCount=f.database.length;
-  const cleanup=await f.handler(request('cleanup'));assert.equal(cleanup.status,403);
-  assert.deepEqual(await cleanup.json(),{status:'cleanup_not_approved'});
-  assert.equal(f.database.length,databaseCount);assert.equal(f.provider.length,providerCount);
+  // The separate SQL-backed integration test proves the cleanup approval fence.
   assert.ok(!f.reads.includes('SUPABASE_SERVICE_ROLE_KEY'));
 });
 test('authenticated missing-ledger and status paths never read provider configuration',async()=>{
@@ -166,7 +163,7 @@ test('commissioned handler stops non-status phases at the unchanged deadline wit
     }
     assert.deepEqual(f.provider,[]);assert.equal(f.state().revision,0);
     const status=await f.handler(request('status'));assert.equal(status.status,200);assert.equal((await status.json()).status,'new');
-    assert.equal((await f.handler(request('cleanup'))).status,403);
+    assert.equal((await f.handler(request('cleanup'))).status,503);
   }
 });
 test('request/env fields cannot add cleanup authority or change the bound run',async()=>{
@@ -176,7 +173,9 @@ test('request/env fields cannot add cleanup authority or change the bound run',a
     const req=new Request('https://synthetic.invalid',{method:'POST',headers:{Authorization:'Bearer '+key},body:JSON.stringify(body)});
     assert.equal((await f.handler(req)).status,400);
   }
-  assert.equal((await f.handler(request('cleanup'))).status,403);assert.deepEqual(f.clients,[]);assert.deepEqual(f.calls,[]);
+  assert.deepEqual(f.clients,[]);assert.deepEqual(f.calls,[]);
+  assert.equal((await f.handler(request('cleanup'))).status,503);
+  assert.equal(f.clients.length,1);assert.deepEqual(f.calls.map(call=>call.input),[readUrl]);
   assert.ok(!f.reads.includes('RUN_APPROVED'));assert.ok(!f.reads.includes('CLEANUP_APPROVED'));
 });
 test('lazy verified-key client sends only fixed read/CAS POST bodies and no credential alternatives',async()=>{

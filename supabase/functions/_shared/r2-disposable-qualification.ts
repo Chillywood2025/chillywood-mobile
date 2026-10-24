@@ -9,9 +9,9 @@ export type RunState = {
   pending: Step | null; completed: Step[]; reconciliations: number;
   requestBudgetReserved: number; observations: Observation[]; updatedAt: string;
 };
-// Implemented by the isolated, unseeded proposal SQL and RPC adapter, NOT deployed.
+// Implemented by the canonical isolated SQL ledger and fixed-project RPC adapter.
 // One pre-seeded exact row, linearizable CAS, monotonic revisions, no reset,
-// delete, TTL or missing-row creation. See the proposal document before wiring.
+// delete, TTL or missing-row creation. Setup and cleanup approval remain separate.
 export type DurableRunStore = {
   read: () => Promise<RunState | null>;
   compareAndSwap: (expectedRevision: number, next: RunState) => Promise<boolean>;

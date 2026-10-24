@@ -78,6 +78,7 @@ export function createSyntheticQualificationR2({now=()=>Date.parse(fixtureNow),l
     if(fixture.after)await fixture.after(record,response);
     return response;
   };
+  fixture.request=request; // Explicit synthetic transport for full runtime tests.
   fixture.origin=createQualificationOrigin(k=>environment[k],request,now);
   // Fresh factory means source/isolate restart does not preserve an in-memory
   // permit; all factories still share only this synthetic external object store.

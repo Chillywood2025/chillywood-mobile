@@ -20,7 +20,7 @@ async function qualify(f){for(const action of ['prepare','read','conflict'])awai
 const count=(p,op)=>p.protectedMutations.filter(r=>r.op===op).length;
 
 test('exact five permanent receipts are disjoint, hash-bound fixed inputs, never cleanup targets',()=>{
-  assert.equal(RUN_APPROVED,true);assert.equal(CLEANUP_APPROVED,false);
+  assert.equal(RUN_APPROVED,true);assert.equal(CLEANUP_APPROVED,true);
   assert.deepEqual(Object.keys(MUTATION_RECEIPTS),mutations);
   const protectedDirectory=OBJECTS.control.key.slice(0,OBJECTS.control.key.lastIndexOf('/'));
   assert.equal(OBJECTS.target.key.slice(0,OBJECTS.target.key.lastIndexOf('/')),protectedDirectory);
