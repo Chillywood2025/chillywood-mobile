@@ -373,35 +373,23 @@ end $$;
 
 create or replace function public.list_deleted_content_expiry_work() returns jsonb
 language plpgsql volatile security definer set search_path='' as $$
-declare ids uuid[]; stages uuid[]; enabled boolean;
+declare ids uuid[];
 begin
- select text_expiry_enabled into enabled from private.deleted_content_retention_settings;
- if not enabled then return jsonb_build_object('enabled',false,'deletionIds','[]'::jsonb,'stageIds','[]'::jsonb); end if;
+ if not exists(select 1 from private.deleted_content_retention_settings where text_expiry_enabled) then
+   return jsonb_build_object('enabled',false,'deletionIds','[]'::jsonb,'stageIds','[]'::jsonb); end if;
  if current_setting('transaction_isolation')<>'read committed' then
-   raise exception 'retention_requires_read_committed' using errcode='25000';
- end if;
+   raise exception 'retention_requires_read_committed' using errcode='25000'; end if;
  perform pg_advisory_xact_lock(176214,31);
  select array_agg(id) into ids from (
    select r.id from private.deleted_content_records r
    left join private.deleted_content_work_dispatch q on q.kind='text' and q.work_id=r.id
    where r.target_type<>'platform_brand_asset' and r.expires_at<=clock_timestamp() and (q.work_id is null or q.next_attempt_at<=clock_timestamp())
    order by coalesce(q.next_attempt_at,r.expires_at),r.id limit 20
- ) x;
- select array_agg(id) into stages from (
-   select s.id from private.deleted_content_media_stages s
-   left join private.deleted_content_work_dispatch q on q.kind='stage' and q.work_id=s.id
-   where s.deletion_id is null and s.reconcile_after<=clock_timestamp()
-     and (q.work_id is null or q.next_attempt_at<=clock_timestamp())
-     and exists(select 1 from private.deleted_content_retention_settings where media_staging_enabled)
-   order by coalesce(q.next_attempt_at,s.reconcile_after),s.id limit 20
- ) x;
+ ) work;
  insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
- select 'text',unnest(ids),clock_timestamp()+interval '1 minute'
- on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
- insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
- select 'stage',unnest(stages),clock_timestamp()+interval '1 minute'
- on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
- return jsonb_build_object('enabled',true,'deletionIds',coalesce(to_jsonb(ids),'[]'::jsonb),'stageIds',coalesce(to_jsonb(stages),'[]'::jsonb));
+   select 'text',unnest(ids),clock_timestamp()+interval '1 minute'
+   on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
+ return jsonb_build_object('enabled',true,'deletionIds',coalesce(to_jsonb(ids),'[]'::jsonb),'stageIds','[]'::jsonb);
 end $$;
 
 create or replace function public.deleted_content_expiry_readiness() returns jsonb
