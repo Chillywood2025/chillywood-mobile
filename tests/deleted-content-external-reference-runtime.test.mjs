@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {externalReferenceFixture} from './helpers/deleted-content-external-reference-fixture.mjs';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
-const migration='20261023221500_deleted_content_reviewed_external_reference.sql';
+const migration='20261024093048_deleted_content_reviewed_external_reference.sql';
 const owner='10000000-0000-4000-8000-000000000001';
 const other='10000000-0000-4000-8000-000000000002';
 const date='2026-01-01T00:00:00Z';

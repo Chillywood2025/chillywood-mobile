@@ -145,7 +145,7 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
-const externalReferenceFiles = ['20261023221500_deleted_content_reviewed_external_reference.sql'];
+const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];
 const externalReferenceFunctionKeys = new Set([
   'private.deleted_content_external_sha256/1',
   'private.preserve_deleted_content_external_reference/0',
