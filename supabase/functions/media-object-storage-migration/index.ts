@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyPlatformBrandRetentionOrigin } from "../_shared/brand-retention-origin.ts";
+import { recordPlatformBrandEmptyTestDisposition } from "../_shared/brand-empty-test-origin.ts";
 import { copySupabaseOriginal } from "../_shared/supabase-original-copy.ts";
 import { cutoverSupabaseOriginal } from "../_shared/supabase-original-cutover.ts";
 import { checkDeletedMediaRetirement } from "../_shared/deleted-media-retirement.ts";
@@ -7,6 +8,7 @@ import { checkDeletedMediaRetirement } from "../_shared/deleted-media-retirement
 type MigrationAction =
   | "verify_brand_retention_origin"
   | "record_brand_retention_proof"
+  | "record_brand_empty_test_disposition"
   | "copy_supabase_original"
   | "cutover_supabase_original"
   | "audit_inventory"
@@ -241,6 +243,7 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
   if (
     action === "verify_brand_retention_origin"
     || action === "record_brand_retention_proof"
+    || action === "record_brand_empty_test_disposition"
     || action === "copy_supabase_original"
     || action === "cutover_supabase_original"
     || action === "audit_inventory"
@@ -1945,6 +1948,20 @@ const handler = async (req: Request): Promise<Response> => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    if (action === "record_brand_empty_test_disposition") {
+      if (Object.keys(payload).some(key => !["action", "assetId"].includes(key))
+        || typeof payload.assetId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload.assetId)) {
+        return json(400, {ok: false, error: "brand_empty_disposition_asset_required"});
+      }
+      try {
+        const result = await recordPlatformBrandEmptyTestDisposition(payload.assetId, {
+          projectUrl: supabaseUrl, adminClient,
+        });
+        return json(200, {ok: true, action, ...result});
+      } catch {
+        return json(409, {ok: false, error: "brand_empty_disposition_not_confirmed"});
+      }
+    }
     if (action === "verify_brand_retention_origin" || action === "record_brand_retention_proof") {
       try {
         const scanReceiptId = toText(payload.scanReceiptId);
