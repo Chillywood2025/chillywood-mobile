@@ -146,10 +146,15 @@ test('global Brand integration preserves exact lifecycle, admission and independ
    assert.equal((await q('select read_platform_brand_retention_batch_claim($1,$2) r',[f.id,c.claimToken])).r.status,'authorized');
    await db.exec('update private.platform_brand_retention_settings set batch_enabled=false');
    assert.equal((await q('select read_platform_brand_retention_batch_claim($1,$2) r',[f.id,c.claimToken])).r.status,'batch_disabled_or_unqualified');
+   assert.equal((await q('select prepare_platform_brand_retention_batch_dispatch($1,$2) r',[f.id,c.claimToken])).r.status,'batch_disabled_or_unqualified','gate changed after read prevents final intent');
+   assert.equal((await q('select count(*)::int n from private.platform_brand_expiry_dispatch_intents where asset_id=$1',[f.id])).n,0);
    await db.exec('update private.platform_brand_retention_settings set batch_enabled=true');
    await db.query("update private.platform_brand_retention_work_dispatch set next_attempt_at=clock_timestamp()-interval '1 second' where asset_id=$1",[f.id]);
    assert.equal((await q('select read_platform_brand_retention_batch_claim($1,$2) r',[f.id,c.claimToken])).r.status,'batch_dispatch_unavailable');
+   assert.equal((await q('select prepare_platform_brand_retention_batch_dispatch($1,$2) r',[f.id,c.claimToken])).r.status,'batch_dispatch_unavailable','expired dispatch fence prevents final intent');
    assert.deepEqual((await work()).assetIds,[f.id],'crash becomes retryable without extending retain_until');
+   assert.equal((await q('select prepare_platform_brand_retention_batch_dispatch($1,$2) r',[f.id,c.claimToken])).r.status,'dispatch_authorized','batch has its own fully guarded final authorization');
+   assert.equal((await q('select prepare_platform_brand_retention_batch_dispatch($1,$2) r',[f.id,c.claimToken])).r.status,'observe_only','batch never reauthorizes uncertain prior dispatch');
    assert.deepEqual((await q('select list_deleted_content_expiry_work() r')).r.deletionIds,[],'generic text queue does not spin on Brand tombstones');
    await db.query('delete from storage.objects where id=$1',[f.objectId]);
    assert.equal((await q('select read_platform_brand_retention_batch_claim($1,$2) r',[f.id,c.claimToken])).r.status,'authorized','metadata disappearance retains exact claimed recovery evidence');

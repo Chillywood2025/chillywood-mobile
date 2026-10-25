@@ -181,6 +181,9 @@ jobs:
           node scripts/test-r2-qualification-ledger-postgres.mjs
           node --test tests/brand-soft-removal-scan-queue.test.mjs tests/brand-review-retention-evidence.test.mjs tests/brand-permission-reduction-fence.test.mjs tests/brand-reference-free-profile.test.mjs
           node scripts/test-platform-brand-expiry-transport-postgres.mjs
+          node --test tests/brand-retention-expiry.test.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-expiry-dispatch-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-expiry-dispatch-concurrency.mjs --negative-control
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-brand-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-global-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-archived-brand-verification-concurrency.mjs

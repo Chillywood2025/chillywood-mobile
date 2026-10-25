@@ -32,10 +32,10 @@ function fixture(options={}) {
     let data;
     if(name==='list_platform_brand_retention_expiry_work') data=Object.hasOwn(options,'work')?options.work:work([id(1)]);
     else if(name==='begin_platform_brand_retention_batch_transport') data={status:options.claimStatus??'claimed',assetId:args.p_asset_id,claimToken:claim};
-    else if(name==='read_platform_brand_retention_batch_claim') data={status:options.readStatus??'authorized',
+    else if(name==='read_platform_brand_retention_batch_claim'||name==='prepare_platform_brand_retention_batch_dispatch') data={status:name==='prepare_platform_brand_retention_batch_dispatch'?'dispatch_authorized':options.readStatus??'authorized',
       assetId:args.p_asset_id,claimToken:claim,provider:'supabase',bucket:'platform-brand-assets',
       objectKey:`owner/logo/${args.p_asset_id}.png`,storageObjectId:storageObject,storageVersion:'exact-version',
-      providerOrigin:project,providerContractSha256:'a'.repeat(64),exactVersionDelete:true,permanentlyAbsent:false};
+      providerOrigin:project,providerContractSha256:'a'.repeat(64),exactVersionDelete:true,permanentlyAbsent:false,metadataPresent:true,observationOnly:false,deleteAcknowledged:false};
     else if(name==='record_platform_brand_retention_transport_result') data={status:args.p_outcome,
       assetId:args.p_asset_id,claimToken:claim,permanentlyAbsent:false,...options.receipt};
     else if(name==='record_platform_brand_retention_worker_heartbeat') data={status:'recorded',
@@ -50,6 +50,7 @@ function fixture(options={}) {
     requests.push({url:String(url),init});
     if(options.providerThrows) throw Error('synthetic-private-provider-url');
     const failing=options.failAsset && String(url).includes(options.failAsset);
+    if(init.method==='GET')return new Response(JSON.stringify({code:'NoSuchKey',statusCode:'404'}),{status:failing?503:400});
     return new Response(null,{status:init.method==='DELETE'?(failing?503:204):(options.headStatus??404)});
   });
   return {rpc,origin,calls,requests};
@@ -89,16 +90,16 @@ test('exactly 25 due assets each reuse one exact claim, recheck, transport and r
   const f=fixture({work:work(assetIds)}),result=await runPlatformBrandRetentionExpiryBatch(f.rpc,f.origin);
   assert.equal(result.success,true);assert.equal(result.heartbeatRecorded,true);
   assert.deepEqual(result.results,assetIds.map(assetId=>({assetId,status:'observed_absent',permanentlyAbsent:false})));
-  assert.equal(f.requests.length,50);
+  assert.equal(f.requests.length,100);
   for(const assetId of assetIds) {
     const attempts=f.calls.filter(c=>c.args.p_asset_id===assetId);
     assert.deepEqual(attempts.map(c=>c.name),['begin_platform_brand_retention_batch_transport',
-      'read_platform_brand_retention_batch_claim','record_platform_brand_retention_transport_result']);
+      'read_platform_brand_retention_batch_claim','prepare_platform_brand_retention_batch_dispatch','record_platform_brand_retention_transport_result','record_platform_brand_retention_transport_result']);
     const requests=f.requests.filter(r=>r.url.includes(assetId));
-    assert.deepEqual(requests.map(r=>r.init.method),['DELETE','HEAD']);
+    assert.deepEqual(requests.map(r=>r.init.method),['DELETE','GET','HEAD','GET']);
     for(const request of requests) {
       const url=new URL(request.url);
-      assert.equal(url.origin,project);assert.equal(url.search,'?versionId=exact-version');
+      assert.equal(url.origin,project);assert.equal(url.search,request.init.method==='GET'?'':'?versionId=exact-version');
       assert.equal(request.init.redirect,'error');assert.equal(request.init.cache,'no-store');
     }
   }
@@ -155,7 +156,7 @@ test('partial Brand provider failure preserves every outcome and prevents Brand 
   const result=await runDeletedContentRetentionWorker(f.rpc,()=>{throw Error('R2 must remain unused');},f.origin);
   assert.equal(result.success,false);assert.equal(result.brand.success,false);
   assert.deepEqual(result.brand.results.map(r=>r.status),['observed_absent','failed','observed_absent']);
-  assert.deepEqual(heartbeatNames(f),[]);assert.equal(f.requests.length,5);
+  assert.deepEqual(heartbeatNames(f),[]);assert.equal(f.requests.length,10);
   assert.equal(result.brand.heartbeatRecorded,false);
   assert.equal(result.permanentPhysicalAbsenceGuaranteed,false);
 });
@@ -182,7 +183,7 @@ test('successful real R2 helper outcomes cannot mask a failed Brand transport or
   assert.deepEqual(r2Requests,['DELETE','HEAD']);
   assert.equal(result.media.results[0].status,'observed_absent');
   assert.equal(result.brand.results[0].status,'failed');assert.equal(result.success,false);
-  assert.equal(f.requests.length,1);assert.equal(new URL(f.requests[0].url).origin,project);
+  assert.equal(f.requests.length,2);assert.equal(new URL(f.requests[0].url).origin,project);
   assert.deepEqual(heartbeatNames(f),[]);
 });
 

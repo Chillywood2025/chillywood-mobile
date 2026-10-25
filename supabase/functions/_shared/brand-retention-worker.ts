@@ -59,7 +59,8 @@ export async function runPlatformBrandRetentionExpiryBatch(rpc: Rpc, origin: Ori
   // gates before delegating to its existing claim and exact-binding reads.
   const batchRpc: Rpc = (name, args) => rpc(
     name === "begin_platform_brand_retention_transport" ? "begin_platform_brand_retention_batch_transport"
-      : name === "read_platform_brand_retention_expiry_claim" ? "read_platform_brand_retention_batch_claim" : name,
+      : name === "read_platform_brand_retention_expiry_claim" ? "read_platform_brand_retention_batch_claim"
+        : name === "prepare_platform_brand_retention_dispatch" ? "prepare_platform_brand_retention_batch_dispatch" : name,
     args,
   );
   for (const assetId of work.assetIds) {
