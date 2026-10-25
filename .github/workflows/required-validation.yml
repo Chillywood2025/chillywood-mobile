@@ -173,6 +173,9 @@ jobs:
           node scripts/test-deleted-media-retirement-postgres.mjs
           node scripts/test-platform-brand-retention-postgres.mjs
           node --test tests/brand-global-retention.test.mjs tests/brand-retention-worker.test.mjs
+          node --test tests/archived-brand-verification.test.mjs tests/archived-brand-worker.test.mjs
+          docker build --tag chillywood-archived-scanner-test --file ops/malware-scanner-worker/Dockerfile ops/malware-scanner-worker
+          docker run --rm --network none --entrypoint node --volume "$PWD:/workspace:ro" --workdir /workspace chillywood-archived-scanner-test scripts/test-archived-brand-worker-clamav.mjs
           node --test supabase/functions/_shared/r2-disposable-qualification.test.mjs supabase/functions/_shared/r2-disposable-qualification-store.test.mjs
           node --test supabase/functions/_shared/r2-disposable-qualification-fence.test.mjs
           node scripts/test-r2-qualification-ledger-postgres.mjs
@@ -180,6 +183,8 @@ jobs:
           node scripts/test-platform-brand-expiry-transport-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-brand-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-global-retention-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-archived-brand-verification-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-archived-brand-verification-concurrency.mjs --negative-control
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-soft-removal-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-media-scan-byte-receipt-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-media-scan-byte-receipt-concurrency.mjs --negative-control
