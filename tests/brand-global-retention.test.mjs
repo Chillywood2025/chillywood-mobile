@@ -11,7 +11,7 @@ const genericDispatchDefinition=file=>{
  assert.equal(statements.length,1,'one authoritative generic dispatcher definition');
  return statements[0].slice(statements[0].indexOf(marker)).trim();
 };
-const genericDispatch=genericDispatchDefinition('supabase/migrations/20261024171258_platform_brand_global_retention_integration.sql');
+const genericDispatch=genericDispatchDefinition('supabase/migrations/20261025033057_platform_brand_global_retention_integration.sql');
 
 test('Brand integration changes the existing generic dispatcher only by excluding Brand archives',()=>{
  const predecessor=genericDispatchDefinition('supabase/migrations/20261020201310_deleted_content_stage_recovery.sql');
@@ -202,7 +202,7 @@ test('global Brand integration preserves exact lifecycle, admission and independ
 });
 
 test('forward integration adopts legacy bookkeeping without rewriting or restarting the Brand window', {timeout:240000},async()=>{
- const migration='20261024171258_platform_brand_global_retention_integration.sql';
+ const migration='20261025033057_platform_brand_global_retention_integration.sql';
  const sql=readFileSync('supabase/migrations/'+migration,'utf8');
  const lock=sql.indexOf('lock table public.platform_brand_assets in access exclusive mode;');
  assert.ok(lock>0 && lock<sql.indexOf('insert into private.deleted_content_brand_delegations'));

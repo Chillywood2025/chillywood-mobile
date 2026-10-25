@@ -46,7 +46,7 @@ const adminBackendFiles = [
 
 // Both reviewed successors are part of the current replay: new transactional
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
-const brandGlobalRetentionFiles = ['20261024171258_platform_brand_global_retention_integration.sql'];
+const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];
 const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
 const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
