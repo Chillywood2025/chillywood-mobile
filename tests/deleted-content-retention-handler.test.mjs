@@ -47,11 +47,12 @@ function fixture(options={}) {
         data={status:'recorded',enabled:args.p_enabled,qualified:args.p_qualified,permanentlyAbsent:false};
       } else if(name==='begin_platform_brand_retention_batch_transport') {
         data={status:'claimed',assetId:args.p_asset_id,claimToken:'22222222-2222-4222-8222-222222222222'};
-      } else if(name==='read_platform_brand_retention_batch_claim') {
-        data={status:'authorized',assetId:args.p_asset_id,claimToken:args.p_claim_token,
+      } else if(name==='read_platform_brand_retention_batch_claim'||name==='prepare_platform_brand_retention_batch_dispatch') {
+        data={status:name==='prepare_platform_brand_retention_batch_dispatch'?'dispatch_authorized':'authorized',assetId:args.p_asset_id,claimToken:args.p_claim_token,
           provider:'supabase',bucket:'platform-brand-assets',objectKey:`owner/logo/${args.p_asset_id}.png`,
           storageObjectId:'33333333-3333-4333-8333-333333333333',storageVersion:'exact-version',
-          providerOrigin:projectUrl,providerContractSha256:'a'.repeat(64),exactVersionDelete:true,permanentlyAbsent:false};
+          providerOrigin:projectUrl,providerContractSha256:'a'.repeat(64),exactVersionDelete:true,permanentlyAbsent:false,
+          metadataPresent:true,observationOnly:options.brandObservationOnly??false,deleteAcknowledged:options.brandAcknowledged??false};
       } else if(name==='record_platform_brand_retention_transport_result') {
         data={status:args.p_outcome,assetId:args.p_asset_id,claimToken:args.p_claim_token,permanentlyAbsent:false};
       } else {
@@ -66,6 +67,8 @@ function fixture(options={}) {
     calls.push('brandOrigin');assert.equal(url,projectUrl);assert.equal(key,options.expectedKey??serviceKey);
     return brandDependencies.createBrandExpiryOrigin(url,key,async(input,init)=>{
       brandRequests.push({input:String(input),init});
+      if(init.method==='GET'&&options.brandCurrentPresent&&!String(input).includes('/object/info/'))return new Response('synthetic cached bytes',{status:200});
+      if(init.method==='GET')return new Response(JSON.stringify({code:'NoSuchKey',statusCode:'404'}),{status:options.brandDeleteStatus??400});
       return new Response(null,{status:init.method==='DELETE'?(options.brandDeleteStatus??204):404});
     });
   };
@@ -191,12 +194,33 @@ test('actual worker entrypoint lazily uses a separate exact Brand origin with th
   assert.deepEqual(body.brand.results,[{assetId:asset,status:'observed_absent',permanentlyAbsent:false}]);
   assert.equal(f.calls.filter(name=>name==='brandOrigin').length,1);
   assert.equal(f.calls.includes('origin'),false,'Brand must never use the R2 cleanup origin');
-  assert.deepEqual(f.brandRequests.map(call=>call.init.method),['DELETE','HEAD']);
+  assert.deepEqual(f.brandRequests.map(call=>call.init.method),['DELETE','GET','HEAD','GET']);
   for(const call of f.brandRequests) {
-    const url=new URL(call.input);assert.equal(url.origin,projectUrl);assert.equal(url.search,'?versionId=exact-version');
+    const url=new URL(call.input);assert.equal(url.origin,projectUrl);assert.equal(url.search,call.init.method==='GET'?'':'?versionId=exact-version');
     assert.equal(call.init.headers.Authorization,'Bearer '+serviceKey);assert.equal(call.init.redirect,'error');
   }
   assert.deepEqual(f.envReads,['RETENTION_WORKER_SERVICE_KEY_SHA256','SUPABASE_URL']);
+  assert.equal(body.permanentPhysicalAbsenceGuaranteed,false);
+});
+
+test('actual entrypoint uses batch permit once and later reconciles GET200 without another DELETE',async()=>{
+  const asset='11111111-1111-4111-8111-111111111111';
+  const options={brandWork:{enabled:true,qualified:true,assetIds:[asset],limit:25},brandCurrentPresent:true};
+  const f=fixture(options);
+  let response=await f.handler(request()),body=await response.json();
+  assert.equal(response.status,200);assert.equal(body.brand.results[0].status,'delete_acknowledged','current GET200 cannot prove absence');
+  assert.equal(f.calls.filter(name=>name==='prepare_platform_brand_retention_batch_dispatch').length,1);
+  assert.equal(f.calls.includes('prepare_platform_brand_retention_dispatch'),false,'entrypoint must retain batch gate wrapper');
+  // Model the persisted immutable intent and acknowledgement returned by the
+  // actual SQL reader on subsequent batches; no elapsed-time success shortcut.
+  options.brandObservationOnly=true;options.brandAcknowledged=true;
+  response=await f.handler(request());body=await response.json();
+  assert.equal(response.status,200);assert.equal(body.brand.results[0].status,'delete_acknowledged');
+  options.brandCurrentPresent=false;
+  response=await f.handler(request());body=await response.json();
+  assert.equal(response.status,200);assert.equal(body.brand.results[0].status,'observed_absent');
+  assert.equal(f.brandRequests.filter(call=>call.init.method==='DELETE').length,1,'three entrypoint calls dispatch exactly once');
+  assert.equal(f.calls.filter(name=>name==='prepare_platform_brand_retention_batch_dispatch').length,1,'observation-only path does not request another permit');
   assert.equal(body.permanentPhysicalAbsenceGuaranteed,false);
 });
 

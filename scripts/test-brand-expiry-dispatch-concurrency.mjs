@@ -144,14 +144,21 @@ try{
   query(`select public.record_platform_brand_retention_transport_result(${lit(f.id)},${lit(claim.claimToken)},'delete_acknowledged')`);
   assert.equal(JSON.parse(query(prepare)).status,'observe_only','acknowledged claim cannot reauthorize');
   assert.equal(query(`select count(*) from private.platform_brand_expiry_dispatch_intents where claim_token=${lit(claim.claimToken)}`),'1');
-  query(`delete from storage.objects where name=${lit(f.key)}`);
-  assert.equal(JSON.parse(query(prepare)).status,'observe_only','missing metadata is read-only');
+  // Native Storage protects direct SQL deletion even inside this disposable
+  // clone. Assert that guard rather than disable it to manufacture absence.
+  // Missing-metadata recovery is separately covered by migrated SQL fixtures.
+  const deletion=docker(args(),`begin;${claimsForDelete()}delete from storage.objects where name=${lit(f.key)};rollback;`);
+  assert.notEqual(deletion.status,0,'direct SQL deletion must remain forbidden');
+  assert.match(String(deletion.stderr),/storage\.protect_delete/);
+  assert.equal(JSON.parse(query(prepare)).status,'observe_only','present bytes never reauthorize acknowledged deletion');
   assert.equal(query("select has_function_privilege('authenticated','public.prepare_platform_brand_retention_dispatch(uuid,uuid)','EXECUTE')"),'f');
   assert.equal(query("select has_table_privilege('service_role','private.platform_brand_expiry_dispatch_intents','INSERT')"),'f');
   checks+=6;
  }
- console.log(`Brand dispatch native PostgreSQL: ${negative?'unsafe replay variant rejected':`${checks} controls passed with independent lock queue`}; no provider calls.`);
+ console.log(`Brand dispatch native PostgreSQL: ${negative?'unsafe replay variant rejected':`${checks} controls passed with independent lock queue and direct-SQL deletion denial`}; no provider calls; native metadata disappearance not exercised.`);
 } finally {
  if(cloned)ok(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');
  if(before!==undefined)assert.equal(query(fingerprint,'postgres'),before,'local source unchanged');
 }
+
+function claimsForDelete(){return `set request.jwt.claims='{"role":"service_role"}';set request.jwt.claim.role='service_role';`;}

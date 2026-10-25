@@ -91,6 +91,10 @@
     ],
     "database": [
       "supabase/**",
+      "tests/archived-brand-verification.test.mjs",
+      "tests/archived-brand-worker.test.mjs",
+      "tests/helpers/archived-brand-fixture.mjs",
+      "tests/helpers/archived-brand-worker-fixture.mjs",
       "scripts/test-database-runtime-authority-concurrency.mjs",
       "tests/fixtures/database-runtime-production-20261015.sql",
       "app/_layout.tsx",

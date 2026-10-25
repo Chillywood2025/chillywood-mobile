@@ -62,3 +62,9 @@ convergence. Native PostgreSQL CI uses independent backends and an observed lock
 queue to require exactly one dispatch authorization, and rejects a deliberately
 unsafe replay implementation in a disposable local clone. No test contacts a
 provider or creates production qualification evidence.
+
+The native harness preserves and explicitly verifies Storage's direct-SQL
+deletion prohibition. It therefore does not exercise metadata disappearance on
+native Storage. Missing-metadata recovery semantics are covered by the migrated
+SQL fixture separately; the bounded provider test supplies the actual observed
+missing-response behavior. Neither substitutes for unperformed native actions.
