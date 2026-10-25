@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Native PostgreSQL only: independent backends, complete migrated LOCAL clones.
 // Synthetic SQL scanner results are not engine/byte/provider evidence. The
 // separate worker tests exercise the trusted scanner boundary, not attestation.
@@ -18,6 +19,7 @@ const project = readFileSync('supabase/config.toml', 'utf8').match(/^project_id\
 assert.ok(project);
 const container = process.env.SUPABASE_DB_CONTAINER || `supabase_db_${project}`;
 assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const lit = value => `'${String(value).replaceAll("'", "''")}'`;
 const json = value => `${lit(JSON.stringify(value))}::jsonb`;
 const redact = value => String(value).replaceAll(/[A-Za-z0-9_-]{40,}/g, '<redacted>')
@@ -146,7 +148,7 @@ function restoreClone(dump, phase) {
   assert.match(database, /^archived_brand_(unarmed|armed|negative)_[0-9]+_[a-f0-9]{12}$/);
   ok(docker(['exec', container, 'createdb', '-U', 'postgres', '-T', 'template0', database]), 'create generated clone'); cloned = true;
   ok(docker(args(), 'create schema vault;create extension supabase_vault with schema vault;'), 'initialize clone');
-  ok(admin(['psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database], dump, null), 'restore complete schema');
+  ok(admin(['psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database], cloneGuardRestore.prepare(dump, database), null), 'restore complete schema');
 }
 
 const worker = 'archived-native-fixture';
@@ -416,11 +418,13 @@ try {
   }
   console.log(`Archived Brand native PostgreSQL ${negativeControl ? 'negative control' : 'positive proof'}: ${checks} controls; ${observedQueues} observed pg_blocking_pids queues. SQL metadata/lock proof only, not ClamAV execution, cryptographic attestation, provider deletion or production qualification.`);
 } finally {
+  try {
   try { dropClone(); }
   finally {
     if (sourceRows !== undefined) assert.deepEqual(rowFingerprint('postgres'), sourceRows, 'complete source table row fingerprints unchanged');
     if (sourceCatalog !== undefined) assert.equal(query(catalogFingerprint, 'postgres'), sourceCatalog, 'complete source catalog fingerprints unchanged');
   }
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }
 function parsedSourceVersions() {
   return JSON.parse(query("select coalesce(json_agg(version order by version),'[]') from supabase_migrations.schema_migrations;", 'postgres'));

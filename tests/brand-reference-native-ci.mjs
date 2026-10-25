@@ -7,6 +7,7 @@ import {readFileSync,writeFileSync,existsSync,createWriteStream,readdirSync,mkdi
 import {fileURLToPath} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
+import {assertBrandNativeCleanShutdown} from './helpers/brand-reference-native-shutdown.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
@@ -81,8 +82,14 @@ async function command(label,binary,args,seconds){
 }
 function stopMain(){
  if(!created||stopped)return;
- checked(docker(['exec',container,'pg_ctl','-D',dataDirectory,'-m','smart','-w','-t','15','stop'],undefined,20000),'graceful stop of own fixture');
- const state=inspect();assert.equal(state.State.Running,false);stopped=true;summary.mainStopped=true;
+ assert.equal(inspect().State.Running,true,'own server must be running before the shutdown request');
+ const record=r=>({status:r.status,signal:r.signal,error:r.error?.message??null,stdout:r.stdout??'',stderr:r.stderr??''});
+ const shutdown={requestedAt:new Date().toISOString()};summary.shutdown=shutdown;
+ shutdown.command=record(docker(['exec',container,'pg_ctl','-D',dataDirectory,'-m','smart','-w','-t','15','stop'],undefined,20000));
+ shutdown.inspection=record(docker(['inspect',container]));
+ if(shutdown.inspection.status===0)shutdown.inspection.stdout=JSON.stringify(JSON.parse(shutdown.inspection.stdout)[0]);
+ shutdown.logs=record(docker(['logs','--timestamps','--since',shutdown.requestedAt,container]));
+ summary.terminalState=assertBrandNativeCleanShutdown(shutdown);stopped=true;summary.mainStopped=true;
 }
 try{
  save('verify local runner engine and download exact historical image');

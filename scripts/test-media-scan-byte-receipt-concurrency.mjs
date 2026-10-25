@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Native mode uses only a generated disposable clone of local Supabase.
 // --bootstrap checks the same fixture SQL with real migrated functions in PGlite;
 // it is deliberately NOT evidence of independent backend contention.
@@ -19,6 +20,7 @@ const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=
 assert.ok(project);
 const container=process.env.SUPABASE_DB_CONTAINER||`supabase_db_${project}`;
 assert.match(container,/^supabase_db_[A-Za-z0-9_.-]{1,200}$/);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database=`scan_byte_queue_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}`;
 const docker=(args,input,encoding='utf8')=>spawnSync('docker',args,{input,encoding,maxBuffer:256*1024*1024,timeout:120000});
 const ok=(r,label)=>{assert.equal(r.status,0,`${label}: ${r.error?.message||String(r.stderr).replaceAll(/[A-Za-z0-9_-]{40,}/g,'<redacted>')}`);return r.stdout;};
@@ -113,7 +115,7 @@ try {
   ok(docker(['exec',container,'createdb','-U','postgres','-T','template0',database]),'create generated clone');cloned=true;
   ok(docker(args(),'create schema vault;create extension supabase_vault with schema vault;'),'initialize clone');
   const dump=admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault','--exclude-extension=pg_graphql','--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
-  ok(dump,'read-only dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],dump.stdout,null),'restore clone');
+  ok(dump,'read-only dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database], cloneGuardRestore.prepare(dump.stdout, database), null),'restore clone');
  }
  // Basic fixture is identical in both modes. Each query commits independently.
  const baseline=await fixture();baseline.observation=await scalar(begin(baseline));await completed(baseline);
@@ -172,7 +174,9 @@ try {
  assert.equal(await scalar(`select count(*) from private.media_scan_byte_receipts where observation_id=${lit(expired.observation)}`),'0');
  console.log(bootstrap?'Scanner receipt bootstrap and real expiry rejection passed in PGlite; native multi-session cases NOT RUN.':negativeControl?'Native negative control and lease expiry passed; positive nine-case suite is a separate command. No provider operations.':`Scanner receipt native PostgreSQL: ${checks} NOWAIT competing-transaction cases plus real lease expiry passed. No provider operations.`);
 } finally {
+  try {
  if(db)await db.close();
  if(cloned)ok(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');
  if(before!==undefined)assert.equal(native(fingerprint,'postgres'),before,'local source unchanged');
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

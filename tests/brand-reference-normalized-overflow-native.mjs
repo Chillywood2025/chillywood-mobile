@@ -8,6 +8,7 @@ import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
+import {assertBrandNativeCleanShutdown} from './helpers/brand-reference-native-shutdown.mjs';
 
 assert.equal(process.argv.length,2,'one fixed isolated test; no runtime overrides');
 const root=fileURLToPath(new URL('../',import.meta.url));
@@ -146,12 +147,13 @@ try{
   report.serverLogs=resultRecord(docker(['logs','--timestamps',container]));
   if(healthyPass){
    // Graceful shutdown of only this newly created server; no forced fallback.
-   report.shutdown=resultRecord(docker(['exec',container,'pg_ctl','-D',dataDirectory,'-m','smart','-w','-t','10','stop']));
-   report.stateAfterShutdown=resultRecord(inspect());
+   const shutdown={requestedAt:new Date().toISOString()};report.shutdown=shutdown;
    try{
-    assert.equal(report.shutdown.status,0,report.shutdown.stderr||report.shutdown.error);
-    assert.equal(report.stateAfterShutdown.status,0,report.stateAfterShutdown.stderr||report.stateAfterShutdown.error);
-    assert.equal(JSON.parse(report.stateAfterShutdown.stdout).state.Running,false,'own overflow server must be stopped');
+    shutdown.command=resultRecord(docker(['exec',container,'pg_ctl','-D',dataDirectory,'-m','smart','-w','-t','10','stop']));
+    shutdown.inspection=resultRecord(docker(['inspect',container]));
+    if(shutdown.inspection.status===0)shutdown.inspection.stdout=JSON.stringify(JSON.parse(shutdown.inspection.stdout)[0]);
+    shutdown.logs=resultRecord(docker(['logs','--timestamps','--since',shutdown.requestedAt,container]));
+    report.stateAfterShutdown=assertBrandNativeCleanShutdown(shutdown);
    }catch(error){report.status='failed';report.cleanupError=String(error.message);}
   }
  }

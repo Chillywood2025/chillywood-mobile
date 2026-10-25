@@ -31,6 +31,18 @@ owners and OID-based ACLs. It survives a cascade of `private`. Deliberately
 disabling/removing the guard, including its `extensions` namespace, remains
 outside its active lifetime guarantee.
 
+The guard is bound to the installed helpers' catalog identities. A logical
+dump copied into another database cannot reuse its serialized OID fingerprint.
+The disposable-clone adapter in `scripts/lib/brand-guard-clone-restore.mjs`
+validates and replaces only that serialized guard with the identical migration
+installer under its original owner after restoring the clone. It requires both
+event bindings and rejected helper mutations before the clone is used. This
+also respects Supabase's requirement that an event-trigger creator and its
+function owner have matching superuser status. A general logical restore needs
+the same explicit reinstallation and verification procedure; a bare dump
+restore is not qualified. Restored index-registry OIDs do not transfer index
+qualification, so mismatched entries retain the exact scan.
+
 Unsupported types, depth, size, relation shapes, schema changes, changed helper
 or index metadata, and special reference predicates retain the exact full scan.
 Every table, writer guard, hold, generation and latch check remains in place.
@@ -172,6 +184,10 @@ measurements. It stops at the first failed gate. The main server must stop
 gracefully before a separate 3-GiB/no-swap overflow container runs, with at least
 4 GiB observed headroom. This capacity covers the historical 1.5–3 GiB estimate;
 the actual overflow statement retains its 30-second limit. OOM still fails.
+Shutdown requires independent exited/no-OOM/zero-exit container state and fresh
+smart-shutdown/completion logs bounded by the request and container finish time.
+The waiting `pg_ctl` client may exit 137 when PostgreSQL PID 1 exits; that client
+status is accepted only with all of this independent clean-shutdown evidence.
 
 Every attempt copies JSON reports and stage/PostgreSQL logs, with SHA256s, into
 `brand-native-evidence` inside the checkout and uploads that directory even on

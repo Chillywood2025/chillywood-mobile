@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Real independent PostgreSQL backends. Only a generated disposable LOCAL
 // database changes; neither remote URLs nor caller-supplied credentials are used.
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ const project = readFileSync('supabase/config.toml', 'utf8').match(/^project_id\
 assert.ok(project);
 const container = process.env.SUPABASE_DB_CONTAINER || `supabase_db_${project}`;
 assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database = `external_retention_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 const lit = value => `'${String(value).replaceAll("'", "''")}'`;
 const redact = value => String(value).replaceAll(/[A-Za-z0-9_-]{40,}/g, '<redacted>')
@@ -114,7 +116,7 @@ try {
   ok(docker(args(), 'create schema vault;create extension supabase_vault with schema vault;'), 'initialize clone');
   const dump = admin(['pg_dump', '-U', 'supabase_admin', '--exclude-extension=pg_cron', '--exclude-extension=supabase_vault', '--exclude-extension=pg_graphql', '--exclude-schema=cron', '--exclude-schema=realtime', '--exclude-schema=_realtime', '--exclude-schema=vault', '--exclude-schema=graphql', '--exclude-schema=graphql_public', 'postgres'], undefined, null);
   ok(dump, 'read-only dump');
-  ok(admin(['psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database], dump.stdout, null), 'restore clone');
+  ok(admin(['psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database], cloneGuardRestore.prepare(dump.stdout, database), null), 'restore clone');
   assert.equal(query('select not capture_enabled from private.deleted_content_retention_settings'), 't');
   assert.equal(query('select not armed from private.deleted_media_reference_fence'), 't');
   assert.equal(query('select count(*) from private.deleted_content_external_reference_evidence'), '0');
@@ -361,6 +363,8 @@ try {
   }
   console.log(`External-reference retention native PostgreSQL: ${checks} protocol scenarios passed, including ${observedQueues} observed independent backend lock queues; no provider operations.`);
 } finally {
+  try {
   if (cloned) ok(docker(['exec', container, 'dropdb', '-U', 'postgres', '--if-exists', '--force', database]), 'drop generated clone');
   if (before !== undefined) assert.equal(query(fingerprint, 'postgres'), before, 'local source unchanged');
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Only a generated disposable clone of LOCAL Supabase is mutated. No providers.
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
@@ -9,6 +10,7 @@ if(process.argv.includes('--help')){console.log('After local Supabase reset, pro
 assert.equal(process.argv.length,2);
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]{1,200})"/m)?.[1];assert.ok(project);
 const container=process.env.SUPABASE_DB_CONTAINER||`supabase_db_${project}`;assert.match(container,/^supabase_db_[A-Za-z0-9_.-]{1,200}$/);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database=`brand_remove_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}`;
 const lit=x=>`'${String(x).replaceAll("'","''")}'`;
 const claims=`set request.jwt.claims='{"role":"service_role"}';set request.jwt.claim.role='service_role';`;
@@ -45,7 +47,7 @@ try{
  ok(docker(['exec',container,'createdb','-U','postgres','-T','template0',database]),'create clone');cloned=true;
  ok(docker(args(),'create schema vault;create extension supabase_vault with schema vault;'),'initialize clone');
  const dump=admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault','--exclude-extension=pg_graphql','--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
- ok(dump,'read-only source dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],dump.stdout,null),'restore clone');
+ ok(dump,'read-only source dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database], cloneGuardRestore.prepare(dump.stdout, database), null),'restore clone');
  const fixture=()=>{
   const id=randomUUID(),key=`brand_remove_fixture/logo/${id}.png`;
   query(`insert into storage.objects(bucket_id,name,version) values('platform-brand-assets',${lit(key)},${lit(randomUUID())});
@@ -85,6 +87,8 @@ try{
  }
  console.log(`Brand soft removal: ${checks} real claim/removal orderings passed; scanner state unchanged by removal, no providers contacted.`);
 }finally{
+  try {
  if(cloned)ok(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop clone');
  if(before!==undefined)assert.equal(query(fingerprint,'postgres'),before,'local source unchanged');
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

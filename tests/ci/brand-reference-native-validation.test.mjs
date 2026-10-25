@@ -56,6 +56,7 @@ test('Brand native qualification is an unconditional database obligation in the 
     'no separate supplemental workflow can be mistaken for canonical qualification');
   for (const path of [paths[0], 'supabase/tests/platform_brand_global_retention_test.sql',
     'tests/brand-reference-native-ci.mjs', 'tests/brand-reference-normalized-pilot-native.mjs',
+    'tests/brand-reference-native-shutdown.test.mjs', 'tests/helpers/brand-reference-native-shutdown.mjs',
     'tests/helpers/brand-reference-native-target.mjs', 'tests/helpers/brand-reference-scan-corpus.mjs',
     'tests/helpers/database-runtime-authority-fixture.mjs', 'tests/fixtures/database-managed-schema-20261015.json',
     'tests/fixtures/brand-reference-normalized-ddl-guard-candidate.sql', 'package-lock.json']) {

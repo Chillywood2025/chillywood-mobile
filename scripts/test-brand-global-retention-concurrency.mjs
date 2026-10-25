@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Native PostgreSQL only. Two fresh disposable LOCAL clones exercise unarmed
 // activation and armed re-enable without resetting the permanent fence. The
 // actual complete migration stack, triggers and RPCs remain installed. No
@@ -18,6 +19,7 @@ const project = readFileSync('supabase/config.toml', 'utf8').match(/^project_id\
 assert.ok(project);
 const container = process.env.SUPABASE_DB_CONTAINER || `supabase_db_${project}`;
 assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const lit = value => `'${String(value).replaceAll("'", "''")}'`;
 const redact = value => String(value).replaceAll(/[A-Za-z0-9_-]{40,}/g, '<redacted>')
   .replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<synthetic-id>');
@@ -179,7 +181,7 @@ function restoreClone(dump, phase) {
   ok(docker(['exec', container, 'createdb', '-U', 'postgres', '-T', 'template0', database]), 'create generated clone');
   cloned = true;
   ok(docker(args(), 'create schema vault;create extension supabase_vault with schema vault;'), 'initialize clone');
-  ok(admin(['psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database], dump, null), 'restore complete local migration stack');
+  ok(admin(['psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database], cloneGuardRestore.prepare(dump, database), null), 'restore complete local migration stack');
 }
 
 try {
@@ -472,6 +474,8 @@ try {
   assert.equal(query(secondaryFingerprint, 'postgres'), sourceSecondaryBefore, 'source secondary definitions unchanged');
   console.log(`Brand/global retention native PostgreSQL: ${checks} controls, ${observedQueues} observed pg_blocking_pids queues; fence SHARE before advisory 30, initial pending upload, re-enable, scanner invalidation, row/advisory NOWAIT cycle rejection and migration table drain. Local SQL proof only; provider transport and production qualification remain unproved.`);
 } finally {
+  try {
   try { dropClone(); }
   finally { if (before !== undefined) assert.equal(query(fingerprint, 'postgres'), before, 'complete source row fingerprints unchanged'); }
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }
