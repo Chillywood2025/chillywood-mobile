@@ -59,7 +59,7 @@ try{
  const owner=randomUUID();query(`insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values(${lit(owner)},${lit(`cutover-${owner}@example.test`)},now(),false,false)`);
  const sha='a'.repeat(64);
  function fixture(){
-  const id=randomUUID(),receipt=randomUUID(),source=`copy-fixture/${id}.mp4`,target=`originals/supabase-migration/${receipt}/videos/${id}`;
+  const id=randomUUID(),receipt=randomUUID(),source=`${owner}/${id}/source.mp4`,target=`originals/supabase-migration/${receipt}/videos/${id}`;
   query(`insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes)
     values(${lit(id)},${lit(owner)},'Synthetic cutover','draft','clean','supabase','creator-videos',${lit(source)},${lit(source)},'video/mp4',12);
    update videos set scan_status='clean',scan_provider='clamav',scan_result='clean',scanned_at='2026-01-02Z' where id=${lit(id)};
