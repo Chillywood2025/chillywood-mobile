@@ -5,6 +5,14 @@ All existing settings remain unchanged; the new Brand `batch_enabled` gate
 defaults to false. No schedule, deployment, provider request, credential, or
 historical scan proof is created by the migration.
 
+Database installation on 2026-10-25 at 03:30:57 UTC recorded canonical version
+`20261025033057_platform_brand_global_retention_integration`, with SQL SHA-256
+`c91f39dabcc6ba28eb1b8f99e465103bf7ee3b0b006c4e7b1df16a5f418d2128`.
+The source filename matches that immutable identity; the SQL is byte-identical.
+Installation is not worker deployment, provider qualification or activation.
+Post-installation readback at 03:31:47 UTC found all global and Brand activation
+gates off and no retention schedule.
+
 ## Authority and clocks
 
 Global capture delegates Brand assets to their existing immutable incarnation.

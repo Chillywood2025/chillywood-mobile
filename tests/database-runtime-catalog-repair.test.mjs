@@ -145,7 +145,7 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
-const brandGlobalRetentionFiles = ['20261024171258_platform_brand_global_retention_integration.sql'];
+const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const brandGlobalRetentionFunctionKeys = new Set([
   'private.deleted_content_brand_source_coverage/2',
   'private.guard_deleted_content_brand_admission/0',
