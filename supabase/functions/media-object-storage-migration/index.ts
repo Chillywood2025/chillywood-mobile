@@ -1,12 +1,14 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyPlatformBrandRetentionOrigin } from "../_shared/brand-retention-origin.ts";
 import { copySupabaseOriginal } from "../_shared/supabase-original-copy.ts";
+import { cutoverSupabaseOriginal } from "../_shared/supabase-original-cutover.ts";
 import { checkDeletedMediaRetirement } from "../_shared/deleted-media-retirement.ts";
 
 type MigrationAction =
   | "verify_brand_retention_origin"
   | "record_brand_retention_proof"
   | "copy_supabase_original"
+  | "cutover_supabase_original"
   | "audit_inventory"
   | "classify_stale_refs"
   | "resolve_stale_refs_dry_run"
@@ -240,6 +242,7 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
     action === "verify_brand_retention_origin"
     || action === "record_brand_retention_proof"
     || action === "copy_supabase_original"
+    || action === "cutover_supabase_original"
     || action === "audit_inventory"
     || action === "classify_stale_refs"
     || action === "resolve_stale_refs_dry_run"
@@ -1971,7 +1974,7 @@ const handler = async (req: Request): Promise<Response> => {
         return json(409, {ok: false, error: "brand_origin_verification_unavailable"});
       }
     }
-    if (action === "copy_supabase_original") {
+    if (action === "copy_supabase_original" || action === "cutover_supabase_original") {
       // Explicit one-original action; never expands the legacy batch manifest.
       // Operator authority is unchanged. Deployment/invocation requires its own approval.
       const target = readR2OriginConfig();
@@ -1985,6 +1988,20 @@ const handler = async (req: Request): Promise<Response> => {
       if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password
         || endpoint.search || endpoint.hash || !["", "/"].includes(endpoint.pathname)) {
         return json(409, {ok: false, reason: "supabase_copy_target_unavailable"});
+      }
+      if (action === "cutover_supabase_original") {
+        try {
+          const result = await cutoverSupabaseOriginal(toText(payload.receipt_id), {
+            adminClient, supabaseUrl,
+            targetAllowed: async (key) => (await checkDeletedMediaRetirement(adminClient, {
+              provider: "cloudflare_r2", bucket: R2_ORIGIN_BUCKET, objectKey: key, purpose: "upload",
+            })).allowed,
+            targetUrl: (method, objectKey) => createPresignedS3Url({...config, method, objectKey, expiresSeconds: 120}),
+          });
+          return json(200, {ok: true, action, ...result});
+        } catch {
+          return json(409, {ok: false, action, reason: "supabase_copy_cutover_unavailable"});
+        }
       }
       const result = await copySupabaseOriginal({
         tableName: toText(payload.table_name), rowId: toText(payload.row_id), receiptId: toText(payload.receipt_id),

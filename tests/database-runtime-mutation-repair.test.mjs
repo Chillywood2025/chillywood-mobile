@@ -48,7 +48,7 @@ const adminBackendFiles = [
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];
-const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
+const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql','20261025055047_supabase_original_copy_cutover.sql'];
 const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
 const notificationPreferenceOrderingFiles = ['20261022204942_notification_preference_revision_authority.sql'];

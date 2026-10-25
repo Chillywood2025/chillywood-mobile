@@ -176,7 +176,7 @@ const externalReferenceFunctionKeys = new Set([
   'private.delete_retained_content_before_external/6',
   'private.expire_deleted_content_text_before_external/1',
 ]);
-const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql'];
+const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql','20261025055047_supabase_original_copy_cutover.sql'];
 const originalCopyFunctionKeys = new Set([
  'private.preserve_supabase_original_copy_receipt/0',
  'private.supabase_original_copy_snapshot_sha256/1',
@@ -184,6 +184,18 @@ const originalCopyFunctionKeys = new Set([
  'private.supabase_original_copy_binding/2',
  'public.record_supabase_original_copy_receipt/8',
  'public.preflight_supabase_original_copy_cutover/1',
+ 'private.lock_supabase_copy_cutover/0',
+ 'private.supabase_copy_cutover_source/1',
+ 'private.supabase_copy_scan_receipt_matches/2',
+ 'private.supabase_copy_provenance_current/1',
+ 'private.deleted_media_legacy_source_supported_before_copy_cutover/2',
+ 'public.has_verified_legacy_media_object_provenance_before_copy_cutover/5',
+ 'public.has_verified_legacy_video_object_provenance_before_copy_cutover/4',
+ 'public.read_supabase_original_copy_cutover/1',
+ 'public.commit_supabase_original_copy_cutover/4',
+ 'public.begin_supabase_copy_scan_observation/3',
+ 'public.record_supabase_copy_scan_receipt/5',
+ 'public.enroll_supabase_copy_retention_provenance/4',
 ]);
 
 const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
