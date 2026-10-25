@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 export function maintainBrandNativeFixture({tables,execute,onResult=()=>{},now=Date.now}){
  const expected=Array.from({length:354},(_,n)=>'brand_reference_perf_'+String(n).padStart(3,'0'));
  assert.deepEqual(tables.map(table=>table.name),expected,'maintenance requires exactly the freshly generated 354-table inventory');
- const sql="select 'MAINTENANCE_SETTINGS:'||jsonb_build_object('statement_timeout',current_setting('statement_timeout'),'autovacuum',current_setting('autovacuum'),'isolation',current_setting('transaction_isolation'),'work_mem',current_setting('work_mem'),'maintenance_work_mem',current_setting('maintenance_work_mem'))::text;\n"
+ const sql="select 'MAINTENANCE_SETTINGS:'||jsonb_build_object('statement_timeout',current_setting('statement_timeout'),'statement_timeout_value',(select setting::bigint from pg_settings where name='statement_timeout'),'statement_timeout_unit',(select unit from pg_settings where name='statement_timeout'),'autovacuum',current_setting('autovacuum'),'isolation',current_setting('transaction_isolation'),'work_mem',current_setting('work_mem'),'maintenance_work_mem',current_setting('maintenance_work_mem'))::text;\n"
   +'vacuum (analyze) '+expected.map(name=>'public."'+name+'"').join(',')+';\n'
   +"select 'MAINTENANCE_COMPLETE:354';";
  const started=now();const result=execute(sql,{budget:'180s',timeout:210000});
@@ -18,7 +18,8 @@ export function maintainBrandNativeFixture({tables,execute,onResult=()=>{},now=D
  assert.equal(record.error,null);assert.equal(record.signal,null);
  assert.doesNotMatch(record.stderr,/WARNING:|ERROR:|FATAL:/,'maintenance must not skip a requested relation');
  const settings=JSON.parse(record.stdout.match(/^MAINTENANCE_SETTINGS:(.+)$/m)?.[1]??'null');record.settings=settings;
- assert.equal(settings?.statement_timeout,'180s');assert.equal(settings?.autovacuum,'on');assert.equal(settings?.isolation,'read committed');
+ assert.equal(settings?.statement_timeout_value,180000);assert.equal(settings?.statement_timeout_unit,'ms');
+ assert.equal(settings?.autovacuum,'on');assert.equal(settings?.isolation,'read committed');
  assert.match(record.stdout,/^MAINTENANCE_COMPLETE:354\s*$/m,'all requested maintenance must finish before measurement');
  record.completed=true;return record;
 }
