@@ -45,6 +45,36 @@ async function concurrent(holderSQL,contenderSQL,{rollback=false,pattern=/could 
   const result=await h.done;assert.equal(result.code,0,redact(result.err));checks++;
  }finally{if(h.child.exitCode===null){h.child.stdin.end('rollback;\n\\q\n');await h.done}}
 }
+// Job writers already take the same advisory lock as scan observation. Prove
+// real backend serialization, then stale-claim rejection after the writer commits.
+async function queuedStaleClaim(holderSQL,contenderSQL){
+ const holderTag=`copy_holder_${randomUUID()}`,waiterTag=`copy_waiter_${randomUUID()}`;
+ const h=session(`set application_name=${lit(holderTag)};${holderSQL}`);
+ let waiter,done,out='',err='';
+ try{
+  const readyUntil=Date.now()+15000;
+  while(!h.output().includes('HOLDER_READY')){
+   assert.equal(h.child.exitCode,null,redact(h.error()));assert.ok(Date.now()<readyUntil,'holder readiness timeout');await delay(20);
+  }
+  waiter=spawn('docker',args(),{stdio:['pipe','pipe','pipe']});
+  waiter.stdout.setEncoding('utf8');waiter.stderr.setEncoding('utf8');
+  waiter.stdout.on('data',s=>out+=s);waiter.stderr.on('data',s=>err+=s);waiter.stdin.on('error',()=>{});
+  done=new Promise(resolve=>{waiter.on('close',code=>resolve({code,out,err}));waiter.on('error',e=>resolve({code:-1,out,err:e.message}))});
+  waiter.stdin.end(`${claims}set application_name=${lit(waiterTag)};set statement_timeout='15s';${contenderSQL};\n`);
+  const queuedUntil=Date.now()+8000;
+  while(query(`select exists(select 1 from pg_stat_activity w join pg_stat_activity h on h.pid=any(pg_blocking_pids(w.pid)) where w.datname=current_database() and h.datname=current_database() and w.application_name=${lit(waiterTag)} and h.application_name=${lit(holderTag)} and w.wait_event_type='Lock' and w.wait_event='advisory')`)!=='t'){
+   assert.equal(waiter.exitCode,null,redact(err));assert.ok(Date.now()<queuedUntil,'independent advisory queue not observed');await delay(20);
+  }
+  h.child.stdin.end('commit;\n\\q\n');
+  const holder=await h.done;assert.equal(holder.code,0,redact(holder.err));
+  const result=await done;assert.notEqual(result.code,0);assert.match(result.err,/copy_scan_claim_stale/);
+  assert.doesNotMatch(result.err,/statement timeout|deadlock detected/);checks++;
+ }finally{
+  if(h.child.exitCode===null){h.child.stdin.end('rollback;\n\\q\n');await h.done}
+  // A failed assertion must not leave a competing backend in the clone.
+  if(waiter&&waiter.exitCode===null){query(`select pg_terminate_backend(pid) from pg_stat_activity where datname=current_database() and application_name=${lit(waiterTag)} and pid<>pg_backend_pid()`);await done}
+ }
+}
 try{
  if(process.env.DOCKER_HOST)assert.match(process.env.DOCKER_HOST,/^(unix|npipe):\/\//);
  assert.match(ok(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker').trim(),/^(unix|npipe):\/\//);
@@ -100,7 +130,7 @@ try{
  query(`update media_scan_jobs set status='scanning',claimed_by='copy-fixture',claimed_at=clock_timestamp(),attempt_count=1 where id=${lit(job)}`);
  const observe=`select public.begin_supabase_copy_scan_observation(${lit(job)},'copy-fixture',1)`;
  const observation=query(observe);
- await concurrent(`update media_scan_jobs set attempt_count=2 where id=${lit(job)}`,observe);
+ await queuedStaleClaim(`update media_scan_jobs set attempt_count=2 where id=${lit(job)}`,observe);
  assert.match(String(docker(args(),claims+observe).stderr),/claim_stale/);
  assert.ok(observation);assert.equal(query(`select count(*) from storage.objects where name=${lit(f.source)}`),'1');
  assert.equal(query("select md5(pg_get_functiondef('private.guard_deleted_content_secondary_coverage()'::regprocedure))"),heldGuard,'held guard unchanged');
