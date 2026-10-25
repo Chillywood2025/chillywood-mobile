@@ -58,6 +58,7 @@ test('Brand native qualification is an unconditional database obligation in the 
     'tests/brand-reference-native-ci.mjs', 'tests/brand-reference-normalized-pilot-native.mjs',
     'tests/brand-reference-native-shutdown.test.mjs', 'tests/helpers/brand-reference-native-shutdown.mjs',
     'tests/brand-reference-native-readiness.test.mjs', 'tests/helpers/brand-reference-native-readiness.mjs',
+    'tests/brand-reference-native-maintenance.test.mjs', 'tests/helpers/brand-reference-native-maintenance.mjs',
     'tests/helpers/brand-reference-native-target.mjs', 'tests/helpers/brand-reference-scan-corpus.mjs',
     'tests/helpers/database-runtime-authority-fixture.mjs', 'tests/fixtures/database-managed-schema-20261015.json',
     'tests/fixtures/brand-reference-normalized-ddl-guard-candidate.sql', 'package-lock.json']) {

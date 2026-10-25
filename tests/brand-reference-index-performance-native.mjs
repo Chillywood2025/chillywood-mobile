@@ -8,6 +8,7 @@ import {spawnSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import {brandReferenceNativeContainer,brandNativeSpawnSync,brandNativeSpawn,brandNativePreflight} from './helpers/brand-reference-native-target.mjs';
 import {waitForBrandNativeQuiet,BRAND_NATIVE_QUIET_DEADLINE_MS} from './helpers/brand-reference-native-readiness.mjs';
+import {maintainBrandNativeFixture} from './helpers/brand-reference-native-maintenance.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
@@ -46,7 +47,8 @@ if(mode==='--setup'){
    '354 populated synthetic tables are added to the complete source schema; existing source tables remain in the clearance inventory.',
    'Bounded percent-containing documents are normalized in the index; uncertain rows remain mandatory exact candidates.',
    'Managed infrastructure doubles supply no scanner, media-byte, provider, or deployment evidence.',
-   'Actual pathological JSONB serialization overflow requires the separate isolated native proof.'
+   'Actual pathological JSONB serialization overflow requires the separate isolated native proof.',
+   'Measurements follow explicit VACUUM ANALYZE of the new synthetic tables with warmed data/statistics; they are not cold-start latency measurements.'
   ]};
  report.target.key='brand-index-perf/'+report.target.id+'.png';
 }else if(mode==='--measure-query-revision'){
@@ -171,7 +173,13 @@ try{
    report.completedBatches.push({groupNo,tables:group.map(x=>x.name),rows:group.reduce((s,x)=>s+x.rows,0),elapsedMs:report.lastBatch.elapsedMs});
    report.pendingBatch=null;checkpoint(`setup batch ${groupNo+1}/${groups.length} committed`);
   }
-  checkpoint('verify exact synthetic row counts, encoded mix, coverage and native index registration');
+  checkpoint('finish bounded maintenance of only the newly created synthetic tables');
+  maintainBrandNativeFixture({tables,execute:raw,onResult:result=>{
+   // Keep the same record so final completion/settings are saved as well.
+   report.maintenance=result;report.maintenance.helperSHA256=sha(readFileSync(root+'tests/helpers/brand-reference-native-maintenance.mjs'));
+   writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');
+  }});
+  checkpoint('synthetic maintenance completed; verify exact rows, encoded mix, coverage and indexes');
   const counts=JSON.parse(q(`select jsonb_agg(s order by table_name)::text from (${tables.map(t=>`select ${lit(t.name)} as table_name,count(*) as rows,count(*) filter(where metadata->'nested'->>'note'='%2569rrelevant') as encoded_rows,pg_total_relation_size('public.${t.name}') as bytes from public.${ident(t.name)}`).join(' union all ')}) s;`,{budget:'180s',timeout:210000}));
   assert.equal(counts.length,354);for(const [i,c] of counts.entries())assert.equal(Number(c.rows),tables[i].rows);
   report.fixture={rows:counts.reduce((s,x)=>s+Number(x.rows),0),encodedRows:counts.reduce((s,x)=>s+Number(x.encoded_rows),0),totalBytes:counts.reduce((s,x)=>s+Number(x.bytes),0),tables:counts};assert.equal(report.fixture.rows,1700000);assert.equal(report.fixture.encodedRows,17000);

@@ -126,6 +126,16 @@ none is terminated or excluded. Identity snapshots and the readiness-helper hash
 are saved in the performance report even on failure. Readiness precedes the
 measured statements and does not extend their 30-second budget. A prior attempt
 observed one other backend but did not record its identity; its cause is unknown.
+The subsequent diagnostic run recorded an autovacuum worker traversing the
+newly seeded tables throughout that deadline. Setup therefore finishes a
+standalone `VACUUM (ANALYZE)` of exactly those 354 newly created tables under the
+existing 180-second setup limit before measurement. It leaves autovacuum enabled,
+does not use `FULL` or `SKIP_LOCKED`, and records the command, settings, timing
+and completion in the artifact. The quiet-session check remains strict. These
+measurements describe a synthetic fixture after maintenance with warmed data
+and statistics; they do not establish cold-start or production latency.
+Maintenance is nontransactional: a failure records the attempt without a
+rollback claim or automatic retry; already maintained synthetic tables remain changed.
 
 1. Replay the source chain in a fresh cluster; pass native guards, pgTAP,
    semantic/collation parity and immutable-helper DDL checks. The canonical
@@ -143,7 +153,7 @@ observed one other backend but did not record its identity; its cause is unknown
    tables, 17,000 encoded documents, single and repeated complete clearance and
    archived authorization calls within the unchanged 30-second budget. Verify
    actual indexed plans and zero exact matching/normalization for absent
-   bounded candidate sets. A setup failure records its own rollback readback;
+   bounded candidate sets. A failed setup batch records its transaction rollback readback;
    earlier committed batches are explicitly outside that rollback's scope.
 5. Prove actual >1-GiB escaped JSONB serialization returns 54000 and the helper
    returns 1,048,577 in a separate memory-bounded container. The supplied
