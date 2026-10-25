@@ -212,7 +212,7 @@ test('forward integration adopts legacy bookkeeping without rewriting or restart
  const lock=sql.indexOf('lock table public.platform_brand_assets in access exclusive mode;');
  assert.ok(lock>0 && lock<sql.indexOf('insert into private.deleted_content_brand_delegations'));
  assert.ok(lock<sql.indexOf('alter table private.deleted_content_records'),'drain source writers before archive DDL, matching capture order');
- const {db}=await createDatabase({includeHeldStudio:true,excludeMigrations:[migration]});
+ const {db}=await createDatabase({includeHeldStudio:true,excludeMigrations:[migration,'20261025114152_platform_brand_empty_test_disposition.sql']});
  const q=async(sql,args=[])=>(await db.query(sql,args)).rows[0];
  try{
   const id=randomUUID(),key=`legacy-official/logo/${id}.png`,deletionId=randomUUID();

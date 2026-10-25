@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from './database-runtime-authority-fixture.mjs';
 
-export const archivedMigration='20261025055056_platform_brand_archived_byte_verification.sql';
+export const archivedMigration='20261025111122_platform_brand_archived_byte_verification.sql';
 export const archivedTables=['platform_brand_archived_requests','platform_brand_archived_attempts',
  'platform_brand_archived_results','platform_brand_archived_receipts'];
 export const archivedPublicFunctions=[

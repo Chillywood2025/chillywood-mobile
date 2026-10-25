@@ -28,7 +28,7 @@ function assertNativeGate(candidate) {
 
 test('archived verifier requires positive and mutation-control native PostgreSQL gates', () => {
   assertNativeGate(workflow);
-  for (const path of ['supabase/migrations/20261025055056_platform_brand_archived_byte_verification.sql',
+  for (const path of ['supabase/migrations/20261025111122_platform_brand_archived_byte_verification.sql',
     'supabase/tests/platform_brand_archived_verification_test.sql', 'scripts/test-archived-brand-verification-concurrency.mjs',
     'tests/ci/archived-brand-verification-validation.test.mjs']) {
     assert.equal(computeValidationPlan([path]).categories.database, true, path);

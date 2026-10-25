@@ -181,7 +181,7 @@ try {
  check((await q("select has_function_privilege('anon','public.read_platform_brand_retention_expiry_claim(uuid,uuid)','EXECUTE') allowed")).allowed,false,'anonymous cannot read transport authority');
  const legacy=await fixture();await age(legacy.id);const legacyClaim=await begin(legacy.id);
  await db.exec('update private.platform_brand_retention_settings set expiry_enabled=false');
- await applyBrandMigrationStatements(db,read('20261025075710_platform_brand_expiry_observation_recovery.sql'));
+ await applyBrandMigrationStatements(db,read('20261025111212_platform_brand_expiry_observation_recovery.sql'));
  await db.exec('update private.platform_brand_retention_settings set expiry_enabled=true');
  const prepare=async(id,t)=>(await q('select public.prepare_platform_brand_retention_dispatch($1,$2) r',[id,t])).r;
  check((await prepare(legacy.id,legacyClaim.claimToken)).status,'observe_only','legacy no-result claim cannot replay unknown dispatch');

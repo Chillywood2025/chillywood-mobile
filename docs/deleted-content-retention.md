@@ -263,3 +263,68 @@ owner/nonowner/malformed/unknown-scope behavior checks, and unchanged function
 permissions, all 12 hold records (10 active), and retention, Brand and inspection
 settings. No holds were released. Retention remained off; this deployment did
 not enroll content, activate expiry, or deploy the separate copy/archive protocols.
+# Archived empty-test disposition (source-only)
+
+`20261025114152_platform_brand_empty_test_disposition.sql` adds a distinct
+`archived_empty_test` retention evidence branch. It does not classify empty bytes
+as clean media, repair historical scan outcomes, overwrite source sizes, or grant
+delivery/publication access. Existing positive-byte proof and scan-receipt paths
+remain unchanged. The migration contains no target authorizations or activation.
+
+The required order is separately approved private exact-target PRE-archive
+authorization, genuine authenticated asset-owner
+`remove_platform_brand_empty_test_asset`, then trusted empty-origin measurement
+and registration. The bounded wrapper calls unchanged canonical
+`remove_platform_brand_asset`, preserving current session/legal/Premium/path
+authority, the permanent server-observed tombstone and full 720-hour clock. It
+atomically records one private immutable Owner-removal receipt. It cannot archive
+another account's asset, reconstruct a past removal, or seed authorization.
+Exact retries reestablish canonical current authority and preserve the clock.
+
+The intent freezes the active draft, original incarnation, complete terminal
+scan jobs and decision digest. The receipt freezes the postarchive core; only
+canonical removal fields may differ. Every history exception, observation,
+disposition, coverage and claim path requires both. Any failed reference, hold,
+snapshot or receipt check rolls the entire new removal back. This path works
+with global capture off and does not write global capture/delegation/audit rows
+or change flags. Optional global records must be entirely absent or one fully
+consistent pair; later legitimate capture does not invalidate frozen core
+evidence. The receipt explicitly reports whether global capture existed at
+removal, and is never itself described as global capture. Unknown/missing
+bindings and mutable/claimable scan histories fail closed.
+
+The existing operator migration endpoint's narrowly scoped
+`record_brand_empty_test_disposition` action accepts only `assetId`, obtains an
+authorization-bound observation token, streams the canonical authenticated origin,
+and rechecks the exact archived generation before and after a complete HTTP 200
+read. Zero actual bytes, empty SHA-256, successful EOF, identity encoding and no
+Range/Content-Range are mandatory. Missing/failed/truncated responses, catalog size
+alone, and caller-supplied hashes cannot qualify. Signed URLs/tokens are never
+returned. Registration is immutable; only an identical observation/result retry
+is idempotent. Conflicting evidence is rejected, not replaced.
+
+Coverage reports `retained_empty_test` or `claimed_empty_test`, never
+`brand_verified_original`. `platformBrandMissingCurrentScanProofCount` remains a
+truthful positive-proof count; `platformBrandMissingRetentionEvidenceCount` and
+`platformBrandSupportedEmptyTestCount` distinguish supported empty dispositions
+from unresolved gaps. Holds prevent actions without mislabeling retained evidence
+as uncovered. Exact authorized terminal jobs are audit evidence only and cannot
+be changed, deleted, truncated or requeued. Additional aliases/references and
+unrecognized locator schemas still block expiry.
+
+Mature, qualified expiry atomically creates an immutable typed claim-evidence
+sidecar bound to the disposition digest and original generation. Missing metadata
+cannot qualify an initial claim. Existing claims are not reinterpreted; an exact
+empty claim can subsequently recover without metadata only through its original
+evidence. The existing dispatch-intent protocol remains at-most-once, including
+observation-only recovery after uncertain dispatch. Provider qualification,
+writer-drain/reference evidence, holds, absence checks and
+`permanentlyAbsent: false` remain mandatory and unchanged.
+
+Deployment of the bounded registration capability, exact private authorization
+population, real Owner archival, origin credential use, expiry activation and
+eventual permanent deletion each retain their separate approval boundaries.
+Source validation authorizes none of those live operations. Local PGlite tests
+cover SQL lifecycle/ACLs; the required hosted Database job additionally runs
+independent-backend claim/dispatch contention and a mandatory unsafe-replay
+mutation control in disposable PostgreSQL clones, never against providers.

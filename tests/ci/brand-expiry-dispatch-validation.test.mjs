@@ -28,7 +28,7 @@ function assertNativeGate(candidate) {
 
 test('expiry dispatch requires positive and mutation-control native PostgreSQL gates', () => {
   assertNativeGate(workflow);
-  for (const path of ['supabase/migrations/20261025075710_platform_brand_expiry_observation_recovery.sql',
+  for (const path of ['supabase/migrations/20261025111212_platform_brand_expiry_observation_recovery.sql',
     'scripts/test-brand-expiry-dispatch-concurrency.mjs',
     'tests/ci/brand-expiry-dispatch-validation.test.mjs']) {
     assert.equal(computeValidationPlan([path]).categories.database, true, path);
