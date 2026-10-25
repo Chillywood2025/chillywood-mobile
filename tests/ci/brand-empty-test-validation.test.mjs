@@ -39,7 +39,7 @@ function assertNativeGate(candidate) {
 
 test('empty-evidence lifecycle and native mutation controls are additive mandatory Database gates', () => {
   assertNativeGate(workflow);
-  for (const path of ['supabase/migrations/20261025095906_platform_brand_empty_test_disposition.sql',
+  for (const path of ['supabase/migrations/20261025114152_platform_brand_empty_test_disposition.sql',
     'supabase/functions/_shared/brand-empty-test-origin.ts', 'supabase/functions/media-object-storage-migration/index.ts',
     'tests/brand-empty-test-disposition.test.mjs', 'tests/brand-empty-test-origin.test.mjs', script,
     'tests/ci/brand-empty-test-validation.test.mjs']) {

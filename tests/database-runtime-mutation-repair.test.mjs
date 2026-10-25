@@ -47,12 +47,12 @@ const adminBackendFiles = [
 // Both reviewed successors are part of the current replay: new transactional
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
 const userIdHoldScopeFiles = ['20261025083249_deleted_content_user_id_hold_scope.sql'];
-const brandEmptyFiles = ['20261025095906_platform_brand_empty_test_disposition.sql'];
-const brandObservationFiles = ['20261025075710_platform_brand_expiry_observation_recovery.sql'];
+const brandEmptyFiles = ['20261025114152_platform_brand_empty_test_disposition.sql'];
+const brandObservationFiles = ['20261025111212_platform_brand_expiry_observation_recovery.sql'];
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
-const brandArchivedVerificationFiles = ['20261025055056_platform_brand_archived_byte_verification.sql'];
+const brandArchivedVerificationFiles = ['20261025111122_platform_brand_archived_byte_verification.sql'];
 const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];
-const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql','20261025055047_supabase_original_copy_cutover.sql'];
+const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql','20261025111024_supabase_original_copy_cutover.sql'];
 const legacyRetentionFiles = ['20261021134020_deleted_media_legacy_provenance_adapter.sql'];
 const collectionOrderingFiles = ['20261020233652_user_collection_revision_authority.sql'];
 const notificationPreferenceOrderingFiles = ['20261022204942_notification_preference_revision_authority.sql'];

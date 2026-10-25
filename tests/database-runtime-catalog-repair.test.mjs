@@ -146,8 +146,8 @@ const adminBackendFunctionKeys = new Set([
 ]);
 
 const userIdHoldScopeFiles = ['20261025083249_deleted_content_user_id_hold_scope.sql'];
-const brandEmptyFiles = ['20261025095906_platform_brand_empty_test_disposition.sql'];
-const brandObservationFiles = ['20261025075710_platform_brand_expiry_observation_recovery.sql'];
+const brandEmptyFiles = ['20261025114152_platform_brand_empty_test_disposition.sql'];
+const brandObservationFiles = ['20261025111212_platform_brand_expiry_observation_recovery.sql'];
 const brandEmptyFunctionKeys = new Set([
   'private.platform_brand_empty_core_snapshot/3',
   'private.platform_brand_empty_intent_snapshot/1',
@@ -166,7 +166,7 @@ const brandEmptyFunctionKeys = new Set([
 ]);
 const brandObservationFunctionKeys = new Set(['public.prepare_platform_brand_retention_dispatch/2','public.prepare_platform_brand_retention_batch_dispatch/2']);
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
-const brandArchivedVerificationFiles = ['20261025055056_platform_brand_archived_byte_verification.sql'];
+const brandArchivedVerificationFiles = ['20261025111122_platform_brand_archived_byte_verification.sql'];
 const brandArchivedVerificationFunctionIdentities = new Map([
   ['private.platform_brand_archived_service_required/0','private.platform_brand_archived_service_required()'],
   ['private.platform_brand_archived_snapshot/2','private.platform_brand_archived_snapshot(uuid,boolean)'],
@@ -212,7 +212,7 @@ const externalReferenceFunctionKeys = new Set([
   'private.delete_retained_content_before_external/6',
   'private.expire_deleted_content_text_before_external/1',
 ]);
-const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql','20261025055047_supabase_original_copy_cutover.sql'];
+const originalCopyFiles = ['20261021134033_supabase_original_copy_receipts.sql','20261025111024_supabase_original_copy_cutover.sql'];
 const originalCopyFunctionKeys = new Set([
  'private.preserve_supabase_original_copy_receipt/0',
  'private.supabase_original_copy_snapshot_sha256/1',

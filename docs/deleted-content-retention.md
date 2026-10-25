@@ -265,7 +265,7 @@ settings. No holds were released. Retention remained off; this deployment did
 not enroll content, activate expiry, or deploy the separate copy/archive protocols.
 # Archived empty-test disposition (source-only)
 
-`20261025095906_platform_brand_empty_test_disposition.sql` adds a distinct
+`20261025114152_platform_brand_empty_test_disposition.sql` adds a distinct
 `archived_empty_test` retention evidence branch. It does not classify empty bytes
 as clean media, repair historical scan outcomes, overwrite source sizes, or grant
 delivery/publication access. Existing positive-byte proof and scan-receipt paths

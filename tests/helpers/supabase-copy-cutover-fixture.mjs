@@ -2,7 +2,7 @@
 // reduced table schemas. Not native concurrency or provider-byte evidence.
 import {readFileSync} from 'node:fs';
 import {externalReferenceFixture} from './deleted-content-external-reference-fixture.mjs';
-export const cutoverMigration='supabase/migrations/20261025055047_supabase_original_copy_cutover.sql';
+export const cutoverMigration='supabase/migrations/20261025111024_supabase_original_copy_cutover.sql';
 export async function copyCutoverFixture(){
  const db=await externalReferenceFixture();
  await db.exec("set timezone='UTC'");
