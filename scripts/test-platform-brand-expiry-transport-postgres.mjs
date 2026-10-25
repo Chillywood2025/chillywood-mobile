@@ -179,5 +179,28 @@ try {
  await deny(()=>db.query("insert into storage.objects(bucket_id,name,version) values('platform-brand-assets',$1,'v2')",[f.key]),/incarnation_fenced/);
  check((await q("select has_function_privilege('authenticated','public.begin_platform_brand_retention_transport(uuid)','EXECUTE') allowed")).allowed,false,'client cannot begin transport');
  check((await q("select has_function_privilege('anon','public.read_platform_brand_retention_expiry_claim(uuid,uuid)','EXECUTE') allowed")).allowed,false,'anonymous cannot read transport authority');
+ const legacy=await fixture();await age(legacy.id);const legacyClaim=await begin(legacy.id);
+ await db.exec('update private.platform_brand_retention_settings set expiry_enabled=false');
+ await applyBrandMigrationStatements(db,read('20261025075710_platform_brand_expiry_observation_recovery.sql'));
+ await db.exec('update private.platform_brand_retention_settings set expiry_enabled=true');
+ const prepare=async(id,t)=>(await q('select public.prepare_platform_brand_retention_dispatch($1,$2) r',[id,t])).r;
+ check((await prepare(legacy.id,legacyClaim.claimToken)).status,'observe_only','legacy no-result claim cannot replay unknown dispatch');
+ check((await prepare(f.id,token)).status,'observe_only','legacy acknowledged missing claim remains read-only');
+ check((await q('select reason from private.platform_brand_expiry_dispatch_intents where claim_token=$1',[legacyClaim.claimToken])).reason,'legacy_unknown_history','migration preserves explicit unknown reason');
+ const fresh=await fixture();await age(fresh.id);const freshClaim=await begin(fresh.id);
+ check((await readClaim(fresh.id,freshClaim.claimToken)).observationOnly,false,'new guarded claim starts eligible');
+ check((await prepare(fresh.id,freshClaim.claimToken)).status,'dispatch_authorized','first confirmed intent alone grants dispatch');
+ check((await prepare(fresh.id,freshClaim.claimToken)).status,'observe_only','intent persists before any result');
+ check((await readClaim(fresh.id,freshClaim.claimToken)).deleteAcknowledged,false,'intent is not acknowledgement');
+ await isolated(async()=>{await q('select public.record_platform_brand_retention_transport_result($1,$2,$3)',[fresh.id,freshClaim.claimToken,'delete_acknowledged']);});
+ check((await prepare(fresh.id,freshClaim.claimToken)).status,'observe_only','rolled-back acknowledgement does not reset intent');
+ await deny(()=>db.exec('delete from private.platform_brand_expiry_dispatch_intents'),/identity_permanent/);
+ await deny(()=>db.exec('truncate private.platform_brand_expiry_dispatch_intents'),/identity_permanent/);
+ await deny(()=>db.exec("update private.platform_brand_expiry_dispatch_intents set reason='dispatch_intent'"),/identity_permanent/);
+ for(const role of ['anon','authenticated'])check((await q(`select has_function_privilege('${role}','public.prepare_platform_brand_retention_dispatch(uuid,uuid)','EXECUTE') allowed`)).allowed,false,`${role} cannot authorize dispatch`);
+ check((await q("select has_table_privilege('service_role','private.platform_brand_expiry_dispatch_intents','INSERT') allowed")).allowed,false,'service cannot manufacture intents directly');
+ check((await prepare(fresh.id,'00000000-0000-4000-8000-000000000000')).status,'claim_unavailable','wrong token denied');
+ await isolated(async()=>{await db.exec('update private.platform_brand_retention_settings set expiry_enabled=false');check((await prepare(fresh.id,freshClaim.claimToken)).status,'disabled','marker does not bypass stop');});
+ await isolated(async()=>{await db.exec('alter table storage.objects disable trigger aaa_platform_brand_storage_incarnation');check((await prepare(fresh.id,freshClaim.claimToken)).status,'required_guard_unavailable','marker does not bypass guard parity');});
  console.log(`Brand expiry transport: ${checks} actual migrated SQL controls passed; no provider calls or physical absence claims.`);
 } finally { await db.close(); }

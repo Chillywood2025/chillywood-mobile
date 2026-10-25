@@ -9,7 +9,7 @@ function fixture({beginFails=false,receiptFails=false,status='clean',downloadFai
  const bytes={path:'/synthetic-test-only',bytes:23,sha256:'a'.repeat(64)};
  const rpc=async(name,payload)=>{
   calls.push({name,payload});
-  if(name==='begin_media_scan_byte_observation') {if(beginFails)throw Error('private');return 'observation-one';}
+  if(name==='begin_media_scan_byte_observation'||name==='begin_supabase_copy_scan_observation') {if(beginFails)throw Error('private');return 'observation-one';}
   if(receiptFails)throw Error('private');return 'receipt-one';
  };
  const download=async()=>{calls.push({name:'download'});if(downloadFails)throw Error('download failed');return bytes;};
@@ -38,3 +38,21 @@ test('unrelated scanner jobs remain on their original path',async()=>{
  const f=fixture();await f.process({...job,target_table:'videos'});
  assert.deepEqual(f.calls.map(x=>x.name),['download','scan','complete']);
 });
+const copiedJob={...job,target_table:'videos',target_column:'source',storage_provider:'cloudflare_r2',metadata:{supabaseCopyCutoverId:'copy-one'}};
+test('copy-cutover scans use only the separate immutable proof protocol',async()=>{
+ const f=fixture();await f.process(copiedJob);
+ assert.deepEqual(f.calls.map(x=>x.name),['begin_supabase_copy_scan_observation','download','scan','complete','record_supabase_copy_scan_receipt']);
+ assert.equal(f.calls.at(-1).payload.p_sha256,'a'.repeat(64));
+});
+for(const options of [{beginFails:true},{receiptFails:true},{status:'manual_review'},{status:'malware_detected'},{downloadFails:true}]) {
+ test('copy proof failure cannot fabricate clean evidence or repeat completion '+JSON.stringify(options),async()=>{
+  const f=fixture(options);await f.process(copiedJob);
+  assert.equal(f.calls.filter(x=>x.name==='complete').length,1);
+  if(!options.receiptFails)assert.ok(!f.calls.some(x=>x.name==='record_supabase_copy_scan_receipt'));
+ });
+}
+for(const bad of [{...copiedJob,metadata:{}},{...copiedJob,target_column:'thumbnail'},{...copiedJob,target_table:'video_renditions'}]) {
+ test('unrelated R2 or secondary job has no copy evidence calls '+JSON.stringify(bad),async()=>{
+  const f=fixture();await f.process(bad);assert.deepEqual(f.calls.map(x=>x.name),['download','scan','complete']);
+ });
+}
