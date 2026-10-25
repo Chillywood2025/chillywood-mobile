@@ -53,7 +53,7 @@ const registration = (status = 'not_registered') => ({ status, permissionState: 
 // this is not a full Router/native/provider/device integration test.
 export async function mount(t, { read, write, register, authority: initialAuthority = owner(), keyed = true, actualPush = false,
   preferenceBackend = createPreferenceBackend() } = {}) {
-  const state = { authority: initialAuthority, focused: true, reads: [], writes: [], registrations: 0, revocations: 0, pushReads: 0,
+  const state = { deletionRequests: [], restorationRequests: [], signOuts: [], voipRevocations: [], deletionHandler: null, revokeHandler: null, voipHandler: null, authority: initialAuthority, focused: true, reads: [], writes: [], registrations: 0, revocations: 0, pushReads: 0,
     alerts: [], rows: preferenceBackend.rows, read, write, register, registration: registration(), routes: [], transport: [], permissionReader: null,
     authorityReader: null, storageReader: null, nativeTokens: 0, tokenReader: null, authoritySubscriptions: 0, revokeReceipt: 'valid',
     backendBarrier: null, backendCommits: [], installOwner: null, preferenceBackend, preferenceRequests: [], sessionReader: null,
@@ -150,7 +150,17 @@ export async function mount(t, { read, write, register, authority: initialAuthor
   };
   authority.publishAccountSessionAuthoritySnapshot(initialAuthority);
   const rpc = load(compile(source('_lib/accountBoundSupabaseRpc.mjs')), {}, { URL, fetch: async (url, options) => {
-    assert.equal(new URL(url).pathname, '/rest/v1/rpc/wave1_session_authority_readback');
+    const name = new URL(url).pathname.split('/').at(-1);
+    const token = new Headers(options.headers).get('Authorization').replace(/^Bearer /, '');
+    if (name !== 'wave1_session_authority_readback') {
+      assert.ok(['schedule_account_deletion', 'restore_scheduled_account_deletion', 'get_my_account_deletion_status'].includes(name));
+      const subject = state.tokenOwners.get(token);
+      if (name === 'get_my_account_deletion_status') return Response.json({ scheduled: subject?.restoreOnly === true });
+      const record = { subject: plain(subject), token, args: JSON.parse(options.body) };
+      (name === 'schedule_account_deletion' ? state.deletionRequests : state.restorationRequests).push(record);
+      const result = state.deletionHandler ? await state.deletionHandler(record) : { scheduled: name === 'schedule_account_deletion', status: name === 'schedule_account_deletion' ? 'scheduled' : 'active' };
+      return Response.json(result);
+    }
     const result = await database.rpc('wave1_session_authority_readback').setHeader('Authorization', new Headers(options.headers).get('Authorization'));
     return new Response(JSON.stringify(result.data), { status: 200 });
   } });
@@ -159,6 +169,9 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     './accountBoundSupabaseRpc.mjs': rpc,
     './supabase': { supabase: database, SUPABASE_URL: 'https://fixture.invalid', SUPABASE_ANON_KEY: 'fixture-anon' },
     'react-native': { Platform: { OS: 'android' } },
+  });
+  const deletionRequests = load(compile(source('_lib/accountDeletionRequests.ts')), {
+    './accountBoundSupabaseMutation': mutation, './accountSessionAuthority': authority,
   });
   const realNotifications = load(compile(notificationSource), {
     '@react-native-async-storage/async-storage': { getItem: async key => state.storageReader ? state.storageReader(key, storage.get(key) || null) : storage.get(key) || null,
@@ -179,7 +192,7 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     async readCurrentPushRegistration() { state.pushReads++; return state.registration; },
     async requestPushPermissionAndRegister(...args) { state.registrations++; return actualPush ? realNotifications.requestPushPermissionAndRegister(...args)
       : state.register ? state.register() : registration('registered'); },
-    async revokeCurrentPushInstall(...args) { state.revocations++; return actualPush ? realNotifications.revokeCurrentPushInstall(...args) : registration('not_registered'); },
+    async revokeCurrentPushInstall(...args) { state.revocations++; if(state.revokeHandler) await state.revokeHandler(...args); return actualPush ? realNotifications.revokeCurrentPushInstall(...args) : registration('not_registered'); },
   };
   // Explicit historical sources predate CAS. These API-shape adapters allow
   // those controls to reach their original lifecycle/transport fault, not a
@@ -220,13 +233,20 @@ export async function mount(t, { read, write, register, authority: initialAuthor
       authority: state.authority, authorityStatus: state.authority ? 'active' : 'signed_out' }) },
     '../_lib/accountSessionAuthority': authority,
     '../_lib/monetization': { getCachedMonetizationSnapshot: () => ({ targets: {} }), subscribeToMonetizationSnapshot: () => noop, readMonetizationSnapshot: async () => ({ targets: {} }), isPremiumPurchaseShellAvailable: () => false },
-    '../_lib/accountDeletionRequests': { readMyAccountDeletionStatus: async () => ({ scheduled: false }) },
+    '../_lib/accountDeletionRequests': { ...deletionRequests, readMyAccountDeletionStatus: async () => ({ scheduled: state.authority?.restoreOnly === true }) },
+    '../_lib/accountSessionActions': { accountSessionActionIdentity: () => null, async signOutExactAccountSession(expected) {
+      if (!authority.sameAccountSessionIdentity(expected, state.authority)) return false;
+      state.signOuts.push(plain(expected)); state.authority = null;
+      authority.publishAccountSessionAuthoritySnapshot(null); return true;
+    } },
     '../_lib/analytics': { trackEvent: noop }, '../_lib/userFacingErrors': { getUserFacingErrorMessage: (_, fallback) => fallback },
     '../_lib/notifications': notifications,
     '../_lib/chillyChatCalls': { CHILLY_CHAT_RINGTONE_OPTIONS: [{ key: 'chilly_ring', label: 'Chilly ring' }, { key: 'quiet_buzz', label: 'Quiet buzz' }] }, '../_lib/chillyChatCallSoundAssets': { stopChillyChatCallSound: async () => {} },
     '../_lib/moderation': { getModerationAccess: () => ({}), canAccessAdminConsole: () => false, readMyPlatformRoleMemberships: async () => [] },
     '../_lib/legalPolicies': { LEGAL_POLICY_ROUTES: [] }, '../_lib/accessVisibility': { ACCESS_VISIBILITY_OPTIONS: [], getAccessVisibilityLabel: x => x },
-    '../_lib/runtimeConfig': { getRuntimeLegalConfig: () => ({}) }, '../_lib/iosNativeCalls': {},
+    '../_lib/runtimeConfig': { getRuntimeLegalConfig: () => ({}) }, '../_lib/iosNativeCalls': {
+      async revokeIosVoipRegistration(expected) { state.voipRevocations.push(plain(expected)); if(state.voipHandler) await state.voipHandler(expected); },
+    },
     '../_lib/releaseDiagnostics': { readReleaseDiagnostics: () => ({}), sanitizeReleaseDiagnosticsForDisplay: x => x, formatReleaseDiagnosticsSummary: () => '' },
     '../_lib/supabase': { supabase: database }, '../_lib/displayText': { maskEmailAddress: () => '' },
     '../_lib/usernameHandles': { formatUsernameHandle: x => x || '', normalizeUsernameHandle: x => x || '', validateUsernameHandle: () => ({ available: false, username: '' }) },
@@ -253,6 +273,7 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     assert.equal(matches.length, 1, `one ${label} toggle`); return matches[0].props;
   };
   return { state, authority, notifications, appListeners, act, render, unmount, button, toggle, row, section,
+    action(id) { const matches = walk(tree, n => n.props?.testID === id); assert.equal(matches.length, 1, id); return matches[0].props; },
     async expireProviderDeadline() { await act(() => {
       const matches = [...timers].filter(([, timer]) => timer.delay === 15_000);
       assert.equal(matches.length, 1, 'one actual production provider deadline');

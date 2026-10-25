@@ -65,7 +65,7 @@ export function computeValidationPlan(paths, config = policy) {
 
 export function expectedJobs(plan, config = policy) {
   const expected = [config.jobs.plan, config.jobs.core, config.jobs.result];
-  for (const [category, jobKey] of [["product", "product"], ["sensitive", "sensitive"], ["database", "database"], ["nativeRelease", "nativeRelease"], ["autonomous", "autonomous"], ["policy", "policy"]]) {
+  for (const [category, jobKey] of [["product", "product"], ["sensitive", "sensitive"], ["database", "database"], ["database", "brandNative"], ["nativeRelease", "nativeRelease"], ["autonomous", "autonomous"], ["policy", "policy"]]) {
     if (plan.categories[category]) expected.push(config.jobs[jobKey]);
   }
   return expected;

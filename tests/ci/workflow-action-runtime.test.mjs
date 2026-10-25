@@ -23,6 +23,12 @@ const reviewedActions = new Map([
     version: "v7.0.0",
     runtime: "node24",
   }],
+  ["actions/upload-artifact", {
+    // Official v7.0.2 ref and action.yml at this immutable commit were checked.
+    sha: "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+    version: "v7.0.2",
+    runtime: "node24",
+  }],
   ["denoland/setup-deno", {
     sha: "22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
     version: "v2.0.5",

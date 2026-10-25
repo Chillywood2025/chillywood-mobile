@@ -224,6 +224,36 @@ jobs:
           npm run test:cognitive-product-sentinel-concurrency
           npm run test:cognitive-runtime-login-integration
 
+  database-brand-native:
+    name: Validation / Brand Native PostgreSQL 17.6
+    if: needs.plan.outputs.database == 'true'
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Synthetic guards, native plans, complete performance and rollback gates
+        env:
+          CI: '1'
+          EXPO_NO_DOTENV: '1'
+          EXPO_NO_CLIENT_ENV_VARS: '1'
+        run: node tests/brand-reference-native-ci.mjs
+      - name: Preserve exact attempt evidence even when a gate fails
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: brand-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ../brand-reference-*.json
+            ../brand-native-ci-*.json
+            ../brand-native-ci-*.log
+          if-no-files-found: warn
+          retention-days: 14
+
   native-inference:
     name: Validation / Android Camera Compilation
     if: needs.plan.outputs.nativeRelease == 'true'
@@ -461,7 +491,7 @@ jobs:
   result:
     name: Validation / Results
     if: always()
-    needs: [plan, core, product, sensitive, database, native-inference, native-sdk, native-release, autonomous, policy]
+    needs: [plan, core, product, sensitive, database, database-brand-native, native-inference, native-sdk, native-release, autonomous, policy]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -474,6 +504,8 @@ jobs:
           const failures = Object.entries(needs).filter(([, value]) => value.result === 'failure' || value.result === 'cancelled');
           const planFailed = needs.plan?.result !== 'success';
           const coreFailed = needs.core?.result !== 'success';
+          const brandNativeFailed = needs.plan?.outputs?.database === 'true'
+            && needs['database-brand-native']?.result !== 'success';
           console.log(JSON.stringify({ jobs: Object.fromEntries(Object.entries(needs).map(([key, value]) => [key, value.result])), failures: failures.map(([key]) => key) }));
-          if (planFailed || coreFailed || failures.length > 0) process.exit(1);
+          if (planFailed || coreFailed || brandNativeFailed || failures.length > 0) process.exit(1);
           NODE

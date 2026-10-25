@@ -71,3 +71,9 @@ export async function clearExactLocalAuthSession(auth: LockedLocalAuthClient, ex
     return !(await auth._signOut({ scope: "local" })).error;
   }));
 }
+
+// Scheduling/restoring deletion changes restoreOnly without replacing the
+// session. Cleanup may follow that transition, but never a new sign-in.
+export function sameAccountSessionIdentity(left?: AccountSessionAuthorityBinding | null, right?: AccountSessionAuthorityBinding | null) {
+  return !!left && !!right && sameAccountSessionAuthority({ ...left, restoreOnly: right.restoreOnly }, right);
+}

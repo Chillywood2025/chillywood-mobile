@@ -1,7 +1,11 @@
 import {
   runAccountRestorationBoundSupabaseMutationRpc,
   runCurrentAccountBoundSupabaseMutationRpc,
+  captureAccountBoundSupabaseMutationSubject,
+  invokeAccountBoundSupabaseMutationRpc,
+  AccountBoundSupabaseMutationError,
 } from "./accountBoundSupabaseMutation";
+import { sameAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
 
 type AccountDeletionRequestPayload = {
   id?: unknown;
@@ -76,8 +80,10 @@ export async function readMyAccountDeletionStatus(): Promise<AccountDeletionRequ
 export async function scheduleAccountDeletion(input: {
   reason?: string | null;
   details?: string | null;
-} = {}): Promise<AccountDeletionRequestResult> {
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("schedule_account_deletion", {
+} = {}, expected?: AccountSessionAuthorityBinding): Promise<AccountDeletionRequestResult> {
+  const subject = await captureAccountBoundSupabaseMutationSubject(expected?.userId);
+  if (expected && !sameAccountSessionAuthority(expected, subject.authority)) throw new AccountBoundSupabaseMutationError();
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "schedule_account_deletion", {
     p_reason: input.reason ?? null,
     p_details: input.details ?? null,
   });
@@ -87,8 +93,8 @@ export async function scheduleAccountDeletion(input: {
   return parseAccountDeletionResult(data, "Account deletion scheduled.");
 }
 
-export async function restoreScheduledAccountDeletion(): Promise<AccountDeletionRequestResult> {
-  const { data, error } = await runAccountRestorationBoundSupabaseMutationRpc<unknown>();
+export async function restoreScheduledAccountDeletion(expected?: AccountSessionAuthorityBinding): Promise<AccountDeletionRequestResult> {
+  const { data, error } = await runAccountRestorationBoundSupabaseMutationRpc<unknown>(expected);
 
   if (error) throw new Error(getAccountDeletionRequestErrorMessage(error));
 

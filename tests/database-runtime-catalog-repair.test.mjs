@@ -148,6 +148,23 @@ const adminBackendFunctionKeys = new Set([
 const userIdHoldScopeFiles = ['20261025083249_deleted_content_user_id_hold_scope.sql'];
 const brandEmptyFiles = ['20261025114152_platform_brand_empty_test_disposition.sql'];
 const brandObservationFiles = ['20261025111212_platform_brand_expiry_observation_recovery.sql'];
+const brandReferenceFiles = [
+  '20261025121430_platform_brand_reference_scan_performance.sql',
+  '20261025141347_platform_brand_reference_candidate_indexes.sql',
+];
+const legacyRenditionFiles = ['20261025192059_legacy_rendition_playback_authority.sql'];
+// Existing scan/playback functions are replaced, not added. Keep only the
+// seven new identities in this schema count; the extensions guard is checked
+// separately so installing pg_trgm cannot widen the historical catalog scope.
+const referenceAndRenditionFunctionIdentities = new Map([
+  ['private.platform_brand_retention_row_mentions/4','private.platform_brand_retention_row_mentions(jsonb,text[],text,text)'],
+  ['private.platform_brand_index_jsonb_bytes_v1/1','private.platform_brand_index_jsonb_bytes_v1(jsonb)'],
+  ['private.platform_brand_index_normalize_v1/1','private.platform_brand_index_normalize_v1(text)'],
+  ['private.platform_brand_index_environment_v1/0','private.platform_brand_index_environment_v1()'],
+  ['private.platform_brand_index_spec_v1/1','private.platform_brand_index_spec_v1(oid)'],
+  ['private.platform_brand_index_expression_v1/1','private.platform_brand_index_expression_v1(oid)'],
+  ['public.video_rendition_playback_safe/1','video_rendition_playback_safe(uuid)'],
+]);
 const brandEmptyFunctionKeys = new Set([
   'private.platform_brand_empty_core_snapshot/3',
   'private.platform_brand_empty_intent_snapshot/1',
@@ -352,6 +369,13 @@ const queries={
     join pg_enum e on e.enumtypid=t.oid where n.nspname in ${schemas} order by 1,2,4`,
   sequences:`select * from pg_sequences where schemaname in ${schemas} order by schemaname,sequencename`,
   publications:'select pubname,schemaname,tablename,attnames,rowfilter from pg_publication_tables order by 1,2,3',
+  brandIndexGuard:`select p.oid,n.nspname||'.'||p.proname||'/'||p.pronargs key,
+    pg_get_functiondef(p.oid) definition,p.proowner,p.proacl,p.prosecdef,p.proconfig,p.prorettype
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='extensions' and p.proname='guard_platform_brand_index_helper_ddl_v1'`,
+  brandIndexEventTriggers:`select evtname,evtevent,evtowner,evtfoid,evtenabled,evttags
+    from pg_event_trigger where evtname in ('platform_brand_index_helper_ddl_v1','platform_brand_index_helper_drop_v1')
+    order by evtname`,
   policies:`select * from pg_policies where schemaname in ${schemas} order by schemaname,tablename,policyname`,
 };
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
@@ -359,7 +383,14 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size);
+    assert.deepEqual(before.functions.filter(fn=>referenceAndRenditionFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
+      [...referenceAndRenditionFunctionIdentities].sort(),'exact Brand reference and legacy rendition helper signatures are present');
+    assert.deepEqual(before.brandIndexGuard.map(fn=>fn.key), ['extensions.guard_platform_brand_index_helper_ddl_v1/0']);
+    assert.deepEqual(before.brandIndexEventTriggers.map(trigger=>[trigger.evtname,trigger.evtevent,trigger.evtfoid,trigger.evtenabled]), [
+      ['platform_brand_index_helper_ddl_v1','ddl_command_end',before.brandIndexGuard[0].oid,'O'],
+      ['platform_brand_index_helper_drop_v1','sql_drop',before.brandIndexGuard[0].oid,'O'],
+    ],'both immutable helper guards are attached and enabled');
     assert.deepEqual(before.functions.filter(fn=>r2QualificationFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
       [...r2QualificationFunctionIdentities].sort(),'exact isolated R2 qualification public RPC keys and signatures are present');
     assert.deepEqual(before.functions.filter(fn=>brandObservationFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...brandObservationFunctionKeys].sort());
@@ -406,7 +437,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>brandReferenceFiles.includes(file)),brandReferenceFiles);
+    assert.deepEqual(replayReport.files.filter(file=>legacyRenditionFiles.includes(file)),legacyRenditionFiles);
     assert.deepEqual(replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles,
       'exact isolated R2 qualification migration is replayed in both Studio scenarios');
     assert.deepEqual(replayReport.files.filter(file=>brandObservationFiles.includes(file)),brandObservationFiles);
