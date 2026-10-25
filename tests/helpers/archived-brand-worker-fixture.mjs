@@ -24,6 +24,7 @@ export async function archivedFixture(options = {}) {
   const log = join(directory, "processes.jsonl");
   const invocations = join(directory, "engine-invocations.jsonl");
   const marker = join(directory, "version-counter");
+  const replacementLog = join(directory, "replacement.json");
   const mode = options.mode ?? "clean";
   await writeFile(executable, `#!${process.execPath}
 const fs = require('node:fs');
@@ -55,7 +56,17 @@ else if (mode === 'infection_without_name') { console.log('private credential ou
 else if (mode === 'process_error') { console.error('private credential and raw path'); process.exit(2); }
 else if (mode === 'wrong_clean') { console.log('unrelated path: OK'); process.exit(0); }
 else if (mode === 'mutate_file') { fs.writeFileSync(path, Buffer.alloc(bytes.length, 120)); console.log(path + ': OK'); }
-else if (mode === 'replace_file') { fs.unlinkSync(path); fs.writeFileSync(path, bytes, { mode:384 }); console.log(path + ': OK'); }
+else if (mode === 'replace_file') {
+  const originalInode = fs.statSync(path, { bigint:true }).ino.toString();
+  fs.unlinkSync(path);
+  fs.writeFileSync(path, bytes, { mode:384 });
+  const replacementInode = fs.statSync(path, { bigint:true }).ino.toString();
+  fs.writeFileSync(${JSON.stringify(replacementLog)}, JSON.stringify({ originalInode, replacementInode,
+    originalSha256:crypto.createHash('sha256').update(bytes).digest('hex'),
+    replacementSha256:crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex') }));
+  require('node:assert/strict').notEqual(originalInode, replacementInode, 'the held original descriptor must prevent inode reuse');
+  console.log(path + ': OK');
+}
 else { console.log(path + ': OK'); }
 `, { mode: 0o700 });
   const env = {
@@ -113,6 +124,7 @@ else { console.log(path + ': OK'); }
     sealed: () => calls.filter(call => call.name === "seal_platform_brand_archived_verification"),
     scanned: async () => (await readFile(log, "utf8").catch(() => "")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)),
     engineInvocations: async () => (await readFile(invocations, "utf8").catch(() => "")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)),
+    replacement: async () => JSON.parse(await readFile(replacementLog, "utf8")),
     leftovers: async () => (await readdir(directory)).filter(name => name.startsWith("brand-archived-scan-")),
     cleanup: () => rm(directory, { recursive: true, force: true }),
   };

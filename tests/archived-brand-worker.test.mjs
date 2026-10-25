@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { readdir, readlink } from "node:fs/promises";
 import { archivedFixture, requestId, resultId, binding } from "./helpers/archived-brand-worker-fixture.mjs";
 import { PROJECT_ORIGIN, MAX_BYTES, runArchivedBrandVerification, runBoundedCommand } from "../ops/malware-scanner-worker/archived-brand-worker.mjs";
 
@@ -11,6 +12,14 @@ const using = async (options, action) => {
   try { await action(fixture); } finally { await fixture.cleanup(); }
 };
 const names = fixture => fixture.calls.map(call => call.name.replace("_platform_brand_archived_verification", ""));
+
+async function openFixtureDescriptors(directory) {
+  const targets = await Promise.all((await readdir("/proc/self/fd")).map(async descriptor => {
+    try { return await readlink(`/proc/self/fd/${descriptor}`); }
+    catch (error) { if (error.code === "ENOENT") return ""; throw error; }
+  }));
+  return targets.filter(target => target.startsWith(`${directory}/brand-archived-scan-`));
+}
 
 test("disabled import and CLI perform no RPC, GET, scan, recovery or configuration lookup", async () => {
   for (const value of [undefined, "false", "TRUE", "1", " true"]) {
@@ -229,6 +238,46 @@ test("actual subprocess failures, limits, unknown versions, altered file and ide
   }
   const result = await runBoundedCommand("/nonexistent-local-scanner-test", [], 1000);
   assert.equal(result.exitCode, -1); assert.equal(result.errorCode, "scanner_spawn_failed");
+});
+
+test("identical-byte pathname replacement cannot recycle the held original inode or seal a result", async () => {
+  await using({ mode: "replace_file" }, async f => {
+    const result = await f.run();
+    const replacement = await f.replacement();
+    assert.notEqual(replacement.originalInode, replacement.replacementInode,
+      "the exclusive original descriptor stays open while the scanner unlinks and recreates its path");
+    assert.equal(replacement.originalSha256, replacement.replacementSha256, "this regression replaces identity, not bytes");
+    assert.equal(result.outcomes[0].status, "scan_failed");
+    const recorded = f.recorded()[0].payload.p_result;
+    assert.equal(recorded.errorCode, "scanned_bytes_changed"); assert.equal(recorded.fullReadback, false);
+    assert.equal(recorded.sha256, null); assert.equal(recorded.sizeBytes, null);
+    assert.equal(f.sealed().length, 0); assert.deepEqual(await f.leftovers(), []);
+  });
+});
+
+test("Linux descriptors stay held through scan and close on success, failure, early denial and uncertain writes", { skip: process.platform !== "linux" }, async () => {
+  for (const [options, status, expectsHeld] of [[{}, "sealed", true], [{ mode: "malware" }, "malware_detected", true],
+    [{ mode: "process_error" }, "scan_failed", true], [{ mode: "replace_file" }, "scan_failed", true],
+    [{ mode: "version_unknown" }, "scan_failed", true], [{ denyRead: 1 }, "attempt_unavailable", false],
+    [{ denyRead: 2 }, "attempt_unavailable", true], [{ denyRead: 3 }, "attempt_unavailable", true],
+    [{ recordError: true }, "record_uncertain", true], [{ sealError: true }, "seal_uncertain", true],
+    [{ body: Buffer.from(""), expectedSizeBytes: 29, headers: { "content-length": "29" } }, "scan_failed", false]]) {
+    await using(options, async f => {
+      assert.deepEqual(await openFixtureDescriptors(f.directory), []);
+      const counts = [];
+      const result = await runArchivedBrandVerification(f.env, { fetcher: f.fetcher, tempRoot: f.directory,
+        clamscanBin: `${f.directory}/clamscan-fixture`, scanTimeoutMs: 2000,
+        rpc: async (name, payload) => {
+          counts.push((await openFixtureDescriptors(f.directory)).length);
+          return f.rpc(name, payload);
+        } });
+      assert.equal(result.outcomes[0].status, status);
+      assert.equal(counts.some(count => count === 1), expectsHeld, "one original descriptor is retained after a full download");
+      assert.ok(counts.every(count => count <= 1), "post-scan temporary read descriptor closes before RPC");
+      assert.deepEqual(await openFixtureDescriptors(f.directory), [], "no original, replacement or deleted-file descriptor leaks after return");
+      assert.deepEqual(await f.leftovers(), []);
+    });
+  }
 });
 
 test("uncertain claim/result/seal is not retried and an unacknowledged result is never sealed", async () => {

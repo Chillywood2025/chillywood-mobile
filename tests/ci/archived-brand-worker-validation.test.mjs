@@ -9,6 +9,22 @@ const build = "docker build --tag chillywood-archived-scanner-test --file ops/ma
 const run = 'docker run --rm --network none --entrypoint node --volume "$PWD:/workspace:ro" --workdir /workspace chillywood-archived-scanner-test scripts/test-archived-brand-worker-clamav.mjs';
 const unit = "node --test tests/archived-brand-verification.test.mjs tests/archived-brand-worker.test.mjs";
 
+test("standalone archived runner remains explicitly inventoried as source-only manual evidence work", () => {
+  const inventory = JSON.parse(readFileSync("config/autonomy/autonomous-components.json", "utf8"));
+  const matches = inventory.components.filter(component => component.paths.includes("ops/malware-scanner-worker/archived-brand-worker.mjs"));
+  assert.equal(matches.length, 1);
+  const component = matches[0];
+  assert.equal(component.id, "archived_brand_verification");
+  assert.equal(component.componentType, "non_autonomous_utility");
+  assert.equal(component.deploymentState, "source_complete");
+  assert.equal(component.approvalLevel, 3);
+  assert.equal(component.schedulerCadence, "none; explicitly approved one-shot with one or two request IDs, at most three lifetime attempts per request");
+  assert.equal(component.killSwitch, "keep archived_verification_enabled=false and ARCHIVED_BRAND_VERIFICATION_ONCE unset");
+  assert.deepEqual(component.allowedWrites, ["immutable bounded attempt, observed scanner result, sealed receipt and existing Brand retention proof only"]);
+  assert.deepEqual(component.forbiddenScope, ["ordinary scan jobs", "delivery or moderation changes", "tombstone or retention-clock reset",
+    "deletion claims or provider deletion", "automatic polling or retries", "credential or raw private output", "fabricated clean evidence"]);
+});
+
 function assertEngineGate(candidate) {
   const job = candidate.jobs.database;
   assert.equal(job.if, "needs.plan.outputs.database == 'true'");
