@@ -11,10 +11,11 @@ const guard=source.split(start)[1].split(end)[0];
 const name='guard_platform_brand_index_helper_ddl_v1';
 const target='brand_dispatch_queue_123_abcdef012345';
 const setup='create schema private;create schema extensions;create role anon;create role authenticated;create role service_role;';
+const restoreHelperOwners='alter function private.platform_brand_index_jsonb_bytes_v1(jsonb) owner to postgres;alter function private.platform_brand_index_normalize_v1(text) owner to postgres;';
 const header=(name,type,schema='extensions',owner='postgres')=>`\n--\n-- Name: ${name}; Type: ${type}; Schema: ${schema}; Owner: ${owner}\n--\n\n`;
 const section=(name,type,sql,schema='extensions')=>header(name,type,schema)+sql+'\n\n';
 function dump(body){return '--\n-- PostgreSQL database dump\n--\n'+
-  section('clone_helpers','TABLE',setup+helpers,'public')+
+  section('clone_helpers','TABLE',setup+helpers+restoreHelperOwners,'public')+
   section(`${name}()`,'FUNCTION',`CREATE FUNCTION extensions.${name}() RETURNS event_trigger\n LANGUAGE plpgsql\n SET search_path TO ''\n AS $function$${body}$function$;\nALTER FUNCTION extensions.${name}() OWNER TO postgres;`)+
   section(`FUNCTION ${name}()`,'ACL',`REVOKE ALL ON FUNCTION extensions.${name}() FROM PUBLIC;`)+
   section('platform_brand_index_helper_ddl_v1','EVENT TRIGGER',`CREATE EVENT TRIGGER platform_brand_index_helper_ddl_v1 ON ddl_command_end\n EXECUTE FUNCTION extensions.${name}();\nALTER EVENT TRIGGER platform_brand_index_helper_ddl_v1 OWNER TO postgres;`,'-')+
@@ -29,9 +30,13 @@ test.after(async()=>{await original?.close();});
 test('adapter preserves unrelated dump SQL, binds original owner, and rejects incomplete or extended guard sections',()=>{
   assert.match(originalDump,/expected constant jsonb:=E'/u,'real format(%L) fixture includes canonical escape-string JSON');
   const prepared=prepareBrandGuardCloneRestore(originalDump,target).toString();
-  assert.ok(prepared.includes(section('clone_helpers','TABLE',setup+helpers,'public')));
+  assert.ok(prepared.includes(section('clone_helpers','TABLE',setup+helpers+restoreHelperOwners,'public')));
   assert.ok(prepared.includes(section('clone_unrelated_after','TABLE','CREATE TABLE public.clone_unrelated_after(id integer);','public')));
-  assert.ok(prepared.includes(`set role "postgres";\n${guard}\nreset role;`));
+  assert.ok(prepared.includes(`set role "postgres";\n${guard}\n`));
+  const proofStart=prepared.indexOf('do $clone_guard_proof$');
+  const proofEnd=prepared.indexOf('end $clone_guard_proof$;')+'end $clone_guard_proof$;'.length;
+  assert.ok(proofStart>prepared.indexOf(`set role "postgres";`));
+  assert.equal(prepared.indexOf('reset role;'),prepared.indexOf('reset role;',proofEnd),'restore role cannot resume before guard proof');
   for(const candidate of [
     originalDump.replace(header(`FUNCTION ${name}()`,'ACL'),'\n-- missing ACL header\n'),
     originalDump.replace('OWNER TO postgres;', 'OWNER TO authenticated;'),
@@ -54,7 +59,7 @@ test('ordinary restore retains obsolete OIDs; clone adapter rebinds with owner, 
   t.after(async()=>{await stale.close();await clone.close();await secondClone.close();});
   await stale.exec('create schema oid_shift;create table oid_shift.rows(id integer);');
   await assert.rejects(stale.exec(originalDump),error=>error.code==='55000'&&error.message==='brand_index_helper_immutable');
-  await clone.exec('create schema oid_shift;create table oid_shift.rows(id integer);');
+  await clone.exec('create schema oid_shift;create table oid_shift.rows(id integer);create role fixture_restore_admin superuser;set session authorization fixture_restore_admin;');
   const prepared=prepareBrandGuardCloneRestore(originalDump,target).toString();
   await assert.rejects(clone.exec(prepared),/brand_guard_clone_target_mismatch/u);
   assert.equal((await clone.query("select to_regnamespace('private') is null absent")).rows[0].absent,true);
@@ -64,6 +69,9 @@ test('ordinary restore retains obsolete OIDs; clone adapter rebinds with owner, 
   const comparison=`current_database()<>'${target}'`;
   assert.equal(prepared.split(comparison).length,3);
   await clone.exec(prepared.replaceAll(comparison,"current_database()<>'postgres'"));
+  assert.equal((await clone.query('select current_user::text role,session_user::text login')).rows[0].role,'fixture_restore_admin','restore role resumes only after owner proof');
+  const proofOnly=prepared.slice(prepared.indexOf('do $clone_guard_proof$'),prepared.indexOf('end $clone_guard_proof$;')+'end $clone_guard_proof$;'.length);
+  await assert.rejects(clone.exec(proofOnly),/brand_guard_clone_proof_role_mismatch/u,'old reset-before-proof context must be rejected explicitly');
   assert.equal((await clone.query('select count(*)::int n from pg_event_trigger')).rows[0].n,2);
   assert.equal((await clone.query("select to_regclass('public.clone_unrelated_after') is not null present")).rows[0].present,true);
   const sourceOids=(await original.query("select oid from pg_proc where proname in ('platform_brand_index_jsonb_bytes_v1','platform_brand_index_normalize_v1') order by proname")).rows;
@@ -86,7 +94,7 @@ test('restored helper owner, ACL, and body changes cannot be blessed by rebindin
     'alter function private.platform_brand_index_normalize_v1(text) stable;',
   ]){
     const db=new PGlite();t.after(()=>db.close());
-    const changed=originalDump.replace(helpers,()=>helpers+mutation);
+    const changed=originalDump.replace(helpers+restoreHelperOwners,()=>helpers+restoreHelperOwners+mutation);
     const sql=prepareBrandGuardCloneRestore(changed,target).toString().replaceAll(`current_database()<>'${target}'`,"current_database()<>'postgres'");
     await assert.rejects(db.exec(sql),/brand_guard_clone_source_catalog_mismatch/u);
   }

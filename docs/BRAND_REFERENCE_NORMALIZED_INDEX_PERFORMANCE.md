@@ -36,12 +36,22 @@ dump copied into another database cannot reuse its serialized OID fingerprint.
 The disposable-clone adapter in `scripts/lib/brand-guard-clone-restore.mjs`
 validates and replaces only that serialized guard with the identical migration
 installer under its original owner after restoring the clone. It requires both
-event bindings and rejected helper mutations before the clone is used. This
+event bindings and rejected helper mutations under that same owner before the
+clone is used, then restores the administrative session role. The owner-change
+probe grants the recipient schema CREATE only inside the rejected transaction
+scope and verifies that the namespace catalog is unchanged afterwards. This
 also respects Supabase's requirement that an event-trigger creator and its
 function owner have matching superuser status. A general logical restore needs
 the same explicit reinstallation and verification procedure; a bare dump
 restore is not qualified. Restored index-registry OIDs do not transfer index
 qualification, so mismatched entries retain the exact scan.
+
+Supabase's Supautils deliberately skips non-superuser-owned event functions
+for effective platform superusers and reserved roles. The active guard's
+immutability guarantee therefore covers DDL for which those events execute;
+it does not constrain `supabase_admin` or other bypassing platform principals.
+The clone proof uses the captured owner to verify that guarded DDL still fails
+with the exact immutable-helper error. See the [Supautils 3.4.0 event hook](https://github.com/supabase/supautils/blob/v3.4.0/src/supautils.c#L137-L170).
 
 Unsupported types, depth, size, relation shapes, schema changes, changed helper
 or index metadata, and special reference predicates retain the exact full scan.

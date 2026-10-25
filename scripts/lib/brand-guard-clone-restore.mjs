@@ -127,10 +127,16 @@ do $clone_catalog$ begin
 end $clone_catalog$;
 set role ${identifier(owner)};
 ${installer}
-reset role;
+-- Supautils skips non-superuser-owned event triggers for platform superusers.
+-- Verify under the captured owner used by the native protocol fixtures.
 do $clone_guard_proof$
-declare initial jsonb:=${catalog}; command text;
+declare initial jsonb:=${catalog}; command text; mutation_number integer:=0;
+  initial_namespace jsonb:=(select to_jsonb(n) from pg_namespace n where n.nspname='private');
 begin
+  if current_user<>${literal(owner)} then raise exception 'brand_guard_clone_proof_role_mismatch'; end if;
+  if not pg_has_role(current_user,'authenticated','SET') then
+    raise exception 'brand_guard_clone_proof_owner_membership_missing';
+  end if;
   if not exists(select 1 from pg_proc p where p.oid='extensions.${guard}()'::regprocedure
     and p.proowner=${literal(owner)}::regrole and not p.prosecdef and not p.proleakproof
     and p.provolatile='v' and p.proparallel='u' and p.proconfig=array['search_path=""']
@@ -150,13 +156,23 @@ begin
     raise exception 'brand_guard_clone_event_binding_mismatch';
   end if;
   foreach command in array array[${mutations.map(literal).join(',')}] loop
-    begin execute command; raise exception 'brand_guard_clone_mutation_allowed';
+    mutation_number:=mutation_number+1;
+    begin
+      -- ALTER OWNER checks the recipient's schema privilege before firing the
+      -- guard. This clone-only grant rolls back with the rejected mutation.
+      if mutation_number=3 then grant create on schema private to authenticated; end if;
+      execute command;
+      raise exception 'brand_guard_clone_mutation_allowed (case %, role %)',mutation_number,current_user;
     exception when sqlstate '55000' then if sqlerrm<>'brand_index_helper_immutable' then raise; end if; end;
     if ${catalog} is distinct from initial then raise exception 'brand_guard_clone_mutation_not_atomic'; end if;
+    if (select to_jsonb(n) from pg_namespace n where n.nspname='private') is distinct from initial_namespace then
+      raise exception 'brand_guard_clone_namespace_not_atomic';
+    end if;
   end loop;
   create temporary table brand_guard_clone_unrelated_ddl(id integer);
   drop table brand_guard_clone_unrelated_ddl;
 end $clone_guard_proof$;
+reset role;
 `;
   return Buffer.from(`${targetCheck}\n${restored}\n${suffix}`, 'utf8');
 }
