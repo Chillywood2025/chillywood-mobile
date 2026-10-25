@@ -13,7 +13,7 @@ test('real worker downloads streamed bytes, passes same temporary bytes to scann
  const data=Buffer.from('Synthetic byte receipt fixture\u0000\u00ff\n');
  const calls=[];
  const job={id:'10000000-0000-4000-8000-000000000001',target_table:'platform_brand_assets',target_column:'logo',
-   storage_provider:'supabase',storage_bucket:'platform-brand-assets',storage_object_key:'fixture/logo.png',attempt_count:1};
+   size_bytes:data.length,storage_provider:'supabase',storage_bucket:'platform-brand-assets',storage_object_key:'fixture/logo.png',attempt_count:1};
  const server=createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;
   const name=req.url.split('/').at(-1);const payload=raw?JSON.parse(raw):null;calls.push({name,payload});

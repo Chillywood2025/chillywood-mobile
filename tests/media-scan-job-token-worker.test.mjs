@@ -17,7 +17,7 @@ async function runWorker({ provider = 'cloudflare_r2', dedicated = jobToken, leg
   const data = Buffer.from('Harmless synthetic private-origin fixture\n');
   const calls = [];
   const job = { id: '10000000-0000-4000-8000-000000000001', target_table: 'videos', target_column: 'playback_url',
-    storage_provider: provider, storage_bucket: 'synthetic-private', storage_object_key: 'fixture/private.bin', attempt_count: 1 };
+    size_bytes: data.length, storage_provider: provider, storage_bucket: 'synthetic-private', storage_object_key: 'fixture/private.bin', attempt_count: 1 };
   const server = createServer(async (req, res) => {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const name = req.url.split('/').at(-1);
