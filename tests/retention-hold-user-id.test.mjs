@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 
 const oldFile='supabase/migrations/20261020141458_deleted_content_retention.sql';
-const migration=readFileSync('supabase/migrations/20261025055426_deleted_content_user_id_hold_scope.sql','utf8');
+const migration=readFileSync('supabase/migrations/20261025083249_deleted_content_user_id_hold_scope.sql','utf8');
 const oldSource=readFileSync(oldFile,'utf8');
 const start=oldSource.indexOf('create function private.deleted_content_hold_matches(');
 const oldFunction=oldSource.slice(start,oldSource.indexOf('$$;',start)+3);
