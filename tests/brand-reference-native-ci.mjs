@@ -3,15 +3,30 @@
 // No production configuration, existing container or deployment is accepted.
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
-import {readFileSync,writeFileSync,existsSync,createWriteStream} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,createWriteStream,readdirSync,mkdirSync,lstatSync,copyFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
-const imageTag='public.ecr.aws/supabase/postgres:17.6.1.159';
-const imageID='sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
+const imageRepository='public.ecr.aws/supabase/postgres';
+const imageDigest='sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
+const imageReference=imageRepository+'@'+imageDigest;
+// Docker's local image/config ID is distinct from the registry manifest digest.
+// Pull only the immutable manifest; never fall back to the historical tag.
+function collectEvidence(){
+ const destination=root+'brand-native-evidence/';mkdirSync(destination,{recursive:true});
+ const files=[];
+ for(const name of readdirSync(evidence).filter(name=>/^brand-(?:reference-.+\.json|native-ci-.+\.(?:json|log))$/.test(name)).sort()){
+  if(!lstatSync(evidence+name).isFile())continue;
+  copyFileSync(evidence+name,destination+name);
+  files.push({name,sha256:createHash('sha256').update(readFileSync(evidence+name)).digest('hex')});
+ }
+ writeFileSync(destination+'manifest.json',JSON.stringify({collectedAt:new Date().toISOString(),files},null,2)+'\n');
+ console.log(`Collected ${files.length} Brand attempt files in brand-native-evidence.`);
+}
+if(process.argv[2]==='--collect-evidence'){assert.equal(process.argv.length,3);collectEvidence();process.exit(0);}
 const stages=[
  ['source-guards','tests/brand-reference-guards-native.mjs',['--keep-fixture'],12*60],
  ['semantics','tests/brand-reference-normalized-semantics-native.mjs',[],4*60],
@@ -25,7 +40,7 @@ const stages=[
 ];
 if(process.argv[2]==='--plan'){
  assert.equal(process.argv.length,3);
- console.log(JSON.stringify({imageTag,imageID,mainMemoryBytes:4*1024**3,network:'none',hostMounts:[],stages,
+ console.log(JSON.stringify({imageReference,imageDigest,mainMemoryBytes:4*1024**3,network:'none',hostMounts:[],stages,
   finalStage:'Stop the main fixture, then run actual overflow in a separate bounded container.'},null,2));process.exit(0);
 }
 assert.equal(process.argv.length,2);
@@ -40,8 +55,9 @@ assert.ok(!existsSync(summaryPath),'one qualification attempt per fresh runner w
 const env={...process.env,BRAND_REFERENCE_TEST_CONTAINER:container,BRAND_REFERENCE_NORMALIZED_FIXTURE:manifest};
 for(const key of Object.keys(env))if(key.startsWith('PG')||key.startsWith('SUPABASE')||key==='DATABASE_URL')delete env[key];
 const sha=value=>createHash('sha256').update(value).digest('hex');
-const summary={status:'running',startedAt:new Date().toISOString(),syntheticOnly:true,container,imageTag,imageID,
+const summary={status:'running',startedAt:new Date().toISOString(),syntheticOnly:true,container,imageReference,imageDigest,
  sourceHead:process.env.GITHUB_SHA,runner:{os:process.platform,architecture:process.arch},stages:[],
+ sourceHashes:Object.fromEntries(['tests/brand-reference-native-ci.mjs','supabase/migrations/20261025121430_platform_brand_reference_scan_performance.sql','supabase/migrations/20261025141347_platform_brand_reference_candidate_indexes.sql'].map(file=>[file,sha(readFileSync(root+file))])),
  limitations:['Native source replay uses explicit managed-service doubles; canonical managed Supabase validation remains separate.',
   'Synthetic runner latency does not establish production latency. No deployment is performed.']};
 const save=phase=>{summary.phase=phase;summary.updatedAt=new Date().toISOString();writeFileSync(summaryPath,JSON.stringify(summary,null,2)+'\n');console.log(summary.updatedAt+' '+phase);};
@@ -73,15 +89,16 @@ try{
  assert.equal(process.platform,'linux');assert.equal(process.arch,'x64');
  if(env.DOCKER_HOST)assert.match(env.DOCKER_HOST,/^unix:\/\//);
  assert.match(checked(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker context'),/^unix:\/\//);
- await command('pull-image','docker',['pull','--platform','linux/amd64',imageTag],300);
- const image=JSON.parse(checked(docker(['image','inspect',imageTag]),'verify image identity'))[0];
- assert.equal(image.Id,imageID,'a changed tag must fail closed, never select a different image');
+ await command('pull-image','docker',['pull','--platform','linux/amd64',imageReference],300);
+ const image=JSON.parse(checked(docker(['image','inspect',imageReference]),'verify image identity'))[0];
+ assert.ok(image.RepoDigests?.includes(imageReference),'the exact immutable manifest must be present');
+ assert.match(image.Id,/^sha256:[0-9a-f]{64}$/);const imageID=image.Id;
  assert.equal(image.Architecture,'amd64');assert.equal(image.Os,'linux');
  summary.image={id:image.Id,repoDigests:image.RepoDigests,architecture:image.Architecture,os:image.Os};
  const init=`initdb -D ${dataDirectory} --auth-local=trust --auth-host=reject --encoding=UTF8 --locale=C && exec postgres -D ${dataDirectory} -c listen_addresses='' -c unix_socket_directories=/tmp`;
  save('create new bounded container with no network, host mounts or published ports');
  checked(docker(['create','--name',container,'--network','none','--memory','4g','--memory-swap','4g','--pids-limit','256',
-  '--label','brand.reference.recovery='+process.env.GITHUB_RUN_ID,'--restart','no','--user','postgres','--entrypoint','/bin/sh',imageID,'-c',init]),'create own fixture');created=true;
+  '--label','brand.reference.recovery='+process.env.GITHUB_RUN_ID,'--restart','no','--user','postgres','--entrypoint','/bin/sh',imageReference,'-c',init]),'create own fixture');created=true;
  const initial=inspect();assert.equal(initial.HostConfig.NetworkMode,'none');assert.deepEqual(initial.Mounts,[]);
  assert.equal(initial.HostConfig.Memory,4*1024**3);assert.equal(initial.HostConfig.MemorySwap,4*1024**3);
  assert.equal(initial.Image,imageID);assert.deepEqual(initial.HostConfig.PortBindings??{},{});
@@ -109,12 +126,12 @@ try{
  const overflow=JSON.parse(readFileSync(evidence+'brand-reference-normalized-overflow-native.json','utf8'));
  assert.equal(overflow.status,'passed');assert.equal(overflow.result.originalSQLSTATE,'54000');
  summary.status='passed';save('native qualification gates passed; no deployment or managed-runtime claim');
-}catch(error){summary.status='failed';summary.error=String(error.message);save('native qualification stopped at the first failed gate');process.exitCode=1;}
+}catch(error){summary.status='failed';summary.error=String(error.message);console.error(summary.error);save('native qualification stopped at the first failed gate');process.exitCode=1;}
 finally{
  if(created){
   const logs=docker(['logs','--timestamps',container]);writeFileSync(evidence+'brand-native-ci-postgres.log',(logs.stdout??'')+(logs.stderr??''));
   try{summary.terminalBeforeStop=inspect().State;stopMain();summary.terminalState=inspect().State;}
   catch(error){summary.cleanupError=String(error.message);summary.status='failed';process.exitCode=1;}
  }
- summary.runnerSHA256=sha(readFileSync(new URL(import.meta.url)));summary.completedAt=new Date().toISOString();save('qualification evidence saved');
+ summary.runnerSHA256=sha(readFileSync(new URL(import.meta.url)));summary.completedAt=new Date().toISOString();save('qualification evidence saved');collectEvidence();
 }

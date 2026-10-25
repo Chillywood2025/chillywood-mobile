@@ -242,15 +242,15 @@ jobs:
           EXPO_NO_DOTENV: '1'
           EXPO_NO_CLIENT_ENV_VARS: '1'
         run: node tests/brand-reference-native-ci.mjs
+      - name: Collect Brand attempt evidence within the workspace
+        if: always()
+        run: node tests/brand-reference-native-ci.mjs --collect-evidence
       - name: Preserve exact attempt evidence even when a gate fails
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: brand-native-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ../brand-reference-*.json
-            ../brand-native-ci-*.json
-            ../brand-native-ci-*.log
+          path: brand-native-evidence
           if-no-files-found: warn
           retention-days: 14
 

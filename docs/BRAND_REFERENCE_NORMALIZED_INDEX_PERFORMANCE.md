@@ -142,10 +142,14 @@ database category. Failed, missing and stale applicable runs fail closed.
 For the pull request introducing this policy update, its exact native run must
 also be reviewed before merge while protected main still has the prior policy.
 
-The runner pulls the historically recorded
-`public.ecr.aws/supabase/postgres:17.6.1.159` and requires the exact recorded image
-ID `sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f`.
-A changed tag fails before creating a fixture. It verifies amd64, native server
+The historical `public.ecr.aws/supabase/postgres:17.6.1.159` resolves to registry
+manifest digest `sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f`.
+The runner pulls `public.ecr.aws/supabase/postgres@` followed by that exact digest,
+without a floating-tag fallback, and verifies it in `RepoDigests`. Docker's local
+image/config ID is recorded separately and checked against the created
+container. Historical evidence sometimes labeled the manifest digest as an
+image ID; the first CI attempt exposed that distinction before creating any
+fixture. It verifies amd64, native server
 170006 and no TCP listener. The newly named main container has no network,
 mounts or published ports, 4 GiB memory and no swap. Existing fixtures cannot be
 adopted. The source replay has managed-service doubles and does not replace the
@@ -159,7 +163,10 @@ gracefully before a separate 3-GiB/no-swap overflow container runs, with at leas
 4 GiB observed headroom. This capacity covers the historical 1.5–3 GiB estimate;
 the actual overflow statement retains its 30-second limit. OOM still fails.
 
-Every attempt uploads JSON reports and stage/PostgreSQL logs even on failure.
+Every attempt copies JSON reports and stage/PostgreSQL logs, with SHA256s, into
+`brand-native-evidence` inside the checkout and uploads that directory even on
+failure. The collector also runs in an unconditional workflow step; artifact
+upload never uses parent-directory patterns, which upload-artifact v7 rejects.
 The top-level report is `brand-native-ci-summary.json`; detailed native results
 include `brand-reference-index-native-guards.json`,
 `brand-reference-index-native-races.json`,

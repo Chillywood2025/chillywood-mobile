@@ -14,7 +14,7 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
 const output=evidence+'brand-reference-normalized-overflow-native.json';
 assert.ok(!existsSync(output),'preserve an earlier attempt; no automatic reruns');
-const image='sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
+const image='public.ecr.aws/supabase/postgres@sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
 const container=`brand-ref-overflow-recovery-${process.pid}-${randomUUID().slice(0,8)}`;
 const dataDirectory='/tmp/brand-reference-overflow-data';
 const memoryBytes=3072*1024*1024;
@@ -50,7 +50,9 @@ try{
  if(process.env.DOCKER_HOST)assert.match(process.env.DOCKER_HOST,/^(unix|npipe):\/\//);
  report.context=success(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker engine');
  assert.match(report.context,/^(unix|npipe):\/\//);
- report.imageIdentity=success(docker(['image','inspect','--format','{{.Id}}',image]),'existing image');assert.equal(report.imageIdentity,image);
+ const imageState=JSON.parse(success(docker(['image','inspect',image]),'existing immutable image'))[0];
+ assert.ok(imageState.RepoDigests?.includes(image),'exact registry manifest required');
+ assert.match(imageState.Id,/^sha256:[0-9a-f]{64}$/);report.imageIdentity=imageState.Id;report.repoDigests=imageState.RepoDigests;
  const init=`initdb -D ${dataDirectory} --auth-local=trust --auth-host=reject --encoding=UTF8 --locale=C && exec postgres -D ${dataDirectory} -c listen_addresses='' -c unix_socket_directories=/tmp`;
  const createArgs=['create','--name',container,'--network','none','--memory','3072m','--memory-swap','3072m','--pids-limit','64','--restart','no','--user','postgres','--entrypoint','/bin/sh',image,'-c',init];
  report.creationCommand=['docker',...createArgs];report.creationOutcome='not_started';checkpoint('create isolated container with hard memory/no-swap bound; no host mounts');
@@ -64,7 +66,7 @@ try{
   else report.creationOutcome='uncertain';
  }
  success(creation,'isolated container creation');created=true;report.creationOutcome='created';
- report.initialProperties=JSON.parse(success(inspect(),'verify created container'));assert.equal(report.initialProperties.network,'none');assert.deepEqual(report.initialProperties.mounts,[]);assert.equal(report.initialProperties.image,image);
+ report.initialProperties=JSON.parse(success(inspect(),'verify created container'));assert.equal(report.initialProperties.network,'none');assert.deepEqual(report.initialProperties.mounts,[]);assert.equal(report.initialProperties.image,report.imageIdentity);
  assert.equal(report.initialProperties.memory,memoryBytes);assert.equal(report.initialProperties.memorySwap,memoryBytes);assert.equal(report.initialProperties.pids,64);assert.equal(report.initialProperties.user,'postgres');
  report.start=resultRecord(docker(['start',container]));assert.equal(report.start.status,0,report.start.stderr);checkpoint('initialize independent empty PostgreSQL cluster');
  const readinessDeadline=Date.now()+45000;

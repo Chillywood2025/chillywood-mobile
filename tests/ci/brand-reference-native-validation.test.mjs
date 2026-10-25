@@ -37,6 +37,11 @@ function assertNativeGate(candidate) {
   assert.equal(upload.length, 1);
   assert.equal(upload[0].if, 'always()');
   assert.match(upload[0].uses, /^actions\/upload-artifact@[a-f0-9]{40}$/);
+  assert.equal(upload[0].with.path, 'brand-native-evidence', 'artifact v7 requires a workspace path without parent traversal');
+  const collectors = job.steps.filter(step => step.run === command + ' --collect-evidence');
+  assert.equal(collectors.length, 1, 'failure evidence has an independent collection step');
+  assert.equal(collectors[0].if, 'always()');
+  assert.ok(job.steps.indexOf(collectors[0]) < job.steps.indexOf(upload[0]));
   assert.equal(candidate.jobs.result.if, 'always()');
   assert.equal(candidate.jobs.result.needs.filter(name => name === jobId).length, 1);
 }
@@ -64,7 +69,7 @@ test('Brand native qualification is an unconditional database obligation in the 
 });
 
 test('native workflow wiring rejects omission, skips, ignored failures and duplicate execution', () => {
-  for (const mutation of ['missing-job', 'skip-job', 'skip-step', 'ignore-job', 'ignore-step', 'duplicate', 'shell-swallow', 'missing-result', 'skip-artifact']) {
+  for (const mutation of ['missing-job', 'skip-job', 'skip-step', 'ignore-job', 'ignore-step', 'duplicate', 'shell-swallow', 'missing-result', 'skip-artifact', 'parent-artifact-path', 'skip-collection', 'missing-collection']) {
     const changed = structuredClone(workflow), job = changed.jobs[jobId];
     const step = job.steps.find(value => value.run === command);
     if (mutation === 'missing-job') delete changed.jobs[jobId];
@@ -76,6 +81,9 @@ test('native workflow wiring rejects omission, skips, ignored failures and dupli
     if (mutation === 'shell-swallow') step.run += ' || true';
     if (mutation === 'missing-result') changed.jobs.result.needs = changed.jobs.result.needs.filter(name => name !== jobId);
     if (mutation === 'skip-artifact') job.steps.find(value => value.uses?.startsWith('actions/upload-artifact@')).if = 'success()';
+    if (mutation === 'parent-artifact-path') job.steps.find(value => value.uses?.startsWith('actions/upload-artifact@')).with.path = '../brand-reference-*.json';
+    if (mutation === 'skip-collection') job.steps.find(value => value.run === command + ' --collect-evidence').if = 'success()';
+    if (mutation === 'missing-collection') job.steps = job.steps.filter(value => value.run !== command + ' --collect-evidence');
     assert.throws(() => assertNativeGate(changed), assert.AssertionError, mutation);
   }
 });
