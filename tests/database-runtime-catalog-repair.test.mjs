@@ -145,6 +145,7 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
+const userIdHoldScopeFiles = ['20261025055426_deleted_content_user_id_hold_scope.sql'];
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const brandArchivedVerificationFiles = ['20261025055056_platform_brand_archived_byte_verification.sql'];
 const brandArchivedVerificationFunctionIdentities = new Map([
@@ -372,11 +373,12 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandArchivedVerificationFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length);
     assert.deepEqual(replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles,
       'exact isolated R2 qualification migration is replayed in both Studio scenarios');
     assert.deepEqual(replayReport.files.filter(file=>brandGlobalRetentionFiles.includes(file)),brandGlobalRetentionFiles);
     assert.deepEqual(replayReport.files.filter(file=>brandArchivedVerificationFiles.includes(file)),brandArchivedVerificationFiles);
+    assert.deepEqual(replayReport.files.filter(file=>userIdHoldScopeFiles.includes(file)),userIdHoldScopeFiles);
     assert.deepEqual(replayReport.files.filter(file=>externalReferenceFiles.includes(file)),externalReferenceFiles);
     assert.deepEqual(replayReport.files.filter(file=>realtimeIdentityFiles.includes(file)),realtimeIdentityFiles);
     assert.deepEqual(replayReport.files.filter(file=>originalCopyFiles.includes(file)),originalCopyFiles);
