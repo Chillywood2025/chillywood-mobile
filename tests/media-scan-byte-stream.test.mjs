@@ -14,7 +14,7 @@ for(const copied of [false,true]) test(`real worker downloads streamed ${copied?
  const calls=[];
  const job={id:'10000000-0000-4000-8000-000000000001',target_table:copied?'videos':'platform_brand_assets',target_column:copied?'source':'logo',
    storage_provider:copied?'cloudflare_r2':'supabase',storage_bucket:copied?'chillywood-media-origin':'platform-brand-assets',
-   storage_object_key:'fixture/logo.png',attempt_count:1,...(copied?{metadata:{supabaseCopyCutoverId:'20000000-0000-4000-8000-000000000001'}}:{})};
+   storage_object_key:'fixture/logo.png',size_bytes:data.length,attempt_count:1,...(copied?{metadata:{supabaseCopyCutoverId:'20000000-0000-4000-8000-000000000001'}}:{})};
  const server=createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;
   const name=req.url.split('/').at(-1);const payload=raw?JSON.parse(raw):null;calls.push({name,payload});

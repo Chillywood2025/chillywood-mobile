@@ -80,7 +80,7 @@ end $$;
 
 create function public.read_supabase_original_copy_cutover(p_receipt_id uuid) returns jsonb
 language plpgsql security definer set search_path='' set timezone='UTC' as $$
-declare r private.supabase_original_copy_receipts; o storage.objects; preflight jsonb; c private.supabase_original_copy_cutovers;
+declare r private.supabase_original_copy_receipts; o storage.objects; preflight jsonb; c private.supabase_original_copy_cutovers; s jsonb;
 begin
  if coalesce(auth.jwt()->>'role','')<>'service_role' then raise exception 'copy_cutover_service_role_required'; end if;
  perform private.lock_supabase_copy_cutover();
@@ -95,6 +95,9 @@ begin
  if preflight->>'reason' is distinct from 'fresh_scan_required_after_locator_cutover'
   or preflight->>'sourceMatches' is distinct from 'true' then
   raise exception 'copy_cutover_preflight_blocked: %',preflight->>'reason'; end if;
+ s:=private.read_supabase_original_copy_source(r.table_name,r.row_id);
+ if (case r.table_name when 'videos' then (s->>'file_size_bytes')::bigint else (s->>'size_bytes')::bigint end)
+   is distinct from r.size_bytes then raise exception 'copy_cutover_source_size_metadata_mismatch'; end if;
  select * into o from storage.objects where bucket_id=r.old_bucket and name=r.old_object_key for share nowait;
  if not found or nullif(to_jsonb(o)->>'version','') is null then raise exception 'copy_cutover_source_storage_missing'; end if;
  return jsonb_build_object('state','readback_required','receiptId',r.id,'tableName',r.table_name,'rowId',r.row_id,
@@ -127,6 +130,9 @@ begin
  if preflight->>'reason' is distinct from 'fresh_scan_required_after_locator_cutover'
   or preflight->>'sourceMatches' is distinct from 'true' then
   raise exception 'copy_cutover_preflight_blocked: %',preflight->>'reason'; end if;
+ s:=private.read_supabase_original_copy_source(r.table_name,r.row_id);
+ if (case r.table_name when 'videos' then (s->>'file_size_bytes')::bigint else (s->>'size_bytes')::bigint end)
+   is distinct from r.size_bytes then raise exception 'copy_cutover_source_size_metadata_mismatch'; end if;
  select * into o from storage.objects where bucket_id=r.old_bucket and name=r.old_object_key for share nowait;
  if not found or (o.id,to_jsonb(o)->>'version') is distinct from (p_source_storage_id,p_source_storage_version)
   or nullif(p_source_storage_version,'') is null then raise exception 'copy_cutover_source_generation_changed'; end if;
@@ -148,6 +154,7 @@ begin
  if s->>'scan_status' is distinct from 'pending_scan' or s->>'scanned_at' is not null
   or s->>'scan_result' is not null or s->>'scan_error' is not null or s->>'quarantined_at' is not null
   or j.status<>'pending_scan' or j.attempt_count<>0 or j.claimed_at is not null or j.completed_at is not null
+  or j.size_bytes is distinct from r.size_bytes
   or j.owner_user_id is distinct from r.owner_id::text then raise exception 'copy_cutover_fresh_scan_not_queued'; end if;
  insert into private.supabase_original_copy_cutovers(id,table_name,row_id,owner_id,source_storage_id,source_storage_version,
   old_binding,new_binding,target_key,sha256,size_bytes,scan_job_id,scan_job_created_at,readback_assertions)

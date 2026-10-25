@@ -1999,8 +1999,9 @@ const handler = async (req: Request): Promise<Response> => {
             targetUrl: (method, objectKey) => createPresignedS3Url({...config, method, objectKey, expiresSeconds: 120}),
           });
           return json(200, {ok: true, action, ...result});
-        } catch {
-          return json(409, {ok: false, action, reason: "supabase_copy_cutover_unavailable"});
+        } catch (error) {
+          return json(409, {ok: false, action, reason: error instanceof Error && error.message === "copy_cutover_source_size_metadata_mismatch"
+            ? "copy_cutover_source_size_metadata_mismatch" : "supabase_copy_cutover_unavailable"});
         }
       }
       const result = await copySupabaseOriginal({

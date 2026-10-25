@@ -17,10 +17,12 @@ protocol and remains preserved even after its R2 successor is retained.
    them to the receipt, and calls the bounded commit RPC. No PUT or DELETE is
    performed by this step.
 3. Commit rechecks the unchanged source snapshot, generation, legal holds,
-   reference coverage, old/new aliases, immutable history, and absence of every
+   reference coverage, old/new aliases, immutable history, exact source size
+   metadata matching the measured receipt, and absence of every
    rendition or transcode. Reference-producer table locks fail immediately on
    contention. Existing queue triggers must create a new pending job with zero
-   attempts. Commit and its permanent ledger are atomic; rollback preserves the
+   attempts and the same measured size. Missing or incorrect source size is a
+   refusal, never a silent metadata repair. Commit and its permanent ledger are atomic; rollback preserves the
    old locator. Exact retries reuse the original job, never enqueue another one.
 4. The existing trusted scanner downloads the new target through its existing
    private-job gateway. A separate observation/receipt protocol binds the actual

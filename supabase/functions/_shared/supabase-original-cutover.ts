@@ -15,6 +15,9 @@ type Dependencies = {
 export async function cutoverSupabaseOriginal(receiptId: string, deps: Dependencies) {
   if (!UUID.test(receiptId)) throw new Error("copy_cutover_identity_invalid");
   const initial = await deps.adminClient.rpc("read_supabase_original_copy_cutover", {p_receipt_id: receiptId});
+  if (typeof initial.error?.message === "string" && initial.error.message.includes("copy_cutover_source_size_metadata_mismatch")) {
+    throw new Error("copy_cutover_source_size_metadata_mismatch");
+  }
   const r = initial.data;
   if (initial.error || !r || r.receiptId !== receiptId) throw new Error("copy_cutover_not_ready");
   if (r.state === "committed") {

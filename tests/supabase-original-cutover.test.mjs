@@ -14,7 +14,7 @@ function fixture(options={}){
  const deps={supabaseUrl:'https://project.example',targetAllowed:async()=>options.allowed!==false,
   targetUrl:async(method,key)=>{calls.push(['sign-target',method,key]);return 'https://private.example/object'},
   adminClient:{storage:{from:()=>({createSignedUrl:async()=>({data:{signedUrl:options.sourceUrl??'https://project.example/storage/v1/object/sign/creator-videos/old.mp4?token=synthetic'}})})},
-   rpc:async(name,args)=>{calls.push([name,args]);return name==='read_supabase_original_copy_cutover'?{data:{...binding,...options.binding}}:{data:options.commitBad?{}:{state:'committed',receiptId:receipt,scanJobId:job,alreadyCommitted:false}}}},
+   rpc:async(name,args)=>{calls.push([name,args]);return name==='read_supabase_original_copy_cutover'?{data:{...binding,...options.binding},error:options.initialError}:{data:options.commitBad?{}:{state:'committed',receiptId:receipt,scanJobId:job,alreadyCommitted:false}}}},
   fetcher:async(url,config)=>{calls.push(['fetch',url.origin,config]);const target=url.origin==='https://private.example';return new Response(target&&options.changed?Buffer.alloc(bytes.length):bytes,{status:options.status??200,headers:{'content-length':String(options.length??bytes.length),...(options.headers??{})}})}
  };
  return {calls,deps};
@@ -38,6 +38,11 @@ for(const options of [{changed:true},{status:206},{length:1},{headers:{'content-
 test('uncertain commit never reported completed or retried internally',async()=>{
  const f=fixture({commitBad:true});await assert.rejects(()=>cutoverSupabaseOriginal(receipt,f.deps),/commit_unconfirmed/);
  assert.equal(f.calls.filter(c=>c[0]==='commit_supabase_original_copy_cutover').length,1);
+});
+test('source-size refusal gives a bounded reason without provider reads or mutation',async()=>{
+ const f=fixture({initialError:{message:'copy_cutover_source_size_metadata_mismatch'}});
+ await assert.rejects(()=>cutoverSupabaseOriginal(receipt,f.deps),/source_size_metadata_mismatch/);
+ assert.equal(f.calls.length,1);
 });
 test('exact completed retry returns existing pending scan without downloads',async()=>{
  const f=fixture({binding:{state:'committed',sourceMatches:true,scanJobId:job}});

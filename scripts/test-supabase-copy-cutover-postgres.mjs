@@ -17,12 +17,20 @@ try {
   check((await q('select prosrc from pg_proc where proname=$1',[original.proname+'_before_copy_cutover'])).prosrc===original.prosrc,'historical body byte-equivalent '+original.proname);
  }
  await db.query('insert into auth.users values($1)',[owner]);
- await db.query(`insert into videos(id,owner_id,title,created_at,storage_provider,storage_bucket,storage_object_key,storage_path)
- values($1,$2,'synthetic test','2026-01-01','supabase','creator-videos','legacy/test.mp4','legacy/test.mp4')`,[id,owner]);
+ await db.query(`insert into videos(id,owner_id,title,created_at,storage_provider,storage_bucket,storage_object_key,storage_path,file_size_bytes)
+ values($1,$2,'synthetic test','2026-01-01','supabase','creator-videos','legacy/test.mp4','legacy/test.mp4',12)`,[id,owner]);
  await db.exec(`update videos set scan_status='clean',scan_provider='clamav',scan_result='clean',scanned_at='2026-01-02Z';
  update media_scan_jobs set status='clean',completed_at='2026-01-02Z';
  insert into storage.objects(bucket_id,name,version) values('creator-videos','legacy/test.mp4','generation-one');`);
  const copyProof={protocol:'supabase-original-copy-v1',sourceSha256:sha,targetSha256:sha,sourceSizeBytes:12,targetSizeBytes:12,createOnly:true,independentReadback:true};
+ for(const mode of ['read','commit']) for(const size of [null,0,11,13]) await rollback(async()=>{
+  await db.query('update videos set file_size_bytes=$1 where id=$2',[size,id]);
+  await q('select public.record_supabase_original_copy_receipt($1,$2,$3,$4,$5,$6,$7,$8)',[receipt,'videos',id,await snapshot(),key,sha,12,copyProof]);
+  const source=(await q("select id from storage.objects where name='legacy/test.mp4'")).id;
+  const assertions={protocol:'supabase-copy-cutover-v1',sourceSha256:sha,targetSha256:sha,sourceSizeBytes:12,targetSizeBytes:12,independentReadback:true,sourcePreserved:true};
+  await deny(()=>mode==='read'?q('select public.read_supabase_original_copy_cutover($1)',[receipt])
+   :q('select public.commit_supabase_original_copy_cutover($1,$2,$3,$4)',[receipt,source,'generation-one',assertions]),/source_size_metadata_mismatch/);
+ });
  await q('select public.record_supabase_original_copy_receipt($1,$2,$3,$4,$5,$6,$7,$8)',[receipt,'videos',id,await snapshot(),key,sha,12,copyProof]);
  const read=async()=> (await q('select public.read_supabase_original_copy_cutover($1) r',[receipt])).r;
  const pre=await read();
@@ -78,6 +86,30 @@ try {
   check((await q(`select relrowsecurity and relforcerowsecurity good from pg_class where oid='private.${table}'::regclass`)).good,'FORCE RLS '+table);
   for(const role of ['anon','authenticated','service_role'])check(!(await q('select has_table_privilege($1,$2,$3) allowed',[role,'private.'+table,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'])).allowed,'no direct access '+role);
  }
+ await rollback(async()=>{
+  const aid='20000000-0000-4000-8000-000000000002',ar='30000000-0000-4000-8000-000000000002';
+  const ak=`originals/supabase-migration/${ar}/social_attachments/${aid}`;
+  await db.query(`insert into social_attachments(id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,size_bytes)
+   values($1,$2,'profile_post',$3,'supabase','social-attachments','legacy/social.png','legacy/social.png',12)`,[aid,owner,id]);
+  await db.query(`update social_attachments set scan_status='clean',scan_provider='clamav',scan_result='clean',scanned_at='2026-01-02Z' where id=$1;
+   `,[aid]);
+  await db.query(`update media_scan_jobs set status='clean',completed_at='2026-01-02Z' where target_table='social_attachments' and target_id=$1`,[aid]);
+  await db.exec("insert into storage.objects(bucket_id,name,version) values('social-attachments','legacy/social.png','social-generation')");
+  const original=(await q('select to_jsonb(a) s from social_attachments a where id=$1',[aid])).s;
+  await q('select public.record_supabase_original_copy_receipt($1,$2,$3,$4,$5,$6,$7,$8)',[ar,'social_attachments',aid,original,ak,sha,12,copyProof]);
+  const binding=(await q('select public.read_supabase_original_copy_cutover($1) r',[ar])).r;
+  const result=(await q('select public.commit_supabase_original_copy_cutover($1,$2,$3,$4) r',[ar,binding.sourceStorageId,binding.sourceStorageVersion,proof])).r;
+  const sj=result.scanJobId;
+  await db.query(`update media_scan_jobs set status='scanning',claimed_by='fixture-worker',attempt_count=1,claimed_at=clock_timestamp() where id=$1`,[sj]);
+  const observation=(await q('select public.begin_supabase_copy_scan_observation($1,$2,$3) r',[sj,'fixture-worker',1])).r;
+  await db.query(`update media_scan_jobs set status='clean',completed_at=clock_timestamp(),scanner_provider='clamav',scanner_version='synthetic',signature_version='synthetic',metadata=metadata||'{"targetPropagationComplete":true}'::jsonb where id=$1`,[sj]);
+  await db.query(`update social_attachments set scan_status='clean',scan_provider='clamav',scan_result='clean',scanned_at=(select completed_at from media_scan_jobs where id=$1) where id=$2`,[sj,aid]);
+  const sr=(await q('select public.record_supabase_copy_scan_receipt($1,$2,$3,$4,$5) r',[observation,sj,'fixture-worker',sha,12])).r;
+  const sp=(await q('select public.enroll_supabase_copy_retention_provenance($1,$2,$3,$4) r',[ar,sr,'b'.repeat(64),'synthetic reviewer'])).r;
+  check((await q('select private.supabase_copy_provenance_current(p) good from private.deleted_media_legacy_provenance p where id=$1',[sp])).good,'social attachment parent/incarnation proof valid');
+  check((await q("select public.has_verified_legacy_media_object_provenance('social_attachments',$1,'cloudflare_r2','chillywood-media-origin',$2) good",[aid,ak])).good,'social attachment delivery proof valid');
+  check((await q("select private.deleted_content_source_coverage('social_attachment',to_jsonb(a)) c from social_attachments a where id=$1",[aid])).c==='eligible_r2_original','social retention coverage uses tagged proof');
+ });
  await db.exec(`update private.deleted_content_retention_settings set legacy_object_deletes_blocked=true;
  update private.deleted_content_rollout_qualification set source_revision=repeat('0',40),client_enforcement_evidence='synthetic fixture',
  legacy_delete_drain_evidence='synthetic fixture',worker_schedule_evidence='synthetic fixture',origin_cleanup_evidence='synthetic fixture',qualified_at=clock_timestamp();
