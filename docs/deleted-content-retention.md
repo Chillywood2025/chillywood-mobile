@@ -250,3 +250,16 @@ provider assumptions; source merge does not enable it.
 
 The fixed 30-day window is exactly 720 elapsed hours, including DST crossings;
 server capture and both archive/retirement constraints use that same duration.
+
+## Verified user-specific hold scope deployment
+
+On 2026-10-25 at 08:32:49 UTC, the approved hold-matching correction was
+installed as `20261025083249_deleted_content_user_id_hold_scope`. The source
+filename now matches the installed identity; SQL bytes are unchanged, SHA-256
+`033a73ec64f7ed5ab5233a1d87ca6f2998d845eb9a79949826a504de344c72e2`.
+
+Independent readback verified the exact SQL and function body, all eight
+owner/nonowner/malformed/unknown-scope behavior checks, and unchanged function
+permissions, all 12 hold records (10 active), and retention, Brand and inspection
+settings. No holds were released. Retention remained off; this deployment did
+not enroll content, activate expiry, or deploy the separate copy/archive protocols.

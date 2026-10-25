@@ -145,7 +145,7 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
-const userIdHoldScopeFiles = ['20261025055426_deleted_content_user_id_hold_scope.sql'];
+const userIdHoldScopeFiles = ['20261025083249_deleted_content_user_id_hold_scope.sql'];
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const brandArchivedVerificationFiles = ['20261025055056_platform_brand_archived_byte_verification.sql'];
 const brandArchivedVerificationFunctionIdentities = new Map([

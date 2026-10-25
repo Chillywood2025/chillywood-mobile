@@ -46,7 +46,7 @@ const adminBackendFiles = [
 
 // Both reviewed successors are part of the current replay: new transactional
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
-const userIdHoldScopeFiles = ['20261025055426_deleted_content_user_id_hold_scope.sql'];
+const userIdHoldScopeFiles = ['20261025083249_deleted_content_user_id_hold_scope.sql'];
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const brandArchivedVerificationFiles = ['20261025055056_platform_brand_archived_byte_verification.sql'];
 const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];
