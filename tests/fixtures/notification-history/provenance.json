@@ -7,6 +7,13 @@
     "baselineSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
     "targetSha256": "7dd4b554a8455b0f934883b264ad2530e06f1a1da356d744ea66254d85e5997d",
     "contextWitness": {
+      "review": "authorized-account-action-repair-2026-10-25",
+      "scope": "Preserve the reviewed account deletion, restore and logout authority repair while reconstructing original notification behavior only.",
+      "rebasedSourceSha256": "b19c26bbb792aab62a034c53a87ae3df3f43cbfbdbf1eefbdb3e81e0a0d5795b",
+      "targetSha256": "aa66daf85e964db207afa34dde206bbe7a9eb1a834a14ad77ca8c5073dac326a",
+      "originalByteIdentityVerified": false
+    },
+    "priorContextWitness": {
       "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
       "baseSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
       "targetSha256": "7dd4b554a8455b0f934883b264ad2530e06f1a1da356d744ea66254d85e5997d",
@@ -37,6 +44,13 @@
     "baselineSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
     "targetSha256": "9fe0dc633b7503db5a731ed94c70b574c04450e92def6b5e94d2ea01953e69a9",
     "contextWitness": {
+      "review": "authorized-account-action-repair-2026-10-25",
+      "scope": "Preserve the reviewed account deletion, restore and logout authority repair while reconstructing first notification-settlement behavior only.",
+      "rebasedSourceSha256": "b19c26bbb792aab62a034c53a87ae3df3f43cbfbdbf1eefbdb3e81e0a0d5795b",
+      "targetSha256": "73fc2c80c6ee3cfe9d823e51b82f4b9ccb7088e5d1213a04b30c48d3ae3294ac",
+      "originalByteIdentityVerified": false
+    },
+    "priorContextWitness": {
       "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
       "baseSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
       "targetSha256": "9fe0dc633b7503db5a731ed94c70b574c04450e92def6b5e94d2ea01953e69a9",
@@ -67,6 +81,13 @@
     "baselineSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
     "targetSha256": "e0e4a46c21fa80df3f0be98bfd545cb8f19736fa6c83ecaebd26e89f6ae6f642",
     "contextWitness": {
+      "review": "authorized-account-action-repair-2026-10-25",
+      "scope": "Preserve the reviewed account deletion, restore and logout authority repair while reconstructing prior notification-ordering behavior only.",
+      "rebasedSourceSha256": "b19c26bbb792aab62a034c53a87ae3df3f43cbfbdbf1eefbdb3e81e0a0d5795b",
+      "targetSha256": "2c0201b8b739bb05b06975dd2ae4d2959a5c255a133163efabece211976e2e41",
+      "originalByteIdentityVerified": false
+    },
+    "priorContextWitness": {
       "baseCommit": "191ffb8e610c81204f1d114ba39a80235ec58031",
       "baseSha256": "14da3affe1c1fdd0210bfc659dc52375d04ca2543f0412b7a7fb23fb113d6e44",
       "targetSha256": "e0e4a46c21fa80df3f0be98bfd545cb8f19736fa6c83ecaebd26e89f6ae6f642",

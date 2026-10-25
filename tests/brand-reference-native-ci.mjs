@@ -10,7 +10,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
-const imageRepository='public.ecr.aws/supabase/postgres';
+const imageRepository='ghcr.io/supabase/postgres';
 const imageDigest='sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
 const imageReference=imageRepository+'@'+imageDigest;
 // Docker's local image/config ID is distinct from the registry manifest digest.

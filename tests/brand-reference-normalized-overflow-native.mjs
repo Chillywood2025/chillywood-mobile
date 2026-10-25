@@ -14,7 +14,7 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
 const output=evidence+'brand-reference-normalized-overflow-native.json';
 assert.ok(!existsSync(output),'preserve an earlier attempt; no automatic reruns');
-const image='public.ecr.aws/supabase/postgres@sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
+const image='ghcr.io/supabase/postgres@sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
 const container=`brand-ref-overflow-recovery-${process.pid}-${randomUUID().slice(0,8)}`;
 const dataDirectory='/tmp/brand-reference-overflow-data';
 const memoryBytes=3072*1024*1024;

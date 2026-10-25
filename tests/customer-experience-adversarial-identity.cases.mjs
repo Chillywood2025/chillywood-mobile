@@ -170,7 +170,7 @@ test("actor-implicit customer and operator mutations use immutable account-bound
 
   const accountDeletionSource = read("_lib/accountDeletionRequests.ts");
   const mutationHelper = read("_lib/accountBoundSupabaseMutation.ts");
-  assert.match(accountDeletionSource, /runAccountRestorationBoundSupabaseMutationRpc<unknown>\(\)/u);
+  assert.match(accountDeletionSource, /runAccountRestorationBoundSupabaseMutationRpc<unknown>\(expected\)/u);
   assert.match(mutationHelper, /"restore_scheduled_account_deletion"/u);
   assert.doesNotMatch(
     accountDeletionSource,
@@ -213,11 +213,8 @@ test("scheduled-deletion restoration is the only restore-only mutation escape an
     "./accountSessionAuthority": {
       getCurrentAccountSessionAuthoritySnapshot: () => authority,
       parseAccountSessionAuthorityReadback: (value) => value,
-      sameAccountSessionAuthority: (left, right) => !!left && !!right
-        && left.userId === right.userId
-        && left.accountId === right.accountId
-        && left.sessionGeneration === right.sessionGeneration
-        && left.restoreOnly === right.restoreOnly,
+      sameAccountSessionAuthority: accountAuthority.sameAccountSessionAuthority,
+      sameAccountSessionIdentity: accountAuthority.sameAccountSessionIdentity,
     },
     "./accountBoundSupabaseRpc.mjs": {
       isAccountBoundSupabaseRpcOutcomeAmbiguous,
@@ -247,7 +244,15 @@ test("scheduled-deletion restoration is the only restore-only mutation escape an
     helper.runCurrentAccountBoundSupabaseMutationRpc("schedule_account_deletion"),
     /signed-in account changed/u,
   );
-  const restored = await helper.runAccountRestorationBoundSupabaseMutationRpc();
+  for (const expected of [
+    { ...authority, userId: "other-account", accountId: "other-account" },
+    { ...authority, sessionGeneration: "other-session" },
+    { ...authority, restoreOnly: false },
+  ]) {
+    await assert.rejects(helper.runAccountRestorationBoundSupabaseMutationRpc(expected), /signed-in account changed/u);
+  }
+  assert.equal(calls.length, 0, "mismatched initiating authority cannot dispatch restoration");
+  const restored = await helper.runAccountRestorationBoundSupabaseMutationRpc(authority);
   assert.equal(restored.data.restored, true);
   assert.deepEqual(calls.map((call) => call.functionName), [
     "wave1_session_authority_readback",

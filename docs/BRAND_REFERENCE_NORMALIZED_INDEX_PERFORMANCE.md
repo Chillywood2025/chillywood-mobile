@@ -1,11 +1,13 @@
-# Brand reference performance recovery — native validation incomplete
+# Brand reference performance recovery and qualification
 
 The recovered source addresses repeated canonical-document projection and
 normalization during absence checks. It normalizes bounded locator documents
 when maintaining a GIN expression index, materializes possible matches, and
-retains the exact reference matcher for every candidate. The full-scale
-performance repair is **not complete or deployment-ready**: no current native
-1.7-million-row result is available. No production operation occurred.
+retains the exact reference matcher for every candidate. Qualification requires
+all native gates below to pass for the exact proposed commit. The canonical
+CI run and its source-hashed artifacts are authoritative for subsequent native
+results; the initial recovery evidence below does not establish a native pass.
+No production operation occurred during recovery or qualification.
 
 ## Source and correctness boundaries
 
@@ -37,12 +39,12 @@ disables candidate filtering when `gin_fuzzy_search_limit` is nonzero:
 [PostgreSQL documents that this setting can return a random subset of GIN results](https://github.com/postgres/postgres/blob/REL_17_STABLE/doc/src/sgml/gin.sgml),
 which cannot establish absence. The original exact scan then remains active.
 
-## Current recovery evidence
+## Initial recovery evidence
 
 All runs below used synthetic PGlite PostgreSQL 18.3/WASM component fixtures;
 they do not prove native PostgreSQL 17.6 plans, concurrency or latency.
 
-| Current check | Result | Evidence in the recovery workspace |
+| Initial component check | Result | Evidence in the recovery workspace |
 | --- | --- | --- |
 | Normalized expression, helper/ACL/error equivalence, uncertain-row fallback and lossy GIN setting fallback | 5/5 passed | `brand-repair-normalized-components.log` |
 | Matcher parity, candidate/index invalidation, literal needles, CTE/exemption behavior | 7/7 passed | `brand-repair-scan-index-components.log` |
@@ -60,7 +62,7 @@ for a task-local build. Compilation of configure's first test succeeded; running
 that test stalled for over five minutes in macOS `U` state with zero CPU time.
 Only the task's build processes received TERM. No PostgreSQL server or new
 native database was created. The configure log remains under
-`brand-native-runtime/`; this is an environment blocker, not a passed build or
+`brand-native-runtime/`; this was a local environment blocker, not a passed build or
 evidence about query performance.
 
 ## Historical evidence and the rollback correction
@@ -80,7 +82,7 @@ not a fresh recovery-time database check or a rollback of all prior work.
 See the immutable retrieval package's `rollback-evidence-scope.json` and
 `preserved-artifacts/brand-reference-normalized-pilot-audit.json`.
 
-## Remaining acceptance gates
+## Native acceptance gates
 
 Native harnesses require `BRAND_REFERENCE_TEST_CONTAINER` to name a new
 `brand-ref-perf-recovery-*` or `brand-ref-normalized-recovery-*` fixture.
@@ -88,8 +90,9 @@ Historical evidence alone cannot select a target. A task-local PostgreSQL
 transport is supported through an explicit `BRAND_REFERENCE_LOCAL_PG` manifest;
 it verifies task-owned files, a private socket, no TCP listener, and the fresh
 cluster system identifier. It reports that runtime honestly as native macOS,
-separate from the Supabase Docker image. This transport and the revised native
-harnesses have syntax checks but have not executed against a native server.
+separate from the Supabase Docker image. Initial local checks established syntax
+only. Subsequent native execution and outcomes must be read from the exact-commit
+canonical CI artifacts described below.
 
 Complete these gates on a responsive isolated native runtime, preserving
 source hashes and each attempt's evidence:
@@ -118,10 +121,10 @@ source hashes and each attempt's evidence:
    inadequate headroom or unavailable Docker is incomplete evidence, never a
    pass. Do not run the large allocation concurrently with other test loads.
 
-The expensive large index build still requires native diagnosis. PostgreSQL
+The historical large index timeout requires native measurement. PostgreSQL
 notes that [GIN build time is sensitive to maintenance work memory](https://github.com/postgres/postgres/blob/REL_17_STABLE/doc/src/sgml/gin.sgml);
-that possibility has not been measured here and is not established as the root
-cause. Raising timeouts or weakening exact fallback is not an accepted repair.
+that possibility was not established as the root cause by the initial component
+tests. Raising timeouts or weakening exact fallback is not an accepted repair.
 No publication, deployment or production performance claim follows from these
 component results.
 
@@ -144,12 +147,19 @@ also be reviewed before merge while protected main still has the prior policy.
 
 The historical `public.ecr.aws/supabase/postgres:17.6.1.159` resolves to registry
 manifest digest `sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f`.
-The runner pulls `public.ecr.aws/supabase/postgres@` followed by that exact digest,
+The runner pulls `ghcr.io/supabase/postgres@` followed by that exact digest,
 without a floating-tag fallback, and verifies it in `RepoDigests`. Docker's local
 image/config ID is recorded separately and checked against the created
 container. Historical evidence sometimes labeled the manifest digest as an
 image ID; the first CI attempt exposed that distinction before creating any
-fixture. It verifies amd64, native server
+fixture. The next attempt hit ECR's anonymous download limit before any fixture
+was created. Supabase's [official mirror workflow](https://github.com/supabase/postgres/blob/920bb634698fef8dee6e78d738330d2dd8e489c5/.github/workflows/mirror.yml)
+publishes to both ECR and GHCR. An anonymous read of GHCR returned the identical
+OCI index bytes and digest; its linux/amd64 manifest is
+`sha256:617b62a16858dc8436c1ded1970fa13e33539feb4c98b580cf6274b46b2ab1ef`
+and config ID is `sha256:1131ee74b2d711ec69ebb078a3ea87042c5bde7a5849aaa21ea868371be21fc7`.
+The registry change needs no credentials and leaves runtime verification intact.
+It verifies amd64, native server
 170006 and no TCP listener. The newly named main container has no network,
 mounts or published ports, 4 GiB memory and no swap. Existing fixtures cannot be
 adopted. The source replay has managed-service doubles and does not replace the
@@ -172,6 +182,7 @@ include `brand-reference-index-native-guards.json`,
 `brand-reference-index-native-races.json`,
 `brand-reference-normalized-pilot-native.json`,
 `brand-reference-index-performance-results.json`, writer/failure-tail JSON, and
-`brand-reference-normalized-overflow-native.json`. These are future artifact
-names, not claims that CI has already passed. The local `--plan` command and
+`brand-reference-normalized-overflow-native.json`. Artifact names alone are not
+claims that CI passed: inspect the exact commit, summary, every gate and cleanup
+result. The local `--plan` command and
 syntax checks do not run Docker or establish native performance.
