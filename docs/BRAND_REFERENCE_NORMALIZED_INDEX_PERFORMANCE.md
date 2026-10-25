@@ -119,6 +119,14 @@ canonical CI artifacts described below.
 Complete these gates on a responsive isolated native runtime, preserving
 source hashes and each attempt's evidence:
 
+Full setup and measurement first require two zero-other-session snapshots,
+100 ms apart, within a fixed 15-second readiness deadline. Every other fixture
+backend, including idle clients and background workers, remains in that check;
+none is terminated or excluded. Identity snapshots and the readiness-helper hash
+are saved in the performance report even on failure. Readiness precedes the
+measured statements and does not extend their 30-second budget. A prior attempt
+observed one other backend but did not record its identity; its cause is unknown.
+
 1. Replay the source chain in a fresh cluster; pass native guards, pgTAP,
    semantic/collation parity and immutable-helper DDL checks. The canonical
    managed Supabase database lane remains a separate requirement.

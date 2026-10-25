@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import {brandReferenceNativeContainer,brandNativeSpawnSync,brandNativeSpawn,brandNativePreflight} from './helpers/brand-reference-native-target.mjs';
+import {waitForBrandNativeQuiet,BRAND_NATIVE_QUIET_DEADLINE_MS} from './helpers/brand-reference-native-readiness.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
@@ -126,7 +127,17 @@ function measured(sql,label,calls){
 try{
  checkpoint('verify existing isolated source fixture and installed definitions');
  report.runtime=brandNativePreflight(container);
- assert.equal(q("select count(*) from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid();"),'0','do not benchmark concurrently with other fixture sessions');
+ const readiness={stage:mode,startedAt:new Date().toISOString(),deadlineMs:BRAND_NATIVE_QUIET_DEADLINE_MS,
+  helperSHA256:sha(readFileSync(root+'tests/helpers/brand-reference-native-readiness.mjs')),observations:[]};
+ (report.fixtureReadiness??=[]).push(readiness);
+ const quiet=await waitForBrandNativeQuiet({readOtherSessions:remainingMs=>JSON.parse(q(`select coalesce(jsonb_agg(jsonb_build_object(
+  'pid',pid,'backendType',backend_type,'applicationName',application_name,'state',state,
+  'waitEventType',wait_event_type,'waitEvent',wait_event,'backendStart',backend_start,'queryStart',query_start,
+  'query',left(query,200)) order by pid),'[]'::jsonb)::text
+  from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid();`,
+  {budget:Math.min(3000,remainingMs)+'ms',timeout:remainingMs})),
+  onObservation:observation=>{readiness.observations.push(observation);writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');}});
+ readiness.passed=true;readiness.elapsedMs=quiet.elapsedMs;
  if(mode==='--measure-query-revision')installQueryRevision();
  report.installedBodySHA256=installedProof();
  if(mode==='--setup'){
