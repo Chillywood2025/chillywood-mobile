@@ -76,6 +76,24 @@
       "physicalProofRequired": false
     },
     {
+      "id": "archived_brand_verification",
+      "owningSystem": "media_automation",
+      "componentType": "non_autonomous_utility",
+      "supportedPlatforms": ["shared"],
+      "paths": ["ops/malware-scanner-worker/archived-brand-worker.mjs"],
+      "schedulerCadence": "none; explicitly approved one-shot with one or two request IDs, at most three lifetime attempts per request",
+      "allowedReads": ["exact archived Brand incarnation, unheld current lease and positive-size full private object bytes"],
+      "allowedWrites": ["immutable bounded attempt, observed scanner result, sealed receipt and existing Brand retention proof only"],
+      "forbiddenScope": ["ordinary scan jobs", "delivery or moderation changes", "tombstone or retention-clock reset", "deletion claims or provider deletion", "automatic polling or retries", "credential or raw private output", "fabricated clean evidence"],
+      "approvalLevel": 3,
+      "proof": "node --test tests/archived-brand-worker.test.mjs tests/archived-brand-verification.test.mjs",
+      "guard": "guard:autonomous-component-inventory",
+      "killSwitch": "keep archived_verification_enabled=false and ARCHIVED_BRAND_VERIFICATION_ONCE unset",
+      "rollback": "stop one-shot runner, disable verification gate and retain immutable evidence; never restore delivery or reset clocks",
+      "deploymentState": "source_complete",
+      "physicalProofRequired": false
+    },
+    {
       "id": "livekit_operator",
       "owningSystem": "livekit_operator",
       "componentType": "top_level_system",

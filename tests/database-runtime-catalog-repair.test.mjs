@@ -147,6 +147,22 @@ const adminBackendFunctionKeys = new Set([
 
 const userIdHoldScopeFiles = ['20261025055426_deleted_content_user_id_hold_scope.sql'];
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
+const brandArchivedVerificationFiles = ['20261025055056_platform_brand_archived_byte_verification.sql'];
+const brandArchivedVerificationFunctionIdentities = new Map([
+  ['private.platform_brand_archived_service_required/0','private.platform_brand_archived_service_required()'],
+  ['private.platform_brand_archived_snapshot/2','private.platform_brand_archived_snapshot(uuid,boolean)'],
+  ['private.platform_brand_archived_read_allowed/1','private.platform_brand_archived_read_allowed(uuid)'],
+  ['private.platform_brand_archived_attempt_current/3','private.platform_brand_archived_attempt_current(uuid,uuid,text)'],
+  ['private.platform_brand_archived_result_valid/1','private.platform_brand_archived_result_valid(jsonb)'],
+  ['private.platform_brand_archived_receipt_matches/5','private.platform_brand_archived_receipt_matches(uuid,jsonb,text,bigint,uuid)'],
+  ['private.platform_brand_scan_byte_receipt_matches_before_archived/4','private.platform_brand_scan_byte_receipt_matches_before_archived(uuid,jsonb,text,bigint)'],
+  ['private.platform_brand_claimed_scan_evidence_matches_before_archived/5','private.platform_brand_claimed_scan_evidence_matches_before_archived(uuid,uuid,jsonb,text,bigint)'],
+  ['public.request_platform_brand_archived_verification/2','request_platform_brand_archived_verification(uuid,jsonb)'],
+  ['public.claim_platform_brand_archived_verification/2','claim_platform_brand_archived_verification(uuid[],text)'],
+  ['public.read_platform_brand_archived_verification_attempt/3','read_platform_brand_archived_verification_attempt(uuid,uuid,text)'],
+  ['public.record_platform_brand_archived_verification_result/4','record_platform_brand_archived_verification_result(uuid,uuid,text,jsonb)'],
+  ['public.seal_platform_brand_archived_verification/4','seal_platform_brand_archived_verification(uuid,uuid,text,uuid)'],
+]);
 const brandGlobalRetentionFunctionKeys = new Set([
   'private.deleted_content_brand_source_coverage/2',
   'private.guard_deleted_content_brand_admission/0',
@@ -312,10 +328,12 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size);
     assert.deepEqual(before.functions.filter(fn=>r2QualificationFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
       [...r2QualificationFunctionIdentities].sort(),'exact isolated R2 qualification public RPC keys and signatures are present');
     assert.deepEqual(before.functions.filter(fn=>brandGlobalRetentionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...brandGlobalRetentionFunctionKeys].sort());
+    assert.deepEqual(before.functions.filter(fn=>brandArchivedVerificationFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
+      [...brandArchivedVerificationFunctionIdentities].sort(),'exact archived Brand verifier function keys and signatures are present');
     assert.deepEqual(before.functions.filter(fn=>externalReferenceFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...externalReferenceFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>notificationPreferenceFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationPreferenceFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>notificationRegistrationFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...notificationRegistrationFunctionKeys].sort());
@@ -355,10 +373,11 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+userIdHoldScopeFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length);
     assert.deepEqual(replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles,
       'exact isolated R2 qualification migration is replayed in both Studio scenarios');
     assert.deepEqual(replayReport.files.filter(file=>brandGlobalRetentionFiles.includes(file)),brandGlobalRetentionFiles);
+    assert.deepEqual(replayReport.files.filter(file=>brandArchivedVerificationFiles.includes(file)),brandArchivedVerificationFiles);
     assert.deepEqual(replayReport.files.filter(file=>userIdHoldScopeFiles.includes(file)),userIdHoldScopeFiles);
     assert.deepEqual(replayReport.files.filter(file=>externalReferenceFiles.includes(file)),externalReferenceFiles);
     assert.deepEqual(replayReport.files.filter(file=>realtimeIdentityFiles.includes(file)),realtimeIdentityFiles);
