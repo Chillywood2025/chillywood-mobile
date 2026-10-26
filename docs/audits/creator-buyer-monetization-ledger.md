@@ -49,13 +49,13 @@ exercise real SQL/client/handler code or mocks, and whether concurrency is real.
 | FN01 | Purchase-time amount/currency/product binding | Intent snapshots exist; compare actual SDK store quote | client modes/money backend |
 | FN02 | Refund/revocation/dispute/credit/payout holds | Terminal projectors traced; actual store reversal unqualified; no automatic refund promise | money backend |
 | FN03 | Ledger/earnings/payout status and split truth | Settlement receipt authority and payout execution remain closed; stale hold copy repaired | money backend/coverage review |
-| AU01 | Stale account/session ownership | Actual client/mounted/SQL tests; event stale UI and Live Stage completion defect identified for repair | client modes/money backend |
+| AU01 | Stale account/session ownership | Actual client/mounted/SQL tests; event stale UI and Live Stage completion defects repaired in this draft | client modes/money backend |
 | AU02 | Idempotency/order/concurrency/partial failures | Native event locks tested; full multi-provider charge concurrency remains unqualified | money backend/event backend |
 | UX01 | Accessibility/loading/empty/error/navigation recovery | Native colors retained; bounded screen recovery repaired; transaction errors still can look empty | client modes/events journey |
 | EX01 | Apple/Google/RevenueCat/Stripe policies | Official sources verified2026-10-26; provider settings uninspected | provider docs |
 | EX02 | Native/device/provider/deployment qualification | Unavailable and outside authorization; no total-completion claim | root |
 | QA01 | Tests, negative controls, full applicable checks | Isolated locked dependency install, required planner, exact diff | root + reviewers |
-| QA02 | Draft PR, exact-head CI, review | Pending implementation; no money-sensitive merge authority | root |
+| QA02 | Draft PR, exact-head CI, review | Draft [PR626](https://github.com/Chillywood2025/chillywood-mobile/pull/626) published; incremental review complete, CI in progress; final check identities in handoff/PR; no money-sensitive merge authority | root |
 
 ## Owner decisions already identified
 

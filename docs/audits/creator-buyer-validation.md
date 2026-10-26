@@ -21,7 +21,10 @@ authorized by this report.
 | Payout wording | Remove blanket7–30day promise | Existing policy traced; no hold policy changed |
 
 New safe tests are registered in existing `tests/*.test.mjs` and
-`tests/creator-money/*.test.mjs` globs; package scripts and CI policy are unchanged.
+`tests/creator-money/*.test.mjs` globs; package scripts and CI selection are unchanged.
+The visible-back-navigation guard now checks history Back and both cold-link
+fallbacks for the subscription screen, retaining the existing accessibility checks.
+Three tests execute that production handler, including broken-handler controls.
 The native concurrency runner is an explicit local command and is not silently
 claimed as an automatic CI job. Its disposable network-isolated container was
 stopped and removed; shared local Supabase was not reset.
@@ -30,20 +33,30 @@ stopped and removed; shared local Supabase was not reset.
 
 - `node --test tests/creator-event-schedule.test.mjs tests/creator-event-route-mounted.test.mjs tests/creator-event-studio-mounted.test.mjs tests/creator-money/store-quote.test.mjs tests/creator-money/event-offer-lifecycle.test.mjs tests/creator-money/live-watch-party-webhook-recovery.test.mjs`:36 tests passed. The store-quote wrapper additionally executes nine actual purchase branches and all mismatch controls; SQL wrapper executes20 SQL checks.
 - `node --test tests/creator-money/live-stage-fulfillment-authority-postgres.test.mjs tests/creator-money/sandbox-contextual-destination.test.mjs`: independently verified4/4 after final review correction.
-- `node --test tests/wave1/*.test.mjs tests/creator-money/*.test.mjs`: earlier integrated run276/276; a final run includes subsequent authority/admin changes. See handoff for terminal count rather than extrapolating.
+- `node --test tests/wave1/*.test.mjs tests/creator-money/*.test.mjs`: integrated run280/280 passed after the authority/admin changes; the later navigation handler suite separately passed3/3.
 - `DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-webhook/index.ts`: passed.
 - Runtime validation, route contracts (13 tests), critical UX guard and pre-activation discovery guard: passed.
 - Creator monetization, payment rail, Money Center, refund/credit/payout hold, iOS commerce catalog/policy, monetization test-ID guards: passed. Catalog check reports30 finite products, live money disabled.
 - Expo doctor:18/18 checks passed.
-- Lint: initial pass; later one JSX apostrophe violation corrected; final repeat pending at preparation.
-- TypeScript: initial run caught now-corrected event intent fields plus missing locked `ops/alert-automation` dependencies. Dependencies installed exactly as CI requires; final repeat pending at preparation.
-- Broad `node --test tests/*.test.mjs`: in progress at preparation. Observed failures in unchanged archived Brand worker tests (`scan_failed` vs expected outcomes), an unchanged conversation timestamp negative-control subprocess timeout, and catalog replay count expecting pre-audit migration count. Exact two-file migration inventory was added for the latter; independent full-schema replay is rerunning. Do not interpret these as a clean broad run.
+- Lint: passed after correcting one JSX apostrophe violation; the later offer-read typing boundary also passed focused lint.
+- TypeScript: initial failures corrected (event intent fields, locked ops dependencies, and generated-schema typing at the contextual offer read). CI at `afa77f2681aa46aceed2246f230228747874ca5f` passed TypeScript but failed the old exact-source Back guard; that guard is corrected in the next candidate. Final exact-head CI remains required.
+- Broad `node --test tests/*.test.mjs`: in progress at this update. Failures include sandbox `listen EPERM` for loopback servers, subprocess/test timeouts, unchanged archived Brand worker expectations, and the old migration-count fixture. Do not interpret this as a clean broad run. No unrelated source changes were made to suppress these failures.
+- Both full-schema runtime catalog replay scenarios passed2/2 after registering exactly the two added migrations; this is the isolated local replay, separate from the GitHub Database job.
 - `git diff --check`: passed. Independent diff review found no remaining blocking regression in the bounded delta after fixing quote precision and duplicate-original reconciliation behavior.
 
 The required planner conservatively selects every category for unclassified
 `_lib/**` and new script paths. Full required CI must run on the actual head;
 local subsets do not replace Database, native compile, autonomous, policy or other
 applicable jobs. No changes were made to weaken selection or branch protection.
+
+Draft [PR626](https://github.com/Chillywood2025/chillywood-mobile/pull/626) contains
+initial commit `82a53c7813d7337c01ae07aabdc3f6debdffdc0c` and typing correction
+`afa77f2681aa46aceed2246f230228747874ca5f`. Its subsequent navigation-guard correction
+must be checked on its own head. At the latter commit, Sensitive, Policy,
+Autonomous, Android compilation and native PostgreSQL passed; Core failed the
+now-corrected source guard, while Product, Database and Native SDK were pending.
+These older-head results are supporting evidence only. The PR and final task
+handoff record the eventual exact-head result without implying a merge or release.
 
 ## Qualification still absent
 
