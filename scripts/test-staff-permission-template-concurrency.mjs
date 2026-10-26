@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Real PostgreSQL sessions and observed lock queues, never mocked authority.
 // Only a generated disposable clone of a local Supabase CLI database is writable.
 import assert from 'node:assert/strict';
@@ -18,6 +19,7 @@ const project = readFileSync(path.join(root, 'supabase/config.toml'), 'utf8').ma
 assert.ok(project, 'safe local Supabase project_id required');
 const container = process.env.SUPABASE_DB_CONTAINER || `supabase_db_${project}`;
 assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/u);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database = `template_queue_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 assert.match(database, /^template_queue_[0-9]+_[a-f0-9]{12}$/u);
 const literal = value => `'${String(value).replaceAll("'", "''")}'`;
@@ -181,7 +183,7 @@ try {
   const dump=admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault','--exclude-extension=pg_graphql',
     '--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
   success(dump,'read-only local source export');
-  success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],dump.stdout,null),'restore disposable clone');
+  success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database], cloneGuardRestore.prepare(dump.stdout, database), null),'restore disposable clone');
   for(const pair of [['apply','apply'],['apply','revoke'],['revoke','apply']])await orderingCase(...pair);
   for(const change of ['none','session-revoke','manager-revoke','actor-revoke','target-revoke','target-email',
     'session-expiry','manager-expiry','actor-expiry','target-expiry'])await queueCase(change);
@@ -189,6 +191,8 @@ try {
   assert.equal(checks,17,'all declared two-backend queue cases executed');
   console.log(`Template native PostgreSQL: ${checks} deterministic cases passed; migration SHA256 ${createHash('sha256').update(migration).digest('hex')}`);
 } finally {
+  try {
   if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop only generated disposable clone');
   if(sourceFingerprint!==undefined)assert.equal(query(fingerprintSql,'postgres'),sourceFingerprint,'local source database changed');
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

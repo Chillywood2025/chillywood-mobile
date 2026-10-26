@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Additive empty-evidence controls using two real PostgreSQL backends.
 // Only a generated disposable LOCAL clone changes. No provider or origin calls.
 import assert from 'node:assert/strict';
@@ -13,6 +14,7 @@ const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=
 assert.ok(project);
 const container=process.env.SUPABASE_DB_CONTAINER || `supabase_db_${project}`;
 assert.match(container,/^supabase_db_[A-Za-z0-9_.-]{1,200}$/);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database=`brand_empty_queue_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}`;
 const lit=x=>`'${String(x).replaceAll("'","''")}'`;
 const docker=(args,input,encoding='utf8')=>spawnSync('docker',args,{input,encoding,maxBuffer:256*1024*1024,timeout:120000});
@@ -77,7 +79,7 @@ try{
  ok(docker(['exec',container,'createdb','-U','postgres','-T','template0',database]),'create generated clone');cloned=true;
  ok(docker(args(),'create schema vault;create extension supabase_vault with schema vault;'),'initialize clone');
  const dump=admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault','--exclude-extension=pg_graphql','--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
- ok(dump,'read-only dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],dump.stdout,null),'restore clone');
+ ok(dump,'read-only dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database], cloneGuardRestore.prepare(dump.stdout, database), null),'restore clone');
 
  assert.equal(query('select not expiry_enabled from private.platform_brand_retention_settings'),'t');
  assert.equal(query("select to_regclass('private.platform_brand_empty_claim_evidence') is not null"),'t','full reset includes empty-evidence migration');
@@ -304,6 +306,8 @@ try{
  assert.equal(query(globalFlagsOff),'t','claims and dispatch never enable global flags');
  console.log(`Brand empty evidence native PostgreSQL: ${negative?'unsafe replay mutant rejected':checks+' independent-backend controls passed'}; no provider or origin calls; synthetic disposition only, not live empty-byte evidence.`);
 } finally {
+  try {
  if(cloned)ok(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');
  if(before!==undefined)assert.equal(query(fingerprint,'postgres'),before,'local source unchanged');
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

@@ -7,6 +7,7 @@ import "react-native-url-polyfill/auto";
 
 import type { Database } from "../supabase/database.types";
 import { getRuntimeConfig } from "./runtimeConfig";
+import { createAccountSessionStorage, guardAccountSessionSignOutEvents } from "./accountSessionStorage";
 
 const DEFAULT_SUPABASE_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co";
 const DEFAULT_SUPABASE_FUNCTIONS_URL = "https://network-proof.chillywoodstream.com";
@@ -33,6 +34,12 @@ const webStorage = {
   },
 };
 
+export const accountSessionStorage = createAccountSessionStorage(isWeb ? webStorage : AsyncStorage,
+  isWeb && typeof navigator !== "undefined" && navigator.locks
+    ? async operation => await navigator.locks.request("chillywood-auth-storage-mutations", operation)
+    : undefined);
+export const ACCOUNT_SESSION_STORAGE_KEY = "@chillywood/supabase-auth";
+
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/g, "");
 const SUPABASE_FUNCTIONS_ORIGIN = `${normalizeBaseUrl(SUPABASE_URL)}/functions/v1/`;
 const TRUSTED_FUNCTIONS_ORIGIN = `${normalizeBaseUrl(SUPABASE_FUNCTIONS_URL)}/functions/v1/`;
@@ -58,8 +65,8 @@ const functionRoutingFetch: typeof fetch = (input, init) => {
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: isWeb ? webStorage : AsyncStorage,
-    storageKey: "@chillywood/supabase-auth",
+    storage: accountSessionStorage.storage,
+    storageKey: ACCOUNT_SESSION_STORAGE_KEY,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
@@ -75,5 +82,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     },
   },
 });
+
+guardAccountSessionSignOutEvents(supabase.auth, accountSessionStorage.storage, ACCOUNT_SESSION_STORAGE_KEY);
 
 export default supabase;

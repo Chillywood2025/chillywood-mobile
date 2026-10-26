@@ -2,6 +2,7 @@ import {
   getCurrentAccountSessionAuthoritySnapshot,
   parseAccountSessionAuthorityReadback,
   sameAccountSessionAuthority,
+  sameAccountSessionIdentity,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
@@ -96,7 +97,13 @@ export async function invokeAccountBoundSupabaseMutationRpc<T>(
       pending,
       { data: null, error: { message: "account_bound_rpc_timeout" } },
     );
-  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  // These two lifecycle RPCs may change restoreOnly on this same session as
+  // they settle. That transition is not permission to accept a replacement.
+  if (functionName === "schedule_account_deletion" || functionName === "restore_scheduled_account_deletion") {
+    if (!sameAccountSessionIdentity(subject.authority, getCurrentAccountSessionAuthoritySnapshot())) {
+      throw new AccountBoundSupabaseMutationError();
+    }
+  } else assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   return result;
 }
 
@@ -171,8 +178,9 @@ export async function runCurrentAccountBoundSupabaseMutationRpc<T>(
 // Account restoration is the only mutation permitted while a scheduled
 // deletion has quarantined the session. Keep that exception literal and bind
 // it to the same exact published session generation as every other mutation.
-export async function runAccountRestorationBoundSupabaseMutationRpc<T>() {
+export async function runAccountRestorationBoundSupabaseMutationRpc<T>(expected?: AccountSessionAuthorityBinding) {
   const subject = await capturePublishedAccountBoundSupabaseMutationSubject(undefined, true);
+  if (expected && !sameAccountSessionAuthority(expected, subject.authority)) throw new AccountBoundSupabaseMutationError();
   const readback = await invokeAccountBoundSupabaseMutationRpc<unknown>(
     subject,
     "wave1_session_authority_readback",

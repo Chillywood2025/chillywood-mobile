@@ -4,8 +4,8 @@
    subscribeToMonetizationSnapshot,
    type MonetizationSnapshot,
  } from "../_lib/monetization";
--import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../_lib/accountSessionAuthority";
-+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+-import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, sameAccountSessionIdentity, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from "../_lib/accountSessionAuthority";
++import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, sameAccountSessionIdentity, type AccountSessionAuthorityBinding } from "../_lib/accountSessionAuthority";
  import {
    readNotificationPreferences,
    readCurrentPushRegistration,

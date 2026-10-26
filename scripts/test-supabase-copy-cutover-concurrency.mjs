@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Native PostgreSQL backends against a generated local clone. No provider
 // traffic, remote URL, deployment, caller credential or production mutation.
 import assert from 'node:assert/strict';
@@ -10,6 +11,7 @@ if(process.argv.includes('--help')){console.log('After local Supabase reset: exa
 assert.equal(process.argv.length,2,'no URL or arguments accepted');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/m)?.[1];assert.ok(project);
 const container=process.env.SUPABASE_DB_CONTAINER||`supabase_db_${project}`;assert.match(container,/^supabase_db_[A-Za-z0-9_.-]+$/);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database=`copy_cutover_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}`;
 const lit=x=>`'${String(x).replaceAll("'","''")}'`;
 const redact=x=>String(x).replaceAll(/[A-Za-z0-9_-]{40,}/g,'<redacted>');
@@ -83,7 +85,7 @@ try{
  ok(docker(['exec',container,'createdb','-U','postgres','-T','template0',database]),'create clone');cloned=true;
  ok(docker(args(),'create schema vault;create extension supabase_vault with schema vault;'),'clone vault');
  const dump=admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault','--exclude-extension=pg_graphql','--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
- ok(dump,'read local dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],dump.stdout,null),'restore clone');
+ ok(dump,'read local dump');ok(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database], cloneGuardRestore.prepare(dump.stdout, database), null),'restore clone');
  assert.equal(query('select not capture_enabled from private.deleted_content_retention_settings'),'t');
  const heldGuard=query("select md5(pg_get_functiondef('private.guard_deleted_content_secondary_coverage()'::regprocedure))");
  const owner=randomUUID();query(`insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values(${lit(owner)},${lit(`cutover-${owner}@example.test`)},now(),false,false)`);
@@ -136,6 +138,8 @@ try{
  assert.equal(query("select md5(pg_get_functiondef('private.guard_deleted_content_secondary_coverage()'::regprocedure))"),heldGuard,'held guard unchanged');
  console.log(`PASS ${checks} native PostgreSQL competing-transaction cases; originals preserved, no provider operations`);
 }finally{
+  try {
  if(cloned)ok(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');
  if(before!==undefined)assert.equal(query(fingerprint,'postgres'),before,'local source unchanged');
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

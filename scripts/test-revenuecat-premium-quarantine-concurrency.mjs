@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -9,6 +10,7 @@ const root = process.cwd();
 const container = process.env.SUPABASE_DB_CONTAINER
   || `supabase_db_${path.basename(root).replace(/[^A-Za-z0-9_.-]/gu, "_")}`;
 assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/u);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const sourceDatabase = "postgres";
 const transientDatabase = `codex_premium_${process.pid}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 assert.match(transientDatabase, /^codex_premium_[0-9]+_[a-f0-9]{12}$/u);
@@ -243,7 +245,7 @@ function restoreSourceSnapshot(target) {
   assert.equal(dump.status, 0, "could not export the read-only local reset snapshot");
   const restored = runAdmin([
     "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", target,
-  ], { encoding: null, input: dump.stdout });
+  ], { encoding: null, input: cloneGuardRestore.prepare(dump.stdout, target) });
   assert.equal(restored.status, 0, "could not restore the isolated Premium concurrency database");
 }
 
@@ -646,6 +648,7 @@ assert.equal(query(`select count(*)::text from pg_stat_activity where applicatio
 await proveGoogleRestoreConcurrency();
 process.stdout.write(`RevenueCat Premium/quarantine concurrency: ${scenarios.length} scope + 5 lifecycle races + 8 Google Restore races passed\n`);
 } finally {
+  try {
   dropTransientDatabase();
   if (sourceSentinel) {
     if (sourceSentinel.child.exitCode === null) sourceSentinel.child.stdin.end("rollback;\n\\q\n");
@@ -655,4 +658,5 @@ process.stdout.write(`RevenueCat Premium/quarantine concurrency: ${scenarios.len
   assert.equal(query(`select (select count(*) from auth.users)::text||':'||(select count(*) from public.revenuecat_terminal_authority_quarantines)::text;`, sourceDatabase), sourceFingerprint, "isolated concurrency proof mutated the local reset database");
   assert.equal(query("select datallowconn::text||':'||datistemplate::text||':'||datconnlimit::text from pg_database where datname=current_database();", sourceDatabase), sourcePolicyFingerprint, "isolated concurrency proof mutated the local reset database policy");
   assert.equal(query(`select count(*)::text from pg_stat_activity where application_name=${literal(sourceSentinelName)};`, sourceDatabase), "0", "read-only source sentinel session remained after proof");
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

@@ -21,7 +21,7 @@ import {
   subscribeToMonetizationSnapshot,
   type MonetizationSnapshot,
 } from "../_lib/monetization";
-import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, sameAccountSessionIdentity, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from "../_lib/accountSessionAuthority";
 import {
   readNotificationPreferences,
   readCurrentPushRegistration,
@@ -76,6 +76,7 @@ import {
   type ReleaseDiagnosticsDisplay,
 } from "../_lib/releaseDiagnostics";
 import { supabase } from "../_lib/supabase";
+import { accountSessionActionIdentity, signOutExactAccountSession } from "../_lib/accountSessionActions";
 import { maskEmailAddress } from "../_lib/displayText";
 import {
   checkUsernameAvailability,
@@ -545,7 +546,7 @@ export default function SettingsScreen() {
   }, [router]);
   const params = useLocalSearchParams<{ section?: string }>();
   const insets = useSafeAreaInsets();
-  const { isLoading, isSignedIn, user, authority, authorityStatus } = useSession();
+  const { isLoading, isSignedIn, user, session, authority, authorityStatus } = useSession();
   const monetizationOwnerKey = !isLoading && isSignedIn && authorityStatus === "active"
     && authority && !authority.restoreOnly && authority.userId === user?.id
     ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration]) : "unavailable";
@@ -560,6 +561,14 @@ export default function SettingsScreen() {
     && monetizationScopeRef.current === monetizationScope && monetizationOwnerKey !== "unavailable"
     && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()),
   [authority, monetizationOwnerKey, monetizationScope]);
+  const accountActionIdentity = useMemo(() => authority ?? accountSessionActionIdentity(session), [authority, session]);
+  const accountActionKey = accountActionIdentity ? `${accountActionIdentity.userId}:${accountActionIdentity.accountId}:${accountActionIdentity.sessionGeneration}` : "none";
+  const accountActionScopeRef = useRef({ key: accountActionKey, busy: false });
+  if (accountActionScopeRef.current.key !== accountActionKey) accountActionScopeRef.current = { key: accountActionKey, busy: false };
+  const accountActionScope = accountActionScopeRef.current;
+  const currentAccountAction = useCallback((expected: AccountSessionAuthorityBinding | null) => mountedRef.current
+    && accountActionScopeRef.current === accountActionScope
+    && sameAccountSessionIdentity(expected, getCurrentAccountSessionAuthoritySnapshot() ?? accountActionIdentity), [accountActionScope, accountActionIdentity]);
   const [signingOut, setSigningOut] = useState(false);
   const [deletionRequestSaving, setDeletionRequestSaving] = useState(false);
   const [deletionRequestNotice, setDeletionRequestNotice] = useState<string | null>(null);
@@ -852,6 +861,10 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     let active = true;
+    setAccountDeletionStatus(null);
+    setDeletionRequestNotice(null);
+    setDeletionRequestSaving(false);
+    setSigningOut(false);
 
     if (isLoading || !isSignedIn) {
       setAccountDeletionStatus(null);
@@ -864,21 +877,21 @@ export default function SettingsScreen() {
     setAccountDeletionStatusLoading(true);
     void readMyAccountDeletionStatus()
       .then((status) => {
-        if (!active) return;
+        if (!active || !currentAccountAction(authority)) return;
         setAccountDeletionStatus(status);
         setDeletionRequestNotice(status.scheduled ? status.message : null);
       })
       .catch(() => {
-        if (active) setAccountDeletionStatus(null);
+        if (active && currentAccountAction(authority)) setAccountDeletionStatus(null);
       })
       .finally(() => {
-        if (active) setAccountDeletionStatusLoading(false);
+        if (active && currentAccountAction(authority)) setAccountDeletionStatusLoading(false);
       });
 
     return () => {
       active = false;
     };
-  }, [isLoading, isSignedIn]);
+  }, [isLoading, isSignedIn, authority, currentAccountAction]);
 
   useEffect(() => {
     const local = validateUsernameHandle(usernameDraft);
@@ -1260,42 +1273,34 @@ export default function SettingsScreen() {
     new Map(LEGAL_POLICY_ROUTES.map((policy) => [policy.slug, policy]))
   ), []);
 
+  const finishAccountSignOut = useCallback(async (expected: AccountSessionAuthorityBinding) => {
+    if (!currentAccountAction(expected)) return;
+    await revokeCurrentPushInstall("user_request", { authority: expected, isCurrent: () => currentAccountAction(expected) }).catch(() => null);
+    if (!currentAccountAction(expected)) return;
+    await revokeIosVoipRegistration(expected).catch(() => null);
+    if (!currentAccountAction(expected)) return;
+    if (await signOutExactAccountSession(expected)) {
+      trackEvent("auth_sign_out_success", { source: "settings" });
+    }
+    // The existing signed-out session effect owns navigation. A delayed action
+    // must never replace the route after another account has signed in.
+  }, [currentAccountAction]);
+
   const onPressSignOut = async () => {
-    if (signingOut) return;
-
+    if (!accountActionIdentity || !currentAccountAction(accountActionIdentity) || accountActionScope.busy) return;
+    accountActionScope.busy = true;
     setSigningOut(true);
-    trackEvent("auth_sign_out_requested", {
-      source: "settings",
-    });
-
+    trackEvent("auth_sign_out_requested", { source: "settings" });
     try {
-      await revokeCurrentPushInstall().catch(() => null);
-      await revokeIosVoipRegistration().catch(() => null);
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        const message = getUserFacingErrorMessage(error, "Unable to log out right now.");
-        trackEvent("auth_sign_out_failed", {
-          reason: message,
-          source: "settings",
-        });
-        Alert.alert("Log Out", message);
-        return;
-      }
-
-      trackEvent("auth_sign_out_success", {
-        source: "settings",
-      });
-      router.replace("/(auth)/login");
+      await finishAccountSignOut(accountActionIdentity);
     } catch (error) {
+      if (!currentAccountAction(accountActionIdentity)) return;
       const message = getUserFacingErrorMessage(error, "Unable to log out right now.");
-      trackEvent("auth_sign_out_failed", {
-        reason: message,
-        source: "settings",
-      });
+      trackEvent("auth_sign_out_failed", { reason: message, source: "settings" });
       Alert.alert("Log Out", message);
     } finally {
-      setSigningOut(false);
+      accountActionScope.busy = false;
+      if (currentAccountAction(accountActionIdentity)) setSigningOut(false);
     }
   };
 
@@ -1632,7 +1637,7 @@ export default function SettingsScreen() {
   }, [legalConfig.accountDeletionUrl, openLocalLegalRoute]);
 
   const onPressSubmitAccountDeletionRequest = useCallback(() => {
-    if (!isSignedIn) {
+    if (!isSignedIn || !authority || !currentAccountAction(authority)) {
       Alert.alert("Sign in required", "Sign in before deleting your account.");
       return;
     }
@@ -1646,12 +1651,15 @@ export default function SettingsScreen() {
           text: "Delete Account",
           style: "destructive",
           onPress: () => {
+            if (!currentAccountAction(authority) || accountActionScope.busy) return;
+            accountActionScope.busy = true;
             setDeletionRequestSaving(true);
             setDeletionRequestNotice(null);
             void scheduleAccountDeletion({
               reason: "User scheduled account deletion from Settings.",
-            })
+            }, authority)
               .then((result) => {
+                if (!currentAccountAction(authority)) return;
                 setAccountDeletionStatus(result);
                 const message = result.alreadyExists
                   ? "Account deletion is already scheduled."
@@ -1661,31 +1669,31 @@ export default function SettingsScreen() {
                   {
                     text: "OK",
                     onPress: () => {
-                      void revokeCurrentPushInstall()
-                        .catch(() => null)
-                        .then(() => revokeIosVoipRegistration().catch(() => null))
-                        .then(() => supabase.auth.signOut())
-                        .finally(() => {
-                          router.replace("/(auth)/login");
-                        });
+                      void finishAccountSignOut(authority).catch((error) => {
+                        if (currentAccountAction(authority)) Alert.alert("Log Out", getUserFacingErrorMessage(error, "Unable to log out right now."));
+                      });
                     },
                   },
                 ]);
               })
               .catch((error) => {
+                if (!currentAccountAction(authority)) return;
                 const message = getAccountDeletionRequestErrorMessage(error);
                 setDeletionRequestNotice(message);
                 Alert.alert("Account deletion", message);
               })
-              .finally(() => setDeletionRequestSaving(false));
+              .finally(() => {
+                accountActionScope.busy = false;
+                if (currentAccountAction(authority)) setDeletionRequestSaving(false);
+              });
           },
         },
       ],
     );
-  }, [isSignedIn, router]);
+  }, [isSignedIn, authority, currentAccountAction, accountActionScope, finishAccountSignOut]);
 
   const onPressRestoreAccountDeletion = useCallback(() => {
-    if (!isSignedIn) {
+    if (!isSignedIn || !authority || !currentAccountAction(authority)) {
       Alert.alert("Sign in required", "Sign in before restoring your account.");
       return;
     }
@@ -1698,24 +1706,31 @@ export default function SettingsScreen() {
         {
           text: "Restore Account",
           onPress: () => {
+            if (!currentAccountAction(authority) || accountActionScope.busy) return;
+            accountActionScope.busy = true;
             setDeletionRequestSaving(true);
-            void restoreScheduledAccountDeletion()
+            void restoreScheduledAccountDeletion(authority)
               .then((result) => {
+                if (!currentAccountAction(authority)) return;
                 setAccountDeletionStatus({ ...result, scheduled: false });
                 setDeletionRequestNotice("Account deletion canceled.");
                 Alert.alert("Account restored", "Account deletion canceled.");
               })
               .catch((error) => {
+                if (!currentAccountAction(authority)) return;
                 const message = getAccountDeletionRequestErrorMessage(error);
                 setDeletionRequestNotice(message);
                 Alert.alert("Account deletion", message);
               })
-              .finally(() => setDeletionRequestSaving(false));
+              .finally(() => {
+                accountActionScope.busy = false;
+                if (currentAccountAction(authority)) setDeletionRequestSaving(false);
+              });
           },
         },
       ],
     );
-  }, [isSignedIn]);
+  }, [isSignedIn, authority, currentAccountAction, accountActionScope]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Settings navigation contract; the current render path intentionally does not call it.
   const onPressCommunityGuidelines = useCallback(() => {

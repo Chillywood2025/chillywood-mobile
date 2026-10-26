@@ -84,17 +84,21 @@ select ok(
   ) ilike '%creator_rendition_direct_owner_authorized%'
   and
   (select policy."qual" ilike '%creator_rendition_direct_owner_authorized%'
-          and policy."qual" ilike '%creator_video_rendition_parent_read_safe%'
-          and policy."qual" ilike '%media_scan_public_safe%'
-          and policy."qual" ilike '%quarantined_at%'
-          and policy."qual" ilike '%status%'
-          and policy."qual" ilike '%quality_label%'
+          and policy."qual" ilike '%video_rendition_playback_safe%'
           and policy."qual" not ilike '%has_platform_role%'
           and policy."qual" not ilike '%has_platform_permission%'
    from pg_catalog.pg_policies policy
    where policy."schemaname"='public'
      and policy."tablename"='video_renditions'
-     and policy."policyname"='video_renditions_select_owner_operator'),
+     and policy."policyname"='video_renditions_select_owner_operator')
+  and pg_get_functiondef('public.video_rendition_playback_safe(uuid)'::regprocedure)
+    ilike '%quarantined_at%'
+  and pg_get_functiondef('public.video_rendition_playback_safe(uuid)'::regprocedure)
+    ilike '%media_scan_public_safe%'
+  and pg_get_functiondef('public.video_rendition_playback_safe(uuid)'::regprocedure)
+    ilike '%status%'
+  and pg_get_functiondef('public.video_rendition_playback_safe(uuid)'::regprocedure)
+    ilike '%quality_label%',
   'direct helper ACLs and the legacy rendition policy admit only an exact current safe owner'
 );
 
@@ -574,9 +578,12 @@ select ok(
   and
   pg_get_functiondef(
     'public.creator_video_storage_rendition_access_allowed(text,text,text)'::regprocedure
+  ) ilike '%video_rendition_playback_safe%'
+  and pg_get_functiondef(
+    'public.video_rendition_playback_safe(uuid)'::regprocedure
   ) ilike '%video_rendition_binding_valid%'
   and pg_get_functiondef(
-    'public.creator_video_storage_rendition_access_allowed(text,text,text)'::regprocedure
+    'public.video_rendition_playback_safe(uuid)'::regprocedure
   ) ilike '%video_rendition_output_paths_valid%',
   '19. tier-specific storage policies delegate exact legacy row and path binding to the fixed helper'
 );

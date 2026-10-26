@@ -860,3 +860,22 @@ test("a mismatched backend receipt never establishes the confirmed-token dedupli
   assert.equal(tokenOperations(h, "register"), 4);
   assert.equal(h.timers.size, 0);
 });
+
+test('stale Settings revocation cannot clear a replacement VoIP lifecycle queued ahead of it', async () => {
+  const h = await harness();
+  const initiating = makeAuthority();
+  const replacement = { ...initiating, userId: ids.other, accountId: ids.other, sessionGeneration: 'replacement-generation' };
+  h.state.authority = replacement;
+  const started = deferred(), release = deferred();
+  h.state.onNativeStart = async () => { started.resolve(); await release.promise; };
+  const starting = h.facade.startIosNativeCallsReadiness(replacement);
+  await started.promise;
+  const stale = h.facade.revokeIosVoipRegistration(initiating);
+  release.resolve(); assert.equal((await starting).status, 'started');
+  const stops = h.state.nativeStops, operations = h.state.backendOperations.length;
+  assert.equal((await stale).status, 'not_registered');
+  assert.equal(h.state.nativeStops, stops); assert.equal(h.state.backendOperations.length, operations);
+  h.state.onBackendOperation = async body => body.action === 'status' ? { data: { registered: true }, error: null } : undefined;
+  assert.equal((await h.facade.readIosVoipRegistrationStatus()).status, 'registered');
+  assert.equal(h.state.backendOperations.at(-1).body.userId, replacement.userId);
+});

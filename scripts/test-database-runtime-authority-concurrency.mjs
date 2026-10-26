@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Real PostgreSQL backends, observed blocking and independently committed
 // authority changes. Only a disposable clone of LOCAL Supabase is writable.
 // No remote URL, provider call, mocked authority predicate or trigger bypass.
@@ -22,6 +23,7 @@ const projectId=readFileSync(path.join(root,'supabase/config.toml'),'utf8').matc
 assert.ok(projectId,'safe local Supabase project_id required');
 const container=process.env.SUPABASE_DB_CONTAINER||`supabase_db_${projectId}`;
 assert.match(container,/^supabase_db_[A-Za-z0-9_.-]{1,200}$/u);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database=`runtime_authority_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}`;
 assert.match(database,/^runtime_authority_[0-9]+_[a-f0-9]{12}$/u);
 const literal=x=>`'${String(x).replaceAll("'","''")}'`;
@@ -165,7 +167,7 @@ try{
   success(docker(psqlArgs(),'create schema vault;create extension supabase_vault with schema vault;'),'initialize clone extension');
   const dump=admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault','--exclude-extension=pg_graphql',
     '--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
-  success(dump,'read-only local source export');success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],dump.stdout,null),'restore disposable clone');
+  success(dump,'read-only local source export');success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database], cloneGuardRestore.prepare(dump.stdout, database), null),'restore disposable clone');
   // Captured-live negative controls run only inside the disposable clone.
   // The 4-argument wrapper was unchanged in the captured17-function overlay;
   // recover its exact pre-repair body from the immutable source migration too.
@@ -195,6 +197,8 @@ try{
   await runOwnerSecurityGrantConcurrency({container,database,query,literal,openSession,waitUntil,terminate});
   console.log(`Runtime authority native PostgreSQL: ${checks} deterministic queue cases passed; SQL SHA256 ${createHash('sha256').update(repairSql).digest('hex')}`);
 }finally{
+  try {
   if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop only generated disposable clone');
   if(sourceFingerprint!==undefined)assert.equal(query(sourceFingerprintSql,'postgres'),sourceFingerprint,'local source database changed');
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

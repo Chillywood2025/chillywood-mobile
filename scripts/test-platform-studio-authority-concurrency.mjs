@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Native PostgreSQL only: actual distinct backend sessions and observed lock
 // waits. Requires a reset, fully migrated LOCAL Supabase Docker container.
 // All fixture writes occur in a disposable pg_dump/restore clone. No database
@@ -24,6 +25,7 @@ assert.ok(projectId, "local supabase/config.toml must declare a safe project_id"
 const container = process.env.SUPABASE_DB_CONTAINER
   || `supabase_db_${projectId}`;
 assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/u);
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const database = `codex_studio_${process.pid}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 assert.match(database, /^codex_studio_[0-9]+_[a-f0-9]{12}$/u);
 const literal = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -154,7 +156,7 @@ try {
     "--exclude-schema=cron", "--exclude-schema=realtime", "--exclude-schema=_realtime",
     "--exclude-schema=vault", "--exclude-schema=graphql", "--exclude-schema=graphql_public", "postgres"], undefined, null);
   success(dump, "read-only export of local source");
-  success(admin(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", database], dump.stdout, null), "restore disposable clone");
+  success(admin(["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", database], cloneGuardRestore.prepare(dump.stdout, database), null), "restore disposable clone");
 
   for (const [index, person] of actors.entries()) {
     query(`insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
@@ -413,6 +415,8 @@ try {
   assert.equal(query(`select status from public.channel_audience_requests where id=${queuedReviewId};`), "pending");
   console.log(`Platform Studio native PostgreSQL concurrency: ${checks} deterministic cases passed.`);
 } finally {
+  try {
   if (cloned) success(docker(["exec", container, "dropdb", "-U", "postgres", "--if-exists", "--force", database]), "drop disposable clone");
   if (sourceFingerprint !== undefined) assert.equal(query(sourceFingerprintSql, "postgres"), sourceFingerprint, "source database fingerprint changed");
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }

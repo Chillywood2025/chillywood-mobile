@@ -45,11 +45,14 @@ select ok(
 
 select ok(
   pg_get_functiondef(
-    'public.creator_video_storage_rendition_access_allowed(text,text,text)'::regprocedure
+    'public.video_rendition_playback_safe(uuid)'::regprocedure
   ) ilike '%video_rendition_binding_valid%'
   and pg_get_functiondef(
-    'public.creator_video_storage_rendition_access_allowed(text,text,text)'::regprocedure
+    'public.video_rendition_playback_safe(uuid)'::regprocedure
   ) ilike '%video_rendition_output_paths_valid%'
+  and pg_get_functiondef(
+    'public.creator_video_storage_rendition_access_allowed(text,text,text)'::regprocedure
+  ) ilike '%video_rendition_playback_safe%'
   and pg_get_functiondef(
     'public.creator_video_storage_rendition_access_allowed(text,text,text)'::regprocedure
   ) ilike '%monetization_has_active_premium%'

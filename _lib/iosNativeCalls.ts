@@ -9,6 +9,7 @@ import {
   isCurrentAccountSessionAuthority,
   readCurrentAccountSessionAuthority,
   sameAccountSessionAuthority,
+  sameAccountSessionIdentity,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
 import { shouldReuseIosNativeCallReadiness } from "./iosNativeCallBridgeLifecycle.mjs";
@@ -1081,10 +1082,16 @@ export async function readIosVoipRegistrationStatus(): Promise<IosVoipRegistrati
   };
 }
 
-export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationState> {
+export async function revokeIosVoipRegistration(expected?: AccountSessionAuthorityBinding): Promise<IosVoipRegistrationState> {
   return runVoipTransition(async () => {
     const apnsEnvironment = readApnsEnvironment();
     if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
+
+    // A Settings callback may have waited behind a replacement registration.
+    // Check the retained owner before touching any shared native state.
+    if (expected && !sameAccountSessionIdentity(expected, voipAuthorityContext?.authority)) {
+      return { apnsEnvironment, status: "not_registered", tokenFingerprint: null };
+    }
 
     ++voipLifecycleGeneration;
     cancelVoipTokenRetries();

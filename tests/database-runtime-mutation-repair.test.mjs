@@ -49,6 +49,11 @@ const adminBackendFiles = [
 const userIdHoldScopeFiles = ['20261025083249_deleted_content_user_id_hold_scope.sql'];
 const brandEmptyFiles = ['20261025114152_platform_brand_empty_test_disposition.sql'];
 const brandObservationFiles = ['20261025111212_platform_brand_expiry_observation_recovery.sql'];
+const brandReferenceFiles = [
+  '20261025121430_platform_brand_reference_scan_performance.sql',
+  '20261025141347_platform_brand_reference_candidate_indexes.sql',
+];
+const legacyRenditionFiles = ['20261025192059_legacy_rendition_playback_authority.sql'];
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const brandArchivedVerificationFiles = ['20261025111122_platform_brand_archived_byte_verification.sql'];
 const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];
@@ -238,7 +243,9 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
     }
     // This remains a full-current-chain repair test, including reviewed successors.
     check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length);
+    check('complete Brand reference scan and candidate index successors',replayReport.files.filter(file=>brandReferenceFiles.includes(file)),brandReferenceFiles);
+    check('complete legacy rendition safety successor',replayReport.files.filter(file=>legacyRenditionFiles.includes(file)),legacyRenditionFiles);
     check('complete isolated R2 qualification successor in both Studio scenarios',replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles);
     check('complete Brand observation recovery successor',replayReport.files.filter(file=>brandObservationFiles.includes(file)),brandObservationFiles);
     check('complete Brand empty-test successor',replayReport.files.filter(file=>brandEmptyFiles.includes(file)),brandEmptyFiles);

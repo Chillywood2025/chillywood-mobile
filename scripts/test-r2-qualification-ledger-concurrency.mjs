@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 // Independent PostgreSQL sessions, only generated LOCAL Supabase clones.
 // Cluster SIGKILL tests use a separate owned no-network container, never the
 // shared Supabase cluster. This is not hardware power-loss/anti-rollback proof.
@@ -22,6 +23,7 @@ const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=
 assert.ok(project);
 const container=process.env.SUPABASE_DB_CONTAINER||`supabase_db_${project}`;
 assert.equal(container,`supabase_db_${project}`,'exact local checkout container');
+const cloneGuardRestore = createBrandGuardCloneRestorer({container});
 const prefix=`r2_qual_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}`;
 const baseline=`${prefix}_base`,marker=`r2-qualification-disposable:${randomUUID()}`;
 const created=new Set(),sessions=new Set();let serial=0,checks=0,sourceBefore,sourceQualificationBefore,crashContainer;
@@ -50,7 +52,7 @@ function createRestored(bytes) {
   const db=`${prefix}_${++serial}`;
   checked(docker(['exec',container,'createdb','-U','postgres','-T','template0',db]),'create fresh restore database');
   created.add(db);query(db,`comment on database ${db} is ${lit(marker)};create schema vault;create extension supabase_vault with schema vault;`);
-  checked(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',allowed(db)],bytes,null),'restore generated database');
+  checked(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',allowed(db)],cloneGuardRestore.prepare(bytes, allowed(db)),null),'restore generated database');
   return db;
 }
 const seed=db=>query(db,`insert into r2_qualification_test_private.run(state,setup_approval_ref) values(${json(initial)},'approved:offline-native-setup');`);
@@ -236,7 +238,7 @@ try {
   sourceBefore=query('postgres',existingDatabaseFingerprintSQL);
   sourceQualificationBefore=query('postgres',qualificationCatalogFingerprintSQL);
   create();query(baseline,'create schema vault;create extension supabase_vault with schema vault;');
-  checked(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',baseline],dump('postgres'),null),'restore full migrated baseline');
+  checked(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',baseline],cloneGuardRestore.prepare(dump('postgres'), baseline),null),'restore full migrated baseline');
   const before=query(baseline,existingDatabaseFingerprintSQL);
   // Full local reset already applied the migration. Compare the restored ledger
   // to a pristine canonical install; never reapply CREATEs or drop its schema.
@@ -298,6 +300,7 @@ try {
     currentSnapshotPreserved:true,staleSnapshotReopensDemonstrated:true,restoreSafeNonreuse:false,...fenced,
     providerRequests:0,liveDatabaseWrites:0}));
 } finally {
+  try {
   if(crashContainer){
     const owner=docker(['inspect','--format','{{index .Config.Labels "r2-qualification-owner"}}',crashContainer.id]);
     if(owner.status===0){assert.equal(owner.stdout.trim(),marker,'never remove unowned container');
@@ -312,4 +315,5 @@ try {
   if(sourceBefore!==undefined)assert.equal(query('postgres',existingDatabaseFingerprintSQL),sourceBefore,'original local source unchanged');
   if(sourceQualificationBefore!==undefined)assert.equal(query('postgres',qualificationCatalogFingerprintSQL),sourceQualificationBefore,'original local qualification schema, clock and rows unchanged');
   assertProposalUnchanged();
+  } finally { cloneGuardRestore.assertSourceUnchanged(); }
 }
