@@ -33,6 +33,7 @@ const stages=[
  ['semantics','tests/brand-reference-normalized-semantics-native.mjs',[],4*60],
  ['ddl','tests/brand-reference-normalized-ddl-native.mjs',['--native'],4*60],
  ['index-races','tests/brand-reference-index-guards-native.mjs',[],5*60],
+ ['concurrent-installer','tests/brand-reference-index-installer-native.mjs',[],5*60],
  ['writers','tests/brand-reference-normalized-writers-native.mjs',[],5*60],
  ['failure-tail','tests/brand-reference-normalized-writers-native.mjs',['--failure-tail'],2*60],
  ['pilots','tests/brand-reference-normalized-pilot-native.mjs',[],8*60],

@@ -55,6 +55,9 @@ test('Brand native qualification is an unconditional database obligation in the 
   assert.equal(existsSync('.github/workflows/brand-reference-native-qualification.yml'), false,
     'no separate supplemental workflow can be mistaken for canonical qualification');
   for (const path of [paths[0], 'supabase/tests/platform_brand_global_retention_test.sql',
+    'scripts/brand-reference-index-installer.mjs', 'tests/brand-reference-index-installer-native.mjs',
+    'tests/brand-reference-index-installer.test.mjs', 'tests/helpers/brand-reference-installer-psql.mjs',
+    'tests/brand-reference-index-installer-catalog.test.mjs',
     'tests/brand-reference-native-ci.mjs', 'tests/brand-reference-normalized-pilot-native.mjs',
     'tests/brand-reference-native-shutdown.test.mjs', 'tests/helpers/brand-reference-native-shutdown.mjs',
     'tests/brand-reference-native-readiness.test.mjs', 'tests/helpers/brand-reference-native-readiness.mjs',

@@ -92,6 +92,7 @@
     ],
     "database": [
       "supabase/**",
+      "scripts/brand-reference-index-installer.mjs",
       "tests/brand-reference-*.mjs",
       "tests/helpers/brand-reference-*.mjs",
       "tests/helpers/database-runtime-authority-fixture.mjs",
