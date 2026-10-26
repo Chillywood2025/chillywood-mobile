@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import { TERMS_ID } from "../fixtures/event-purchase-contract.mjs";
 
 const CREATOR_ID = "11111111-1111-4111-8111-111111111111";
 const VIEWER_ID = "22222222-2222-4222-8222-222222222222";
@@ -160,6 +161,7 @@ test("iOS Event intents replace the persisted Google offer product with one exac
         amountMinor: 99,
         providerProductId: "cw_event_pass_sandbox_099",
       }),
+      undefined, TERMS_ID,
     ),
     { id: INTENT_ID, providerProductId: "com.chillywood.eventpass.tier1", alreadyPurchased: false },
   );
@@ -182,6 +184,7 @@ test("iOS Event intents replace the persisted Google offer product with one exac
           amountMinor: 99,
           providerProductId: "cw_event_pass_sandbox_099",
         }),
+        undefined, TERMS_ID,
       ),
       /authority could not be verified/u,
     );
@@ -406,7 +409,7 @@ test("Android preserves exact Google Play provenance and rejects App Store readb
   });
   const api = loadIntentApi("_lib/paidCreatorEvents.ts", "android", exact);
   assert.equal(
-    (await api.createPaidCreatorEventPassPurchaseIntent(OFFER_ID, expectation)).providerProductId,
+    (await api.createPaidCreatorEventPassPurchaseIntent(OFFER_ID, expectation, undefined, TERMS_ID)).providerProductId,
     "cw_event_pass_sandbox_099",
   );
   const crossStore = loadIntentApi("_lib/paidCreatorEvents.ts", "android", {
@@ -415,7 +418,7 @@ test("Android preserves exact Google Play provenance and rejects App Store readb
     providerProductId: "com.chillywood.eventpass.tier1",
   });
   await assert.rejects(
-    crossStore.createPaidCreatorEventPassPurchaseIntent(OFFER_ID, expectation),
+    crossStore.createPaidCreatorEventPassPurchaseIntent(OFFER_ID, expectation, undefined, TERMS_ID),
     /authority could not be verified/u,
   );
 

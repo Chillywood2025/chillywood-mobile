@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
 import {createDatabase,repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
+import {monetizationAuditFiles} from './helpers/creator-monetization-migration-inventory.mjs';
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
@@ -56,10 +57,6 @@ const brandReferenceFiles = [
 const legacyRenditionFiles = ['20261025192059_legacy_rendition_playback_authority.sql'];
 // Exact creator/buyer audit successors; historical mutation assertions stay
 // unchanged and unexpected/missing migration files still fail the inventory.
-const monetizationAuditFiles = [
-  '20261026104519_creator_event_offer_lifecycle.sql',
-  '20261026105832_live_stage_purchase_fulfillment_authority.sql',
-];
 const brandGlobalRetentionFiles = ['20261025033057_platform_brand_global_retention_integration.sql'];
 const brandArchivedVerificationFiles = ['20261025111122_platform_brand_archived_byte_verification.sql'];
 const externalReferenceFiles = ['20261024093048_deleted_content_reviewed_external_reference.sql'];

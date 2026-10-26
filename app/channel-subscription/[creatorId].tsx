@@ -297,6 +297,9 @@ export default function ChannelSubscriptionScreen() {
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" style={styles.secondaryButton} onPress={() => router.push("/purchases")}>
+              <Text style={styles.secondaryButtonText}>Purchases &amp; My Tickets</Text>
+            </TouchableOpacity>
             <View style={styles.ownerActionStack}>
               <TouchableOpacity
                 style={[styles.primaryButton, busy && styles.buttonDisabled]}

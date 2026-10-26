@@ -1399,6 +1399,7 @@ const writeIosConsumableFromRevenueCatEvent = async (
     p_raw_payload_hash: await hashText(rawBody),
     p_user_id: userId,
     p_input_reason: inputReason,
+    p_purchase_occurred_at: toIsoFromMs(event.purchased_at_ms),
   });
   if (error) throw new Error(`RevenueCat atomic App Store consumable transaction failed: ${error.message}`);
   const result = safeObject(data);
@@ -1614,6 +1615,7 @@ const writeGooglePlayCreatorMoneyFromRevenueCatEvent = async (
     p_raw_payload_hash: await hashText(rawBody),
     p_user_id: userId,
     p_input_reason: inputReason,
+    p_purchase_occurred_at: toIsoFromMs(event.purchased_at_ms),
   });
   if (error) throw new Error(`RevenueCat atomic Google Play creator-money transaction failed: ${error.message}`);
 

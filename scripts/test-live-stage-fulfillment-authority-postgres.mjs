@@ -161,6 +161,17 @@ try {
   assert.equal(await scalar("select has_function_privilege('authenticated',$1,'EXECUTE')",[signature]),false);
   assert.equal(await scalar("select has_function_privilege('anon',$1,'EXECUTE')",[signature]),false);
   assert.equal(await scalar("select has_function_privilege('service_role',$1,'EXECUTE')",[signature]),true);
+  await resetPurchase();
+  await db.exec('update public.paid_live_watch_party_offers set price_cents=999');
+  await assert.rejects(()=>project('edited-offer','edited-offer-original'),/live_watch_party_active_offer_binding_stale/,
+    'negative control: prior projector rejects the accepted99-cent quote after an offer edit');
+  const quoteSource=fs.readFileSync('supabase/migrations/20261026164507_creator_supported_prices_and_purchase_quotes.sql','utf8');
+  await db.exec(extract(quoteSource,'process_revenuecat_live_watch_party_event_atomic'));
+  assert.equal((await project('edited-offer','edited-offer-original')).status,'processed');
+  assert.equal(await scalar('select amount_minor from public.money_access_ledger_events'),99,'accepted price survives offer edit');
+  assert.equal((await project('edited-offer','edited-offer-original')).duplicateProviderEvent,true);
+  assert.equal((await project('edited-offer-refund','edited-offer-original','REFUND')).status,'refunded');
+  assert.equal(await scalar("select amount_minor from public.money_access_ledger_events where event_type='REFUND'"),99);
   console.log('Live Stage SQL authority repair: stale/session/quarantine/restriction/time/immutable-denial/duplicate/refund/grants controls passed.');
 } catch (error) {
   console.error({message:error.message,code:error.code,where:error.where,stack:error.stack});

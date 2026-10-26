@@ -2,6 +2,8 @@ import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 import {
+  beginCreatorMoneyCheckout,
+  CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY,
   captureCreatorMoneyPurchaseAuthority,
   isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
@@ -449,11 +451,17 @@ export async function saveChannelSubscriptionOffer(input: {
   title?: string | null;
   description?: string | null;
   status?: ChannelSubscriptionOfferStatus;
+  priceId?: string;
+  offerId?: string;
 }): Promise<ChannelSubscriptionOffer> {
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("set_creator_channel_subscription_offer", {
+  const pause = input.status === "paused" && !!input.offerId;
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(pause ? "pause_creator_offer" : input.priceId ? "set_creator_channel_subscription_offer_at_price" : "set_creator_channel_subscription_offer", pause ? {
+    p_source_type: "channel_subscription", p_offer_id: input.offerId,
+  } : {
     p_title: input.title ?? "Platform subscription",
     p_description: input.description ?? null,
     p_status: input.status ?? "sandbox",
+    ...(input.priceId ? { p_price_id: input.priceId } : {}),
   });
   if (error) throw new Error("Platform Subscription settings could not be saved.");
   const offer = data && typeof data === "object" && !Array.isArray(data)
@@ -498,7 +506,7 @@ export async function createChannelSubscriptionPurchaseIntent(
     "create_creator_channel_subscription_purchase_intent",
     { p_offer_id: offerId },
   );
-  if (!response || response.error) throw new Error("Platform Subscription checkout is not available right now.");
+  if (!response || response.error) throw new Error("Platform Subscription checkout could not be confirmed. Open Purchases & My Tickets and refresh status before trying another purchase.");
   const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Platform Subscription checkout authority could not be verified.");
@@ -644,7 +652,7 @@ export async function purchaseChannelSubscription(input: {
       access,
     };
   }
-  const intent = await createChannelSubscriptionPurchaseIntent(access.offer.id, {
+  const expectedIntent: Omit<CreatorMoneyPurchaseIntentExpectation, "status"> = {
     userId: purchaseSubject.userId,
     sourceType: "channel_subscription",
     sourceId: access.offer.id,
@@ -654,7 +662,8 @@ export async function purchaseChannelSubscription(input: {
     environment: access.offer.status === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  }, purchaseSubject);
+  };
+  const intent = await createChannelSubscriptionPurchaseIntent(access.offer.id, expectedIntent, purchaseSubject);
   if (intent.alreadySubscribed) {
     const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId, purchaseSubject, access);
     return {
@@ -701,6 +710,9 @@ export async function purchaseChannelSubscription(input: {
     };
   }
 
+  if (!await beginCreatorMoneyCheckout(purchaseSubject, intent.id, { ...expectedIntent, status: "pending", providerProductId: productId })) {
+    return { ok: false, message: CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY, access, intentId: intent.id, productId };
+  }
   try {
     if (pkg) {
       await purchaseRevenueCatPackage(pkg, { authority: purchaseSubject.authority });
@@ -762,8 +774,8 @@ export async function purchaseChannelSubscription(input: {
     return {
       ok: false,
       message: isRevenueCatUserCancellation(error)
-        ? "Platform Subscription was canceled. Nothing changed."
-        : "Platform Subscription checkout could not be completed. Try again later.",
+        ? "Platform Subscription checkout was canceled. Refresh Purchases & My Tickets to confirm its status before another attempt."
+        : "Subscription payment could not be confirmed. Refresh Purchases & My Tickets. Do not purchase again while payment is unknown.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,

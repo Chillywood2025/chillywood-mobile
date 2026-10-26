@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { handleCreatorEventPlayback } from "../_shared/creator-event-playback.ts";
 import {
   readExactCurrentSessionAuthority,
   readExactPlatformRole,
@@ -1305,6 +1306,29 @@ const readRecordAndSession = async (adminClient: SupabaseClientLike, recordId: s
   return { record, session };
 };
 
+const eventPlaybackDependencies = (adminClient: SupabaseClientLike) => ({
+  secret: readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  authenticate: async (request: Request) => {
+    const authorization = request.headers.get("Authorization") ?? "";
+    if (!authorization.toLowerCase().startsWith("bearer ")) return null;
+    const { supabaseUrl, supabaseAnonKey } = createAuthClient();
+    const client = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: authorization } },
+    });
+    const { data, error } = await client.auth.getUser();
+    if (error || !data.user?.id) return null;
+    return await readExactCurrentSessionAuthority(client, data.user.id);
+  },
+  readSource: async (eventId: string, userId: string, sessionId: string) => {
+    const { data, error } = await adminClient.rpc("read_creator_event_playback_source", {
+      p_creator_event_id: eventId, p_user_id: userId, p_session_id: sessionId,
+    });
+    return error ? null : data;
+  },
+  fetchSource: async (url: string) => (await fetchApprovedHlsUrl(url)).response,
+});
+
 const parseRecordRoute = (req: Request) => {
   const url = new URL(req.url);
   const segments = url.pathname.split("/").filter(Boolean);
@@ -1463,6 +1487,8 @@ Deno.serve(async (req): Promise<Response> => {
     const adminClient = adminConfig.client;
 
     if (req.method === "GET") {
+      const eventResponse = await handleCreatorEventPlayback(req, eventPlaybackDependencies(adminClient));
+      if (eventResponse) return eventResponse;
       const route = parseRecordRoute(req);
       if (!route) {
         return jsonResponse(404, {
@@ -1483,6 +1509,9 @@ Deno.serve(async (req): Promise<Response> => {
 
     const parsed = await parseJsonPayload(req);
     if ("error" in parsed) return parsed.error;
+
+    const eventResponse = await handleCreatorEventPlayback(req, eventPlaybackDependencies(adminClient), parsed.value);
+    if (eventResponse) return eventResponse;
 
     const mode = normalizeMode(parsed.value.mode);
     if (mode === "admin_publish" || mode === "admin_sync" || mode === "admin_disable") {

@@ -5,6 +5,8 @@ import {
   normalizeCreatorContentAccessResolution,
 } from "./creatorMonetization";
 import {
+  beginCreatorMoneyCheckout,
+  CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY,
   captureCreatorMoneyPurchaseAuthority,
   isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
@@ -501,14 +503,18 @@ export async function createPaidVideoPurchaseIntent(input: {
   creatorId: string;
   amountCents: number;
   currency?: string | null;
+  productKey?: string | null;
 }, expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
 subject: CreatorMoneyPurchaseSubject) {
   const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
     subject,
-    "create_money_purchase_intent",
+    Platform.OS === "ios" ? "create_ios_creator_money_purchase_intent" : "create_money_purchase_intent",
     {
-      p_product_key: PAID_VIDEO_SANDBOX_PRODUCT_KEY,
+      ...(Platform.OS === "ios" ? { p_concept: "paid_video", p_amount_minor: expected.amountMinor }
+        : { p_product_key: input.productKey }),
+      ...(Platform.OS === "ios" ? {} : {
       p_source_type: "paid_content",
+      }),
       p_source_id: input.videoId,
       p_metadata: {
         creator_id: input.creatorId,
@@ -521,7 +527,7 @@ subject: CreatorMoneyPurchaseSubject) {
       },
     },
   );
-  if (!response || response.error) throw new Error("Paid video checkout is not available right now.");
+  if (!response || response.error) throw new Error("Checkout could not be confirmed. Open Purchases & My Tickets and refresh status before trying another purchase.");
   const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Paid video checkout authority could not be verified.");
@@ -593,7 +599,7 @@ export async function purchasePaidVideoAccess(input: {
   if (!access.creatorId || access.creatorId !== input.creatorId) {
     return { ok: false, message: "This Paid Video is not available right now.", access };
   }
-  const requestedAmount = Math.trunc(input.amountCents);
+  const requestedAmount = input.amountCents;
   const requestedCurrency = toText(input.currency).toLowerCase() || "usd";
   if (
     !Number.isSafeInteger(requestedAmount)
@@ -601,6 +607,7 @@ export async function purchasePaidVideoAccess(input: {
     || requestedCurrency !== access.currency
     || (access.provider !== "revenuecat_app_store" && access.provider !== "revenuecat_google_play")
     || !access.providerProductId
+    || (Platform.OS === "android" && !access.providerProductKey)
   ) {
     return { ok: false, message: "This Paid Video is not available right now.", access };
   }
@@ -640,7 +647,7 @@ export async function purchasePaidVideoAccess(input: {
       access,
     };
   }
-  const intent = await createPaidVideoPurchaseIntent(input, {
+  const expectedIntent: Omit<CreatorMoneyPurchaseIntentExpectation, "status"> = {
     userId: purchaseSubject.userId,
     sourceType: "paid_content",
     sourceId: input.videoId,
@@ -650,7 +657,8 @@ export async function purchasePaidVideoAccess(input: {
     environment: access.offerStatus === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  }, purchaseSubject);
+  };
+  const intent = await createPaidVideoPurchaseIntent({ ...input, productKey: access.providerProductKey }, expectedIntent, purchaseSubject);
   if (intent.alreadyPurchased) {
     const restoredAccess = await waitForPaidVideoAccess(input.videoId, purchaseSubject, access);
     return restoredAccess.allowed
@@ -704,13 +712,16 @@ export async function purchasePaidVideoAccess(input: {
     };
   }
 
+  if (!await beginCreatorMoneyCheckout(purchaseSubject, intent.id, { ...expectedIntent, status: "pending", providerProductId: productId })) {
+    return { ok: false, message: CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY, access, intentId: intent.id, productId };
+  }
   try {
     await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
     if (isRevenueCatUserCancellation(error)) {
       return {
         ok: false,
-        message: "Paid Video unlock was canceled. Nothing changed.",
+        message: "Paid Video checkout was canceled. Refresh Purchases & My Tickets to confirm its status before another attempt.",
         access,
         intentId: intent.id,
         productId,
@@ -728,7 +739,7 @@ export async function purchasePaidVideoAccess(input: {
     }
     return {
       ok: false,
-      message: "Paid Video checkout could not be completed. Try again later.",
+      message: "Paid Video payment could not be confirmed. Open Purchases & My Tickets and refresh status. Do not purchase again while payment is unknown.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,

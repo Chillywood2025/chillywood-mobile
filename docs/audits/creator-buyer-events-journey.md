@@ -7,6 +7,79 @@ The existing Live Stage Seat Pass is eligibility to request a speaking seat; hos
 approval still controls microphone/camera/publishing authority. It is not an
 assigned theater seat. No provider account, live charge, refund or payout was used.
 
+## Approved implementation follow-up, 2026-10-26
+
+The inventory and EJ matrix below retain the initial audit findings against main.
+This section supersedes their implementation status for the current candidate;
+it does not claim deployed behavior. Parent owns final commits, PR626, full
+validation and exact-head CI. No source was committed by this subagent.
+
+| Coverage IDs | Current source implementation | Evidence and remaining limit |
+| --- | --- | --- |
+| EJ01–EJ05 | Event authoring persists an explicit IANA zone and UTC instants. Invalid calendar times and DST gaps fail; repeated hours require first/second choice or a matching offset. Draft/scheduled authoring remains separate from lifecycle controls. | Actual Studio save-handler tests and eight zoned-helper tests, including negative controls. Physical native date-entry/a11y evidence remains unavailable. |
+| EJ06–EJ08 | New `EventSaleEditor` uses supported authoring prices with no99 default; capacity, required opening/closing windows, inclusions and replay settings become immutable revision terms. Existing bulk setup preserves prices. New ticket drafts cannot deactivate a published offer. | Mounted controls exercise chosen199-cent fixture, capacity12, exact US-zone windows, invalid/empty catalog, invalid capacity/windows and stale-owner save. Backend agent owns catalog/price/concurrency tests. These are synthetic supported prices, not new live SKUs. |
+| EJ09, EJ14 | `/event/[eventId]` calls `resolve_creator_event_destination` directly and validates exact event identity. Live/replay CTA goes to `/event-watch/[eventId]`, never a feed scan or generic speaker route. Valid exact purchased replay remains visible when the older pass resolver reports an ended event. | Mounted exact live/replay tests plus wrong-event denial. Root/client agents own protected playback evidence. `EventBroadcastPreparation` is wired before Start; the coverage agent owns its room/source preparation and tests. Actual provider readiness still needs qualification. |
+| EJ10–EJ13 | Checkout binds displayed revision, validated intent and store price. Immediately before SDK it atomically claims a held, unexpired, exact-user/event/offer/revision/amount reservation using a new invocation UUID. SDK requires matching `checkoutAttemptId` and `startAuthorized:true`; duplicate or uncertain claim responses never open the store. Known pre-SDK failures may cancel only an unstarted reservation; no cleanup follows claim/SDK uncertainty. My Tickets links to `/purchases`; exact-event history reads original terms and eligibility. | Production purchase script checks eleven reservation/claim mismatches, duplicate concurrent invocation, lost claim reply, failed/mismatched store lookup and cleanup failure. Sixteen precharge/iOS tests pass. Mounted event tests prove revision binding, stale-account suppression and historical-terms handling. Pending is not reported as failed or refunded. |
+| EJ15–EJ16, EJ19–EJ20 | Dedicated creator publish/start/delay/reschedule/end/cancel/no-show/pause-sales controls call owner/session-bound, optimistic-concurrency RPC. Purchased schedule/duration changes require explicit material confirmation; cancellation/no-show/material change creates durable provider-review refund eligibility. No automatic money action or refund guarantee. | `20261026165705_creator_event_lifecycle_controls.sql` runs in disposable PostgreSQL. Tests check owner/session/stale edits, direct metadata/schedule/replay bypass denial, wrong-host/missing broadcast denial, eligibility ownership, unchanged pass status, permit consumption, finite-time/null-action checks and a removed-trigger negative control. Explicit no-show requires scheduled start to have passed and no verified active broadcast. No nonmaterial threshold or automatic grace period invented. |
+| EJ17 | Event detail now has explicit opt-in/cancel reminder controls, current state, errors and account-change suppression using existing enrollment/outbox and notification preferences. Reminder revision includes IANA zone, lifecycle status and buyer message. | Mounted handlers bind exact event/viewer and reject stale completion. Purchases do not auto-enroll without consent. Actual push delivery, OS permission and device qualification remain unavailable. |
+| EJ18 | Purchased terms show original replay policy/expiry. Direct changes to purchased replay terms fail closed. | Root owns exact replay gateway and access-window tests. No new replay duration policy or provider availability promise. |
+| EJ21–EJ22 | Authority reads are bounded; exact entry and purchase history load alongside metadata. Empty, sold-out, paused/window closed, unavailable and pending recovery copy; unknown terms cannot buy; cold Back and wallet routes work. Failed creator offer refresh preserves verified settings and does not display Free. Dark Chi'llywood styling retained. | Eleven production event-route mounts, six production control mounts, three Studio mounts and date/SQL tests. Android/iOS installed UX, TalkBack/VoiceOver, large text and true native billing still unverified. |
+| EJ23 | Auctions and assigned/physical seating remain design-only and separate from virtual tickets/speaking-seat eligibility. | Official billing-policy assessment is in the parent/provider audit. No auction, reserve, settlement or provider settings implemented. |
+
+Current creator path: Studio → Live schedule → create/edit draft with time zone →
+publish schedule → Configure tickets → choose supported price/capacity/windows and
+inclusions → preview and publish terms → lifecycle controls. An already published
+offer uses Pause new sales and republish; saving a new draft cannot silently make it
+free. Existing purchased schedules use explicit lifecycle actions, not direct edit.
+
+Current buyer path: discovery/profile/notification → exact Event → review terms →
+reserved store checkout → verified/pending status → My Tickets → event waiting state
+→ exact protected live or authorized replay. The latest purchase panel is history,
+not an access grant; the resolver remains authoritative.
+
+Follow-up hardening binds ticket publication to `p_expected_updated_at` under the
+event row lock. The current UI always sends the previewed source version and
+validates the returned title, schedule and replay terms as well as price/capacity/
+sale windows. A stale preview fails before quote creation; the editor preserves
+its selected price and inputs. The ninth parameter defaults to null only for
+legacy eight-argument compatibility. Private lifecycle permits now explicitly
+use FORCE RLS.
+
+Lifecycle remedies also retain exact purchase-intent identity for reservations
+that have no fulfilled pass. A cancellation/material change/no-show can therefore
+precede a late charge without losing eligibility. Passless records are not exposed
+by direct buyer table reads; the wallet requires an exact processed receipt or an
+ignored receipt with an exact owned pending reconciliation obligation before
+showing eligibility. Unpaid pending intents, ignored receipts without obligations,
+wrong-owner obligations and verified refunds do not produce that banner. These
+records never grant entry or mark money refunded.
+
+Focused evidence covers37 tests across the event control,
+route, Studio, date/time, exact configuration readback and lifecycle files;16 precharge/iOS tests passed; the quote
+script passed all nine production purchase branches plus eleven reservation/claim negative
+cases; focused ESLint and `git diff --check` passed. Subsequent root changes must
+retain exact-head checks. The lifecycle SQL test fixtures the broadcast readiness
+boundary; it does not certify LiveKit/HLS provider readiness or a full deployed
+Supabase schema. The latest focused SQL run also passed explicit no-show/publish,
+direct inserted metadata forgery, null action and infinite timestamp denial cases.
+Configuration readback tests reject wrong source, owner, price, currency, capacity,
+inclusion, zone, sale window, pause state and stale-session responses before success UI.
+
+Supabase review used the repository assurance skill and Supabase/Postgres skills.
+Current official [RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security)
+confirms that grants and ownership policies must both constrain exposed tables.
+The [changelog](https://supabase.com/changelog) was checked; the relevant upcoming
+HTTP TLS deprecation is an installed-client qualification concern, not authority
+to change this project’s settings. Remedy tables explicitly revoke writes, enable
+RLS, and allow only current owning buyers to read.
+
+Still pending: physical/assigned-seat meaning; paid-event conversion-to-free
+remedies; configurable nonmaterial schedule threshold/no-show grace; replay
+business duration; real approved catalog and
+store/provider qualification; host broadcast linkage qualification; deployment,
+installed Android/iOS purchase/restore/delivery/media/a11y evidence. No merge or
+release is authorized by this audit.
+
 ## Selected manifests and evidence limits
 
 Read `AGENTS.md`, `app/AGENTS.md`, `.agents/skills/chillywood-assurance/SKILL.md`.

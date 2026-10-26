@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
+import { webcrypto } from "node:crypto";
+import { eventContract, heldReservation, TERMS_ID } from "../tests/fixtures/event-purchase-contract.mjs";
 const buyer = "11111111-1111-4111-8111-111111111111";
 const creator = "22222222-2222-4222-8222-222222222222";
 const offerId = "33333333-3333-4333-8333-333333333333";
@@ -15,6 +17,8 @@ const compiledModules = new Map();
 
 function runtime(options = {}) {
   let nativeCalls = 0;
+  let beginCalls = 0, moneyBeginCalls = 0, cleanupCalls = 0;
+  const attemptIds = [];
   let sessionCurrent = true;
   const amount = options.amount ?? 99;
   const selectedProductId = options.tip ? "cw_creator_tip_sandbox_099" : productId;
@@ -24,17 +28,34 @@ function runtime(options = {}) {
     priceCents: amount, currency: "usd", status: "sandbox",
     provider: "revenuecat_google_play", providerProductId: selectedProductId, providerProductKey: "test_product",
     providerEntitlementId: "channel_member", interval: "monthly", passType: "one_time",
+    ...eventContract(offerId, offerId, amount),
   };
   const access = {
     ...offer, offer, allowed: false, requiresPurchase: true, reason: options.reason ?? "purchase_required",
     resolverStatus: "resolved", offerStatus: "sandbox",
   };
   const cache = new Map();
-  const context = vm.createContext({ console, Date, setTimeout: (fn) => { fn(); return 0; }, clearTimeout });
+  const context = vm.createContext({ console, Date, crypto: webcrypto, setTimeout: (fn) => { fn(); return 0; }, clearTimeout });
   const sdkPurchase = async () => { nativeCalls += 1; throw { userCancelled: true }; };
-  const products = async () => { if (options.switchAccount) sessionCurrent = false; return [product]; };
+  const products = async () => { if (options.productReadThrows) throw Error('catalog unavailable'); if (options.switchAccount) sessionCurrent = false; return [product]; };
+  const moneyClaimState = options.claimState ?? { claimed: false };
+  const claimMoney = async (_subject, name, args) => {
+    assert.equal(name, "begin_creator_money_checkout");
+    assert.equal(args.p_purchase_intent_id, intentId);
+    moneyBeginCalls++; attemptIds.push(args.p_checkout_attempt_id);
+    const alreadyClaimed = moneyClaimState.claimed; moneyClaimState.claimed = true;
+    if (options.moneyBeginUnknown) throw Error("claim response lost");
+    if (options.moneyClaimSwitchAccount) sessionCurrent = false;
+    return { data: { id: intentId, userId: buyer, creatorId: creator,
+      sourceType: options.sourceType ?? "paid_content", sourceId: options.tip ? creator : offerId,
+      provider: "revenuecat_google_play", providerProductId: selectedProductId, environment: "sandbox", status: "pending",
+      amountMinor: amount, currency: "usd", quote: { amountMinor: amount, currency: "usd" },
+      checkoutAttemptId: args.p_checkout_attempt_id, checkoutStartedAt: new Date().toISOString(), startAuthorized: !alreadyClaimed,
+      ...options.moneyClaim }, error: options.moneyClaimError ?? null };
+  };
   const mocks = {
     "react-native": { Platform: { OS: "android" } },
+    "react-native-get-random-values": {},
     "./supabase": { supabase: { rpc: async () => ({ data: options.live ? {
       allowed: true, reason: "exact_live_access_pass", viewerOnly: true, seatEligible: false,
       seatApproved: false, accessOfferId: offerId, currency: "usd", grantsPublish: false,
@@ -50,7 +71,9 @@ function runtime(options = {}) {
         ? { all: { test: { availablePackages: [{ identifier: "monthly", product }] } } } : { all: {} },
       purchaseRevenueCatStoreProduct: sdkPurchase, purchaseRevenueCatPackage: sdkPurchase,
     },
-    "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {},
+    "./accountBoundSupabaseMutation": { invokeAccountBoundSupabaseMutationRpc: claimMoney },
+    "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => sessionCurrent ? { userId: buyer } : null,
+      sameAccountSessionAuthority: (a,b) => !!a && !!b && a.userId === b.userId }, "./creatorTipCheckoutAttempt": {},
     "./featureFlags": {}, "./runtimeConfig": {},
     "./revenuecatPurchaseClosure": {
       isRevenueCatExistingPurchase: () => false,
@@ -75,14 +98,28 @@ function runtime(options = {}) {
           isCreatorMoneyPurchaseAuthorityCurrent: () => sessionCurrent,
           prepareCreatorMoneyPurchaseSubject: async () => ({ userId: buyer, authority: { userId: buyer } }),
           revalidateCreatorMoneyPurchaseSubject: async () => sessionCurrent,
-          invokeCreatorMoneyPurchaseSubjectRpc: async () => ({ data: {
+          invokeCreatorMoneyPurchaseSubjectRpc: async (_subject, name, args) => {
+            if (name === "cancel_unstarted_creator_event_reservation") {
+              cleanupCalls += 1; if (options.cleanupThrows) throw Error('cleanup unavailable');
+              return {data:{canceled:true},error:null};
+            }
+            if (name === "begin_creator_event_checkout") {
+              beginCalls += 1; attemptIds.push(args.p_checkout_attempt_id);
+              const alreadyClaimed = options.claimState?.claimed === true;
+              if (options.claimState) options.claimState.claimed = true;
+              if (options.beginUnknown) throw Error('claim response lost');
+              return {data:{...heldReservation(buyer, offerId, offerId, intentId, amount),
+                checkoutAttemptId:args.p_checkout_attempt_id,startAuthorized:!alreadyClaimed,...options.reservation},error:null};
+            }
+            return { data: {
             id: intentId, userId: buyer, creatorId: creator, sourceType: options.sourceType ?? "paid_content",
             sourceId: options.tip ? creator : offerId, provider: "revenuecat_google_play",
             providerProductId: selectedProductId, environment: "sandbox", status: "pending",
             amountMinor: amount, currency: "usd", alreadyPurchased: false, alreadySubscribed: false,
             partyId: "party-test", passType: options.passType, grantsPublish: false,
             ...options.intent,
-          }, error: null }),
+            }, error: null };
+          },
         };
       }
       const base = specifier.replace("./", "");
@@ -93,7 +130,7 @@ function runtime(options = {}) {
     vm.runInContext(`(function(exports, require, module) { ${compiled}\n})`, context, { filename })(module.exports, require, module);
     return module.exports;
   }
-  return { load, calls: () => nativeCalls };
+  return { load, calls: () => nativeCalls, begins:()=>beginCalls, moneyBegins:()=>moneyBeginCalls, cleanups:()=>cleanupCalls, attemptIds };
 }
 
 const quote = runtime().load("creatorMoneyStoreQuote");
@@ -117,7 +154,7 @@ const cases = [
   { module: "channelSubscriptions", fn: "purchaseChannelSubscription", sourceType: "channel_subscription", reason: "subscription_required", amount: 499, args: { creatorId: creator, sourceSurface: "test" } },
   { module: "channelSubscriptions", fn: "purchaseChannelSubscription", sourceType: "channel_subscription", reason: "subscription_required", amount: 499, package: true, args: { creatorId: creator, sourceSurface: "test" } },
   { module: "creatorTips", fn: "purchaseCreatorTipWithStore", sourceType: "creator_tip", tip: true, args: { creatorId: creator, userId: buyer, amountCents: 99, currency: "usd" } },
-  { module: "paidCreatorEvents", fn: "purchasePaidCreatorEventPass", sourceType: "event", reason: "event_pass_required", args: { creatorEventId: offerId, sourceSurface: "test" } },
+  { module: "paidCreatorEvents", fn: "purchasePaidCreatorEventPass", sourceType: "event", reason: "event_pass_required", args: { creatorEventId: offerId, sourceSurface: "test", expectedTermsRevisionId: TERMS_ID } },
 ];
 for (const test of cases) {
   const label = `${test.module}${test.package ? " package" : ""}`;
@@ -125,7 +162,8 @@ for (const test of cases) {
     const run = runtime({ ...test, product });
     const result = await run.load(test.module)[test.fn](test.args);
     assert.equal(result.ok, false, `${label} mismatch not successful`);
-    assert.equal(result.message, quote.CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, `${label} reaches quote guard`);
+    assert.equal(result.message, test.sourceType === "event" ? quote.CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY.replace("Nothing was charged.", "No new charge was started by this attempt.") : quote.CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, `${label} reaches quote guard`);
+    if (test.sourceType === "event") { assert.equal(run.cleanups(),1); assert.equal(run.begins(),0); }
     assert.equal(run.calls(), 0, `${label} never purchases on quote mismatch`);
   }
   const allowed = runtime(test);
@@ -140,6 +178,32 @@ for (const test of cases) {
     assert.equal(switched.calls(), 0, `${label} switched account prevents checkout`);
   }
 }
+const eventCase = cases.find(item => item.sourceType === "event");
+for (const reservation of [{state:"expired"},{expiresAt:"2000-01-01T00:00:00Z"},{buyerId:creator},
+  {termsRevisionId:intentId},{creatorEventId:creator},{offerId:creator},{priceCents:199},{currency:"eur"},{purchaseIntentId:offerId},
+  {startAuthorized:false},{checkoutAttemptId:intentId}]) {
+  const run = runtime({...eventCase,reservation});
+  const result = await run.load(eventCase.module)[eventCase.fn](eventCase.args);
+  assert.equal(run.calls(),0,"invalid reservation never reaches native checkout");
+  assert.match(result.message,/reservation is no longer ready/);
+  assert.equal(run.cleanups(),0,'never cancel after begin, even denied or malformed readback');
+}
+for (const options of [{productReadThrows:true},{productReadThrows:true,cleanupThrows:true},{product:{price:1.99},cleanupThrows:true}]) {
+  const run=runtime({...eventCase,...options});const result=await run.load(eventCase.module)[eventCase.fn](eventCase.args);
+  assert.equal(run.calls(),0);assert.equal(run.begins(),0);assert.equal(run.cleanups(),1);
+  assert.match(result.message,/No new charge was started/);
+}
+const claimState={claimed:false};
+const firstEvent=runtime({...eventCase,claimState}),secondEvent=runtime({...eventCase,claimState});
+await Promise.all([firstEvent.load(eventCase.module)[eventCase.fn](eventCase.args),secondEvent.load(eventCase.module)[eventCase.fn](eventCase.args)]);
+assert.equal(firstEvent.calls()+secondEvent.calls(),1,'one atomic server claim allows only one SDK invocation');
+assert.equal(firstEvent.cleanups()+secondEvent.cleanups(),0,'no cleanup after claim or store cancellation');
+assert.notEqual(firstEvent.attemptIds[0],secondEvent.attemptIds[0],'each invocation has a new UUID');
+for (const id of [...firstEvent.attemptIds,...secondEvent.attemptIds]) assert.match(id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+const unknown=runtime({...eventCase,beginUnknown:true});
+const unknownResult=await unknown.load(eventCase.module)[eventCase.fn](eventCase.args);
+assert.equal(unknown.calls(),0);assert.equal(unknown.cleanups(),0);assert.equal(unknown.begins(),1);
+assert.match(unknownResult.message,/Check My Tickets/);
 for (const [passType, sourceType] of [["live_watch_party_access_pass", "live_watch_party_access"], ["live_watch_party_seat_pass", "live_watch_party_seat"]]) {
   const input = { partyId: "party-test", offerId, passType, priceCents: 99 };
   for (const product of [{ price: 19.99 }, { currencyCode: "EUR" }, { currencyCode: undefined }]) {
@@ -154,4 +218,34 @@ for (const [passType, sourceType] of [["live_watch_party_access_pass", "live_wat
   await assert.rejects(switched.load("liveWatchPartyMoney").purchaseLiveWatchPartyOffer(input), /Account changed/);
   assert.equal(switched.calls(), 0);
 }
-console.log("PASS: quote values and nine production purchase branches reject price/currency drift, invalid intents and stale sessions before native checkout");
+const fractionalVideo = runtime({ sourceType: "paid_content", reason: "purchase_required" });
+const fractionalResult = await fractionalVideo.load("creatorPaidVideos").purchasePaidVideoAccess({ videoId: offerId, creatorId: creator, amountCents: 99.5, currency: "usd" });
+assert.equal(fractionalResult.ok, false);
+assert.equal(fractionalVideo.calls(), 0, "fractional requested minor units cannot silently truncate into a valid purchase");
+const nonEventCases = [...cases.filter(item => item.sourceType !== "event"),
+  ...[["live_watch_party_access_pass", "live_watch_party_access"], ["live_watch_party_seat_pass", "live_watch_party_seat"]].map(([passType, sourceType]) => ({
+    module: "liveWatchPartyMoney", fn: "purchaseLiveWatchPartyOffer", live: true, passType, sourceType,
+    args: { partyId: "party-test", offerId, passType, priceCents: 99 },
+  }))];
+const invoke = async (run, spec) => { try { return await run.load(spec.module)[spec.fn](spec.args); } catch (error) { return error; } };
+for (const spec of nonEventCases) {
+  const label = `${spec.module}:${spec.sourceType}${spec.package ? ":package" : ""}`;
+  for (const moneyClaim of [{ startAuthorized: false }, { checkoutAttemptId: intentId }, { checkoutStartedAt: null }, { id: offerId },
+    { userId: creator }, { sourceType: "event" }, { sourceId: intentId }, { creatorId: buyer }, { provider: "stripe_connect" },
+    { providerProductId: "different" }, { environment: "production" }, { status: "consumed" }, { amountMinor: 199 }, { currency: "eur" },
+    { quote: null }, { quote: { amountMinor: 199, currency: "usd" } }]) {
+    const run = runtime({ ...spec, moneyClaim }); await invoke(run, spec);
+    assert.equal(run.moneyBegins(), 1, `${label} actual claim invoked`);
+    assert.equal(run.calls(), 0, `${label} rejects mismatched/denied durable claim before SDK`);
+  }
+  const switched = runtime({ ...spec, moneyClaimSwitchAccount: true }); await invoke(switched, spec);
+  assert.equal(switched.moneyBegins(), 1); assert.equal(switched.calls(), 0, `${label} account replacement after claim blocks SDK`);
+  const shared = { claimed: false }, first = runtime({ ...spec, claimState: shared }), second = runtime({ ...spec, claimState: shared });
+  await Promise.all([invoke(first, spec), invoke(second, spec)]);
+  assert.equal(first.calls() + second.calls(), 1, `${label} concurrent callers reach SDK once`);
+  assert.notEqual(first.attemptIds[0], second.attemptIds[0]);
+  const unknownState = { claimed: false }, lost = runtime({ ...spec, claimState: unknownState, moneyBeginUnknown: true });
+  await invoke(lost, spec); const retried = runtime({ ...spec, claimState: unknownState }); await invoke(retried, spec);
+  assert.equal(lost.calls() + retried.calls(), 0, `${label} unknown claim never authorizes repeat SDK call after remount`);
+}
+console.log("PASS: nine production purchase branches reject price/currency drift, invalid intents and stale sessions; every native checkout requires an exact durable one-use claim, including concurrent/unknown-result controls. Event preflight-only cleanup remains guarded.");

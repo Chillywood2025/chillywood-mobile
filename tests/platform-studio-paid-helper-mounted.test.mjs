@@ -9,6 +9,6 @@ for(const malformed of [false,true])test(`mounted Paid save invokes real product
   },
  });
  const h=await mount(t,{route:{tab:'monetization',manage:'paid_videos'},overrides:{savePaidVideoOffer:service.savePaidVideoOffer,saveCreatorSandboxMonetizationConfig:async()=>({id:'config'}),listMyPaidVideoOffers:async()=>saved?[{id:'offer-B',videoId:'B',creatorId:'owner',isPaid:true,priceCents:99,currency:'usd',status:'sandbox'}]:[]}});
- await h.press(h.button('Manage paid unlock for Title B'));await h.press(h.button('Paid · $0.99'));await h.press(h.button('Save video access'));assert.equal(writes,1);
+ await h.press(h.button('Manage paid unlock for Title B'));await h.press(h.button('Paid'));await h.press(h.button('Save video access'));assert.equal(writes,1);
  if(malformed){assert.match(h.text(),/could not be confirmed/);assert.doesNotMatch(h.text(),/setup saved at/);}else assert.match(h.text(),/setup saved at \$0.99/);
 });

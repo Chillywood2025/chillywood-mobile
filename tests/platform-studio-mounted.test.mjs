@@ -59,7 +59,7 @@ for(const outcome of ['success','wrong-target','unavailable','rejected']){
    listMyPaidVideoOffers:async()=>{if(!saved)return [];if(outcome==='unavailable')throw Error('offline');return [{id:'offer-B',videoId:outcome==='wrong-target'?'A':'B',creatorId:'owner',isPaid:true,priceCents:99,currency:'usd',status:'sandbox'}];},
    saveCreatorSandboxMonetizationConfig:async()=>({id:'config-B'}),
   }});
-  await h.press(h.button('Manage paid unlock for Title B'));await h.press(h.button('Paid · $0.99'));
+  await h.press(h.button('Manage paid unlock for Title B'));await h.press(h.button('Paid'));
   const save=h.find(n=>n.props.testID==='money-paid-video-save-button');await h.press(save);await React.act(async()=>{void save.props.onPress();});assert.equal(writes,1);
   await h.resolve(gate);if(outcome==='success')assert.match(h.text(),/Paid Video setup saved at \$0.99/);else {assert.doesNotMatch(h.text(),/Paid Video setup saved at/);assert.match(h.text(),/could not be confirmed/);}
   assert.ok(h.find(n=>n.props.testID==='money-paid-video-editor'),'selection stays visible after result');

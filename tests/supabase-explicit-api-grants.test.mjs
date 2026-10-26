@@ -115,6 +115,11 @@ const recentPublic = {
   'public.notification_qualified_views': {service_role: dml},
   'public.platform_brand_publications': {service_role: ['SELECT']},
   'public.platform_brand_publication_metadata': {authenticated: ['SELECT'], service_role: ['SELECT']},
+  'public.creator_event_offer_revisions': {authenticated: ['SELECT']},
+  'public.event_ticket_reservations': {authenticated: ['SELECT']},
+  'public.creator_money_provider_purchase_times': {},
+  'public.creator_money_purchase_quotes': {authenticated: ['SELECT'], service_role: ['SELECT']},
+  'public.creator_event_purchase_remedies': {authenticated: ['SELECT']},
 };
 
 function recentTables() {

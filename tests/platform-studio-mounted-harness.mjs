@@ -39,7 +39,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     React.useLayoutEffect(()=>{onLayout?.({nativeEvent:{layout:{x:0,y:100,width:360,height:100}}});},[onLayout]);
     return React.createElement(React.Fragment,null,...renderChildren(props.children));
   });
-  const native={};for(const n of ['View','Text','TextInput','TouchableOpacity','ScrollView','ImageBackground','ActivityIndicator','Image','Video'])native[n]=host(n);
+  const native={};for(const n of ['View','Text','TextInput','TouchableOpacity','Pressable','ScrollView','ImageBackground','ActivityIndicator','Image','Video'])native[n]=host(n);
   native.Modal=function FixtureModal({visible,children}){return visible?React.createElement(React.Fragment,null,children):null;};
   Object.assign(native,{StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:'android',select:x=>x.android??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
   const config={branding:{appDisplayName:"Chi'llywood"},features:{creatorSettingsEnabled:true},runtimeControls:{uploads_enabled:true,creator_posting_enabled:true,max_upload_size_mb:500}};
@@ -48,6 +48,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
   const base={
     captureAccountBoundSupabaseMutationSubject:async()=>({accessToken:'synthetic-clip-token',authority:session.authority}),
     getCurrentAccountSessionAuthoritySnapshot:()=>session.authority??null,
+    readCreatorAuthoringPrices:async sourceType=>({status:'resolved',subjectUserId:session.user.id,prices:[{priceKey:'fixture-price',productKey:'fixture-product',amountMinor:['vip_pass','channel_subscription'].includes(sourceType)?499:99,currency:'usd',label:['vip_pass','channel_subscription'].includes(sourceType)?'$4.99':'$0.99',environment:'sandbox',provider:'revenuecat_app_store',providerProductId:'fixture-store-product',platform:'ios',status:'sandbox',providerVerified:false,availablePlatforms:['ios','android'],availabilityLabel:'iOS and Android'}]}),
     sameAccountSessionAuthority:authorityApi.sameAccountSessionAuthority,
     useSession:()=>session,useBetaProgram:()=>({isLoading:false,isActive:true,accessState:{status:'active'}}),getBetaAccessBlockCopy:()=>({title:'Beta required',body:'Blocked'}),
     DEFAULT_APP_CONFIG:config,readAppConfig:async()=>config,resolveFeatureConfig:x=>x.features,resolveBrandingConfig:x=>x.branding,
@@ -77,7 +78,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     CHILLYWOOD_VISUAL:{},LIVE_REPLAY_ACKNOWLEDGEMENT:'Acknowledge replay',RACHI_OFFICIAL_USER_ID:'official',
     isMoneyCenterSectionBodyVisible:expanded=>expanded,sanitizeCreatorRoomAccessRule:x=>x,
   };
-  const components={ProfileMediaImage:native.Image,StableImage:native.Image,AppText:native.Text,ChillywoodPrimaryActionFill:()=>null,MoneyScopeInfoButton:()=>null,NotificationBellButton:()=>null,CreatorContentActionSheet:()=>null,
+  const components={ProfileMediaImage:native.Image,StableImage:native.Image,AppText:native.Text,ChillywoodPrimaryActionFill:()=>null,MoneyScopeInfoButton:()=>null,NotificationBellButton:()=>null,CreatorContentActionSheet:()=>null,EventBroadcastPreparation:()=>null,
     BetaAccessScreen:props=>React.createElement(native.View,{testID:'beta-gate'},React.createElement(native.Text,null,props.title),React.createElement(native.Text,null,props.body)),
     AppActionButton:props=>React.createElement(native.TouchableOpacity,{...props},React.createElement(native.Text,null,props.label)),
     AppEmptyState:props=>React.createElement(native.View,null,React.createElement(native.Text,null,props.title),React.createElement(native.Text,null,props.body),props.onAction?React.createElement(native.TouchableOpacity,{onPress:props.onAction},React.createElement(native.Text,null,props.actionLabel)):null),AppStickyActionBar:()=>null};
@@ -99,6 +100,10 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name.endsWith('/creatorMonetizationFeatures'))return evaluate('_lib/creatorMonetizationFeatures.ts');
       if(name.endsWith('/creatorMonetizationRouteTargets'))return evaluate('_lib/creatorMonetizationRouteTargets.ts');
       if(name.endsWith('/eventSchedule'))return evaluate('_lib/eventSchedule.ts');
+      if(name.endsWith('/useCreatorAuthoringPrice'))return evaluate('_lib/useCreatorAuthoringPrice.ts');
+      if(name.endsWith('/creator-price-picker'))return evaluate('components/monetization/creator-price-picker.tsx');
+      if(name.endsWith('/event-sale-editor'))return evaluate('components/monetization/event-sale-editor.tsx');
+      if(name.endsWith('/event-lifecycle-controls'))return evaluate('components/monetization/event-lifecycle-controls.tsx');
       return new Proxy({},{get:(_,key)=>{
         if(key==='__esModule')return false;
         if(key in mocks)return typeof mocks[key]==='function'?(...args)=>{calls.push([key,...args]);return mocks[key](...args);}:mocks[key];
@@ -123,7 +128,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
   const all=()=>[...nodes.values()];
   return {calls,alerts,routes,scrolls,measures,mocks,all,text:()=>all().filter(n=>n.type==='Text').map(n=>textOf(n)).join('\n'),
     find:(predicate)=>all().find(predicate),input:p=>all().find(n=>n.type==='TextInput'&&n.props.placeholder===p),
-    button:label=>all().find(n=>n.type==='TouchableOpacity'&&(n.props.accessibilityLabel===label||textOf(n).trim()===label)),
+    button:label=>all().find(n=>['TouchableOpacity','Pressable'].includes(n.type)&&(n.props.accessibilityLabel===label||textOf(n).trim()===label)),
     async press(n){assert.ok(n,'mounted visible button exists');assert.notEqual(n.props.disabled,true,'mounted button enabled');await React.act(async()=>{void n.props.onPress();});},
     async change(n,v){assert.ok(n,'mounted visible input exists');assert.notEqual(n.props.editable,false,'mounted input editable');await React.act(async()=>n.props.onChangeText(v));},
     async resolve(d,v){await React.act(async()=>d.resolve(v));},async reject(d,e){await React.act(async()=>d.reject(e));},

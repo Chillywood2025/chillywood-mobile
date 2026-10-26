@@ -340,6 +340,9 @@ export default function CreatorVipPassScreen() {
             />
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" style={styles.secondaryButton} onPress={() => router.push("/purchases")}>
+              <Text style={styles.secondaryButtonText}>Purchases &amp; My Tickets</Text>
+            </TouchableOpacity>
             <Text style={styles.meta}>{"VIP does not unlock Chi'llywood Premium."}</Text>
             <View style={styles.ownerActionStack}>
               <TouchableOpacity

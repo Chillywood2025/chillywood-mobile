@@ -118,25 +118,27 @@ test("tip checkout rejects a session-generation change immediately before Stripe
 test("authoritative buyer readback precedes transaction creation and is revalidated before Stripe mutation", () => {
   const handler = sliceBetween(checkout, "Deno.serve", "} catch (error)");
   const firstAuthority = handler.indexOf("const buyerAuthority = await readBuyerSessionAuthority");
-  const transactionInsert = handler.indexOf('.from("creator_tip_transactions")\n      .insert');
+  const transactionInsert = handler.indexOf('adminClient.rpc("reserve_creator_tip_checkout_attempt"');
   const secondAuthority = handler.indexOf("const currentBuyerAuthority = await readBuyerSessionAuthority");
-  const stripeMutation = handler.indexOf("const session = await stripeRequest");
+  const stripeMutation = handler.indexOf('const session = knownSession');
   assert.ok(firstAuthority >= 0);
   assert.ok(transactionInsert > firstAuthority);
   assert.ok(secondAuthority > transactionInsert);
   assert.ok(stripeMutation > secondAuthority);
   assert.match(handler, /if \(!sameBuyerSessionAuthority\(buyerAuthority, currentBuyerAuthority\)\)/u);
-  assert.match(handler, /payment_status: "failed"[\s\S]+status: "failed"/u);
+  assert.match(handler, /attemptResponse, status: "pending", error: "buyer_authority_changed"/u);
   assert.match(handler, /error: "buyer_authority_changed"/u);
   assert.match(handler, /checkoutCreated: false/u);
   const insert = sliceBetween(
     handler,
-    '.from("creator_tip_transactions")\n      .insert',
-    '.select("id,idempotency_key")',
+    'adminClient.rpc("reserve_creator_tip_checkout_attempt"',
+    'if (reserveError',
   );
-  assert.match(insert, /buyer_account_id: buyerAuthority\.accountId/u);
-  assert.match(insert, /buyer_session_generation: buyerAuthority\.sessionGeneration/u);
-  assert.match(insert, /buyer_authority_bound: true/u);
+  assert.match(insert, /p_buyer_id: buyerAuthority\.accountId/u);
+  assert.match(insert, /p_session_id: buyerAuthority\.sessionGeneration/u);
+  const quoteMigration = readFileSync('supabase/migrations/20261026175927_creator_tip_checkout_retry_quotes.sql','utf8');
+  assert.match(quoteMigration, /creator_tip_buyer_session_authority_internal\(p_buyer_id,p_session_id\)/u);
+  assert.match(quoteMigration, /"buyer_authority_bound":true/u);
 });
 
 test("buyer authority RPC is user-scoped and fails closed on error or malformed readback", () => {

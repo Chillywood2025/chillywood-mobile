@@ -6,6 +6,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import ts from "typescript";
 import * as singleFlight from "../_lib/actionSingleFlight.mjs";
+import { eventContract } from "./fixtures/event-purchase-contract.mjs";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const noop = () => {};
@@ -21,7 +22,8 @@ const load = (file, imports = {}, source = fs.readFileSync(file, "utf8")) => {
 };
 const presentation = load("_lib/customerExperiencePresentation.ts");
 const schedule = load("_lib/eventSchedule.ts");
-const offer = { title: "Sunday show", priceCents: 99, currency: "usd", status: "sandbox" };
+const eventId = "33333333-3333-4333-8333-333333333333";
+const offer = { title: "Sunday show", priceCents: 99, currency: "usd", status: "sandbox", ...eventContract(eventId,eventId) };
 const locked = { allowed: false, requiresPurchase: true, reason: "event_pass_required", offer };
 const owned = { allowed: true, requiresPurchase: false, reason: "event_pass_confirmed", passId: "pass-old", offer };
 
@@ -35,17 +37,26 @@ async function mount(t, options = {}) {
   };
   const native = { Platform: { OS: "android" }, Alert: { alert: noop }, AppState: { addEventListener: () => ({ remove: noop }) }, StyleSheet: { create: x => x } };
   for (const name of ["ActivityIndicator", "Pressable", "RefreshControl", "ScrollView", "Text", "View"]) native[name] = host(name);
-  const event = { id: "event-one", event_title: "Sunday show", status: "scheduled", starts_at: "2026-11-02T01:00:00Z", visibility: "public" };
+  const event = { id: eventId, event_title: "Sunday show", status: "scheduled", starts_at: "2026-11-02T01:00:00Z", visibility: "public", ...options.event };
   const supabase = { auth: { onAuthStateChange: callback => { authCallback = callback; return { data: { subscription: { unsubscribe: noop } } }; } }, from: () => {
     const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: event, error: null }) }; return query;
   } };
+  const entryApi = load("_lib/creatorEventJourney.ts", {
+    "./supabase": { supabase: { rpc: async () => ({ data: options.entry ?? {allowed:false,reason:'waiting_for_host'},error:null }) } },
+    "./entitlementAuthority": {withAuthorityReadDeadline: async p=>p}, "./accountBoundSupabaseMutation": {}, "./liveEvents": {},
+  });
   const Screen = load("app/event/[eventId].tsx", {
     react: React, "react-native": native, "react-native-safe-area-context": { SafeAreaView: host("SafeAreaView") },
-    "expo-router": { useLocalSearchParams: () => ({ eventId: "event-one" }), useRouter: () => ({ canGoBack: () => false, back: () => routes.push("back"), replace: x => routes.push(x), push: x => routes.push(x) }) },
+    "expo-router": { useLocalSearchParams: () => ({ eventId }), useRouter: () => ({ canGoBack: () => false, back: () => routes.push("back"), replace: x => routes.push(x), push: x => routes.push(x) }) },
     "../../_lib/paidCreatorEvents": { resolvePaidCreatorEventPassAccess: async () => access, purchasePaidCreatorEventPass: input => purchase(input), formatPaidCreatorEventPrice: () => "$0.99" },
     "../../_lib/moderation": {}, "../../_lib/actionSingleFlight.mjs": singleFlight,
-    "../../_lib/circleSpectatorFeed": { readCircleSpectatorFeedItems: async () => [] },
-    "../../_lib/discoveryFeed": { readPublicDiscoveryFeedItems: async () => [] },
+    "../../_lib/creatorEventJourney": entryApi,
+    "../../_lib/entitlementAuthority": {withAuthorityReadDeadline: async p=>p},
+    "../../_lib/creatorPurchases": {readMyCreatorPurchases:async()=>({status:'resolved',items:options.purchases??[]})},
+    "../../_lib/notifications": {
+      readEventReminderEnrollment:async()=>options.reminder??null,
+      setEventReminderEnrollment:async(...args)=>options.setReminder?.(...args)??{status:'completed',message:'Reminder saved'},
+    },
     "../../_lib/customerExperiencePresentation": presentation, "../../_lib/eventSchedule": schedule,
     "../../_lib/supabase": { supabase }, "../../components/monetization/MoneyScopeInfoButton": { MoneyScopeInfoButton: host("MoneyScopeInfoButton") },
     "../../components/monetization/money-ui": Object.fromEntries(["MoneyOfferCard", "MoneyScopeStrip", "MoneyStatusChip", "MoneySuccessReceipt"].map(name => [name, host(name)])),
@@ -88,4 +99,55 @@ test("negative control detects removing late purchase account isolation", async 
   await h.account({ allowed: false, requiresPurchase: false, reason: "access_check_failed", offer: null });
   await h.resolve(d, { ok: false, access: owned, message: "Old account receipt" });
   assert.ok(h.node("event-pass-success-receipt"), "mutant reproduces stale account receipt");
+});
+
+test("mounted paid live and replay entry use the exact protected event route", async t => {
+  for (const [kind,status] of [['live','live_now'],['replay','replay_available']]) {
+    const h=await mount(t,{access:owned,event:{status},entry:{allowed:true,reason:'verified',creatorEventId:eventId,itemId:eventId,kind}});
+    await h.press(`event-open-${kind}-button`);
+    assert.deepEqual(h.routes,[`/event-watch/${eventId}`]);
+  }
+});
+
+test("exact resolver rejects another event destination and no feed fallback grants entry", async t => {
+  const h=await mount(t,{access:owned,event:{status:'live_now'},entry:{allowed:true,reason:'verified',creatorEventId:eventId,itemId:'44444444-4444-4444-8444-444444444444',kind:'live'}});
+  assert.equal(h.node('event-open-live-button'),undefined);assert.deepEqual(h.routes,[]);
+});
+
+test("ended event can open a purchased replay only from exact replay authority",async t=>{
+  const h=await mount(t,{access:{allowed:false,requiresPurchase:false,reason:'ended',offer:null},event:{status:'ended'},
+    purchases:[{status:'active',termsAvailable:false,terms:{},amountMinor:199,currency:'usd'}],
+    entry:{allowed:true,creatorEventId:eventId,itemId:eventId,kind:'replay',reason:'verified'}});
+  await h.press('event-open-replay-button');assert.deepEqual(h.routes,[`/event-watch/${eventId}`]);assert.doesNotMatch(h.text(),/This Event is free/);
+});
+
+test("mounted event checkout binds displayed terms revision and provides purchase library recovery",async t=>{
+  let input;const h=await mount(t,{purchase:async value=>{input=value;return{ok:false,access:locked,message:'Purchase pending verification'};}});
+  await h.press('event-pass-purchase-button');assert.equal(input.expectedTermsRevisionId,offer.termsRevisionId);
+  await h.press('event-my-tickets-button');assert.deepEqual(h.routes,['/purchases']);
+});
+
+test("missing original terms do not substitute the current listing and unverified new terms cannot buy",async t=>{
+  const h=await mount(t,{access:{...locked,offer:{...offer,terms:null}},purchases:[{status:'upcoming',termsAvailable:false,terms:{},amountMinor:99,currency:'usd'}]});
+  assert.equal(h.node('event-pass-purchase-button'),undefined);assert.match(h.text(),/Original terms are unavailable/);
+});
+
+test("recorded purchase shows agreed schedule and provider-review eligibility separately from changed listing",async t=>{
+  const h=await mount(t,{access:owned,purchases:[{status:'upcoming',amountMinor:199,currency:'usd',termsAvailable:true,
+    terms:{title:'Purchased Sunday show',startsAt:'2026-11-02T01:00:00Z',timeZone:'America/New_York',includeText:'Original agreed admission'},
+    refundEligibility:{reasons:['material_schedule_change']}}]});
+  assert.match(h.text(),/Purchased Sunday show/);assert.match(h.text(),/Original agreed admission/);
+  assert.match(h.text(),/not confirmation of a refund/);assert.equal(h.node('event-purchase-terms'),undefined);
+});
+
+test("event reminder action binds explicit viewer and event without claiming push delivery",async t=>{
+  let args;const h=await mount(t,{reminder:{eventId,viewerUserId:'buyer-one',state:'not_enrolled',canEnroll:true},setReminder:async(...value)=>{args=value;return{status:'completed',message:'Reminder saved'};}});
+  await h.press('event-reminder-toggle');assert.deepEqual(args,[eventId,true,'buyer-one']);assert.match(h.text(),/Reminder saved/);
+});
+
+test("late reminder result is suppressed after an account change",async t=>{
+  const d=deferred();const h=await mount(t,{reminder:{eventId,viewerUserId:'buyer-one',state:'not_enrolled',canEnroll:true},setReminder:()=>d.promise});
+  await h.press('event-reminder-toggle');await h.account({allowed:false,requiresPurchase:false,reason:'access_check_failed',offer:null});
+  await h.resolve(d,{status:'completed',message:'Old account reminder saved'});assert.doesNotMatch(h.text(),/Old account reminder saved/);
+  assert.equal(h.node('event-reminder-toggle').props.disabled,false);
 });

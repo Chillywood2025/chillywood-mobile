@@ -2,6 +2,8 @@ import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 import {
+  beginCreatorMoneyCheckout,
+  CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY,
   captureCreatorMoneyPurchaseAuthority,
   isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
@@ -461,7 +463,7 @@ export async function createPaidWatchPartyTicketPurchaseIntent(
     "create_paid_watch_party_ticket_purchase_intent",
     { p_offer_id: offerId },
   );
-  if (!response || response.error) throw new Error("Party Room Pass checkout is not available right now.");
+  if (!response || response.error) throw new Error("Party Room checkout could not be confirmed. Open Purchases & My Tickets and refresh status before trying another purchase.");
   const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Party Room Pass checkout authority could not be verified.");
@@ -505,7 +507,7 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
       p_source_type: "watch_party_live",
     },
   );
-  if (!response || response.error) throw new Error("App Store Party Room Pass checkout is not available right now.");
+  if (!response || response.error) throw new Error("App Store Party Room checkout could not be confirmed. Open Purchases & My Tickets and refresh status before trying another purchase.");
   const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("App Store Party Room Pass checkout authority could not be verified.");
@@ -680,6 +682,9 @@ export async function purchasePaidWatchPartyTicket(input: {
     };
   }
 
+  if (!await beginCreatorMoneyCheckout(purchaseSubject, intent.id, { ...expectedIntent, status: "pending", providerProductId: productId })) {
+    return { ok: false, message: CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY, access, intentId: intent.id, productId };
+  }
   try {
     await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
@@ -698,7 +703,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     if (isRevenueCatUserCancellation(error)) {
       return {
         ok: false,
-        message: "Party Room Pass purchase was canceled. Nothing changed.",
+        message: "Party Room Pass checkout was canceled. Refresh Purchases & My Tickets to confirm its status before another attempt.",
         access: verifiedAccess,
         intentId: intent.id,
         productId,
@@ -713,8 +718,8 @@ export async function purchasePaidWatchPartyTicket(input: {
     return {
       ok: false,
       message: Platform.OS === "ios"
-        ? "Party Room Pass purchase did not finish. If the App Store shows it as pending, refresh this room in a moment."
-        : "Party Room Pass purchase did not finish. If Google Play shows it as pending, refresh this room in a moment.",
+        ? "App Store payment could not be confirmed. Refresh Purchases & My Tickets. Do not purchase again while payment is unknown."
+        : "Google Play payment could not be confirmed. Refresh Purchases & My Tickets. Do not purchase again while payment is unknown.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,
