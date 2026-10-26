@@ -195,7 +195,7 @@ export const readEventReplayAvailability = (
   const replayAvailableAtMillis = event.replayAvailableAt ? Date.parse(event.replayAvailableAt) : null;
   const replayExpiresAtMillis = event.replayExpiresAt ? Date.parse(event.replayExpiresAt) : null;
   const statusExpired = event.status === "expired";
-  const timeExpired = replayExpiresAtMillis != null && Number.isFinite(replayExpiresAtMillis) && nowMillis > replayExpiresAtMillis;
+  const timeExpired = replayExpiresAtMillis != null && Number.isFinite(replayExpiresAtMillis) && nowMillis >= replayExpiresAtMillis;
   const pendingReplay = replayAvailableAtMillis != null && Number.isFinite(replayAvailableAtMillis) && nowMillis < replayAvailableAtMillis;
   const expired = statusExpired || timeExpired;
   const availableByStatus =
@@ -285,6 +285,12 @@ const buildValidatedEventWriteShape = (
   let replayExpiresAt = normalizeIsoTimestamp(value.replayExpiresAt);
   let reminderReady = !!value.reminderReady;
 
+  for (const field of ["startsAt", "endsAt", "replayAvailableAt", "replayExpiresAt"] as const) {
+    if (value[field] != null && String(value[field]).trim() && !normalizeIsoTimestamp(value[field])) {
+      return { error: { message: "Event dates must be valid. Correct the date before saving." } };
+    }
+  }
+
   if (!hostUserId) {
     return { error: { message: "Creator event writes require a host user id." } };
   }
@@ -309,6 +315,8 @@ const buildValidatedEventWriteShape = (
     replayAvailableAt = null;
     replayExpiresAt = null;
   }
+
+  if (replayPolicy === "indefinite") replayExpiresAt = null;
 
   if (replayPolicy === "until_expiration" && !replayExpiresAt) {
     return { error: { message: "Expiring replay windows need a replay expiration time." } };
@@ -455,12 +463,12 @@ export async function updateCreatorEvent(
     eventType: input.eventType ?? current.eventType,
     visibility: input.visibility ?? current.visibility,
     status: input.status ?? current.status,
-    startsAt: input.startsAt ?? current.startsAt,
-    endsAt: input.endsAt ?? current.endsAt,
-    linkedTitleId: input.linkedTitleId ?? current.linkedTitleId,
+    startsAt: input.startsAt === undefined ? current.startsAt : input.startsAt,
+    endsAt: input.endsAt === undefined ? current.endsAt : input.endsAt,
+    linkedTitleId: input.linkedTitleId === undefined ? current.linkedTitleId : input.linkedTitleId,
     replayPolicy: input.replayPolicy ?? current.replayPolicy,
-    replayAvailableAt: input.replayAvailableAt ?? current.replayAvailableAt,
-    replayExpiresAt: input.replayExpiresAt ?? current.replayExpiresAt,
+    replayAvailableAt: input.replayAvailableAt === undefined ? current.replayAvailableAt : input.replayAvailableAt,
+    replayExpiresAt: input.replayExpiresAt === undefined ? current.replayExpiresAt : input.replayExpiresAt,
     reminderReady: input.reminderReady ?? current.reminderReady,
   });
 

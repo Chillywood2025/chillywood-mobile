@@ -226,7 +226,7 @@ export const CREATOR_PAYOUT_REQUIREMENTS: readonly CreatorPayoutSetupRequirement
   { label: "Tax forms", value: "Readiness status" },
   { label: "Payout account", value: "Readiness status" },
   { label: "Fraud review", value: "Required before release" },
-  { label: "Hold period", value: "7–30 days" },
+  { label: "Hold period", value: "Varies by sale and review status; available balance is confirmed separately" },
   { label: "Minimum payout", value: "Undecided" },
 ];
 

@@ -15,6 +15,7 @@ import { readCircleSpectatorFeedItems } from "../../_lib/circleSpectatorFeed";
 import { formatOneTimePrice, resolveEventCustomerPresentation } from "../../_lib/customerExperiencePresentation";
 import { readPublicDiscoveryFeedItems, type DiscoveryFeedItem } from "../../_lib/discoveryFeed";
 import { supabase } from "../../_lib/supabase";
+import { formatEventScheduleTime } from "../../_lib/eventSchedule";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -37,16 +38,7 @@ type EventDestination = {
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
-const formatDate = (value: string | null) => {
-  const parsed = Date.parse(String(value ?? ""));
-  if (!Number.isFinite(parsed)) return "Not scheduled";
-  return new Date(parsed).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
+const formatDate = formatEventScheduleTime;
 
 const formatEventType = (value: string | null) => {
   if (value === "watch_party_live") return "Watch-Party Event";
@@ -60,6 +52,9 @@ const LOCKED_COPY =
 
 const unavailableEventPassCopy = (status: string | null | undefined) => {
   const normalized = normalizeText(status).toLowerCase();
+  if (normalized === "access_check_failed" || normalized === "malformed_access_response") {
+    return "Your Event Pass access could not be verified. Refresh to try again. Check your store purchase history before attempting another purchase.";
+  }
   if (normalized === "ended" || normalized === "expired") {
     return "This Event Pass is no longer available because the event has ended or expired. Event access stays locked until access is verified.";
   }
@@ -88,6 +83,7 @@ export default function PaidCreatorEventRoute() {
   const [destination, setDestination] = useState<EventDestination | null>(null);
   const loadGenerationRef = useRef(0);
   const purchaseLatchRef = useRef(createActionSingleFlightLatch());
+  const purchaseContextRef = useRef(0);
 
   const load = React.useCallback(async (options?: { preserveRendered?: boolean }) => {
     const generation = ++loadGenerationRef.current;
@@ -132,6 +128,11 @@ export default function PaidCreatorEventRoute() {
   }, [eventId]);
 
   useEffect(() => {
+    purchaseContextRef.current += 1;
+    setEvent(null);
+    setAccess(null);
+    setDestination(null);
+    setNotice("");
     if (!eventId) {
       setLoading(false);
       setError("Missing event id.");
@@ -146,7 +147,23 @@ export default function PaidCreatorEventRoute() {
     return () => {
       active = false;
       loadGenerationRef.current += 1;
+      purchaseContextRef.current += 1;
     };
+  }, [eventId, load]);
+
+  useEffect(() => {
+    let active = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      if (!active) return;
+      purchaseContextRef.current += 1;
+      loadGenerationRef.current += 1;
+      setAccess(null);
+      setDestination(null);
+      setNotice("");
+      // Defer Supabase reads until the auth callback has released its lock.
+      void Promise.resolve().then(() => { if (active && eventId) return load(); });
+    });
+    return () => { active = false; subscription.unsubscribe(); };
   }, [eventId, load]);
 
   useEffect(() => {
@@ -158,6 +175,7 @@ export default function PaidCreatorEventRoute() {
 
   const onBuyEventPass = async () => {
     if (!eventId || !purchaseLatchRef.current.tryAcquire()) return;
+    const context = purchaseContextRef.current;
     setPurchaseLoading(true);
     setNotice("");
     setError("");
@@ -166,11 +184,12 @@ export default function PaidCreatorEventRoute() {
         creatorEventId: eventId,
         sourceSurface: "event_page",
       });
+      if (context !== purchaseContextRef.current) return;
       setAccess(result.access);
       setNotice(result.message);
       if (result.ok) await load();
     } catch {
-      setError("Event Pass checkout is not available right now.");
+      if (context === purchaseContextRef.current) setError("Event Pass checkout is not available right now.");
     } finally {
       purchaseLatchRef.current.release();
       setPurchaseLoading(false);
@@ -189,7 +208,7 @@ export default function PaidCreatorEventRoute() {
   const title = event?.event_title || offer?.title || "Creator event";
   const normalizedEventStatus = normalizeText(event?.status ?? offer?.status).toLowerCase();
   const terminalEventState = ["canceled", "cancelled", "ended", "replay_available", "expired"].includes(normalizedEventStatus);
-  const accessUnavailable = unavailable && !terminalEventState;
+  const accessUnavailable = unavailable && !terminalEventState && !soldOut;
   const hasEventAccess = confirmedEventPass || creatorPreview || freeEvent;
   const priceLabel = offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null;
   const oneTimePriceLabel = priceLabel ? formatOneTimePrice(priceLabel) : null;
@@ -268,6 +287,7 @@ export default function PaidCreatorEventRoute() {
               <Text style={styles.detail}>{audienceLabel}</Text>
               <Text style={styles.detail}>Starts {formatDate(event?.starts_at ?? offer?.startsAt ?? null)}</Text>
               <Text style={styles.detail}>Ends: {formatDate(event?.ends_at ?? offer?.endsAt ?? null)}</Text>
+              <Text style={styles.detail}>Times are shown in your device’s time zone.</Text>
               {offer ? (
                 <>
                   <Text style={styles.detail}>Event Pass · {oneTimePriceLabel}</Text>
@@ -328,7 +348,7 @@ export default function PaidCreatorEventRoute() {
                   <MoneyStatusChip label="Unavailable" tone="warning" />
                 </View>
                 <Text style={styles.body}>
-                  {unavailableEventPassCopy(event?.status || offer?.status || access?.reason)}
+                  {unavailableEventPassCopy(access?.reason === "access_check_failed" || access?.reason === "malformed_access_response" ? access.reason : event?.status || offer?.status || access?.reason)}
                 </Text>
               </View>
             ) : event ? (
@@ -357,8 +377,11 @@ export default function PaidCreatorEventRoute() {
               </View>
             )}
 
-            {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {notice ? <Text style={styles.notice} accessibilityLiveRegion="polite">{notice}</Text> : null}
+            {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel="Refresh event access" accessibilityState={{ busy: refreshing }} onPress={() => void load({ preserveRendered: true })} disabled={refreshing} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{refreshing ? "Refreshing..." : "Refresh Event"}</Text>
+            </Pressable>
 
             <Pressable
               accessibilityRole="button"
@@ -374,7 +397,7 @@ export default function PaidCreatorEventRoute() {
               accessibilityRole="button"
               accessibilityLabel="Back"
               testID="event-back-button"
-              onPress={() => router.back()}
+              onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
               style={styles.secondaryButton}
             >
               <Text style={styles.secondaryButtonText}>Back</Text>

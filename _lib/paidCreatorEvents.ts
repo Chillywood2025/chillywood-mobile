@@ -24,6 +24,7 @@ import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
 export const PAID_CREATOR_EVENT_SANDBOX_PRODUCT_KEY = "event_pass_sandbox_099";
 export const PAID_CREATOR_EVENT_SANDBOX_PROVIDER_PRODUCT_ID = "cw_event_pass_sandbox_099";
@@ -552,10 +553,14 @@ export async function purchasePaidCreatorEventPass(input: {
   const productId = intent.providerProductId;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
   const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
-  if (!product) {
+  if (!product || !isCreatorMoneyStoreQuoteMatch(product, {
+    productId,
+    amountMinor: access.priceCents,
+    currency: access.currency,
+  })) {
     return {
       ok: false,
-      message: "The Event Pass is not available on this device yet. Nothing was charged.",
+      message: CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY,
       access,
       intentId: intent.id,
       productId,

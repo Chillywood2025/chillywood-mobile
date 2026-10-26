@@ -119,7 +119,13 @@ export default function TipStatusScreen() {
           <Text style={styles.amount}>{formatMonetizationCurrency(amountCents, currency)}</Text>
         ) : null}
         <Text style={styles.body}>{presentation.body}</Text>
-        <TouchableOpacity style={styles.button} activeOpacity={0.86} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.button}
+          activeOpacity={0.86}
+          accessibilityRole="button"
+          accessibilityLabel="Done viewing tip status"
+          onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)"); }}
+        >
           <ChillywoodPrimaryActionFill radius={14} />
           <Text style={styles.buttonText}>Done</Text>
         </TouchableOpacity>

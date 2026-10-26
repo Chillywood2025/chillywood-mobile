@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
 import { supabase } from "./supabase";
 import {
@@ -570,6 +571,10 @@ export async function purchaseCreatorTipWithStore(input: {
         ? "This App Store tip amount is not available on this device yet."
         : "This Google Play tip amount is not available on this device yet.",
     };
+  }
+
+  if (!isCreatorMoneyStoreQuoteMatch(storeProduct, { productId, amountMinor: amountCents, currency })) {
+    return { ok: false, message: CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, intentId, productId };
   }
 
   if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {

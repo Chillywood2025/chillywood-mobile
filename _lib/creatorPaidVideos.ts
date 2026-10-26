@@ -1,4 +1,5 @@
 import { trackEvent } from "./analytics";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 import {
   formatMonetizationCurrency,
   normalizeCreatorContentAccessResolution,
@@ -679,6 +680,10 @@ export async function purchasePaidVideoAccess(input: {
       intentId: intent.id,
       productId,
     };
+  }
+
+  if (!isCreatorMoneyStoreQuoteMatch(product, { productId, amountMinor: requestedAmount, currency: requestedCurrency })) {
+    return { ok: false, message: CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, access, intentId: intent.id, productId };
   }
 
   trackEvent("paid_video_unlock_started", {

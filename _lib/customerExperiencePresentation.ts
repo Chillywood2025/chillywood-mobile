@@ -149,10 +149,8 @@ const eventStartLabel = (startsAt?: string | null) => {
   const parsed = Date.parse(clean(startsAt));
   if (!Number.isFinite(parsed)) return "Start time to be announced";
   return new Date(parsed).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    weekday: "short", year: "numeric", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
   });
 };
 
@@ -233,7 +231,7 @@ export function resolveEventCustomerPresentation(input: {
     return {
       statusLabel: "Canceled",
       headline: "This Event was canceled",
-      body: "There is nothing you need to do. It is no longer open for entry.",
+      body: "It is no longer open for entry. If you purchased an Event Pass, check your store purchase history and contact support about your purchase.",
       action: "none",
       actionLabel: null,
     };
@@ -280,6 +278,16 @@ export function resolveEventCustomerPresentation(input: {
       actionLabel: canBuyPass
         ? input.priceLabel ? `Get Event Pass — ${input.priceLabel}` : "Get Event Pass"
         : null,
+    };
+  }
+
+  if (input.soldOut && !input.accessAllowed) {
+    return {
+      statusLabel: "Sold out",
+      headline: "Event Passes are sold out",
+      body: "No more Event Passes are available. If you already purchased one, refresh to check your access.",
+      action: "none",
+      actionLabel: null,
     };
   }
 

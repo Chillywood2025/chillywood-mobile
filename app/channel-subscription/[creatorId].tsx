@@ -208,7 +208,11 @@ export default function ChannelSubscriptionScreen() {
             testID="platform-subscription-back-button"
             style={styles.backButton}
             activeOpacity={0.82}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else if (creatorId) router.replace({ pathname: "/channel/[userId]", params: { userId: creatorId } });
+              else router.replace("/(tabs)");
+            }}
             accessibilityRole="button"
             accessibilityLabel="Go back from Platform Subscription"
           >

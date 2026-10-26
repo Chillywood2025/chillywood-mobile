@@ -39,6 +39,8 @@ const instantiate = (path, mocks) => {
       ? mocks[id]
       : id === "./entitlementAuthority"
         ? { withAuthorityReadDeadline: async (operation) => await operation }
+        : id === "./creatorMoneyStoreQuote"
+          ? instantiate("_lib/creatorMoneyStoreQuote.ts", {})
         : inert,
   );
   return module.exports;
@@ -235,12 +237,12 @@ const loadPurchaseRuntime = ({
     purchaseRevenueCatStoreProduct: async () => { purchaseCalls += 1; },
     readRevenueCatNonSubscriptionProducts: async () => {
       productReads += 1;
-      return [{ identifier: access.providerProductId }];
+      return [{ identifier: access.providerProductId, price: access.priceCents / 100, currencyCode: "USD" }];
     },
     readRevenueCatOfferings: async () => { productReads += 1; return null; },
     readRevenueCatSubscriptionProducts: async () => {
       productReads += 1;
-      return [{ identifier: access.providerProductId }];
+      return [{ identifier: access.providerProductId, price: access.priceCents / 100, currencyCode: "USD" }];
     },
     restoreRevenueCatPurchases: async () => { purchaseCalls += 1; return {}; },
   };
@@ -582,7 +584,7 @@ const loadSeatRuntime = ({ providerProductId, intent, subjectStable = true, prod
       readRevenueCatCustomerInfo: inert,
       readRevenueCatNonSubscriptionProducts: async () => {
         productReads += 1;
-        return productAvailable ? [{ identifier: product.productId }] : [];
+        return productAvailable ? [{ identifier: product.productId, price: product.referencePriceMinor / 100, currencyCode: "USD" }] : [];
       },
       purchaseRevenueCatStoreProduct: async () => { purchaseCalls += 1; },
     },
@@ -712,7 +714,7 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
         getRevenueCatProductionReadiness: inert,
         readRevenueCatNonSubscriptionProducts: async () => {
           productReads += 1;
-          return [{ identifier: "cw_creator_tip_sandbox_099" }];
+          return [{ identifier: "cw_creator_tip_sandbox_099", price: 0.99, currencyCode: "USD" }];
         },
         purchaseRevenueCatStoreProduct: async () => { purchaseCalls += 1; },
       },

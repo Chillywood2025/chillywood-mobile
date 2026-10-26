@@ -31,6 +31,7 @@ import {
   resolveFeatureConfig,
 } from "../_lib/appConfig";
 import { trackEvent } from "../_lib/analytics";
+import { EventScheduleInputError, formatEventScheduleInput, parseEventScheduleInput } from "../_lib/eventSchedule";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
 import { captureAccountBoundSupabaseMutationSubject } from "../_lib/accountBoundSupabaseMutation";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
@@ -620,21 +621,8 @@ const formatCentsAsDollarInput = (value: number) => (
   (Math.max(0, Math.trunc(value || 0)) / 100).toFixed(2)
 );
 
-const toDatetimeLocalValue = (value: string | null) => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) return "";
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) return normalized.slice(0, 16);
-  const offset = parsed.getTimezoneOffset();
-  return new Date(parsed.getTime() - offset * 60_000).toISOString().slice(0, 16);
-};
-
-const fromDatetimeLocalValue = (value: string) => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) return null;
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? normalized : parsed.toISOString();
-};
+const toDatetimeLocalValue = formatEventScheduleInput;
+const fromDatetimeLocalValue = parseEventScheduleInput;
 
 const formatEventTypeLabel = (value: CreatorEventType) => {
   switch (value) {
@@ -4942,15 +4930,15 @@ export function ChannelStudioScreen() {
         eventType: eventEditor.eventType,
         visibility: eventEditor.visibility,
         status: eventEditor.status,
-        startsAt: fromDatetimeLocalValue(eventEditor.startsAt),
-        endsAt: fromDatetimeLocalValue(eventEditor.endsAt),
+        startsAt: fromDatetimeLocalValue(eventEditor.startsAt, "Start time"),
+        endsAt: fromDatetimeLocalValue(eventEditor.endsAt, "End time"),
         linkedTitleId:
           eventEditor.eventType === "watch_party_live"
             ? String(eventEditor.linkedTitleId).trim() || null
             : null,
         replayPolicy: eventEditor.replayPolicy,
-        replayAvailableAt: fromDatetimeLocalValue(eventEditor.replayAvailableAt),
-        replayExpiresAt: fromDatetimeLocalValue(eventEditor.replayExpiresAt),
+        replayAvailableAt: eventEditor.replayPolicy === "none" ? null : fromDatetimeLocalValue(eventEditor.replayAvailableAt, "Replay available time"),
+        replayExpiresAt: eventEditor.replayPolicy !== "until_expiration" ? null : fromDatetimeLocalValue(eventEditor.replayExpiresAt, "Replay expiration"),
         reminderReady: eventEditor.reminderReady,
       };
 
@@ -4971,8 +4959,8 @@ export function ChannelStudioScreen() {
       }
       resetEventEditor();
       setEventNotice(eventEditor.editingEventId ? "Creator event updated." : "Creator event created.");
-    } catch {
-      setEventNotice("Unable to save creator event right now.");
+    } catch (error) {
+      setEventNotice(error instanceof EventScheduleInputError ? error.message : getUserFacingErrorMessage(error, "Unable to save creator event right now."));
     } finally {
       eventSaveInFlightRef.current = false;
       setEventSaving(false);
@@ -10471,11 +10459,12 @@ export function ChannelStudioScreen() {
               <Text style={styles.sectionLabel}>
                 {eventEditor.editingEventId ? "Edit Event" : "Create Event"}
               </Text>
-              <Text style={styles.permissionCopy}>Enter local date and time for this device. Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}.</Text>
+              <Text style={styles.permissionCopy}>Enter local date and time for this device. Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}. For a repeated daylight-saving hour, include the UTC offset (for example, 2026-11-01T01:30-05:00).</Text>
               <TextInput
                 editable={!eventSaving}
                 style={styles.input}
                 placeholder="Event title"
+                accessibilityLabel="Event title"
                 placeholderTextColor="#8d8d8d"
                 value={eventEditor.eventTitle}
                 onChangeText={(text) => updateEventEditor({ eventTitle: text })}
@@ -10487,6 +10476,9 @@ export function ChannelStudioScreen() {
                   <TouchableOpacity
                     key={value}
                     style={[styles.chip, eventEditor.eventType === value && styles.chipActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Event type: ${formatEventTypeLabel(value)}`}
+                    accessibilityState={{ selected: eventEditor.eventType === value }}
                     onPress={() => updateEventEditor({ eventType: value })}
                   >
                     <Text style={[styles.chipText, eventEditor.eventType === value && styles.chipTextActive]}>
@@ -10502,6 +10494,9 @@ export function ChannelStudioScreen() {
                   <TouchableOpacity
                     key={value}
                     style={[styles.chip, eventEditor.status === value && styles.chipActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Event status: ${formatEventStatusLabel(value)}`}
+                    accessibilityState={{ selected: eventEditor.status === value }}
                     onPress={() => updateEventEditor({ status: value, reminderReady: value === "scheduled" ? eventEditor.reminderReady : false })}
                   >
                     <Text style={[styles.chipText, eventEditor.status === value && styles.chipTextActive]}>
@@ -10533,6 +10528,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                 style={styles.input}
                 placeholder="Starts at (YYYY-MM-DDTHH:mm)"
+                accessibilityLabel="Event start date and time"
+                autoCapitalize="none"
+                autoCorrect={false}
                 placeholderTextColor="#8d8d8d"
                 value={eventEditor.startsAt}
                 onChangeText={(text) => updateEventEditor({ startsAt: text })}
@@ -10541,6 +10539,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                 style={styles.input}
                 placeholder="Ends at (YYYY-MM-DDTHH:mm)"
+                accessibilityLabel="Event end date and time, optional"
+                autoCapitalize="none"
+                autoCorrect={false}
                 placeholderTextColor="#8d8d8d"
                 value={eventEditor.endsAt}
                 onChangeText={(text) => updateEventEditor({ endsAt: text })}
@@ -10551,6 +10552,7 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                   style={styles.input}
                   placeholder="Linked title id"
+                  accessibilityLabel="Linked title id"
                   placeholderTextColor="#8d8d8d"
                   value={eventEditor.linkedTitleId}
                   onChangeText={(text) => updateEventEditor({ linkedTitleId: text })}
@@ -10563,6 +10565,9 @@ export function ChannelStudioScreen() {
                   <TouchableOpacity
                     key={value}
                     style={[styles.chip, eventEditor.replayPolicy === value && styles.chipActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Replay policy: ${formatReplayPolicyLabel(value)}`}
+                    accessibilityState={{ selected: eventEditor.replayPolicy === value }}
                     onPress={() => updateEventEditor({ replayPolicy: value })}
                   >
                     <Text style={[styles.chipText, eventEditor.replayPolicy === value && styles.chipTextActive]}>
@@ -10578,6 +10583,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                     style={styles.input}
                     placeholder="Replay available at (YYYY-MM-DDTHH:mm)"
+                    accessibilityLabel="Replay available date and time, optional"
+                    autoCapitalize="none"
+                    autoCorrect={false}
                     placeholderTextColor="#8d8d8d"
                     value={eventEditor.replayAvailableAt}
                     onChangeText={(text) => updateEventEditor({ replayAvailableAt: text })}
@@ -10587,6 +10595,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                       style={styles.input}
                       placeholder="Replay expires at (YYYY-MM-DDTHH:mm)"
+                      accessibilityLabel="Replay expiration date and time"
+                      autoCapitalize="none"
+                      autoCorrect={false}
                       placeholderTextColor="#8d8d8d"
                       value={eventEditor.replayExpiresAt}
                       onChangeText={(text) => updateEventEditor({ replayExpiresAt: text })}
@@ -10598,6 +10609,8 @@ export function ChannelStudioScreen() {
               {liveReplayAcknowledgementRequired ? (
                 <TouchableOpacity
                   style={[styles.legalAcknowledgementRow, liveReplayAccepted && styles.legalAcknowledgementRowActive]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: liveReplayAccepted, disabled: eventSaving }}
                   activeOpacity={0.86}
                   onPress={() => setLiveReplayAccepted((current) => !current)}
                   disabled={eventSaving}
@@ -10619,6 +10632,9 @@ export function ChannelStudioScreen() {
                     <TouchableOpacity
                       key={value}
                       style={[styles.chip, active && styles.chipActive, disabled && styles.chipDisabled]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Event reminders ${value === "ready" ? "ready" : "off"}`}
+                      accessibilityState={{ selected: active, disabled }}
                       onPress={() => {
                         if (disabled) return;
                         updateEventEditor({ reminderReady: value === "ready" });
@@ -10640,6 +10656,9 @@ export function ChannelStudioScreen() {
                 <TouchableOpacity
                   style={styles.eventPrimaryButton}
                   onPress={onSaveEvent}
+                  accessibilityRole="button"
+                  accessibilityLabel={eventEditor.editingEventId ? "Update Event" : "Create Event"}
+                  accessibilityState={{ disabled: eventSaving, busy: eventSaving }}
                   activeOpacity={0.88}
                   disabled={eventSaving}
                 >

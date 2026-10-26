@@ -1,5 +1,6 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 import {
   captureCreatorMoneyPurchaseAuthority,
   isCreatorMoneyPurchaseAuthorityCurrent,
@@ -654,6 +655,10 @@ export async function purchasePaidWatchPartyTicket(input: {
       intentId: intent.id,
       productId,
     };
+  }
+
+  if (!isCreatorMoneyStoreQuoteMatch(product, { productId, amountMinor: access.priceCents, currency: access.currency })) {
+    return { ok: false, message: CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, access, intentId: intent.id, productId };
   }
 
   trackEvent("room_ticket_purchase_started", {

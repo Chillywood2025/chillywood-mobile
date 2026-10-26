@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
 import {
   captureCreatorMoneyPurchaseAuthority,
@@ -398,6 +399,9 @@ export async function purchaseLiveWatchPartyOffer(input: {
   if (!await revalidateCreatorMoneyPurchaseSubject(subject)) throw new Error("Account changed before checkout.");
   const storeProduct = products.find((product) => exactText(product.identifier) === intent.providerProductId);
   if (!storeProduct) throw new Error("The Live Stage Pass is unavailable on this device. Nothing was charged.");
+  if (!isCreatorMoneyStoreQuoteMatch(storeProduct, { productId: intent.providerProductId, amountMinor: input.priceCents, currency: "usd" })) {
+    throw new Error(CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY);
+  }
   if (input.passType === "live_watch_party_seat_pass") {
     if (!await revalidateCreatorMoneyPurchaseSubject(subject)) throw new Error("Account changed before checkout.");
     const latestEntryAccess = await readLiveWatchPartyMoneyAccess(input.partyId);

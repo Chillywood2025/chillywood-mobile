@@ -16,7 +16,7 @@ const compile = (source) => ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 function declarations(file, names) {
-  const source = fs.readFileSync(path.join(root, file), "utf8");
+  const source = fs.readFileSync(path.resolve(root, file), "utf8");
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const nodes = ast.statements.filter((node) => {
     if (ts.isImportDeclaration(node) || ts.isExpressionStatement(node)) return false;
@@ -28,7 +28,7 @@ function declarations(file, names) {
   if (names) assert.equal(nodes.length, names.length, `actual declarations: ${file}`);
   return nodes.map((node) => node.getText(ast)).join("\n");
 }
-const source = declarations("supabase/functions/revenuecat-webhook/index.ts");
+const source = declarations(process.env.REVENUECAT_TEST_SOURCE_PATH ?? "supabase/functions/revenuecat-webhook/index.ts");
 const readiness = declarations("supabase/functions/_shared/provider-readiness.ts",
   ["encoder", "toText", "sanitizeErrorMessage", "hashText"]);
 const receipts = declarations("supabase/functions/_shared/expo-push-receipts.ts");
@@ -68,9 +68,19 @@ export function createRevenueCatNotificationHarness(options = {}) {
   let tokenReadFailure = options.tokenReadFailure ?? null;
   let blockReadFailure = options.blockReadFailure ?? false;
   let intentReadFailure = options.intentReadFailure ?? false;
+  let ledgerReadFailure = options.ledgerReadFailure ?? false;
+  let rpcCount = 0;
   const tables = {
     money_purchase_intents: [{ id: ids.intent, creator_id: ids.creator,
-      source_id: ids.source, source_type: productType, metadata: { party_id: ids.party } }],
+      user_id: ids.buyer, product_id: "synthetic-product-id", product_key: "synthetic-product", product_type: productType,
+      provider: platform === "ios" ? "revenuecat_app_store" : "revenuecat_google_play", environment: "sandbox",
+      source_id: ids.source, source_type: productType === "live_watch_party_access_pass" ? "live_watch_party_access"
+        : productType === "live_watch_party_seat_pass" ? "live_watch_party_seat" : productType,
+      metadata: { party_id: ids.party } }],
+    money_access_ledger_events: [{ id: ids.ledger, provider_event_id: ids.provider,
+      user_id: ids.buyer, creator_id: ids.creator, source_id: ids.source, product_id: "synthetic-product-id",
+      source_type: productType === "live_watch_party_access_pass" ? "live_watch_party_access" : "live_watch_party_seat",
+      event_type: "NON_RENEWING_PURCHASE", environment: "sandbox", metadata: { purchase_intent_id: ids.intent } }],
     channel_audience_blocks: [],
     paid_watch_party_offers: [{ id: ids.source, creator_id: ids.creator, party_id: ids.party }],
     paid_live_watch_party_offers: [{ id: ids.source, creator_id: ids.creator, party_id: ids.party, pass_type: productType }],
@@ -106,6 +116,9 @@ export function createRevenueCatNotificationHarness(options = {}) {
           recordEvent({ kind: "db", table, operation, values: copy(values) });
           if (table === "money_purchase_intents" && operation === "select" && intentReadFailure) {
             return { data: null, error: { code: "XX000", message: "modeled intent lookup failure" } };
+          }
+          if (table === "money_access_ledger_events" && operation === "select" && ledgerReadFailure) {
+            return { data: null, error: { code: "XX000", message: "modeled ledger lookup failure" } };
           }
           if (table === "channel_audience_blocks" && operation === "select" && blockReadFailure) {
             return { data: null, error: { code: "XX000", message: "modeled block lookup failure" } };
@@ -144,6 +157,7 @@ export function createRevenueCatNotificationHarness(options = {}) {
       assert.equal(name, options.writer === "live" ? "process_revenuecat_live_watch_party_event_atomic"
         : platform === "ios" ? "process_revenuecat_app_store_event_atomic" : "process_revenuecat_google_play_event_atomic");
       recordEvent({ kind: "atomic_rpc", name, args: copy(args) });
+      if (options.atomicResults) return { error: null, data: copy(options.atomicResults[rpcCount++]) };
       // Deliberately modeled durable purchase result, stable IDs on replay.
       return { error: null, data: {
         status: options.atomicStatus ?? "processed", productType, productKey: "synthetic-product",
@@ -203,6 +217,7 @@ export function createRevenueCatNotificationHarness(options = {}) {
     product_id: "synthetic-store-product", store: platform === "ios" ? "APP_STORE" : "PLAY_STORE",
     original_transaction_id: "synthetic-original", environment: "SANDBOX", currency: "USD",
     price_in_purchased_currency: 0.99, event_timestamp_ms: now,
+    ...options.event,
   };
   const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
   return {
@@ -221,6 +236,7 @@ export function createRevenueCatNotificationHarness(options = {}) {
     setTokenReadFailure(value) { tokenReadFailure = value; },
     setBlockReadFailure(value) { blockReadFailure = value; },
     setIntentReadFailure(value) { intentReadFailure = value; },
+    setLedgerReadFailure(value) { ledgerReadFailure = value; },
     sends: () => events.filter((e) => e.kind === "push_send"),
     rpcs: () => events.filter((e) => e.kind === "atomic_rpc"),
     async waitForBoundary(kind = "push_send", predicate = () => true) {

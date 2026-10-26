@@ -153,6 +153,12 @@ const brandReferenceFiles = [
   '20261025141347_platform_brand_reference_candidate_indexes.sql',
 ];
 const legacyRenditionFiles = ['20261025192059_legacy_rendition_playback_authority.sql'];
+// Creator/buyer audit successors replace existing function bodies only.
+// Keep the exact files explicit without widening historical catalog scope.
+const monetizationAuditFiles = [
+  '20261026104519_creator_event_offer_lifecycle.sql',
+  '20261026105832_live_stage_purchase_fulfillment_authority.sql',
+];
 // Existing scan/playback functions are replaced, not added. Keep only the
 // seven new identities in this schema count; the extensions guard is checked
 // separately so installing pg_trgm cannot widen the historical catalog scope.
@@ -437,7 +443,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles,
+      'exact creator/buyer monetization audit migrations replay in both Studio scenarios');
     assert.deepEqual(replayReport.files.filter(file=>brandReferenceFiles.includes(file)),brandReferenceFiles);
     assert.deepEqual(replayReport.files.filter(file=>legacyRenditionFiles.includes(file)),legacyRenditionFiles);
     assert.deepEqual(replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles,
