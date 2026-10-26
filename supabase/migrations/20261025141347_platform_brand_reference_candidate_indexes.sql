@@ -229,30 +229,10 @@ end $$;
 revoke all on function private.platform_brand_index_environment_v1(),private.platform_brand_index_spec_v1(oid),
  private.platform_brand_index_expression_v1(oid) from public,anon,authenticated,service_role;
 
--- Each qualifying table gets an ordinary native expression index, including
--- currently empty tables so later growth does not require a new writer hook.
--- No public row/schema changes, side tables of document contents or triggers.
--- Build without the Brand latch: writers already hold relation locks before
--- their guards wait on that latch. Holding it across CREATE INDEX would cycle.
--- Indexes and their metadata become visible atomically with this migration.
-do $$
-declare t record; spec record; index_name text; index_id oid; extension_schema text;
-begin
- select n.nspname into extension_schema from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_trgm';
- for t in select c.oid,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
-   where n.nspname='public' and c.relkind='r' order by c.oid loop
-   execute format('lock table public.%I in access share mode',t.relname);
-   if to_regclass(format('public.%I',t.relname))::oid is distinct from t.oid then raise exception 'brand_reference_relation_changed'; end if;
-   select * into spec from private.platform_brand_index_spec_v1(t.oid);
-   if not found then continue; end if;
-   index_name:='brand_reference_v1_'||t.oid::text;
-   execute format('create index %I on public.%I using gin ((%s) %I.gin_trgm_ops)',index_name,t.relname,spec.scan_expression,extension_schema);
-   index_id:=to_regclass(format('public.%I',index_name));
-   insert into private.platform_brand_reference_indexes_v1(table_oid,index_oid,row_schema,scan_expression,index_expression,environment)
-   select t.oid,index_id,spec.row_schema,spec.scan_expression,pg_get_expr(indexprs,indrelid,false),private.platform_brand_index_environment_v1()
-   from pg_index where indexrelid=index_id;
- end loop;
-end $$;
+-- Construction is a separately authorized, resumable concurrent rollout via
+-- scripts/brand-reference-index-installer.mjs. An empty or partial registry
+-- retains the existing exact scan for every unregistered table. No Brand latch
+-- is held across index construction, and no activation setting is changed.
 
 create or replace function private.platform_brand_retention_references_clear(p_asset_id uuid) returns boolean
 language plpgsql security definer set search_path='' as $$
