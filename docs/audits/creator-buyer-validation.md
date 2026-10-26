@@ -58,6 +58,18 @@ now-corrected source guard, while Product, Database and Native SDK were pending.
 These older-head results are supporting evidence only. The PR and final task
 handoff record the eventual exact-head result without implying a merge or release.
 
+At `ad4faa7cd80682e188a72f36413e9efaf9d859a2`, Core, Sensitive, Policy,
+Autonomous, Android compilation and native PostgreSQL passed. Product completed
+with4,224 passes and3 failures: the explicit client API scanner could not resolve
+the new ternary table expression, and both mutation replay scenarios retained
+the old migration count. The follow-up uses two literal read branches, registers
+only their SELECT consumer attribution, and adds exactly the two new migrations
+to the mutation fixture. No grants, RLS policies or guard selection were changed.
+The API inventory/destination tests passed12/12; both independent full-schema
+mutation scenarios passed103 real-SQL assertions each. Incremental diff review
+and whitespace checks passed. Database/Native SDK were still running at this
+update; the follow-up commit still requires its own complete CI result.
+
 ## Qualification still absent
 
 Local PGlite fixtures execute real production SQL bodies with explicit synthetic

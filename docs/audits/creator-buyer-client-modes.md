@@ -40,6 +40,20 @@ Purchases and store billing; Stripe Connect is a creator payout readiness bounda
 | C-08 | Error-state ambiguity | Per-mode creator transaction list helpers often return `[]` on RPC error, indistinguishable from genuine zero transactions to a caller. Paid Video offer loading supports strict throw-on-unavailable, but transaction helpers do not. | Recommend typed unavailable results and explicit Retry in all activity sections. Do not infer zero earnings from failed transaction reads. |
 | C-09 | Misleading generic payout copy | `_lib/creatorPayouts.ts` showed a blanket7–30day hold while current settlement has source-specific holds and reserves. | Replaced with sale/review-dependent hold and separately confirmed available balance. No financial policy or payout date promised. |
 
+C-06 qualification: the admin tool's Live Stage offer-ID lookup preserves the
+existing `paid_live_watch_party_offers_read_exact_room` RLS policy. Only the
+current authorized, unrestricted creator/host can read that offer row; a tester
+who is neither cannot map the offer ID to a party through this table and receives
+the unavailable error. This is not complete admin Stage purchase qualification.
+Those buyers must reach the contextual Stage screen using an already-known room
+destination. No existing client-callable read RPC accepting an offer ID and
+returning its party ID was found in the relevant source. The read resolver
+`resolve_live_watch_party_money_access(p_party_id)` requires the party ID first;
+`create_live_watch_party_purchase_intent(p_offer_id)` returns a party ID but
+creates an intent and is not a navigation lookup. Private notification helpers
+and service-only authority resolvers are not client read alternatives. No grant,
+RLS policy or new resolver was added to work around this limitation.
+
 ## Journey and contract coverage
 
 | Journey concern | Current evidence | Remaining work / qualification |

@@ -23,11 +23,17 @@ export async function resolveCreatorSandboxPurchaseDestination(sourceType: strin
   if (sourceType === "event") return { pathname: "/event/[eventId]", params: { eventId: sourceId } };
   const isStage = sourceType === "live_watch_party_access" || sourceType === "live_watch_party_seat";
   if (sourceType !== "watch_party_live" && !isStage) throw new Error("This source has no contextual checkout.");
-  const { data, error } = await offerReader
-    .from(isStage ? "paid_live_watch_party_offers" : "paid_watch_party_offers")
-    .select("id,party_id")
-    .eq("id", sourceId)
-    .maybeSingle();
+  const { data, error } = isStage
+    ? await offerReader
+      .from("paid_live_watch_party_offers")
+      .select("id,party_id")
+      .eq("id", sourceId)
+      .maybeSingle()
+    : await offerReader
+      .from("paid_watch_party_offers")
+      .select("id,party_id")
+      .eq("id", sourceId)
+      .maybeSingle();
   const row = data && typeof data === "object" && !Array.isArray(data)
     ? data as Record<string, unknown> : null;
   if (error || !row || row.id !== sourceId || typeof row.party_id !== "string"
