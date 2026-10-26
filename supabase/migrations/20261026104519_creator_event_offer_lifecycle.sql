@@ -170,4 +170,3 @@ end;
 $$;
 revoke all on function public."set_paid_creator_event_offer_pre_integrity_closeout"(uuid,text,integer,integer,text)
   from public,anon,authenticated,service_role;
-
