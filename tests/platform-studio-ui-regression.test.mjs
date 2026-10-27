@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import test from "node:test";
 import React from "react";
+import ts from "typescript";
 import { loadStudioFunctions } from "./helpers/studio-source-harness.mjs";
 
 // Narrow failure/race probes execute exact production closures and JSX. Native
@@ -15,6 +16,11 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a, b)
 const settle = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const noop = () => {};
 const { sameAccountSessionAuthority } = loadStudioFunctions('_lib/accountSessionAuthority.ts', ['sameAccountSessionAuthority'], {});
+const scheduleContext = { exports: {}, Date, Intl };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(`${process.env.STUDIO_SOURCE_ROOT || process.cwd()}/_lib/eventSchedule.ts`, "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, scheduleContext);
+const { EventScheduleInputError, parseZonedEventScheduleInput } = scheduleContext.exports;
 function fixture(initial, bindings = {}) {
   const state = { ...initial };
   const authority = { userId: 'owner', accountId: 'owner', state: 'ACTIVE', restoreOnly: false, sessionGeneration: 'fixture-session' };
@@ -108,15 +114,68 @@ test("Content page cursor counts server rows, not pinned out-of-page saved video
   assert.equal(h.state.creatorVideos.length, 81); assert.equal(h.state.creatorVideosHasMore, false);
 });
 
-test("Event durable create survives failed refresh; retry updates the same event and double tap does not insert twice", async () => {
-  let creates = 0, updates = 0; const gate = deferred();
-  const h = fixture({ eventEditor: { eventTitle: "Launch", eventType: "live_first", editingEventId: null, startsAt: "2026-11-01", endsAt: "", replayPolicy: "none" }, eventSaving: false, eventNotice: null, liveReplayAccepted: false }, {
-    eventSaveInFlightRef: { current: false }, user: { id: "owner" }, creatorPostingEnabled: true, liveReplayAcknowledgementRequired: false, fromDatetimeLocalValue: value => value, createCreatorEvent: async () => { creates++; await gate.promise; return { id: "event-1" }; }, updateCreatorEvent: async id => { assert.equal(id, "event-1"); updates++; return { id }; }, loadCreatorEvents: async () => { throw new Error("refresh offline"); }, resetEventEditor: noop, getUserFacingErrorMessage: (_, fallback) => fallback,
+const confirmedDraft = { id: "event-1", hostUserId: "owner", eventTitle: "Launch", status: "draft", updatedAt: "2026-10-27T00:00:00.123456Z" };
+function eventFixture(bindings = {}) {
+  const h = fixture({ creatorEvents: [], eventEditor: {
+    eventTitle: "Launch", eventType: "live_first", editingEventId: null, status: "draft", visibility: "private",
+    startsAt: "2026-11-01T12:00", endsAt: "", timeZone: "UTC", timeDisambiguation: "reject", linkedTitleId: "",
+    replayPolicy: "none", replayAvailableAt: "", replayExpiresAt: "", reminderReady: false,
+  }, eventSaving: false, eventNotice: null, liveReplayAccepted: false }, {
+    eventSaveInFlightRef: { current: false }, user: { id: "owner" }, creatorPostingEnabled: true,
+    liveReplayAcknowledgementRequired: false, editedPublishedEventRequiresLifecycle: false,
+    EventScheduleInputError, fromDatetimeLocalValue: parseZonedEventScheduleInput,
+    createCreatorEvent: async () => confirmedDraft, loadCreatorEvents: async () => false,
+    resetEventEditor: noop, getUserFacingErrorMessage: (_, fallback) => fallback, ...bindings,
   });
-  const api = h.load(["onSaveEvent"]);
-  const first = api.onSaveEvent(); const second = api.onSaveEvent(); gate.resolve(); await Promise.all([first, second]);
-  assert.equal(creates, 1); assert.equal(h.state.eventEditor.editingEventId, "event-1"); assert.match(h.state.eventNotice, /^Event saved/);
-  await api.onSaveEvent(); assert.equal(creates, 1); assert.equal(updates, 1);
+  return { ...h, api: h.load(["onSaveEvent"]) };
+}
+
+test("Event durable create survives failed refresh; retry updates the same event and double tap does not insert twice", async () => {
+  let creates = 0, updates = 0, refreshes = 0, resets = 0; const gate = deferred(), caught = [];
+  const updated = { ...confirmedDraft, updatedAt: "2026-10-27T00:01:00.654321Z" };
+  const h = eventFixture({
+    createCreatorEvent: async payload => { creates++; assert.equal(payload.startsAt, "2026-11-01T12:00:00.000Z"); await gate.promise; return confirmedDraft; },
+    updateCreatorEvent: async id => { assert.equal(id, "event-1"); updates++; return updated; },
+    loadCreatorEvents: async () => { refreshes++; throw new Error("refresh offline"); }, resetEventEditor: () => { resets++; },
+    getUserFacingErrorMessage: (error, fallback) => { caught.push(error); return fallback; },
+  });
+  const first = h.api.onSaveEvent(); const second = h.api.onSaveEvent();
+  assert.equal(creates, 1); assert.equal(h.state.eventSaving, true); assert.equal(h.context.eventSaveInFlightRef.current, true);
+  gate.resolve(); await Promise.all([first, second]);
+  assert.equal(h.state.eventEditor.editingEventId, "event-1"); assert.match(h.state.eventNotice, /^Event saved.*schedule could not refresh/);
+  assert.equal(h.state.creatorEvents.length, 1); assert.equal(h.state.creatorEvents[0], confirmedDraft);
+  await h.api.onSaveEvent(); assert.equal(creates, 1); assert.equal(updates, 1); assert.equal(refreshes, 2);
+  assert.equal(h.state.creatorEvents.length, 1); assert.equal(h.state.creatorEvents[0], updated);
+  assert.equal(h.state.eventSaving, false); assert.equal(h.context.eventSaveInFlightRef.current, false);
+  assert.equal(resets, 0); assert.deepEqual(caught, [], "refresh rejection is handled without hiding a save-handler exception");
+});
+
+test("Event real schedule validation prevents a write and releases the lock for a corrected retry", async () => {
+  let creates = 0; const caught = [];
+  const h = eventFixture({ createCreatorEvent: async () => { creates++; return confirmedDraft; },
+    getUserFacingErrorMessage: (error, fallback) => { caught.push(error); return fallback; } });
+  h.state.eventEditor.startsAt = "2026-02-30T12:00";
+  await h.api.onSaveEvent();
+  assert.match(h.state.eventNotice, /^Start time: enter a valid calendar date and time\./);
+  assert.equal(creates, 0); assert.equal(h.state.creatorEvents.length, 0); assert.equal(h.state.eventEditor.editingEventId, null);
+  assert.equal(h.state.eventSaving, false); assert.equal(h.context.eventSaveInFlightRef.current, false);
+  assert.deepEqual(caught, [], "the production schedule error class uses its actionable validation message");
+  h.state.eventEditor.startsAt = "2026-11-01T12:00";
+  await h.api.onSaveEvent();
+  assert.equal(creates, 1); assert.equal(h.state.eventEditor.editingEventId, "event-1"); assert.equal(h.state.creatorEvents[0], confirmedDraft);
+});
+
+test("Event rejected create stays unacknowledged and releases the lock before a successful retry", async () => {
+  let creates = 0; const rejected = new Error("modeled write rejected"), caught = [];
+  const h = eventFixture({ createCreatorEvent: async () => { if (++creates === 1) throw rejected; return confirmedDraft; },
+    getUserFacingErrorMessage: (error, fallback) => { caught.push(error); return fallback; } });
+  await h.api.onSaveEvent();
+  assert.equal(h.state.eventNotice, "Unable to save creator event right now."); assert.deepEqual(caught, [rejected]);
+  assert.equal(h.state.creatorEvents.length, 0); assert.equal(h.state.eventEditor.editingEventId, null);
+  assert.equal(h.state.eventSaving, false); assert.equal(h.context.eventSaveInFlightRef.current, false);
+  await h.api.onSaveEvent();
+  assert.equal(creates, 2); assert.equal(h.state.creatorEvents[0], confirmedDraft); assert.equal(h.state.eventEditor.editingEventId, "event-1");
+  assert.deepEqual(caught, [rejected], "retry must not hide an unrelated fixture or handler exception");
 });
 
 test("installed Android Alert retains Cancel and Cancel cannot mutate an audience request", () => {
