@@ -17,6 +17,7 @@ export const monetizationImplementationFiles = [
   '20261026180230_creator_money_checkout_attempt_claims.sql',
   '20261026180500_event_checkout_attempt_claims.sql',
   '20261026184512_creator_event_broadcast_recovery.sql',
+  '20261027021608_creator_monetization_reference_guard_integration.sql',
 ];
 export const monetizationAuditFiles = [...monetizationBaselineFiles, ...monetizationImplementationFiles];
 export const monetizationAddedFunctionIdentities = new Map([
