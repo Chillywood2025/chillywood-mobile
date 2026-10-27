@@ -45,6 +45,9 @@ test('mounted Event form uses production event service; durable create plus read
  const inputWasLocked=h.input('Event title').props.editable===false;s.failRead();await h.resolve(s.gate);
  assert.match(h.text(),/Event saved.*schedule could not refresh/);assert.ok(h.button('Update Event'));
  await h.press(h.button('Update Event'));assert.equal(s.creates(),1);assert.equal(s.updates(),1);assert.ok(inputWasLocked,'held save locks keyboard edits');
+ assert.equal(h.calls.filter(([name])=>name==='updateCreatorEvent').length,1);
+ assert.equal(h.calls.find(([name])=>name==='updateCreatorEvent')[1],'event-1','retry updates the confirmed event id');
+ assert.equal(h.button('Event status: Draft').props.disabled,false,'confirmed draft stays editable after schedule read failure');
 });
 test('all nine mounted Studio tabs remain reachable with selected tab accessibility state',async t=>{
  const h=await mount(t);for(const label of ['Home','Content','Clip','Live','Audience','Moderation','Insights','Monetization','Brand']){

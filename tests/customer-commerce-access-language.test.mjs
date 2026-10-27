@@ -171,7 +171,8 @@ test("money CTAs are exact, accessible, and synchronously single-flight", () => 
   assert.match(tip, /keyboardShouldPersistTaps="handled"/u);
   assert.match(tip, /maxHeight: "92%"/u);
   assert.match(tipAuthority, /no_access_grant: true/u);
-  assert.match(tip, /It did not unlock access/u);
+  assert.match(tip, /Store checkout returned\.[\s\S]*verified tip status\.[\s\S]*No access is included/u);
+  assert.match(tipAuthority, /Creator credit depends on provider confirmation, and no access is included/u);
   assert.match(player, /Unlock Video[\s\S]*creatorVideoPaidContentOneTimePriceLabel/u);
   assert.match(party, /Get Party Room Pass —/u);
   assert.match(stage, /Get Live Stage Pass —/u);

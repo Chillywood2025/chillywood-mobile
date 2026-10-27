@@ -4863,6 +4863,9 @@ export function ChannelStudioScreen() {
         return;
       }
 
+      // Keep the confirmed row if the schedule read fails, so a saved draft
+      // remains editable without treating its status as unknown or published.
+      setCreatorEvents((current) => [result, ...current.filter((event) => event.id !== result.id)]);
       setEventEditor((current) => ({ ...current, editingEventId: result.id }));
       const refreshed = await loadCreatorEvents().catch(() => false);
       if (!refreshed) {

@@ -184,6 +184,19 @@ test("mounted tip result cannot display on a replaced account session", async t 
   assert.equal(h.node("tip-success-receipt"), undefined);
 });
 
+test("mounted tip checkout fallback requires verified status and never promises access or creator credit", async t => {
+  const h = await mountTip(t, { purchase: async () => ({ ok: true }) });
+  await h.press("tip-confirm-button");
+  const receipt = h.node("tip-success-receipt");
+  assert.equal(receipt.props.title, "Tip status");
+  assert.match(receipt.props.body, /Store checkout returned/u);
+  assert.match(receipt.props.body, /Check Purchases & My Tickets for verified tip status/u);
+  assert.match(receipt.props.body, /No access is included/u);
+  assert.doesNotMatch(receipt.props.body, /tip sent|payment confirmed|creator credited|access unlocked/iu);
+  assert.equal(h.purchases.length, 1);
+  assert.deepEqual(h.routes, []);
+});
+
 test("mounted Stripe tip receipt remounts on session replacement and exposes refund/dispute states", async t => {
   const nodes = new Map(), events = [], old = deferred(), current = deferred(); let reads = 0;
   let session = { user: { id: "buyer" }, authority: { sessionGeneration: "one" } };
