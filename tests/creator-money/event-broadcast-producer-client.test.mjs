@@ -38,3 +38,18 @@ test('old account results and malformed readiness replies cannot become creator-
   }
   const other=load();assert.equal((await other.api.controlCreatorEventBroadcast({...event,hostUserId:event.id},'stop')).canStart,false);assert.equal(other.calls.length,0);
 });
+test('denied restart preserves replay promises and original terms without claiming cleanup or a refund',async()=>{
+  const reasons=[
+    ['event_broadcast_replay_recovery_required',/purchased replay.*platform support.*preserving that replay/],
+    ['event_broadcast_original_terms_required',/window or event terms have changed or expired.*purchase history are preserved/],
+    ['event_broadcast_terminal_receipt_required',/has not confirmed.*Refresh readiness.*until shutdown is confirmed/],
+  ];
+  for(const [reason,expected] of reasons){
+    const h=load({reply:{state:'unavailable',reason,canStart:false}});
+    const result=await h.api.controlCreatorEventBroadcast(event,'start');
+    assert.equal(result.canStart,false);assert.equal(result.reason,reason);
+    const copy=h.api.creatorEventBroadcastStatusCopy(result);
+    assert.match(copy,expected);assert.doesNotMatch(copy,/refund|verified and ready|has stopped/);
+    assert.equal(h.calls.length,1);
+  }
+});

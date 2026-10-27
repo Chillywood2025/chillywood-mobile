@@ -4,6 +4,7 @@ import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority,
 import { readCreatorEventForHostRoom } from "../../_lib/creatorEventBroadcast";
 import type { CreatorEventSummary } from "../../_lib/liveEvents";
 import { EventLifecycleControls } from "./event-lifecycle-controls";
+import { EventBroadcastPreparation } from "./event-broadcast-preparation";
 
 /** Room identity is an input to an owner-only server read, never event ownership evidence. */
 export function EventHostBroadcastControls({ roomId, active, stageActive, top, maxHeight }: {
@@ -51,12 +52,15 @@ export function EventHostBroadcastControls({ roomId, active, stageActive, top, m
       {status === "loading" ? <><ActivityIndicator color="#DC143C" /><Text style={styles.body}>Verifying this room’s event…</Text></>
         : !bound || !event || status !== "resolved" ? <><Text accessibilityRole="alert" style={styles.body}>This room’s event could not be verified for your current account. Refresh before using event controls.</Text><Pressable accessibilityRole="button" accessibilityLabel="Refresh host event mapping" style={styles.button} onPress={() => void refresh()}><Text style={styles.title}>Refresh event</Text></Pressable></>
           : <>
-            <Text style={styles.title}>{event.title}</Text>
+            <Text style={styles.title}>{event.eventTitle}</Text>
             {["ended", "canceled", "expired"].includes(event.status) ? <Text style={styles.body}>This event is closed to live viewers. Broadcast shutdown has been requested; provider confirmation is still required before shutdown is complete.</Text> : null}
             <Text style={styles.body}>Keep this room open during the show. Leaving or returning to the event page disconnects this device’s camera and microphone.</Text>
             {stageActive ? <EventLifecycleControls key={`${roomId}:${event.id}:${accountKey}`} event={event} hasPaidOffer inHostRoom onChanged={next => {
               if (next.id === event.id && next.hostUserId === event.hostUserId && sameAccountSessionAuthority(binding.current, getCurrentAccountSessionAuthoritySnapshot())) setEvent(next);
-            }} /> : <Text style={styles.body}>Continue to Live Stage and connect your camera or microphone using the room controls. Event broadcast controls appear here once the host stage is open; the server then verifies your live media.</Text>}
+            }} /> : <>
+              <Text style={styles.body}>Continue to Live Stage and connect your camera or microphone using the room controls. Starting the broadcast requires the host stage and verified live media. You can still check or stop an existing broadcast below.</Text>
+              <EventBroadcastPreparation key={`${roomId}:${event.id}:${accountKey}`} event={event} inHostRoom recoveryOnly />
+            </>}
           </>}
     </ScrollView> : null}
   </View>;

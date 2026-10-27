@@ -119,3 +119,21 @@ test('persisted terminal receipt remains truthful after camera disconnect withou
     assert.equal((await h.run('refresh')).state,state);assert.equal(h.receipts.length,0);assert.equal(h.starts(),0);
   }
 });
+test('authoritative terminal recovery uses its new media identity and never retries a denied replay or changed contract',async()=>{
+  for(const reason of ['event_broadcast_replay_recovery_required','event_broadcast_original_terms_required','event_broadcast_terminal_receipt_required']){
+    const denied=fixture({read:()=>({...source,allowed:false,reason})});
+    assert.equal((await denied.run('start')).reason,reason);assert.equal(denied.starts(),0);assert.equal(denied.receipts.length,0);
+  }
+  const nextBroadcast=id(14),nextAttempt=id(15),next={...claimed,attemptId:nextAttempt,broadcastId:nextBroadcast,
+    outputPrefix:`creator-events/${nextBroadcast}/${nextAttempt}`};
+  const nextInfo={...info,egressId:'EG_recovered',outputPrefix:next.outputPrefix};
+  const h=fixture();let starts=0,current={...source};
+  h.deps.read=async()=>({...current,claimed:false});
+  h.deps.claim=async()=>{current={...next};return {...next};};
+  h.deps.start=async s=>{assert.equal(s.broadcastId,nextBroadcast);assert.equal(s.attemptId,nextAttempt);starts++;return nextInfo;};
+  h.deps.list=async()=>starts?[nextInfo]:[];
+  h.deps.verifyPrivateOrigin=async s=>({sourceUrl:`${s.privateOrigin}/${s.outputPrefix}/live.m3u8`,playlistPath:`${s.outputPrefix}/live.m3u8`});
+  assert.equal((await h.run('start')).state,'active');assert.equal(starts,1);
+  assert.equal(h.receipts.at(-1).egressId,'EG_recovered');
+  assert.equal((await h.run('start')).state,'active');assert.equal(starts,1,'same recovery attempt is not dispatched twice');
+});

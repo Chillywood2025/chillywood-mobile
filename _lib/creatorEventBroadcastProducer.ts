@@ -30,6 +30,9 @@ export async function controlCreatorEventBroadcast(event: Pick<CreatorEventSumma
 }
 
 export function creatorEventBroadcastStatusCopy(result: CreatorEventBroadcastResult) {
+  if (result.reason === "event_broadcast_replay_recovery_required") return "This show includes a purchased replay. Contact platform support to recover the broadcast while preserving that replay. A replacement broadcast cannot start until this is resolved.";
+  if (result.reason === "event_broadcast_original_terms_required") return "The original approved broadcast window or event terms have changed or expired. Contact platform support before trying to restart. Your event and purchase history are preserved.";
+  if (result.reason === "event_broadcast_terminal_receipt_required") return "The provider has not confirmed that the previous broadcast stopped. Refresh readiness to check that attempt; a replacement will not start until shutdown is confirmed.";
   if (result.state === "active") return "The broadcast is verified and ready. Use Start verified event to open the show for ticket holders.";
   if (result.state === "stopped") return "The broadcast has stopped. Your event and purchase history remain available.";
   if (result.reason.includes("host_tracks")) return "Enter the host room and turn on your camera or microphone before starting the broadcast.";

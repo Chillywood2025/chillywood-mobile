@@ -1,5 +1,5 @@
 begin;
-select plan(63);
+select plan(64);
 
 select has_table('public','paid_live_watch_party_offers','1. exact live offers table exists');
 select has_table('public','paid_live_watch_party_passes','2. exact live passes table exists');
@@ -229,13 +229,17 @@ update public.platform_money_kill_switches set state='sandbox_only'
 where key='live_watch_party_access_enabled';
 update public.paid_live_watch_party_offers set price_cents=199
 where id='c1000000-0000-4000-8000-000000000001';
-select throws_ok($$select public.process_revenuecat_live_watch_party_event_atomic(
+select lives_ok($$select public.process_revenuecat_live_watch_party_event_atomic(
   'revenuecat_google_play','rfgc-stale-offer','NON_RENEWING_PURCHASE','b1000000-0000-4000-8000-000000000003',
   'cw_live_watch_party_access_sandbox_099','sandbox',timezone('utc'::text,now()),99,'usd',repeat('3',64),'rfgc-stale-offer-original')$$,
-  'live_watch_party_active_offer_binding_stale','42. active event cannot grant after offer mapping changes');
+  '42. a verified receipt honors its immutable purchase after the creator reprices the current offer');
 select is((select count(*)::integer from public.paid_live_watch_party_passes
-  where buyer_id='b1000000-0000-4000-8000-000000000003'),0,
-  '43. stale offer mismatch creates no pass authority');
+  where buyer_id='b1000000-0000-4000-8000-000000000003'),1,
+  '43. original purchase terms create exactly one bound pass despite a later offer reprice');
+select is((select amount_minor from public.money_access_ledger_events
+  where metadata->>'original_transaction_id'='rfgc-stale-offer-original'
+    and event_type='NON_RENEWING_PURCHASE'),99,
+  'the original agreed99 economics remain immutable after the current offer changes to199');
 select is((select creator_id::text from public.money_access_ledger_events
   where metadata->>'original_transaction_id'='rfgc-original-access-b1' and event_type='REFUND'),
   'a1000000-0000-4000-8000-000000000001',

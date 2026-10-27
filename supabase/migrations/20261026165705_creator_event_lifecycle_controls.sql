@@ -64,7 +64,10 @@ begin
     select exists(select 1 from public.paid_creator_event_passes p where p.creator_event_id=new.id
       and p.refunded_at is null and p.revoked_at is null and p.status in ('active','expired'))
       or exists(select 1 from public.event_ticket_reservations r where r.creator_event_id=new.id) into v_has_purchase;
-    if v_has_purchase and (v_contract_changed or (new.status='canceled' and old.status is distinct from new.status)) then
+    -- Every status transition for a reserved or purchased event belongs to the
+    -- managed lifecycle. A legacy editor must not hide the show as draft,
+    -- finish it before it starts, or reopen a cancellation without its checks.
+    if v_has_purchase and (v_contract_changed or new.status is distinct from old.status) then
       if not v_permit then raise exception 'purchased_event_lifecycle_management_required'; end if;
       if row(new.replay_policy,new.replay_available_at,new.replay_expires_at)
         is distinct from row(old.replay_policy,old.replay_available_at,old.replay_expires_at)

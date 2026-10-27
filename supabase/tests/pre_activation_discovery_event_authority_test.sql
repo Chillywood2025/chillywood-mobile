@@ -75,7 +75,25 @@ insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values
   ('c3000000-0000-4000-8000-000000000003',false,false,timezone('utc'::text,now())),
   ('d4000000-0000-4000-8000-000000000004',false,false,timezone('utc'::text,now()))
 on conflict (id) do nothing;
+insert into auth.sessions(id,user_id)
+select id,id from auth.users where id in (
+  'a1000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000002',
+  'c3000000-0000-4000-8000-000000000003','d4000000-0000-4000-8000-000000000004'
+) on conflict (id) do nothing;
 set local session_replication_role=origin;
+
+-- Current creator writes bind both a live session and its exact account terms.
+insert into public.wave1_legal_acceptances(
+  user_id,subject_hash,document_key,document_version,market,role_key,capability,
+  session_generation,authority_source
+)
+select session.user_id,public.wave1_sha256(session.user_id::text),document.document_key,
+  document.version,document.market,'member',document.capability,session.id::text,'service_reconciliation'
+from auth.sessions session cross join public.wave1_legal_document_versions document
+where session.id in (
+  'a1000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000002',
+  'c3000000-0000-4000-8000-000000000003','d4000000-0000-4000-8000-000000000004'
+) and document.active and document.market='UNITED_STATES' and document.capability='account';
 
 insert into public.user_friendships(
   user_low_id,user_high_id,requested_by_user_id,status,responded_at,actioned_by_user_id
@@ -88,7 +106,7 @@ insert into public.user_friendships(
 
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001"}',true);
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001","session_id":"a1000000-0000-4000-8000-000000000001"}',true);
 set local role authenticated;
 select lives_ok(
   $$insert into public.creator_events(
@@ -115,19 +133,21 @@ select is((select count(*)::integer from public.discovery_feed_items
 
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"c3000000-0000-4000-8000-000000000003"}',true);
+  '{"role":"authenticated","sub":"c3000000-0000-4000-8000-000000000003","session_id":"c3000000-0000-4000-8000-000000000003"}',true);
 set local role authenticated;
-select throws_like(
+select throws_ok(
   $$insert into public.creator_events(
       host_user_id,event_title,event_type,status,starts_at,ends_at,visibility,reminder_ready
     ) values (
       'a1000000-0000-4000-8000-000000000001','Wrong-host Event','live_first','scheduled',
       now()+interval '6 hours',now()+interval '7 hours','public',false
     ) returning id$$,
-  '%row-level security policy%',
+  'P0001','event_creator_session_required',
   'an authenticated user cannot create an Event for another host'
 );
 reset role;
+select is((select count(*)::integer from public.creator_events where event_title='Wrong-host Event'),0,
+  'rejected foreign-host creation leaves no Event row');
 
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
@@ -228,6 +248,38 @@ select ok((select access_type='ticketed' and requires_ticket_to_watch
   where source_type='creator_event' and source_id='e7000000-0000-4000-8000-000000000007'),
   'a paid public Event remains exact Event discovery and requires its Event Pass');
 
+select throws_ok(
+  $$update public.creator_events set status='live_now'
+    where id='e1000000-0000-4000-8000-000000000001'$$,
+  'P0001','event_verified_broadcast_required',
+  'an Event cannot enter live discovery without exact verified broadcast authority');
+-- Synthetic trusted provider evidence for this rollback-only discovery fixture.
+-- Event start still runs the actual readiness resolver and lifecycle trigger.
+insert into public.room_broadcast_sessions(
+  id,source_type,source_room_id,creator_event_id,host_user_id,channel_user_id,broadcast_status,
+  egress_provider,egress_status,egress_id,hls_playback_url,playback_url_status,rights_status,
+  access_type,ad_policy,is_publicly_watchable,is_spectator_playback_enabled,
+  requires_premium,requires_ticket,cost_guard_status,started_at,metadata
+) values (
+  'ef100000-0000-4000-8000-000000000001','creator_event','RFGC-EVENT-PUBLIC',
+  'e1000000-0000-4000-8000-000000000001',
+  'a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000001',
+  'active_later','manual_foundation','active_later','EG_RFGC_EVENT_PUBLIC',
+  'https://example.invalid/rfgc-event/index.m3u8','public_safe_available','creator_owned',
+  'public_free','no_ads',true,true,false,false,'foundation',now(),
+  jsonb_build_object('d7f_public_safe_approved',true)
+);
+insert into public.spectator_hls_playback_records(
+  id,broadcast_session_id,source_room_id,creator_event_id,host_user_id,channel_user_id,visibility,
+  playback_status,playlist_path,rights_status,access_type,is_publicly_watchable,
+  is_spectator_playback_enabled,requires_premium,requires_ticket,metadata
+) values (
+  'ef200000-0000-4000-8000-000000000002','ef100000-0000-4000-8000-000000000001',
+  'RFGC-EVENT-PUBLIC','e1000000-0000-4000-8000-000000000001',
+  'a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000001',
+  'public','live','rfgc-event/index.m3u8','creator_owned','public_free',true,true,false,false,
+  jsonb_build_object('d7f_public_safe_gate',true)
+);
 update public.creator_events set status='live_now'
 where id='e1000000-0000-4000-8000-000000000001';
 select is((select live_state from public.discovery_feed_items

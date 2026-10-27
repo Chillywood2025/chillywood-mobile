@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mount } from "./platform-studio-mounted-harness.mjs";
+import { mount, React } from "./platform-studio-mounted-harness.mjs";
 
 test("creator event save displays invalid date guidance without calling create", async t => {
   const h = await mount(t, { route: { tab: "live", focus: "schedule" }, videos: [] });
@@ -47,4 +47,47 @@ test("creator Sunday8PM schedule passes an exact instant and cleared optional fi
   assert.equal(call[1].status, "scheduled");
   assert.equal(call[1].replayExpiresAt, null);
   assert.match(h.text(), /Creator event created/);
+});
+
+const savedEvent = {
+  id: "event-one", hostUserId: "owner", eventTitle: "Sunday show", eventType: "live_first", visibility: "public",
+  status: "scheduled", startsAt: "2099-01-04T01:00:00.000Z", endsAt: "2099-01-04T02:00:00.000Z",
+  timeZone: "America/New_York", replayPolicy: "none", replay: { policy: "none" }, reminder: { reason: "ready" },
+  updatedAt: "2026-10-26T00:00:00Z",
+};
+
+for (const status of ["sandbox", "paused", "blocked", "archived", "canceled"]) {
+  test(`published ${status} ticketed event cannot be hidden with the legacy Draft toggle`, async t => {
+    const h = await mount(t, { route: { tab: "live", focus: "schedule" }, videos: [], overrides: {
+      readCreatorEventReminderSummaries: async () => [{ event: savedEvent, activeReminderCount: 0, canceledReminderCount: 0 }],
+      listMyPaidCreatorEventOffers: async () => [{ id: "offer-one", creatorEventId: savedEvent.id, creatorId: "owner", status, currency: "usd", priceCents: 99, passesSold: 0 }],
+    } });
+    await h.press(h.button("Edit"));
+    const draft = h.button("Event status: Draft");
+    assert.equal(draft.props.disabled, true);
+    assert.equal(draft.props.accessibilityState.disabled, true);
+    await React.act(async () => draft.props.onPress());
+    assert.equal(h.button("Event status: Scheduled").props.accessibilityState.selected, true);
+    assert.match(h.text(), /Use Manage this event to pause sales or cancel a published ticketed event/);
+    assert.equal(h.calls.some(([name]) => name === "updateCreatorEvent"), false);
+  });
+}
+
+test("unavailable ticket readback blocks legacy Draft while verified free events retain it", async t => {
+  for (const available of [false, true]) {
+    const h = await mount(t, { route: { tab: "live", focus: "schedule" }, videos: [], overrides: {
+      readCreatorEventReminderSummaries: async () => [{ event: savedEvent, activeReminderCount: 0, canceledReminderCount: 0 }],
+      listMyPaidCreatorEventOffers: async () => { if (!available) throw new Error("ticket settings unavailable"); return []; },
+      updateCreatorEvent: async (_id, payload) => ({ ...savedEvent, status: payload.status }),
+    } });
+    await h.press(h.button("Edit"));
+    assert.equal(h.button("Event status: Draft").props.disabled, !available);
+    if (available) {
+      await h.press(h.button("Event status: Draft"));
+      await h.press(h.button("Update Event"));
+      const update = h.calls.find(([name]) => name === "updateCreatorEvent");
+      assert.ok(update, "verified free event still uses the existing save handler");
+      assert.equal(update[2].status, "draft");
+    }
+  }
 });

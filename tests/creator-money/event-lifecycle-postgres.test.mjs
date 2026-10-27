@@ -2,6 +2,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
+import ts from 'typescript';
+import * as singleFlight from '../../_lib/actionSingleFlight.mjs';
+
+function loadProduction(path, imports) {
+  const module={exports:{}};
+  const source=ts.transpileModule(fs.readFileSync(path,'utf8'),{
+    compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+  }).outputText;
+  new Function('module','exports','require',source)(module,module.exports,name=>{
+    assert.ok(Object.hasOwn(imports,name),`unexpected dependency ${name}`);
+    return imports[name];
+  });
+  return module.exports;
+}
+const liveEvents=loadProduction('_lib/liveEvents.ts',{
+  './supabase':{supabase:{}},'./actionSingleFlight.mjs':singleFlight,
+});
 
 const owner='11111111-1111-4111-8111-111111111111',buyer='22222222-2222-4222-8222-222222222222';
 const event='33333333-3333-4333-8333-333333333333',pass='44444444-4444-4444-8444-444444444444';
@@ -31,7 +48,9 @@ test('production lifecycle enforces exact owner, immutable paid terms, explicit 
     await db.exec(fs.readFileSync('supabase/migrations/20261026165705_creator_event_lifecycle_controls.sql','utf8'));
     assert.equal((await db.query("select relforcerowsecurity from pg_class where oid='private.creator_event_lifecycle_permits'::regclass")).rows[0].relforcerowsecurity,true);
     const actor=async id=>db.query("select set_config('fixture.actor',$1,false)",[id]);
-    const row=async()=> (await db.query('select * from public.creator_events where id=$1',[event])).rows[0];
+    // PostgREST returns timestamps in JSON with PostgreSQL precision. A native
+    // JS Date row decoder would hide the production version-token regression.
+    const row=async()=> (await db.query('select to_jsonb(e) event from public.creator_events e where id=$1',[event])).rows[0].event;
     const act=async(action,{start=null,end=null,message='Update for ticket holders',material=false,expected}={})=>{
       const current=await row();
       return (await db.query('select public.manage_creator_event_lifecycle($1,$2,$3,$4,$5,$6,$7,$8) result',
@@ -41,6 +60,27 @@ test('production lifecycle enforces exact owner, immutable paid terms, explicit 
     await actor(owner); await db.exec("select set_config('fixture.current','false',false)");
     await assert.rejects(act('cancel'),/event_creator_session_required/);
     await db.exec("select set_config('fixture.current','true',false)");
+    const lifecycle=loadProduction('_lib/creatorEventJourney.ts',{
+      './liveEvents':liveEvents,'./supabase':{supabase:{}},'./entitlementAuthority':{},
+      './accountBoundSupabaseMutation':{async runCurrentAccountBoundSupabaseMutationRpc(name,args,host){
+        assert.equal(name,'manage_creator_event_lifecycle');assert.equal(host,owner);
+        const result=await db.query('select public.manage_creator_event_lifecycle($1,$2,$3,$4,$5,$6,$7,$8) result',
+          [args.p_creator_event_id,args.p_action,args.p_expected_updated_at,args.p_starts_at,args.p_ends_at,
+            args.p_time_zone,args.p_message,args.p_material_change]);
+        return {data:result.rows[0].result,error:null};
+      }},
+    });
+    await db.query("update public.creator_events set updated_at='2026-10-26T18:00:00.123456+00:00' where id=$1",[event]);
+    const preciseEvent=liveEvents.buildCreatorEventSummary(liveEvents.parseCreatorEventRow(await row()));
+    assert.match(preciseEvent.updatedAt,/\.123456/);
+    await assert.rejects(act('stop_sales',{expected:new Date(preciseEvent.updatedAt).toISOString()}),
+      /event_changed_refresh_required/,'negative control: millisecond truncation rejects the current server row');
+    const paused=await lifecycle.manageCreatorEventLifecycle(preciseEvent,'stop_sales');
+    assert.equal(paused.managementStatus,'sales_paused');
+    const delayed=await lifecycle.manageCreatorEventLifecycle(paused,'delay',{message:'The show is preparing'});
+    assert.equal(delayed.managementStatus,'delayed','the production parser can reuse the returned version on the next action');
+    await assert.rejects(lifecycle.manageCreatorEventLifecycle(preciseEvent,'stop_sales'),/event_changed_refresh_required/,
+      'an actually stale version remains rejected');
     await assert.rejects(act(null),/event_action_invalid/);
     await assert.rejects(act('reschedule',{start:'infinity',material:true}),/event_finite_schedule_required/);
     await assert.rejects(db.query("update public.creator_events set starts_at='infinity' where id=$1",[event]),/event_finite_schedule_required/);
@@ -48,6 +88,11 @@ test('production lifecycle enforces exact owner, immutable paid terms, explicit 
     await assert.rejects(act('cancel',{expected:'2000-01-01T00:00Z'}),/event_changed_refresh_required/);
     await assert.rejects(db.query("update public.creator_events set starts_at='2099-01-11T01:00Z' where id=$1",[event]),/purchased_event_lifecycle_management_required/);
     await assert.rejects(db.query("update public.creator_events set status='canceled' where id=$1",[event]),/purchased_event_lifecycle_management_required/);
+    for (const status of ['draft','ended','expired','replay_available']) {
+      await assert.rejects(db.query('update public.creator_events set status=$1 where id=$2',[status,event]),
+        /purchased_event_lifecycle_management_required/,
+        `legacy status edits cannot withdraw or prematurely finish a purchased event as ${status}`);
+    }
     await assert.rejects(db.query("update public.creator_events set replay_policy='indefinite' where id=$1",[event]),/purchased_event_lifecycle_management_required/);
     await assert.rejects(db.query("update public.creator_events set management_status='no_show',status_message='No show' where id=$1",[event]),/event_lifecycle_management_required/);
     await assert.rejects(act('start'),/event_verified_broadcast_required/);
@@ -69,10 +114,19 @@ test('production lifecycle enforces exact owner, immutable paid terms, explicit 
     assert.notEqual((await db.query('select private.discovery_notification_event_revision(e) revision from public.creator_events e')).rows[0].revision,revisionBefore);
     await assert.rejects(act('cancel',{expected:before.updated_at}),/event_changed_refresh_required/);
     await db.query('insert into public.fixture_broadcasts values($1,$2,true)',[event,owner]);
+    await assert.rejects(db.query("update public.creator_events set status='live_now' where id=$1",[event]),
+      /purchased_event_lifecycle_management_required/,'a ready source does not bypass the lifecycle action');
     assert.equal((await act('start')).status,'live_now');
+    await assert.rejects(db.query("update public.creator_events set status='scheduled' where id=$1",[event]),
+      /purchased_event_lifecycle_management_required/,'a live purchased event cannot be rewound by the old editor');
+    await db.exec('begin');
+    assert.equal((await act('end')).status,'ended','the authorized end action remains available');
+    await db.exec('rollback');
     const pendingIntent='99999999-9999-4999-8999-999999999999';
     await db.query('insert into public.event_ticket_reservations values(null,$1,$2,$3)',[buyer,pendingIntent,event]);
     const canceled=await act('cancel');assert.equal(canceled.status,'canceled');assert.equal(canceled.reminder_ready,false);
+    await assert.rejects(db.query("update public.creator_events set status='scheduled' where id=$1",[event]),
+      /purchased_event_lifecycle_management_required/,'cancellation cannot be silently undone');
     remedies=(await db.query('select * from public.creator_event_purchase_remedies where pass_id is not null order by reason')).rows;
     assert.deepEqual(remedies.map(r=>r.reason),['event_canceled','material_schedule_change']);
     const conditional=(await db.query('select * from public.creator_event_purchase_remedies where purchase_intent_id=$1',[pendingIntent])).rows[0];
@@ -88,6 +142,8 @@ test('production lifecycle enforces exact owner, immutable paid terms, explicit 
     await db.exec('begin; alter table public.creator_events disable trigger guard_creator_event_lifecycle');
     await db.query("update public.creator_events set starts_at='2099-02-01T01:00Z' where id=$1",[event]);
     assert.equal(new Date((await row()).starts_at).toISOString(),'2099-02-01T01:00:00.000Z');
+    await db.query("update public.creator_events set status='draft' where id=$1",[event]);
+    assert.equal((await row()).status,'draft','negative control: removing the guard permits the hidden-event bypass');
     await db.exec('rollback');
     const missed='77777777-7777-4777-8777-777777777777',missedPass='88888888-8888-4888-8888-888888888888';
     await db.query(`insert into public.creator_events(id,host_user_id,event_title,event_type,visibility,status,starts_at,ends_at,time_zone,replay_policy)

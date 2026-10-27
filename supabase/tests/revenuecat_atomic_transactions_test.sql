@@ -390,7 +390,8 @@ insert into public.money_purchase_intents (
 select
   '60000000-0000-0000-0000-000000000001', '66666666-6666-6666-6666-666666666666',
   mapping.product_id, product.product_key, product.product_type, mapping.provider,
-  mapping.provider_product_id, 'creator_tip', '65000000-0000-0000-0000-000000000001',
+  mapping.provider_product_id, 'creator_tip',
+  (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1),
   (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'tip-intent-atomic-test',
   now() + interval '15 minutes',md5('revenuecat-buyer-session:66666666-6666-6666-6666-666666666666')::uuid::text,
@@ -422,7 +423,8 @@ insert into public.money_purchase_intents (
 select
   '61000000-0000-0000-0000-000000000001', 'bbbbbbbb-1111-1111-1111-111111111111',
   mapping.product_id, product.product_key, product.product_type, mapping.provider,
-  mapping.provider_product_id, 'creator_tip', '65100000-0000-0000-0000-000000000001',
+  mapping.provider_product_id, 'creator_tip',
+  (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1),
   (select creator_id from pg_temp.revenuecat_creator_authority_fixture where fixture_index = 1), 'sandbox', 'pending',
   mapping.reference_price_minor, mapping.reference_currency, 'tip-intent-localized-storefront-test',
   now() + interval '15 minutes',md5('revenuecat-buyer-session:bbbbbbbb-1111-1111-1111-111111111111')::uuid::text,

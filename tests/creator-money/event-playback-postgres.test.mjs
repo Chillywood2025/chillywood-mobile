@@ -29,6 +29,13 @@ test('exact event playback uses actual purchase, original terms, current session
     eq(await one('select count(*)::integer from public.paid_creator_event_passes where creator_event_id=$1 and buyer_id=$2 and status=\'active\'',[event,buyer.user_id]),1,'real provider projection issued exact ticket');
     const resolve=async(actor=buyer)=>{await claim(actor);return await one('select public.resolve_creator_event_destination($1)',[event]);};
     eq((await resolve()).reason,'waiting_for_show','advance ticket opens waiting room before verified start');
+    await claim(host);
+    for (const status of ['draft','ended','expired']) {
+      await assert.rejects(db.query('update public.creator_events set status=$1 where id=$2',[status,event]),
+        /purchased_event_lifecycle_management_required/,
+        `an authenticated creator cannot bypass lifecycle control with ${status}`);
+      checks++;
+    }
     await service();
     const broadcast=await one(`insert into public.room_broadcast_sessions(source_type,source_room_id,creator_event_id,host_user_id,channel_user_id,
       broadcast_status,egress_provider,egress_id,egress_status,hls_playback_url,playback_url_status,rights_status,access_type,

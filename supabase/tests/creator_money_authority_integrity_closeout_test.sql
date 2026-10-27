@@ -1,5 +1,5 @@
 begin;
-select plan(148);
+select plan(149);
 
 -- Successor-owned authority surfaces exist and remain service/internal only.
 select has_table('public', 'creator_earnings_lifecycle_events', 'append-only creator earnings lifecycle exists');
@@ -2348,9 +2348,19 @@ where id=(
 
 reset role;
 select set_config('request.jwt.claims', '{}', true);
+select throws_ok(
+  $$update public.money_purchase_intents set amount_minor=amount_minor+1
+    where id='a3000000-0000-4000-8000-000000000003'$$,
+  'P0001','purchase_intent_quote_immutable',
+  'completed purchase economics cannot be rewritten after quote capture'
+);
+-- Keep the historical-corruption readback control, but prove the new write
+-- guard first. Only this rollback fixture bypasses that one guard while seeding.
+alter table public.money_purchase_intents disable trigger guard_creator_money_purchase_intent_quote;
 update public.money_purchase_intents
 set amount_minor=amount_minor+1
 where id='a3000000-0000-4000-8000-000000000003';
+alter table public.money_purchase_intents enable trigger guard_creator_money_purchase_intent_quote;
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
@@ -2369,9 +2379,11 @@ from (
 ) corrupt_price;
 reset role;
 select set_config('request.jwt.claims', '{}', true);
+alter table public.money_purchase_intents disable trigger guard_creator_money_purchase_intent_quote;
 update public.money_purchase_intents
 set amount_minor=amount_minor-1
 where id='a3000000-0000-4000-8000-000000000003';
+alter table public.money_purchase_intents enable trigger guard_creator_money_purchase_intent_quote;
 set local role authenticated;
 select set_config(
   'request.jwt.claims',

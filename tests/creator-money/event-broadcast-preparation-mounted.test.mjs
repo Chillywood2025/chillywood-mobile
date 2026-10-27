@@ -54,3 +54,15 @@ test('old event asynchronous completion cannot update the newly selected event',
   await h.render({...event,id:'55555555-5555-4555-8555-555555555555'});await h.resolve(()=>pending.resolve(prepared));
   assert.equal(h.find('Enter event host room'),undefined);
 });
+test('retired preparation handler cannot target a previously selected event',async t=>{
+  const h=await mount(t);const prepareOldEvent=h.find('Prepare event host room').props.onPress;
+  await h.render({...event,id:'55555555-5555-4555-8555-555555555555'});
+  await React.act(async()=>{prepareOldEvent();});
+  assert.equal(h.calls.length,0);
+});
+test('retired host navigation cannot reopen a closed event',async t=>{
+  const h=await mount(t);await h.press('Prepare event host room');
+  const enter=h.find('Enter event host room').props.onPress;
+  await h.render({...event,status:'ended'});await React.act(async()=>{enter();});
+  assert.equal(h.calls.some(c=>c[0]==='navigate'),false);
+});

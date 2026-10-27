@@ -148,7 +148,8 @@ check(Number(await sql(as('buyer20','select count(*) from public.event_ticket_re
 
 const rescheduled=await configure('show10',99,1);
 const originalTime=await buy('buyer13',rescheduled);
-await sql(as('creator',`update public.creator_events set starts_at=starts_at+interval '1 hour',ends_at=ends_at+interval '1 hour' where id='${events.show10}';`));
+await rejected('creator',`update public.creator_events set starts_at=starts_at+interval '1 hour',ends_at=ends_at+interval '1 hour' where id='${events.show10}';`,'purchased_event_lifecycle_management_required');
+await sql(as('creator',`select public.manage_creator_event_lifecycle(id,'reschedule',updated_at,starts_at+interval '1 hour',ends_at+interval '1 hour',time_zone,'The show has moved by one hour.',true) from public.creator_events where id='${events.show10}';`));
 check((await provider('buyer13',originalTime,'event-reservation-changed-show')).status,'ignored','changed show time cannot silently replace purchased terms');
 check((await read('buyer13',`public.read_my_creator_event_reservation('${originalTime.id}')`)).state,'reconciliation_required','changed paid attempt is preserved for resolution');
 const newer=await configure('show11',99,1);
@@ -171,11 +172,12 @@ check(Number(await sql(`select count(*) from public.event_ticket_reservations wh
 if(!process.argv.includes('--capacity-only')){
 const beforeSDK=await configure('show13',99,1);
 const preSDKIntent=await buy('buyer16',beforeSDK);
-await sql(as('creator',`update public.creator_events set starts_at=starts_at+interval '1 hour',ends_at=ends_at+interval '1 hour' where id='${events.show13}';`));
+await sql(as('creator',`select public.manage_creator_event_lifecycle(id,'reschedule',updated_at,starts_at+interval '1 hour',ends_at+interval '1 hour',time_zone,'The show has moved by one hour.',true) from public.creator_events where id='${events.show13}';`));
 await rejected('buyer16',`select public.read_my_creator_event_reservation('${preSDKIntent.id}');`,'event_reservation_terms_changed');
 const cancelSDK=await configure('show14',99,1);
 const cancelIntent=await buy('buyer17',cancelSDK);
-await sql(as('creator',`update public.creator_events set status='canceled' where id='${events.show14}';`));
+await rejected('creator',`update public.creator_events set status='canceled' where id='${events.show14}';`,'purchased_event_lifecycle_management_required');
+await sql(as('creator',`select public.manage_creator_event_lifecycle(id,'cancel',updated_at,null,null,null,'The creator canceled this show.') from public.creator_events where id='${events.show14}';`));
 await rejected('buyer17',`select public.read_my_creator_event_reservation('${cancelIntent.id}');`,'event_reservation_source_unavailable');
 await sql(as('creator',`update public.creator_events set replay_policy='until_expiration',replay_expires_at=ends_at-interval '1 hour' where id='${events.show15}';`));
 const configureSignature='public.configure_paid_creator_event_sale(uuid,text,integer,integer,text,text,timestamptz,timestamptz,timestamptz)';

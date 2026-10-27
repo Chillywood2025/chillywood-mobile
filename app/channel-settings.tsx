@@ -1544,6 +1544,13 @@ export function ChannelStudioScreen() {
     eventEditor.replayPolicy !== "none"
     || eventEditor.status === "live_now"
     || eventEditor.status === "replay_available";
+  const editedSavedEvent = creatorEvents.find(event => event.id === eventEditor.editingEventId);
+  const editedPublishedEventRequiresLifecycle = !!eventEditor.editingEventId
+    && (!editedSavedEvent || editedSavedEvent.status !== "draft")
+    && (!paidEventOffersAvailable || !editedSavedEvent || creatorPaidEventOffers.some(offer =>
+      // An archived/canceled offer with no confirmed passes may still have a
+      // dispatched payment or expired reservation whose outcome is unresolved.
+      offer.creatorEventId === eventEditor.editingEventId));
   const videoTitleReady = videoEditor.title.trim().length > 0;
   const videoSubmitRequirement = videoEditor.editingVideoId
     ? videoTitleReady
@@ -4809,6 +4816,11 @@ export function ChannelStudioScreen() {
 
   const onSaveEvent = async () => {
     if (!user?.id || eventSaveInFlightRef.current) return;
+
+    if (eventEditor.status === "draft" && editedPublishedEventRequiresLifecycle) {
+      setEventNotice("Use Manage this event to pause sales or cancel a published ticketed event. Refresh ticket settings if they are unavailable.");
+      return;
+    }
 
     if (!eventEditor.editingEventId && !creatorPostingEnabled) {
       setEventNotice("Creator event creation is temporarily paused. Existing events can still be managed.");
@@ -10414,9 +10426,12 @@ export function ChannelStudioScreen() {
                     style={[styles.chip, eventEditor.status === value && styles.chipActive]}
                     accessibilityRole="button"
                     accessibilityLabel={`Event status: ${formatEventStatusLabel(value)}`}
-                    accessibilityState={{ selected: eventEditor.status === value }}
-                    disabled={!["draft", "scheduled"].includes(eventEditor.status)}
-                    onPress={() => updateEventEditor({ status: value, reminderReady: value === "scheduled" ? eventEditor.reminderReady : false })}
+                    accessibilityState={{ selected: eventEditor.status === value, disabled: !["draft", "scheduled"].includes(eventEditor.status) || (value === "draft" && editedPublishedEventRequiresLifecycle) }}
+                    disabled={!["draft", "scheduled"].includes(eventEditor.status) || (value === "draft" && editedPublishedEventRequiresLifecycle)}
+                    onPress={() => {
+                      if (value === "draft" && editedPublishedEventRequiresLifecycle) return;
+                      updateEventEditor({ status: value, reminderReady: value === "scheduled" ? eventEditor.reminderReady : false });
+                    }}
                   >
                     <Text style={[styles.chipText, eventEditor.status === value && styles.chipTextActive]}>
                       {formatEventStatusLabel(value)}
@@ -10426,6 +10441,7 @@ export function ChannelStudioScreen() {
               </View>
 
               <Text style={styles.permissionCopy}>Current status: {formatEventStatusLabel(eventEditor.status)}. Start, delay, reschedule, end, cancellation and no-show actions use Manage this event after saving. Starting requires a verified live broadcast.</Text>
+              {editedPublishedEventRequiresLifecycle ? <Text style={styles.permissionCopy}>Use Manage this event to pause sales or cancel a published ticketed event.{!paidEventOffersAvailable ? " Refresh ticket settings before changing status; Draft is unavailable while they are unverified." : " Existing ticket terms are preserved."}</Text> : null}
 
               <Text style={styles.sectionLabel}>Audience</Text>
               <View style={styles.chipRow}>

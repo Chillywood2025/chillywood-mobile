@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(20);
+select plan(21);
 
 select ok(
   (select prosecdef and pg_get_functiondef(oid) ilike '%set search_path to ''''%'
@@ -251,6 +251,36 @@ select is(
     '91000000-0000-4000-8000-000000000001'::uuid,
     'com.chillywood.eventpass.tier1','sandbox','source-lock-original',
     'revenuecat_app_store'
+  ),
+  null::jsonb,
+  'a pending Event intent without reservation and purchase-time evidence resolves no source'
+);
+
+-- This existing source-lock unit fixture seeds identity inputs only. Actual
+-- issuance, capacity and provider fulfillment are covered by reservation tests.
+set local session_replication_role=replica;
+update public.money_purchase_intents
+set event_terms_revision_id='96000000-0000-4000-8000-000000000001'
+where id='93000000-0000-4000-8000-000000000001';
+insert into public.event_ticket_reservations(
+  purchase_intent_id,revision_id,buyer_id,creator_event_id,offer_id,state,expires_at
+)
+select id,event_terms_revision_id,user_id,source_id,
+  '97000000-0000-4000-8000-000000000001','held',expires_at
+from public.money_purchase_intents where id='93000000-0000-4000-8000-000000000001';
+set local session_replication_role=origin;
+select public.record_creator_money_purchase_time_internal(
+  'revenuecat_app_store','source-lock-runtime-provider',
+  '91000000-0000-4000-8000-000000000001','com.chillywood.eventpass.tier1',
+  'sandbox',repeat('a',64),clock_timestamp()
+);
+
+select is(
+  public.creator_money_provider_source_identity_internal(
+    'source-lock-runtime-provider',
+    '91000000-0000-4000-8000-000000000001'::uuid,
+    'com.chillywood.eventpass.tier1','sandbox','source-lock-original',
+    'revenuecat_app_store'
   )->>'sourceId',
   '94000000-0000-4000-8000-000000000001',
   'a unique pending Event intent resolves one exact provider source lock'
@@ -260,16 +290,23 @@ set local session_replication_role=replica;
 insert into public.money_purchase_intents(
   id,user_id,product_id,product_key,product_type,provider,
   provider_product_id,source_type,source_id,creator_id,environment,status,
-  amount_minor,currency,idempotency_key,expires_at,metadata,session_generation
+  amount_minor,currency,idempotency_key,expires_at,metadata,session_generation,
+  event_terms_revision_id,created_at
 )
 select
   '93000000-0000-4000-8000-000000000002'::uuid,user_id,product_id,
   product_key,product_type,provider,provider_product_id,source_type,
   '94000000-0000-4000-8000-000000000002'::uuid,creator_id,environment,
   status,amount_minor,currency,'source-lock-runtime-two',expires_at,metadata,
-  session_generation
+  session_generation,'96000000-0000-4000-8000-000000000002',created_at
 from public.money_purchase_intents
 where id='93000000-0000-4000-8000-000000000001'::uuid;
+insert into public.event_ticket_reservations(
+  purchase_intent_id,revision_id,buyer_id,creator_event_id,offer_id,state,expires_at
+)
+select id,event_terms_revision_id,user_id,source_id,
+  '97000000-0000-4000-8000-000000000002','held',expires_at
+from public.money_purchase_intents where id='93000000-0000-4000-8000-000000000002';
 set local session_replication_role=origin;
 
 select is(
@@ -283,8 +320,12 @@ select is(
   'ambiguous pooled-product pending intents resolve no provider authority'
 );
 
+set local session_replication_role=replica;
+delete from public.event_ticket_reservations
+where purchase_intent_id='93000000-0000-4000-8000-000000000002';
 delete from public.money_purchase_intents
 where id='93000000-0000-4000-8000-000000000002'::uuid;
+set local session_replication_role=origin;
 set local role authenticated;
 select set_config(
   'request.jwt.claims',

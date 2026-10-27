@@ -81,6 +81,14 @@ function eventClient(source) {
   }, source) };
 }
 
+test("event version tokens retain the server timestamp precision and offset", () => {
+  const { api } = eventClient();
+  for (const updatedAt of ["2026-10-26T18:00:00.123456+00:00", "2026-10-26T13:00:00.987654-05:00"]) {
+    assert.equal(api.parseCreatorEventRow({ ...row, updated_at: updatedAt }).updatedAt, updatedAt,
+      "managed lifecycle and sale updates compare the exact PostgreSQL instant");
+  }
+});
+
 test("event edit preserves omitted values but clears explicit nulls and obsolete replay expiry", async () => {
   const { writes, api } = eventClient();
   await api.updateCreatorEvent(row.id, { hostUserId: row.host_user_id, eventTitle: "Updated show" });

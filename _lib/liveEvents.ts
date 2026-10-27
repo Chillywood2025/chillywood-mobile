@@ -146,12 +146,16 @@ const normalizeCreatorEventReplayPolicy = (value: unknown): CreatorEventReplayPo
   return "none";
 };
 
-const normalizeIsoTimestamp = (value: unknown): string | null => {
+const readTimestampToken = (value: unknown): string | null => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return null;
-  const parsed = Date.parse(normalized);
-  if (!Number.isFinite(parsed)) return null;
-  return new Date(parsed).toISOString();
+  if (!Number.isFinite(Date.parse(normalized))) return null;
+  return normalized;
+};
+
+const normalizeIsoTimestamp = (value: unknown): string | null => {
+  const token = readTimestampToken(value);
+  return token ? new Date(token).toISOString() : null;
 };
 
 export const parseCreatorEventRow = (row: CreatorEventRow | null): CreatorEventRecord | null => {
@@ -180,7 +184,9 @@ export const parseCreatorEventRow = (row: CreatorEventRow | null): CreatorEventR
     replayExpiresAt: normalizeIsoTimestamp(row.replay_expires_at),
     reminderReady: !!row.reminder_ready,
     createdAt: normalizeIsoTimestamp(row.created_at) ?? new Date().toISOString(),
-    updatedAt: normalizeIsoTimestamp(row.updated_at) ?? new Date().toISOString(),
+    // PostgreSQL retains microseconds; Date would round the optimistic-lock
+    // token and make every subsequent management action reject a fresh row.
+    updatedAt: readTimestampToken(row.updated_at) ?? new Date().toISOString(),
   };
 };
 
