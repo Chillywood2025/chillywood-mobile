@@ -92,6 +92,52 @@ test("wallet retains unlinked review records and legacy Stripe tips without inve
   assert.ok(h.purchases.parseCreatorPurchasePage(page([tip]), buyer));
 });
 
+test("Stripe tip refunds preserve original charges and validate none, partial, full and disputed RPC results", async () => {
+  const tip = (changes = {}) => item({ sourceType: "creator_tip", sourceId: creator, productType: "creator_tip", productKey: null,
+    provider: "stripe_connect", destination: { kind: "creator_channel", id: creator }, status: "completed", amountMinor: 500, ...changes });
+  for (const [status, refund, label] of [
+    ["completed", { state: "none", amountMinor: 0 }, "Completed"],
+    ["completed", { state: "partial", amountMinor: 125 }, "Partially refunded"],
+    ["refunded", { state: "full", amountMinor: 500 }, "Fully refunded"],
+    ["disputed", { state: "partial", amountMinor: 125 }, "Disputed"],
+    ["disputed", { state: "full", amountMinor: 500 }, "Disputed"],
+    ["pending", { state: "partial", amountMinor: 125 }, "Pending"],
+    ["failed", { state: "partial", amountMinor: 125 }, "Failed"],
+  ]) {
+    const h = setup({ rpc: async () => ({ data: page([tip({ status, refund })]), error: null }) });
+    const result = await h.purchases.readMyCreatorPurchases();
+    assert.equal(result.status, "resolved"); assert.equal(result.items[0].amountMinor, 500);
+    assert.deepEqual(result.items[0].refund, refund); assert.equal(result.items[0].grantsAccess, false);
+    assert.equal(h.purchases.creatorPurchasePresentation(result.items[0]).label, label);
+  }
+});
+
+test("Stripe refund parsing rejects malformed or contradictory economics without inventing a legacy amount", () => {
+  const h = setup();
+  const tip = item({ sourceType: "creator_tip", sourceId: creator, productType: "creator_tip", productKey: null,
+    provider: "stripe_connect", destination: { kind: "creator_channel", id: creator }, status: "completed", amountMinor: 500 });
+  for (const refund of [false, {}, { state: "partial", amountMinor: "100" }, { state: "partial", amountMinor: 0 },
+    { state: "full", amountMinor: 100 }, { state: "none", amountMinor: 1 }, { state: "partial", amountMinor: -1 },
+    { state: "full", amountMinor: 501 }, { state: "partial", amountMinor: 1.5 }, { state: "unknown", amountMinor: 100 }]) {
+    assert.equal(h.purchases.parseCreatorPurchasePage(page([{ ...tip, refund }]), buyer), null);
+  }
+  for (const invalid of [
+    { status: "completed", refund: { state: "full", amountMinor: 500 } },
+    { status: "refunded", refund: { state: "partial", amountMinor: 100 } },
+    { amountMinor: 0, refund: { state: "none", amountMinor: 0 } },
+    { refund: null },
+  ]) assert.equal(h.purchases.parseCreatorPurchasePage(page([{ ...tip, ...invalid }]), buyer), null);
+  assert.equal(h.purchases.parseCreatorPurchasePage(page([item({ refund: { state: "none", amountMinor: 0 } })]), buyer), null,
+    "Stripe refund facts cannot change another purchase mode");
+  for (const status of ["reconciliation_required", "disputed"]) {
+    assert.equal(h.purchases.parseCreatorPurchasePage(page([{ ...tip, status, refund: null }]), buyer).items[0].refund, null);
+  }
+  const legacy = h.purchases.parseCreatorPurchasePage(page([{ ...tip, status: "refunded" }]), buyer).items[0];
+  assert.equal(legacy.refund, undefined); assert.equal(h.purchases.creatorPurchasePresentation(legacy).label, "Refund reported");
+  assert.match(h.purchases.creatorPurchasePresentation(legacy).detail, /amount is unavailable/);
+  assert.doesNotMatch(h.purchases.creatorPurchasePresentation(legacy).detail, /full original charge/);
+});
+
 test("wallet fails closed for wrong owner, access grants, destination mismatches, malformed cursors and stale session", async () => {
   const h = setup();
   for (const invalid of [{ grantsAccess: true }, { sourceType: "premium" }, { productType: "premium" }, { amountMinor: 2.99 },

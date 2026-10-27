@@ -22,6 +22,7 @@ const revenueCat = read("supabase/functions/revenuecat-webhook/index.ts");
 const googlePlay = read("supabase/functions/google-play-webhook/index.ts");
 const stripeConnect = read("supabase/functions/stripe-connect-webhook/index.ts");
 const stripeMerch = read("supabase/functions/stripe-merch-webhook/index.ts");
+const stripeMerchSettlement = read("supabase/migrations/20261027034844_creator_merch_payment_refund_reconciliation.sql");
 const providerReadiness = read("supabase/functions/_shared/provider-readiness.ts");
 const stripeShared = read("supabase/functions/_shared/stripe-connect.ts");
 const packageJson = read("package.json");
@@ -68,14 +69,21 @@ const proofCases = [
   {
     name: "Stripe test-mode event cannot claim production",
     passes: () => stripeConnect.includes("Live-mode Stripe webhook event was rejected")
-      && stripeMerch.includes("Live-mode Stripe merch webhook event was rejected")
+      && stripeMerch.includes("event.livemode !== false")
+      && stripeMerch.includes("object?.livemode !== false")
+      && stripeMerchSettlement.includes("p_facts->'event_livemode' is distinct from 'false'::jsonb")
+      && stripeMerchSettlement.includes("p_facts->'object_livemode' is distinct from 'false'::jsonb")
       && stripeConnect.includes('mode: "test"')
       && stripeMerch.includes('mode: "sandbox"'),
   },
   {
     name: "duplicate provider event detection is safe",
     passes: () => stripeConnect.includes('status: "duplicate"')
-      && stripeMerch.includes('status: "duplicate"')
+      && stripeMerch.includes('rpc("process_stripe_merch_webhook_lifecycle"')
+      && stripeMerch.includes('status: result.status')
+      && stripeMerchSettlement.includes("v_event.status in ('processed','ignored')")
+      && stripeMerchSettlement.includes("'status','duplicate'")
+      && stripeMerchSettlement.includes("v_event.raw_event_hash <> p_raw_event_hash")
       && moneyOperator.includes("money_duplicate_event_detections"),
   },
   {

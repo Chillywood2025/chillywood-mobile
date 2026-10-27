@@ -50,9 +50,30 @@ export type StripeAccountObject = {
   livemode?: boolean;
   payouts_enabled?: boolean;
   requirements?: StripeRequirements | null;
+  type?: unknown;
+  controller?: {
+    type?: unknown;
+    is_controller?: unknown;
+    fees?: { payer?: unknown } | null;
+    losses?: { payments?: unknown } | null;
+    requirement_collection?: unknown;
+    stripe_dashboard?: { type?: unknown } | null;
+  } | null;
 };
 
-export type NormalizedStripeAccount = {
+export type StripeObservedConfiguration = {
+  accountType: string;
+  controllerType: string;
+  isController: boolean | null;
+  dashboardType: string;
+  feesPayer: string;
+  feesPayerRaw: string;
+  lossesCollector: string;
+  requirementsCollection: string;
+  configurationStatus: "match" | "mismatch" | "unknown";
+};
+
+export type NormalizedStripeAccount = StripeObservedConfiguration & {
   cardPaymentsCapabilityStatus: string;
   chargesEnabled: boolean;
   country: string | null;
@@ -65,6 +86,7 @@ export type NormalizedStripeAccount = {
   onboardingStatus: string;
   payoutsEnabled: boolean;
   providerReady: boolean;
+  providerReportedReady: boolean;
   requirementsCurrentlyDue: string[];
   requirementsEventuallyDue: string[];
   requirementsPastDue: string[];
@@ -79,6 +101,18 @@ export type CreatorPayoutAccountRow = {
   onboarding_started_at?: string | null;
   provider_account_id?: string | null;
   status?: string;
+  provider?: string;
+  provider_environment?: string;
+  provider_account_type?: string;
+  provider_controller_type?: string;
+  provider_is_controller?: boolean | null;
+  provider_dashboard_type?: string;
+  provider_fees_payer?: string;
+  provider_fees_payer_raw?: string;
+  provider_losses_collector?: string;
+  provider_requirements_collection?: string;
+  provider_configuration_observed_at?: string | null;
+  provider_configuration_account_id?: string | null;
 };
 
 export type StripeProviderEvent = {
@@ -151,9 +185,22 @@ export const DB_PROVIDER = "stripe_connect";
 export const RESPONSE_PROVIDER = "stripe";
 export const PROVIDER_ENVIRONMENT = "test";
 export const STRIPE_API_VERSION = "2026-02-25.clover";
+export const STRIPE_CONNECT_EXPECTED_CONFIGURATION = {
+  key: "stripe_connect_test_express_controller_v1",
+  accountTypes: ["express", "none"],
+  controllerType: "application",
+  isController: true,
+  dashboardType: "express",
+  feesPayer: "platform",
+  feesPayerRaw: ["application", "application_express"],
+  lossesCollector: "platform",
+  requirementsCollection: "stripe",
+} as const;
 export const STRIPE_CONNECT_FOUNDATION_WEBHOOK_EVENT_TYPES = [
   "account.updated",
   "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
   "charge.refunded",
@@ -205,7 +252,7 @@ export const sanitizeErrorMessage = (error: unknown) => {
     .slice(0, 280);
 };
 
-export const parseJsonPayload = async <Payload extends object>(req: Request) => {
+export const parseJsonPayload = async <Payload extends object>(req: Request): Promise<{ value: Payload } | { error: Response }> => {
   const rawBody = await req.text();
   if (!rawBody.trim()) return { value: {} as Payload };
 
@@ -484,9 +531,89 @@ const capabilityStatus = (value: unknown) => {
   return status ? "unknown" : "not_requested";
 };
 
+const observedEnum = (value: unknown, supported: readonly string[]) =>
+  typeof value === "string" && supported.includes(value) ? value : "unknown";
+
+const observedOwner = (value: unknown, feePayer = false) => {
+  if (value === "application" || (feePayer && (value === "application_express" || value === "application_custom"))) return "platform";
+  if (!feePayer && value === "stripe") return "stripe";
+  if (feePayer && value === "account") return "account";
+  return "unknown";
+};
+
+const configurationStatus = (observed: Omit<StripeObservedConfiguration, "configurationStatus">): StripeObservedConfiguration["configurationStatus"] => {
+  const expected = STRIPE_CONNECT_EXPECTED_CONFIGURATION;
+  const comparisons = [
+    [observed.accountType, expected.accountTypes.includes(observed.accountType as "express" | "none")],
+    [observed.controllerType, observed.controllerType === expected.controllerType],
+    [observed.dashboardType, observed.dashboardType === expected.dashboardType],
+    [observed.feesPayer, observed.feesPayer === expected.feesPayer],
+    [observed.feesPayerRaw, expected.feesPayerRaw.includes(observed.feesPayerRaw as "application" | "application_express")],
+    [observed.lossesCollector, observed.lossesCollector === expected.lossesCollector],
+    [observed.requirementsCollection, observed.requirementsCollection === expected.requirementsCollection],
+  ] as const;
+  if (observed.isController === false || comparisons.some(([value, matches]) => value !== "unknown" && !matches)) return "mismatch";
+  if (observed.isController === null || comparisons.some(([value]) => value === "unknown")) return "unknown";
+  return "match";
+};
+
+export const normalizeStripeConfiguration = (account: StripeAccountObject): StripeObservedConfiguration => {
+  const controller = account.controller;
+  const observed = {
+    accountType: observedEnum(account.type, ["express", "standard", "custom", "none"]),
+    controllerType: observedEnum(controller?.type, ["application", "account"]),
+    isController: typeof controller?.is_controller === "boolean" ? controller.is_controller : null,
+    dashboardType: observedEnum(controller?.stripe_dashboard?.type, ["express", "full", "none"]),
+    feesPayer: observedOwner(controller?.fees?.payer, true),
+    feesPayerRaw: observedEnum(controller?.fees?.payer, ["application", "application_express", "application_custom", "account"]),
+    lossesCollector: observedOwner(controller?.losses?.payments),
+    requirementsCollection: observedOwner(controller?.requirement_collection),
+  };
+  return { ...observed, configurationStatus: configurationStatus(observed) };
+};
+
+export const storedStripeConfiguration = (account: CreatorPayoutAccountRow): StripeObservedConfiguration => {
+  // Historical fixed values are not evidence of an observed provider response.
+  if (!account.provider_configuration_observed_at || !account.provider_account_id
+    || account.provider_configuration_account_id !== account.provider_account_id
+    || account.provider !== DB_PROVIDER || account.provider_environment !== PROVIDER_ENVIRONMENT) return normalizeStripeConfiguration({});
+  const observed = {
+    accountType: observedEnum(account.provider_account_type, ["express", "standard", "custom", "none"]),
+    controllerType: observedEnum(account.provider_controller_type, ["application", "account"]),
+    isController: typeof account.provider_is_controller === "boolean" ? account.provider_is_controller : null,
+    dashboardType: observedEnum(account.provider_dashboard_type, ["express", "full", "none"]),
+    feesPayer: observedEnum(account.provider_fees_payer, ["platform", "account", "stripe"]),
+    feesPayerRaw: observedEnum(account.provider_fees_payer_raw, ["application", "application_express", "application_custom", "account"]),
+    lossesCollector: observedEnum(account.provider_losses_collector, ["platform", "stripe"]),
+    requirementsCollection: observedEnum(account.provider_requirements_collection, ["platform", "stripe"]),
+  };
+  return { ...observed, configurationStatus: configurationStatus(observed) };
+};
+
+export const stripeConfigurationNotice = (status: StripeObservedConfiguration["configurationStatus"]) => status === "mismatch"
+  ? "The provider account configuration differs from the expected setup and needs platform review. Payouts remain inactive."
+  : "Provider account configuration is not fully verified. Refresh provider status before continuing setup. Payouts remain inactive.";
+
+export const safeStripeConfigurationPayload = (observed: StripeObservedConfiguration) => ({
+  status: observed.configurationStatus,
+  expected: STRIPE_CONNECT_EXPECTED_CONFIGURATION,
+  observed: {
+    account_type: observed.accountType,
+    controller_type: observed.controllerType,
+    is_controller: observed.isController,
+    dashboard_type: observed.dashboardType,
+    fees_payer: observed.feesPayer,
+    fees_payer_raw: observed.feesPayerRaw,
+    losses_collector: observed.lossesCollector,
+    requirements_collection: observed.requirementsCollection,
+  },
+});
+
 export const normalizeStripeAccount = (account: StripeAccountObject): NormalizedStripeAccount => {
   const id = toText(account.id);
   if (!id) throw new Error("Stripe account response did not include an account id.");
+  if (account.livemode === true) throw new Error("Live-mode Stripe account responses are not processed.");
+  const configuration = normalizeStripeConfiguration(account);
 
   const requirements = account.requirements ?? {};
   const currentlyDue = arrayOfStrings(requirements.currently_due);
@@ -498,10 +625,12 @@ export const normalizeStripeAccount = (account: StripeAccountObject): Normalized
   const detailsSubmitted = account.details_submitted === true;
   const transfersCapabilityStatus = capabilityStatus(account.capabilities?.transfers);
   const cardPaymentsCapabilityStatus = capabilityStatus(account.capabilities?.card_payments);
-  const providerReady = payoutsEnabled && detailsSubmitted && !disabledReason && currentlyDue.length === 0 && pastDue.length === 0;
+  const providerReportedReady = payoutsEnabled && detailsSubmitted && !disabledReason && currentlyDue.length === 0 && pastDue.length === 0;
+  const providerReady = providerReportedReady && configuration.configurationStatus === "match";
   const kycReady = detailsSubmitted && !disabledReason && currentlyDue.length === 0 && pastDue.length === 0;
   const onboardingStatus = (() => {
     if (disabledReason) return "payouts_disabled";
+    if (configuration.configurationStatus !== "match") return "under_review";
     if (currentlyDue.length > 0 || pastDue.length > 0) return "action_required";
     if (providerReady) return "ready_for_payouts";
     if (detailsSubmitted) return "under_review";
@@ -509,6 +638,7 @@ export const normalizeStripeAccount = (account: StripeAccountObject): Normalized
   })();
   const legacyStatus = (() => {
     if (disabledReason) return "pending_review";
+    if (configuration.configurationStatus !== "match") return "pending_review";
     if (providerReady) return "eligible";
     if (currentlyDue.length > 0 || pastDue.length > 0) return "pending_kyc";
     if (!detailsSubmitted) return "setup_required";
@@ -516,6 +646,7 @@ export const normalizeStripeAccount = (account: StripeAccountObject): Normalized
   })();
 
   return {
+    ...configuration,
     cardPaymentsCapabilityStatus,
     chargesEnabled,
     country: toText(account.country) || null,
@@ -528,6 +659,7 @@ export const normalizeStripeAccount = (account: StripeAccountObject): Normalized
     onboardingStatus,
     payoutsEnabled,
     providerReady,
+    providerReportedReady,
     requirementsCurrentlyDue: currentlyDue,
     requirementsEventuallyDue: eventuallyDue,
     requirementsPastDue: pastDue,
@@ -545,6 +677,8 @@ const accountMetadata = (
     last_provider_sync_source: source,
     provider_account_status: normalized.legacyStatus,
     provider_ready: normalized.providerReady,
+    provider_reported_ready: normalized.providerReportedReady,
+    provider_configuration: safeStripeConfigurationPayload(normalized),
     requirements_summary: {
       currently_due_count: normalized.requirementsCurrentlyDue.length,
       eventually_due_count: normalized.requirementsEventuallyDue.length,
@@ -586,14 +720,18 @@ export const upsertCreatorPayoutAccountFromStripe = async (
   auditLogId: string | null,
   source: string,
 ) => {
-  const now = new Date().toISOString();
+  if (existing && (existing.creator_user_id !== creatorUserId
+    || (existing.provider_account_id && existing.provider_account_id !== normalized.id)
+    || (existing.provider && existing.provider !== DB_PROVIDER)
+    || (existing.provider_environment && existing.provider_environment !== PROVIDER_ENVIRONMENT))) {
+    throw new Error("Stripe account observation does not match the stored account binding.");
+  }
+  const previousObservation = Date.parse(toText(existing?.provider_configuration_observed_at));
+  const now = new Date(Math.max(Date.now(), Number.isFinite(previousObservation) ? previousObservation + 1 : 0)).toISOString();
   const onboardingCompletedAt =
     normalized.providerReady && !existing?.onboarding_completed_at ? now : existing?.onboarding_completed_at ?? null;
 
-  const { data, error } = await adminClient
-    .from("creator_payout_accounts")
-    .upsert(
-      {
+  const values = {
         card_payments_capability_status: normalized.cardPaymentsCapabilityStatus,
         charges_enabled: normalized.chargesEnabled,
         country: normalized.country,
@@ -610,13 +748,20 @@ export const upsertCreatorPayoutAccountFromStripe = async (
         payouts_enabled: normalized.payoutsEnabled,
         provider: DB_PROVIDER,
         provider_account_id: normalized.id,
-        provider_account_type: "express",
-        provider_configuration_key: "stripe_connect_test_express_controller_v1",
-        provider_dashboard_type: "express",
+        provider_account_type: normalized.accountType,
+        provider_controller_type: normalized.controllerType,
+        provider_is_controller: normalized.isController,
+        provider_configuration_key: normalized.configurationStatus === "match" ? STRIPE_CONNECT_EXPECTED_CONFIGURATION.key : null,
+        provider_expected_configuration_key: STRIPE_CONNECT_EXPECTED_CONFIGURATION.key,
+        provider_configuration_status: normalized.configurationStatus,
+        provider_configuration_observed_at: now,
+        provider_configuration_account_id: normalized.id,
+        provider_dashboard_type: normalized.dashboardType,
         provider_environment: PROVIDER_ENVIRONMENT,
-        provider_fees_payer: "platform",
-        provider_losses_collector: "platform",
-        provider_requirements_collection: "stripe",
+        provider_fees_payer: normalized.feesPayer,
+        provider_fees_payer_raw: normalized.feesPayerRaw,
+        provider_losses_collector: normalized.lossesCollector,
+        provider_requirements_collection: normalized.requirementsCollection,
         requirements_currently_due: normalized.requirementsCurrentlyDue,
         requirements_eventually_due: normalized.requirementsEventuallyDue,
         requirements_past_due: normalized.requirementsPastDue,
@@ -624,11 +769,23 @@ export const upsertCreatorPayoutAccountFromStripe = async (
         tax_status: "not_connected",
         transfers_capability_status: normalized.transfersCapabilityStatus,
         updated_at: now,
-      },
-      { onConflict: "creator_user_id" },
-    )
-    .select("*")
-    .single();
+      };
+  // An observation cannot replace a binding that changed during provider I/O.
+  const existingMutation = existing
+    ? adminClient.from("creator_payout_accounts").update(values).eq("id", existing.id)
+      .eq("creator_user_id", creatorUserId).eq("provider", DB_PROVIDER)
+      .eq("provider_environment", PROVIDER_ENVIRONMENT)
+    : null;
+  if (existingMutation) {
+    if (existing?.provider_configuration_observed_at) existingMutation.eq("provider_configuration_observed_at", existing.provider_configuration_observed_at);
+    else existingMutation.is("provider_configuration_observed_at", null);
+  }
+  const mutation = existingMutation
+    ? existing?.provider_account_id
+      ? existingMutation.eq("provider_account_id", normalized.id)
+      : existingMutation.is("provider_account_id", null)
+    : adminClient.from("creator_payout_accounts").insert(values);
+  const { data, error } = await mutation.select("*").single();
 
   if (error) throw new Error(`Payout account upsert failed: ${error.message}`);
   return data as CreatorPayoutAccountRow;
@@ -659,46 +816,6 @@ export const markOnboardingStarted = async (
 
   if (error) throw new Error(`Payout account onboarding-start update failed: ${error.message}`);
   return data as CreatorPayoutAccountRow;
-};
-
-export const upsertEligibilityRecord = async (
-  adminClient: SupabaseClientLike,
-  creatorUserId: string,
-  payoutAccountId: string,
-  normalized: NormalizedStripeAccount,
-  auditLogId: string | null,
-) => {
-  const now = new Date().toISOString();
-  const { error } = await adminClient.from("creator_payout_eligibility_records").upsert(
-    {
-      admin_review_status: "not_started",
-      creator_user_id: creatorUserId,
-      eligibility_reason: normalized.providerReady
-        ? "Stripe Connect test-mode provider readiness is synced. Payout execution is not active."
-        : "Stripe Connect test-mode setup is not complete. Payout execution is not active.",
-      eligibility_status: normalized.onboardingStatus,
-      eligible_for_payouts: false,
-      fraud_hold_active: false,
-      hold_period_cleared: false,
-      kyc_ready: normalized.kycReady,
-      last_evaluated_at: now,
-      metadata: safeMetadata({
-        provider_ready: normalized.providerReady,
-        provider_status_only: true,
-        no_payable_balance: true,
-      }),
-      minimum_payout_met: false,
-      payout_account_id: payoutAccountId,
-      payout_account_ready: normalized.providerReady,
-      platform_admin_audit_log_id: auditLogId,
-      provider_ready: normalized.providerReady,
-      tax_ready: false,
-      updated_at: now,
-    },
-    { onConflict: "creator_user_id" },
-  );
-
-  if (error) throw new Error(`Payout eligibility upsert failed: ${error.message}`);
 };
 
 const encodeStripeForm = (params: Record<string, unknown>) => {
@@ -1027,7 +1144,7 @@ export const safeUrlOrigin = (rawUrl: string) => {
   }
 };
 
-export const resolveRedirectUrls = (payload: StripeConnectOnboardingPayload) => {
+export const resolveRedirectUrls = (payload: StripeConnectOnboardingPayload): { value: { refreshUrl: string; returnUrl: string } } | { error: Response } => {
   const returnUrl = toText(payload.return_url ?? payload.returnUrl) || readOptionalEnv("STRIPE_CONNECT_RETURN_URL");
   const refreshUrl = toText(payload.refresh_url ?? payload.refreshUrl) || readOptionalEnv("STRIPE_CONNECT_REFRESH_URL");
 
@@ -1205,6 +1322,13 @@ export const insertProviderWebhookEvent = async (
       .maybeSingle();
 
     if (readError) throw new Error(`Webhook event duplicate lookup failed: ${readError.message}`);
+    if (!existing || existing.event_id !== eventId || existing.event_type !== eventType
+      || existing.provider !== DB_PROVIDER || existing.provider_environment !== PROVIDER_ENVIRONMENT
+      || existing.provider_account_id !== providerAccountId
+      || existing.connected_account_id !== (toText(event.account) || null)
+      || existing.livemode !== false || event.livemode !== false) {
+      throw new Error("Stripe Connect webhook retry does not match the stored event binding.");
+    }
     return { duplicate: true as const, row: existing as { id?: string; status?: string } | null };
   }
 
@@ -1232,7 +1356,8 @@ export const updateProviderWebhookEvent = async (
       status: input.status,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", rowId);
+    .eq("id", rowId)
+    .in("status", ["received", "failed", "retry_required"]);
 
   if (error) throw new Error(`Webhook event update failed: ${error.message}`);
 };
@@ -1251,7 +1376,9 @@ export const safeAccountStatusPayload = (normalized: NormalizedStripeAccount) =>
   payout_execution_active: false,
   payouts_enabled: normalized.payoutsEnabled,
   provider_account_status: normalized.legacyStatus,
-  provider_account_type: "express",
+  provider_account_type: normalized.accountType,
+  provider_configuration: safeStripeConfigurationPayload(normalized),
+  provider_reported_ready: normalized.providerReportedReady,
   provider_ready: normalized.providerReady,
   requirements: safeRequirementsSummary(normalized),
 });

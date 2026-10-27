@@ -17,11 +17,11 @@ import {
   safeAccountStatusPayload,
   safeWriteAuditLog,
   sanitizeErrorMessage,
+  stripeConfigurationNotice,
   type AuthenticatedUser,
   type StripeConnectSyncPayload,
   type SupabaseClientLike,
   upsertCreatorPayoutAccountFromStripe,
-  upsertEligibilityRecord,
   writeAuditLog,
 } from "../_shared/stripe-connect.ts";
 
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
       targetUserId: currentUser.id,
     });
 
-    const updatedAccount = await upsertCreatorPayoutAccountFromStripe(
+    await upsertCreatorPayoutAccountFromStripe(
       adminClient,
       currentUser.id,
       normalizedAccount,
@@ -132,7 +132,6 @@ Deno.serve(async (req) => {
       syncedAuditId,
       FUNCTION_NAME,
     );
-    await upsertEligibilityRecord(adminClient, currentUser.id, updatedAccount.id, normalizedAccount, syncedAuditId);
 
     return jsonResponse(200, {
       status: "synced",
@@ -155,7 +154,9 @@ Deno.serve(async (req) => {
         synced: true,
         syncedAuditLogId: syncedAuditId,
       },
-      message: "Stripe Connect test-mode account status was synced. Payout execution remains inactive.",
+      message: normalizedAccount.configurationStatus === "match"
+        ? "Stripe Connect test-mode account status was synced. Payout execution remains inactive."
+        : stripeConfigurationNotice(normalizedAccount.configurationStatus),
     });
   } catch (error) {
     await safeWriteAuditLog(adminClient, {

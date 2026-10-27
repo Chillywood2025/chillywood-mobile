@@ -18,6 +18,10 @@ export const monetizationImplementationFiles = [
   '20261026180500_event_checkout_attempt_claims.sql',
   '20261026184512_creator_event_broadcast_recovery.sql',
   '20261027021608_creator_monetization_reference_guard_integration.sql',
+  '20261027034836_creator_tip_settlement_authority.sql',
+  '20261027034844_creator_merch_payment_refund_reconciliation.sql',
+  '20261027034858_creator_connect_observed_configuration.sql',
+  '20261027034920_buyer_purchase_partial_refund_presentation.sql',
 ];
 export const monetizationAuditFiles = [...monetizationBaselineFiles, ...monetizationImplementationFiles];
 export const monetizationAddedFunctionIdentities = new Map([
@@ -36,6 +40,7 @@ export const monetizationAddedFunctionIdentities = new Map([
   ['private.guard_event_ticket_reservation_identity/0','private.guard_event_ticket_reservation_identity()'],
   ['private.guard_event_ticket_terms_immutable/0','private.guard_event_ticket_terms_immutable()'],
   ['private.guard_ticketed_event_replay_identity/0','private.guard_ticketed_event_replay_identity()'],
+  ['private.project_creator_connect_observed_eligibility/0','private.project_creator_connect_observed_eligibility()'],
   ['private.queue_creator_event_broadcast_lifecycle_stop/0','private.queue_creator_event_broadcast_lifecycle_stop()'],
   ['private.queue_creator_event_broadcast_stop/3','private.queue_creator_event_broadcast_stop(uuid,text,timestamp with time zone)'],
   ['private.require_event_ticket_reservation_for_grant/0','private.require_event_ticket_reservation_for_grant()'],
@@ -72,6 +77,7 @@ export const monetizationAddedFunctionIdentities = new Map([
   ['public.prepare_creator_event_broadcast/1','prepare_creator_event_broadcast(uuid)'],
   ['public.process_revenuecat_app_store_event_atomic/13','process_revenuecat_app_store_event_atomic(text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,integer,text,text,text,text,timestamp with time zone)'],
   ['public.process_revenuecat_google_play_event_atomic/13','process_revenuecat_google_play_event_atomic(text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,integer,text,text,text,text,timestamp with time zone)'],
+  ['public.process_stripe_merch_webhook_lifecycle/4','process_stripe_merch_webhook_lifecycle(text,text,text,jsonb)'],
   ['public.read_creator_event_broadcast_producer_authority/4','read_creator_event_broadcast_producer_authority(uuid,uuid,uuid,text)'],
   ['public.read_creator_event_for_host_room/1','read_creator_event_for_host_room(text)'],
   ['public.read_creator_event_playback_source/3','read_creator_event_playback_source(uuid,uuid,uuid)'],
@@ -98,6 +104,7 @@ export const monetizationReplacedFunctionIdentities = new Map([
   ['public.process_creator_money_provider_event_pre_source_lock/16','process_creator_money_provider_event_pre_source_lock(text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,integer,text,text,text,text,text,text,text,text)'],
   ['public.process_revenuecat_consumable_event_provider_internal/16','process_revenuecat_consumable_event_provider_internal(text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,integer,text,text,text,text,text,text,text,text)'],
   ['public.process_revenuecat_live_watch_party_event_atomic/11','process_revenuecat_live_watch_party_event_atomic(text,text,text,uuid,text,text,timestamp with time zone,integer,text,text,text)'],
+  ['public.process_stripe_tip_webhook_lifecycle/6','process_stripe_tip_webhook_lifecycle(text,uuid,uuid,jsonb,jsonb,jsonb)'],
   ['public.resolve_paid_creator_event_pass_access/1','resolve_paid_creator_event_pass_access(uuid)'],
   ['public.set_creator_content_price/5','set_creator_content_price(text,uuid,boolean,integer,text)'],
   ['public.set_paid_creator_event_offer_pre_integrity_closeout/5','set_paid_creator_event_offer_pre_integrity_closeout(uuid,text,integer,integer,text)'],

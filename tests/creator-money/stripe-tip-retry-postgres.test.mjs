@@ -44,14 +44,20 @@ test('Stripe checkout retry uses real immutable authority and receipt SQL', {tim
     await db.exec('begin');
     await one("select public.reserve_stripe_tip_webhook_event('evt_retry_failed','payment_intent.payment_failed',repeat('c',64),$1)",[webhookAttempt]);
     await one("select public.process_stripe_tip_webhook_lifecycle('evt_retry_failed',$1,$2,$3,'{\"metadata\":{}}','{}')",
-      [webhookAttempt,tip,{object_id:'pi_fixture',payment_intent_id:'pi_fixture'}]);
+      [webhookAttempt,tip,{event_livemode:false,object_livemode:false,object_type:'payment_intent',
+        object_status:'requires_payment_method',amount_received_cents:0,
+        object_id:'pi_fixture',payment_intent_id:'pi_fixture',amount_cents:300,currency:'usd',
+        metadata_tip_id:tip,metadata_sender_id:buyer.user_id,metadata_creator_id:host.user_id}]);
     eq((await reserve()).status,'failed');
     await db.exec('savepoint failed_attempt_guard');
     await deny(()=>reserve('ea000000-0000-4000-8000-000000000003'),/tip_checkout_previous_unresolved/);
     await db.exec('rollback to savepoint failed_attempt_guard');
     await one("select public.reserve_stripe_tip_webhook_event('evt_retry_expired','checkout.session.expired',repeat('d',64),$1)",[webhookAttempt]);
     await one("select public.process_stripe_tip_webhook_lifecycle('evt_retry_expired',$1,$2,$3,'{\"metadata\":{}}','{}')",
-      [webhookAttempt,tip,{object_id:'cs_test_fixture'}]);
+      [webhookAttempt,tip,{event_livemode:false,object_livemode:false,object_type:'checkout.session',
+        object_status:'expired',checkout_mode:'payment',payment_status:'unpaid',client_reference_id:tip,
+        object_id:'cs_test_fixture',payment_intent_id:'pi_fixture',amount_cents:300,currency:'usd',
+        metadata_tip_id:tip,metadata_sender_id:buyer.user_id,metadata_creator_id:host.user_id}]);
     const nextTip='ea000000-0000-4000-8000-000000000006';
     eq((await reserve('ea000000-0000-4000-8000-000000000003',{...quote,tipId:nextTip,
       body:{...quote.body,client_reference_id:nextTip,'metadata[chillywood_tip_id]':nextTip}})).tipId,nextTip,
@@ -59,13 +65,16 @@ test('Stripe checkout retry uses real immutable authority and receipt SQL', {tim
     await db.exec('rollback');
     await one("select public.reserve_stripe_tip_webhook_event('evt_retry_paid','payment_intent.succeeded',repeat('a',64),$1)",[webhookAttempt]);
     const paid=await one("select public.process_stripe_tip_webhook_lifecycle('evt_retry_paid',$1,$2,$3,'{\"metadata\":{}}','{}')",
-      [webhookAttempt,tip,{object_id:'pi_fixture',payment_intent_id:'pi_fixture',amount_cents:300,currency:'usd',
+      [webhookAttempt,tip,{event_livemode:false,object_livemode:false,object_type:'payment_intent',
+        object_status:'succeeded',amount_received_cents:300,
+        object_id:'pi_fixture',payment_intent_id:'pi_fixture',amount_cents:300,currency:'usd',
         metadata_tip_id:tip,metadata_sender_id:buyer.user_id,metadata_creator_id:host.user_id}]);
     eq(paid.status,'paid','real payment projector accepts the exact checkout transaction');
     eq((await receipt()).status,'paid','late Edge reply cannot downgrade webhook terminal state');
     await one("select public.reserve_stripe_tip_webhook_event('evt_retry_refund','charge.refunded',repeat('b',64),$1)",[webhookAttempt]);
     await one("select public.process_stripe_tip_webhook_lifecycle('evt_retry_refund',$1,$2,$3,'{\"metadata\":{}}','{}')",
-      [webhookAttempt,tip,{object_id:'ch_fixture',payment_intent_id:'pi_fixture',amount_cents:300,amount_refunded_cents:30,refunded:false,currency:'usd',
+      [webhookAttempt,tip,{event_livemode:false,object_livemode:false,object_type:'charge',
+        object_id:'ch_fixture',payment_intent_id:'pi_fixture',amount_cents:300,amount_refunded_cents:30,refunded:false,currency:'usd',
         metadata_tip_id:tip,metadata_sender_id:buyer.user_id,metadata_creator_id:host.user_id}]);
     eq(await one('select creator_net_cents from public.creator_tip_transactions where id=$1',[tip]),270,'actual verified partial refund still adjusts creator net');
     // Seed an old synthetic receipt through normal INSERT guards. Never disable

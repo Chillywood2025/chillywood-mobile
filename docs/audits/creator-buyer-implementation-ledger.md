@@ -8,7 +8,14 @@ The source corrections below follow that checkpoint. The recovered implementatio
 was published to draft PR626 at `c382369928cde0ebeb9cbf4e46e3a6c4828f9f27`.
 Canonical CI at that head found the reference-guard integration regression
 recorded below. Neither earlier audit CI nor passing individual jobs qualify the
-complete implementation; the repaired publication head needs its own full checks.
+complete implementation. The subsequent scheduled-show checkpoint
+`370ca25b2a13ecd07ba48309335d7af274bd3f03` passed all 13 exact-head checks,
+including Required Validation job `121994288771`, as independently verified by
+the parent reviewer. That checkpoint remains preserved. The separately approved
+Stripe settlement, refund presentation and observed Connect configuration
+follow-up is recorded in
+[`creator-buyer-stripe-followup.md`](creator-buyer-stripe-followup.md) and requires
+its own validation; the older green result does not qualify that delta.
 
 This supplements, and retains the IDs from,
 [`creator-buyer-monetization-ledger.md`](creator-buyer-monetization-ledger.md).
@@ -86,10 +93,10 @@ silently changes price/status; unconfigured modes direct to explicit editors.
 | AU01 | Fresh account/session-bound catalog, saves, purchase intent, wallet and playback response. | Mounted stale account callbacks/late catalog and actual SQL foreign-subject cases. No reopening unrelated account/logout review. |
 | AU02 | Same-frame creator save latches; immutable intent/quote; reservation locks; original transaction/offer identity; purchase-time receipt provenance. | Reservation, event/general checkout, Stripe request-retry and broadcast native concurrency controls passed. Full provider reordered/duplicate delivery remains external. |
 | UX01 | Radio checked/disabled metadata, busy states, retry, selection preservation, empty/error distinction and exact recovery routes. | Mounted native-host models, not physical accessibility testing. iOS/Android display/store availability may differ. |
-| EX01 | Official Apple/Google/RevenueCat/Stripe documentation reviewed2026-10-26. | Documentation is source-policy evidence. Recovery connector reads returned no usable account/project result; connection, live catalog and migration parity remain unverified. No provider/account settings changed. |
+| EX01 | Official Apple/Google/RevenueCat/Stripe documentation reviewed2026-10-26. | Parent subsequently verified read-only provider connectivity, sandbox configuration, Supabase ACTIVE_HEALTHY and live/payout switches off. End-to-end payments, live catalog, deployed parity and device qualification remain unverified. No provider/account settings changed. |
 | EX02 | No deployment or physical device claim. | Current remote migration parity, store approval, provider callbacks, media output and device behavior remain external. |
 | QA01 | Direct source/SQL tests, malformed/wrong-owner/wrong-quote controls and broad applicable checks. | Passing subsets and retained failures below. Independent recovery review found no remaining blocker in its hashed checkout/lifecycle/Studio/broadcast scope; it did not independently review its author's host controls. Complete required validation remains pending. |
-| QA02 | Existing draft PR626 retained; no merge. | Recovered implementation published at `c3823699`; canonical CI exposed a new reference-guard integration failure. The repaired head requires complete exact-head CI and review. Earlier checkpoint CI cannot qualify this delta. |
+| QA02 | Existing draft PR626 retained; no merge. | The reference-guard and fixture repairs reached green checkpoint `370ca25b` with all 13 exact-head checks passed. The later Stripe follow-up requires a separate exact-head result. |
 
 ## Recovery validation evidence
 
@@ -416,6 +423,12 @@ and Supabase project-list batch returned no usable result before interruption
 after approximately912 seconds. The user's subsequent report that Stripe was
 connected prompted a separate read-only account-list call; that call returned no
 result before being user-aborted after24942 seconds. No account-specific read or
-Supabase migration listing was reached. Connection/catalog/refund/onboarding and
-remote migration parity remain **unverified**, not confirmed disconnected. No
-credentials, settings, products, prices, charges, refunds or payouts were changed.
+Supabase migration listing was reached by those local attempts. These are
+historical local-tool outcomes, superseded for connectivity by the parent's
+successful read-only checks: provider connectivity and sandbox configuration,
+Supabase ACTIVE_HEALTHY, and live/payout switches off were verified. End-to-end
+payments, live catalog, deployed schema parity, and device qualification remain
+**unverified**. The observed Connect configuration mismatch is addressed in the
+separate source follow-up using synthetic fixtures; no account was synchronized
+or modified by this task. No credentials, settings, products, prices, charges,
+refunds or payouts were changed.

@@ -19,6 +19,9 @@ import {
   safeUrlOrigin,
   safeWriteAuditLog,
   sanitizeErrorMessage,
+  safeStripeConfigurationPayload,
+  storedStripeConfiguration,
+  stripeConfigurationNotice,
   toText,
   type AuthenticatedUser,
   type StripeConnectOnboardingPayload,
@@ -84,6 +87,17 @@ Deno.serve(async (req) => {
         providerWrite: false,
         onboardingUrlCreated: false,
         message: "A Stripe Connect test-mode account must be created before an onboarding link can be requested.",
+      });
+    }
+
+    const configuration = storedStripeConfiguration(payoutAccount);
+    if (configuration.configurationStatus !== "match") {
+      return jsonResponse(200, {
+        status: "configuration_review_required", provider: "stripe", providerKey: "stripe_connect", mode: "test",
+        liveMoneyAction: false, creatorUserId: currentUser.id, providerAccountPresent: true,
+        providerCall: false, providerWrite: false, onboardingUrlCreated: false,
+        configuration: safeStripeConfigurationPayload(configuration),
+        message: stripeConfigurationNotice(configuration.configurationStatus),
       });
     }
 

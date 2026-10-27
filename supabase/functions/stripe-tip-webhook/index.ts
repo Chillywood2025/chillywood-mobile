@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { checkoutSettlementOutcome, paymentIntentSettlementOutcome } from "../_shared/stripe-payment-settlement.ts";
 
 import {
   createAdminClient,
@@ -20,12 +21,17 @@ const FUNCTION_NAME = "stripe-tip-webhook";
 type StripeTipEvent = ReturnType<typeof parseStripeEvent>;
 type StripeObject = Record<string, unknown> & {
   amount?: number;
+  amount_received?: number;
   amount_refunded?: number;
   amount_total?: number;
   client_reference_id?: string;
   currency?: string;
   id?: string;
   metadata?: Record<string, unknown>;
+  livemode?: boolean;
+  mode?: string;
+  object?: string;
+  payment_status?: string;
   payment_intent?: string | null;
   refunded?: boolean;
   status?: string;
@@ -60,6 +66,8 @@ type TipProjectionResult = {
 
 const tipEventTypes = new Set([
   "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
   "checkout.session.expired",
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
@@ -250,17 +258,15 @@ const readTipTransaction = async (
   return data as TipTransactionRow | null;
 };
 
-const providerCompletionMatchesTip = (
+const providerPaymentFactsMatchTip = (
   eventType: string,
   object: StripeObject | null,
   tip: TipTransactionRow,
+  requirePaymentIntent = true,
 ) => {
   if (!object) return false;
-  const amount = typeof object.amount_total === "number"
-    ? object.amount_total
-    : typeof object.amount === "number"
-      ? object.amount
-      : null;
+  const checkoutEvent = eventType.startsWith("checkout.session.");
+  const amount = checkoutEvent ? object.amount_total : object.amount;
   const currency = toText(object.currency).toLowerCase();
   const senderId = normalizeUuid(tip.sender_id);
   const creatorId = normalizeUuid(tip.creator_id);
@@ -269,15 +275,21 @@ const providerCompletionMatchesTip = (
   const metadataTipId = normalizeUuid(object.metadata?.chillywood_tip_id);
   const tipId = normalizeUuid(tip.id);
   const providerObjectId = toText(object.id);
-  const providerIdentityExact = eventType === "checkout.session.completed"
-    ? providerObjectId !== "" && providerObjectId === toText(tip.provider_checkout_session_id)
-    : eventType === "payment_intent.succeeded"
-      ? providerObjectId !== ""
-        && (!toText(tip.provider_payment_intent_id)
-          || providerObjectId === toText(tip.provider_payment_intent_id))
+  const paymentIntentId = paymentIntentFromObject(object);
+  const providerIdentityExact = checkoutEvent
+    ? providerObjectId.startsWith("cs_test_")
+      && providerObjectId === toText(tip.provider_checkout_session_id)
+      && toText(object.client_reference_id) === tipId
+      && (!requirePaymentIntent || (!!paymentIntentId && /^pi_[A-Za-z0-9_]+$/.test(paymentIntentId)))
+      && (!paymentIntentId || !toText(tip.provider_payment_intent_id) || paymentIntentId === toText(tip.provider_payment_intent_id))
+    : eventType.startsWith("payment_intent.")
+      ? /^pi_[A-Za-z0-9_]+$/.test(providerObjectId)
+        && providerObjectId === toText(tip.provider_payment_intent_id)
       : false;
   return providerIdentityExact
+    && object.livemode === false
     && Number.isSafeInteger(amount)
+    && typeof amount === "number" && amount > 0
     && amount === tip.tip_amount_cents
     && currency !== ""
     && currency === toText(tip.currency).toLowerCase()
@@ -289,31 +301,46 @@ const providerCompletionMatchesTip = (
     && metadataTipId === tipId;
 };
 
+const providerCompletionMatchesTip = (
+  eventType: string,
+  object: StripeObject | null,
+  tip: TipTransactionRow,
+) => (checkoutSettlementOutcome(eventType, object) === "succeeded"
+  || paymentIntentSettlementOutcome(eventType, object) === "succeeded")
+  && providerPaymentFactsMatchTip(eventType, object, tip);
+
 const providerRemovalOrFailureMatchesTip = (
   eventType: string,
   object: StripeObject | null,
   tip: TipTransactionRow,
 ) => {
-  if (!object) return false;
+  if (!object || object.livemode !== false) return false;
+  if (eventType === "checkout.session.async_payment_failed") {
+    return checkoutSettlementOutcome(eventType, object) === "failed"
+      && providerPaymentFactsMatchTip(eventType, object, tip);
+  }
   if (eventType === "checkout.session.expired") {
-    return toText(object.id) !== ""
-      && toText(object.id) === toText(tip.provider_checkout_session_id);
+    return object.object === "checkout.session" && object.mode === "payment" && object.status === "expired" && object.payment_status === "unpaid"
+      && providerPaymentFactsMatchTip(eventType, object, tip, false);
   }
   if (eventType === "payment_intent.payment_failed") {
-    return toText(object.id) !== ""
-      && toText(object.id) === toText(tip.provider_payment_intent_id);
+    return paymentIntentSettlementOutcome(eventType, object) === "failed"
+      && providerPaymentFactsMatchTip(eventType, object, tip);
   }
   if (eventType === "charge.refunded" || eventType === "charge.dispute.created") {
     const paymentIntentId = paymentIntentFromObject(object);
     if (eventType === "charge.dispute.created") {
-      return paymentIntentId !== null
-        && paymentIntentId === toText(tip.provider_payment_intent_id);
+      return object.object === "dispute" && toText(object.id).startsWith("dp_")
+        && paymentIntentId !== null && paymentIntentId === toText(tip.provider_payment_intent_id)
+        && Number.isSafeInteger(object.amount) && (object.amount ?? 0) > 0
+        && (object.amount ?? 0) <= (tip.total_paid_cents ?? 0)
+        && toText(object.currency).toLowerCase() === toText(tip.currency).toLowerCase();
     }
 
     const chargeAmount = object.amount;
     const amountRefunded = object.amount_refunded;
     const currency = toText(object.currency).toLowerCase();
-    return toText(object.id).startsWith("ch_")
+    return object.object === "charge" && toText(object.id).startsWith("ch_")
       && paymentIntentId !== null
       && paymentIntentId === toText(tip.provider_payment_intent_id)
       && typeof chargeAmount === "number"
@@ -334,12 +361,14 @@ const providerRemovalOrFailureMatchesTip = (
 const tipEventTypeForStripeEvent = (eventType: string) => {
   switch (eventType) {
     case "checkout.session.completed":
+    case "checkout.session.async_payment_succeeded":
       return "checkout_completed";
     case "checkout.session.expired":
       return "checkout_canceled";
     case "payment_intent.succeeded":
       return "payment_succeeded";
     case "payment_intent.payment_failed":
+    case "checkout.session.async_payment_failed":
       return "payment_failed";
     case "charge.refunded":
       return "refunded";
@@ -348,6 +377,24 @@ const tipEventTypeForStripeEvent = (eventType: string) => {
     default:
       return "webhook_ignored";
   }
+};
+
+// A signed removal can arrive before the Checkout response has persisted its
+// PaymentIntent. Keep that delivery retryable without trusting metadata or
+// inventing a local payment association. Exact economics are checked by SQL
+// after a stored receipt makes the tip discoverable.
+const removalCanAwaitTipReceipt = (eventType: string, object: StripeObject | null) => {
+  if (!object || object.livemode !== false || !/^pi_[A-Za-z0-9_]+$/.test(paymentIntentFromObject(object) ?? "")
+    || !Number.isSafeInteger(object.amount) || typeof object.amount !== "number" || object.amount <= 0
+    || toText(object.currency).toLowerCase() !== "usd") return false;
+  if (eventType === "charge.refunded") {
+    return object.object === "charge" && /^ch_[A-Za-z0-9_]+$/.test(toText(object.id))
+      && Number.isSafeInteger(object.amount_refunded) && typeof object.amount_refunded === "number"
+      && object.amount_refunded > 0 && object.amount_refunded <= object.amount
+      && typeof object.refunded === "boolean" && object.refunded === (object.amount_refunded === object.amount);
+  }
+  return eventType === "charge.dispute.created" && object.object === "dispute"
+    && /^dp_[A-Za-z0-9_]+$/.test(toText(object.id));
 };
 
 const updateTipForEvent = async (
@@ -361,7 +408,7 @@ const updateTipForEvent = async (
   if (!tipId) return {
     tipId: null,
     updated: false,
-    reason: "tip_not_found",
+    reason: removalCanAwaitTipReceipt(eventType, object) ? "tip_provider_identity_pending" : "tip_not_found",
     buyerAuthorityValid: null,
     compensationRequired: false,
     webhookFinalized: false,
@@ -372,7 +419,7 @@ const updateTipForEvent = async (
     return {
       tipId: null,
       updated: false,
-      reason: "tip_not_found",
+      reason: removalCanAwaitTipReceipt(eventType, object) ? "tip_provider_identity_pending" : "tip_not_found",
       buyerAuthorityValid: null,
       compensationRequired: false,
       webhookFinalized: false,
@@ -380,13 +427,9 @@ const updateTipForEvent = async (
   }
 
   const paymentIntentId = paymentIntentFromObject(object);
-  const amount = eventType === "charge.refunded"
-    ? object?.amount
-    : typeof object?.amount_total === "number"
-      ? object.amount_total
-      : typeof object?.amount === "number"
-        ? object.amount
-        : undefined;
+  const amount = eventType.startsWith("checkout.session.")
+    ? object?.amount_total
+    : object?.amount;
   const amountRefunded = eventType === "charge.refunded"
     ? object?.amount_refunded
     : undefined;
@@ -395,6 +438,7 @@ const updateTipForEvent = async (
     : undefined;
 
   const completionEvent = eventType === "checkout.session.completed"
+    || eventType === "checkout.session.async_payment_succeeded"
     || eventType === "payment_intent.succeeded";
   const providerCompletionExact = completionEvent
     ? providerCompletionMatchesTip(eventType, object, tip)
@@ -424,7 +468,16 @@ const updateTipForEvent = async (
     p_processing_attempt_id: processingAttemptId,
     p_provider_facts: {
       amount_cents: amount,
+      amount_received_cents: object?.amount_received,
       amount_refunded_cents: amountRefunded,
+      event_livemode: event.livemode,
+      event_account: event.account ?? null,
+      client_reference_id: object?.client_reference_id,
+      object_livemode: object?.livemode,
+      object_type: object?.object,
+      object_status: object?.status,
+      checkout_mode: object?.mode,
+      payment_status: object?.payment_status,
       currency: toText(object?.currency).toLowerCase() || null,
       metadata_creator_id: normalizeUuid(object?.metadata?.creator_user_id),
       metadata_sender_id: normalizeUuid(object?.metadata?.fan_user_id),
@@ -528,16 +581,16 @@ Deno.serve(async (req) => {
     }
 
     event = parseStripeEvent(rawBody);
-    if (event.livemode === true) {
+    if (event.livemode !== false || event.account != null) {
       await safeWriteAuditLog(adminClient, {
         action: "creator_tip_webhook_failed",
         metadata: {
           event_id: toText(event.id),
           event_type: toText(event.type),
-          failure_reason: "live_mode_event_rejected",
+          failure_reason: "platform_test_mode_event_required",
           function_name: FUNCTION_NAME,
         },
-        reason: "Live-mode Stripe tip webhook event was rejected by the test-mode function.",
+        reason: "Stripe tip webhook event without explicit platform test-mode authority was rejected.",
         severity: "warning",
         targetType: "creator_tip_webhook",
       });
@@ -550,7 +603,7 @@ Deno.serve(async (req) => {
         eventStored: false,
         signatureVerified: true,
         webhookProcessed: false,
-        message: "Live-mode Stripe tip events are not processed by Tips V1.",
+        message: "Only explicit platform test-mode Stripe tip events are processed by Tips V1.",
       });
     }
 
@@ -629,6 +682,16 @@ Deno.serve(async (req) => {
     }
 
     const result = await updateTipForEvent(adminClient, event, object, webhookProcessingAttemptId);
+    if (result.reason === "tip_provider_identity_pending") {
+      if (!result.webhookFinalized) {
+        await finalizeWebhookEvent(adminClient, toText(event.id), webhookProcessingAttemptId, "failed");
+      }
+      return jsonResponse(409, {
+        status: "pending", provider: "stripe", providerKey: "stripe_connect", mode: "test",
+        liveMoneyAction: false, eventStored: true, signatureVerified: true,
+        webhookProcessed: false, message: "The exact checkout receipt is not bound yet; retry this delivery.",
+      });
+    }
     if (!result.webhookFinalized) {
       await finalizeWebhookEvent(
         adminClient,

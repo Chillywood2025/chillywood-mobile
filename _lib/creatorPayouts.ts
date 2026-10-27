@@ -23,6 +23,7 @@ export type CreatorPayoutSetupStatus =
   | "action_required"
   | "under_review"
   | "provider_ready_payouts_not_active"
+  | "configuration_review_required"
   | "on_hold"
   | "payouts_disabled";
 
@@ -55,6 +56,7 @@ export type CreatorPayoutDashboardReadModel = {
   canStartProviderSetup: boolean;
   canRefreshProviderStatus: boolean;
   providerReady: boolean;
+  providerConfigurationStatus: "match" | "mismatch" | "unknown" | null;
   eligibleForPayouts: boolean;
   holdPeriodCleared: boolean;
   kycReady: boolean;
@@ -139,6 +141,8 @@ type CreatorPayoutEligibilityDbRow = {
   payout_account_ready?: boolean | null;
   provider_ready?: boolean | null;
   tax_ready?: boolean | null;
+  metadata?: unknown;
+  payout_account_id?: string | null;
 };
 
 type CreatorPayoutEligibilityQueryResult = {
@@ -147,6 +151,7 @@ type CreatorPayoutEligibilityQueryResult = {
 };
 
 export type CreatorPayoutFunctionPayload = {
+  configuration?: { status?: "match" | "mismatch" | "unknown"; expected?: Record<string, unknown>; observed?: Record<string, unknown> };
   account?: {
     charges_enabled?: boolean;
     details_submitted?: boolean;
@@ -156,6 +161,9 @@ export type CreatorPayoutFunctionPayload = {
     provider_ready?: boolean;
     requirements_currently_due_count?: number;
     requirements_past_due_count?: number;
+    provider_account_type?: string;
+    provider_reported_ready?: boolean;
+    provider_configuration?: { status?: "match" | "mismatch" | "unknown"; expected?: Record<string, unknown>; observed?: Record<string, unknown> };
   };
   accountCreated?: boolean;
   accountReused?: boolean;
@@ -342,6 +350,8 @@ const formatSetupStatusLabel = (status: CreatorPayoutSetupStatus) => {
       return "Under review";
     case "provider_ready_payouts_not_active":
       return "Provider ready";
+    case "configuration_review_required":
+      return "Configuration needs review";
     case "on_hold":
       return "On hold";
     case "payouts_disabled":
@@ -395,26 +405,51 @@ const resolveSetupActionLabel = (status: CreatorPayoutSetupStatus) => {
 const toCreatorPayoutSetupFields = (
   eligibility: CreatorPayoutEligibilityDbRow | null,
 ) => {
+  const metadata = isPlainObject(eligibility?.metadata) ? eligibility.metadata : {};
+  const configuration = isPlainObject(metadata.provider_configuration) ? metadata.provider_configuration : {};
+  const observed = isPlainObject(configuration.observed) ? configuration.observed : {};
+  const expected = isPlainObject(configuration.expected) ? configuration.expected : {};
+  const verifiedMatch = configuration.status === "match"
+    && expected.key === "stripe_connect_test_express_controller_v1"
+    && ["express", "none"].includes(String(observed.account_type))
+    && observed.controller_type === "application" && observed.is_controller === true
+    && observed.dashboard_type === "express" && observed.fees_payer === "platform"
+    && ["application", "application_express"].includes(String(observed.fees_payer_raw))
+    && observed.losses_collector === "platform" && observed.requirements_collection === "stripe";
+  const providerConfigurationStatus: "match" | "mismatch" | "unknown" | null = eligibility
+    ? verifiedMatch ? "match" : configuration.status === "mismatch" ? "mismatch" : "unknown"
+    : null;
   const baseStatus = normalizeSetupStatus(eligibility?.eligibility_status);
+  const configurationNeedsReview = providerConfigurationStatus === "mismatch"
+    || (providerConfigurationStatus === "unknown" && (!!eligibility?.payout_account_id
+      || eligibility?.provider_ready === true || eligibility?.payout_account_ready === true
+      || eligibility?.eligible_for_payouts === true || baseStatus === "provider_ready_payouts_not_active"));
   const status = eligibility?.fraud_hold_active
     ? "on_hold"
-    : eligibility?.provider_ready
-      ? "provider_ready_payouts_not_active"
-      : baseStatus;
-  const eligibilityReason = normalizeText(eligibility?.eligibility_reason);
+    : configurationNeedsReview
+      ? "configuration_review_required"
+      : eligibility?.provider_ready
+        ? "provider_ready_payouts_not_active"
+        : baseStatus;
+  const eligibilityReason = configurationNeedsReview
+    ? providerConfigurationStatus === "mismatch"
+      ? "The provider account configuration differs from the expected setup and needs platform review. Payouts remain inactive."
+      : "Provider account configuration is not fully verified. Refresh provider status before continuing setup. Payouts remain inactive."
+    : normalizeText(eligibility?.eligibility_reason);
 
   return {
     adminReviewStatus: normalizeText(eligibility?.admin_review_status),
     canRefreshProviderStatus: status !== "provider_not_configured",
     canStartProviderSetup: ["setup_required", "onboarding_in_progress", "action_required"].includes(status),
     eligibilityReason,
-    eligibleForPayouts: eligibility?.eligible_for_payouts === true,
+    eligibleForPayouts: !configurationNeedsReview && eligibility?.eligible_for_payouts === true,
     fraudHoldActive: eligibility?.fraud_hold_active === true,
     holdPeriodCleared: eligibility?.hold_period_cleared === true,
     kycReady: eligibility?.kyc_ready === true,
     minimumPayoutMet: eligibility?.minimum_payout_met === true,
-    payoutAccountReady: eligibility?.payout_account_ready === true,
-    providerReady: eligibility?.provider_ready === true,
+    payoutAccountReady: !configurationNeedsReview && eligibility?.payout_account_ready === true,
+    providerReady: !configurationNeedsReview && eligibility?.provider_ready === true,
+    providerConfigurationStatus,
     setupActionLabel: resolveSetupActionLabel(status),
     setupStatus: status,
     setupStatusBody: formatSetupStatusBody(status, eligibilityReason),
@@ -469,7 +504,7 @@ async function readCreatorPayoutEligibility(creatorUserId: string) {
   const { data, error } = await payoutClient
     .from(CREATOR_PAYOUT_ELIGIBILITY_RECORDS_TABLE)
     .select(
-      "eligibility_status,eligibility_reason,eligible_for_payouts,fraud_hold_active,hold_period_cleared,minimum_payout_met,payout_account_ready,tax_ready,kyc_ready,provider_ready,admin_review_status",
+      "eligibility_status,eligibility_reason,eligible_for_payouts,fraud_hold_active,hold_period_cleared,minimum_payout_met,payout_account_ready,tax_ready,kyc_ready,provider_ready,admin_review_status,metadata,payout_account_id",
     )
     .eq("creator_user_id", creatorUserId)
     .maybeSingle();

@@ -28,6 +28,7 @@ const transferCreate = read("supabase/functions/stripe-connect-transfer-create/i
 const payoutRelease = read("supabase/functions/payout-release-preflight/index.ts");
 const merchCheckout = read("supabase/functions/stripe-merch-checkout/index.ts");
 const merchWebhook = read("supabase/functions/stripe-merch-webhook/index.ts");
+const merchSettlement = read("supabase/migrations/20261027034844_creator_merch_payment_refund_reconciliation.sql");
 const merchMigration = `${read("supabase/migrations/20260603165000_money_access_grants_product_catalog.sql")}\n${read("supabase/migrations/20260604043000_stripe_merch_payout_sandbox_readiness.sql")}`;
 const creatorMonetization = read("_lib/creatorMonetization.ts");
 const creatorPayouts = read("_lib/creatorPayouts.ts");
@@ -122,8 +123,14 @@ assertNotIncludes(merchCheckout, "money_access_ledger_events", "merch checkout m
 
 assertIncludes(merchWebhook, "readStripeWebhookSecret", "merch webhook secret reader");
 assertIncludes(merchWebhook, "verifyStripeWebhookSignature", "merch webhook signature verification");
-assertIncludes(merchWebhook, "Live-mode Stripe merch events are not processed", "merch webhook live-mode refusal");
-assertIncludes(merchWebhook, "stripe_merch_events", "merch webhook event storage");
+assertIncludes(merchWebhook, "event.livemode !== false", "merch webhook explicit test envelope");
+assertIncludes(merchWebhook, "object?.livemode !== false", "merch webhook explicit test object");
+assertIncludes(merchWebhook, "process_stripe_merch_webhook_lifecycle", "merch webhook atomic settlement");
+assertIncludes(merchSettlement, "insert into public.stripe_merch_events", "merch webhook event storage");
+assertIncludes(merchSettlement, "pg_advisory_xact_lock", "merch delivery serialization");
+assertIncludes(merchSettlement, "v_event.raw_event_hash <> p_raw_event_hash", "merch exact delivery binding");
+assertIncludes(merchSettlement, "p_facts->'event_livemode' is distinct from 'false'::jsonb", "SQL test envelope authority");
+assertIncludes(merchSettlement, "p_facts->'object_livemode' is distinct from 'false'::jsonb", "SQL test object authority");
 assertIncludes(merchWebhook, "checkout.session.completed", "merch checkout completed event");
 assertIncludes(merchWebhook, "payment_intent.succeeded", "merch payment succeeded event");
 assertIncludes(merchWebhook, "checkout.session.expired", "merch expired event");
@@ -134,10 +141,15 @@ assertIncludes(merchWebhook, "revenueCatEntitlementCreated: false", "merch webho
 assertIncludes(merchWebhook, "premiumEntitlementCreated: false", "merch webhook no Premium entitlement");
 assertIncludes(merchWebhook, "payoutCreated: false", "merch webhook no payout");
 assertIncludes(merchWebhook, "cashOutEnabled: false", "merch webhook no cash-out");
-assertIncludes(merchWebhook, "status: \"duplicate\"", "merch webhook duplicate handling");
+assertIncludes(merchSettlement, "v_event.status in ('processed','ignored')", "merch completed delivery deduplication");
+assertIncludes(merchSettlement, "'status','duplicate'", "merch duplicate result");
+assertIncludes(merchWebhook, "status: result.status", "merch atomic outcome forwarding");
 assertNotIncludes(merchWebhook, "user_entitlements", "merch webhook must not write Premium entitlements");
 assertNotIncludes(merchWebhook, "access_grants", "merch webhook must not write access grants");
 assertNotIncludes(merchWebhook, "money_access_ledger_events", "merch webhook must not write digital ledger");
+for (const table of ["user_entitlements", "access_grants", "money_access_ledger_events"]) {
+  assertNotIncludes(merchSettlement, table, `merch atomic settlement must not write ${table}`);
+}
 
 assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_BPS = 0", "scheduled payout fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 150", "instant cash-out fee");

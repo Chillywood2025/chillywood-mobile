@@ -18,11 +18,13 @@ import {
   safeAccountStatusPayload,
   safeWriteAuditLog,
   sanitizeErrorMessage,
+  safeStripeConfigurationPayload,
+  storedStripeConfiguration,
+  stripeConfigurationNotice,
   type AuthenticatedUser,
   type StripeConnectAccountPayload,
   type SupabaseClientLike,
   upsertCreatorPayoutAccountFromStripe,
-  upsertEligibilityRecord,
   writeAuditLog,
 } from "../_shared/stripe-connect.ts";
 
@@ -104,8 +106,9 @@ Deno.serve(async (req) => {
     });
 
     if (existingAccount?.provider_account_id) {
+      const configuration = storedStripeConfiguration(existingAccount);
       return jsonResponse(200, {
-        status: "account_reused",
+        status: configuration.configurationStatus === "match" ? "account_reused" : "configuration_review_required",
         provider: "stripe",
         providerKey: "stripe_connect",
         mode: "test",
@@ -115,11 +118,14 @@ Deno.serve(async (req) => {
         providerCall: false,
         providerWrite: false,
         accountCreated: false,
+        configuration: safeStripeConfigurationPayload(configuration),
         audit: {
           requested: true,
           requestedAuditLogId: requestedAuditId,
         },
-        message: "Existing Stripe Connect test-mode payout account reference was reused. No new provider account was created.",
+        message: configuration.configurationStatus === "match"
+          ? "Existing Stripe Connect test-mode payout account reference was reused. No new provider account was created."
+          : stripeConfigurationNotice(configuration.configurationStatus),
       });
     }
 
@@ -148,7 +154,7 @@ Deno.serve(async (req) => {
       targetUserId: currentUser.id,
     });
 
-    const finalAccountRow = await upsertCreatorPayoutAccountFromStripe(
+    await upsertCreatorPayoutAccountFromStripe(
       adminClient,
       currentUser.id,
       normalizedAccount,
@@ -156,10 +162,9 @@ Deno.serve(async (req) => {
       createdAuditId,
       FUNCTION_NAME,
     );
-    await upsertEligibilityRecord(adminClient, currentUser.id, finalAccountRow.id, normalizedAccount, createdAuditId);
 
     return jsonResponse(200, {
-      status: "configured",
+      status: normalizedAccount.configurationStatus === "match" ? "configured" : "configuration_review_required",
       provider: "stripe",
       providerKey: "stripe_connect",
       mode: "test",
@@ -179,7 +184,9 @@ Deno.serve(async (req) => {
         requested: true,
         requestedAuditLogId: requestedAuditId,
       },
-      message: "Stripe Connect test-mode account was created. Payout execution remains inactive.",
+      message: normalizedAccount.configurationStatus === "match"
+        ? "Stripe Connect test-mode account was created. Payout execution remains inactive."
+        : stripeConfigurationNotice(normalizedAccount.configurationStatus),
     });
   } catch (error) {
     await safeWriteAuditLog(adminClient, {

@@ -1762,6 +1762,7 @@ export function ChannelStudioScreen() {
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
       setPayoutSetupNotice(null);
+      setPayoutSetupBusy(null);
       setPlatformBranding(null);
       setPlatformVisibilitySaving(null);
       setPlatformVisibilityNotice(null);
@@ -1985,6 +1986,7 @@ export function ChannelStudioScreen() {
   }, [canUseChannelSettings, user?.id]);
 
   const refreshCreatorPayouts = useCallback(async () => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
     if (!user?.id) {
       setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
       return;
@@ -1994,10 +1996,12 @@ export function ChannelStudioScreen() {
       creatorUserId: String(user.id),
       limit: 5,
     });
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return;
     setCreatorPayoutSummary(nextSummary);
   }, [user?.id]);
 
   const refreshCreatorTips = useCallback(async () => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
     if (!user?.id) {
       setCreatorTipSettings(null);
       setCreatorTipTransactions([]);
@@ -2008,6 +2012,7 @@ export function ChannelStudioScreen() {
       readMyCreatorTipSettings().catch(() => null),
       listMyCreatorTipTransactions(25).catch(() => []),
     ]);
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return;
     setCreatorTipSettings(nextSettings);
     setCreatorTipTransactions(nextTransactions);
   }, [user?.id]);
@@ -2448,7 +2453,10 @@ export function ChannelStudioScreen() {
 
   const handleStartPayoutProviderSetup = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
-    if (!creatorUserId || payoutSetupBusy) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === creatorUserId
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!creatorUserId || !isCurrent() || payoutSetupBusy) return;
 
     setPayoutSetupBusy("setup");
     setPayoutSetupNotice(null);
@@ -2460,6 +2468,12 @@ export function ChannelStudioScreen() {
 
     try {
       const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
+      if (!isCurrent()) return;
+      if (accountPayload.status === "configuration_review_required") {
+        setPayoutSetupNotice(accountPayload.message || "Provider account configuration needs review. Refresh status before continuing setup. Payouts remain inactive.");
+        await refreshCreatorPayouts();
+        return;
+      }
       if (accountPayload.status === "not_configured") {
         setPayoutSetupNotice("Payout readiness/status flow is active. Provider setup is not configured, and no payout movement is enabled.");
         await refreshCreatorPayouts();
@@ -2471,8 +2485,9 @@ export function ChannelStudioScreen() {
         refreshUrl: createPayoutSetupRedirectUrl("refresh"),
         returnUrl: createPayoutSetupRedirectUrl("return"),
       });
+      if (!isCurrent()) return;
 
-      if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required") {
+      if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required" || linkPayload.status === "configuration_review_required") {
         setPayoutSetupNotice(linkPayload.message || "Payout provider setup needs owner/provider resolution. No payout movement is enabled.");
         await refreshCreatorPayouts();
         return;
@@ -2486,6 +2501,7 @@ export function ChannelStudioScreen() {
       }
 
       const canOpen = await Linking.canOpenURL(onboardingUrl).catch(() => true);
+      if (!isCurrent()) return;
       if (!canOpen) {
         setPayoutSetupNotice("Payout setup link could not be opened on this device.");
         await refreshCreatorPayouts();
@@ -2493,34 +2509,41 @@ export function ChannelStudioScreen() {
       }
 
       await Linking.openURL(onboardingUrl);
+      if (!isCurrent()) return;
       setPayoutSetupNotice("Payout setup opened. Withdrawals are not active yet.");
       await refreshCreatorPayouts();
+      if (!isCurrent()) return;
       await refreshCreatorTips();
     } catch {
-      setPayoutSetupNotice("Payout setup could not be started. No payout or transfer was created.");
+      if (isCurrent()) setPayoutSetupNotice("Payout setup could not be started. No payout or transfer was created.");
     } finally {
-      setPayoutSetupBusy(null);
+      if (isCurrent()) setPayoutSetupBusy(null);
     }
   }, [payoutSetupBusy, refreshCreatorPayouts, refreshCreatorTips, user?.id]);
 
   const handleRefreshPayoutProviderStatus = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
-    if (!creatorUserId || payoutSetupBusy) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === creatorUserId
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!creatorUserId || !isCurrent() || payoutSetupBusy) return;
 
     setPayoutSetupBusy("sync");
     setPayoutSetupNotice(null);
 
     try {
       const syncPayload = await syncCreatorPayoutProviderStatus(creatorUserId);
+      if (!isCurrent()) return;
       setPayoutSetupNotice(
         syncPayload.message || "Payout provider status was checked. Withdrawals are not active yet.",
       );
       await refreshCreatorPayouts();
+      if (!isCurrent()) return;
       await refreshCreatorTips();
     } catch {
-      setPayoutSetupNotice("Payout provider status could not be refreshed. No money action was created.");
+      if (isCurrent()) setPayoutSetupNotice("Payout provider status could not be refreshed. No money action was created.");
     } finally {
-      setPayoutSetupBusy(null);
+      if (isCurrent()) setPayoutSetupBusy(null);
     }
   }, [payoutSetupBusy, refreshCreatorPayouts, refreshCreatorTips, user?.id]);
 

@@ -1,63 +1,46 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import vm from "node:vm";
 import test from "node:test";
 import React from "react";
 import { createRoot } from "react-dom/client";
-import ts from "typescript";
 import * as singleFlight from "../../_lib/actionSingleFlight.mjs";
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const noop = () => {};
-const doc = { addEventListener: noop, removeEventListener: noop, defaultView: globalThis, nodeType: 9 };
-const container = () => ({ addEventListener: noop, removeEventListener: noop, namespaceURI: "http://www.w3.org/1999/xhtml", nodeName: "DIV", nodeType: 1, ownerDocument: doc, parentNode: null, tagName: "DIV" });
-doc.documentElement = container(); globalThis.document = doc; globalThis.window = globalThis; globalThis.HTMLIFrameElement = class {};
-const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
-const textOf = node => Array.isArray(node) ? node.map(textOf).join(" ") : node == null || typeof node === "boolean" ? "" : typeof node !== "object" ? String(node) : textOf(node.props?.children);
-const load = (file, imports, source = fs.readFileSync(file, "utf8")) => {
-  const context = { exports: {}, Date, Intl, Promise, require: name => { assert.ok(name in imports, `unexpected import ${name}`); return imports[name]; } };
-  vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, context);
-  return context.exports;
-};
-const wallet = load("_lib/creatorPurchases.ts", { "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {}, "./creatorMoneyPurchaseAuthority": {}, "./revenuecat": {} });
-const purchase = (id = "one", status = "upcoming", changes = {}) => ({ id, purchaseIntentId: id, sourceType: "event", sourceId: "exact-event", creatorId: "creator", productType: "event_pass", productKey: "event", title: "Sunday show", status,
-  amountMinor: 299, currency: "usd", createdAt: "2026-10-26T16:30:00Z", purchasedAt: "2026-10-26T16:30:00Z", startsAt: "2026-11-01T20:00:00Z", expiresAt: null, provider: "revenuecat_google_play", environment: "sandbox",
-  destination: { kind: "creator_event", id: "exact-event" }, receipt: null, terms: { timeZone: "America/New_York", replayPolicy: "none" }, termsAvailable: true, grantsAccess: false, ...changes });
-const page = (items = [purchase()], extra = {}) => ({ status: "resolved", subjectUserId: "buyer", subjectSessionGeneration: "one", fetchedAt: "2026-10-26T16:30:00Z", items, nextCursor: null, ...extra });
-async function mount(t, options = {}) {
-  const nodes = new Map(), routes = [], reads = [];
-  let session = { user: { id: "buyer" }, authority: { userId: "buyer", sessionGeneration: "one", restoreOnly: false }, isLoading: false };
-  let reader = options.reader ?? (async () => page(options.items));
-  const host = name => function NativeHost(props) {
-    const id = React.useId(); nodes.set(id, { type: name, props });
-    React.useEffect(() => () => nodes.delete(id), [id]);
-    return React.createElement(React.Fragment, null, ...React.Children.toArray(props.children).filter(child => typeof child === "object"));
-  };
-  const native = { AppState: { addEventListener: () => ({ remove: noop }) }, StyleSheet: { create: x => x, absoluteFillObject: {} } };
-  for (const name of ["ActivityIndicator", "Pressable", "ImageBackground", "ScrollView", "Text", "View"]) native[name] = host(name);
-  const Screen = load("app/purchases.tsx", {
-    react: React, "react-native": native, "react-native-safe-area-context": { SafeAreaView: host("SafeAreaView") },
-    "expo-router": { useFocusEffect: callback => React.useEffect(callback, [callback]), useRouter: () => ({ canGoBack: () => false, back: () => routes.push("back"), replace: route => routes.push(route), push: route => routes.push(route) }) },
-    "../_lib/session": { useSession: () => session },
-    "../_lib/creatorPurchases": { ...wallet, readMyCreatorPurchases: async cursor => { reads.push(cursor); return reader(cursor); }, restoreCreatorPurchaseLibrary: options.restore ?? (async () => ({ ok: true, message: "Verified restore refreshed" })) },
-    "../components/navigation/app-back-button": { AppBackButton: host("AppBackButton") },
-    "../components/ui/chillywood-visual-system": { CHILLYWOOD_VISUAL: { glassBackground: "black" } },
-    "../assets/images/chillywood-branded-background.png": {},
-  }, options.source).default;
-  const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen)));
-  t.after(() => React.act(async () => root.unmount()));
-  return { routes, reads, node: id => [...nodes.values()].find(node => node.props.testID === id), text: () => [...nodes.values()].map(textOf).join(" "),
-    async press(id) { const node = [...nodes.values()].find(node => node.props.testID === id); assert.ok(node, id); assert.ok(!node.props.disabled, `${id} disabled`); await React.act(async () => { void node.props.onPress(); }); },
-    async account(nextReader, next = "two") { reader = nextReader; session = { ...session, authority: { ...session.authority, sessionGeneration: next } }; await React.act(async () => root.render(React.createElement(Screen))); },
-    async resolve(d, value) { await React.act(async () => d.resolve(value)); }, setReader: next => { reader = next; },
-  };
-}
+import { noop, container, deferred, textOf, load, wallet, purchase, page, mount } from "./purchases-mounted-fixture.mjs";
 
 test("mounted wallet shows immutable price/terms and exact event destination, with cold-link recovery", async t => {
   const h = await mount(t);
   assert.match(h.text(), /\$2\.99/); assert.match(h.text(), /America\/New_York/); assert.match(h.text(), /Premium is separate/);
   await h.press("purchase-open-one"); assert.equal(h.routes[0].pathname, "/event/[eventId]"); assert.equal(h.routes[0].params.eventId, "exact-event");
   await h.press("purchases-back"); assert.equal(h.routes[1], "/(tabs)/my-list");
+});
+
+test("mounted Stripe refund receipts show cumulative amount separately and preserve dispute precedence", async t => {
+  const id = "55555555-5555-4555-8555-555555555555", creator = "66666666-6666-4666-8666-666666666666";
+  let tip = purchase(id, "completed", { purchaseIntentId: null, sourceType: "creator_tip", sourceId: creator, creatorId: creator,
+    productType: "creator_tip", productKey: null, title: "Tip", provider: "stripe_connect", destination: { kind: "creator_channel", id: creator },
+    startsAt: null, amountMinor: 500, terms: {}, termsAvailable: false, refund: { state: "none", amountMinor: 0 } });
+  const reader = async () => {
+    const parsed = wallet.parseCreatorPurchasePage({ userId: "buyer", fetchedAt: "2026-10-27T03:00:00Z", items: [tip], nextCursor: null }, "buyer");
+    return parsed ? { ...parsed, status: "resolved", subjectSessionGeneration: "one" }
+      : page([], { status: "unavailable" });
+  };
+  const h = await mount(t, { reader });
+  assert.match(textOf(h.node(`purchase-refund-${id}`)), /None.*\$0\.00 of \$5\.00/);
+  for (const [status, refund, label, extent] of [
+    ["completed", { state: "partial", amountMinor: 125 }, "Partially refunded", /Partial.*\$1\.25 of \$5\.00/],
+    ["refunded", { state: "full", amountMinor: 500 }, "Fully refunded", /Full.*\$5\.00 of \$5\.00/],
+    ["disputed", { state: "full", amountMinor: 500 }, "Disputed", /Full.*\$5\.00 of \$5\.00/],
+  ]) {
+    tip = { ...tip, status, refund }; await h.press("purchases-refresh");
+    assert.ok(h.text().includes(label)); assert.match(textOf(h.node(`purchase-refund-${id}`)), extent);
+    assert.match(h.text(), /Purchase price:\s+\$5\.00/); assert.match(h.text(), /No video, ticket, VIP, membership or other access/);
+    if (status === "disputed") { assert.doesNotMatch(h.text(), /Fully refunded/); assert.equal(h.node(`purchase-open-${id}`), undefined); }
+  }
+  tip = { ...tip, status: "refunded" }; delete tip.refund;
+  await h.press("purchases-refresh");
+  assert.match(h.text(), /Refund reported/); assert.match(textOf(h.node(`purchase-refund-${id}`)), /amount unavailable/);
+  assert.doesNotMatch(h.text(), /Fully refunded|Partially refunded/);
+  tip = { ...tip, refund: { state: "full", amountMinor: 900 } }; await h.press("purchases-refresh");
+  assert.ok(h.node("purchases-error")); assert.equal(h.node(`purchase-${id}`), undefined, "malformed RPC refund cannot leave a trusted receipt visible");
 });
 
 test("mounted receipt keeps purchased inclusions/schedule separate from reschedule and reads finite replay expiry", async t => {

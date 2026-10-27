@@ -12,11 +12,18 @@ const projectId = readFileSync("supabase/config.toml", "utf8")
 assert.ok(projectId, "supabase/config.toml must declare project_id");
 const container = process.env.SUPABASE_DB_CONTAINER ||
   `supabase_db_${projectId}`;
+// Optional local fixture transport; defaults preserve the existing CI target.
+const database = process.env.SUPABASE_DB_NAME || "postgres";
+const socketDirectory = process.env.SUPABASE_DB_SOCKET_DIR;
+assert.match(database, /^[A-Za-z_][A-Za-z0-9_]*$/u, "local fixture database name must be an identifier");
+if (socketDirectory) assert.match(socketDirectory, /^\/(?:tmp|var\/run\/postgresql)$/u,
+  "fixture socket override must be a local PostgreSQL Unix socket directory");
 const psql = [
   "exec",
   "-i",
   container,
   "psql",
+  ...(socketDirectory ? ["-h", socketDirectory] : []),
   "-X",
   "-q",
   "-A",
@@ -26,7 +33,7 @@ const psql = [
   "-U",
   "postgres",
   "-d",
-  "postgres",
+  database,
 ];
 const literal = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const admin = (sql, capture = false) =>
@@ -155,6 +162,7 @@ const finalizeSql = (eventId, attemptId, status) => `
   );`;
 const projectSql = ({
   eventId,
+  eventType,
   attemptId,
   tipId,
   objectId,
@@ -168,6 +176,17 @@ const projectSql = ({
   select public.process_stripe_tip_webhook_lifecycle(
     ${literal(eventId)},${literal(attemptId)}::uuid,${literal(tipId)}::uuid,
     jsonb_build_object(
+      'event_livemode',false,
+      'object_livemode',false,
+      'object_type',${literal(eventType === "charge.refunded" ? "charge" : "checkout.session")},
+      ${
+  eventType === "charge.refunded"
+    ? ""
+    : `'object_status',${literal(eventType === "checkout.session.expired" ? "expired" : "complete")},
+       'checkout_mode','payment',
+       'client_reference_id',${literal(tipId)},
+       'payment_status',${literal(eventType === "checkout.session.expired" ? "unpaid" : "paid")},`
+}
       'object_id',${literal(objectId)},
       'payment_intent_id',${literal(paymentIntentId)},
       'amount_cents',${amount},
@@ -221,8 +240,8 @@ const suffix = crypto.randomUUID();
 const tipId = crypto.randomUUID();
 const senderId = crypto.randomUUID();
 const creatorId = crypto.randomUUID();
-const paymentIntentId = `pi_concurrency_${suffix}`;
-const checkoutSessionId = `cs_concurrency_${suffix}`;
+const paymentIntentId = `pi_concurrency_${suffix.replaceAll("-", "")}`;
+const checkoutSessionId = `cs_test_concurrency_${suffix.replaceAll("-", "")}`;
 const refundEventId = `evt_tip_refund_${suffix}`;
 const completionEventId = `evt_tip_completion_${suffix}`;
 const staleEventId = `evt_tip_stale_${suffix}`;
@@ -230,8 +249,8 @@ const authorityTipId = crypto.randomUUID();
 const authorityUserId = crypto.randomUUID();
 const authorityCreatorId = crypto.randomUUID();
 const authoritySessionId = crypto.randomUUID();
-const authorityPaymentIntentId = `pi_authority_${suffix}`;
-const authorityCheckoutSessionId = `cs_authority_${suffix}`;
+const authorityPaymentIntentId = `pi_authority_${suffix.replaceAll("-", "")}`;
+const authorityCheckoutSessionId = `cs_test_authority_${suffix.replaceAll("-", "")}`;
 const authorityEventId = `evt_tip_authority_${suffix}`;
 const refundAttempt = crypto.randomUUID();
 const completionAttempt = crypto.randomUUID();
@@ -334,6 +353,7 @@ try {
         ${
           projectSql({
             eventId: refundEventId,
+            eventType: "charge.refunded",
             attemptId: refundAttempt,
             tipId,
             objectId: `ch_concurrency_${suffix.replaceAll("-", "")}`,
@@ -359,6 +379,7 @@ try {
         ${
           projectSql({
             eventId: completionEventId,
+            eventType: "checkout.session.completed",
             attemptId: completionAttempt,
             tipId,
             objectId: checkoutSessionId,
@@ -473,6 +494,7 @@ try {
         ${
           projectSql({
             eventId: staleEventId,
+            eventType: "checkout.session.expired",
             attemptId: staleAttempt,
             tipId,
             objectId: checkoutSessionId,
@@ -575,6 +597,7 @@ try {
           ${
           projectSql({
             eventId: authorityEventId,
+            eventType: "checkout.session.completed",
             attemptId: authorityAttempt,
             tipId: authorityTipId,
             objectId: authorityCheckoutSessionId,

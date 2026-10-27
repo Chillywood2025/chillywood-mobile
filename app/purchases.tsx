@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { ActivityIndicator, AppState, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSession } from "../_lib/session";
-import { creatorPurchaseDestinationRoute, creatorPurchaseScope, creatorPurchaseStatusPresentation, readMyCreatorPurchases,
+import { creatorPurchaseDestinationRoute, creatorPurchaseScope, creatorPurchasePresentation, readMyCreatorPurchases,
   restoreCreatorPurchaseLibrary, type CreatorPurchase, type CreatorPurchasePage } from "../_lib/creatorPurchases";
 import { AppBackButton } from "../components/navigation/app-back-button";
 import { CHILLYWOOD_VISUAL } from "../components/ui/chillywood-visual-system";
@@ -118,7 +118,7 @@ export default function PurchasesScreen() {
               : <>
                 <View style={styles.actions}>{filters.map(value => <Pressable key={value} testID={`purchases-filter-${value}`} accessibilityRole="button" accessibilityState={{ selected: filter === value }} style={[styles.filter, filter === value && styles.selected]} onPress={() => setFilter(value)}><Text style={styles.buttonText}>{value}</Text></Pressable>)}</View>
                 {shown.length === 0 ? <View testID="purchases-empty" style={styles.card}><Text style={styles.title}>No purchases in this view</Text><Text style={styles.body}>{page.items.length ? "Choose another filter or load older purchases." : "Completed and pending creator purchases will appear here. If you purchased on another device, restore store purchases and refresh."}</Text></View> : shown.map(item => {
-                  const status = creatorPurchaseStatusPresentation(item.status), scope = creatorPurchaseScope[item.sourceType];
+                  const status = creatorPurchasePresentation(item), scope = creatorPurchaseScope[item.sourceType];
                   const terms = item.terms;
                   const purchasedStart = item.termsAvailable ? termDate(terms.startsAt) : null;
                   const purchasedEnd = item.termsAvailable ? termDate(terms.endsAt) : null;
@@ -128,6 +128,9 @@ export default function PurchasesScreen() {
                     <Text style={styles.kind}>{scope.title}{item.environment === "sandbox" ? " · Sandbox" : item.environment === "unknown" ? " · Environment unverified" : ""}</Text>
                     <Text style={styles.title}>{item.title ?? scope.title}</Text>
                     <Text style={styles.price}>Purchase price: {moneyLabel(item)}</Text>
+                    {item.sourceType === "creator_tip" && item.provider === "stripe_connect" ? <Text testID={`purchase-refund-${item.id}`} style={styles.meta}>
+                      {item.refund ? `Provider-reported refund: ${item.refund.state === "none" ? "None" : item.refund.state === "partial" ? "Partial" : "Full"} · ${moneyLabel({ ...item, amountMinor: item.refund.amountMinor })} of ${moneyLabel(item)}` : "Refund amount unavailable. Check the provider receipt or contact support."}
+                    </Text> : null}
                     {item.receipt?.reportedAmountMinor != null && item.receipt.reportedCurrency ? <Text style={styles.meta}>Provider-reported amount: {moneyLabel({ ...item, amountMinor: item.receipt.reportedAmountMinor, currency: item.receipt.reportedCurrency })}</Text> : null}
                     <Text style={styles.status}>{item.sourceType === "event" && item.status === "completed" ? "Event ended" : status.label}</Text>
                     <Text style={styles.body}>{item.sourceType === "event" && item.status === "completed" ? "The show has ended. Replay is available only when included in the purchase terms and currently authorized." : status.detail}</Text>

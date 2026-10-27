@@ -1,467 +1,165 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
+import { checkoutSettlementOutcome, paymentIntentSettlementOutcome } from "../_shared/stripe-payment-settlement.ts";
 import {
-  createAdminClient,
-  jsonResponse,
-  notConfiguredPayload,
-  optionsResponse,
-  parseStripeEvent,
-  readOptionalEnv,
-  readStripeWebhookSecret,
-  safeWriteAuditLog,
-  sanitizeErrorMessage,
-  toText,
-  verifyStripeWebhookSignature,
-  type SupabaseClientLike,
+  createAdminClient, jsonResponse, notConfiguredPayload, optionsResponse,
+  parseStripeEvent, readOptionalEnv, readStripeWebhookSecret, safeWriteAuditLog,
+  sanitizeErrorMessage, toText, verifyStripeWebhookSignature, type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
 
 const FUNCTION_NAME = "stripe-merch-webhook";
-
 const readStripeMerchWebhookSecret = () => {
-  const merchSecret = readOptionalEnv("STRIPE_MERCH_WEBHOOK_SECRET");
-  if (merchSecret) {
-    if (!merchSecret.startsWith("whsec_")) {
-      return {
-        configured: false as const,
-        message: "Stripe merch webhook signing secret is not a valid test webhook secret.",
-        reason: "stripe_merch_webhook_secret_invalid",
-      };
-    }
-
-    return { configured: true as const, secret: merchSecret };
-  }
-
-  return readStripeWebhookSecret();
+  const secret = readOptionalEnv("STRIPE_MERCH_WEBHOOK_SECRET");
+  if (!secret) return readStripeWebhookSecret();
+  if (!secret.startsWith("whsec_")) return { configured: false as const,
+    message: "Stripe merch webhook signing secret is not a valid test webhook secret.",
+    reason: "stripe_merch_webhook_secret_invalid" };
+  return { configured: true as const, secret };
 };
-
 type StripeMerchEvent = ReturnType<typeof parseStripeEvent>;
-type StripeObject = Record<string, unknown> & {
-  amount?: number;
-  amount_subtotal?: number;
-  amount_total?: number;
-  client_reference_id?: string;
-  currency?: string;
-  id?: string;
-  metadata?: Record<string, unknown>;
-  payment_intent?: string | null;
-  status?: string;
-};
-
+type StripeObject = Record<string, unknown>;
 const merchEventTypes = new Set([
-  "checkout.session.completed",
-  "checkout.session.expired",
-  "payment_intent.succeeded",
-  "payment_intent.payment_failed",
-  "charge.refunded",
-  "charge.dispute.created",
+  "checkout.session.completed", "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed", "checkout.session.expired",
+  "payment_intent.succeeded", "payment_intent.payment_failed",
+  "charge.refunded", "charge.dispute.created",
 ]);
-
 const eventObject = (event: StripeMerchEvent): StripeObject | null => {
   const object = event.data?.object;
-  if (!object || typeof object !== "object" || Array.isArray(object)) return null;
-  return object as StripeObject;
+  return object && typeof object === "object" && !Array.isArray(object) ? object as StripeObject : null;
 };
-
-const objectId = (object: StripeObject | null) => toText(object?.id) || null;
-
-const orderIdFromObject = (object: StripeObject | null) =>
-  toText(object?.metadata?.chillywood_order_id ?? object?.client_reference_id) || null;
-
-const paymentIntentFromObject = (object: StripeObject | null) =>
-  toText(object?.payment_intent ?? object?.id) || null;
-
-const sanitizedEventMetadata = (event: StripeMerchEvent, object: StripeObject | null, extra: Record<string, unknown> = {}) => ({
-  amount_total_minor: typeof object?.amount_total === "number" ? object.amount_total : null,
-  charge_amount_minor: typeof object?.amount === "number" ? object.amount : null,
-  checkout_session_id: toText(object?.id) || null,
-  creates_digital_access: false,
-  app_access_record_created: false,
-  event_type: toText(event.type),
-  live_money_action: false,
-  object_id: objectId(object),
-  physical_merch_only: true,
-  premium_entitlement_created: false,
-  provider_payload_stored: false,
-  rail: "physical_merch",
-  revenuecat_entitlement_created: false,
-  sandbox_only: true,
-  ...extra,
-});
-
-const insertStripeMerchEvent = async (
-  adminClient: SupabaseClientLike,
-  event: StripeMerchEvent,
-  object: StripeObject | null,
-) => {
-  const eventId = toText(event.id);
-  const eventType = toText(event.type);
-  const orderId = orderIdFromObject(object);
-  const { data, error } = await adminClient
-    .from("stripe_merch_events")
-    .insert({
-      environment: "sandbox",
-      event_type: eventType,
-      linked_order_id: orderId,
-      metadata: sanitizedEventMetadata(event, object),
-      object_id: objectId(object),
-      provider: "stripe",
-      status: "received",
-      stripe_event_id: eventId,
-    })
-    .select("id, linked_order_id")
-    .single();
-
-  if (error && error.code === "23505") {
-    const { data: existing, error: readError } = await adminClient
-      .from("stripe_merch_events")
-      .select("id, linked_order_id, status")
-      .eq("stripe_event_id", eventId)
-      .maybeSingle();
-
-    if (readError) throw new Error(`Stripe merch duplicate lookup failed: ${readError.message}`);
-    return { duplicate: true as const, row: existing as { id?: string; linked_order_id?: string | null; status?: string } | null };
+const minorAmount = (value: unknown) =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+const providerEventStateSupported = (type: string, object: StripeObject | null) => {
+  if (!object) return false;
+  if (type.startsWith("checkout.session.") && type !== "checkout.session.expired") {
+    const outcome = checkoutSettlementOutcome(type, object);
+    return type === "checkout.session.async_payment_succeeded"
+      ? outcome === "succeeded" : outcome !== "unsupported";
   }
-
-  if (error) throw new Error(`Stripe merch event insert failed: ${error.message}`);
-  return { duplicate: false as const, row: data as { id?: string; linked_order_id?: string | null } | null };
+  if (type.startsWith("payment_intent.")) return paymentIntentSettlementOutcome(type, object) !== "unsupported";
+  if (type === "checkout.session.expired") return object.object === "checkout.session"
+    && object.mode === "payment" && object.status === "expired" && object.payment_status === "unpaid"
+    && (minorAmount(object.amount_total) ?? 0) > 0;
+  if (type === "charge.refunded") {
+    const amount = minorAmount(object.amount), refunded = minorAmount(object.amount_refunded);
+    return object.object === "charge" && amount !== null && amount > 0 && refunded !== null
+      && refunded > 0 && refunded <= amount && object.refunded === (refunded === amount);
+  }
+  return type === "charge.dispute.created" && object.object === "dispute"
+    && (minorAmount(object.amount) ?? 0) > 0 && /^ch_[A-Za-z0-9_]+$/.test(toText(object.charge));
 };
-
-const updateStripeMerchEvent = async (
-  adminClient: SupabaseClientLike,
-  rowId: string | null,
-  status: "processed" | "ignored" | "failed",
-  metadata: Record<string, unknown>,
-) => {
-  if (!rowId) return;
-  const { error } = await adminClient
-    .from("stripe_merch_events")
-    .update({
-      metadata,
-      processed_at: new Date().toISOString(),
-      status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", rowId);
-
-  if (error) throw new Error(`Stripe merch event update failed: ${error.message}`);
-};
-
-const readOrderByStripeObject = async (adminClient: SupabaseClientLike, object: StripeObject | null) => {
-  const orderId = orderIdFromObject(object);
-  const sessionId = toText(object?.id);
-  const paymentIntentId = paymentIntentFromObject(object);
-
-  if (orderId) {
-    const result = await adminClient
-      .from("merch_orders")
-      .select("id")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (result.error) throw new Error(`Merch order lookup failed: ${result.error.message}`);
-    if (result.data) return toText((result.data as { id?: unknown }).id);
-  }
-
-  if (sessionId) {
-    const result = await adminClient
-      .from("merch_orders")
-      .select("id")
-      .eq("stripe_checkout_session_id", sessionId)
-      .maybeSingle();
-    if (result.error) throw new Error(`Merch order session lookup failed: ${result.error.message}`);
-    if (result.data) return toText((result.data as { id?: unknown }).id);
-  }
-
-  if (paymentIntentId) {
-    const result = await adminClient
-      .from("merch_orders")
-      .select("id")
-      .eq("stripe_payment_intent_id", paymentIntentId)
-      .maybeSingle();
-    if (result.error) throw new Error(`Merch order payment intent lookup failed: ${result.error.message}`);
-    if (result.data) return toText((result.data as { id?: unknown }).id);
-  }
-
-  return null;
-};
-
-const updateOrderForEvent = async (
-  adminClient: SupabaseClientLike,
-  event: StripeMerchEvent,
-  object: StripeObject | null,
-) => {
-  const eventType = toText(event.type);
-  const orderId = await readOrderByStripeObject(adminClient, object);
-  if (!orderId) return { orderId: null, orderUpdated: false, reason: "order_not_found" };
-
-  const baseUpdate: Record<string, unknown> = {
-    metadata: sanitizedEventMetadata(event, object, {
-      processed_by: FUNCTION_NAME,
-      stripe_event_id: toText(event.id),
-    }),
-    stripe_payment_intent_id: paymentIntentFromObject(object),
-    updated_at: new Date().toISOString(),
+const providerFacts = (event: StripeMerchEvent, object: StripeObject) => {
+  const type = toText(event.type);
+  const metadata = object.metadata && typeof object.metadata === "object" && !Array.isArray(object.metadata)
+    ? object.metadata as Record<string, unknown> : {};
+  return {
+    event_livemode: event.livemode,
+    object_livemode: object.livemode,
+    event_account_id: toText((event as unknown as Record<string, unknown>).account) || null,
+    object_id: toText(object.id) || null,
+    object_type: toText(object.object) || null,
+    payment_intent_id: toText(type.startsWith("payment_intent.") ? object.id : object.payment_intent) || null,
+    charge_id: toText(object.charge) || null,
+    client_reference_id: toText(object.client_reference_id) || null,
+    metadata_order_id: toText(metadata.chillywood_order_id) || null,
+    metadata_buyer_id: toText(metadata.buyer_user_id) || null,
+    metadata_environment: toText(metadata.environment) || null,
+    metadata_rail: toText(metadata.rail) || null,
+    amount_minor: minorAmount(type.startsWith("checkout.session.") ? object.amount_total : object.amount),
+    amount_received_minor: minorAmount(object.amount_received),
+    refunded_amount_minor: minorAmount(object.amount_refunded),
+    refunded: typeof object.refunded === "boolean" ? object.refunded : null,
+    currency: toText(object.currency).toLowerCase() || null,
+    mode: toText(object.mode) || null,
+    status: toText(object.status) || null,
+    payment_status: toText(object.payment_status) || null,
   };
-
-  const update = (() => {
-    switch (eventType) {
-      case "checkout.session.completed":
-      case "payment_intent.succeeded":
-        return {
-          ...baseUpdate,
-          amount_subtotal_minor: typeof object?.amount_subtotal === "number" ? object.amount_subtotal : undefined,
-          amount_total_minor: typeof object?.amount_total === "number" ? object.amount_total : typeof object?.amount === "number" ? object.amount : undefined,
-          currency: toText(object?.currency).toLowerCase() || undefined,
-          fulfillment_status: "processing",
-          order_status: "paid",
-          paid_at: new Date().toISOString(),
-          payment_status: "paid",
-          provider_order_id: toText(object?.id) || undefined,
-          stripe_checkout_session_id: eventType === "checkout.session.completed" ? toText(object?.id) || undefined : undefined,
-        };
-      case "payment_intent.payment_failed":
-        return {
-          ...baseUpdate,
-          order_status: "failed",
-          payment_status: "failed",
-        };
-      case "checkout.session.expired":
-        return {
-          ...baseUpdate,
-          canceled_at: new Date().toISOString(),
-          order_status: "canceled",
-          payment_status: "failed",
-        };
-      case "charge.refunded":
-        return {
-          ...baseUpdate,
-          fulfillment_status: "canceled",
-          order_status: "refunded",
-          payment_status: "refunded",
-          refunded_at: new Date().toISOString(),
-        };
-      case "charge.dispute.created":
-        return {
-          ...baseUpdate,
-          fulfillment_status: "blocked",
-          order_status: "chargeback",
-          payment_status: "disputed",
-        };
-      default:
-        return baseUpdate;
-    }
-  })();
-
-  const cleanedUpdate = Object.fromEntries(Object.entries(update).filter(([, value]) => value !== undefined));
-  const { error } = await adminClient
-    .from("merch_orders")
-    .update(cleanedUpdate)
-    .eq("id", orderId);
-
-  if (error) throw new Error(`Merch order webhook update failed: ${error.message}`);
-  return { orderId, orderUpdated: true, reason: "order_updated" };
+};
+const hashText = async (value: string) => Array.from(new Uint8Array(
+  await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+const responseFacts = {
+  provider: "stripe", providerKey: "stripe_physical_goods", mode: "sandbox",
+  liveMoneyAction: false, physicalMerchOnly: true, checkoutCreated: false,
+  digitalAccessGrantCreated: false, revenueCatEntitlementCreated: false,
+  premiumEntitlementCreated: false, payoutCreated: false, cashOutEnabled: false,
 };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return optionsResponse();
-  if (req.method !== "POST") {
-    return jsonResponse(405, { error: "method_not_allowed", message: "Use POST for Stripe merch webhook requests." });
-  }
-
+  if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed", message: "Use POST for Stripe merch webhook requests." });
   let adminClient: SupabaseClientLike | null = null;
-
   try {
-    const webhookSecret = readStripeMerchWebhookSecret();
-    if (!webhookSecret.configured) {
-      return jsonResponse(200, notConfiguredPayload(webhookSecret.reason, webhookSecret.message, {
-        eventStored: false,
-        signatureVerified: false,
-        webhookProcessed: false,
-        physicalMerchOnly: true,
-      }));
-    }
-
-    const adminConfig = createAdminClient();
-    if (!adminConfig.configured) {
-      return jsonResponse(200, notConfiguredPayload(adminConfig.reason, adminConfig.message, {
-        eventStored: false,
-        signatureVerified: false,
-        webhookProcessed: false,
-        physicalMerchOnly: true,
-      }));
-    }
-    adminClient = adminConfig.client;
-
-    const rawBody = await req.text();
-    const signatureVerified = await verifyStripeWebhookSignature(rawBody, req.headers.get("stripe-signature"), webhookSecret.secret);
-    if (!signatureVerified) {
-      await safeWriteAuditLog(adminClient, {
-        action: "stripe_merch_webhook_failed",
-        metadata: {
-          failure_reason: "signature_verification_failed",
-          function_name: FUNCTION_NAME,
-        },
-        reason: "Stripe merch webhook signature verification failed.",
-        severity: "warning",
-        targetType: "stripe_merch_webhook",
-      });
-
-      return jsonResponse(400, {
-        error: "invalid_signature",
-        liveMoneyAction: false,
-        message: "Stripe merch webhook signature verification failed.",
-        mode: "sandbox",
-        provider: "stripe",
-        providerKey: "stripe_physical_goods",
-        signatureVerified: false,
-      });
-    }
-
-    const event = parseStripeEvent(rawBody);
-    const object = eventObject(event);
-    if (event.livemode === true) {
-      await safeWriteAuditLog(adminClient, {
-        action: "stripe_merch_webhook_failed",
-        metadata: {
-          event_id: toText(event.id),
-          event_type: toText(event.type),
-          failure_reason: "live_mode_event_rejected",
-          function_name: FUNCTION_NAME,
-        },
-        reason: "Live-mode Stripe merch webhook event was rejected by the sandbox function.",
-        severity: "warning",
-        targetType: "stripe_merch_webhook",
-      });
-
-      return jsonResponse(200, {
-        status: "ignored",
-        provider: "stripe",
-        providerKey: "stripe_physical_goods",
-        mode: "sandbox",
-        liveMoneyAction: false,
-        eventStored: false,
-        signatureVerified: true,
-        webhookProcessed: false,
-        message: "Live-mode Stripe merch events are not processed by this sandbox function.",
-      });
-    }
-
-    const eventType = toText(event.type);
-    const eventRecord = await insertStripeMerchEvent(adminClient, event, object);
-    const eventRowId = toText(eventRecord.row?.id) || null;
-
-    if (eventRecord.duplicate) {
-      return jsonResponse(200, {
-        status: "duplicate",
-        provider: "stripe",
-        providerKey: "stripe_physical_goods",
-        mode: "sandbox",
-        liveMoneyAction: false,
-        eventStored: false,
-        signatureVerified: true,
-        webhookProcessed: false,
-        checkoutCreated: false,
-        digitalAccessGrantCreated: false,
-        revenueCatEntitlementCreated: false,
-        premiumEntitlementCreated: false,
-        payoutCreated: false,
-        cashOutEnabled: false,
-        message: "Stripe merch webhook event was already recorded and was not processed again.",
-      });
-    }
-
-    if (!merchEventTypes.has(eventType)) {
-      await updateStripeMerchEvent(adminClient, eventRowId, "ignored", sanitizedEventMetadata(event, object, {
-        ignored_reason: "unsupported_merch_event_type",
-      }));
-      return jsonResponse(200, {
-        status: "ignored",
-        provider: "stripe",
-        providerKey: "stripe_physical_goods",
-        mode: "sandbox",
-        liveMoneyAction: false,
-        eventStored: true,
-        signatureVerified: true,
-        webhookProcessed: true,
-        checkoutCreated: false,
-        digitalAccessGrantCreated: false,
-        revenueCatEntitlementCreated: false,
-        premiumEntitlementCreated: false,
-        payoutCreated: false,
-        cashOutEnabled: false,
-        message: "Stripe event was recorded but ignored because it is not a physical-merch event.",
-      });
-    }
-
-    const orderResult = await updateOrderForEvent(adminClient, event, object);
-    await updateStripeMerchEvent(adminClient, eventRowId, orderResult.orderUpdated ? "processed" : "ignored", sanitizedEventMetadata(event, object, {
-      linked_order_id: orderResult.orderId,
-      processing_reason: orderResult.reason,
+    const secret = readStripeMerchWebhookSecret();
+    if (!secret.configured) return jsonResponse(200, notConfiguredPayload(secret.reason, secret.message, {
+      ...responseFacts, eventStored: false, signatureVerified: false, webhookProcessed: false,
     }));
-
-    await safeWriteAuditLog(adminClient, {
-      action: "stripe_merch_webhook_processed",
-      metadata: {
-        creates_digital_access: false,
-        event_id: toText(event.id),
-        event_type: eventType,
-        function_name: FUNCTION_NAME,
-        linked_order_id: orderResult.orderId,
-        physical_merch_only: true,
-        processing_reason: orderResult.reason,
-      },
-      reason: "Stripe sandbox physical merch webhook processed without digital access, payout, or live-money action.",
-      targetId: orderResult.orderId,
-      targetType: "merch_order",
+    const admin = createAdminClient();
+    if (!admin.configured) return jsonResponse(200, notConfiguredPayload(admin.reason, admin.message, {
+      ...responseFacts, eventStored: false, signatureVerified: false, webhookProcessed: false,
+    }));
+    adminClient = admin.client;
+    const rawBody = await req.text();
+    if (!await verifyStripeWebhookSignature(rawBody, req.headers.get("stripe-signature"), secret.secret)) {
+      await safeWriteAuditLog(adminClient, {
+        action: "stripe_merch_webhook_failed", targetType: "stripe_merch_webhook", severity: "warning",
+        reason: "Stripe merch webhook signature verification failed.",
+        metadata: { failure_reason: "signature_verification_failed", function_name: FUNCTION_NAME },
+      });
+      return jsonResponse(400, { ...responseFacts, error: "invalid_signature", signatureVerified: false,
+        eventStored: false, webhookProcessed: false, message: "Stripe merch webhook signature verification failed." });
+    }
+    const event = parseStripeEvent(rawBody), object = eventObject(event), type = toText(event.type);
+    // Missing environment is not evidence of a test event; connected-account
+    // events are not this platform's physical-merch Checkout authority.
+    if (event.livemode !== false || object?.livemode !== false
+      || toText((event as unknown as Record<string, unknown>).account)) {
+      await safeWriteAuditLog(adminClient, {
+        action: "stripe_merch_webhook_failed", targetType: "stripe_merch_webhook", severity: "warning",
+        reason: "Stripe merch webhook was rejected by the sandbox environment guard.",
+        metadata: { event_id: toText(event.id), event_type: type,
+          failure_reason: "test_environment_required", function_name: FUNCTION_NAME },
+      });
+      return jsonResponse(200, { ...responseFacts, status: "ignored", reason: "test_environment_required",
+        eventStored: false, signatureVerified: true, webhookProcessed: false,
+        message: "Only explicit test-mode platform merch events are accepted." });
+    }
+    if (!merchEventTypes.has(type) || !providerEventStateSupported(type, object)) {
+      return jsonResponse(200, { ...responseFacts, status: "ignored", reason: "payment_state_not_confirmed",
+        eventStored: false, signatureVerified: true, webhookProcessed: false,
+        message: "This event does not confirm a supported physical-merch payment state." });
+    }
+    // Sale eligibility belongs to initiation. Verified callbacks for an existing
+    // order still settle after sales are disabled, through the same test guards.
+    const { data, error } = await adminClient.rpc("process_stripe_merch_webhook_lifecycle", {
+      p_event_id: toText(event.id), p_event_type: type,
+      p_raw_event_hash: await hashText(rawBody), p_facts: providerFacts(event, object!),
     });
-
-    return jsonResponse(200, {
-      status: orderResult.orderUpdated ? "processed" : "ignored",
-      provider: "stripe",
-      providerKey: "stripe_physical_goods",
-      mode: "sandbox",
-      liveMoneyAction: false,
-      eventStored: true,
-      signatureVerified: true,
-      webhookProcessed: true,
-      orderUpdated: orderResult.orderUpdated,
-      linkedOrderId: orderResult.orderId,
-      checkoutCreated: false,
-      digitalAccessGrantCreated: false,
-      revenueCatEntitlementCreated: false,
-      premiumEntitlementCreated: false,
-      payoutCreated: false,
-      cashOutEnabled: false,
-      message: orderResult.orderUpdated
-        ? "Stripe sandbox physical merch event updated the merch order only."
-        : "Stripe sandbox physical merch event was stored but no matching order was found.",
+    if (error) throw new Error(`Merch reconciliation failed: ${error.message}`);
+    const result = data as Record<string, unknown> | null;
+    if (!result || !["processed", "ignored", "duplicate", "pending"].includes(toText(result.status))
+      || typeof result.retryable !== "boolean" || typeof result.orderUpdated !== "boolean"
+      || typeof result.eventStored !== "boolean") throw new Error("Merch reconciliation returned no confirmed outcome.");
+    await safeWriteAuditLog(adminClient, {
+      action: "stripe_merch_webhook_processed", targetType: "merch_order",
+      targetId: toText(result.orderId) || null,
+      reason: "Verified sandbox merch payment state reconciled without payout or digital access.",
+      metadata: { event_id: toText(event.id), event_type: type, function_name: FUNCTION_NAME,
+        processing_reason: toText(result.reason), physical_merch_only: true, creates_digital_access: false },
+    });
+    return jsonResponse(result.retryable ? 409 : 200, {
+      ...responseFacts, status: result.status, reason: result.reason, signatureVerified: true,
+      eventStored: result.eventStored, webhookProcessed: !result.retryable && result.status !== "duplicate",
+      orderUpdated: result.orderUpdated, linkedOrderId: result.orderId ?? null, retryable: result.retryable,
+      message: result.retryable
+        ? "The exact stored payment identity is not available yet. Retry this same delivery."
+        : "The verified physical-merch payment state was reconciled.",
     });
   } catch (error) {
-    await safeWriteAuditLog(adminClient, {
-      action: "stripe_merch_webhook_failed",
-      metadata: {
-        error: sanitizeErrorMessage(error),
-        function_name: FUNCTION_NAME,
-      },
-      reason: "Stripe sandbox physical merch webhook failed.",
-      severity: "warning",
-      targetType: "stripe_merch_webhook",
-    });
-
-    return jsonResponse(500, {
-      error: "stripe_merch_webhook_failed",
-      liveMoneyAction: false,
-      eventStored: false,
-      webhookProcessed: false,
-      checkoutCreated: false,
-      digitalAccessGrantCreated: false,
-      revenueCatEntitlementCreated: false,
-      premiumEntitlementCreated: false,
-      payoutCreated: false,
-      cashOutEnabled: false,
-      message: sanitizeErrorMessage(error),
-      provider: "stripe",
-      providerKey: "stripe_physical_goods",
-      mode: "sandbox",
-    });
+    await safeWriteAuditLog(adminClient, { action: "stripe_merch_webhook_failed", targetType: "stripe_merch_webhook",
+      severity: "warning", reason: "Stripe sandbox physical merch webhook failed.",
+      metadata: { error: sanitizeErrorMessage(error), function_name: FUNCTION_NAME } });
+    return jsonResponse(500, { ...responseFacts, error: "stripe_merch_webhook_failed",
+      eventStored: false, webhookProcessed: false, message: sanitizeErrorMessage(error) });
   }
 });

@@ -7,10 +7,14 @@ import type { CreatorPriceSourceType } from "./creatorSupportedPrices";
 export type CreatorPurchaseStatus = "pending" | "paid_unfulfilled" | "reconciliation_required" | "active" | "upcoming" | "expired" | "refunded" | "revoked" | "failed" | "canceled" | "disputed" | "completed";
 export type CreatorPurchaseCursor = { createdAt: string; id: string };
 export type CreatorPurchaseDestination = { kind: "creator_video" | "creator_event" | "watch_party" | "live_stage" | "creator_channel" | "vip_pass" | "channel_subscription"; id: string };
+export type CreatorPurchaseRefund = { state: "none" | "partial" | "full"; amountMinor: number };
 export type CreatorPurchase = {
   id: string; purchaseIntentId: string | null; sourceType: CreatorPriceSourceType; sourceId: string | null; creatorId: string | null;
   productType: string; productKey: string | null; title: string | null; status: CreatorPurchaseStatus;
   amountMinor: number | null; currency: string | null; createdAt: string; purchasedAt: string | null;
+  // Absent on older servers/non-Stripe purchases; null means inconsistent
+  // accounting requires review. Neither case establishes a refund amount.
+  refund?: CreatorPurchaseRefund | null;
   startsAt: string | null; endsAt?: string | null; expiresAt: string | null; provider: string; environment: "sandbox" | "production" | "unknown";
   destination: CreatorPurchaseDestination | null;
   receipt: { providerEventId: string | null; originalTransactionId: string | null; verifiedAt: string | null; providerTransactionId?: string | null;
@@ -61,6 +65,21 @@ export function parseCreatorPurchasePage(value: unknown, expectedUserId: string)
       && (!Number.isSafeInteger(entry.amountMinor) || Number(entry.amountMinor) < 0 || !text(entry.currency) || !/^[a-z]{3}$/u.test(entry.currency))) return null;
     const sourceType = entry.sourceType as CreatorPriceSourceType;
     if (entry.productType !== sourceProducts[sourceType]) return null;
+    if (entry.refund !== undefined) {
+      if (sourceType !== "creator_tip" || entry.provider !== "stripe_connect") return null;
+      if (entry.refund === null) {
+        if (!["reconciliation_required", "disputed"].includes(entry.status)) return null;
+      } else {
+        if (!record(entry.refund) || !["none", "partial", "full"].includes(String(entry.refund.state))
+          || !Number.isSafeInteger(entry.amountMinor) || Number(entry.amountMinor) <= 0
+          || !Number.isSafeInteger(entry.refund.amountMinor) || Number(entry.refund.amountMinor) < 0
+          || Number(entry.refund.amountMinor) > Number(entry.amountMinor)) return null;
+        const refunded = Number(entry.refund.amountMinor), charged = Number(entry.amountMinor);
+        const extent = refunded === 0 ? "none" : refunded === charged ? "full" : "partial";
+        if (entry.refund.state !== extent
+          || (extent === "full" ? !["refunded", "disputed"].includes(entry.status) : entry.status === "refunded")) return null;
+      }
+    }
     if (entry.destination !== null) {
       if (!entry.sourceId || !entry.creatorId
         || (!entry.productKey && !(sourceType === "creator_tip" && entry.provider === "stripe_connect"))
@@ -138,6 +157,21 @@ export function creatorPurchaseStatusPresentation(status: CreatorPurchaseStatus)
     completed: { label: "Completed", detail: "This transaction is recorded. Its receipt does not grant unrelated access.", pending: false },
   };
   return presentation[status];
+}
+
+export function creatorPurchasePresentation(item: CreatorPurchase) {
+  const base = creatorPurchaseStatusPresentation(item.status);
+  if (item.sourceType !== "creator_tip" || item.provider !== "stripe_connect" || item.status === "disputed") return base;
+  if (item.status === "refunded" && item.refund === undefined) return {
+    label: "Refund reported", detail: "A refund was reported, but its amount is unavailable. Check the provider receipt for the refunded amount. Tips do not include access.", pending: false,
+  };
+  if (item.refund?.state === "full" && item.status === "refunded") return {
+    label: "Fully refunded", detail: "The provider reports the full original charge refunded. Tips do not include access.", pending: false,
+  };
+  if (item.refund?.state === "partial" && item.status === "completed") return {
+    label: "Partially refunded", detail: "The provider reports part of this tip refunded. The original charge and cumulative refund are shown separately. Tips do not include access.", pending: false,
+  };
+  return base;
 }
 
 export function creatorPurchaseDestinationRoute(destination: CreatorPurchaseDestination) {
