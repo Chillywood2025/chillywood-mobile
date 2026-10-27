@@ -4,9 +4,11 @@ Recovery evidence updated 2026-10-27. The original audit head was
 `268711e4f9b68efe8fd3f905ad15d192ff8fb384`. Recovery checkpoint
 `4308e0324d2566549766ece4b22792a71a4d731e` preserves all 113 recovered changed
 files in a separate checkout and Git bundle; the original checkout was retained.
-The source corrections below follow that checkpoint. Draft PR626's earlier CI
-does not qualify this implementation. Final publication, frozen-head checks and
-review remain to be recorded on that PR; this document does not claim them green.
+The source corrections below follow that checkpoint. The recovered implementation
+was published to draft PR626 at `c382369928cde0ebeb9cbf4e46e3a6c4828f9f27`.
+Canonical CI at that head found the reference-guard integration regression
+recorded below. Neither earlier audit CI nor passing individual jobs qualify the
+complete implementation; the repaired publication head needs its own full checks.
 
 This supplements, and retains the IDs from,
 [`creator-buyer-monetization-ledger.md`](creator-buyer-monetization-ledger.md).
@@ -87,7 +89,7 @@ silently changes price/status; unconfigured modes direct to explicit editors.
 | EX01 | Official Apple/Google/RevenueCat/Stripe documentation reviewed2026-10-26. | Documentation is source-policy evidence. Recovery connector reads returned no usable account/project result; connection, live catalog and migration parity remain unverified. No provider/account settings changed. |
 | EX02 | No deployment or physical device claim. | Current remote migration parity, store approval, provider callbacks, media output and device behavior remain external. |
 | QA01 | Direct source/SQL tests, malformed/wrong-owner/wrong-quote controls and broad applicable checks. | Passing subsets and retained failures below. Independent recovery review found no remaining blocker in its hashed checkout/lifecycle/Studio/broadcast scope; it did not independently review its author's host controls. Complete required validation remains pending. |
-| QA02 | Existing draft PR626 retained; no merge. | Final implementation commit and exact-head CI/review pending. Earlier checkpoint CI cannot qualify this delta. |
+| QA02 | Existing draft PR626 retained; no merge. | Recovered implementation published at `c3823699`; canonical CI exposed a new reference-guard integration failure. The repaired head requires complete exact-head CI and review. Earlier checkpoint CI cannot qualify this delta. |
 
 ## Recovery validation evidence
 
@@ -108,20 +110,117 @@ October27. Counts below overlap and must not be added into a unique total.
 | Broadcast recovery |33 native assertions and33 complete-chain embedded assertions passed; concurrent retry has one winner, original deadline remains fixed, and uniqueness-removal negative control fails correctly. Producer/transport/runtime suite passed17 tests. | `broadcast-producer-native.log`, `broadcast-producer-sql-verified.log`, `broadcast-producer-source-final.log`. The later verified SQL log supersedes failed fixture-UUID attempts; no production constraint was weakened. |
 | Creator and buyer recovery |9 Studio,8 timestamp/lifecycle and32 independent wallet/playback tests passed. Host preparation/control integration passed29 tests; subsequent exact-title correction passed the11-test host suite. | `implementation-review-source-proof.json`, host-control logs. Mounted media continuity is synthetic, not installed-device proof. |
 | Sensitive client and Edge |375 client tests across37 files passed with no skips. Five Deno authority groups passed28/50/43/51/13 tests. Changed scheduled-show/money Edge, LiveKit and notification typechecks passed. | `sensitive-summary.json`; DB-owned tests were intentionally separate. One unchanged R2 typecheck failure is retained below. |
-| Catalog and explicit grants |3 catalog tests passed; inventory is12 implementation migrations,67 added functions,13 replacements,3 preserved-OID renames and0 removals. Standalone client API-grant rerun passed for133 client tables. | `database-catalog-validation.log`, `database-api-client-operations-rerun.log`; earlier120-second load timeout retained. |
+| Catalog and explicit grants |3 catalog tests passed after the reference-guard repair for 13 implementation migrations, 67 added functions, 13 replacements, 3 preserved-OID renames and 0 removals. The same five-test rerun passed supported-price/immutable-quote coverage with 84 assertions and full-chain reservations. Earlier standalone client API-grant rerun passed for 133 client tables. | `reference-guard-catalog-sale-reservations.log`; prior 12-migration `database-catalog-validation.log` and `database-api-client-operations-rerun.log` retained, including the earlier 120-second load timeout. |
 | Repository checks |Final full `npm run typecheck` and `npm run lint` passed; runtime/routes/UX guards,10 sensitive-policy guards,111 policy tests and18/18 Expo Doctor checks also passed. | `core-typecheck-final.log`, `core-lint-final.log`, `core-expo-doctor-final.log`; complete frozen-head required CI remains separate and pending. |
+
+### Recovered-head canonical CI checkpoint
+
+[Source run40436649669](https://github.com/Chillywood2025/chillywood-mobile/actions/runs/40436649669)
+is bound to `c382369928cde0ebeb9cbf4e46e3a6c4828f9f27`. The recorded snapshot
+shows Core, Sensitive, Policy and Autonomous passing. Sensitive reports 387/387,
+Policy 111/111, and the main Autonomous suite 140/140 tests, each with no skips.
+Those are separate head-specific results, not totals added to local counts.
+The subsequent completed Product result reports 4,258 tests: 4,236 passed,
+18 failed and 4 skipped. Two distinct Product failure causes were repaired in
+`4d5c54e3`, with scoped validation below; the original run remains failed.
+Database executed 5,182 assertions across 147
+files, with 10 media-retirement suites aborting and three explicit assertion
+failures: `deleted_content_readiness` assertions 14 and 23, and
+`platform_brand_global_retention` assertion 23. The ordinary
+`scheduled_virtual_event_reservations` suite passed. Android compilation passed;
+Native SDK qualification remains pending. All of these results belong to
+`c3823699`, before the reference-guard and Product repairs, and do not qualify
+the repaired publication head.
+
+The Product failures had two causes. After a successful event create followed
+by a failed schedule refresh, the creator editor retained the event ID but lost
+the confirmed row. Its lifecycle guard then correctly refused to treat an
+unknown row as an editable draft. The three-line correction in
+[`app/channel-settings.tsx`](../../app/channel-settings.tsx) preserves the
+confirmed server row before refreshing. The strengthened mounted test verifies
+that the confirmed draft remains editable and Update retries exact `event-1`;
+the lifecycle guard itself is unchanged. The other failure was an obsolete
+tip-copy assertion. Semantic checks now cover the current instruction to verify
+Purchases status and the absence of included access, with a mounted fallback
+receipt test that checks for no promised creator credit, access or confirmed
+payment. Tip production behavior was not changed.
+
+The original two-file reproduction passed 83 of 85 tests and failed two, with
+no skips. After repair, the four-file run passed all 106 tests with no failures,
+cancellations or skips: `customer-commerce-access-language`,
+`platform-studio-mounted`, `creator-event-studio-mounted` and
+`creator-money/purchases-route-mounted`. Evidence is
+`product-two-failures-before.log` and `product-two-failures-after.log`. Commit
+`4d5c54e3` contains this source/test correction; complete Product and all required
+checks on the final publication head remain pending.
+
+Brand Native PostgreSQL failed with `retirement_fence_not_armed`. Investigation
+confirmed a new implementation integration gap: the public JSON `terms` columns
+on `creator_event_offer_revisions` and `creator_money_purchase_quotes` were not
+registered with the existing deleted-media and Brand reference guards. Their
+absence makes global retirement readiness false. This is a confirmed source
+regression, not merely an exported-fixture limitation. Forward migration
+[`20261027021608_creator_monetization_reference_guard_integration.sql`](../../supabase/migrations/20261027021608_creator_monetization_reference_guard_integration.sql)
+registers exactly four triggers: `zzz_deleted_media_reference_guard` calls
+`private.guard_deleted_media_references()` and
+`zzz_platform_brand_retention_reference` calls
+`private.guard_platform_brand_retention_references()` on each new table. All four
+run BEFORE INSERT OR UPDATE FOR EACH ROW without a filter. No guard function,
+grant, activation setting or existing retention policy changes; the prior
+performance task remains outside this correction. The before/after definition
+hashes for both guards and both readiness functions are identical in
+`reference-guard-definition-proof.json`. The migration SHA256 is
+`49845a15ffb030da0f8da00579d6b4bff712db78596f29135a5ed48d5099b1f8`.
+The four-file database repair was committed as `81a163b4`; this does not imply
+that complete CI on that commit passed.
+
+The native causal proof reproduced four missing registrations and both readiness
+checks false before the migration, then no missing registrations and both true
+afterward. The existing global-retention test failed at its readiness assertion
+before repair and passed 41/41 afterward. The new integration test passed 12/12,
+including removal/restoration negative controls; the existing deleted-fallback
+test passed 12/12. Evidence is `reference-guard-regression-results.json` and its
+before/after logs. These are local synthetic PostgreSQL results; complete CI on
+the repaired head remains required. The original failed CI run and logs are
+retained in `ci-c3823699-*` evidence.
+
+The subsequent 12-file native affected-suite run completed 11 files with 305
+passing assertions, including ordinary scheduled-show reservations. The retained
+media suite reached 13 of its planned 36 assertions before aborting with
+`content_inspection_denied`; the complete run remains failed. The diagnostic
+kept `receiptValid=true` before and after the call, but only 1,058.964 ms remained
+on its existing five-second authorization; the resolver took 3,571.031 ms and
+rejected with `42501` after the deadline. No deadline, guard or assertion was
+changed. This explains the local deadline rejection without qualifying the
+suite. The relevant retained-media migrations and test match audit head
+`268711e4`, but baseline runtime parity and canonical repaired-head CI remain
+pending. See
+`reference-guard-retained-diagnostic.log`,
+`reference-guard-affected-suites-results.json` and the retained-media log. These
+counts overlap the causal proof above and are not added to it. The consolidated
+source hashes, test results and remaining limits are in
+`reference-guard-closeout.json`.
+
+The separate complete-chain catalog/sale/reservation rerun passed all five Node
+tests with no skips: three catalog-delta/idempotence tests for the 13-migration
+inventory, supported-price/immutable-quote coverage with 84 assertions including
+the unchanged 99-cent negative control, and embedded ordinary reservations.
+`reference-guard-catalog-sale-reservations.log` records these local results;
+provider transport and full repaired-head CI remain unqualified.
 
 ### Retained failures and incomplete runs
 
-- The broad synthetic native pgTAP run is **not green**:147 files,119 passed,
-  28 failed,4701 reported assertions. Six corrected fixture files subsequently
-  passed456 assertions. The remaining22 findings were classified as exported
-  fixture gaps by the October27 read-only review, including the two ACL-normalizer
-  failures traced to fixture-added direct function grants. The unchanged audit
-  baseline and fresh native metadata support that classification. This does not
-  relabel the failed run green: canonical Supabase Database CI is still required.
-  See `final-db-review-20261027.json` for Storage/Realtime/pg_net, migration-history,
-  locale/database-ACL and function-grant evidence.
+- The broad synthetic native pgTAP run is **not green**: 147 files, 119 passed,
+  28 failed, 4701 reported assertions. Six corrected fixture files subsequently
+  passed 456 assertions. The remaining 22 findings were initially classified as
+  exported-fixture gaps in `final-db-review-20261027.json`, including two
+  ACL-normalizer failures traced to fixture-added direct function grants.
+  Subsequent canonical CI exposed the new-table reference-guard regression above;
+  the earlier blanket classification is therefore superseded as a complete
+  diagnosis of implementation readiness. Its Storage/Realtime/pg_net,
+  migration-history, locale/database-ACL and function-grant observations remain
+  historical evidence, not a waiver. The failed run is retained unchanged and
+  complete canonical Database CI is still required after repair.
 - Initial full TypeScript failed on `event.title` in the host controls and
   missing `ops/alert-automation` dependencies in the recovery checkout. The title
   now uses `event.eventTitle`; existing dependencies were linked and the11-test
@@ -129,8 +228,9 @@ October27. Counts below overlap and must not be added into a unique total.
   earlier failure output remains retained.
 - Local Deno2.7.14/TypeScript5.9.2 reports TS2339 on `init.method` and
   `init.headers` in unchanged `r2-disposable-qualification-runtime.ts:34,38`.
-  The same errors reproduce from audit head `268711e4`; this is retained as an
-  applicable check failure, not converted into a pass or an unrelated repair.
+  The same errors reproduce from audit head `268711e4`. The local failure is
+  retained; canonical Sensitive subsequently passed on `c3823699` without an
+  unrelated R2 source repair. Neither result is relabeled as the other.
 - The broad interim Product run was intentionally stopped to avoid duplicate
   full-schema replays competing with the database lane. Its log is incomplete,
   not passing. Complete Product and all other selected categories must run on
@@ -249,13 +349,17 @@ endpoint could not be rendered by the web reader; its HTML index was used.
 
 ### Database inventory and reservation follow-up
 
-The baseline comparison uses actual full-schema replay with only the12 new
-implementation migrations excluded. It identifies67 added signatures,
-13 replacements,3 preserved predecessor OID renames and0 removals against468
+The pre-integration-repair baseline comparison uses actual full-schema replay
+with the 12 implementation migrations excluded. It identifies 67 added signatures,
+13 replacements, 3 preserved predecessor OID renames and 0 removals against 468
 baseline migrations. This supersedes the initial7-migration/43-addition capture.
 `tests/helpers/creator-monetization-migration-inventory.mjs` records the explicit
 signatures; the passing catalog suite checks actual before/after identity while
-retaining historical repair assertions.
+retaining historical repair assertions. The canonical reference-guard correction
+adds `20261027021608` as the 13th implementation migration without adding or
+replacing a function. The complete inventory/sale/reservation rerun passed all
+five tests in `reference-guard-catalog-sale-reservations.log`, including the
+three catalog tests; the earlier 12-migration result remains historical evidence.
 
 New public tables are classified with their existing minimal grants: owner-facing
 revisions/reservations/remedies receive authenticated SELECT with their RLS;
@@ -264,7 +368,9 @@ times have no direct API grant. Review identified missing RLS/FORCE on two new
 private implementation tables; current source now enables and forces RLS on
 both broadcast preparations and lifecycle permits. The existing explicit API
 permission test was retained; the standalone133-table client-grant readback
-passed. This does not dispose of the separate broad-fixture ACL findings above.
+passed. These permission checks did not establish reference-guard registration
+for the new JSON tables; the canonical CI regression and its required correction
+are recorded above.
 
 Reservation review confirmed the event row lock, immutable currency/price terms,
 pre-grant admission guard, source-specific late receipt binding and fail-closed

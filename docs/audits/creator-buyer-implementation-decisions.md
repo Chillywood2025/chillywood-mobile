@@ -4,9 +4,11 @@ Design reconciliation updated 2026-10-27. The original audit checkpoint was
 `268711e4f9b68efe8fd3f905ad15d192ff8fb384`; recovery checkpoint
 `4308e0324d2566549766ece4b22792a71a4d731e` preserves the existing implementation
 before the recovery corrections. The original checkout is retained. Historical
-observations are labeled below; final publication and exact-head CI remain
-separate from these local source results. The owner approved fixed-price
-virtual-show source/local-synthetic work on October26 at16:37 UTC and D1/D2 at
+observations are labeled below; full exact-head CI remains separate from these
+local source results. The recovered publication at `c3823699` exposed a
+reference-guard integration regression, recorded in the implementation ledger;
+its repair does not alter the commercial decisions below. The owner approved
+fixed-price virtual-show source/local-synthetic work on October26 at16:37 UTC and D1/D2 at
 16:57 UTC. Those approvals are not requested again. Auctions, physical seats,
 provider changes, live money operations, release, and money-sensitive merge
 remain excluded.
@@ -160,6 +162,15 @@ ticket in parallel transactions, schedule changes while payment is pending,
 unknown billing state, and expiry/refund racing entry. The ledger binds each
 passing subset to its evidence and retains failures; it does not substitute
 synthetic results for complete frozen-head validation or provider delivery.
+
+Canonical CI found that the two new public immutable-terms tables were missing
+the existing deleted-media and Brand reference INSERT/UPDATE triggers. Forward
+migration [`20261027021608`](../../supabase/migrations/20261027021608_creator_monetization_reference_guard_integration.sql)
+registers those four canonical guards without changing policy, permissions,
+activation settings or guard behavior. Local native before/after proof restores
+the existing readiness checks, with the exact evidence in the implementation
+ledger. Full repaired-head CI remains required; this correction is not approval
+to reopen prior retention/performance work or to change any owner decision.
 
 Remaining external qualification is not an owner product decision: deployed
 schema/catalog parity; approved/available native products on each platform;
