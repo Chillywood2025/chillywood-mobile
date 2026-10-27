@@ -927,7 +927,7 @@ async function readEventReminderRowsForEvents(eventIds: string[], options?: { th
     .filter(isDefined);
 }
 
-async function readViewerEventReminderRows(eventIds: string[], viewerUserId: string): Promise<EventReminderRow[]> {
+async function readViewerEventReminderRows(eventIds: string[], viewerUserId: string, options?: { throwOnUnavailable?: boolean }): Promise<EventReminderRow[]> {
   const normalizedEventIds = Array.from(new Set(eventIds.map((value) => normalizeText(value)).filter(Boolean)));
   if (!normalizedEventIds.length || !viewerUserId) return [];
 
@@ -938,7 +938,10 @@ async function readViewerEventReminderRows(eventIds: string[], viewerUserId: str
     .in("event_id", normalizedEventIds)
     .returns<EventReminderRow[]>();
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (options?.throwOnUnavailable) throw new Error("Event reminders could not be loaded. Please retry.");
+    return [];
+  }
   return data
     .map((row) => parseEventReminderRow(row))
     .filter(isDefined);
@@ -1526,13 +1529,14 @@ export async function readCreatorEventReminderSummaries(
 export async function readPublicEventReminderSummaries(
   hostUserId: string,
   userId?: string,
+  options?: { throwOnUnavailable?: boolean },
 ): Promise<PublicEventReminderSummary[]> {
-  const events = await readPublicEventSummaries(hostUserId);
+  const events = await readPublicEventSummaries(hostUserId, options);
   if (!events.length) return [];
 
   const viewerUserId = await readSessionUserId(userId);
   const reminderRows = viewerUserId
-    ? await readViewerEventReminderRows(events.map((event) => event.id), viewerUserId)
+    ? await readViewerEventReminderRows(events.map((event) => event.id), viewerUserId, options)
     : [];
 
   return events.map((event) => {

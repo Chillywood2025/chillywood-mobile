@@ -156,7 +156,9 @@ assertIncludes(profile, `isSelfProfile ? onPressPreviewPlatform : onPressViewCha
 assertIncludes(publicPlatform, `const showOwnerControls = isOwner && !publicPreviewMode`, "public Platform owner-control preview guard");
 assertIncludes(publicPlatform, `testID="platform-public-handle"`, "public Platform handle render");
 assertIncludes(publicPlatform, `{channel.handle}`, "public Platform canonical handle value");
-assertIncludes(publicPlatform, `if (nextAudienceState?.isViewerBlocked)`, "public Platform blocked-viewer guard");
+if (!/if\s*\(\s*nextAudienceState(?:\?\.|\.)isViewerBlocked\s*\)/.test(publicPlatform)) {
+  fail("public Platform blocked-viewer guard is missing its blocked-state condition");
+}
 assertIncludes(publicPlatform, `readCreatorVideos(routeUserId, { includeDrafts: false, limit:`, "public Platform draft exclusion");
 assertIncludes(platformStudio, `router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } })`, "Platform Studio public preview route");
 assertIncludes(socialAttachments, `export type SocialAttachmentPickerScope = "images" | "files"`, "shared attachment picker scope");

@@ -69,7 +69,8 @@ export async function readCreatorRelationshipFeedItems(
     .order("published_at", { ascending: false })
     .limit(limit);
 
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("The relationship feed could not be loaded.");
   return data
     .map((row) => parseCreatorFeedItem(row as Record<string, unknown>))
     .filter((item) => item.id && item.source_id && item.target_scope === scope);

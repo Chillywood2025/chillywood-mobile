@@ -240,8 +240,11 @@ export function sortProfileSocialFeedItems(items: ProfileSocialFeedItem[]) {
   }
 
   return [...deduped.values()].sort((left, right) => {
+    // Source affinity must not permanently pin an old own post above fresh social activity.
+    const recency = timestampMillis(right.rankTime) - timestampMillis(left.rankTime);
+    if (recency) return recency;
     if (left.rankScore !== right.rankScore) return right.rankScore - left.rankScore;
-    return timestampMillis(right.rankTime) - timestampMillis(left.rankTime);
+    return left.id.localeCompare(right.id);
   });
 }
 
@@ -252,6 +255,7 @@ export function buildOwnProfileSocialFeed(input: BuildOwnProfileSocialFeedInput)
   const items: ProfileSocialFeedItem[] = [];
 
   for (const post of input.ownPosts) {
+    if (normalizeText(post.userId) !== ownerUserId) continue;
     items.push({
       id: `my-post-${post.id}`,
       type: "my_post",
@@ -264,6 +268,7 @@ export function buildOwnProfileSocialFeed(input: BuildOwnProfileSocialFeedInput)
   }
 
   for (const video of input.ownVideos) {
+    if (normalizeText(video.ownerId) !== ownerUserId) continue;
     items.push({
       id: `own-video-${video.id}`,
       type: "creator_video",
@@ -364,10 +369,13 @@ export function buildOwnProfileSocialFeed(input: BuildOwnProfileSocialFeedInput)
 
 export function buildPublicProfileActivityFeed(input: BuildPublicProfileActivityFeedInput): ProfileSocialFeedItem[] {
   const mode: ProfileSocialFeedMode = "public_profile_activity_feed";
+  const profileUserId = normalizeText(input.profileUserId);
+  if (!profileUserId) return [];
   const actorsByUserId = input.actorsByUserId ?? {};
   const items: ProfileSocialFeedItem[] = [];
 
   for (const discoveryItem of input.discoveryItems) {
+    if (!actorIdsForDiscoveryItem(discoveryItem).includes(profileUserId)) continue;
     items.push({
       id: `public-spectator-${discoveryItem.id}`,
       type: "public_profile_spectator_entry",
@@ -381,6 +389,7 @@ export function buildPublicProfileActivityFeed(input: BuildPublicProfileActivity
   }
 
   for (const post of input.profilePosts) {
+    if (normalizeText(post.userId) !== profileUserId) continue;
     items.push({
       id: `public-post-${post.id}`,
       type: "public_profile_post",
@@ -393,6 +402,7 @@ export function buildPublicProfileActivityFeed(input: BuildPublicProfileActivity
   }
 
   for (const video of input.profileVideos) {
+    if (normalizeText(video.ownerId) !== profileUserId) continue;
     items.push({
       id: `public-video-${video.id}`,
       type: "public_profile_creator_video",
