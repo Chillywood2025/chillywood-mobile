@@ -122,4 +122,3 @@ export type CreatorSupportedPricesResult = {
   subjectUserId: string | null;
   prices: CreatorSupportedPrice[];
 };
-
