@@ -13,8 +13,10 @@ import {
   readStripeTestSecret,
   safeWriteAuditLog,
   sanitizeErrorMessage,
+  storedStripeConfiguration,
   toText,
   type AuthenticatedUser,
+  type CreatorPayoutAccountRow,
   type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
 
@@ -63,7 +65,7 @@ type TipSettingsRow = {
   tips_enabled?: boolean | null;
 };
 
-type PayoutAccountRow = {
+type PayoutAccountRow = CreatorPayoutAccountRow & {
   charges_enabled?: boolean | null;
   onboarding_status?: string | null;
   payouts_enabled?: boolean | null;
@@ -255,6 +257,11 @@ const readTipSettings = async (adminClient: SupabaseClientLike, creatorId: strin
   return data as TipSettingsRow | null;
 };
 
+const payoutAccountReadyForTip = (account: PayoutAccountRow | null) =>
+  !!account && account.charges_enabled === true && account.payouts_enabled === true
+  && account.onboarding_status === "ready_for_payouts"
+  && storedStripeConfiguration(account).configurationStatus === "match";
+
 const syncSettingsFromPayout = async (
   adminClient: SupabaseClientLike,
   creatorId: string,
@@ -265,7 +272,7 @@ const syncSettingsFromPayout = async (
   const providerStatus = toText(payoutAccount?.onboarding_status) || "setup_required";
   const chargesEnabled = payoutAccount?.charges_enabled === true;
   const payoutsEnabled = payoutAccount?.payouts_enabled === true;
-  const status = settings.tips_enabled === true && chargesEnabled && payoutsEnabled && providerStatus === "ready_for_payouts"
+  const status = settings.tips_enabled === true && payoutAccountReadyForTip(payoutAccount)
     ? "active"
     : settings.tips_enabled === true && providerStatus === "payouts_disabled"
       ? "blocked"
@@ -467,9 +474,8 @@ Deno.serve(async (req): Promise<Response> => {
     });
     const knownSession = toText(attempt.providerSessionId);
     const latestPayout = await readCreatorPayoutAccount(adminClient, creatorId) as PayoutAccountRow | null;
-    const recipientCurrent = latestPayout?.charges_enabled === true && latestPayout?.payouts_enabled === true
-      && latestPayout?.onboarding_status === "ready_for_payouts"
-      && (attempt.body as Record<string, unknown>)["payment_intent_data[transfer_data][destination]"] === toText(latestPayout.provider_account_id);
+    const recipientCurrent = payoutAccountReadyForTip(latestPayout)
+      && (attempt.body as Record<string, unknown>)["payment_intent_data[transfer_data][destination]"] === toText(latestPayout?.provider_account_id);
     if (!knownSession && !recipientCurrent) return jsonResponse(200, {
       ...attemptResponse, status: "reconciliation_required", message: "The original recipient setup changed. This tip needs review before checkout can continue.",
     });

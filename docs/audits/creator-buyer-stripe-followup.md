@@ -164,6 +164,42 @@ Public references reviewed for the implementation include Stripe [Checkout Sessi
 
 ## Qualification boundary
 
+### Published-review follow-up: tip checkout admission
+
+Parent review of `05a42f60` found that legacy-ready payout fields could still
+activate tip settings and admit a new checkout despite unknown or mismatched
+observed configuration. The narrow follow-up changes
+`supabase/functions/create-creator-tip-checkout/index.ts`: both initial activation
+and the final pre-dispatch readiness check call the same predicate:
+
+```ts
+!!account && account.charges_enabled === true && account.payouts_enabled === true
+  && account.onboarding_status === "ready_for_payouts"
+  && storedStripeConfiguration(account).configurationStatus === "match";
+```
+
+The shared observation reader already requires the current Stripe test account
+and its bound observation ID. This change admits new checkout only when that
+configuration matches the existing expected policy. No migration or callback
+settlement code changes.
+
+The actual-handler fixture now models settings update/readback and supplies the
+real observation reader. Initial negative controls cover legacy-ready/unobserved,
+cleared replacement, mismatch, unknown controller, wrong observation account and
+non-test binding. Pre-dispatch controls cover replacement and same-account
+observation clearing/mismatch/unknown after an initially valid read. Matching
+observed configuration succeeds. Removing the predicate reproduces both unsafe
+provider calls, while the fixed handler makes zero provider calls for those
+negative cases and preserves any already-reserved attempt for reconciliation.
+
+Focused command (`stripe-tip-retry-edge`, `stripe-tip-buyer-authority`,
+`stripe-tip-settlement-edge`, `stripe-tip-webhook-lifecycle`): **53/53 pass,
+zero skips**, including unchanged callback regressions. Deno endpoint check,
+Stripe/creator-monetization/payment-rail guards and whitespace check pass.
+Independent exact-diff review found no remaining blocker. Evidence:
+`tip-admission-focused.log` and `tip-admission-deno.log`. This overlaps earlier
+Tip suite counts. Its published head still requires separate exact-head CI.
+
 - Tip missing-PI/receipt retry and partial-refund-before-success ordering are reviewed and pass focused real-path regression tests; native final-schema qualification remains below.
 - Atomic Connect account/eligibility projection, stale account/observation changes, preserved holds and transaction failure/rollback pass focused SQL/Edge proof. The observation is bound to its exact account ID; inherited match on raw replacement is rejected, and a cleared replacement remains unknown.
 - The real purchase-refund RPC→parser→mounted UI round trip passes, preserving outer event-remedy wrapper behavior and account/session denial.
