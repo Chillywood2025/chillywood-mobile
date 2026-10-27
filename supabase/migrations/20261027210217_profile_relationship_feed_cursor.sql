@@ -1,3 +1,7 @@
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
 -- Read-only, source-level news feed. No copied per-recipient content, no policy
 -- changes, and no privileged bypass of source/relationship/moderation RLS.
 create or replace function public.preserve_creator_feed_cursor_identity()
@@ -15,7 +19,15 @@ create trigger preserve_creator_feed_cursor_identity_before_update
 
 create index if not exists creator_feed_items_creator_scope_cursor_idx
   on public.creator_feed_items (creator_user_id, target_scope, created_at desc, id desc)
+  include (source_type, source_id, visibility, status)
   where status = 'active';
+-- Canonical source-access helpers compare text source IDs against UUID::text.
+-- Cover that exact existing predicate without replacing authorization functions
+-- or changing malformed-ID/canonical-text matching semantics.
+create index if not exists profile_posts_feed_source_text_id_idx
+  on public.profile_posts ((id::text));
+create index if not exists videos_feed_source_text_id_idx
+  on public.videos ((id::text));
 create index if not exists profile_posts_owner_cursor_idx
   on public.profile_posts (user_id, created_at desc, id desc)
   where deleted_at is null and visibility = 'public' and moderation_status in ('clean', 'reported');
@@ -72,11 +84,32 @@ begin
   ), actors as materialized (
     select r.actor_id, min(r.priority) as priority
       from relationships r group by r.actor_id
+  ), heads as materialized (
+    select a.actor_id, a.priority, head.created_at, head.id
+    from actors a
+    cross join lateral (
+      select item.created_at, item.id
+      from public.creator_feed_items item
+      where item.creator_user_id = a.actor_id and item.status = 'active'
+        and item.target_scope = case when a.priority = 2 then 'followers' else 'circle' end
+        and item.created_at <= v_snapshot
+        and (p_before_created_at is null
+          or (item.created_at, item.id) < (p_before_created_at, p_before_id))
+      order by item.created_at desc, item.id desc
+      limit 1
+    ) head
+  ), cutoff as materialized (
+    -- K visible actor heads establish K distinct eligible rows. No row older
+    -- than their Kth tuple can enter the global top K. If fewer heads exist,
+    -- leave the cutoff absent so one prolific actor can still fill the page.
+    select head.created_at, head.id from heads head
+    order by head.created_at desc, head.id desc offset v_limit limit 1
   )
   select page.id, page.source_type, page.source_id, page.creator_user_id,
     case a.priority when 0 then 'own' when 1 then 'chilly_circle' else 'following' end,
     page.created_at, v_snapshot
-  from actors a
+  from heads a
+  left join cutoff boundary on true
   cross join lateral (
     select item.id, item.source_type, item.source_id, item.creator_user_id, item.created_at
     from public.creator_feed_items item
@@ -84,15 +117,20 @@ begin
       and item.status = 'active'
       -- Public posts/videos already have a Circle source row, and Circle-only
       -- videos have only that row. It is the canonical owner/Circle scope.
-      -- One equality (not a scope OR) keeps high-volume creator cursor reads
-      -- on the full creator/scope/time/id index and avoids sorting their history.
+      -- One equality (not a scope OR) permits the creator/scope/time/id index.
       and item.target_scope = case when a.priority = 2 then 'followers' else 'circle' end
       and item.created_at <= v_snapshot
       and (p_before_created_at is null
         or (item.created_at, item.id) < (p_before_created_at, p_before_id))
+      -- The minimum tuple is an unrestricted fallback, including -infinity
+      -- timestamps. Avoid an OR so the real cutoff can be an index condition.
+      and (item.created_at, item.id) >= (
+        coalesce(boundary.created_at, '-infinity'::timestamptz),
+        coalesce(boundary.id, '00000000-0000-0000-0000-000000000000'::uuid))
     order by item.created_at desc, item.id desc
     limit v_limit + 1
   ) page
+  where boundary.id is null or (a.created_at, a.id) >= (boundary.created_at, boundary.id)
   order by page.created_at desc, page.id desc
   limit v_limit + 1;
 end;
@@ -129,3 +167,4 @@ revoke all on function public.read_profile_post_engagement_batch(uuid[]) from pu
 grant execute on function public.read_profile_post_engagement_batch(uuid[]) to anon, authenticated;
 comment on function public.read_profile_post_engagement_batch(uuid[]) is
   'At most 50 source-authorized public post engagement summaries; RLS applies to source, likes and comments. Inaccessible posts are omitted, never represented by leaked counts.';
+commit;

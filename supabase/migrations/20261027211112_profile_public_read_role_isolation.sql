@@ -1,3 +1,7 @@
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
 -- Staff-role helpers are intentionally not executable by anon. A PUBLIC policy
 -- referencing those helpers makes otherwise-public reads fail at expression
 -- initialization. Keep authenticated policy expressions exactly unchanged and
@@ -80,3 +84,4 @@ create policy social_attachments_select_anonymous_public on public.social_attach
     and public.media_scan_public_safe(scan_status)
     and public.anonymous_social_attachment_source_visible(surface_type,surface_id)
   );
+commit;

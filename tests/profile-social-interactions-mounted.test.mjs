@@ -110,6 +110,18 @@ test('same-turn personal post submits create one row and a stale account cannot 
   const first=m.context.exports.onSubmitProfilePost();const second=m.context.exports.onSubmitProfilePost();assert.equal(calls,1);
   m.current(false);resolve({...post,userId:'viewer'});await Promise.all([first,second]);assert.equal(m.calls.some(c=>c[0]==='posts'),false);
 });
+test('successful local publish refreshes canonical feed without losing committed post on refresh failure',async t=>{
+  const m=await mount(t);const prompts=[];let refreshes=0;
+  m.context.createProfilePost=async()=>({...post,id:'new-local',userId:'viewer'});
+  m.context.feedPages={refresh:async()=>{refreshes++;return undefined;}};
+  m.context.setFeedFreshness=value=>prompts.push(value);
+  m.context.profilePostUiById[post.id].commentDraft='keep unrelated draft';
+  await m.context.exports.onSubmitProfilePost();await Promise.resolve();
+  assert.equal(refreshes,1);assert.equal(m.calls.find(c=>c[0]==='posts')[1][0].id,'new-local');
+  assert.equal(m.context.profilePostUiById[post.id].commentDraft,'keep unrelated draft');
+  assert.deepEqual(JSON.parse(JSON.stringify(prompts)),[{identity:'viewer:one',available:true,retry:true}]);
+  assert.equal(m.calls.some(c=>c[0]==='postNotice'&&String(c[1]).includes('Unable to post')),false);
+});
 test('held delete confirmations cannot execute for a replacement account',async t=>{
   const m=await mount(t);m.context.exports.onDeleteProfilePost({...post,userId:'viewer'});
   m.context.exports.onDeleteProfilePostCommentPress(post,{id:'comment',userId:'viewer'});

@@ -352,12 +352,17 @@ export async function readProfilePostEngagementState(postId: string): Promise<Pr
 }
 
 /** A bounded page-sized RPC, not three round trips for every card. Missing keys remain unavailable. */
-export async function readProfilePostEngagementStates(postIds: string[]): Promise<Record<string, ProfilePostEngagementState>> {
+export async function readProfilePostEngagementStates(postIds: string[], signal?: AbortSignal): Promise<Record<string, ProfilePostEngagementState>> {
+  if (signal?.aborted) throw new Error("Post engagement request retired.");
   const ids = [...new Set(postIds.map(normalizeText).filter(Boolean))];
   if (ids.length > 50) throw new Error("Read engagement for at most 50 posts at a time.");
   if (!ids.length) return {};
   const viewerUserId = await getSignedInUserId();
-  const { data, error } = await supabase.rpc("read_profile_post_engagement_batch", { p_post_ids: ids });
+  if (signal?.aborted) throw new Error("Post engagement request retired.");
+  let request = supabase.rpc("read_profile_post_engagement_batch", { p_post_ids: ids });
+  if (signal) request = request.abortSignal(signal);
+  const { data, error } = await request;
+  if (signal?.aborted) throw new Error("Post engagement request retired.");
   if (error) throw error;
   if (!data) throw new Error("Post engagement could not be loaded.");
   return Object.fromEntries(data.map(row => [row.post_id, {

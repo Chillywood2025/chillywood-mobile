@@ -107,7 +107,9 @@ import {
   type ProfileSocialFeedMode,
   type ProfileSocialFeedPostActivity,
 } from "../../_lib/profileSocialFeed";
-import { readOwnProfileFeedPage } from "../../_lib/profileFeedReader";
+import { readOwnProfileFeedHead, readOwnProfileFeedPage, type ProfileFeedHead } from "../../_lib/profileFeedReader";
+import { hasNewProfileFeedHead, startProfileFeedFreshness } from "../../_lib/profileFeedFreshness";
+import { getNotificationActivityOwnerKey, subscribeToNotificationActivity } from "../../_lib/notificationActivity";
 import {
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
   type SocialAttachmentPickerScope,
@@ -270,6 +272,7 @@ type ProfilePostUiState = {
   commentsCursor?: string | null;
   commentsHasMore?: boolean;
   commentsLoading?: boolean;
+  commentsRefreshAvailable?: boolean;
   comments?: ProfilePostComment[];
   commentDraft?: string;
   commentAttachmentFile?: SocialAttachmentFile | null;
@@ -662,7 +665,7 @@ export function useProfileFeedPages(userId: string, own: boolean, enabled: boole
   const mutationRevision = useRef(0);
   const busy = useRef(false);
   const wasFocused = useRef(focused);
-  const [state, setState] = useState({ identity, posts: [] as ProfilePost[], items: [] as ProfileSocialFeedItem[], ready: false, notice: null as string | null, cursor: null as string | null, hasMore: false });
+  const [state, setState] = useState({ identity, posts: [] as ProfilePost[], items: [] as ProfileSocialFeedItem[], head: null as ProfileFeedHead | null, ready: false, notice: null as string | null, cursor: null as string | null, hasMore: false });
   const load = useCallback(async (append = false) => {
     if (!enabled || !userId || (append && busy.current)) return;
     const request = ++epoch.current;
@@ -690,9 +693,10 @@ export function useProfileFeedPages(userId: string, own: boolean, enabled: boole
       const posts = own ? items.flatMap(item => "post" in item ? [item.post] : []) : page.items as ProfilePost[];
       if (linkedPost && linkedPost.userId === userId && !posts.some(p => p.id === linkedPost.id)) posts.unshift(linkedPost);
       const unique = <T extends { id: string }>(values: T[]) => Array.from(new Map(values.map(value => [value.id, value])).values());
-      setState(s => ({ identity, posts: unique([...(append ? s.posts : []), ...posts]), items: unique([...(append ? s.items : []), ...items]), ready: true,
+      setState(s => ({ identity, posts: unique([...(append ? s.posts : []), ...posts]), items: unique([...(append ? s.items : []), ...items]), head: append ? s.head : "head" in page ? page.head as ProfileFeedHead | null : null, ready: true,
         notice: postId && !append && (!linkedPost || linkedPost.userId !== userId) ? "This shared post is unavailable or private." : null,
         cursor: page.nextCursor, hasMore: page.hasMore }));
+      return true;
     } catch {
       if (current()) setState(s => ({ ...s, identity, ready: true, notice: "Unable to load profile updates right now. Retry to reconnect." }));
     } finally { if (current()) busy.current = false; }
@@ -700,7 +704,7 @@ export function useProfileFeedPages(userId: string, own: boolean, enabled: boole
   const loadRef = useRef(load); loadRef.current = load;
   useEffect(() => {
     epoch.current += 1; busy.current = false;
-    setState({ identity, posts: [], items: [], ready: !enabled, notice: null, cursor: null, hasMore: false });
+    setState({ identity, posts: [], items: [], head: null, ready: !enabled, notice: null, cursor: null, hasMore: false });
     if (focusedRef.current && enabled) void loadRef.current();
     return () => { epoch.current += 1; };
   }, [identity, enabled]);
@@ -716,7 +720,7 @@ export function useProfileFeedPages(userId: string, own: boolean, enabled: boole
   const acceptsPublication = () => identityRef.current === identity
     && (authority ? sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()) : !getCurrentAccountSessionAuthoritySnapshot());
   return {
-    posts: visible ? state.posts : [], items: visible ? state.items : [], ready: visible && state.ready,
+    posts: visible ? state.posts : [], items: visible ? state.items : [], head: visible ? state.head : null, ready: visible && state.ready,
     refreshRevision: refreshRevision.current,
     notice: visible ? state.notice : null, hasMore: visible && state.hasMore,
     refresh: () => loadRef.current(), loadMore: () => loadRef.current(true),
@@ -737,6 +741,12 @@ export default function ProfileScreen() {
   const socialActionKeysRef = useRef(new Set<string>());
   const commentRevisionsRef = useRef(new Map<string, number>());
   const engagementRevisionsRef = useRef(new Map<string, number>());
+  const visibleFeedPostIdsRef = useRef<string[]>([]);
+  const onFeedViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: { item: ProfileSocialFeedItem; isViewable: boolean }[] }) => {
+    visibleFeedPostIdsRef.current = viewableItems.filter(entry => entry.isViewable && "post" in entry.item)
+      .flatMap(entry => "post" in entry.item ? [entry.item.post.id] : []).slice(0, 12);
+  }).current;
+  const feedViewabilityConfig = useRef({ itemVisiblePercentThreshold: 20 }).current;
   const currentUserId = authorityStatus === "active" && !authority?.restoreOnly ? authority?.userId ?? "" : "";
   const [chillyCircleCount, setChillyCircleCount] = useState<number | null>(null);
   const [viewerFollowState, setViewerFollowState] = useState<ProfileViewerFollowState>("unavailable");
@@ -789,6 +799,8 @@ export default function ProfileScreen() {
   const [profileSocialFeedExtrasReady, setProfileSocialFeedExtrasReady] = useState(false);
   const [profileSocialFeedNotice, setProfileSocialFeedNotice] = useState<string | null>(null);
   const [socialRefresh, setSocialRefresh] = useState(0);
+  const [feedFreshness, setFeedFreshness] = useState<{ identity: string; available: boolean; retry?: boolean }>({ identity: "", available: false });
+  const [feedAppActive, setFeedAppActive] = useState(AppState.currentState === "active");
   const [reminderActionLoading, setReminderActionLoading] = useState<string | null>(null);
   const [reminderActionNotice, setReminderActionNotice] = useState<string | null>(null);
   const [aboutDraft, setAboutDraft] = useState("");
@@ -856,6 +868,7 @@ export default function ProfileScreen() {
   const isSocialIdentityCurrent = useCallback(() => socialIdentityRef.current === socialIdentity
     && (authority ? sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()) : !getCurrentAccountSessionAuthoritySnapshot()), [authority, socialIdentity]);
   useEffect(() => {
+    visibleFeedPostIdsRef.current = [];
     setProfilePostUiById({}); setAboutBusy(false); setAboutNotice(null);
     setProfilePostDraft(""); setProfilePostAttachmentFile(null); setProfilePostBusy(false);
     setProfileAttachmentSheetTarget(null); setProfilePostReportTarget(null); setProfilePostCommentReportTarget(null);
@@ -1118,7 +1131,7 @@ export default function ProfileScreen() {
     updater: (current: ProfilePostUiState) => ProfilePostUiState,
   ) => {
     if (!isSocialIdentityCurrent()) return;
-    setProfilePostUiById((current) => ({
+    setProfilePostUiById((current) => !isSocialIdentityCurrent() ? current : ({
       ...current,
       [postId]: updater(current[postId] ?? {}),
     }));
@@ -1245,6 +1258,7 @@ export default function ProfileScreen() {
         commentsHasMore: page.hasMore,
         commentsLoading: false,
         commentsReady: true,
+        commentsRefreshAvailable: append ? current.commentsRefreshAvailable : false,
       }));
     } catch {
       if ((commentRevisionsRef.current.get(key) ?? 0) !== revision) {
@@ -1379,6 +1393,72 @@ export default function ProfileScreen() {
     };
   }, [currentUserId, isOfficialProfile, isSelfProfile, userId]);
   const [activeTab, setActiveTab] = useState<PublicProfileTabKey>("home");
+  const freshnessSnapshotRef = useRef({ items: feedPages.items, posts: profilePosts, head: feedPages.head, refreshRevision: feedPages.refreshRevision });
+  freshnessSnapshotRef.current = { items: feedPages.items, posts: profilePosts, head: feedPages.head, refreshRevision: feedPages.refreshRevision };
+  const freshnessAuthorityRef = useRef(authority); freshnessAuthorityRef.current = authority;
+  const freshnessIdentityCurrentRef = useRef(isSocialIdentityCurrent); freshnessIdentityCurrentRef.current = isSocialIdentityCurrent;
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", next => setFeedAppActive(next === "active"));
+    return () => subscription.remove();
+  }, []);
+  useEffect(() => {
+    // Only a successful page replacement acknowledges the prompt. A failed
+    // refresh leaves both the old reading position and the prompt intact.
+    setFeedFreshness({ identity: socialIdentity, available: false });
+  }, [socialIdentity, feedPages.refreshRevision]);
+  useEffect(() => {
+    if (!currentUserId || !focused || !feedAppActive || activeTab !== "home"
+      || !profilePostsReady || !canViewFullProfile || isOfficialProfile) return;
+    let retired = false;
+    // Freeze this lifetime's predicate. Reading the ref after an account switch
+    // could adopt the replacement identity before passive cleanup has run.
+    const ownsIdentity = freshnessIdentityCurrentRef.current;
+    const current = () => !retired && AppState.currentState === "active" && ownsIdentity();
+    const controller = startProfileFeedFreshness({
+      isCurrent: current,
+      check: async (signal) => {
+        const revision = freshnessSnapshotRef.current.refreshRevision;
+        const ids = visibleFeedPostIdsRef.current.slice(0, 12);
+        const revisions = new Map(ids.map(id => [id, engagementRevisionsRef.current.get(`${socialIdentity}:${id}`) ?? 0]));
+        const [head, counts] = await Promise.all([
+          isSelfProfile ? readOwnProfileFeedHead(signal) : Promise.resolve(null),
+          ids.length ? readProfilePostEngagementStates(ids, signal) : Promise.resolve({} as Record<string, ProfilePostEngagementState>),
+        ]);
+        if (signal.aborted || !current() || revision !== freshnessSnapshotRef.current.refreshRevision) return;
+        if (isSelfProfile) {
+          const snapshot = freshnessSnapshotRef.current;
+          const known = [
+            ...snapshot.items.filter(item => item.type !== "spectator_entry").map(item => ({ id: item.id, createdAt: item.rankTime })),
+            ...snapshot.posts.map(post => ({ id: `relationship-profile_post-${post.id}`, createdAt: post.createdAt })),
+          ];
+          setFeedFreshness(previous => signal.aborted || !current()
+            || revision !== freshnessSnapshotRef.current.refreshRevision ? previous : ({
+              identity: socialIdentity,
+              available: (previous.identity === socialIdentity && previous.available)
+                || hasNewProfileFeedHead(head, known, snapshot.head),
+              retry: previous.identity === socialIdentity && previous.retry,
+            }));
+        }
+        setProfilePostUiById(previous => {
+          if (signal.aborted || !current() || revision !== freshnessSnapshotRef.current.refreshRevision) return previous;
+          const next = { ...previous };
+          for (const id of ids) {
+            if (!counts[id] || !next[id] || next[id].likeBusy || next[id].commentBusy || next[id].deletingCommentId
+              || revisions.get(id) !== (engagementRevisionsRef.current.get(`${socialIdentity}:${id}`) ?? 0)) continue;
+            // Counts update quietly. Loaded comment text, draft, attachment,
+            // reply target and cursor are intentionally never replaced here.
+            next[id] = { ...next[id], engagement: counts[id], engagementReady: true,
+              commentsRefreshAvailable: next[id].commentsRefreshAvailable || (!!next[id].commentsOpen
+                && next[id].engagement?.commentCount !== counts[id].commentCount) };
+          }
+          return next;
+        });
+      },
+    });
+    const unsubscribe = subscribeToNotificationActivity(getNotificationActivityOwnerKey(freshnessAuthorityRef.current), controller.hint);
+    return () => { retired = true; controller.dispose(); unsubscribe(); };
+  }, [activeTab, canViewFullProfile, currentUserId, feedAppActive, focused,
+    isOfficialProfile, isSelfProfile, profilePostsReady, socialIdentity]);
   const liveNowEvent = useMemo(
     () => publicEvents.find((event) => event.isLiveNow) ?? null,
     [publicEvents],
@@ -2079,7 +2159,7 @@ export default function ProfileScreen() {
       });
       if (!isSocialIdentityCurrent()) return;
       setProfilePosts((current) => [post, ...current.filter((entry) => entry.id !== post.id)]);
-      setProfilePostUiById((current) => ({
+      setProfilePostUiById((current) => !isSocialIdentityCurrent() ? current : ({
         ...current,
         [post.id]: {
           engagement: {
@@ -2099,6 +2179,13 @@ export default function ProfileScreen() {
       setProfilePostDraft("");
       setProfilePostAttachmentFile(null);
       setProfilePostsReady(true);
+      // This explicit publish action also catches up the canonical feed. Without
+      // it a newly added local post could mask an unseen older head in probes.
+      // The page hook preserves the acknowledged post on failure and rejects
+      // retired identity/mutation responses; do not scroll or clear other drafts.
+      void feedPages.refresh().then(success => {
+        if (!success && isSocialIdentityCurrent()) setFeedFreshness({ identity: socialIdentity, available: true, retry: true });
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       setProfilePostsNotice(message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
@@ -3725,6 +3812,11 @@ export default function ProfileScreen() {
         {!uiState.commentsOpen && uiState.commentNotice ? <AppText scale="footnote" style={styles.profilePostCommentNoticeText}>{uiState.commentNotice}</AppText> : null}
         {uiState.commentsOpen ? (
           <View style={styles.profilePostCommentsPanel}>
+            {uiState.commentsRefreshAvailable ? <TouchableOpacity accessibilityRole="button"
+              accessibilityLabel="Comments changed. Refresh comments" disabled={uiState.commentsLoading}
+              onPress={() => { void loadProfilePostComments(post.id); }}>
+              <Text style={styles.feedPostActionText}>Comments changed · Refresh comments</Text>
+            </TouchableOpacity> : null}
             {uiState.commentNotice ? (
               <View style={styles.profilePostCommentNotice}>
                 <AppText scale="footnote" style={styles.profilePostCommentNoticeText}>{uiState.commentNotice}</AppText>
@@ -4047,10 +4139,29 @@ export default function ProfileScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
       >
+      {activeTab === "home" && isSelfProfile && canViewFullProfile && !shouldShowLockedShell && feedFreshness.identity === socialIdentity && feedFreshness.available ? (
+        <View pointerEvents="box-none" style={styles.feedFreshnessOverlay}>
+          <TouchableOpacity style={styles.feedFreshnessButton} accessibilityRole="button"
+            accessibilityLabel="Refresh feed updates" disabled={!profilePostsReady}
+            onPress={() => {
+              void feedPages.refresh().then(success => {
+                if (!success || !isSocialIdentityCurrent()) return;
+                setSocialRefresh(value => value + 1);
+                scrollViewRef.current?.scrollToOffset({ offset: 0, animated: true });
+              });
+            }}>
+            <Text style={styles.feedPostActionText}>{profilePostsReady ? feedFreshness.retry ? "Feed updates · Retry" : "↑ New posts" : "Loading feed updates…"}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <FlatList
         key={socialIdentity}
         ref={scrollViewRef}
         extraData={profilePostUiById}
+        onViewableItemsChanged={onFeedViewableItemsChanged}
+        viewabilityConfig={feedViewabilityConfig}
+        refreshing={!profilePostsReady && profilePosts.length > 0}
+        onRefresh={() => { void feedPages.refresh(); setSocialRefresh(value => value + 1); void profileAudience.refreshProfileAudience(); void profileDiscovery.reload(); }}
         style={styles.screen}
         contentContainerStyle={[styles.content, styles.contentKeyboardInset]}
         keyboardShouldPersistTaps="handled"
@@ -4883,6 +4994,8 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   virtualizedFeedItem: { width: "100%" },
   profileListHeader: { gap: 16 },
+  feedFreshnessOverlay: { position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, alignItems: "center" },
+  feedFreshnessButton: { backgroundColor: "#29131D", borderColor: "#DC143C", borderWidth: 1, borderRadius: 24, paddingHorizontal: 18, paddingVertical: 12 },
   outerFlex: { flex: 1 },
   fullBackground: {
     ...StyleSheet.absoluteFillObject,

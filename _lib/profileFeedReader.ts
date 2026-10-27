@@ -9,10 +9,32 @@ import type { ProfileSocialFeedActor, ProfileSocialFeedItem } from "./profileSoc
 type FeedRow = { id: string; source_type: "profile_post" | "creator_video"; source_id: string; creator_user_id: string; source_context: "own" | "chilly_circle" | "following"; created_at: string; snapshot_at: string };
 type ActorRow = { user_id: string; display_name: string | null; username: string | null; avatar_url: string | null; profile_avatar_media_status: string | null };
 
+/** Metadata only: existing source-authorized RPC, without actors/media hydration. */
+export type ProfileFeedHead = { id: string; createdAt: string; rowId: string };
+export async function readOwnProfileFeedHead(signal?: AbortSignal): Promise<ProfileFeedHead | null> {
+  if (signal?.aborted) throw new Error("Feed freshness request retired.");
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!authority || authority.restoreOnly) throw new Error("Sign in to read your feed.");
+  let request = supabase.rpc("read_profile_relationship_feed_page", {
+    p_before_created_at: null, p_before_id: null, p_snapshot_at: null, p_limit: 1,
+  });
+  if (signal) request = request.abortSignal(signal);
+  const { data, error } = await request;
+  if (signal?.aborted) throw new Error("Feed freshness request retired.");
+  if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("The signed-in account changed.");
+  if (error) throw error;
+  if (!data) throw new Error("Feed freshness is unavailable.");
+  const row = data[0];
+  if (!row) return null;
+  if ((row.source_type !== "profile_post" && row.source_type !== "creator_video")
+    || !row.source_id || !Number.isFinite(Date.parse(row.created_at))) throw new Error("Invalid feed head.");
+  return { id: `relationship-${row.source_type}-${row.source_id}`, createdAt: row.created_at, rowId: row.id };
+}
+
 /** One indexed relationship page + batch hydration, never one content request per followed person. */
 export async function readOwnProfileFeedPage(
   options: { limit?: number; cursor?: string | null } = {},
-): Promise<ProfileFeedPage<ProfileSocialFeedItem>> {
+): Promise<ProfileFeedPage<ProfileSocialFeedItem> & { head: ProfileFeedHead | null }> {
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   if (!authority || authority.restoreOnly) throw new Error("Sign in to read your feed.");
   const current = () => {
@@ -87,5 +109,7 @@ export async function readOwnProfileFeedPage(
   });
   const last = rows.at(-1);
   const hasMore = data.length > limit;
-  return { items, hasMore, nextCursor: hasMore && last ? encodeProfileFeedCursor({ version: 1, scope, at: last.created_at, id: last.id, snapshotAt: last.snapshot_at }) : null };
+  const first = rows[0];
+  return { items, hasMore, head: first ? { id: `relationship-${first.source_type}-${first.source_id}`, createdAt: first.created_at, rowId: first.id } : null,
+    nextCursor: hasMore && last ? encodeProfileFeedCursor({ version: 1, scope, at: last.created_at, id: last.id, snapshotAt: last.snapshot_at }) : null };
 }

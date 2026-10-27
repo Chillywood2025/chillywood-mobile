@@ -1,0 +1,127 @@
+{
+  "status": "passed",
+  "scope": "Only four new undeployed profile migrations. No live database mutation.",
+  "changes": [
+    "Add BEGIN/COMMIT to the three migrations without explicit transaction wrappers.",
+    "Add SET LOCAL lock_timeout = 5s and statement_timeout = 60s to all four.",
+    "No runtime function, policy, grant, index, trigger, or counter statement changed."
+  ],
+  "statementTimeoutSemantics": "60 seconds per statement, not a whole-migration deadline. Lock timeout caps each lock acquisition wait. Settings are local to the migration transaction and restore after commit/rollback.",
+  "runtimeComparison": "Parse PostgreSQL-aware statement boundaries; remove only top-level BEGIN, COMMIT and timeout SET LOCAL statements; trim each statement boundary; assert arrays equal. Hash JSON serialization of unchanged runtime statements.",
+  "mapping": [
+    {
+      "file": "20261027210217_profile_relationship_feed_cursor.sql",
+      "measuredPayloadSha256": "0e49604cfbfaae97ded4750112319a3e526546f8b0ec8e5bd68989da5b4a5c94",
+      "guardedPayloadSha256": "3841645f4ef65c6393cc85b77e4b23a56d4b90ecaea436f585ec3de00878920b",
+      "runtimeStatementsIdentical": true,
+      "previousStatementCount": 16,
+      "guardedStatementCount": 20,
+      "runtimeStatementsSha256": "691eae35034985df87052122f7672a4f1ed46910d0c84a9ce842385687359778"
+    },
+    {
+      "file": "20261027211112_profile_public_read_role_isolation.sql",
+      "measuredPayloadSha256": "5b9697c29b8eb8b95f1c6bc80df18c3a7e9c78fa77984af277eeb8bbb0d885f1",
+      "guardedPayloadSha256": "456d9898f05e109f98e0f23e877f659cd2086ad397e8753575c05e76cae4b357",
+      "runtimeStatementsIdentical": true,
+      "previousStatementCount": 11,
+      "guardedStatementCount": 15,
+      "runtimeStatementsSha256": "49e34ccc2bb5b35802b4bece99d2685b93171174c6adc39db273df961aeb238f"
+    },
+    {
+      "file": "20261027214412_profile_engagement_sharded_counters.sql",
+      "measuredPayloadSha256": "9f5a9e4319b1dd25e20ad6663e5ad01d24373e69a4c7744b9991303624a4a854",
+      "guardedPayloadSha256": "0aac25388cd402fea09c83c801c8710e76850e8e502c4ed09b87ba11c55981e0",
+      "runtimeStatementsIdentical": true,
+      "previousStatementCount": 27,
+      "guardedStatementCount": 29,
+      "runtimeStatementsSha256": "8ce123eb5b24a652cb3f6f6db3cfc597a076fa8291f9e5eeeeffc8a500f83c49"
+    },
+    {
+      "file": "20261027221629_profile_feed_guarded_candidate_fastpath.sql",
+      "measuredPayloadSha256": "019417d25a634928dced5bf2697d57aa288c197d6580b6e246ec5341d439238a",
+      "guardedPayloadSha256": "e5439086a1269eec3065f7b6bdee8d73d80fc92d975c97c2b1e487a323552284",
+      "runtimeStatementsIdentical": true,
+      "previousStatementCount": 5,
+      "guardedStatementCount": 9,
+      "runtimeStatementsSha256": "e1c32372749d67a6d92685966ea5db52963ed6d646ba44ba79ed766c1b8c79ca"
+    }
+  ],
+  "authorization": {
+    "status": "passed",
+    "checks": 21,
+    "engine": "native PostgreSQL",
+    "migrations": 470,
+    "sha256": "c9bf463c001b2e54cc702ffb7a4a93e0e6d6d7dcfecfcde69d1d157bed2bc9f0"
+  },
+  "counterCorrectness": {
+    "status": "passed",
+    "checks": 57,
+    "migrations": 470,
+    "engine": "native PostgreSQL canonical schema",
+    "version": "PostgreSQL 17.11 (Debian 17.11-0+deb13u1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "nativeConcurrency": false,
+    "productionCapacity": false,
+    "fixtureOnlyWriteTriggersSuppressed": false,
+    "measurements": [],
+    "hash": "0aac25388cd402fea09c83c801c8710e76850e8e502c4ed09b87ba11c55981e0",
+    "scriptHash": "b621754e5e69f0027811a0ec98f1337d0fd8475943bff8d35001a7359fbdae08"
+  },
+  "concurrency": {
+    "status": "passed",
+    "cases": 16,
+    "scope": "Native multi-session minimal source fixture, not full-schema authority or production capacity",
+    "script": "scripts/test-profile-engagement-concurrency.mjs"
+  },
+  "atomicity": {
+    "status": "passed",
+    "engine": "PostgreSQL 17.11 (Debian 17.11-0+deb13u1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "observations": [
+      {
+        "file": "20261027210217_profile_relationship_feed_cursor.sql",
+        "sha256": "3841645f4ef65c6393cc85b77e4b23a56d4b90ecaea436f585ec3de00878920b",
+        "errorCode": "55P03",
+        "elapsedMs": 5011.221893,
+        "atomicRollback": true,
+        "subsequentUnblockedApply": true,
+        "sessionSettingsRestored": true
+      },
+      {
+        "file": "20261027211112_profile_public_read_role_isolation.sql",
+        "sha256": "456d9898f05e109f98e0f23e877f659cd2086ad397e8753575c05e76cae4b357",
+        "errorCode": "55P03",
+        "elapsedMs": 5019.091005999999,
+        "atomicRollback": true,
+        "subsequentUnblockedApply": true,
+        "sessionSettingsRestored": true
+      },
+      {
+        "file": "20261027214412_profile_engagement_sharded_counters.sql",
+        "sha256": "0aac25388cd402fea09c83c801c8710e76850e8e502c4ed09b87ba11c55981e0",
+        "errorCode": "55P03",
+        "elapsedMs": 5023.603835999998,
+        "atomicRollback": true,
+        "subsequentUnblockedApply": true,
+        "sessionSettingsRestored": true
+      },
+      {
+        "file": "20261027221629_profile_feed_guarded_candidate_fastpath.sql",
+        "sha256": "e5439086a1269eec3065f7b6bdee8d73d80fc92d975c97c2b1e487a323552284",
+        "errorCode": "55P03",
+        "elapsedMs": 5012.718916000002,
+        "atomicRollback": true,
+        "subsequentUnblockedApply": true,
+        "sessionSettingsRestored": true
+      }
+    ],
+    "production": false
+  },
+  "atomicityScript": "scripts/test-profile-migration-transaction-guards.mjs",
+  "atomicityScriptSha256": "bd80266136a5f442ce32c06567438ebf7c33e52d8f42be59c07901ffd306a001",
+  "scaleEvidence": "Existing measured pre-wrapper payload hashes remain unchanged in their original artifacts. Native scale timings were not rerun or relabeled; runtime statement equality connects those measurements to guarded deployment payloads.",
+  "finalWhitespaceNormalization": {
+    "file": "20261027221629_profile_feed_guarded_candidate_fastpath.sql",
+    "previousQualifiedSha256": "c9bf463c001b2e54cc702ffb7a4a93e0e6d6d7dcfecfcde69d1d157bed2bc9f0",
+    "finalPayloadSha256": "e5439086a1269eec3065f7b6bdee8d73d80fc92d975c97c2b1e487a323552284",
+    "change": "Removed exactly one redundant final newline after COMMIT. All parsed SQL statements and runtime definitions are unchanged. Prior authorization/counter/concurrency evidence retains original tested hashes; atomicity is rerun on final bytes."
+  }
+}

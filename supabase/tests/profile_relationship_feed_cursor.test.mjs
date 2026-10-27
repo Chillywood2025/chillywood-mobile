@@ -3,10 +3,25 @@
 // PGlite is single-backend: this is not native concurrency or production proof.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { isAbsolute } from 'node:path';
 import { createDatabase } from '../../tests/helpers/database-runtime-authority-fixture.mjs';
 
 const roleMigration='20261027211112_profile_public_read_role_isolation.sql';
-const { db, replayReport } = await createDatabase({ includeHeldStudio: true, applyRepair: true, excludeMigrations:[roleMigration] });
+const evidenceFiles=['supabase/migrations/20261027210217_profile_relationship_feed_cursor.sql',
+  'supabase/migrations/20261027221629_profile_feed_guarded_candidate_fastpath.sql',
+  'tests/helpers/native-profile-database.mjs',
+  `supabase/migrations/${roleMigration}`,'supabase/tests/profile_relationship_feed_cursor.test.mjs',
+  'supabase/tests/profile_relationship_feed_cursor_test.sql'];
+const sourceHashes=()=>Object.fromEntries(evidenceFiles.map(file=>[file,createHash('sha256').update(readFileSync(file)).digest('hex')]));
+const hashes=sourceHashes();
+let databaseFactory;
+if (process.env.NATIVE_PG_ADAPTER) {
+  assert.ok(isAbsolute(process.env.NATIVE_PG_ADAPTER),'native test adapter must be an explicit local absolute path');
+  ({databaseFactory}=await import(pathToFileURL(process.env.NATIVE_PG_ADAPTER).href));
+}
+const { db, replayReport } = await createDatabase({ includeHeldStudio: true, applyRepair: true, excludeMigrations:[roleMigration], databaseFactory });
 const u = n => `9b470000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const p = n => `9b471000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const s = n => `9b472000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -21,6 +36,21 @@ const user = async (n, sql, args = []) => {
 const page = (cursor = null, limit = 20, snapshot = '2099-01-01T00:00:00Z') => user(1,
   'select * from public.read_profile_relationship_feed_page($1,$2,$3,$4)',
   [cursor?.created_at ?? null,cursor?.id ?? null,snapshot,limit]);
+// Deliberately exhaustive oracle (tests only): no per-actor limit/head cutoff.
+// It shares source RLS but independently selects the complete eligible union.
+const referencePage = (cursor = null, limit = 20) => user(1, `
+  with relationships as (
+    select $1::text actor_id,0 priority
+    union all select user_high_id,1 from public.user_friendships where user_low_id=$1 and status='active'
+    union all select user_low_id,1 from public.user_friendships where user_high_id=$1 and status='active'
+    union all select channel_user_id,2 from public.channel_followers where follower_user_id=$1
+  ), actors as (select actor_id,min(priority) priority from relationships group by actor_id)
+  select item.id from actors a join public.creator_feed_items item on item.creator_user_id=a.actor_id
+  where item.status='active' and item.target_scope=case when a.priority=2 then 'followers' else 'circle' end
+    and item.created_at<='2099-01-01'::timestamptz
+    and ($2::timestamptz is null or (item.created_at,item.id)<($2::timestamptz,$3::uuid))
+  order by item.created_at desc,item.id desc limit $4`,
+  [u(1),cursor?.created_at??null,cursor?.id??null,limit+1]);
 const explainProductionQuery = async (cursor = null) => {
   const source=readFileSync(new URL('../migrations/20261027210217_profile_relationship_feed_cursor.sql',import.meta.url),'utf8');
   const start=source.indexOf('  return query\n');
@@ -36,6 +66,17 @@ const explainProductionQuery = async (cursor = null) => {
     [u(1),cursor?.created_at??null,cursor?.id??null,'2099-01-01T00:00:00Z',20]))[0]['QUERY PLAN'];
 };
 try {
+  check((await db.query(`with tuples(ts,id) as(values
+    ('-infinity'::timestamptz,'00000000-0000-0000-0000-000000000000'::uuid),
+    ('2026-01-01','00000000-0000-0000-0000-000000000001'),
+    ('2026-01-01','ffffffff-ffff-ffff-ffff-ffffffffffff'),
+    ('infinity','ffffffff-ffff-ffff-ffff-ffffffffffff')),
+    boundaries(ts,id) as(select * from tuples union all select null::timestamptz,null::uuid)
+    select bool_and((b.id is null or(t.ts,t.id)>=(b.ts,b.id)) is not distinct from
+      ((t.ts,t.id)>=(coalesce(b.ts,'-infinity'::timestamptz),
+       coalesce(b.id,'00000000-0000-0000-0000-000000000000'::uuid)))) equivalent
+    from tuples t cross join boundaries b`)).rows[0].equivalent,true,
+    'indexable cutoff equals nullable cutoff including empty boundary, infinity and extreme UUID ties');
   const policiesBefore=(await db.query("select tablename,policyname,qual from pg_policies where policyname in ('profile_posts_select_public_clean_or_owner','profile_post_comments_select_public_clean_or_owner','profile_post_likes_select_public_clean','social_attachments_select_authorized') order by tablename")).rows;
   await db.query("select set_config('request.jwt.claims','{\"role\":\"anon\"}',false)");
   await db.exec('set role anon');
@@ -77,6 +118,10 @@ try {
   check(all.find(row=>row.creator_user_id===u(1))?.source_context,'own','owner context');
   check(all.some(row=>row.creator_user_id===u(64)),false,'outsider excluded');
   check((await page(null,100000)).length,51,'max50 plus lookahead');
+  for (const limit of [1,20,50]) for (const before of [null,all[39],all[59]]) {
+    check((await page(before,limit)).map(row=>row.id),(await referencePage(before,limit)).map(row=>row.id),
+      'head cutoff equals exhaustive top K across equal timestamps, underfilled pages and cursor boundaries');
+  }
   const first = (await page(null,20)).slice(0,20);
   await db.query('update public.profile_posts set updated_at=now() where id=$1',[first[0].source_id]);
   check((await page(null,20)).slice(0,20).map(row=>row.id),first.map(row=>row.id),'source updates do not reorder stable cursor');
@@ -124,6 +169,8 @@ try {
     // are real posts and execute the canonical permissions dependency graph.
     for (const total of [100_000,1_000_000]) {
       console.error(`Index-volume fixture: inserting through ${total} unrelated rows`);
+      const triggerState=async()=>(await db.query("select tgname,tgenabled,pg_get_triggerdef(oid) definition from pg_trigger where tgrelid='public.creator_feed_items'::regclass and not tgisinternal order by tgname")).rows;
+      const triggers=await triggerState();
       // These are index-volume fixtures, not source-write tests. Global retained
       // media reference guards would otherwise inspect each artificial row.
       // Restore every trigger before any measured SELECT; keep all RLS enabled.
@@ -133,19 +180,56 @@ try {
           'scale-unrelated-'||n,'scale-outsider-'||(n%10000),'public','followers',
           '2026-01-01'::timestamptz,'2026-01-01'::timestamptz,'active'
         from generate_series(${total===100_000 ? 1 : 100_001},${total}) n;
-        alter table public.creator_feed_items enable trigger user;
-        analyze public.creator_feed_items; analyze public.channel_followers; analyze public.user_friendships;`);
+        `);
+      for(const trigger of triggers){
+        const mode={O:'enable',D:'disable',A:'enable always',R:'enable replica'}[trigger.tgenabled];
+        await db.exec(`alter table public.creator_feed_items ${mode} trigger "${trigger.tgname.replaceAll('"','""')}"`);
+      }
+      check(await triggerState(),triggers,'all canonical feed trigger definitions/states restored before measurement');
+      check((await db.query("select relrowsecurity from pg_class where oid='public.creator_feed_items'::regclass")).rows[0].relrowsecurity,true,'canonical feed SELECT RLS remains enabled');
+      await db.exec('analyze public.creator_feed_items; analyze public.channel_followers; analyze public.user_friendships;');
       const timings = [];
       console.error(`Index-volume fixture: measuring ${total} unrelated rows`);
       for (let iteration=0;iteration<4;iteration++) {
         const start=performanceNow(); await page(null,20); timings.push(performanceNow()-start);
       }
+      const headOnlyMs=[];
+      for(let iteration=0;iteration<4;iteration++) {
+        const start=performanceNow(); const rows=await page(null,1); headOnlyMs.push(performanceNow()-start);
+        check(rows.length<=2,true,'head-only refresh probe remains limit1 plus lookahead');
+      }
       const explain = await user(1,'explain (analyze,buffers,format json) select * from public.read_profile_relationship_feed_page(null,null,$1,20)',['2099-01-01T00:00:00Z']);
       const deep = all[Math.min(39,all.length-1)];
       const start=performanceNow(); const deepRows=await page(deep,20);
-      performance.push({unrelatedFeedRows:total,viewerRelationshipDegree:60,firstPageMs:timings,deepPageMs:performanceNow()-start,
+      performance.push({unrelatedFeedRows:total,viewerRelationshipDegree:59,candidateCreatorsIncludingOwner:60,firstPageMs:timings,headOnlyMs,deepPageMs:performanceNow()-start,
         deepRows:deepRows.length,rpcPlan:explain[0]['QUERY PLAN'],queryPlan:await explainProductionQuery(),deepQueryPlan:await explainProductionQuery(deep)});
     }
+    console.error('Index-volume fixture: adding 100000 actual same-creator Profile sources for nested RLS lookup proof');
+    const sourceTriggers=(await db.query("select tgname,tgenabled,pg_get_triggerdef(oid) definition from pg_trigger where tgrelid='public.profile_posts'::regclass and not tgisinternal order by tgname")).rows;
+    await db.exec(`alter table public.profile_posts disable trigger user;
+      insert into public.profile_posts(id,user_id,body)
+      select ('9b4b0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${u(7)}','Same creator source history fixture '||n
+      from generate_series(1,100000) n;`);
+    for(const trigger of sourceTriggers){
+      const mode={O:'enable',D:'disable',A:'enable always',R:'enable replica'}[trigger.tgenabled];
+      await db.exec(`alter table public.profile_posts ${mode} trigger "${trigger.tgname.replaceAll('"','""')}"`);
+    }
+    check((await db.query("select tgname,tgenabled,pg_get_triggerdef(oid) definition from pg_trigger where tgrelid='public.profile_posts'::regclass and not tgisinternal order by tgname")).rows,sourceTriggers,'source fixture trigger states/definitions restored');
+    await db.exec('analyze public.profile_posts');
+    const sourceDefinition=(await db.query("select pg_get_functiondef('public.can_read_creator_feed_item(text,text,text,text,text,text,text)'::regprocedure) definition")).rows[0].definition;
+    const sourceStart=sourceDefinition.search(/select\s+1\s+from public\."profile_posts" post/u);
+    const sourceEnd=sourceDefinition.indexOf('\n    ) then',sourceStart);
+    assert.ok(sourceStart>0&&sourceEnd>sourceStart,'canonical nested source lookup found');
+    const nestedSourceQuery=sourceDefinition.slice(sourceStart,sourceEnd).replace(/\bv_source_id\b/gu,'$1::text').replace(/\bv_creator_user_id\b/gu,'$2::text');
+    const sourceTimings=[];
+    for(let i=0;i<4;i++){const start=performanceNow();await page(null,20,null);sourceTimings.push(performanceNow()-start);}
+    const sourceHeadOnlyMs=[];
+    for(let i=0;i<4;i++){const start=performanceNow();await page(null,1,null);sourceHeadOnlyMs.push(performanceNow()-start);}
+    // The canonical helper is SECURITY DEFINER. EXPLAIN its exact extracted
+    // source lookup as the same catalog owner, preserving the viewer JWT.
+    performance.push({unrelatedFeedRows:1_000_000,sameCreatorRealProfilePosts:100_000,viewerRelationshipDegree:59,
+      firstPageMs:sourceTimings,headOnlyMs:sourceHeadOnlyMs,queryPlan:await explainProductionQuery(),nestedSourceLookupPlan:
+        (await db.query(`explain (analyze,buffers,format json) ${nestedSourceQuery}`,[p(7),u(7)])).rows[0]['QUERY PLAN']});
     console.error('Index-volume fixture: adding high-degree and celebrity source fixtures');
     await db.query("select set_config('request.jwt.claims','{}',false)");
     await db.exec(`insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
@@ -162,13 +246,25 @@ try {
       analyze public.creator_feed_items; analyze public.channel_followers; analyze public.user_friendships;`);
     const timings=[];
     for(let i=0;i<4;i++){const start=performanceNow();await page(null,20,null);timings.push(performanceNow()-start);}
-    performance.push({unrelatedFeedRows:1_000_000,viewerRelationshipDegree:1059,celebrityPosts:500,firstPageMs:timings,
+    const headOnlyMs=[];
+    for(let i=0;i<4;i++){const start=performanceNow();await page(null,1,null);headOnlyMs.push(performanceNow()-start);}
+    for(const limit of [1,20,50]) {
+      const firstPage=await page(null,limit);
+      check(firstPage.map(row=>row.id),(await referencePage(null,limit)).map(row=>row.id),'skewed first page equals exhaustive top K');
+      const before=firstPage[limit-1];
+      check((await page(before,limit)).map(row=>row.id),(await referencePage(before,limit)).map(row=>row.id),'skewed next page equals exhaustive top K');
+    }
+    performance.push({unrelatedFeedRows:1_000_000,viewerRelationshipDegree:1059,celebrityPosts:500,firstPageMs:timings,headOnlyMs,
       rpcPlan:(await user(1,'explain (analyze,buffers,format json) select * from public.read_profile_relationship_feed_page(null,null,null,20)'))[0]['QUERY PLAN'],
       queryPlan:await explainProductionQuery()});
   }
+  check(sourceHashes(),hashes,'benchmark source files did not change during execution');
   console.log(JSON.stringify({status:'passed',checks,migrations:replayReport.files.length+1,skipped:replayReport.skipped,
-    engine:'PGlite canonical migration replay',nativeConcurrency:false,productionLoad:false,
-    benchmarkFixtureWriteTriggersSuppressed:process.env.PROFILE_FEED_SCALE==='1',performance}));
+    engine:databaseFactory?'native PostgreSQL canonical migration replay':'PGlite canonical migration replay',
+    version:(await db.query('select version()')).rows[0].version,nativeConcurrency:false,productionLoad:false,
+    plannerSettings:(await db.query("select name,setting,unit from pg_settings where name in ('jit','plan_cache_mode','work_mem','max_parallel_workers_per_gather') order by name")).rows,
+    sampleMethod:'Four sequential warm-connection calls per case. Limit1 head probes follow limit20 calls; no concurrent load generator. Node wall time includes local SQL-client round trips, not mobile network transport.',
+    benchmarkFixtureWriteTriggersSuppressed:process.env.PROFILE_FEED_SCALE==='1',hashes,performance}));
 } finally { await db.close(); }
 
 function performanceNow() { return globalThis.performance.now(); }

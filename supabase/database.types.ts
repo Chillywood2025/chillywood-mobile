@@ -20615,6 +20615,14 @@ export type Database = {
         Args: { p_before_created_at?: string | null; p_before_id?: string | null; p_snapshot_at?: string | null; p_limit?: number }
         Returns: { id: string; source_type: string; source_id: string; creator_user_id: string; source_context: string; created_at: string; snapshot_at: string }[]
       }
+      read_authorized_profile_post_counts: {
+        Args: { p_post_id: string }
+        Returns: { like_count: number; comment_count: number }[]
+      }
+      read_authorized_profile_feed_candidates: {
+        Args: { p_actors: Json; p_before_created_at?: string | null; p_before_id?: string | null; p_snapshot_at?: string | null; p_limit?: number }
+        Returns: { id: string; created_at: string }[]
+      }
       read_profile_post_engagement_batch: {
         Args: { p_post_ids: string[] }
         Returns: { post_id: string; like_count: number; comment_count: number; liked_by_viewer: boolean }[]
