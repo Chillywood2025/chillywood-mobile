@@ -1,27 +1,36 @@
 # Creator/buyer implementation decisions
 
-Design reconciliation updated 2026-10-26. The original source checkpoint was
-`268711e4f9b68efe8fd3f905ad15d192ff8fb384`; current implementation is in the
-shared checkout after that checkpoint. Historical observations are labeled below.
-The owner approved fixed-price virtual-show source/local-synthetic work at 16:37
-UTC and the D1/D2 policies below at 16:57 UTC. Those approvals are not requested
-again. Auctions, physical seats, provider changes, live money operations,
-release, and money-sensitive merge remain excluded.
+Design reconciliation updated 2026-10-27. The original audit checkpoint was
+`268711e4f9b68efe8fd3f905ad15d192ff8fb384`; recovery checkpoint
+`4308e0324d2566549766ece4b22792a71a4d731e` preserves the existing implementation
+before the recovery corrections. The original checkout is retained. Historical
+observations are labeled below; final publication and exact-head CI remain
+separate from these local source results. The owner approved fixed-price
+virtual-show source/local-synthetic work on October26 at16:37 UTC and D1/D2 at
+16:57 UTC. Those approvals are not requested again. Auctions, physical seats,
+provider changes, live money operations, release, and money-sensitive merge
+remain excluded.
 
 ## Approved policies and remaining owner decisions
 
 | Decision / approval status | Owner policy or pending choice | Current implementation boundary | What must not be inferred |
 | --- | --- | --- | --- |
-| D1: Late verified payment — approved16:57 UTC | Atomically recover a place only if capacity remains and the original event schedule/replay terms remain valid. Otherwise retain a visible needs-resolution obligation. | Checkout starts only with a valid server reservation. A verified late receipt uses its original immutable intent/revision and purchase timestamp, locks the source event, and cannot displace another valid hold. Failed recovery becomes `reconciliation_required`; payment evidence remains in history. | Recovery does not initiate another payment, grant a different event, promise available earnings/payout, or imply a refund completed. Expiry cannot cancel a pending store transaction or justify “nothing was charged.” |
-| D2: Cancellation/no-show/material reschedule — eligibility approved16:57 UTC; thresholds pending | Affected purchases are eligible for a refund review through the payment provider's process. Owner still must select the material-change threshold, no-show grace period, consent/decline details and response responsibilities. | Preserve original terms, paid/pending history and exact ownership; stop new sales on cancellation; record eligibility separately from fulfillment and actual refund state. Current entry follows authoritative event/stream state. Simple sales pause preserves existing access. | Eligibility is not a completed or guaranteed refund, amount, deadline, fee allocation, credit or payout promise. Do not automatically declare no-show after the start time, silently substitute another event, or invent the financial effects of paid-to-free conversion. |
-| D3: Replay inclusion and expiry — pending | For new offers retain the existing explicit live-only/no-replay default; allow replay only with clear supported inclusion and expiry terms before purchase. Owner must decide whether replay is included, its availability deadline, expiry duration/basis, and remedy if promised replay is unavailable. | Snapshot purchased replay terms; preserve historical indefinite/until-expiration terms. Show a replay CTA only when event terms, current entitlement/window, and protected media authorization all permit it. At expiry retain history and deny replay. Never grant every video or Premium from an event ticket. | A linked video, `replay_available` event status, or an unexpired event pass alone is not proof of protected-video entitlement. Do not shorten historical rights or convert purchased virtual currency into an expiring entitlement. |
-| D4: Creator self-start or per-show operator approval — pending | Decide whether an eligible creator may start their own show after technical qualification, or whether every show needs separate operator approval. The parent has asked asynchronously; no answer is recorded. | Prepare exact creator/event media authority and fail closed until required technical and current approval gates pass. Keep draft/source implementation distinct from deployed producer qualification. | Do not treat lack of an answer as permission to remove operator approval, grant new roles, enable a provider, or claim live delivery. |
+| D1: Late verified payment — approved16:57 UTC | Atomically recover a place only if capacity remains and the original event schedule/replay terms remain valid. Otherwise retain a visible needs-resolution obligation. | Checkout starts only with a valid server reservation and current billing/source authority. A started unresolved attempt blocks another checkout after expiry or a new login. A verified late receipt uses its original immutable intent/revision and purchase timestamp, locks the source event, and cannot displace another valid hold. Failed recovery becomes `reconciliation_required`; payment evidence remains in history. | Recovery does not initiate another payment, grant a different event, promise available earnings/payout, or imply a refund completed. Expiry cannot cancel a pending store transaction or justify “nothing was charged.” |
+| D2: Cancellation/no-show/material reschedule — eligibility approved16:57 UTC; thresholds pending | Affected purchases are eligible for a refund review through the payment provider's process. Owner still must select the material-change threshold, no-show grace period, consent/decline details and response responsibilities. | Preserve original terms, paid/pending history and exact ownership; stop new sales on cancellation; record eligibility separately from fulfillment and actual refund state. Reserved/purchased status transitions require managed lifecycle authority, including legacy edits to draft/ended/expired. Current entry follows authoritative event/stream state. Simple sales pause preserves existing access. | Eligibility is not a completed or guaranteed refund, amount, deadline, fee allocation, credit or payout promise. Do not automatically declare no-show after the start time, silently substitute another event, or invent the financial effects of paid-to-free conversion. |
+| D3: Replay inclusion and expiry — pending | For new offers retain the existing explicit live-only/no-replay default; allow replay only with clear supported inclusion and expiry terms before purchase. Owner must decide whether replay is included, its availability deadline, expiry duration/basis, and remedy if promised replay is unavailable. | Snapshot purchased replay terms; preserve captured historical indefinite/until-expiration terms. Show a replay CTA only when event terms, current entitlement/window, and protected media authorization all permit it. At expiry retain history and deny replay. Legacy rows without captured terms require authoritative reconciliation, not invented rights. Restart is blocked when current or purchased terms promise replay because the current resolver cannot combine recording fragments. | A linked video, `replay_available` event status, or an unexpired event pass alone is not proof of protected-video entitlement. Do not shorten historical rights or substitute a later recording fragment for promised replay. Do not convert purchased virtual currency into an expiring entitlement. |
+| D4: Creator self-start or per-show operator approval — pending | Decide whether an eligible creator may start their own show after technical qualification, or whether every show needs separate operator approval. The parent has asked asynchronously; no answer is recorded. | Prepare exact creator/event media authority and fail closed until required technical and current approval gates pass. No approval rows are seeded. A live-only replacement requires exact terminal provider/cleanup proof, current host/session/worker authority, the same finite approval, unchanged original terms and the original stop deadline. Keep source implementation distinct from deployed producer qualification. | A retry mechanism does not approve creator self-start. Do not treat lack of an answer as permission to remove operator approval, grant new roles, enable a provider, reset the cost deadline, retry an uncertain provider result, or claim live delivery. |
 
 D1 recovery and D2 eligibility are approved. The remaining thresholds, replay
 promise and D4 start policy are not. Reservation duration and sale windows are
 visible technical settings, not substitutes for those decisions. A pending store
 payment may outlive both the local hold and sale cutoff; provider success must
 always be fulfilled under approved rules or reconciled visibly.
+
+The recovery fixes implement independent authority and retry requirements; they
+do not choose the outstanding commercial policies. Native PostgreSQL controls
+passed for last-place admission, unresolved-checkout expiry, exact terminal
+broadcast retry and original-deadline preservation. These are synthetic source
+tests, not store purchases, provider receipts or permission to start a live show.
 
 Suggested buyer copy for an unfulfilled verified payment: **“Your payment was
 received, but your ticket is not confirmed. We need to reconcile this purchase.
@@ -123,6 +132,13 @@ Catalog source evidence:
 - [`20260831120000_creator_access_product_doctrine_amendment.sql`](../../supabase/migrations/20260831120000_creator_access_product_doctrine_amendment.sql):
   current VIP period and creator-access doctrine; earlier seed metadata is not
   the final entitlement policy.
+- [`20261026180230_creator_money_checkout_attempt_claims.sql`](../../supabase/migrations/20261026180230_creator_money_checkout_attempt_claims.sql)
+  and [`20261026180500_event_checkout_attempt_claims.sql`](../../supabase/migrations/20261026180500_event_checkout_attempt_claims.sql):
+  one native checkout dispatch per durable attempt, unresolved-outcome barriers
+  across expiry and current authority checks immediately before checkout.
+- [`20261026184512_creator_event_broadcast_recovery.sql`](../../supabase/migrations/20261026184512_creator_event_broadcast_recovery.sql):
+  confirmed-terminal live-only recovery with preserved history, original terms,
+  approval and deadline; unknown or replay-promising attempts remain closed.
 
 ## Provider-compatible implementation and evidence gaps
 
@@ -138,17 +154,23 @@ Current source includes catalog readback, immutable offer terms, atomic
 reservations, explicit failed/pending/reconciliation states, owner-scoped ticket
 history, exact event destination, and preservation of historical purchases.
 The [implementation ledger](creator-buyer-implementation-ledger.md) distinguishes
-implemented source, passed local checks and pending qualification. Required
-local controls cover expiry versus provider success,
-duplicate/reordered callbacks, the final ticket in parallel transactions,
-cancellation/reschedule while payment is pending, unknown billing state, and
-expiry/refund racing entry. These are required proof cases, not pass claims.
+implemented source, passed local checks and pending qualification. Local source
+controls cover expiry versus provider success, duplicate callbacks, the final
+ticket in parallel transactions, schedule changes while payment is pending,
+unknown billing state, and expiry/refund racing entry. The ledger binds each
+passing subset to its evidence and retains failures; it does not substitute
+synthetic results for complete frozen-head validation or provider delivery.
 
 Remaining external qualification is not an owner product decision: deployed
 schema/catalog parity; approved/available native products on each platform;
 RevenueCat restore and webhook configuration; real sandbox pending/declined/
 restored/refunded lifecycle; protected live/replay delivery; native accessibility
 and notification behavior; verified settlement ingestion; and operator/provider
-reconciliation completion. No account inspection or settings change was made
-for this document. No production sale or provider activation follows from the
-source approval.
+reconciliation completion. Recovery Stripe account-list and Supabase project-list
+reads returned no usable result before interruption; a later Stripe account-list
+call after the user reported connection was also aborted without a result. No
+account-specific or migration-history read completed. Access, catalog,
+refund/onboarding mechanism and deployed migration parity remain unverified,
+not confirmed disconnected. No account settings, credentials, products, prices,
+payments, refunds or payouts were changed. No production sale or provider
+activation follows from source approval.
