@@ -79,7 +79,7 @@ const getDiscoveryKicker = (item: Extract<ProfileSocialFeedItem, { type: "specta
     case "following":
       return "FOLLOWING";
     default:
-      return "SPECTATOR";
+      return "SUGGESTED";
   }
 };
 

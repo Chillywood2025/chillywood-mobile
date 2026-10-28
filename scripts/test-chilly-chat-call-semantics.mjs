@@ -1396,7 +1396,7 @@ assert.match(
 );
 assert.match(
   clearEndedCallBlock,
-  /captureChatMutationAuthority\(expectedBinding\?\.userId\)[\s\S]{0,240}sameAccountSessionAuthority\(expectedBinding, authority\.binding\)/u,
+  /captureChatMutationAuthority\(expectedBinding\?\.userId, signal\)[\s\S]{0,240}assertChatReadCurrent\(expectedBinding, signal\)[\s\S]{0,100}sameAccountSessionAuthority\(expectedBinding, authority\.binding\)/u,
   "stale call cleanup binds the mutation to the initiating mounted subject",
 );
 assert.match(

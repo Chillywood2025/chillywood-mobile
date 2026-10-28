@@ -152,6 +152,7 @@ Current classification:
 | `notification-device-tokens` | device token registration | bearer/session | live and backed | 1 | Token redaction required. |
 | `notification-dispatch` | notification dispatch | trusted/session as coded | scoped/live | 2 | No broad campaigns. |
 | `notification-operator` | notification operator | narrow token | scheduled/live | 2 | DeviceNotRegistered cleanup only with evidence. |
+| `discovery-invalidation-worker` | bounded scoped discovery invalidation dispatcher | gateway JWT plus dedicated worker token; service-only RPCs | source-only; collection and dispatch disabled | 4 | Opaque delivery IDs only; no content/access authority, phone push, money, activation, scheduler or legacy room-setting changes. Separate activation, capacity, retention and installed-device proof required. |
 | `observability-operator` | observability operator | narrow token | scheduled/live | 2 | No crash evidence deletion or PII expansion. |
 | `installed-product-qa-operator` | installed product QA operator | narrow token | manual/device-lab pending | 2 | Findings/owner-command requests only; no fake proof, Premium grant, sideload, or app-control mutation. |
 | `owner-command-operator` | owner command routing | owner JWT or narrow trusted token | live and backed | 3 | Routes through target operators only. |

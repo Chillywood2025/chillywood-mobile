@@ -7,6 +7,8 @@ import crypto from 'node:crypto';
 import test from 'node:test';
 import {createDatabase,repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
 import {monetizationAuditFiles} from './helpers/creator-monetization-migration-inventory.mjs';
+import {profileFeedFiles} from './helpers/profile-feed-runtime-inventory.mjs';
+import {discoveryInvalidationFiles} from './helpers/discovery-invalidation-runtime-inventory.mjs';
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
@@ -246,8 +248,10 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
     }
     // This remains a full-current-chain repair test, including reviewed successors.
     check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length);
     check('exact creator/buyer monetization audit successors',replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles);
+    assert.deepEqual(replayReport.files.filter(file=>profileFeedFiles.includes(file)),profileFeedFiles, 'exact profile feed migration bundle');
+    assert.deepEqual(replayReport.files.filter(file=>discoveryInvalidationFiles.includes(file)),discoveryInvalidationFiles, 'exact scoped discovery migration bundle');
     check('complete Brand reference scan and candidate index successors',replayReport.files.filter(file=>brandReferenceFiles.includes(file)),brandReferenceFiles);
     check('complete legacy rendition safety successor',replayReport.files.filter(file=>legacyRenditionFiles.includes(file)),legacyRenditionFiles);
     check('complete isolated R2 qualification successor in both Studio scenarios',replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles);

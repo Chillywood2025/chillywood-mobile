@@ -1,16 +1,5 @@
 --- _lib/notifications.ts
 +++ _lib/notifications.ts
-@@ -30,8 +30,7 @@
- } from "./chillyChatCallSoundAssets";
- import { resolveApplicationRoute } from "./appLinks";
- import { resolveNotificationMessagePath, type NotificationMessageTarget } from "./notificationMessageTarget";
--import { getCurrentAccountSessionAuthoritySnapshot, readCurrentAccountSessionAuthority, subscribeToAccountSessionAuthority } from "./accountSessionAuthority";
--import { captureAccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
-+import { readCurrentAccountSessionAuthority } from "./accountSessionAuthority";
- import { withAuthorityReadDeadline } from "./entitlementAuthority";
--
-+
- export const NOTIFICATIONS_TABLE = "notifications";
 @@ -337,6 +336,7 @@
  type EventReminderUpdate = TablesUpdate<"event_reminders">;
  type CreatorEventRow = Tables<"creator_events">;

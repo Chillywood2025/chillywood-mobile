@@ -57,8 +57,8 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "tip_received",
 ].forEach((needle) => assertIncludes(notifications, needle, "creator-money important type coverage"));
 
-assertIncludes(notifications, "readImportantNotificationList(userId, importantLimit)", "important rows must be read separately from recent rows");
-assertIncludes(notifications, "readNotificationList(userId, recentLimit)", "recent rows must remain separate from important rows");
+assertIncludes(notifications, "readImportantNotificationList(userId, importantLimit, signal)", "important rows must be read separately from recent rows");
+assertIncludes(notifications, "readNotificationList(userId, recentLimit, signal)", "recent rows must remain separate from important rows");
 assertIncludes(notifications, '.eq("user_id", viewerUserId).is("read_at", null).is("dismissed_at", null)', "badge summary must count only unread, undismissed rows");
 assertIncludes(notifications, "const payload: NotificationUpdate = { read_at", "mark-read must update read_at");
 assertNotIncludes(notifications, "read_at: new Date().toISOString(), dismissed_at", "mark-read must not dismiss important rows");
@@ -69,15 +69,15 @@ assertIncludes(notifications, "dismissed_at: new Date().toISOString(), status: \
   "notification-tray-recent-section",
   "Important / Action Needed",
   "These stay visible after read until handled, dismissed, revoked, or expired.",
-  "readImportantNotificationList(user!.id, 30)",
-  "readNotificationListPage(user!.id, 30)",
+  "readImportantNotificationList(user!.id, 30, signal)",
+  "readNotificationListPage(user!.id, 30, null, signal)",
   "Show More Activity",
   "Open Notification Settings",
 ].forEach((needle) => assertIncludes(bell, needle, "bell tray retention UI"));
 
 assertNotIncludes(settings, "readNotificationActivityList", "Settings must not duplicate bell Activity records");
 assertNotIncludes(settings, "settings-notification-activity-list", "Settings must not render an Activity inbox");
-assertIncludes(bell, "mergeNotifications(importantRows, recentPage.items)", "bell tray must retain important rows independently of the recent-page bound");
+assertIncludes(bell, "mergeNotifications(importantResult.value, pageResult.value.items)", "bell tray must retain important rows independently of the recent-page bound");
 assertIncludes(notifications, "export async function readCurrentPushRegistration", "Settings must have backend push status readback helper");
 assertIncludes(settings, "readCurrentPushRegistration()", "Settings refresh must read backend push registration");
 assertIncludes(settings, "Device push registration controls phone push alerts. In-app Activity lives in the bell tray and still works in the app.", "Settings must separate push registration from in-app Activity");

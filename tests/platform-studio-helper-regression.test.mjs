@@ -11,7 +11,8 @@ function profileHarness() {
   let owner = "creator-a";
   let generation = "session-1";
   let response = { error: null };
-  const writes = [], cache = [], snapshots = [];
+  let writeStarted = deferred();
+  const writes = [], cache = [], snapshots = [], tokens = [];
   const context = {
     getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: owner, accountId: owner, state: "ACTIVE", restoreOnly: false, sessionGeneration: generation }),
     sameAccountSessionAuthority: loadStudioFunctions("_lib/accountSessionAuthority.ts", ["sameAccountSessionAuthority"], {}).sameAccountSessionAuthority,
@@ -20,11 +21,29 @@ function profileHarness() {
     logChatProfile() {}, USER_PROFILES_TABLE: "user_profiles", USER_PROFILE_KEY: "profile",
     writeAccountValue: async (...args) => cache.push(args),
     refreshSignedInIdentitySnapshots: async (...args) => snapshots.push(args),
-    supabase: { from: () => ({ upsert: async (payload) => { writes.push(payload); return await response; } }) },
+    captureAccountBoundSupabaseMutationSubject: async (expected) => {
+      assert.equal(expected, owner);
+      return {authority: context.getCurrentAccountSessionAuthoritySnapshot(), accessToken:`fixture-${owner}-${generation}`};
+    },
+    SUPABASE_URL:"https://fixture.invalid", SUPABASE_ANON_KEY:"fixture-public",
+    // Run production captureProfileSaveOperation and real SDK PostgREST/header
+    // construction; only transport and the external session read are modeled.
+    createClient: (url, key, options) => createClient(url,key,{...options,global:{...options.global,
+      fetch:async (_url,init) => {
+        writes.push(JSON.parse(init.body));tokens.push(new Headers(init.headers).get("Authorization"));
+        const started=writeStarted;writeStarted=deferred();started.resolve();
+        const result=await response;
+        return result.error
+          ? new Response(JSON.stringify(result.error),{status:400,headers:{"content-type":"application/json"}})
+          : new Response(null,{status:204});
+      },
+    }}),
+    supabase: {from:()=>{throw new Error("Profile save must not use mutable shared transport");}},
   };
   return {
-    api: loadStudioFunctions("_lib/userData.ts", ["captureUserDataAccountBinding", "getBoundUserId", "userDataAccountBindingIsCurrent", "assertUserDataAccountBindingIsCurrent", "syncUserProfileToRemote", "saveUserProfileRemote"], context),
-    writes, cache, snapshots, setOwner(value) { owner = value; }, setResponse(value) { response = value; },
+    api: loadStudioFunctions("_lib/userData.ts", ["captureUserDataAccountBinding", "getBoundUserId", "userDataAccountBindingIsCurrent", "assertUserDataAccountBindingIsCurrent", "captureProfileSaveOperation", "syncUserProfileToRemote", "saveUserProfileRemote"], context),
+    writes, cache, snapshots, tokens, nextWrite:()=>writeStarted.promise,
+    setOwner(value) { owner = value; }, setResponse(value) { response = value; },
     setGeneration(value) { generation = value; },
   };
 }
@@ -41,6 +60,8 @@ test("Studio profile save needs remote acknowledgement; unchanged retry really r
   assert.equal(h.cache.length, 1);
   assert.equal(h.snapshots.length, 1);
   assert.equal(h.writes[1].user_id, "creator-a");
+  assert.deepEqual(h.tokens,["Bearer fixture-creator-a-session-1","Bearer fixture-creator-a-session-1"]);
+  assert.ok(h.snapshots[0][2],"identity refresh must receive the same pinned client");
 });
 
 test("Studio rejects stale initiating owner before remote IO and account changes before acknowledgement", async () => {
@@ -50,7 +71,9 @@ test("Studio rejects stale initiating owner before remote IO and account changes
   assert.equal(h.writes.length, 0);
   h.setOwner("creator-a");
   const response = deferred(); h.setResponse(response.promise);
+  const writeStarted=h.nextWrite();
   const operation = h.api.saveUserProfileRemote({}, "creator-a");
+  await writeStarted;
   assert.equal(h.writes.length, 1);
   h.setOwner("creator-b"); response.resolve({ error: null });
   await assert.rejects(operation, /Account changed/);
@@ -58,7 +81,9 @@ test("Studio rejects stale initiating owner before remote IO and account changes
   assert.equal(h.snapshots.length, 0);
   h.setOwner("creator-a");
   const next = deferred(); h.setResponse(next.promise);
+  const nextWriteStarted=h.nextWrite();
   const sameUserNewSession = h.api.saveUserProfileRemote({}, "creator-a");
+  await nextWriteStarted;
   h.setGeneration("session-2"); next.resolve({ error: null });
   await assert.rejects(sameUserNewSession, /Account changed/);
   assert.equal(h.cache.length, 0, "same-user new session cannot acknowledge an old save");

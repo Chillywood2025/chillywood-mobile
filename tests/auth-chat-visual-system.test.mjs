@@ -143,7 +143,7 @@ test("Chat call, message, attachment, navigation, and safety authority wiring is
     'onPress={() => router.back()}',
   ], "direct Chat behavior");
   assertIncludes(source.inbox, [
-    'listChatThreads()',
+    'listChatThreads({ signal })',
     'subscribeToInbox',
     'getOrCreateDirectThread',
     'hideChatThreadFromInbox',

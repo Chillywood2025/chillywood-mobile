@@ -15,6 +15,7 @@ const titleReleaseClosure = read("supabase/migrations/20260908040000_pre_activat
 const titleReleaseTest = read("supabase/tests/pre_activation_title_release_visibility_closure_test.sql");
 const home = read("app/(tabs)/index.tsx");
 const live = read("app/(tabs)/live.tsx");
+const upcomingFeed = read("_lib/useLiveUpcomingEvents.ts");
 const liveTabDiscoveryBuckets = read("_lib/liveTabDiscoveryBuckets.ts");
 const explore = read("app/(tabs)/explore.tsx");
 const saved = read("app/(tabs)/my-list.tsx");
@@ -111,7 +112,7 @@ assert.ok(home.includes('title: "Circle Watch-Party"'), "Home must use the custo
 assert.ok(home.includes("Official Chi&apos;llywood"), "Rachi official identity must remain creator-tied rather than a section status");
 assert.ok(home.includes("readLatestPublicEventSummaries({ limit: 24 }).catch"), "Home Event failure must not erase independent public creator rails");
 assert.ok(live.includes('useLiveDiscoveryFeed({ surface: "home", liveOnly: true')
-  && !live.includes("setDiscoveryItems") && live.includes("setErrorMsg("),
+  && !live.includes("setDiscoveryItems") && live.includes("upcoming.error") && upcomingFeed.includes("Upcoming events could not refresh"),
   "Live Event failure must remain visible without erasing independently refreshed discovery");
 assert.ok(live.includes("buildLiveTabDiscoveryBuckets(discoveryItems, events)"),
   "Live must use the tested lifecycle-aware discovery buckets");
@@ -208,8 +209,8 @@ for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explo
   assert.ok(source.includes("accessibilityLabel"), `${label} discovery cards need deterministic accessibility meaning`);
   assert.ok(source.includes("getDiscoveryItemActionLabel(item)"),
     `${label} must share the exact discovery destination accessibility label`);
-  assert.ok(source.includes("useRefreshOnForeground"), `${label} must refresh canonical discovery after foreground resume`);
-  assert.ok(source.includes("LoadGenerationRef") && source.includes("generation !=="),
+  assert.ok(label === "Live" ? source.includes("useLiveUpcomingEvents") && upcomingFeed.includes("next === 'active'") : source.includes("useRefreshOnForeground"), `${label} must refresh canonical discovery after foreground resume`);
+  assert.ok(label === "Live" ? upcomingFeed.includes("request === sequence") && upcomingFeed.includes("sameAccountSessionAuthority") : source.includes("LoadGenerationRef") && source.includes("generation !=="),
     `${label} must prevent an older discovery request from overwriting newer authoritative state`);
 }
 assert.ok(foregroundRefresh.includes('nextState === "active"') && foregroundRefresh.includes('appStateRef.current !== "active"'),

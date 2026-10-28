@@ -513,26 +513,36 @@ export const parseCommunicationMembershipPayload = (row: CommunicationMembership
   };
 };
 
-async function fetchCommunicationRoomRow(roomId: string): Promise<CommunicationRoomRow | null> {
+const assertCommunicationReadActive = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+  const error = new Error("Communication room read retired.");
+  error.name = "AbortError";
+  throw error;
+};
+
+async function fetchCommunicationRoomRow(roomId: string, signal?: AbortSignal): Promise<CommunicationRoomRow | null> {
+  assertCommunicationReadActive(signal);
   const normalizedRoomId = formatCommunicationRoomCode(roomId);
   if (!normalizedRoomId) return null;
 
-  const query = await supabase
+  let request = supabase
     .from(COMMUNICATION_ROOMS_TABLE)
     .select(COMMUNICATION_ROOM_SELECT)
-    .eq("room_id", normalizedRoomId)
-    .returns<CommunicationRoomFullRow>()
-    .maybeSingle();
+    .eq("room_id", normalizedRoomId);
+  if (signal) request = request.abortSignal(signal);
+  const query = await request.returns<CommunicationRoomFullRow>().maybeSingle();
+  assertCommunicationReadActive(signal);
 
   if (!query.error) return query.data ?? null;
 
   if (query.error && isMissingColumnError(query.error, "content_access_rule")) {
-    const fallback = await supabase
+    let fallbackRequest = supabase
       .from(COMMUNICATION_ROOMS_TABLE)
       .select(COMMUNICATION_ROOM_BASE_SELECT)
-      .eq("room_id", normalizedRoomId)
-      .returns<CommunicationRoomBaseRow>()
-      .maybeSingle();
+      .eq("room_id", normalizedRoomId);
+    if (signal) fallbackRequest = fallbackRequest.abortSignal(signal);
+    const fallback = await fallbackRequest.returns<CommunicationRoomBaseRow>().maybeSingle();
+    assertCommunicationReadActive(signal);
     if (fallback.error) throw createCommunicationOperationError("room fallback read", fallback.error);
     return fallback.data ?? null;
   }
@@ -648,8 +658,8 @@ export async function createCommunicationRoom(hostUserIdOrOptions?: string | Com
   return { error: { message: "Unable to generate a unique communication room code." } };
 }
 
-export async function getCommunicationRoom(roomId: string): Promise<CommunicationRoomState | null> {
-  const row = await fetchCommunicationRoomRow(roomId);
+export async function getCommunicationRoom(roomId: string, options: { signal?: AbortSignal } = {}): Promise<CommunicationRoomState | null> {
+  const row = await fetchCommunicationRoomRow(roomId, options.signal);
   if (!row) return null;
   const room = parseCommunicationRoomPayload(row);
   return isCommunicationRoomActive(room) ? room : null;

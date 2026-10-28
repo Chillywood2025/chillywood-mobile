@@ -1,6 +1,5 @@
 import type { Tables } from "../supabase/database.types";
-import { readFollowedChannelUserIds } from "./channelAudience";
-import { readActiveFriendUserIds } from "./friendGraph";
+import { readDiscoveryCandidateRankingSignals } from "./discoveryRankingSignals";
 import { supabase } from "./supabase";
 
 export const DISCOVERY_FEED_ITEMS_TABLE = "discovery_feed_items";
@@ -30,6 +29,8 @@ export type DiscoveryRankingReason =
 
 export type PublicDiscoveryFeedReadOptions = {
   itemId?: string;
+  /** Bounded canonical revalidation of already displayed cards. */
+  itemIds?: string[];
   surface?: Exclude<DiscoveryFeedSurface, "none">;
   channelUserId?: string;
   ownerUserId?: string;
@@ -531,7 +532,7 @@ export function rankDiscoveryFeedItems<T extends DiscoveryFeedItem>(
     if (leftScore !== rightScore) return rightScore - leftScore;
     const leftTime = Date.parse(normalizeText(left.starts_at) || normalizeText(left.published_at) || normalizeText(left.created_at));
     const rightTime = Date.parse(normalizeText(right.starts_at) || normalizeText(right.published_at) || normalizeText(right.created_at));
-    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0) || left.id.localeCompare(right.id);
   });
 }
 
@@ -545,31 +546,21 @@ export function rankCircleSpectatorFeedItems<T extends DiscoveryFeedItem>(
     if (leftScore !== rightScore) return rightScore - leftScore;
     const leftTime = Date.parse(normalizeText(left.starts_at) || normalizeText(left.published_at) || normalizeText(left.created_at));
     const rightTime = Date.parse(normalizeText(right.starts_at) || normalizeText(right.published_at) || normalizeText(right.created_at));
-    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0) || left.id.localeCompare(right.id);
   });
 }
 
-export async function loadDiscoveryFeedRankingSignals(options?: { limit?: number }): Promise<DiscoveryFeedRankingSignals> {
-  const limit = Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? 75)) || 75));
-  const [followedChannelIds, chillyCircleUserIds] = await Promise.all([
-    readFollowedChannelUserIds({ limit }).catch(() => []),
-    readActiveFriendUserIds().catch(() => []),
-  ]);
-
-  return {
-    followedChannelIds: Array.from(new Set(followedChannelIds.map(normalizeText).filter(Boolean))),
-    chillyCircleUserIds: Array.from(new Set(chillyCircleUserIds.map(normalizeText).filter(Boolean))),
-    categoryKeys: [],
-  };
+export async function loadDiscoveryFeedRankingSignals(options?: { limit?: number; items?: readonly DiscoveryFeedItem[]; signal?: AbortSignal }): Promise<DiscoveryFeedRankingSignals> {
+  // An empty candidate set needs no graph read. Keep this export for callers,
+  // but never enumerate the viewer's entire graph to rank a bounded page.
+  return readDiscoveryCandidateRankingSignals(options?.items ?? [], options?.signal);
 }
 
 export async function readRankedPublicDiscoveryFeedItems(
   options: PublicDiscoveryFeedReadOptions = {},
 ): Promise<RankedPublicDiscoveryFeedReadResult> {
-  const [items, signals] = await Promise.all([
-    readPublicDiscoveryFeedItems(options),
-    loadDiscoveryFeedRankingSignals(),
-  ]);
+  const items = await readPublicDiscoveryFeedItems(options);
+  const signals = await readDiscoveryCandidateRankingSignals(items, options.signal);
 
   return {
     items: rankDiscoveryFeedItems(items, signals),
@@ -584,6 +575,7 @@ export async function readPublicDiscoveryFeedItems(
 ): Promise<DiscoveryFeedItem[]> {
   const limit = Math.max(1, Math.min(50, Math.floor(Number(options.limit ?? 12)) || 12));
   const itemId = normalizeText(options.itemId);
+  const itemIds = normalizeDiscoveryItemIds(options.itemIds);
 
   let query = supabase
     .from(DISCOVERY_FEED_ITEMS_TABLE)
@@ -594,7 +586,8 @@ export async function readPublicDiscoveryFeedItems(
     .in("rights_status", [...PUBLIC_SPECTATOR_SAFE_RIGHTS, "metadata_only"])
     .order("ranking_score", { ascending: false })
     .order("starts_at", { ascending: false, nullsFirst: false })
-    .order("published_at", { ascending: false, nullsFirst: false });
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: true });
 
   if (options.liveOnly) {
     query = query.eq("live_state", "live").or(`ended_at.is.null,ended_at.gt.${new Date().toISOString()}`);
@@ -603,6 +596,7 @@ export async function readPublicDiscoveryFeedItems(
   if (itemId) {
     query = query.eq("id", itemId);
   }
+  if (itemIds) query = query.in("id", itemIds);
 
   if (options.surface) {
     query = query.in("discovery_surface", PUBLIC_READ_SURFACE_MAP[options.surface]);
@@ -625,6 +619,15 @@ export async function readPublicDiscoveryFeedItems(
   if (error) throw error;
   if (!data) throw new Error("Discovery response unavailable.");
   return data.filter(isDiscoveryFeedItemEligibleForRanking);
+}
+
+export function normalizeDiscoveryItemIds(ids?: string[]) {
+  if (ids === undefined) return undefined;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 50
+    || ids.some(id => typeof id !== 'string' || !id.trim() || id.length > 128)) {
+    throw new Error('Invalid discovery items.');
+  }
+  return Array.from(new Set(ids));
 }
 
 export function normalizeDiscoveryCreatorIds(options: Pick<PublicDiscoveryFeedReadOptions, "creatorUserId" | "creatorUserIds">) {

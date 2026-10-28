@@ -76,6 +76,7 @@ async function harness(backend = createPreferenceBackend()) {
   const storage = new Map([['chillywood.notification.install_id.v1', 'fixture-install'],
     ['chillywood.notification.revoke_credential.v1', 'f'.repeat(64)]]);
   const mocks = {
+    '@supabase/supabase-js': { createClient },
     '@react-native-async-storage/async-storage': { getItem: async key => storage.get(key) || null, setItem: async (key, value) => storage.set(key, value) },
     'expo-constants': { easConfig: { projectId: 'fixture-project' } }, 'expo-device': { isDevice: true }, 'expo-application': {},
     'expo-notifications': { AndroidImportance: {}, AndroidNotificationPriority: {}, setNotificationHandler() {}, setNotificationChannelAsync: async () => {},

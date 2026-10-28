@@ -73,6 +73,7 @@ async function mount(t, { lane = "public", row = projection(lane), initialAuthor
       if (name.endsWith("/session")) return { useSession: () => ({ authority, authorityStatus: authority ? "active" : "anonymous", isSignedIn: !!authority }) };
       if (name.endsWith("/accountSessionAuthority")) return { readCurrentAccountSessionAuthority: () => reader(), sameAccountSessionAuthority: sameOwner };
       if (name === "./supabase") return { supabase: database };
+      if (name === "./discoveryRankingSignals") return { readDiscoveryCandidateRankingSignals: () => { throw new Error('Entry resolution must not rank or enumerate relationships'); } };
       if (name === "./channelAudience") return { readFollowedChannelUserIds: async () => [] };
       if (name === "./friendGraph") return { readActiveFriendUserIds: async () => [] };
       if (name.endsWith("/discoveryFeed")) return load("_lib/discoveryFeed.ts");

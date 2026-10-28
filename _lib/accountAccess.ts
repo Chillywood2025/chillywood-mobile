@@ -11,21 +11,22 @@ export type AccountAccessStatusReadback = {
 type AccountAccessStatusRpc = PromiseLike<{
   data: Record<string, unknown> | null;
   error: { message?: string } | null;
-}>;
+}> & { abortSignal(signal: AbortSignal): AccountAccessStatusRpc };
 
 const toText = (value: unknown) => String(value ?? "").trim();
-export async function readAccountAccessStatus(userId: string): Promise<AccountAccessStatusReadback> {
+export async function readAccountAccessStatus(userId: string, options: { signal?: AbortSignal } = {}): Promise<AccountAccessStatusReadback> {
   const normalizedUserId = toText(userId);
   if (!normalizedUserId) {
     throw new Error("account_user_required");
   }
 
-  const rpc = (supabase.rpc as unknown as (
+  let rpc = (supabase.rpc as unknown as (
     fn: "account_access_status_readback",
     args: { p_user_id: string },
   ) => AccountAccessStatusRpc)("account_access_status_readback", {
     p_user_id: normalizedUserId,
   });
+  if (options.signal) rpc = rpc.abortSignal(options.signal);
 
   const { data, error } = await rpc;
   if (error) {

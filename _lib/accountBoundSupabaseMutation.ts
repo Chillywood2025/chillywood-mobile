@@ -19,6 +19,18 @@ export type AccountBoundSupabaseMutationResult<T> = {
   data: T | null;
   error: { message?: string; code?: string } | null;
 };
+export type AccountBoundSupabaseCaptureOptions = {
+  // A read owner may bound its display separately, but must retain any
+  // abort-ignoring auth/readback operation until actual transport settlement.
+  waitForReadSettlement?: boolean;
+  signal?: AbortSignal;
+};
+const assertCaptureActive = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+  const error = new Error("Account-bound read retired.");
+  error.name = "AbortError";
+  throw error;
+};
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -73,6 +85,7 @@ export async function invokeAccountBoundSupabaseMutationRpc<T>(
   subject: AccountBoundSupabaseMutationSubject,
   functionName: string,
   args: Record<string, unknown> = {},
+  options: { waitForReadSettlement?: boolean; retainTransportSettlement?: boolean } = {},
 ): Promise<AccountBoundSupabaseMutationResult<T>> {
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   const pending = invokeAccountBoundSupabaseRpc({
@@ -83,8 +96,9 @@ export async function invokeAccountBoundSupabaseMutationRpc<T>(
       args,
       clientPlatform: Platform.OS,
     }) as Promise<AccountBoundSupabaseMutationResult<T>>;
-  // Room admission, owned media writes, and leave mutate durable membership.
-  // Their callers bound the
+  // Room admission, owned media writes, and leave mutate durable state.
+  // Signal-owned inbox cleanup opts into the same retained settlement; legacy
+  // call-control cleanup keeps its existing deadline. These callers bound the
   // UI wait separately and retain this operation until transport settlement;
   // a display deadline must not pretend that a server mutation was canceled.
   // Other RPC callers retain their existing authority-read deadline.
@@ -92,6 +106,8 @@ export async function invokeAccountBoundSupabaseMutationRpc<T>(
     || functionName === "join_owned_communication_room_session"
     || functionName === "touch_owned_communication_room_session"
     || functionName === "leave_communication_room_session"
+    || (functionName === "clear_stale_chilly_chat_thread_call" && options.retainTransportSettlement)
+    || (functionName === "wave1_session_authority_readback" && options.waitForReadSettlement)
     ? await pending
     : await withAuthorityReadDeadline<AccountBoundSupabaseMutationResult<T>>(
       pending,
@@ -110,7 +126,9 @@ export async function invokeAccountBoundSupabaseMutationRpc<T>(
 async function capturePublishedAccountBoundSupabaseMutationSubject(
   expectedUserId?: string,
   allowRestoreOnly = false,
+  options: AccountBoundSupabaseCaptureOptions = {},
 ): Promise<AccountBoundSupabaseMutationSubject> {
+  assertCaptureActive(options.signal);
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   if (
     !authority
@@ -121,7 +139,9 @@ async function capturePublishedAccountBoundSupabaseMutationSubject(
     throw new AccountBoundSupabaseMutationError();
   }
 
-  const sessionResponse = await withAuthorityReadDeadline(supabase.auth.getSession(), null);
+  const sessionRead = supabase.auth.getSession();
+  const sessionResponse = options.waitForReadSettlement ? await sessionRead : await withAuthorityReadDeadline(sessionRead, null);
+  assertCaptureActive(options.signal);
   const session = sessionResponse?.data.session;
   const accessToken = toText(session?.access_token);
   if (!accessToken || toText(session?.user?.id) !== authority.userId) {
@@ -135,13 +155,18 @@ async function capturePublishedAccountBoundSupabaseMutationSubject(
 
 export async function captureAccountBoundSupabaseMutationSubject(
   expectedUserId?: string,
+  options: AccountBoundSupabaseCaptureOptions = {},
 ): Promise<AccountBoundSupabaseMutationSubject> {
-  const subject = await capturePublishedAccountBoundSupabaseMutationSubject(expectedUserId);
+  const subject = await capturePublishedAccountBoundSupabaseMutationSubject(expectedUserId, false, options);
+  assertCaptureActive(options.signal);
   const authority = subject.authority;
   const readback = await invokeAccountBoundSupabaseMutationRpc<unknown>(
     subject,
     "wave1_session_authority_readback",
+    {},
+    options,
   );
+  assertCaptureActive(options.signal);
   const exactReadback = readback.error
     ? null
     : parseAccountSessionAuthorityReadback(readback.data);

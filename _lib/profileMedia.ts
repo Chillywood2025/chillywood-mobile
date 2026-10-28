@@ -1,8 +1,10 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import type { ImagePickerAsset } from "expo-image-picker";
+import { createClient } from "@supabase/supabase-js";
+import { captureAccountBoundSupabaseMutationSubject, assertAccountBoundSupabaseMutationSubjectCurrent } from "./accountBoundSupabaseMutation";
 
-import type { TablesUpdate } from "../supabase/database.types";
+import type { Database, TablesUpdate } from "../supabase/database.types";
 import { normalizeImageUploadFile } from "./imageUploadNormalization";
 import {
   normalizeProfileAppearanceFitMode,
@@ -10,13 +12,14 @@ import {
   normalizeProfileMediaStatus,
   normalizeUserProfile,
   readUserProfile,
-  saveUserProfile,
+  cacheAcknowledgedUserProfile,
   USER_PROFILES_TABLE,
   type ProfileAppearanceFitMode,
   type ProfileMediaStatus,
   type UserProfile,
 } from "./userData";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
+import { reportRuntimeError } from "./logger";
 
 export const PROFILE_MEDIA_BUCKET = "profile-media";
 export const PROFILE_AVATAR_MAX_BYTES = 10 * 1024 * 1024;
@@ -116,19 +119,20 @@ const validateProfileMediaFile = async (kind: ProfileMediaKind, file: ProfileMed
   return { uri, mimeType, size };
 };
 
-const getSignedInUserId = async () => {
-  const { data, error } = await supabase.auth.getSession();
-  const userId = toText(data.session?.user?.id);
-  if (error || !userId) throw new Error("Sign in before changing Profile appearance.");
-  return userId;
+const captureProfileMediaOperation = async () => {
+  const subject = await captureAccountBoundSupabaseMutationSubject();
+  // Every request (including retries/cleanup) keeps the initiating token. The
+  // shared SDK client may adopt another account while a native upload is held.
+  const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+  });
+  return { subject, client };
 };
-
-const getSignedInAccessToken = async () => {
-  const { data, error } = await supabase.auth.getSession();
-  const accessToken = toText(data.session?.access_token);
-  if (error || !accessToken) throw new Error("Sign in before changing Profile appearance.");
-  return accessToken;
-};
+type ProfileMediaOperation = Awaited<ReturnType<typeof captureProfileMediaOperation>>;
+const assertMediaOperationCurrent = (operation: ProfileMediaOperation) =>
+  assertAccountBoundSupabaseMutationSubjectCurrent(operation.subject);
+class ProfileAppearanceWriteRejectedError extends Error {}
 
 const loadImagePicker = async () => {
   try {
@@ -178,11 +182,23 @@ const extractProfileMediaObjectKey = (url?: string | null) => {
   }
 };
 
-const deleteOwnedProfileMediaObject = async (userId: string, url?: string | null) => {
+const deleteOwnedProfileMediaObject = async (operation: ProfileMediaOperation, userId: string, url?: string | null) => {
   const objectKey = extractProfileMediaObjectKey(url);
   if (!objectKey || !objectKey.startsWith(`${userId}/`)) return;
-  const { error } = await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]);
+  assertMediaOperationCurrent(operation);
+  const { error } = await operation.client.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]);
   if (error) throw new Error(error.message || "Unable to remove this Profile image right now.");
+};
+
+const cleanupReplacedProfileMedia = async (operation: ProfileMediaOperation, userId: string, url?: string | null) => {
+  try {
+    await deleteOwnedProfileMediaObject(operation, userId, url);
+  } catch {
+    // Metadata is already committed. Do not report the save as failed or invite
+    // a second upload. Retained objects need owner-scoped storage reconciliation;
+    // no object key, private URL, or credential is included in this diagnostic.
+    reportRuntimeError("profile-media-cleanup-pending", new Error("Profile saved; old image cleanup requires reconciliation."));
+  }
 };
 
 const buildProfileMediaReadUrl = (objectKey: string) => (
@@ -243,12 +259,13 @@ async function getPreparedProfileMediaFileSize(uri: string, fallback?: number | 
   return Number.isFinite(size) && size > 0 ? size : 0;
 }
 
-async function uploadProfileMediaFileToStorage(input: {
+async function uploadProfileMediaFileToStorage(operation: ProfileMediaOperation, input: {
   objectKey: string;
   uri: string;
   mimeType: string;
 }) {
-  const accessToken = await getSignedInAccessToken();
+  assertMediaOperationCurrent(operation);
+  const accessToken = operation.subject.accessToken;
   const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PROFILE_MEDIA_BUCKET}/${encodeStoragePath(input.objectKey)}`;
 
   try {
@@ -271,8 +288,9 @@ async function uploadProfileMediaFileToStorage(input: {
     // Fall back to the SDK path below; some native builds handle Expo File bodies better.
   }
 
+  assertMediaOperationCurrent(operation);
   const uploadBody = new File(input.uri);
-  const { error } = await supabase.storage
+  const { error } = await operation.client.storage
     .from(PROFILE_MEDIA_BUCKET)
     .upload(input.objectKey, uploadBody as unknown as Blob, {
       contentType: input.mimeType,
@@ -281,9 +299,10 @@ async function uploadProfileMediaFileToStorage(input: {
   if (error) throw error;
 }
 
-async function assertProfileMediaUploadReadable(objectKey: string, expectedSize: number) {
+async function assertProfileMediaUploadReadable(operation: ProfileMediaOperation, objectKey: string, expectedSize: number) {
   if (expectedSize <= 0) return;
-  const { data, error } = await supabase.storage
+  assertMediaOperationCurrent(operation);
+  const { data, error } = await operation.client.storage
     .from(PROFILE_MEDIA_BUCKET)
     .createSignedUrl(objectKey, 60);
   if (error || !data?.signedUrl) throw new Error("Profile image could not be verified after upload.");
@@ -299,31 +318,42 @@ async function assertProfileMediaUploadReadable(objectKey: string, expectedSize:
 }
 
 async function updateProfileAppearance(
+  operation: ProfileMediaOperation,
   userId: string,
   existingProfile: UserProfile,
   patch: UserProfileUpdate,
   nextProfile: UserProfile,
 ) {
-  const { data, error } = await supabase
+  assertMediaOperationCurrent(operation);
+  const { data, error } = await operation.client
     .from(USER_PROFILES_TABLE)
     .update(patch)
     .eq("user_id", userId)
     .select("user_id")
     .maybeSingle();
+  assertMediaOperationCurrent(operation);
 
   if (error) {
-    throw new Error(error.message || "Unable to save Profile appearance right now.");
+    // SDK transport errors can also arrive in `error`; only explicit database
+    // rejection receipts prove that the uploaded object is unreferenced.
+    const message = error.message || "Unable to save Profile appearance right now.";
+    if (["42501", "23505", "23514", "23502", "22P02"].includes(error.code)) {
+      throw new ProfileAppearanceWriteRejectedError(message);
+    }
+    throw new Error(message);
   }
   if (!data) {
-    throw new Error("Profile appearance could not be saved for this account.");
+    throw new ProfileAppearanceWriteRejectedError("Profile appearance could not be saved for this account.");
   }
 
   const normalized = normalizeUserProfile({
     ...existingProfile,
     ...nextProfile,
   });
-  await saveUserProfile(normalized);
-  return normalized;
+  const cachePatch = Object.fromEntries(Object.entries(normalized).filter(([key]) =>
+    Object.prototype.hasOwnProperty.call(patch, key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)),
+  )) as Partial<UserProfile>;
+  return cacheAcknowledgedUserProfile(cachePatch, operation.subject.authority, operation.client);
 }
 
 export async function pickProfileMediaImage(kind: ProfileMediaKind): Promise<ProfileMediaImageFile | null> {
@@ -349,8 +379,10 @@ export async function uploadProfileMedia(
   file: ProfileMediaImageFile,
   options: ProfileMediaUploadOptions = {},
 ): Promise<UserProfile> {
-  const userId = await getSignedInUserId();
-  const existingProfile = await readUserProfile();
+  const operation = await captureProfileMediaOperation();
+  const userId = operation.subject.authority.userId;
+  const existingProfile = await readUserProfile(userId);
+  assertMediaOperationCurrent(operation);
   const nextFitMode = normalizeProfileAppearanceFitMode(options.fitMode);
   const normalized = await normalizeImageUploadFile(file);
   const objectKey = await (async () => {
@@ -361,15 +393,15 @@ export async function uploadProfileMedia(
 
       try {
         const preparedSize = await getPreparedProfileMediaFileSize(prepared.uri, size);
-        await uploadProfileMediaFileToStorage({
+        await uploadProfileMediaFileToStorage(operation, {
           objectKey: nextObjectKey,
           uri: prepared.uri,
           mimeType,
         });
-        await assertProfileMediaUploadReadable(nextObjectKey, preparedSize);
+        await assertProfileMediaUploadReadable(operation, nextObjectKey, preparedSize);
         return nextObjectKey;
       } catch (error) {
-        await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([nextObjectKey]).catch(() => undefined);
+        await operation.client.storage.from(PROFILE_MEDIA_BUCKET).remove([nextObjectKey]).catch(() => undefined);
         throw new Error(error instanceof Error && error.message
           ? error.message
           : `Unable to upload this ${kind === "avatar" ? "photo" : "background"} right now.`);
@@ -383,7 +415,7 @@ export async function uploadProfileMedia(
 
   const publicUrl = buildProfileMediaReadUrl(objectKey);
   if (!publicUrl) {
-    await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
+    await operation.client.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
     throw new Error("Unable to prepare this Profile image for display.");
   }
 
@@ -445,22 +477,30 @@ export async function uploadProfileMedia(
         profileBackgroundOverlayStrength: 0.58,
       });
 
+  // A lost response/account transition does not prove that the row write failed.
+  // Never delete a newly uploaded object that a committed row may now reference.
   let saved: UserProfile;
   try {
-    saved = await updateProfileAppearance(userId, existingProfile, patch, nextProfile);
+    saved = await updateProfileAppearance(operation, userId, existingProfile, patch, nextProfile);
   } catch (error) {
-    await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
+    if (error instanceof ProfileAppearanceWriteRejectedError) {
+      await cleanupReplacedProfileMedia(operation, userId, publicUrl);
+    } else {
+      reportRuntimeError("profile-media-upload-reconciliation-pending", new Error("Profile image upload requires reconciliation after an unconfirmed save."));
+    }
     throw error;
   }
   if (shouldCleanupProfileMediaObject(oldStatus)) {
-    await deleteOwnedProfileMediaObject(userId, oldUrl);
+    await cleanupReplacedProfileMedia(operation, userId, oldUrl);
   }
   return saved;
 }
 
 export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserProfile> {
-  const userId = await getSignedInUserId();
-  const existingProfile = await readUserProfile();
+  const operation = await captureProfileMediaOperation();
+  const userId = operation.subject.authority.userId;
+  const existingProfile = await readUserProfile(userId);
+  assertMediaOperationCurrent(operation);
   const removedUrl = kind === "avatar" ? existingProfile.avatarUrl : existingProfile.profileBackgroundUrl;
   const removedStatus = kind === "avatar"
     ? existingProfile.profileAvatarMediaStatus
@@ -519,18 +559,21 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
         profileBackgroundOverlayStrength: 0.58,
       });
 
+  const saved = await updateProfileAppearance(operation, userId, existingProfile, patch, nextProfile);
   if (shouldCleanupProfileMediaObject(removedStatus)) {
-    await deleteOwnedProfileMediaObject(userId, removedUrl);
+    await cleanupReplacedProfileMedia(operation, userId, removedUrl);
   }
-  return updateProfileAppearance(userId, existingProfile, patch, nextProfile);
+  return saved;
 }
 
 export async function updateProfileMediaFitMode(
   kind: ProfileMediaKind,
   fitMode: ProfileAppearanceFitMode,
 ): Promise<UserProfile> {
-  const userId = await getSignedInUserId();
-  const existingProfile = await readUserProfile();
+  const operation = await captureProfileMediaOperation();
+  const userId = operation.subject.authority.userId;
+  const existingProfile = await readUserProfile(userId);
+  assertMediaOperationCurrent(operation);
   const normalizedFitMode = normalizeProfileAppearanceFitMode(fitMode);
   const now = new Date().toISOString();
   const patch: UserProfileUpdate = kind === "avatar"
@@ -564,5 +607,5 @@ export async function updateProfileMediaFitMode(
         profileBackgroundFitMode: normalizedFitMode,
       });
 
-  return updateProfileAppearance(userId, existingProfile, patch, nextProfile);
+  return updateProfileAppearance(operation, userId, existingProfile, patch, nextProfile);
 }

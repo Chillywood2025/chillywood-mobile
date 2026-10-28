@@ -6,6 +6,7 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Modal,
   Pressable,
   ScrollView,
@@ -34,6 +35,7 @@ import {
 } from "../ui/chillywood-visual-system";
 import { useSession } from "../../_lib/session";
 import { getCurrentNotificationActivityOwnerKey, getNotificationActivityOwnerKey, invalidateNotificationActivity, subscribeToNotificationActivity } from "../../_lib/notificationActivity";
+import { createNotificationHintBudget } from "../../_lib/notificationHintBudget";
 
 type NotificationBellButtonProps = {
   surface: string;
@@ -50,6 +52,8 @@ const EMPTY_SUMMARY: NotificationSummary = {
 };
 
 const formatBadgeCount = (count: number) => (count > 99 ? "99+" : String(count));
+const NOTIFICATION_READ_DEADLINE_MS = 10_000;
+type NotificationReadRequest = { kind: "refresh"; full: boolean } | { kind: "more"; cursor: NotificationListCursor };
 
 
 export function NotificationBellButton({ surface, roomSafe = false, style }: NotificationBellButtonProps) {
@@ -65,10 +69,18 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   const actionSequence = useRef(0);
   const actionPending = useRef(false);
   const refreshAfterAction = useRef(false);
+  const focusedRef = useRef(false);
+  const interactionEpochRef = useRef(0);
+  const foregroundRef = useRef(AppState.currentState === "active");
+  const trayVisibleRef = useRef(false);
+  const readFlight = useRef<{ controller: AbortController; ownerKey: string } | null>(null);
+  const queuedRead = useRef<NotificationReadRequest | null>(null);
+  const runReadRef = useRef<(request: NotificationReadRequest) => void>(() => {});
   const [stateOwner, setStateOwner] = useState(ownerKey);
   const [summary, setSummary] = useState<NotificationSummary>(EMPTY_SUMMARY);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [trayVisible, setTrayVisible] = useState(false);
+  trayVisibleRef.current = trayVisible;
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -77,10 +89,16 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   const [busyId, setBusyId] = useState<string | null>(null);
   const ownsActivity = useCallback(() => mountedRef.current && !!ownerKey && ownerRef.current === ownerKey
     && getCurrentNotificationActivityOwnerKey() === ownerKey, [ownerKey]);
+  const canRead = useCallback(() => ownsActivity() && focusedRef.current && foregroundRef.current, [ownsActivity]);
+  const retireReads = useCallback(() => {
+    refreshSequence.current += 1;
+    queuedRead.current = null;
+    readFlight.current?.controller.abort();
+  }, []);
 
   useLayoutEffect(() => {
-    refreshSequence.current += 1;
-    fullRefreshPending.current = false;
+    interactionEpochRef.current += 1;
+    retireReads();
     actionSequence.current += 1;
     actionPending.current = false;
     refreshAfterAction.current = false;
@@ -94,11 +112,12 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     setLoading(false);
     setLoadingMore(false);
     setTrayVisible(false);
-  }, [ownerKey]);
+    trayVisibleRef.current = false;
+  }, [ownerKey, retireReads]);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; refreshSequence.current += 1; actionSequence.current += 1; };
-  }, []);
+    return () => { mountedRef.current = false; retireReads(); actionSequence.current += 1; };
+  }, [retireReads]);
 
   const mergeNotifications = useCallback((...groups: NotificationRecord[][]) => {
     const seen = new Set<string>();
@@ -109,64 +128,121 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     }).sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
   }, []);
 
-  const refreshNotifications = useCallback(async () => {
-    if (!ownsActivity()) return;
-    if (actionPending.current) { refreshAfterAction.current = true; return; }
-    refreshAfterAction.current = false;
+  const runRead = useCallback(async (request: NotificationReadRequest) => {
+    if (!canRead() || readFlight.current || actionPending.current) return;
+    const flight = { controller: new AbortController(), ownerKey };
+    readFlight.current = flight;
+    const signal = flight.controller.signal;
     const sequence = ++refreshSequence.current;
-    fullRefreshPending.current = true;
-    const isCurrent = () => ownsActivity() && sequence === refreshSequence.current;
-    setLoading(true);
-    setLoadingMore(false);
+    fullRefreshPending.current = request.kind === "refresh";
+    const isCurrent = () => canRead() && !signal.aborted && sequence === refreshSequence.current;
+    setLoading(request.kind === "refresh");
+    setLoadingMore(request.kind === "more");
+    const deadline = setTimeout(() => {
+      if (isCurrent()) {
+        setLoading(false);
+        setLoadingMore(false);
+        setLoadError("Notifications could not be refreshed. Your existing activity is unchanged.");
+      }
+      flight.controller.abort();
+      // Retain actual source ownership until settlement, even if a transport
+      // ignores cancellation. Resume/manual retries cannot pile up requests.
+    }, NOTIFICATION_READ_DEADLINE_MS);
     try {
-      const [nextSummary, importantRows, recentPage] = await Promise.all([
-        readNotificationSummary(user!.id),
-        readImportantNotificationList(user!.id, 30),
-        readNotificationListPage(user!.id, 30),
-      ]);
-      if (!isCurrent()) return;
-      if (recentPage.status !== "resolved") throw new Error("notification_page_unavailable");
-      setSummary(nextSummary);
-      setNotifications(mergeNotifications(importantRows, recentPage.items)
-        .filter((notification) => !notification.isDismissed));
-      setNextCursor(recentPage.nextCursor);
+      if (request.kind === "more") {
+        const page = await readNotificationListPage(user!.id, 30, request.cursor, signal);
+        if (!isCurrent()) return;
+        if (page.status !== "resolved") throw new Error("notification_page_unavailable");
+        setNotifications(current => mergeNotifications(current, page.items).filter(item => !item.isDismissed));
+        setNextCursor(page.nextCursor);
+      } else if (!request.full) {
+        const nextSummary = await readNotificationSummary(user!.id, signal);
+        if (!isCurrent()) return;
+        setSummary(nextSummary);
+      } else {
+        // Await every source, including failed siblings; Promise.all alone can
+        // release ownership while another read/reconciliation is still alive.
+        const results = await Promise.allSettled([
+          readNotificationSummary(user!.id, signal),
+          readImportantNotificationList(user!.id, 30, signal),
+          readNotificationListPage(user!.id, 30, null, signal),
+        ]);
+        if (!isCurrent()) return;
+        const [summaryResult, importantResult, pageResult] = results;
+        if (summaryResult.status !== "fulfilled" || importantResult.status !== "fulfilled"
+          || pageResult.status !== "fulfilled" || pageResult.value.status !== "resolved") {
+          throw new Error("notification_page_unavailable");
+        }
+        setSummary(summaryResult.value);
+        setNotifications(mergeNotifications(importantResult.value, pageResult.value.items)
+          .filter(notification => !notification.isDismissed));
+        setNextCursor(pageResult.value.nextCursor);
+      }
       setLoadError(null);
     } catch {
       if (!isCurrent()) return;
       setLoadError("Notifications could not be refreshed. Your existing activity is unchanged.");
     } finally {
-      if (isCurrent()) { fullRefreshPending.current = false; setLoading(false); }
+      clearTimeout(deadline);
+      if (readFlight.current === flight) {
+        readFlight.current = null;
+        fullRefreshPending.current = false;
+        if (isCurrent()) { setLoading(false); setLoadingMore(false); }
+        const queued = queuedRead.current;
+        queuedRead.current = null;
+        // The current render's runner owns any successor account/lifetime.
+        if (queued) runReadRef.current(queued);
+      }
     }
-  }, [mergeNotifications, ownsActivity, user]);
+  }, [canRead, mergeNotifications, ownerKey, user]);
+  runReadRef.current = request => { void runRead(request); };
 
-  useEffect(() => subscribeToNotificationActivity(ownerKey, () => { void refreshNotifications(); }), [ownerKey, refreshNotifications]);
+  const refreshNotifications = useCallback((fresh = true, full = trayVisibleRef.current) => {
+    if (!canRead()) return;
+    if (actionPending.current) { refreshAfterAction.current = true; return; }
+    refreshAfterAction.current = false;
+    const request: NotificationReadRequest = { kind: "refresh", full };
+    if (readFlight.current) {
+      queuedRead.current = request;
+      if (fresh) {
+        refreshSequence.current += 1;
+        readFlight.current.controller.abort();
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    } else runReadRef.current(request);
+  }, [canRead]);
 
   const loadMoreNotifications = useCallback(async () => {
-    if (!nextCursor || loadingMore || fullRefreshPending.current || actionPending.current || !ownsActivity()) return;
-    const sequence = ++refreshSequence.current;
-    const isCurrent = () => ownsActivity() && sequence === refreshSequence.current;
-    setLoadingMore(true);
-    setLoading(false);
-    try {
-      const page = await readNotificationListPage(user!.id, 30, nextCursor);
-      if (!isCurrent()) return;
-      if (page.status !== "resolved") throw new Error("notification_page_unavailable");
-      setNotifications((current) => mergeNotifications(current, page.items)
-        .filter((notification) => !notification.isDismissed));
-      setNextCursor(page.nextCursor);
-      setLoadError(null);
-    } catch {
-      if (!isCurrent()) return;
-      setLoadError("More activity could not be loaded. Try again when your connection is available.");
-    } finally {
-      if (isCurrent()) setLoadingMore(false);
-    }
-  }, [loadingMore, mergeNotifications, nextCursor, ownsActivity, user]);
+    if (!nextCursor || loadingMore || readFlight.current || actionPending.current || !canRead()) return;
+    runReadRef.current({ kind: "more", cursor: nextCursor });
+  }, [canRead, loadingMore, nextCursor]);
 
   useFocusEffect(
     useCallback(() => {
+      focusedRef.current = true;
+      foregroundRef.current = AppState.currentState === "active";
+      const budget = createNotificationHintBudget(() => refreshNotifications(false));
+      const unsubscribe = subscribeToNotificationActivity(ownerKey, reason => {
+        if (!canRead()) return;
+        if (reason === "confirmed") refreshNotifications();
+        else budget.hint();
+      });
+      const appState = AppState.addEventListener("change", state => {
+        const wasForeground = foregroundRef.current;
+        foregroundRef.current = state === "active";
+        if (!foregroundRef.current) {
+          interactionEpochRef.current += 1;
+          retireReads(); setLoading(false); setLoadingMore(false);
+        } else if (!wasForeground) refreshNotifications();
+      });
       void refreshNotifications();
-    }, [refreshNotifications]),
+      return () => {
+        interactionEpochRef.current += 1;
+        focusedRef.current = false;
+        budget.stop(); unsubscribe(); appState.remove(); retireReads();
+      };
+    }, [canRead, ownerKey, refreshNotifications, retireReads]),
   );
 
   const visibleOwner = stateOwner === ownerKey && ownsActivity();
@@ -178,8 +254,9 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     : "Notifications";
 
   const openTray = () => {
+    trayVisibleRef.current = true;
     setTrayVisible(true);
-    void refreshNotifications();
+    refreshNotifications(true, true);
   };
 
   const openNotificationSettings = () => {
@@ -191,12 +268,13 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   };
 
   const openNotification = async (notification: NotificationRecord) => {
-    if (busyId || actionPending.current || !ownsActivity()) return;
+    if (busyId || actionPending.current || !canRead()) return;
     const action = ++actionSequence.current;
+    const interactionEpoch = interactionEpochRef.current;
     actionPending.current = true;
-    refreshSequence.current += 1;
-    fullRefreshPending.current = false;
-    const isCurrent = () => ownsActivity() && action === actionSequence.current;
+    retireReads();
+    const ownsAction = () => ownsActivity() && action === actionSequence.current;
+    const isCurrent = () => ownsAction() && canRead() && interactionEpochRef.current === interactionEpoch;
     setBusyId(notification.id);
     setLoading(false);
     setLoadingMore(false);
@@ -219,13 +297,13 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
           ? { ...item, isRead: true, readAt: item.readAt ?? new Date().toISOString() }
           : item
       )));
-      invalidateNotificationActivity(ownerKey);
+      invalidateNotificationActivity(ownerKey, "confirmed");
       if (path) {
         setTrayVisible(false);
         router.push(path as Parameters<typeof router.push>[0]);
       }
     } finally {
-      if (isCurrent()) {
+      if (ownsAction()) {
         actionPending.current = false;
         setBusyId(null);
         if (refreshAfterAction.current) void refreshNotifications();
@@ -234,12 +312,13 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   };
 
   const dismiss = async (notification: NotificationRecord) => {
-    if (busyId || actionPending.current || !ownsActivity()) return;
+    if (busyId || actionPending.current || !canRead()) return;
     const action = ++actionSequence.current;
+    const interactionEpoch = interactionEpochRef.current;
     actionPending.current = true;
-    refreshSequence.current += 1;
-    fullRefreshPending.current = false;
-    const isCurrent = () => ownsActivity() && action === actionSequence.current;
+    retireReads();
+    const ownsAction = () => ownsActivity() && action === actionSequence.current;
+    const isCurrent = () => ownsAction() && canRead() && interactionEpochRef.current === interactionEpoch;
     setBusyId(notification.id);
     setLoading(false);
     setLoadingMore(false);
@@ -250,12 +329,12 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
       if (result?.status === "completed" || result?.status === "noop") {
         setActionError(null);
         setNotifications((current) => current.filter((item) => item.id !== notification.id));
-        invalidateNotificationActivity(ownerKey);
+        invalidateNotificationActivity(ownerKey, "confirmed");
       } else {
         setActionError("This notification could not be dismissed. Please try again.");
       }
     } finally {
-      if (isCurrent()) {
+      if (ownsAction()) {
         actionPending.current = false;
         setBusyId(null);
         if (refreshAfterAction.current) void refreshNotifications();

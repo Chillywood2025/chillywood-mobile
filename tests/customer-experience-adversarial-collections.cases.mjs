@@ -419,12 +419,17 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
   let currentUserId = "account-a";
   let pageReads = 0;
   const rows = Array.from({ length: notificationCount }, (_, index) => makeNotification(index + 1));
-  const timeoutOperation = new Promise(() => {});
   const createQuery = () => {
     const filters = [];
     let countOnly = false;
     let cursor = null;
     let pageSize = 30;
+    let readSignal;
+    const waitForAbort = () => new Promise(resolve => {
+      const finish = () => resolve({ data: null, error: { message: "read aborted" } });
+      if (readSignal.aborted) finish();
+      else readSignal.addEventListener("abort", finish, { once: true });
+    });
     const query = {
       timeout: timeoutStage === "count",
       select(_columns, options) { countOnly = options?.count === "exact" && options?.head === true; return query; },
@@ -438,8 +443,9 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
         return query;
       },
       limit(value) { pageSize = value; return query; },
+      abortSignal(value) { readSignal = value; return query; },
       returns() {
-        if (timeoutStage === "page") return timeoutOperation;
+        if (timeoutStage === "page") return waitForAbort();
         pageReads += 1;
         let result = rows.filter((row) => filters.every(([column, value]) => row[column] === value));
         if (cursor) {
@@ -456,7 +462,7 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
         return Promise.resolve({ data: result, error: null });
       },
       then(resolve, reject) {
-        if (timeoutStage === "count") return timeoutOperation.then(resolve, reject);
+        if (timeoutStage === "count") return waitForAbort().then(resolve, reject);
         const matching = rows.filter((row) => filters.every(([column, value]) => row[column] === value));
         return Promise.resolve(countOnly
           ? { data: null, error: null, count: matching.length }
@@ -482,11 +488,12 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
     "./chillyChatCalls": {},
     "./chillyChatCallSoundAssets": {},
     "./appLinks": {},
-    "./accountSessionAuthority": {},
-    "./entitlementAuthority": {
-      withAuthorityReadDeadline: async (operation, fallback) => (
-        operation === timeoutOperation || operation?.timeout === true ? fallback : await operation
-      ),
+    "./accountSessionAuthority": {
+      getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: currentUserId, accountId: currentUserId,
+        sessionGeneration: `${currentUserId}-session`, state: "ACTIVE", restoreOnly: false }),
+      sameAccountSessionAuthority: (left, right) => !!left && !!right
+        && Object.keys(left).every(key => left[key] === right[key]),
+      subscribeToAccountSessionAuthority: () => () => {},
     },
   });
   return { runtime, getPageReads: () => pageReads };
@@ -525,26 +532,35 @@ test("notification summary counts remain exact beyond the first hundred-row read
   assert.equal(summary.latestCreatedAt, makeNotification(135).created_at);
 });
 
-test("notification page timeout releases as unavailable without stale rows", async () => {
+test("notification page timeout releases as unavailable without stale rows", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const harness = makeNotificationHarness({ timeoutStage: "page" });
+  const pending = harness.runtime.readNotificationListPage();
+  t.mock.timers.tick(8_000);
   assert.deepEqual(
-    await harness.runtime.readNotificationListPage(),
+    await pending,
     { status: "unavailable", subjectUserId: "account-a", items: [], nextCursor: null },
   );
 });
 
-test("important notification timeout cannot silently hide retained action-needed rows", async () => {
+test("important notification timeout cannot silently hide retained action-needed rows", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const harness = makeNotificationHarness({ timeoutStage: "page" });
+  const pending = harness.runtime.readImportantNotificationList();
+  t.mock.timers.tick(8_000);
   await assert.rejects(
-    () => harness.runtime.readImportantNotificationList(),
+    pending,
     /could not be refreshed/u,
   );
 });
 
-test("notification count timeout releases the summary refresh with an accurate failure", async () => {
+test("notification count timeout releases the summary refresh with an accurate failure", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const harness = makeNotificationHarness({ timeoutStage: "count" });
+  const pending = harness.runtime.readNotificationSummary();
+  t.mock.timers.tick(8_000);
   await assert.rejects(
-    () => harness.runtime.readNotificationSummary(),
+    pending,
     /could not be refreshed/u,
   );
 });
@@ -756,7 +772,7 @@ test("direct Chat thread and inbox mutations cannot dispatch as a replacement ac
     /openOrRepairDirectThreadWithRpc\(\s*target: ChatTargetIdentity,\s*authority: ChatMutationAuthority/u,
   );
   assert.match(chat, /return openOrRepairDirectThreadWithRpc\(target, authority\)/u);
-  assert.match(chat, /captureAccountBoundSupabaseMutationSubject\(expectedUserId\)/u);
+  assert.match(chat, /captureAccountBoundSupabaseMutationSubject\(expectedUserId, \{ waitForReadSettlement: !!signal, signal \}\)/u);
   assert.match(accountBoundMutation, /parseAccountSessionAuthorityReadback\(readback\.data\)/u);
   assert.match(accountBoundMutation, /accessToken: subject\.accessToken/u);
   assert.match(chat, /unhideChatThreadWithAuthority\(thread\.threadId, authority\)/u);

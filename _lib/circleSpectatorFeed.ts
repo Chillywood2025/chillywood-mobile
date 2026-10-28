@@ -1,15 +1,17 @@
 import type { DiscoveryFeedItem, DiscoveryFeedRankingSignals } from "./discoveryFeed";
 import {
-  loadDiscoveryFeedRankingSignals,
   normalizeDiscoveryCreatorIds,
+  normalizeDiscoveryItemIds,
   rankCircleSpectatorFeedItems,
 } from "./discoveryFeed";
 import { supabase } from "./supabase";
+import { readDiscoveryCandidateRankingSignals } from './discoveryRankingSignals';
 
 export const CIRCLE_SPECTATOR_FEED_ITEMS_TABLE = "circle_spectator_feed_items";
 
 export type CircleSpectatorFeedReadOptions = {
   itemId?: string;
+  itemIds?: string[];
   limit?: number;
   creatorUserId?: string;
   creatorUserIds?: string[];
@@ -123,6 +125,7 @@ export async function readCircleSpectatorFeedItems(
 ): Promise<DiscoveryFeedItem[]> {
   const limit = Math.max(1, Math.min(50, Math.floor(Number(options.limit ?? 12)) || 12));
   const itemId = toText(options.itemId);
+  const itemIds = normalizeDiscoveryItemIds(options.itemIds);
 
   let query = supabase
     .from(CIRCLE_SPECTATOR_FEED_ITEMS_TABLE)
@@ -133,7 +136,8 @@ export async function readCircleSpectatorFeedItems(
     .eq("moderation_status", "clean")
     .order("ranking_score", { ascending: false })
     .order("starts_at", { ascending: false, nullsFirst: false })
-    .order("published_at", { ascending: false, nullsFirst: false });
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: true });
 
   if (options.liveOnly) {
     query = query.eq("live_state", "live").or(`ended_at.is.null,ended_at.gt.${new Date().toISOString()}`);
@@ -144,6 +148,7 @@ export async function readCircleSpectatorFeedItems(
   if (itemId) {
     query = query.eq("id", itemId);
   }
+  if (itemIds) query = query.in("id", itemIds);
 
   query = query.limit(limit);
   if (options.signal) query = query.abortSignal(options.signal);
@@ -161,10 +166,8 @@ export async function readCircleSpectatorFeedItem(itemId: string): Promise<Disco
 export async function readRankedCircleSpectatorFeedItems(
   options: CircleSpectatorFeedReadOptions = {},
 ): Promise<RankedCircleSpectatorFeedReadResult> {
-  const [items, signals] = await Promise.all([
-    readCircleSpectatorFeedItems(options),
-    loadDiscoveryFeedRankingSignals(),
-  ]);
+  const items = await readCircleSpectatorFeedItems(options);
+  const signals = await readDiscoveryCandidateRankingSignals(items, options.signal);
 
   return {
     items: rankCircleSpectatorFeedItems(items, signals),

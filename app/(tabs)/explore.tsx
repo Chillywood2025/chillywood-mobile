@@ -39,6 +39,7 @@ import {
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
+import { NewLiveStreamsButton } from "../../components/live/new-live-streams-button";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
@@ -273,7 +274,7 @@ const fetchBackedTitles = async () => {
 
 export default function ExploreScreen() {
   const discovery = useLiveDiscoveryFeed({ surface: "home", limit: 36 });
-  const liveDiscovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, limit: 40 });
+  const liveDiscovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, preserveBrowsePosition: true, limit: 40 });
   const bottomTabBarHeight = useBottomTabBarHeight();
   const { height: viewportHeight } = useWindowDimensions();
   const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
@@ -723,11 +724,13 @@ export default function ExploreScreen() {
     emptyTitle: string,
     emptyText: string,
     children: React.ReactNode,
+    action?: React.ReactNode,
   ) => (
     <View style={styles.discoverySection}>
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.sectionMeta}>{meta}</Text>
+        {action ? <View><Text style={styles.sectionTitle}>{title}</Text><Text style={styles.sectionMeta}>{meta}</Text></View>
+          : <Text style={styles.sectionTitle}>{title}</Text>}
+        {action ?? <Text style={styles.sectionMeta}>{meta}</Text>}
       </View>
       {hasRows ? (
         <ScrollView
@@ -1168,6 +1171,7 @@ export default function ExploreScreen() {
                   <>
                     {liveDiscoveryItems.map((item) => renderDiscoveryCard(item, "Live"))}
                   </>,
+                  <NewLiveStreamsButton pendingItemCount={liveDiscovery.pendingItemCount} onRefresh={liveDiscovery.reload} />,
                 ) : null}
 
                 {showPlatformScope ? renderBackedSection(

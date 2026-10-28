@@ -184,6 +184,24 @@
       "physicalProofRequired": true
     },
     {
+      "id": "discovery_scoped_invalidation_worker",
+      "owningSystem": "search_ranking_integrity_operator",
+      "componentType": "foundation_only_off",
+      "supportedPlatforms": ["shared", "ios", "android"],
+      "paths": ["supabase/functions/discovery-invalidation-worker/index.ts", "supabase/functions/_shared/discovery-invalidation-worker.mjs", "supabase/migrations/20261028145327_discovery_scoped_invalidation_outbox.sql"],
+      "schedulerCadence": "none installed; separately authorized bounded dispatcher required",
+      "allowedReads": ["private scoped invalidation queue, current public source revisions, bounded transport insertion confirmation and aggregate health"],
+      "allowedWrites": ["exact claimed invalidation statuses, scoped pacing, opaque Broadcast insertion and sanitized retry/dead-letter state"],
+      "forbiddenScope": ["silent activation", "content or access decisions in hints", "per-follower fanout", "phone push", "money or entitlement mutation", "legacy public-channel settings", "automatic destructive retention", "credential output"],
+      "approvalLevel": 4,
+      "proof": "tests/discovery-invalidation-database.test.mjs, tests/discovery-invalidation-worker.test.mjs and supabase/tests/discovery_scoped_invalidation_test.sql",
+      "guard": "guard:autonomous-component-inventory",
+      "killSwitch": "disable dedicated discovery worker configuration; collection can pause separately; client transport flag defaults off",
+      "rollback": "stop invocation and transport, retain durable pending/dead-letter history and canonical polling",
+      "deploymentState": "foundation_only_off",
+      "physicalProofRequired": true
+    },
+    {
       "id": "notification_activity_delivery_worker",
       "owningSystem": "notification_delivery_operator",
       "componentType": "registered_surface",

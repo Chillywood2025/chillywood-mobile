@@ -617,6 +617,76 @@ export async function readLatestPublicEventSummaries(options?: {
     .map((event) => buildCreatorEventSummary(event));
 }
 
+export type PublicUpcomingEventReadOptions = {
+  hostUserIds?: string[];
+  limit?: number;
+  signal?: AbortSignal;
+};
+
+const readPostgresTimestampMicros = (value: string | null | undefined): bigint | null => {
+  const text = String(value ?? "").trim(), millis = Date.parse(text);
+  if (!Number.isFinite(millis)) return null;
+  const fraction = text.match(/\.(\d+)(?:Z|[+-]\d{2}(?::?\d{2})?)$/i)?.[1] ?? "";
+  return BigInt(millis) * 1000n + BigInt(fraction.padEnd(6, "0").slice(3, 6) || "0");
+};
+
+/** Scheduled is durable host-owned state, not a clock-driven live transition. */
+export async function readPublicUpcomingEventSummaries(
+  options: PublicUpcomingEventReadOptions = {},
+): Promise<CreatorEventSummary[]> {
+  const hostUserIds = Array.from(new Set((options.hostUserIds ?? []).map((id) => id.trim())));
+  if (options.hostUserIds !== undefined && (!hostUserIds.length || hostUserIds.length > 100
+    || hostUserIds.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))) {
+    throw new Error("Invalid upcoming event host.");
+  }
+  const limit = Math.max(1, Math.min(50, Math.floor(Number(options.limit ?? 32)) || 32));
+  const nowMillis = Date.now(), nowIso = new Date(nowMillis).toISOString(), nowMicros = BigInt(nowMillis) * 1000n;
+  type Candidate = { event: CreatorEventSummary; revision: bigint | null; startsAt: bigint };
+  const readLane = async (awaitingHost: boolean) => {
+    let query = supabase
+      .from(CREATOR_EVENTS_TABLE)
+      .select(CREATOR_EVENT_SELECT)
+      .eq("visibility", "public")
+      .eq("status", "scheduled");
+    // Separate bounded lanes prevent years-old scheduled rows from swallowing
+    // future events, without pretending that a late host canceled or went live.
+    query = awaitingHost ? query.lte("starts_at", nowIso) : query.gt("starts_at", nowIso);
+    query = query.order("starts_at", { ascending: !awaitingHost, nullsFirst: false }).order("id", { ascending: true });
+    if (hostUserIds.length) query = query.in("host_user_id", hostUserIds);
+    query = query.limit(awaitingHost ? Math.min(8, limit) : limit);
+    if (options.signal) query = query.abortSignal(options.signal);
+    const { data, error } = await query.returns<CreatorEventRow[]>();
+    if (error || !data) throw new Error("Upcoming events could not be loaded. Please try again.");
+    const candidates: Candidate[] = [];
+    for (const row of data) {
+      const event = parseCreatorEventRow(row), startsAt = readPostgresTimestampMicros(row.starts_at);
+      if (!event || event.visibility !== "public" || event.status !== "scheduled" || startsAt === null
+        || (awaitingHost ? startsAt > nowMicros : startsAt <= nowMicros)) continue;
+      candidates.push({
+        event: { ...buildCreatorEventSummary(event, nowMillis), isUpcoming: !awaitingHost },
+        revision: readPostgresTimestampMicros(row.updated_at), startsAt,
+      });
+    }
+    return candidates;
+  };
+  const [future, awaitingHost] = await Promise.all([readLane(false), readLane(true)]);
+  const merged = new Map<string, Candidate>();
+  for (const candidate of [...future, ...awaitingHost]) {
+    const previous = merged.get(candidate.event.id);
+    // A reschedule between the two bounded reads may appear in both lanes.
+    // Compare raw PostgreSQL precision before the public summary normalizes it.
+    if (!previous || (candidate.revision !== null && (previous.revision === null || candidate.revision > previous.revision))) {
+      merged.set(candidate.event.id, candidate);
+    }
+  }
+  return Array.from(merged.values()).sort((left, right) => {
+    if (left.event.isUpcoming !== right.event.isUpcoming) return left.event.isUpcoming ? -1 : 1;
+    const byStart = left.startsAt < right.startsAt ? -1 : left.startsAt > right.startsAt ? 1 : 0;
+    if (byStart) return left.event.isUpcoming ? byStart : -byStart;
+    return left.event.id < right.event.id ? -1 : left.event.id > right.event.id ? 1 : 0;
+  }).map(candidate => candidate.event);
+}
+
 export async function readCreatorEventReplayAvailability(
   eventId: string,
 ): Promise<CreatorEventReplayAvailability | null> {

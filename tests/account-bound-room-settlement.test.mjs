@@ -12,7 +12,7 @@ const deferred = () => {
 };
 const flush = async () => { for (let index = 0; index < 20; index++) await Promise.resolve(); };
 
-function harness() {
+function harness(options = {}) {
   let nextTimer = 0;
   const timers = new Map();
   const clock = {
@@ -40,6 +40,7 @@ function harness() {
     "./accountSessionAuthority": {
       getCurrentAccountSessionAuthoritySnapshot: () => current,
       sameAccountSessionAuthority: (left, right) => Boolean(right) && left.userId === right.userId && left.sessionGeneration === right.sessionGeneration,
+      parseAccountSessionAuthorityReadback: value => value,
     },
     "./accountBoundSupabaseRpc.mjs": {
       isAccountBoundSupabaseRpcOutcomeAmbiguous,
@@ -54,12 +55,12 @@ function harness() {
     },
     "./supabase": {
       SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_ANON_KEY: "local-anon",
-      supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: authority.userId }, access_token: "initiating-token" } } }) } },
+      supabase: { auth: { getSession: async () => options.session ?? ({ data: { session: { user: { id: authority.userId }, access_token: "initiating-token" } } }) } },
     },
     "react-native": { Platform: { OS: "ios" } },
   });
   return {
-    helper, response, calls: () => calls,
+    helper, response, authority, calls: () => calls,
     replaceAccount: () => { current = { ...authority, userId: "next-user", sessionGeneration: "generation-2" }; },
     async passReadDeadline() {
       await flush();
@@ -70,6 +71,48 @@ function harness() {
     },
   };
 }
+
+test("inbox stale-call cleanup retains actual frozen-token mutation beyond the read deadline", async () => {
+  const h = harness(); let settled = false;
+  const pending = h.helper.invokeAccountBoundSupabaseMutationRpc(
+    { authority: h.authority, accessToken: "initiating-token" }, "clear_stale_chilly_chat_thread_call", {}, { retainTransportSettlement: true },
+  ).then(value => { settled = true; return value; });
+  await h.passReadDeadline();
+  assert.equal(h.calls(), 1); assert.equal(settled, false);
+  h.response.resolve({ ok: true, status: 200, json: async () => ({ cleared: true, reason: "ended" }) });
+  assert.equal((await pending).data.cleared, true);
+});
+
+test("legacy call-control cleanup keeps its existing bounded deadline without the inbox opt-in", async () => {
+  const h = harness();
+  const pending = h.helper.invokeAccountBoundSupabaseMutationRpc(
+    { authority: h.authority, accessToken: "initiating-token" }, "clear_stale_chilly_chat_thread_call", {},
+  );
+  await h.passReadDeadline();
+  assert.equal((await pending).error.message, "account_bound_rpc_timeout");
+  h.response.resolve({ ok: true, status: 200, json: async () => ({ cleared: true, reason: "ended" }) });
+});
+
+test("retained capture waits for real auth settlement and cancellation stops the subsequent readback", async () => {
+  const session = deferred(); const h = harness({ session: session.promise }); const controller = new AbortController();
+  let settled = false;
+  const pending = h.helper.captureAccountBoundSupabaseMutationSubject("test-user", { waitForReadSettlement: true, signal: controller.signal })
+    .finally(() => { settled = true; });
+  await h.passReadDeadline(); controller.abort(); await h.passReadDeadline();
+  assert.equal(settled, false); assert.equal(h.calls(), 0);
+  session.resolve({ data: { session: { user: { id: "test-user" }, access_token: "initiating-token" } } });
+  await assert.rejects(pending, /read retired/); assert.equal(h.calls(), 0);
+});
+
+test("retained capture holds raw readback beyond its former deadline and fences a late aborted result", async () => {
+  const h = harness(); const controller = new AbortController(); let settled = false;
+  const pending = h.helper.captureAccountBoundSupabaseMutationSubject("test-user", { waitForReadSettlement: true, signal: controller.signal })
+    .finally(() => { settled = true; });
+  await h.passReadDeadline(); controller.abort(); await h.passReadDeadline();
+  assert.equal(h.calls(), 1); assert.equal(settled, false);
+  h.response.resolve({ ok: true, status: 200, json: async () => h.authority });
+  await assert.rejects(pending, /read retired/);
+});
 
 for (const name of ["join_communication_room_session", "join_owned_communication_room_session", "touch_owned_communication_room_session", "leave_communication_room_session"]) {
   test(`${name} retains real transport completion after the former read deadline`, async () => {
