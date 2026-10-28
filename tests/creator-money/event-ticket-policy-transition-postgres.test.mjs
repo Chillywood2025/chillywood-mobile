@@ -5,8 +5,9 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 
 const migration='20261027085819_creator_event_ticket_schedule_policy.sql';
 const dependentMigration='20261027094021_creator_event_replay_deadline_remedy.sql';
+const lockOrderMigration='20261028214433_creator_replay_observation_lock_order.sql';
 test('policy migration preserves real pre-policy delivered, unknown and explicit remedy history', {timeout:600_000}, async t=>{
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,dependentMigration]});
+  const {db,replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,dependentMigration,lockOrderMigration]});
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
     await db.exec(fs.readFileSync('tests/fixtures/event-broadcast-producer-authority.sql','utf8'));
@@ -17,6 +18,7 @@ test('policy migration preserves real pre-policy delivered, unknown and explicit
     await db.exec(fs.readFileSync('tests/fixtures/event-ticket-policy-transition-before.sql','utf8'));
     await db.exec(fs.readFileSync(`supabase/migrations/${migration}`,'utf8'));
     await db.exec(fs.readFileSync(`supabase/migrations/${dependentMigration}`,'utf8'));
+    await db.exec(fs.readFileSync(`supabase/migrations/${lockOrderMigration}`,'utf8'));
     await db.exec(fs.readFileSync('tests/fixtures/event-ticket-policy-transition-after.sql','utf8'));
     const rows=(await db.query('select label from event_reservation_fixture.transition_assertions order by label')).rows;
     assert.equal(rows.length,24);
