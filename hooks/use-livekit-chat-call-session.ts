@@ -3001,6 +3001,7 @@ export function useLiveKitChatCallSession({
         adaptiveStream: true,
         dynacast: true,
       }));
+      let initialMediaPending = true;
       roomRef.current = liveKitRoom;
       effectBinding = activateCommittedSession({
         identity: currentIdentity,
@@ -3085,7 +3086,11 @@ export function useLiveKitChatCallSession({
         .on(RoomEvent.TrackUnmuted, refresh)
         .on(RoomEvent.LocalTrackPublished, (publication) => {
           if (!roomCallbackIsCurrent()) return;
-          if (publication.source === Track.Source.Microphone && !pendingMicToggleRef.current) {
+          // LiveKit emits this event before setMicrophoneEnabled resolves.
+          // Startup reports first audio only after its authority readback;
+          // the event itself cannot approve a late or revoked acquisition.
+          if (publication.source === Track.Source.Microphone
+            && !initialMediaPending && !pendingMicToggleRef.current) {
             updateFirstMediaState({ localAudioPublished: true });
             emitStage("local_audio_published", { connectionState: String(liveKitRoom.state) });
           }
@@ -3204,21 +3209,109 @@ export function useLiveKitChatCallSession({
         });
       }
 
-      let effectiveMicEnabled = initialMicEnabled;
+      // Startup has the same capture boundary as later reconciliation. An
+      // accepted call may connect while Android is still backgrounded, or while
+      // iOS has no retained CallKit audio owner. Keep the requested intent for
+      // foreground recovery without acquiring or advertising a microphone yet.
+      const readInitialMicrophoneAuthority = async () => {
+        // Do not wait on UIKit for a retired call: late native capture must be
+        // stopped even if a new application-state query never settles.
+        if (!active || !effectBinding || !isCommittedSessionCurrent(effectBinding)) return false;
+        const generation = applicationStateGenerationRef.current;
+        const backgroundAudio = allowBackgroundAudioRef.current;
+        const appActive = await readApplicationActiveForMedia();
+        return active && isCommittedSessionCurrent(effectBinding)
+          && generation === applicationStateGenerationRef.current
+          && backgroundAudio === allowBackgroundAudioRef.current
+          && (appActive || backgroundAudio);
+      };
+      const initialMicrophoneAllowed = await readInitialMicrophoneAuthority() && initialMicEnabled;
+      if (!active || !effectBinding || !isCommittedSessionCurrent(effectBinding)) return;
+      let effectiveMicEnabled = false;
       let initialMicrophonePermissionDenied = false;
+      let initialMicrophoneRetirementFailed = false;
       let microphonePublication: TrackPublication | undefined;
+      const getInitialMicrophoneTrack = () => (
+        liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone)?.track
+          ?? microphonePublication?.track
+      );
+      const retireInitialMicrophone = async () => {
+        const track = getInitialMicrophoneTrack();
+        try {
+          track?.stop();
+          await liveKitRoom.localParticipant.setMicrophoneEnabled(false);
+          if ((track && track.mediaStreamTrack.readyState !== "ended")
+            || publicationIsUsable(liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone))) {
+            throw new Error("initial_microphone_retirement_unconfirmed");
+          }
+        } catch (retirementError) {
+          initialMicrophoneRetirementFailed = true;
+          reportRuntimeError("chat-call-livekit-initial-microphone-retirement", retirementError);
+          // This operation can settle after the write reservation timed out,
+          // so its own failure path must own bounded cleanup. Late capture
+          // also invalidates any prior shutdown proof for this exact Room.
+          const failedBinding = effectBinding;
+          cleanupCompletedOwnersRef.current.delete(liveKitRoom);
+          // Room.disconnect is a no-op after a prior End disconnected it.
+          // Retry this exact late track directly; the final native-state
+          // check must still report failure if capture cannot be stopped.
+          try {
+            track?.stop();
+          } catch (stopError) {
+            reportRuntimeError("chat-call-livekit-initial-microphone-stop", stopError);
+          }
+          // An earlier End may already be waiting on its membership leave;
+          // cleanupSession then refuses a concurrent owner. Independently
+          // retire this Room's newly arrived capture, without waiting forever
+          // on the SDK or disconnecting a replacement Room.
+          let disconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+          const forcedDisconnect = Promise.race([
+            liveKitRoom.disconnect(true).then(() => true, () => false),
+            new Promise<boolean>((resolve) => {
+              disconnectTimeout = setTimeout(() => resolve(false), CLEANUP_OPERATION_TIMEOUT_MS);
+            }),
+          ]).finally(() => { if (disconnectTimeout) clearTimeout(disconnectTimeout); });
+          const [disconnected] = await Promise.all([
+            forcedDisconnect,
+            cleanupSession({ leaveMembership: true }, failedBinding, cleanupToken),
+          ]);
+          if (!disconnected || liveKitRoom.state !== ConnectionState.Disconnected
+            || (track && track.mediaStreamTrack.readyState !== "ended")) {
+            reportRuntimeError("chat-call-livekit-initial-microphone-retirement", new Error("initial_microphone_shutdown_unconfirmed"));
+          }
+          if (active && sameCommittedAuthority(committedSessionRef.current, failedBinding)) {
+            setLoading(false);
+            setChannelState("error");
+            setError("Unable to safely initialize this call's microphone. End the call or try again from the thread.");
+          }
+          throw retirementError;
+        }
+        microphonePublication = undefined;
+      };
       try {
-        microphonePublication = initialMicEnabled
+        microphonePublication = initialMicrophoneAllowed
           ? await liveKitRoom.localParticipant.setMicrophoneEnabled(true)
           : undefined;
-        if (initialMicEnabled && !microphonePublication) {
-          effectiveMicEnabled = false;
+        const microphoneStillAllowed = await readInitialMicrophoneAuthority();
+        if (initialMicrophoneAllowed && !microphoneStillAllowed) {
+          // Native acquisition may settle after suspension or End. Stop the
+          // exact old Room's track before any durable startup write, then let
+          // the SDK mute it. Never touch a replacement Room's microphone.
+          await retireInitialMicrophone();
+        }
+        if (!active || !isCommittedSessionCurrent(effectBinding)) return;
+        effectiveMicEnabled = microphoneStillAllowed && !!microphonePublication
+          && publicationIsUsable(liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone));
+        if (initialMicrophoneAllowed && microphoneStillAllowed && !effectiveMicEnabled) {
           setReconciliationWarning("Local microphone could not be started. The call remains connected.");
-        } else if (initialMicEnabled) {
+        } else if (effectiveMicEnabled) {
           setMicrophonePermissionState("granted");
           setMicrophonePermissionMessage(null);
         }
       } catch (microphoneError) {
+        // Retirement failure is a failed initialization, not a recoverable
+        // permission miss; its exact-Room failure path already owns cleanup.
+        if (initialMicrophoneRetirementFailed) throw microphoneError;
         effectiveMicEnabled = false;
         const permissionDenial = await classifyNativePermissionDenial(
           "microphone",
@@ -3234,7 +3327,7 @@ export function useLiveKitChatCallSession({
         }
         reportRuntimeError("chat-call-livekit-initial-microphone", microphoneError);
       }
-      if (microphonePublication) {
+      if (effectiveMicEnabled) {
         updateFirstMediaState({ localAudioPublished: true });
         emitStage("local_audio_published", { connectionState: String(liveKitRoom.state) });
       }
@@ -3323,15 +3416,51 @@ export function useLiveKitChatCallSession({
       cameraRequestedRef.current = initialCameraEnabled && !initialCameraPermissionDenied;
       micRequestedRef.current = initialMicEnabled && !initialMicrophonePermissionDenied;
       await setSpeaker(speakerRequestedRef.current, effectBinding);
-      const initialMembership = await enqueueSessionMediaWrite(effectBinding, () => (
-        performMembershipMediaWrite(
-          effectiveCameraEnabled,
-          effectiveMicEnabled,
-          "active",
-          true,
-          effectBinding,
-        )
-      ));
+      const initialMembership = await enqueueSessionMediaWrite(effectBinding, async (operationCurrent) => {
+        // Camera acquisition, audio routing and a predecessor write can all
+        // yield across suspension. Project current capture inside the write
+        // reservation; the earlier successful startup booleans are not proof.
+        while (operationCurrent()) {
+          const generation = applicationStateGenerationRef.current;
+          const backgroundAudio = allowBackgroundAudioRef.current;
+          const appActive = await readApplicationActiveForMedia();
+          if (!operationCurrent()) return null;
+          if (generation !== applicationStateGenerationRef.current
+            || backgroundAudio !== allowBackgroundAudioRef.current) continue;
+          if (!appActive && publicationIsUsable(liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera))) {
+            if (!await disableCameraOrTerminate(liveKitRoom, "chat-call-livekit-initial-camera-retirement")) return null;
+          }
+          // SDK mute can leave a live capture track behind. Publication/UI
+          // Off is not evidence that this startup microphone was retired.
+          const microphoneTrack = getInitialMicrophoneTrack();
+          if (!appActive && !backgroundAudio && microphoneTrack
+            && microphoneTrack.mediaStreamTrack.readyState !== "ended") {
+            await retireInitialMicrophone();
+          }
+          if (!operationCurrent()) return null;
+          if (generation !== applicationStateGenerationRef.current
+            || backgroundAudio !== allowBackgroundAudioRef.current) continue;
+          effectiveCameraEnabled = appActive && cameraRequestedRef.current
+            && publicationIsUsable(liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera));
+          effectiveMicEnabled = (appActive || backgroundAudio) && micRequestedRef.current
+            && publicationIsUsable(liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone));
+          const membership = await performMembershipMediaWrite(
+            effectiveCameraEnabled,
+            effectiveMicEnabled,
+            appActive || backgroundAudio ? "active" : "reconnecting",
+            true,
+            effectBinding,
+          );
+          if (!operationCurrent()) return null;
+          if (generation !== applicationStateGenerationRef.current
+            || backgroundAudio !== allowBackgroundAudioRef.current) continue;
+          return membership;
+        }
+        return null;
+      });
+      if (initialMicrophoneRetirementFailed) throw new Error("initial_microphone_retirement_failed");
+      if (!active || !isCommittedSessionCurrent(effectBinding)) return;
+      initialMediaPending = false;
       if (!initialMembership) {
         setReconciliationWarning();
         setLoading(false);
@@ -3466,6 +3595,7 @@ export function useLiveKitChatCallSession({
     clearReconciliationWarning,
     cleanupSession,
     committedSessionOwnsCurrentRoom,
+    disableCameraOrTerminate,
     emitStage,
     initialCameraEnabled,
     initialMicEnabled,
