@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "rea
 
 import { getDiscoveryAccessLabel, getDiscoveryItemDestination, isDiscoveryFeedItemEligibleForRanking } from "../../_lib/discoveryFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
+import { NewLiveStreamsButton } from "./new-live-streams-button";
 import { AppActionButton, AppEmptyState, AppSection } from "../ui/app-surface";
 
 /** Current canonical live sources, including standalone stages with no Event. */
@@ -11,7 +12,7 @@ export function PlatformLiveNow({ creatorUserId, enabled }: { creatorUserId: str
   const router = useRouter();
   const feed = useLiveDiscoveryFeed({
     surface: "channel", creatorUserId, enabled: enabled && !!creatorUserId,
-    includeCircle: false, liveOnly: true, limit: 24,
+    includeCircle: false, liveOnly: true, preserveBrowsePosition: true, limit: 24,
   });
   const items = enabled ? feed.items.filter((item) => (
     item.live_state === "live"
@@ -20,7 +21,7 @@ export function PlatformLiveNow({ creatorUserId, enabled }: { creatorUserId: str
   )) : [];
 
   return (
-    <AppSection title="Live Now">
+    <AppSection title="Live Now" action={<NewLiveStreamsButton pendingItemCount={feed.pendingItemCount} onRefresh={feed.reload} />}>
       {feed.error ? (
         <View style={styles.list} testID="platform-live-discovery-error">
           <Text style={styles.body}>Live sessions could not be checked. Try again.</Text>

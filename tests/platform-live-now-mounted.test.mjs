@@ -13,7 +13,8 @@ doc.documentElement=container();globalThis.document=doc;globalThis.window=global
 const compile=file=>ts.transpileModule(fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8'),{
   compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true},
 }).outputText;
-const code={feed:compile('_lib/discoveryFeed.ts'),hook:compile('_lib/useLiveDiscoveryFeed.ts'),component:compile('components/live/platform-live-now.tsx')};
+const code={feed:compile('_lib/discoveryFeed.ts'),hook:compile('_lib/useLiveDiscoveryFeed.ts'),sharedRead:compile('_lib/sharedLiveRead.ts'),component:compile('components/live/platform-live-now.tsx'),button:compile('components/live/new-live-streams-button.tsx')};
+const rankingCode=compile('_lib/discoveryRankingSignals.ts');
 const creator='10000000-0000-4000-8000-000000000001',other='10000000-0000-4000-8000-000000000002';
 const owner=id=>({userId:id,accountId:id,sessionGeneration:`session-${id}`,state:'ACTIVE',restoreOnly:false});
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
@@ -27,34 +28,44 @@ const descendants=(node,predicate)=>{
   return [...(predicate(node)?[node]:[]),...descendants(node.props?.children,predicate)];
 };
 async function mount(t,initial=[row()]){
-  let authority=owner('viewer-a'),creatorId=creator,enabled=true,tree,rows=initial,reader=null;
+  let authority=owner('viewer-a'),creatorId=creator,enabled=true,tree,action,rows=initial,reader=null;
+  let now=Date.now();
+  class Clock extends Date { static now(){return now;} }
   const requests=[],routes=[],intervals=new Set(),timers=new Set(),listeners=new Set();
   const native={StyleSheet:{create:x=>x},AppState:{currentState:'active',addEventListener:(_,f)=>{listeners.add(f);return {remove:()=>listeners.delete(f)};}}};
-  for(const name of ['ActivityIndicator','Text','TouchableOpacity','View'])native[name]=name;
+  for(const name of ['ActivityIndicator','Text','TouchableOpacity','View','Pressable'])native[name]=name;
   const read=async options=>{requests.push(options);return {items:reader?await reader(options):rows,signals:{}};};
   const evaluate=(source,imports)=>{
-    const context={exports:{},require:name=>{if(!(name in imports))throw Error(`Unexpected import ${name}`);return imports[name];},
+    const context={exports:{},Date:Clock,require:name=>{if(!(name in imports))throw Error(`Unexpected import ${name}`);return imports[name];},
       AbortController,setTimeout:f=>{timers.add(f);return f;},clearTimeout:f=>timers.delete(f),
       setInterval:f=>{intervals.add(f);return f;},clearInterval:f=>intervals.delete(f)};
     vm.runInNewContext(source,context);return context.exports;
   };
-  const feed=evaluate(code.feed,{'./channelAudience':{},'./friendGraph':{},'./supabase':{supabase:{}}});
+  const feed=evaluate(code.feed,{'./discoveryRankingSignals':{readDiscoveryCandidateRankingSignals:(...args)=>ranking.readDiscoveryCandidateRankingSignals(...args)},'./supabase':{supabase:{}}});
+  const ranking=evaluate(rankingCode,{
+    './supabase':{supabase:new (require('@supabase/postgrest-js').PostgrestClient)('https://offline.invalid/rest/v1',{fetch:async()=>new Response('[]',{status:200,headers:{'Content-Type':'application/json'}})})},
+    './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&a.userId===b.userId&&a.sessionGeneration===b.sessionGeneration},
+  });
   const hook=evaluate(code.hook,{'react':React,'react-native':native,'@react-navigation/native':{useIsFocused:()=>true},
     './session':{useSession:()=>({authority,authorityStatus:'active'})},
     './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&a.userId===b.userId&&a.sessionGeneration===b.sessionGeneration},
-    './discoveryFeed':{...feed,readRankedPublicDiscoveryFeedItems:read},'./circleSpectatorFeed':{readRankedCircleSpectatorFeedItems:()=>assert.fail('Public Platform must not broaden its audience')},
+    './discoveryFeed':{...feed,readRankedPublicDiscoveryFeedItems:read,readPublicDiscoveryFeedItems:async options=>(await read(options)).items.filter(item=>!options.itemIds||options.itemIds.includes(item.id))},'./circleSpectatorFeed':{readRankedCircleSpectatorFeedItems:()=>assert.fail('Public Platform must not broaden its audience')},
+    './sharedLiveUpdates':{getDiscoveryLiveUpdateInterest: options=>options,isDiscoveryLiveUpdateConnected:()=>false,subscribeToLiveUpdates:()=>()=>{}},
+    './sharedLiveRead':evaluate(code.sharedRead,{}),
+    './discoveryRankingSignals':ranking,
   });
-  const surface={AppSection:props=>{tree=props.children;return null;},AppActionButton:'Action',AppEmptyState:'Empty'};
+  const surface={AppSection:props=>{tree=props.children;action=props.action;return null;},AppActionButton:'Action',AppEmptyState:'Empty'};
+  const button=evaluate(code.button,{'react':React,'react-native':native});
   const component=evaluate(code.component,{'react':React,'react-native':native,'expo-router':{useRouter:()=>({push:path=>routes.push(path)})},
-    '../../_lib/discoveryFeed':feed,'../../_lib/useLiveDiscoveryFeed':hook,'../ui/app-surface':surface});
+    '../../_lib/discoveryFeed':feed,'../../_lib/useLiveDiscoveryFeed':hook,'../ui/app-surface':surface,'./new-live-streams-button':button});
   function Host(){return React.createElement(component.PlatformLiveNow,{creatorUserId:creatorId,enabled});}
   const root=createRoot(container());
   const render=()=>React.act(async()=>root.render(React.createElement(Host)));
   await render();t.after(()=>React.act(async()=>root.unmount()));
-  return {requests,routes,buttons:()=>descendants(tree,x=>x.props?.testID==='platform-live-discovery-open-button'),
+  return {requests,routes,action:()=>action,buttons:()=>descendants(tree,x=>x.props?.testID==='platform-live-discovery-open-button'),
     nodes:type=>descendants(tree,x=>x.type===type),errors:()=>descendants(tree,x=>x.props?.testID==='platform-live-discovery-error'),
     setReader:value=>{reader=value;},async creator(value){creatorId=value;await render();},async account(value){authority=owner(value);await render();},
-    async enable(value){enabled=value;await render();},async refresh(value=rows){rows=value;await React.act(async()=>{for(const f of intervals)void f();});},
+    async enable(value){enabled=value;await render();},async refresh(value=rows){now+=30000;rows=value;await React.act(async()=>{for(const f of intervals)void f();});},
     async resolve(d,value){await React.act(async()=>d.resolve(value));},async press(button){await React.act(async()=>button.props.onPress());},
   };
 }
@@ -63,6 +74,17 @@ test('mounted Platform shows standalone canonical stage without a creator Event 
   const h=await mount(t);assert.equal(h.buttons().length,1);
   assert.equal(h.requests[0].creatorUserId,creator);assert.equal(h.requests[0].surface,'channel');assert.equal(h.requests[0].liveOnly,true);
   await h.press(h.buttons()[0]);assert.deepEqual(h.routes,['/spectate/stage-one']);
+});
+test('Platform retains browse cards until explicit new-live refresh and never navigates automatically',async t=>{
+  const h=await mount(t);
+  await h.refresh([row({id:'stage-two',title:'New stage'}),row()]);
+  assert.equal(h.buttons().length,1);
+  assert.equal(h.action().props.pendingItemCount,1);
+  assert.equal(h.routes.length,0);
+  await React.act(async()=>h.action().props.onRefresh());
+  assert.equal(h.buttons().length,2);
+  assert.equal(h.action().props.pendingItemCount,0);
+  assert.equal(h.routes.length,0);
 });
 test('canonical public live Event retains its Event destination',async t=>{
   const h=await mount(t,[row({item_type:'creator_event',event_id:'event-one'})]);await h.press(h.buttons()[0]);

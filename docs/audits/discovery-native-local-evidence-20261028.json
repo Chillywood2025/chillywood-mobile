@@ -1,0 +1,37 @@
+{
+  "purpose": "Sanitized engineering evidence summary, not production capacity or deployment authority",
+  "engine": "PostgreSQL 17.11",
+  "migration": "20261028043447_discovery_scoped_invalidation_outbox.sql",
+  "migration_sha256": "32b5fd76092012c03efb01f2e18a1d83381b63b9cf904daf377162f28be0b54c",
+  "environment": "Disposable local native database; synthetic warm-cache measurements",
+  "independent_concurrency_and_failure_checks_passed": 16,
+  "pgtap_assertions_passed": 20,
+  "confirmation_query": {
+    "synthetic_messages": 100001,
+    "daily_partitions": 3,
+    "unrelated_messages_in_same_100ms_window": 40000,
+    "partial_index_used": true,
+    "partitions_pruned": 2,
+    "candidate_rows": 1,
+    "buffers": 356,
+    "observed_ms_range": [1.05, 1.10]
+  },
+  "outbox_claim_query": {
+    "synthetic_rows": 100000,
+    "claimed_rows": 100,
+    "index_used": true,
+    "sequential_scan": false,
+    "observed_ms": 0.141
+  },
+  "local_flush": {
+    "samples": 5,
+    "observed_ms_range": [2.10, 5.25]
+  },
+  "limitations": [
+    "Not hosted Realtime, device delivery, signed-release or physical-device proof",
+    "Not p95/p99 latency, sustainable throughput, cold-cache behavior or million-concurrent-user qualification",
+    "Returned candidate limits do not bound arbitrary global index traversal",
+    "Collection, dispatch and new client Broadcast transport remain disabled pending separately authorized activation",
+    "Final paused-collection drain regression has separate final native verification; these timings are not a rerun of that regression"
+  ]
+}

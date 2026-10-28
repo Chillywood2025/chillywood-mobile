@@ -17,7 +17,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
-import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import {
   resolveLiveHubCardWidth,
@@ -31,7 +30,9 @@ import {
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
-import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
+import { NewLiveStreamsButton } from "../../components/live/new-live-streams-button";
+import { type CreatorEventSummary } from "../../_lib/liveEvents";
+import { useLiveUpcomingEvents } from "../../_lib/useLiveUpcomingEvents";
 import {
   getRuntimeControlBlockedCopy,
   isRuntimeControlBlockedAccess,
@@ -67,55 +68,38 @@ export default function LiveTabScreen() {
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
   const discoveryCardWidth = resolveLiveHubCardWidth(viewportWidth);
-  const liveLoadGenerationRef = useRef(0);
   const liveTransitionLatchRef = useRef(createActionSingleFlightLatch());
   const [liveTransitionInFlight, setLiveTransitionInFlight] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [premiumGate, setPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [premiumGateVisible, setPremiumGateVisible] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const discovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, limit: 40 });
+  const discovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, preserveBrowsePosition: true, limit: 40 });
   const discoveryItems = discovery.items;
-  const [events, setEvents] = useState<CreatorEventSummary[]>([]);
+  const upcoming = useLiveUpcomingEvents({ limit: 32 });
+  const events = upcoming.items;
+  const loading = upcoming.loading;
+  const errorMsg = upcoming.error;
+  const reloadUpcoming = upcoming.reload;
+  const reloadDiscovery = discovery.reload;
 
-  const { liveItems, upcomingEvents } = useMemo(
+  const { liveItems, upcomingEvents, awaitingEvents } = useMemo(
     () => buildLiveTabDiscoveryBuckets(discoveryItems, events),
     [discoveryItems, events],
   );
 
-  const loadLive = useCallback(async (refresh = false) => {
-    const generation = ++liveLoadGenerationRef.current;
-    if (refresh) setRefreshing(true);
-    else setLoading(true);
-    setErrorMsg(null);
-
-    try {
-      const publicEvents = await readLatestPublicEventSummaries({ limit: 32 });
-      if (generation !== liveLoadGenerationRef.current) return;
-      setEvents(publicEvents);
-    } catch {
-      if (generation !== liveLoadGenerationRef.current) return;
-      setEvents([]);
-      setErrorMsg("Live discovery could not refresh right now. Pull down to try again.");
-    } finally {
-      if (generation === liveLoadGenerationRef.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, []);
+  const refreshLive = useCallback(async () => {
+    setRefreshing(true);
+    try { await Promise.all([reloadUpcoming(), reloadDiscovery()]); }
+    finally { setRefreshing(false); }
+  }, [reloadUpcoming, reloadDiscovery]);
 
   useFocusEffect(
     useCallback(() => {
       liveTransitionLatchRef.current.release();
       setLiveTransitionInFlight(false);
-      void loadLive(false);
-    }, [loadLive]),
+    }, []),
   );
-
-  useRefreshOnForeground(() => loadLive(true));
 
   const openLiveWatchParty = async () => {
     if (!liveTransitionLatchRef.current.tryAcquire()) return;
@@ -201,7 +185,7 @@ export default function LiveTabScreen() {
           showsVerticalScrollIndicator={false}
           alwaysBounceVertical
           nestedScrollEnabled
-          refreshControl={<RefreshControl refreshing={refreshing || discovery.loading} onRefresh={() => { void loadLive(true); void discovery.reload(); }} tintColor="#E50914" />}
+          refreshControl={<RefreshControl refreshing={refreshing || discovery.loading} onRefresh={() => { void refreshLive(); }} tintColor="#E50914" />}
         >
           <MainTabTopBar surface="live" label="LIVE" style={styles.mainTabTopBar} />
           <View
@@ -224,7 +208,7 @@ export default function LiveTabScreen() {
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Live discovery unavailable</Text>
               <Text style={styles.errorBody}>{errorMsg ?? discovery.error}</Text>
-              <Pressable style={styles.secondaryButton} onPress={() => { void loadLive(true); void discovery.reload(); }} accessibilityRole="button">
+              <Pressable style={styles.secondaryButton} onPress={() => { void refreshLive(); }} accessibilityRole="button">
                 <Text style={styles.buttonText}>Retry</Text>
               </Pressable>
             </View>
@@ -261,8 +245,11 @@ export default function LiveTabScreen() {
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Live Now</Text>
-              <Text style={styles.sectionMeta}>{discovery.error ? "Unavailable" : discovery.loading ? "Checking" : `${totalLiveNow} available`}</Text>
+              <View>
+                <Text style={styles.sectionTitle}>Live Now</Text>
+                <Text style={styles.sectionMeta}>{discovery.error ? "Unavailable" : discovery.loading ? "Checking" : `${totalLiveNow} available`}</Text>
+              </View>
+              <NewLiveStreamsButton pendingItemCount={discovery.pendingItemCount} onRefresh={discovery.reload} />
             </View>
             {discovery.loading ? (
               <View style={styles.loadingRow}><ActivityIndicator color="#E50914" /><Text style={styles.muted}>Loading live discovery...</Text></View>
@@ -291,26 +278,45 @@ export default function LiveTabScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Upcoming Events</Text>
-              <Text style={styles.sectionMeta}>{upcomingEvents.length} scheduled</Text>
+              <Text style={styles.sectionMeta}>{upcoming.error ? "Unavailable" : upcoming.loading ? "Checking" : `${upcomingEvents.length} scheduled`}</Text>
             </View>
             {upcomingEvents.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                 {upcomingEvents.map((event) => (
-                  <TouchableOpacity key={`upcoming-${event.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Upcoming public Event. ${formatDateTime(event.startsAt)}. Open Event`}>
-                    <View style={styles.upcomingBadge}><Text style={styles.upcomingBadgeText}>UPCOMING</Text></View>
-                    <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
-                    <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
-                    <Text style={styles.cardMeta}>{formatDateTime(event.startsAt)}</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity key={`upcoming-${event.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Upcoming public Event. ${formatDateTime(event.startsAt)}. Open Event`}>
+                      <View style={styles.upcomingBadge}><Text style={styles.upcomingBadgeText}>UPCOMING</Text></View>
+                      <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
+                      <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
+                      <Text style={styles.cardMeta}>{formatDateTime(event.startsAt)}</Text>
+                    </TouchableOpacity>
                 ))}
               </ScrollView>
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateTitle}>No upcoming public events yet</Text>
-                <Text style={styles.emptyStateBody}>Scheduled public creator events will appear here automatically.</Text>
+                <Text style={styles.emptyStateTitle}>{upcoming.error ? "Upcoming events unavailable" : upcoming.loading ? "Checking upcoming events" : "No upcoming public events yet"}</Text>
+                <Text style={styles.emptyStateBody}>{upcoming.error ?? (upcoming.loading ? "Checking current public schedules." : "Scheduled public creator events will appear here automatically.")}</Text>
               </View>
             )}
           </View>
+
+          {awaitingEvents.length > 0 ? (
+            <View style={styles.section} testID="live-awaiting-host-section">
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Awaiting host</Text>
+                <Text style={styles.sectionMeta}>{awaitingEvents.length} not started</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+                {awaitingEvents.map((event) => (
+                  <TouchableOpacity key={`awaiting-${event.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Awaiting host, not live. Scheduled for ${formatDateTime(event.startsAt)}. Open Event`}>
+                    <View style={styles.upcomingBadge}><Text style={styles.upcomingBadgeText}>AWAITING HOST</Text></View>
+                    <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
+                    <Text style={styles.cardBody}>The scheduled time has passed. The host has not started this event.</Text>
+                    <Text style={styles.cardMeta}>{formatDateTime(event.startsAt)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
 
           <View style={styles.disclosureCard}>
             <Pressable

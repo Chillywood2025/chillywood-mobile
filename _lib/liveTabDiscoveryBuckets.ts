@@ -5,6 +5,7 @@ export type LiveTabDiscoveryBuckets = {
   liveItems: DiscoveryFeedItem[];
   liveEvents: CreatorEventSummary[];
   upcomingEvents: CreatorEventSummary[];
+  awaitingEvents: CreatorEventSummary[];
 };
 
 export function buildLiveTabDiscoveryBuckets(
@@ -28,5 +29,11 @@ export function buildLiveTabDiscoveryBuckets(
     upcomingEvents: events
       .filter((event) => event.isUpcoming)
       .slice(0, 10),
+    awaitingEvents: events
+      // A late host has not started or canceled the event merely because its
+      // scheduled time passed. Keep a separate bounded lane, never live-now.
+      .filter((event) => event.status === "scheduled" && !event.isUpcoming
+        && event.startsAt !== null && Number.isFinite(Date.parse(event.startsAt)))
+      .slice(0, 8),
   };
 }
