@@ -90,6 +90,13 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
     "./imageUploadNormalization": unavailableModule("attachment upload"),
     "./mediaStorage": unavailableModule("attachment provider"),
   });
+  const notificationActivity = loadSource("_lib/notificationActivity.ts", {
+    "./accountSessionAuthority": authority,
+    "./supabase": bootstrap,
+    // Inbox lifecycle subscriptions are outside this messaging/call fixture.
+    // Load their actual module graph, and fail if this harness invokes them.
+    "react-native": { AppState: unavailableModule("notification lifecycle") },
+  });
   const diagnostics = [];
   const chat = loadSource("_lib/chat.ts", {
     "./communication": communication, "./chillyChatCalls": calls,
@@ -99,6 +106,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
     "./accountBoundSupabaseMutation": mutation, "./communicationCallMediaPolicy.mjs": mediaPolicy,
     "./logger": { reportRuntimeError: (label) => diagnostics.push(label) },
     "./userFacingErrors": errors,
+    "./notificationActivity": notificationActivity,
   });
   return { chat, calls, communication, mutation, authority, refreshAuthority, diagnostics };
 }

@@ -168,6 +168,26 @@ test("actual room helper checks cancellation before legacy fallback dispatch", a
   assert.equal(reads, 1);
 });
 
+test("room-only optimization is confined to signal-owned inbox reads while legacy cleanup keeps its snapshot", async () => {
+  let snapshots = 0, roomReads = 0;
+  const h = harness({
+    read: q => ({ data: q.table === "chat_threads" ? [row("one", true)] : [], error: null }),
+    communication: {
+      formatCommunicationRoomCode: value => value, isCommunicationRoomActive: () => false,
+      getCommunicationRoomSnapshot: async () => { snapshots++; return { room: null }; },
+      getCommunicationRoom: async () => { roomReads++; return null; },
+    },
+  });
+  await h.api.listChatThreads();
+  assert.equal(snapshots, 1); assert.equal(roomReads, 0);
+  assert.equal(h.state.writes.length, 1);
+  assert.equal(h.state.writes[0][3].retainTransportSettlement, false);
+  await h.api.listChatThreads({ signal: new AbortController().signal });
+  assert.equal(snapshots, 1); assert.equal(roomReads, 1);
+  assert.equal(h.state.writes.length, 2);
+  assert.equal(h.state.writes[1][3].retainTransportSettlement, true);
+});
+
 test("friend refresh retains both parallel readers until settlement despite rejection", async () => {
   const held = deferred(); const controller = new AbortController(); let reads = 0, settled = false;
   const friendGraph = loadStubbed("_lib/friendGraph.ts", {

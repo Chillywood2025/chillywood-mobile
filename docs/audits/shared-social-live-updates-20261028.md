@@ -87,7 +87,10 @@ changing database/provider state.
 An AbortSignal requests client transport cancellation. It is not proof an already
 dispatched database query stopped, and never proves a mutation was rolled back.
 UI deadlines bound visible waiting, while actual promise settlement owns the
-source permit. Concurrent sibling reads use all-settled ownership so an early
+source permit for the new explicit-signal live consumers. Legacy no-signal
+notification callers retain their existing eight-second observer deadline;
+expiration aborts and fences their source continuations, not an already-dispatched
+mutation. Concurrent sibling reads use all-settled ownership so an early
 failure cannot free a permit while another source is still alive. The same fix
 applies to directly affected Discovery and candidate-ranking aggregators.
 
@@ -110,6 +113,14 @@ diff. Local focused/core/full-glob results are recorded in the task report;
 the exact published head still requires protected **Chi'llywood / Required
 Validation** and final diff review before merge. Do not equate a draft checkpoint
 or a local pass with protected final-head validation.
+
+The standalone historical notification-retention guard still rejects the
+unchanged Settings `setNotificationSavingKey("push-refresh")` literal expectation.
+That same sole failure was reproduced against exact base `07fd778c` using the
+unmodified guard and all its tracked input files. Only the five assertions
+directly affected by this refactor are aligned to signal parameters and the
+all-settled merge; negative controls remove each actual read/merge behavior and
+remain rejected. The unrelated Settings assertion is not relaxed.
 
 Current primary references checked: [AbortSignal fetch control](https://supabase.com/docs/reference/javascript/using-modifiers-abortsignal),
 [Postgres Changes filtering, authorization and scale](https://supabase.com/docs/guides/realtime/postgres-changes),

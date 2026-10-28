@@ -6,7 +6,7 @@ They reconstruct the reviewed notification changes without copying either full
 production module. `provenance.json` records each original commit/path, the
 reviewed source baseline, and SHA-256 hashes of both complete source blobs.
 
-Each patch was generated from the exact `c164ae241e81ce90e2b51f8bad86556cc23c2a78`
+Each patch was originally generated from the exact `c164ae241e81ce90e2b51f8bad86556cc23c2a78`
 source to its listed original blob. The loader applies each hunk only when its
 context matches exactly once. At that baseline it also requires byte-exact
 original SHA-256 equivalence. This equivalence was checked against all five
@@ -24,6 +24,18 @@ witness SHA-256 targets are unchanged. The updated provenance explicitly retains
 `originalByteIdentityVerified: false`: those witnesses are not claimed to be
 byte-identical copies of the original historical Git blobs. Settings fixtures
 and the strict single-match reconstruction checks are unchanged.
+
+The shared live-read context review on 2026-10-28 removes only the obsolete
+import-reversal hunk from each helper patch. Current authority and frozen-token
+imports are required by the unrelated live-read and reconciliation helpers;
+their retention does not restore any removed historical preference or push
+guard. Every preference and push behavior hunk remains unchanged. The updated
+`contextWitness` binds the new current source and reconstructed counterexample
+hashes, and `priorContextWitness` preserves the previous context record. Original
+commit, baseline and historical target hashes remain unchanged. These rebased
+helpers are behavioral counterexamples, not byte-identical original historical
+modules; `originalByteIdentityVerified` remains false. No loader checks or
+negative-control assertions are relaxed.
 
 Portability validation uses an invalid `GIT_DIR` while running the complete
 negative-control suite, so no unpublished object can satisfy a test:

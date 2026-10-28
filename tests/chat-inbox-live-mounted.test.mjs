@@ -15,6 +15,8 @@ globalThis.document = document; globalThis.window = globalThis; globalThis.HTMLI
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const ownerKey = a => a ? JSON.stringify([a.userId, a.accountId, a.sessionGeneration]) : "";
 const thread = id => ({ threadId: id, currentMember: { unreadCount: 0 }, otherMember: { userId: `peer-${id}`, displayName: id } });
+const textOf = node => Array.isArray(node) ? node.map(textOf).join(" ")
+  : node && typeof node === "object" ? textOf(node.props?.children) : typeof node === "string" ? node : "";
 
 async function mount(t) {
   const state = { focused: true, authority: { userId: "user", accountId: "user", sessionGeneration: "one", state: "ACTIVE", restoreOnly: false }, reads: [], queued: [], friends: ["friend"], friendQueued: [], directQueued: [], searchQueued: [], routes: [], subscriptions: [], retired: [], now: 0 };
@@ -46,8 +48,15 @@ async function mount(t) {
   let source = fs.readFileSync("app/chat/index.tsx", "utf8");
   const ast = ts.createSourceFile("inbox.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const screen = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === "ChillyChatInboxScreen");
+  let emptyState;
+  const findEmpty = node => {
+    if (ts.isJsxAttribute(node) && node.name.getText(ast) === "ListEmptyComponent") emptyState = node.initializer.expression.getText(ast);
+    ts.forEachChild(node, findEmpty);
+  };
+  findEmpty(screen);
+  assert.ok(emptyState, "production empty-state expression is exercised");
   const returned = screen.body.statements.find(n => ts.isIfStatement(n) && n.expression.getText(ast) === "authLoading || loading");
-  source = source.slice(0, returned.pos) + "\nruntime.snapshot = { threads, activeFriendUserIds, loading, refreshing, error, loadThreads, openDirectThreadForPerson, startingChatUserId, searchPeopleLoading, setSearchQuery }; return null;\n}" + source.slice(screen.end);
+  source = source.slice(0, returned.pos) + `\nruntime.snapshot = { threads, activeFriendUserIds, loading, refreshing, error, loadThreads, openDirectThreadForPerson, startingChatUserId, searchPeopleLoading, setSearchQuery, emptyState: ${emptyState} }; return null;\n}` + source.slice(screen.end);
   const javascript = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(javascript, { exports: module.exports, module, require: id => modules[id] ?? {}, runtime: state, AbortController,
@@ -140,4 +149,44 @@ test("background retires held people-search busy state", async t => {
   await h.appState("background"); assert.equal(h.snapshot.searchPeopleLoading, false);
   await h.run(() => held.reject(new Error("retired search")));
   assert.equal(h.snapshot.searchPeopleLoading, false);
+});
+
+test("session rotations cap pending owners without eviction and recover after a source settles", async t => {
+  const h = await mount(t);
+  const baseline = h.state.reads.length;
+  const held = Array.from({ length: 4 }, deferred);
+  h.state.queued.push(held[0].promise);
+  await h.run(() => { void h.snapshot.loadThreads(true); });
+  for (let i = 1; i < 4; i++) {
+    h.state.authority = { ...h.state.authority, sessionGeneration: `held-${i}` };
+    h.state.queued.push(held[i].promise);
+    await h.render();
+    assert.equal(h.snapshot.threads.length, 0, "old owner rows are not shown by a replacement");
+  }
+  assert.equal(h.state.reads.length, baseline + 4);
+  for (let i = 4; i < 9; i++) {
+    h.state.authority = { ...h.state.authority, sessionGeneration: `refused-${i}` };
+    await h.render();
+    assert.equal(h.state.reads.length, baseline + 4, "rotations cannot accumulate more underlying reads");
+    assert.equal(h.snapshot.threads.length, 0);
+    assert.equal(h.snapshot.loading, false);
+    assert.equal(h.snapshot.refreshing, false);
+    assert.match(h.snapshot.error, /requests are still finishing/);
+    assert.match(textOf(h.snapshot.emptyState), /Inbox unavailable/);
+    assert.doesNotMatch(textOf(h.snapshot.emptyState), /No Chi'lly Chat threads yet/);
+  }
+  await h.advance(130_000);
+  assert.equal(h.state.reads.length, baseline + 4, "deadlines and fallback must not evict pending owners");
+  await h.run(() => held[0].resolve([thread("obsolete-owner")]));
+  assert.equal(h.snapshot.threads.length, 0);
+  assert.equal(h.state.reads.length, baseline + 4, "settling a retired owner does not publish its rows");
+  h.state.queued.push([thread("recovered-current-owner")]);
+  await h.run(() => { void h.snapshot.loadThreads(true); });
+  assert.equal(h.state.reads.length, baseline + 5);
+  assert.equal(h.snapshot.threads[0].threadId, "recovered-current-owner");
+  assert.equal(h.snapshot.error, null);
+  assert.equal(h.snapshot.loading, false);
+  assert.equal(h.snapshot.refreshing, false);
+  await h.run(() => held.slice(1).forEach((read, index) => read.resolve([thread(`retired-${index}`)])));
+  assert.equal(h.snapshot.threads[0].threadId, "recovered-current-owner");
 });

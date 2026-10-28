@@ -627,7 +627,12 @@ async function withNotificationRead<T>(
   const retire = subscribeToAccountSessionAuthority(next => {
     if (!sameAccountSessionAuthority(authority, next)) abort();
   });
-  const timer = setTimeout(abort, NOTIFICATION_READ_DEADLINE_MS);
+  let rejectDeadline: ((error: Error) => void) | undefined;
+  const observerDeadline = signal ? null : new Promise<T>((_resolve, reject) => { rejectDeadline = reject; });
+  const timer = setTimeout(() => {
+    abort();
+    rejectDeadline?.(new Error("Notification activity could not be refreshed."));
+  }, NOTIFICATION_READ_DEADLINE_MS);
   const operation: NotificationReadOperation = { authority, signal: controller.signal,
     assertCurrent: () => {
       if (controller.signal.aborted || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) {
@@ -636,12 +641,17 @@ async function withNotificationRead<T>(
     },
   };
   try {
-    operation.assertCurrent();
-    // Abort the real read, not just its observer. If a transport ignores abort,
-    // retain this promise until it settles so callers cannot overlap a retry.
-    const result = await read(operation);
-    operation.assertCurrent();
-    return result;
+    const pending = (async () => {
+      operation.assertCurrent();
+      const result = await read(operation);
+      operation.assertCurrent();
+      return result;
+    })();
+    // Explicit signal owners manage their UI deadline and retain actual source
+    // settlement, even if transport ignores abort. Legacy callers have no such
+    // owner: preserve their bounded observer wait while permanently aborting and
+    // fencing every later continuation. This cannot undo a dispatched mutation.
+    return await (observerDeadline ? Promise.race([pending, observerDeadline]) : pending);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", abort);
@@ -752,6 +762,12 @@ async function reconcileChillyChatCallNotificationRows(
       const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
         accessToken: async () => { operation.assertCurrent(); return subject.accessToken; },
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: { fetch: (input, init) => {
+          // The SDK awaits accessToken before dispatch. Retire cancellation or
+          // session replacement in that microtask gap before any write leaves.
+          operation.assertCurrent();
+          return fetch(input, init);
+        } },
       });
       operation.assertCurrent();
       // This is a mutation, not a read: do not abort it or race away transport

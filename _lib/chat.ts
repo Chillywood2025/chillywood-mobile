@@ -500,6 +500,17 @@ async function enrichChatThreadsWithUsernames(threads: ChatThreadSummary[], bind
   });
 }
 
+async function readActiveThreadRoomState(roomId: string, binding?: AccountSessionAuthorityBinding, signal?: AbortSignal): Promise<"active" | "inactive"> {
+  // Signal-owned inbox reconciliation consumes only canonical room state,
+  // avoiding the snapshot's unrelated parallel membership read. Legacy
+  // call-control callers retain their existing snapshot/error semantics.
+  const room = signal
+    ? await getCommunicationRoom(roomId, { signal })
+    : (await getCommunicationRoomSnapshot(roomId))?.room;
+  assertChatReadCurrent(binding, signal);
+  return room && isCommunicationRoomActive(room) ? "active" : "inactive";
+}
+
 async function shouldRequestStaleActiveThreadCallCleanup(thread: ChatThreadSummary, binding?: AccountSessionAuthorityBinding, signal?: AbortSignal): Promise<boolean> {
   assertChatReadCurrent(binding, signal);
   const threadId = toText(thread.threadId);
@@ -520,14 +531,8 @@ async function shouldRequestStaleActiveThreadCallCleanup(thread: ChatThreadSumma
 
   const invite = data?.[0] ?? null;
   const inviteStatus = toText(invite?.status).toLowerCase();
-  let roomState: "active" | "inactive" | "unavailable" = "unavailable";
-  if (inviteStatus === "accepted" || !invite) {
-    // Reconciliation consumes only canonical room state, not memberships.
-    // Avoid the snapshot's unrelated parallel membership read entirely.
-    const room = await getCommunicationRoom(roomId, { signal });
-    assertChatReadCurrent(binding, signal);
-    roomState = room && isCommunicationRoomActive(room) ? "active" : "inactive";
-  }
+  const roomState = inviteStatus === "accepted" || !invite
+    ? await readActiveThreadRoomState(roomId, binding, signal) : "unavailable";
   return resolveChatThreadCallReconciliation({
     inviteExpiresAt: invite?.expires_at,
     inviteStatus,

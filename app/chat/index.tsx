@@ -49,6 +49,7 @@ const CHAT_SUGGESTION_DEBOUNCE_MS = 300;
 const CHAT_THREAD_PREVIEW_LIMIT = 4;
 const INBOX_READ_DEADLINE_MS = 15_000;
 const INBOX_FALLBACK_MS = 65_000;
+const INBOX_MAX_PENDING_OWNERS = 4;
 
 function buildThreadMap(items: ChatThreadSummary[]) {
   const map = new Map<string, ChatThreadSummary>();
@@ -145,6 +146,15 @@ export default function ChillyChatInboxScreen() {
     if (existing) {
       existing.pending = true;
       return existing.promise;
+    }
+    // Never evict a live flight: even an aborted old session can still own an
+    // underlying read. Bound successive session rotations by refusing new work
+    // until one of those real operations settles.
+    if (flightsRef.current.size >= INBOX_MAX_PENDING_OWNERS) {
+      setError("Earlier Chi'lly Chat requests are still finishing. Please try refreshing again shortly.");
+      setLoading(false);
+      setRefreshing(false);
+      return;
     }
     const lifetime = lifetimeRef.current;
     const controller = new AbortController();
@@ -885,9 +895,11 @@ export default function ChillyChatInboxScreen() {
         ListHeaderComponent={listHeader}
         ListEmptyComponent={(
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>{searchQuery.trim() ? "No matching threads" : "No Chi'lly Chat threads yet"}</Text>
+            <Text style={styles.emptyTitle}>{error ? "Inbox unavailable" : searchQuery.trim() ? "No matching threads" : "No Chi'lly Chat threads yet"}</Text>
             <Text style={styles.emptyBody}>
-              {searchQuery.trim()
+              {error
+                ? "Your conversations could not be loaded. Pull down to retry."
+                : searchQuery.trim()
                 ? "Try another name, handle, or clear your search."
                 : "Open Chi'lly Chat from a profile to start your first direct thread."}
             </Text>

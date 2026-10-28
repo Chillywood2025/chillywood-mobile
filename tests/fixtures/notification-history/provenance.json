@@ -29,6 +29,13 @@
     "baselineSha256": "d5512cc5072af428b4322daa8ef48b9caa72dc1eacc594a400afc6e50c193b54",
     "targetSha256": "323b558fca9a792e89eda6030b97634af07100abcd915f064c0ee25da81caec8",
     "contextWitness": {
+      "review": "shared-social-live-read-context-2026-10-28",
+      "scope": "Retain current live-read authority and frozen-token reconciliation imports; every historical preference and push behavior reversal remains unchanged. This is a current-context counterexample, not recovered original source bytes.",
+      "rebasedSourceSha256": "b49e0e7771cf1a581bceffb995f59b739156936e807e65597856a3f1731e217c",
+      "targetSha256": "6ca5b56391e8a02f1eb57e1b0b9d79ddd82237df1826ddb5e832c5c4008cbfb2",
+      "originalByteIdentityVerified": false
+    },
+    "priorContextWitness": {
       "baseCommit": "93976ea7d0058020a61362397a49c1e31cfc3bcd",
       "baseSha256": "b107175344473f8c465beb6f5b15c38225fcbc320ecc1e83e56eb8a6b4ca4e8d",
       "targetSha256": "ba037a239cf809b993b8ddd65e1d6e9bcb6f0b9fdcc945085f5947e05038c263",
@@ -66,6 +73,13 @@
     "baselineSha256": "d5512cc5072af428b4322daa8ef48b9caa72dc1eacc594a400afc6e50c193b54",
     "targetSha256": "18b4e3a2143b9bf6037dff060f515e3eb828c9904a146f825f9ffdf801cc6866",
     "contextWitness": {
+      "review": "shared-social-live-read-context-2026-10-28",
+      "scope": "Retain current live-read authority and frozen-token reconciliation imports; every historical preference and push behavior reversal remains unchanged. This is a current-context counterexample, not recovered original source bytes.",
+      "rebasedSourceSha256": "b49e0e7771cf1a581bceffb995f59b739156936e807e65597856a3f1731e217c",
+      "targetSha256": "0ef46a31074955be5db465c638b23c77d3448ec277d41702ff8ce01f2543755b",
+      "originalByteIdentityVerified": false
+    },
+    "priorContextWitness": {
       "baseCommit": "93976ea7d0058020a61362397a49c1e31cfc3bcd",
       "baseSha256": "b107175344473f8c465beb6f5b15c38225fcbc320ecc1e83e56eb8a6b4ca4e8d",
       "targetSha256": "1d055f6dc6c90e143b48d4ead1456c2ee26b94e760023b195897e3e2b5cc86b1",

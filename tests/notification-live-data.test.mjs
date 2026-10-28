@@ -19,10 +19,10 @@ const settle = async () => { for (let i = 0; i < 50; i++) await Promise.resolve(
 const response = (data, count = 1) => new Response(JSON.stringify(data), {
   status: 200, headers: { 'Content-Type': 'application/json', 'Content-Range': `0-0/${count}` },
 });
-function harness({ fetcher, capture } = {}) {
+function harness({ fetcher, capture, afterScopedToken, omitDispatchFence = false } = {}) {
   let authority = binding();
   const calls = [], timers = new Map(), subscribers = new Set();
-  let timerId = 0, captures = 0;
+  let timerId = 0, captures = 0, clients = 0, dispatchGapVisits = 0;
   const fetchImpl = async (input, init) => {
     const call = { url: new URL(input), method: init?.method ?? 'GET', signal: init?.signal,
       authorization: new Headers(init?.headers).get('authorization'), body: init?.body };
@@ -34,9 +34,24 @@ function harness({ fetcher, capture } = {}) {
     if (call.method === 'HEAD') return response(null, 135);
     return response([row()]);
   };
-  const createClient = (url, key, options) => createSdkClient(url, key, {
-    ...options, global: { ...options?.global, fetch: fetchImpl },
-  });
+  const createClient = (url, key, options) => {
+    const scoped = ++clients > 1;
+    let tokenReads = 0;
+    return createSdkClient(url, key, {
+      ...options,
+      accessToken: () => {
+        const token = options.accessToken();
+        // The first token read initializes Realtime. Retire in the actual
+        // mutation's token-await gap, after the production callback checked.
+        if (scoped && ++tokenReads === 2 && afterScopedToken) {
+          void token.then(() => { dispatchGapVisits++; afterScopedToken(); });
+        }
+        return token;
+      },
+      global: { ...options?.global,
+        fetch: omitDispatchFence ? fetchImpl : options?.global?.fetch ?? fetchImpl },
+    });
+  };
   const supabase = createClient('https://notifications.invalid', 'test-anon-key', {
     accessToken: async () => `mutable-${authority.sessionGeneration}`,
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -60,21 +75,23 @@ function harness({ fetcher, capture } = {}) {
     } },
   };
   const exports = {};
-  new Function('exports', 'require', 'setTimeout', 'clearTimeout', source)(exports,
+  new Function('exports', 'require', 'setTimeout', 'clearTimeout', 'fetch', source)(exports,
     name => deps[name] ?? {},
     (callback, delay) => { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
-    id => timers.delete(id));
+    id => timers.delete(id), fetchImpl);
   return { api: exports, calls, timers, subscribers, get captures() { return captures; },
+    get dispatchGapVisits() { return dispatchGapVisits; },
     expire() { for (const { callback, delay } of [...timers.values()]) { assert.equal(delay, 8000); callback(); } },
     replace() { authority = binding('session-b'); subscribers.forEach(callback => callback(authority)); },
   };
 }
 
 test('notification reads abort SDK transport at the deadline and retain abort-ignoring ownership', async () => {
-  const held = deferred();
+  const held = deferred(), controller = new AbortController();
   const h = harness({ fetcher: () => held.promise });
   let finished = false;
-  const pending = h.api.readNotificationListPage('account-a').then(result => { finished = true; return result; });
+  const pending = h.api.readNotificationListPage('account-a', 30, null, controller.signal)
+    .then(result => { finished = true; return result; });
   await settle(); assert.equal(h.calls.length, 1);
   h.expire(); await settle();
   assert.equal(h.calls[0].signal.aborted, true);
@@ -83,6 +100,42 @@ test('notification reads abort SDK transport at the deadline and retain abort-ig
   const result = await pending;
   assert.equal(result.status, 'unavailable'); assert.equal(h.captures, 0);
   assert.equal(h.timers.size, 0); assert.equal(h.subscribers.size, 0);
+});
+
+test('legacy Profile-style no-signal read releases its observer at eight seconds and fences the late read', async () => {
+  const held = deferred();
+  const h = harness({ fetcher: () => held.promise });
+  const pending = h.api.readNotificationListPage('account-a', 12);
+  await settle(); assert.equal(h.calls.length, 1);
+  h.expire();
+  assert.equal((await pending).status, 'unavailable');
+  assert.equal(h.calls[0].signal.aborted, true);
+  held.resolve(response([row()])); await settle();
+  assert.equal(h.captures, 0);
+  assert.equal(h.calls.filter(call => call.method === 'PATCH').length, 0);
+});
+
+test('legacy no-signal deadline during auth capture releases observer and cannot dispatch a late reconciliation write', async () => {
+  const held = deferred();
+  const h = harness({ capture: () => held.promise });
+  const pending = h.api.readNotificationListPage('account-a', 12);
+  await settle(); assert.equal(h.captures, 1);
+  h.expire(); assert.equal((await pending).status, 'unavailable');
+  held.resolve(); await settle();
+  assert.equal(h.calls.filter(call => call.method === 'PATCH').length, 0);
+  assert.equal(h.subscribers.size, 0); assert.equal(h.timers.size, 0);
+});
+
+test('legacy observer deadline does not abort or undo an already-dispatched reconciliation write', async () => {
+  const held = deferred();
+  const h = harness({ fetcher: call => call.method === 'PATCH' ? held.promise : null });
+  const pending = h.api.readNotificationListPage('account-a', 12);
+  await settle();
+  const write = h.calls.find(call => call.method === 'PATCH');
+  assert.ok(write); assert.equal(write.signal, undefined);
+  h.expire(); assert.equal((await pending).status, 'unavailable');
+  held.resolve(response(null)); await settle();
+  assert.equal(h.calls.filter(call => call.method === 'PATCH').length, 1);
 });
 
 test('already cancelled reads dispatch nothing and same-user replacement aborts SDK queries', async () => {
@@ -109,6 +162,24 @@ for (const retirement of ['cancel', 'session']) test(`reconciliation ${retiremen
   assert.equal((await pending).status, 'unavailable');
   assert.equal(h.calls.filter(call => call.method === 'PATCH').length, 0);
 });
+
+for (const retirement of ['cancel', 'session']) {
+  for (const omitDispatchFence of [false, true]) test(`reconciliation ${retirement} in SDK token-to-fetch microtask gap ${omitDispatchFence ? 'negative control reaches UPDATE without dispatch fence' : 'dispatches no UPDATE'}`, async () => {
+    const controller = new AbortController();
+    const h = harness({ omitDispatchFence,
+      afterScopedToken: () => { if (retirement === 'cancel') controller.abort(); else h.replace(); },
+    });
+    const result = await h.api.readNotificationListPage('account-a', 30, null, controller.signal);
+    assert.equal(h.dispatchGapVisits, 1, 'retirement must hit the actual SDK mutation-token await');
+    assert.equal(result.status, 'unavailable');
+    const writes = h.calls.filter(call => call.method === 'PATCH');
+    assert.equal(writes.length, omitDispatchFence ? 1 : 0);
+    if (omitDispatchFence) {
+      assert.equal(writes[0].authorization, 'Bearer frozen-session-a');
+      assert.equal(writes[0].signal, undefined, 'read cancellation must not be attached to dispatched writes');
+    }
+  });
+}
 
 test('reconciliation freezes initiating token and awaits already-dispatched UPDATE without pretending cancellation undid it', async () => {
   const held = deferred(), controller = new AbortController();
