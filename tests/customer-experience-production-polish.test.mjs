@@ -17,6 +17,14 @@ const load = (path) => {
 
 const presentation = load("_lib/customerExperiencePresentation.ts");
 
+const assertLiveForegroundRefreshWiring = (live, upcoming) => {
+  assert.match(live, /const upcoming = useLiveUpcomingEvents\(\{ limit: 32 \}\)/u);
+  assert.match(live, /Promise\.all\(\[reloadUpcoming\(\), reloadDiscovery\(\)\]\)/u);
+  assert.match(upcoming, /AppState\.addEventListener\('change', \(next\) =>/u);
+  assert.match(upcoming, /if \(next === 'active'\) \{ void run\(false\); connect\(\); \}/u);
+  assert.match(upcoming, /subscription\.remove\(\)/u);
+};
+
 test("every customer-facing main tab reserves the same bounded brand-safe region", () => {
   assert.equal(presentation.resolveMainTabBrandRevealHeight(700), 188);
   assert.equal(presentation.resolveMainTabBrandRevealHeight(852), 204);
@@ -49,7 +57,15 @@ test("Live Hub cards remain useful with populated rails and the page stays verti
   assert.match(live, /testID="live-hub-scroll"/u);
   assert.match(live, /alwaysBounceVertical/u);
   assert.match(live, /style=\{\[styles\.discoveryCard, \{ width: discoveryCardWidth \}\]\}/u);
-  assert.match(live, /useRefreshOnForeground\(\(\) => loadLive\(true\)\)/u);
+  assertLiveForegroundRefreshWiring(live, read("_lib/useLiveUpcomingEvents.ts"));
+});
+
+test("Live foreground wiring guard rejects disconnected and missing resume handlers", () => {
+  const live = read("app/(tabs)/live.tsx");
+  const upcoming = read("_lib/useLiveUpcomingEvents.ts");
+  assert.throws(() => assertLiveForegroundRefreshWiring(live.replace("useLiveUpcomingEvents({ limit: 32 })", "legacyReader()"), upcoming));
+  assert.throws(() => assertLiveForegroundRefreshWiring(live, upcoming.replace("if (next === 'active') { void run(false); connect(); }", "if (next === 'active') { connect(); }")));
+  assert.throws(() => assertLiveForegroundRefreshWiring(live, upcoming.replace("subscription.remove()", "void 0")));
 });
 
 test("Event presentation never masquerades a future state as an Open Event action", () => {
