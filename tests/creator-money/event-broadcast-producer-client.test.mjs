@@ -53,3 +53,12 @@ test('denied restart preserves replay promises and original terms without claimi
     assert.equal(h.calls.length,1);
   }
 });
+test('qualified self-start messaging distinguishes creator qualification from platform worker readiness',()=>{
+  const h=load();
+  for(const reason of ['event_broadcast_approval_required','event_broadcast_qualification_required']) {
+    const copy=h.api.creatorEventBroadcastStatusCopy({state:'unavailable',reason,canStart:false});
+    assert.match(copy,/qualification must be current.*readiness checks pass.*without a separate approval for each show/);
+    assert.doesNotMatch(copy,/verified and ready|has stopped|refund/);
+  }
+  assert.match(h.api.creatorEventBroadcastStatusCopy({state:'unavailable',reason:'event_broadcast_worker_not_ready',canStart:false}),/Platform broadcast setup is not ready.*refresh readiness/);
+});

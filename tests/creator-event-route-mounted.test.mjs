@@ -61,10 +61,11 @@ async function mount(t, options = {}) {
     "../../_lib/supabase": { supabase }, "../../components/monetization/MoneyScopeInfoButton": { MoneyScopeInfoButton: host("MoneyScopeInfoButton") },
     "../../components/monetization/money-ui": Object.fromEntries(["MoneyOfferCard", "MoneyScopeStrip", "MoneyStatusChip", "MoneySuccessReceipt"].map(name => [name, host(name)])),
     "../../components/safety/report-sheet": { ReportSheet: () => null },
+    "../../components/monetization/event-ticket-policy": { EventTicketPolicy: host("EventTicketPolicy") },
   }, options.source).default;
   const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen)));
   t.after(() => React.act(async () => root.unmount()));
-  return { routes, node: id => [...nodes.values()].find(node => node.props.testID === id),
+  return { routes, ticketPolicies: () => [...nodes.values()].filter(node => node.type === "EventTicketPolicy").map(node => node.props), node: id => [...nodes.values()].find(node => node.props.testID === id),
     text: () => [...nodes.values()].map(textOf).join(" "),
     async press(id) { const node = [...nodes.values()].find(node => node.props.testID === id); assert.ok(node, id); await React.act(async () => { void node.props.onPress(); }); },
     async account(next) { access = next; await React.act(async () => authCallback()); },
@@ -127,17 +128,30 @@ test("mounted event checkout binds displayed terms revision and provides purchas
   await h.press('event-my-tickets-button');assert.deepEqual(h.routes,['/purchases']);
 });
 
+test("before purchase the event shows exact replay availability and expiry in the ticket timezone",async t=>{
+  const terms={...offer.terms,replayPolicy:'until_expiration',timeZone:'America/Los_Angeles',
+    replayAvailableAt:'2026-11-03T04:00:00Z',replayExpiresAt:'2026-11-05T04:00:00Z'};
+  const h=await mount(t,{access:{...locked,offer:{...offer,terms}},event:{time_zone:'Asia/Tokyo',starts_at:'2026-11-01T10:00:00Z'}});
+  const replay=textOf(h.node('event-ticket-replay-terms'));
+  assert.match(replay,/Replay included from/);assert.match(replay,/Nov 2, 2026/);assert.match(replay,/Nov 4, 2026/);
+  assert.equal((replay.match(/America\/Los_Angeles/g)??[]).length,2);assert.doesNotMatch(replay,/Asia\/Tokyo/);
+  assert.match(h.text(),/Replay arriving later does not remove that eligibility/);assert.match(h.text(),/not a guaranteed or completed refund/);
+  assert.ok(h.node('event-pass-purchase-button'),'terms visible before checkout');
+});
+
 test("missing original terms do not substitute the current listing and unverified new terms cannot buy",async t=>{
   const h=await mount(t,{access:{...locked,offer:{...offer,terms:null}},purchases:[{status:'upcoming',termsAvailable:false,terms:{},amountMinor:99,currency:'usd'}]});
   assert.equal(h.node('event-pass-purchase-button'),undefined);assert.match(h.text(),/Original terms are unavailable/);
 });
 
 test("recorded purchase shows agreed schedule and provider-review eligibility separately from changed listing",async t=>{
-  const h=await mount(t,{access:owned,purchases:[{status:'upcoming',amountMinor:199,currency:'usd',termsAvailable:true,
+  const h=await mount(t,{access:owned,purchases:[{id:'exact-purchase-record',status:'upcoming',amountMinor:199,currency:'usd',termsAvailable:true,
     terms:{title:'Purchased Sunday show',startsAt:'2026-11-02T01:00:00Z',timeZone:'America/New_York',includeText:'Original agreed admission'},
     refundEligibility:{reasons:['material_schedule_change']}}]});
   assert.match(h.text(),/Purchased Sunday show/);assert.match(h.text(),/Original agreed admission/);
   assert.match(h.text(),/not confirmation of a refund/);assert.equal(h.node('event-purchase-terms'),undefined);
+  assert.equal(h.ticketPolicies().length,1);assert.equal(h.ticketPolicies()[0].eventId,eventId);
+  assert.equal(h.ticketPolicies()[0].purchaseId,'exact-purchase-record');assert.equal(h.ticketPolicies()[0].initiallyExpanded,true);
 });
 
 test("event reminder action binds explicit viewer and event without claiming push delivery",async t=>{

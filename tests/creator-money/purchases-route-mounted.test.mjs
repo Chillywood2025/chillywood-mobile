@@ -9,6 +9,8 @@ import { noop, container, deferred, textOf, load, wallet, purchase, page, mount 
 test("mounted wallet shows immutable price/terms and exact event destination, with cold-link recovery", async t => {
   const h = await mount(t);
   assert.match(h.text(), /\$2\.99/); assert.match(h.text(), /America\/New_York/); assert.match(h.text(), /Premium is separate/);
+  assert.equal(h.ticketPolicies().length, 1); assert.equal(h.ticketPolicies()[0].eventId, "exact-event");
+  assert.equal(h.ticketPolicies()[0].purchaseId, "one"); assert.equal(h.ticketPolicies()[0].initiallyExpanded, undefined);
   await h.press("purchase-open-one"); assert.equal(h.routes[0].pathname, "/event/[eventId]"); assert.equal(h.routes[0].params.eventId, "exact-event");
   await h.press("purchases-back"); assert.equal(h.routes[1], "/(tabs)/my-list");
 });

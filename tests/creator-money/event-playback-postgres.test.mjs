@@ -4,7 +4,10 @@ import test from 'node:test';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 
 test('exact event playback uses actual purchase, original terms, current session and protected source SQL', {timeout:240_000}, async t=>{
-  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});
+  const replayPolicyMigration='20261027085833_creator_event_explicit_replay_terms.sql';
+  // This fixture intentionally purchases the historical window that began
+  // during the live show, then verifies that the forward policy preserves it.
+  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[replayPolicyMigration]});
   let step='fixture';let checks=0;
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(actual,expected,message)=>{assert.deepEqual(actual,expected,message);checks++;};
@@ -26,6 +29,7 @@ test('exact event playback uses actual purchase, original terms, current session
     await service();
     const receipt=await one("select public.process_revenuecat_app_store_event_atomic('playback-paid','NON_RENEWING_PURCHASE',$1,$2,'sandbox',now(),null,99,'usd',repeat('e',64),'playback-original',null,$3)",[buyer.user_id,intent.providerProductId,intent.createdAt]);
     eq(receipt.status,'processed',JSON.stringify(receipt));
+    await db.exec(fs.readFileSync(`supabase/migrations/${replayPolicyMigration}`,'utf8'));
     eq(await one('select count(*)::integer from public.paid_creator_event_passes where creator_event_id=$1 and buyer_id=$2 and status=\'active\'',[event,buyer.user_id]),1,'real provider projection issued exact ticket');
     const resolve=async(actor=buyer)=>{await claim(actor);return await one('select public.resolve_creator_event_destination($1)',[event]);};
     eq((await resolve()).reason,'waiting_for_show','advance ticket opens waiting room before verified start');

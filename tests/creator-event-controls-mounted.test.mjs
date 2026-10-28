@@ -6,6 +6,7 @@ import test from 'node:test';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import ts from 'typescript';
+import {productionFunctions} from './platform-studio-mounted-harness.mjs';
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const noop=()=>{},doc={addEventListener:noop,removeEventListener:noop,defaultView:globalThis,nodeType:9};
 const container=()=>({addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'});
@@ -24,6 +25,7 @@ async function mount(t,kind,options={}){
       '../../_lib/accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>a?.userId===b?.userId&&a?.sessionGeneration===b?.sessionGeneration},
       '../../_lib/creatorSupportedPrices':{readCreatorAuthoringPrices:async()=>options.catalog??{status:'resolved',subjectUserId:owner,prices}},
       '../../_lib/paidCreatorEvents':{configurePaidCreatorEventSale:async input=>{calls.push(['save',input]);return options.save?options.save(input):{id:'offer',...input};}},
+      '../../_lib/liveEvents':productionFunctions('_lib/liveEvents.ts',['readNewCreatorEventReplayTermsError'],{Date,Number}),
       '../../_lib/creatorEventJourney':{manageCreatorEventLifecycle:async(e,action,input)=>{calls.push(['manage',action,input]);return {...e};}},
       '../../_lib/eventSchedule':()=>load('_lib/eventSchedule.ts'),'./creator-price-picker':()=>load('components/monetization/creator-price-picker.tsx'),
       './event-broadcast-preparation':{EventBroadcastPreparation:()=>null}};
@@ -62,6 +64,26 @@ test('event ticket editor blocks invalid capacity and inverted windows without w
   await h.change('Event ticket sales close date and time','2099-01-03T19:00');await h.press('Publish ticket terms');
   assert.match(h.text(),/close after they open/);assert.equal(h.calls.length,0);
 });
+test('new ticket publication rejects unknown replay windows without a sale RPC and shows exact supported terms',async t=>{
+  for (const replay of [
+    {replayPolicy:'indefinite'},
+    {replayPolicy:'until_expiration',replayAvailableAt:null,replayExpiresAt:'2099-01-05T02:00:00Z'},
+    {replayPolicy:'until_expiration',replayAvailableAt:'2099-01-04T02:00:00Z',replayExpiresAt:'2099-01-04T02:00:00Z'},
+  ]) {
+    const h=await mount(t,'sale',{props:{event:{...event,...replay}}});await h.press('event-price-picker-p199');
+    await h.press('Publish ticket terms');
+    assert.equal(h.calls.filter(c=>c[0]==='save').length,0);
+    assert.match(h.text(),/explicit availability time|Choose the event end|must be after replay availability/);
+  }
+  const bounded={...event,replayPolicy:'until_expiration',replayAvailableAt:'2099-01-04T02:00:00Z',replayExpiresAt:'2099-01-05T02:00:00Z'};
+  const h=await mount(t,'sale',{props:{event:bounded}});await h.press('event-price-picker-p199');
+  assert.match(h.text(),/Available from 2099-01-03T21:00 until 2099-01-04T21:00 \(America\/New_York\)/);
+  await h.change('Event ticket sales open date and time','2098-12-20T20:00');
+  await h.change('Event ticket sales close date and time','2099-01-03T19:30');await h.press('Publish ticket terms');
+  const saved=h.calls.find(c=>c[0]==='save')[1];
+  assert.equal(saved.expectedTerms.replayAvailableAt,bounded.replayAvailableAt);
+  assert.equal(saved.expectedTerms.replayExpiresAt,bounded.replayExpiresAt);
+});
 test('event catalog unavailable has recovery and cannot publish',async t=>{
   const h=await mount(t,'sale',{catalog:{status:'unavailable',subjectUserId:owner,prices:[]}});
   assert.equal(h.find('Publish ticket terms').props.disabled,true);assert.ok(h.find('Refresh supported prices'));assert.match(h.text(),/could not be verified/);
@@ -74,13 +96,14 @@ test('late event save cannot update UI after owning account changes',async t=>{
   await h.press('Publish ticket terms');h.changeAccount();
   await h.resolve(()=>resolve({id:'old-account-offer'}));assert.equal(h.calls.some(c=>c[0]==='saved'),false);
 });
-test('purchased schedule change requires explicit material confirmation and sends it through actual control',async t=>{
+test('purchased schedule changes use server policy without a creator eligibility override',async t=>{
   const h=await mount(t,'lifecycle');await h.change('Updated event start time','2099-01-10T20:00');
   await h.change('Event update message for buyers','Moving the show to next Sunday.');await h.press('Reschedule event');
-  assert.equal(h.calls.length,0);assert.match(h.text(),/Confirm that this schedule change/);
-  await h.press('Confirm material schedule change and refund request eligibility');await h.press('Reschedule event');
-  const action=h.calls.find(c=>c[0]==='manage');assert.equal(action[1],'reschedule');assert.equal(action[2].materialChange,true);
+  assert.equal(h.find('Confirm material schedule change and refund request eligibility'),undefined);
+  const action=h.calls.find(c=>c[0]==='manage');assert.equal(action[1],'reschedule');assert.equal(action[2].materialChange,undefined);
   assert.equal(action[2].startsAt,'2099-01-11T01:00:00.000Z');assert.match(h.text(),/subject to the payment provider/);
+  assert.match(h.text(),/delay of 30 minutes or more/);assert.match(h.text(),/silence does not accept/);
+  assert.match(h.text(),/keeps later cancellation and no-show protection/);
 });
 test('pause sales uses lifecycle action and does not convert the paid event to free',async t=>{
   const h=await mount(t,'lifecycle');await h.press('Pause new sales');assert.equal(h.calls[0][1],'stop_sales');assert.match(h.text(),/Existing purchases keep/);

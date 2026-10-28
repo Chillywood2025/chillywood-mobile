@@ -21,7 +21,7 @@ export type CreatorPurchase = {
     reportedAmountMinor?: number | null; reportedCurrency?: string | null } | null;
   terms: Record<string, unknown>; termsAvailable: boolean; grantsAccess: false;
   refundEligibility?: { eligibility: "eligible"; status: "provider_review_required";
-    reasons: ("event_canceled" | "event_no_show" | "material_schedule_change")[]; createdAt: string };
+    reasons: ("event_canceled" | "event_no_show" | "material_schedule_change" | "event_replay_unavailable")[]; createdAt: string };
 };
 export type CreatorPurchasePage = {
   status: "resolved" | "unavailable"; subjectUserId: string | null; subjectSessionGeneration: string | null;
@@ -99,7 +99,7 @@ export function parseCreatorPurchasePage(value: unknown, expectedUserId: string)
       && (!record(entry.refundEligibility) || entry.refundEligibility.eligibility !== "eligible"
         || entry.refundEligibility.status !== "provider_review_required" || !timestamp(entry.refundEligibility.createdAt)
         || !Array.isArray(entry.refundEligibility.reasons) || entry.refundEligibility.reasons.length === 0
-        || entry.refundEligibility.reasons.some(reason => !["event_canceled", "event_no_show", "material_schedule_change"].includes(String(reason))))) return null;
+        || entry.refundEligibility.reasons.some(reason => !["event_canceled", "event_no_show", "material_schedule_change", "event_replay_unavailable"].includes(String(reason))))) return null;
     ids.add(entry.id);
     items.push(entry as unknown as CreatorPurchase);
   }

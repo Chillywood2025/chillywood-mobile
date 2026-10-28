@@ -6,6 +6,7 @@ import { useSession } from "../_lib/session";
 import { creatorPurchaseDestinationRoute, creatorPurchaseScope, creatorPurchasePresentation, readMyCreatorPurchases,
   restoreCreatorPurchaseLibrary, type CreatorPurchase, type CreatorPurchasePage } from "../_lib/creatorPurchases";
 import { AppBackButton } from "../components/navigation/app-back-button";
+import { EventTicketPolicy } from "../components/monetization/event-ticket-policy";
 import { CHILLYWOOD_VISUAL } from "../components/ui/chillywood-visual-system";
 
 const filters = ["All", "Tickets & passes", "Videos", "Memberships", "Tips"] as const;
@@ -134,7 +135,7 @@ export default function PurchasesScreen() {
                     {item.receipt?.reportedAmountMinor != null && item.receipt.reportedCurrency ? <Text style={styles.meta}>Provider-reported amount: {moneyLabel({ ...item, amountMinor: item.receipt.reportedAmountMinor, currency: item.receipt.reportedCurrency })}</Text> : null}
                     <Text style={styles.status}>{item.sourceType === "event" && item.status === "completed" ? "Event ended" : status.label}</Text>
                     <Text style={styles.body}>{item.sourceType === "event" && item.status === "completed" ? "The show has ended. Replay is available only when included in the purchase terms and currently authorized." : status.detail}</Text>
-                    {item.refundEligibility ? <Text style={styles.body}>Eligible for refund review because the show was canceled, missed or materially rescheduled. Provider review is required; a refund has not been confirmed.</Text> : null}
+                    {item.refundEligibility ? <Text style={styles.body}>A ticket remedy was recorded. Review ticket changes for current eligibility and any schedule choice. Provider review is required; a refund has not been confirmed.</Text> : null}
                     <Text style={styles.body}>{scope.includes}</Text>
                     <Text style={styles.meta}>Recorded {dateLabel(item.createdAt)} · times shown in your device timezone</Text>
                     {item.sourceType !== "event" && item.startsAt ? <Text style={styles.meta}>Access starts {dateLabel(item.startsAt)}</Text> : null}
@@ -151,6 +152,7 @@ export default function PurchasesScreen() {
                     </View> : <Text style={styles.meta}>Original detailed terms are unavailable for this historical receipt.</Text>}
                     {item.sourceType === "event" && currentStart ? <Text testID={`purchase-current-start-${item.id}`} style={styles.meta}>Current scheduled start: {dateLabel(currentStart)}{purchasedStart ? " · changed since purchase" : " · original time unavailable"}</Text> : null}
                     {item.sourceType === "event" && currentEnd ? <Text testID={`purchase-current-end-${item.id}`} style={styles.meta}>Current scheduled end: {dateLabel(currentEnd)}{purchasedEnd ? " · changed since purchase" : " · original time unavailable"}</Text> : null}
+                    {item.sourceType === "event" && item.sourceId ? <EventTicketPolicy key={`${accountKey}:${item.id}`} eventId={item.sourceId} purchaseId={item.id} /> : null}
                     <Text selectable style={styles.meta}>Receipt reference: {item.purchaseIntentId ?? item.id}</Text>
                     <View style={styles.actions}>
                       {!status.pending && item.destination ? <Pressable testID={`purchase-open-${item.id}`} accessibilityRole="button" accessibilityLabel={`View ${item.title ?? scope.title}`} style={styles.button} onPress={() => {

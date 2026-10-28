@@ -283,8 +283,26 @@ export const buildCreatorEventSummary = (
   };
 };
 
+export const readNewCreatorEventReplayTermsError = (value: {
+  replayPolicy?: CreatorEventReplayPolicy;
+  replayAvailableAt?: string | null;
+  replayExpiresAt?: string | null;
+  endsAt?: string | null;
+}): string | null => {
+  if (!value.replayPolicy || value.replayPolicy === "none") return null;
+  if (value.replayPolicy !== "until_expiration") return "New replay offers need an explicit availability time and expiration. Existing purchased replay terms are preserved.";
+  const available = Date.parse(value.replayAvailableAt ?? "");
+  const expires = Date.parse(value.replayExpiresAt ?? "");
+  const ends = Date.parse(value.endsAt ?? "");
+  if (![available, expires, ends].every(Number.isFinite)) return "Choose the event end, replay availability, and replay expiration before offering replay.";
+  if (available < ends) return "Replay availability cannot be before the event’s scheduled end.";
+  if (expires <= available) return "Replay expiration must be after replay availability.";
+  return null;
+};
+
 const buildValidatedEventWriteShape = (
   value: CreateCreatorEventInput | (CreatorEventRecord & UpdateCreatorEventInput),
+  existing?: CreatorEventRecord,
 ): { payload: CreatorEventInsert | CreatorEventUpdate } | { error: CreatorEventWriteError } => {
   const hostUserId = String(value.hostUserId ?? "").trim();
   const eventTitle = String(value.eventTitle ?? "").trim();
@@ -335,12 +353,11 @@ const buildValidatedEventWriteShape = (
 
   if (replayPolicy === "indefinite") replayExpiresAt = null;
 
-  if (replayPolicy === "until_expiration" && !replayExpiresAt) {
-    return { error: { message: "Expiring replay windows need a replay expiration time." } };
-  }
-
-  if (replayAvailableAt && replayExpiresAt && Date.parse(replayExpiresAt) < Date.parse(replayAvailableAt)) {
-    return { error: { message: "Replay expiration cannot be earlier than replay availability." } };
+  const replayTermsChanged = !existing || replayPolicy !== existing.replayPolicy
+    || replayAvailableAt !== existing.replayAvailableAt || replayExpiresAt !== existing.replayExpiresAt;
+  if (replayTermsChanged) {
+    const replayError = readNewCreatorEventReplayTermsError({ replayPolicy, replayAvailableAt, replayExpiresAt, endsAt });
+    if (replayError) return { error: { message: replayError } };
   }
 
   if (status !== "scheduled" || !startsAt) {
@@ -490,7 +507,7 @@ export async function updateCreatorEvent(
     replayAvailableAt: input.replayAvailableAt === undefined ? current.replayAvailableAt : input.replayAvailableAt,
     replayExpiresAt: input.replayExpiresAt === undefined ? current.replayExpiresAt : input.replayExpiresAt,
     reminderReady: input.reminderReady ?? current.reminderReady,
-  });
+  }, current);
 
   if ("error" in validated) return validated;
 

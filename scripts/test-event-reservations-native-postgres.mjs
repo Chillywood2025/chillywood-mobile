@@ -179,15 +179,29 @@ const cancelIntent=await buy('buyer17',cancelSDK);
 await rejected('creator',`update public.creator_events set status='canceled' where id='${events.show14}';`,'purchased_event_lifecycle_management_required');
 await sql(as('creator',`select public.manage_creator_event_lifecycle(id,'cancel',updated_at,null,null,null,'The creator canceled this show.') from public.creator_events where id='${events.show14}';`));
 await rejected('buyer17',`select public.read_my_creator_event_reservation('${cancelIntent.id}');`,'event_reservation_source_unavailable');
-await sql(as('creator',`update public.creator_events set replay_policy='until_expiration',replay_expires_at=ends_at-interval '1 hour' where id='${events.show15}';`));
+const invalidReplayWrite=`update public.creator_events set replay_policy='until_expiration',replay_expires_at=ends_at-interval '1 hour' where id='${events.show15}';`;
+await rejected('creator',invalidReplayWrite,'event_replay_explicit_window_required');
+// Seed the legacy invalid tuple only in this caller-owned disposable fixture;
+// the active guard above proves normal current writes cannot create it.
+await sql(as('creator',invalidReplayWrite)
+  .replace('begin;','begin; alter table public.creator_events disable trigger guard_creator_event_explicit_replay_terms;')
+  .replace('commit;','reset role; alter table public.creator_events enable trigger guard_creator_event_explicit_replay_terms; commit;'));
 const configureSignature='public.configure_paid_creator_event_sale(uuid,text,integer,integer,text,text,timestamptz,timestamptz,timestamptz)';
 const originalConfigure=await sql(`select pg_get_functiondef('${configureSignature}'::regprocedure)`);
 const missingReplayValidation=originalConfigure.replace(/  if e\.replay_policy='until_expiration'[\s\S]*?then raise exception 'event_replay_expiry_must_follow_show'; end if;/,'');
 assert.notEqual(missingReplayValidation,originalConfigure);
-try{
-  await sql(missingReplayValidation);
-  check((await configure('show15',99,1)).terms.replayPolicy,'until_expiration','negative control sells an invalid expiry when replay ordering check is omitted');
-}finally{await sql(originalConfigure);}
+const invalidReplaySale=`select public.configure_paid_creator_event_sale('${events.show15}','Online',99,1,'sandbox','America/New_York',now()-interval '1 hour',now()+interval '1 day');`;
+// Mutants and disabled triggers are transaction-scoped and rolled back, even
+// when PostgreSQL aborts the assertion. No altered source survives a check.
+let revisionGuardError;
+try { await sql(as('creator',invalidReplaySale).replace('begin;',`begin; ${missingReplayValidation};`).replace('commit;','rollback;')); }
+catch(error){revisionGuardError=String(error.stderr??error);}
+assert.match(revisionGuardError??'',/event_replay_explicit_window_required/);checks++;console.log(`ok ${checks} - new immutable revision guard still rejects legacy invalid terms without old RPC ordering check`);
+const unsafeReplay=JSON.parse((await sql(as('creator',invalidReplaySale)
+  .replace('begin;',`begin; ${missingReplayValidation}; alter table public.creator_event_offer_revisions disable trigger guard_creator_event_offer_explicit_replay_terms;`)
+  .replace('commit;','rollback;'))).split('\n').at(-1));
+check(unsafeReplay.terms.replayPolicy,'until_expiration','negative control sells invalid replay only when both RPC and immutable revision guards are absent');
+check(await sql(`select pg_get_functiondef('${configureSignature}'::regprocedure)`),originalConfigure,'negative control restores exact production function');
 await rejected('creator',`select public.configure_paid_creator_event_sale('${events.show15}','Online',99,1,'sandbox','America/New_York',now()-interval '1 hour',now()+interval '1 day');`,'event_replay_expiry_must_follow_show');
 }
 const legacyCapacity=await configure('show16',99,2);

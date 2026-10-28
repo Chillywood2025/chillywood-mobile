@@ -62,17 +62,17 @@ const row = {
   replay_available_at: "2026-11-02T03:00:00.000Z", replay_expires_at: "2026-11-03T03:00:00.000Z",
   reminder_ready: true, created_at: "2026-10-26T00:00:00.000Z", updated_at: "2026-10-26T00:00:00.000Z",
 };
-function eventClient(source) {
+function eventClient(source, storedRow = row) {
   const writes = [];
   const client = { from(name) {
     assert.equal(name, "creator_events");
     let payload;
     const query = {
       select() { return query; }, eq() { return query; }, returns() { return query; },
-      async maybeSingle() { return { data: { ...row }, error: null }; },
+      async maybeSingle() { return { data: { ...storedRow }, error: null }; },
       insert(value) { payload = value; writes.push(value); return query; },
       update(value) { payload = value; writes.push(value); return query; },
-      async single() { return { data: { ...row, ...payload }, error: null }; },
+      async single() { return { data: { ...storedRow, ...payload }, error: null }; },
     };
     return query;
   } };
@@ -96,12 +96,52 @@ test("event edit preserves omitted values but clears explicit nulls and obsolete
   assert.equal(writes[0].ends_at, row.ends_at);
   const result = await api.updateCreatorEvent(row.id, {
     hostUserId: row.host_user_id, endsAt: null, linkedTitleId: null,
-    replayAvailableAt: null, replayPolicy: "indefinite",
+    replayAvailableAt: null, replayPolicy: "none",
   });
   assert.equal(result.endsAt, null);
   assert.equal(writes[1].linked_title_id, null);
   assert.equal(writes[1].replay_available_at, null);
   assert.equal(writes[1].replay_expires_at, null);
+});
+
+test("new events default live-only and replay requires explicit supported availability and expiry", async () => {
+  const base = { hostUserId: row.host_user_id, eventTitle: row.event_title, status: "scheduled",
+    startsAt: row.starts_at, endsAt: row.ends_at, timeZone: "America/New_York" };
+  const live = eventClient();
+  const saved = await live.api.createCreatorEvent(base);
+  assert.equal(saved.replayPolicy, "none");
+  assert.equal(live.writes[0].replay_available_at, null);
+  assert.equal(live.writes[0].replay_expires_at, null);
+  for (const replay of [
+    { replayPolicy: "indefinite" },
+    { replayPolicy: "until_expiration", replayExpiresAt: row.replay_expires_at },
+    { replayPolicy: "until_expiration", replayAvailableAt: row.replay_available_at },
+    { replayPolicy: "until_expiration", replayAvailableAt: row.starts_at, replayExpiresAt: row.replay_expires_at },
+    { replayPolicy: "until_expiration", replayAvailableAt: row.replay_available_at, replayExpiresAt: row.replay_available_at },
+  ]) {
+    const h = eventClient();
+    assert.ok("error" in await h.api.createCreatorEvent({ ...base, ...replay }));
+    assert.equal(h.writes.length, 0);
+  }
+  const replay = eventClient();
+  const terms = await replay.api.createCreatorEvent({ ...base, replayPolicy: "until_expiration",
+    replayAvailableAt: "2026-11-01T21:00:00-05:00", replayExpiresAt: "2026-11-01T22:00:00-05:00" });
+  assert.equal(terms.replayAvailableAt, row.ends_at, "availability may begin exactly at the scheduled end");
+  assert.equal(terms.replayExpiresAt, "2026-11-02T03:00:00.000Z");
+});
+
+test("unchanged historical replay promises survive unrelated edits but cannot be newly introduced", async () => {
+  const historical = { ...row, replay_policy: "indefinite", replay_available_at: null, replay_expires_at: null };
+  const h = eventClient(undefined, historical);
+  const saved = await h.api.updateCreatorEvent(row.id, { hostUserId: row.host_user_id, eventTitle: "Historical show title" });
+  assert.equal(saved.replayPolicy, "indefinite");
+  assert.equal(saved.replayAvailableAt, null);
+  assert.equal(saved.replayExpiresAt, null);
+  const changed = eventClient();
+  assert.ok("error" in await changed.api.updateCreatorEvent(row.id, {
+    hostUserId: row.host_user_id, replayPolicy: "indefinite", replayAvailableAt: null, replayExpiresAt: null,
+  }));
+  assert.equal(changed.writes.length, 0);
 });
 
 test("invalid schedules and wrong host never write; drafts can explicitly clear their start", async () => {

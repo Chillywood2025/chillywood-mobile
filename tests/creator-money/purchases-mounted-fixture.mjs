@@ -40,12 +40,13 @@ async function mount(t, options = {}) {
     "../_lib/session": { useSession: () => session },
     "../_lib/creatorPurchases": { ...wallet, readMyCreatorPurchases: async cursor => { reads.push(cursor); return reader(cursor); }, restoreCreatorPurchaseLibrary: options.restore ?? (async () => ({ ok: true, message: "Verified restore refreshed" })) },
     "../components/navigation/app-back-button": { AppBackButton: host("AppBackButton") },
+    "../components/monetization/event-ticket-policy": { EventTicketPolicy: host("EventTicketPolicy") },
     "../components/ui/chillywood-visual-system": { CHILLYWOOD_VISUAL: { glassBackground: "black" } },
     "../assets/images/chillywood-branded-background.png": {},
   }, options.source).default;
   const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen)));
   t.after(() => React.act(async () => root.unmount()));
-  return { routes, reads, node: id => [...nodes.values()].find(node => node.props.testID === id), text: () => [...nodes.values()].map(textOf).join(" "),
+  return { routes, reads, ticketPolicies: () => [...nodes.values()].filter(node => node.type === "EventTicketPolicy").map(node => node.props), node: id => [...nodes.values()].find(node => node.props.testID === id), text: () => [...nodes.values()].map(textOf).join(" "),
     async press(id) { const node = [...nodes.values()].find(node => node.props.testID === id); assert.ok(node, id); assert.ok(!node.props.disabled, `${id} disabled`); await React.act(async () => { void node.props.onPress(); }); },
     async account(nextReader, next = "two", nextUserId = userId) { reader = nextReader; session = { ...session, user: { id: nextUserId }, authority: { ...session.authority, userId: nextUserId, sessionGeneration: next } }; await React.act(async () => root.render(React.createElement(Screen))); },
     async resolve(d, value) { await React.act(async () => d.resolve(value)); }, setReader: next => { reader = next; },

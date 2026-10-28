@@ -11,5 +11,9 @@ test('broadcast producer and terminal recovery execute real authority SQL with i
     const rows=(await db.query('select label from event_reservation_fixture.broadcast_assertions order by label')).rows;
     assert.equal(rows.length,33);
     t.diagnostic(`${rows.length} actual SQL assertions; synthetic trusted approval/provider receipt inputs, no external action`);
+    await db.exec(fs.readFileSync('tests/fixtures/event-broadcast-self-start.sql','utf8'));
+    const selfStart=(await db.query('select label from event_reservation_fixture.self_start_assertions order by label')).rows;
+    assert.equal(selfStart.length,19);
+    t.diagnostic(`${selfStart.length} actual SQL self-start assertions; two shows use one finite creator qualification without per-show approval rows`);
   } catch(error) {if(error.where)error.message+=`\n${error.where}`;throw error;} finally {await db.close();}
 });

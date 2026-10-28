@@ -11,7 +11,6 @@ export function EventLifecycleControls({ event, hasPaidOffer, onChanged, inHostR
 }) {
   const [message, setMessage] = useState("");
   const [newStart, setNewStart] = useState("");
-  const [materialChange, setMaterialChange] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const active = useRef(true), flight = useRef(false);
@@ -26,12 +25,13 @@ export function EventLifecycleControls({ event, hasPaidOffer, onChanged, inHostR
         ? parseZonedEventScheduleInput(newStart, event.timeZone, "reject", "Updated start") : null;
       if (action === "reschedule" && !startsAt) throw new EventScheduleInputError("Enter the new start time before rescheduling.");
       if (["delay", "reschedule", "cancel", "mark_no_show"].includes(action) && !message.trim()) throw new EventScheduleInputError("Add a short update for your buyers before changing this event.");
-      if (hasPaidOffer && startsAt && startsAt !== event.startsAt && !materialChange) throw new EventScheduleInputError("Confirm that this schedule change makes existing buyers eligible to request a refund through their payment provider.");
-      const saved = await manageCreatorEventLifecycle(event, action, { startsAt, message, materialChange });
+      // The server compares each buyer's original or explicitly accepted terms.
+      // A creator checkbox cannot decide or waive a buyer's remedy eligibility.
+      const saved = await manageCreatorEventLifecycle(event, action, { startsAt, message });
       if (!current()) return;
-      onChanged(saved); setMessage(""); setNewStart(""); setMaterialChange(false);
+      onChanged(saved); setMessage(""); setNewStart("");
       setNotice(action === "start" ? "This event is live on its verified broadcast." : action === "stop_sales" ? "New ticket sales paused. Existing purchases keep their recorded terms."
-        : "Event update saved. Existing purchase records are preserved. Cancellation, no-show, or a confirmed material schedule change makes affected buyers eligible to request a refund, subject to the payment provider’s process.");
+        : "Event update saved. Original purchase terms and buyer choices remain recorded. Affected buyers can request refund review, subject to the payment provider’s process.");
     } catch (error) { if (current()) setNotice(error instanceof EventScheduleInputError ? error.message : "This event action could not be confirmed. Refresh before retrying. Starting requires a real active broadcast linked to this event."); }
     finally { flight.current = false; if (current()) setBusy(false); }
   };
@@ -46,9 +46,9 @@ export function EventLifecycleControls({ event, hasPaidOffer, onChanged, inHostR
     <Text style={styles.title}>Manage this event</Text>
     <Text style={styles.body}>Starting requires an active, authorized broadcast already linked to this event. A scheduled time alone never grants media access.</Text>
     {event.status === "scheduled" ? <TextInput style={styles.input} value={newStart} onChangeText={setNewStart} editable={!busy} placeholder={`Updated start in ${event.timeZone}`} placeholderTextColor="#9AA5B8" accessibilityLabel="Updated event start time" autoCapitalize="none" autoCorrect={false} /> : null}
-    {event.status === "scheduled" && hasPaidOffer ? <Pressable onPress={() => setMaterialChange(value => !value)} disabled={busy} accessibilityRole="checkbox" accessibilityLabel="Confirm material schedule change and refund request eligibility" accessibilityState={{ checked: materialChange, disabled: busy }} style={styles.button}><Text style={styles.buttonText}>{materialChange ? "✓ " : "□ "}Confirm material schedule change</Text><Text style={styles.body}>Changing a purchased show’s start makes buyers eligible to request a refund through their payment provider. Existing ticket terms remain recorded.</Text></Pressable> : null}
+    {event.status === "scheduled" && hasPaidOffer ? <Text style={styles.body}>An earlier start, a delay of 30 minutes or more, or a change of date in the event’s time zone gives affected buyers a choice: keep the new schedule or request provider refund review. Smaller changes accumulate against their original or explicitly accepted schedule. A buyer must choose; silence does not accept a change.</Text> : null}
     <TextInput style={styles.input} value={message} onChangeText={setMessage} editable={!busy} placeholder="Update for your buyers" placeholderTextColor="#9AA5B8" accessibilityLabel="Event update message for buyers" multiline />
-    <Text style={styles.body}>Review and republish ticket terms before reopening sales. Cancellation, no-show, and confirmed material schedule changes create refund request eligibility. The payment provider decides the outcome and timing; these controls do not issue money.</Text>
+    <Text style={styles.body}>Review and republish ticket terms before reopening sales. Cancellation makes buyers eligible for refund review immediately. If a verified broadcast has not begun 30 minutes after the advertised start, no-show refund review becomes available. Accepting a new schedule keeps later cancellation and no-show protection. The payment provider decides the outcome and timing; these controls do not issue money.</Text>
     {notice ? <Text style={styles.notice} accessibilityLiveRegion="polite">{notice}</Text> : null}
     {busy ? <ActivityIndicator color="#DC143C" /> : null}
     <View style={styles.actions}>{actions.map(([action, label]) => <Pressable key={action} onPress={() => void act(action)} disabled={busy} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: busy, busy }} style={[styles.button, busy && styles.disabled]}><Text style={styles.buttonText}>{label}</Text></Pressable>)}</View>

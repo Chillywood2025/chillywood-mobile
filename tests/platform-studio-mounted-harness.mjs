@@ -26,6 +26,7 @@ export function productionFunctions(file,names,bindings){
  names.forEach(name=>assert.ok(found.has(name),`Production declaration ${name}`));const ctx={exports:{},...bindings};vm.runInNewContext(compile([...found.values()].join('\n')+`\nexports.api={${names.join(',')}};`),ctx);return ctx.exports.api;
 }
 export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B')],overrides={},session:initialSession=null}={}){
+  const replayPolicy = productionFunctions('_lib/liveEvents.ts',['readNewCreatorEventReplayTermsError'],{Date,Number});
   const nodes=new Map(),calls=[],alerts=[],routes=[],timers=new Map(),scrolls=[],measures=[];let timerId=0;
   let session=initialSession||{user:{id:'owner',email:'owner@example.test'},isSignedIn:true,isLoading:false,authority:{userId:'owner',accountId:'owner',sessionGeneration:'first',state:'ACTIVE',restoreOnly:false},authorityStatus:'active'};
   let params={...route};
@@ -103,6 +104,11 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name.endsWith('/useCreatorAuthoringPrice'))return evaluate('_lib/useCreatorAuthoringPrice.ts');
       if(name.endsWith('/creator-price-picker'))return evaluate('components/monetization/creator-price-picker.tsx');
       if(name.endsWith('/event-sale-editor'))return evaluate('components/monetization/event-sale-editor.tsx');
+      if(name.endsWith('/liveEvents'))return new Proxy(replayPolicy,{get:(target,key)=>{
+        if(key in target)return target[key];
+        if(key in mocks)return typeof mocks[key]==='function'?(...args)=>{calls.push([key,...args]);return mocks[key](...args);}:mocks[key];
+        throw Error(`Unconfigured import ${name}:${String(key)}`);
+      }});
       if(name.endsWith('/event-lifecycle-controls'))return evaluate('components/monetization/event-lifecycle-controls.tsx');
       return new Proxy({},{get:(_,key)=>{
         if(key==='__esModule')return false;

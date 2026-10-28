@@ -34,7 +34,8 @@ async function mount(t,options={}){
     resolve:async fn=>React.act(async fnAct=>fn())};
 }
 test('creator prepares exact source room, enters host route and invokes normal producer',async t=>{
-  const h=await mount(t);await h.press('Prepare event host room');assert.match(h.text(),/Protected playback and broadcast setup/);
+  const h=await mount(t);assert.match(h.text(),/Qualified creators can start their own shows.*readiness checks pass.*separate approval for each show is not required/);
+  await h.press('Prepare event host room');assert.match(h.text(),/Protected playback and broadcast setup/);
   await h.press('Enter event host room');assert.equal(h.calls[1][1].params.partyId,prepared.roomId);
   await h.press('Start event broadcast');assert.equal(h.calls[2][2],'start');assert.match(h.text(),/Verified broadcast ready/);
   await h.press('Refresh broadcast readiness');assert.equal(h.calls[3][2],'refresh');

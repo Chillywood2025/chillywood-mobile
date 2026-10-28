@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mount, React } from "./platform-studio-mounted-harness.mjs";
 
+test("new event form defaults to live-only and offers replay with explicit availability and expiry", async t => {
+  const h = await mount(t, { route: { tab: "live", focus: "schedule" }, videos: [] });
+  assert.equal(h.button("Replay policy: No Replay").props.accessibilityState.selected, true);
+  assert.equal(h.find(n => n.props.accessibilityLabel === "Replay policy: Existing Replay Without Expiry"), undefined);
+  assert.match(h.text(), /Tickets are live-only by default/);
+  await h.press(h.button("Replay policy: Replay Until Expiration"));
+  assert.ok(h.find(n => n.props.accessibilityLabel === "Replay available date and time"));
+  assert.ok(h.find(n => n.props.accessibilityLabel === "Replay expiration date and time"));
+});
+
 test("creator event save displays invalid date guidance without calling create", async t => {
   const h = await mount(t, { route: { tab: "live", focus: "schedule" }, videos: [] });
   await h.change(h.input("Event title"), "Sunday show");

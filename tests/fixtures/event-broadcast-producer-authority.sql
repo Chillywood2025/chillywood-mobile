@@ -45,7 +45,7 @@ begin
   perform event_reservation_fixture.check_broadcast(authority->>'reason'='event_broadcast_worker_not_ready','worker lease required before start');
   perform public.heartbeat_creator_event_broadcast_worker();
   authority:=public.read_creator_event_broadcast_producer_authority(event,host.user_id,host.session_id,'start');
-  perform event_reservation_fixture.check_broadcast(authority->>'reason'='event_broadcast_approval_required','no implicit creator self-start approval');
+  perform event_reservation_fixture.check_broadcast(authority->>'reason'='event_broadcast_approval_required','creator self-start does not create implicit qualification');
   -- Trusted qualification is synthetic fixture data, never a provider action.
   insert into private.creator_event_broadcast_approvals(creator_id,creator_event_id,rights_status,max_minutes,expires_at,
     private_origin,approved_by,approved_session_id)
@@ -114,8 +114,9 @@ begin
   for replay_case in select unnest(array['current','purchased']) loop
     perform set_config('request.jwt.claims','{"role":"service_role"}',true);
     replay_event:=gen_random_uuid();
-    insert into public.creator_events(id,host_user_id,event_title,event_type,status,starts_at,ends_at,time_zone,replay_policy)
-    values(replay_event,host.user_id,'Promised replay fixture','live_first','scheduled',now()-interval '1 hour',now()+interval '2 hours','America/New_York','indefinite');
+    insert into public.creator_events(id,host_user_id,event_title,event_type,status,starts_at,ends_at,time_zone,replay_policy,replay_available_at,replay_expires_at)
+    values(replay_event,host.user_id,'Promised replay fixture','live_first','scheduled',now()-interval '1 hour',now()+interval '2 hours',
+      'America/New_York','until_expiration',now()+interval '2 hours',now()+interval '1 day');
     perform set_config('request.jwt.claims',original_claims,true);
     replay_offer:=public.configure_paid_creator_event_sale(replay_event,'Replay promised',99,5,'sandbox','America/New_York',now()-interval '2 hours',now()+interval '1 hour');
     if replay_case='purchased' then
@@ -129,7 +130,7 @@ begin
       -- Model historical mutable-event drift only inside this owned fixture;
       -- current production writes must keep rejecting purchased replay edits.
       alter table public.creator_events disable trigger guard_creator_event_lifecycle;
-      update public.creator_events set replay_policy='none' where id=replay_event;
+      update public.creator_events set replay_policy='none',replay_available_at=null,replay_expires_at=null where id=replay_event;
       alter table public.creator_events enable trigger guard_creator_event_lifecycle;
       perform set_config('request.jwt.claims',original_claims,true);
     end if;

@@ -649,7 +649,7 @@ const formatEventStatusLabel = (value: CreatorEventStatus) => {
 const formatReplayPolicyLabel = (value: CreatorEventReplayPolicy) => {
   switch (value) {
     case "indefinite":
-      return "Replay Kept";
+      return "Existing Replay Without Expiry";
     case "until_expiration":
       return "Replay Until Expiration";
     default:
@@ -10523,14 +10523,16 @@ export function ChannelStudioScreen() {
               ) : null}
 
               <Text style={styles.sectionLabel}>Replay Policy</Text>
+              <Text style={styles.permissionCopy}>Tickets are live-only by default. Include replay only when you can offer its availability and expiration before purchase. Times use the event’s selected time zone.</Text>
               <View style={styles.chipRow}>
-                {(["none", "indefinite", "until_expiration"] as const).map((value) => (
+                {(["none", "until_expiration", ...(eventEditor.replayPolicy === "indefinite" ? ["indefinite"] : [])] as CreatorEventReplayPolicy[]).map((value) => (
                   <TouchableOpacity
                     key={value}
                     style={[styles.chip, eventEditor.replayPolicy === value && styles.chipActive]}
                     accessibilityRole="button"
                     accessibilityLabel={`Replay policy: ${formatReplayPolicyLabel(value)}`}
-                    accessibilityState={{ selected: eventEditor.replayPolicy === value }}
+                    disabled={eventSaving || value === "indefinite"}
+                    accessibilityState={{ selected: eventEditor.replayPolicy === value, disabled: eventSaving || value === "indefinite" }}
                     onPress={() => updateEventEditor({ replayPolicy: value })}
                   >
                     <Text style={[styles.chipText, eventEditor.replayPolicy === value && styles.chipTextActive]}>
@@ -10546,7 +10548,7 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                     style={styles.input}
                     placeholder="Replay available at (YYYY-MM-DDTHH:mm)"
-                    accessibilityLabel="Replay available date and time, optional"
+                    accessibilityLabel="Replay available date and time"
                     autoCapitalize="none"
                     autoCorrect={false}
                     placeholderTextColor="#8d8d8d"

@@ -48,4 +48,6 @@ assert.throws(()=>sql(duplicate),/creator_event_broadcast_one_unresolved_attempt
 const mutant=sql(`begin;drop index private.creator_event_broadcast_one_unresolved_attempt;${duplicate}
 select count(*) from private.creator_event_broadcast_attempts where creator_event_id='${context.event_id}' and state='starting';rollback;`);
 assert.equal(Number(mutant),2,'negative control admits two unresolved attempts without invariant');
-console.log('Native broadcast recovery: 33 production SQL assertions, one concurrent retry winner, same original deadline, duplicate-invariant negative control passed. No provider transport.');
+sql(fs.readFileSync('tests/fixtures/event-broadcast-self-start.sql','utf8'));
+assert.equal(Number(sql('select count(*) from event_reservation_fixture.self_start_assertions')),19);
+console.log('Native broadcast recovery: 33 production SQL assertions, one concurrent retry winner, same original deadline, duplicate-invariant negative control passed. Self-start: 19 SQL assertions, two shows with one finite creator qualification and no per-show approvals. No provider transport.');

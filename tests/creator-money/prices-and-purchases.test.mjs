@@ -92,6 +92,21 @@ test("wallet retains unlinked review records and legacy Stripe tips without inve
   assert.ok(h.purchases.parseCreatorPurchasePage(page([tip]), buyer));
 });
 
+test("wallet retains missed replay eligibility and immutable replay window when replay arrives late", async () => {
+  const terms={...item().terms,replayPolicy:"until_expiration",replayAvailableAt:"2026-11-02T01:00:00Z",replayExpiresAt:"2026-11-05T01:00:00Z"};
+  const eligibility={eligibility:"eligible",status:"provider_review_required",reasons:["event_replay_unavailable"],createdAt:"2026-11-02T01:00:00Z"};
+  for(const status of ["completed","active"]){
+    const h=setup({rpc:async()=>({data:page([item({status,terms,refundEligibility:eligibility})]),error:null})});
+    const result=await h.purchases.readMyCreatorPurchases();assert.equal(result.status,"resolved");
+    assert.deepEqual(result.items[0].refundEligibility,eligibility);assert.deepEqual(result.items[0].terms,terms);
+    assert.equal(result.items[0].status,status);assert.equal(result.items[0].grantsAccess,false);
+  }
+  const h=setup();
+  for(const refundEligibility of [{...eligibility,reasons:["replay_refund_guaranteed"]},{...eligibility,reasons:["event_replay_unavailable","unknown"]},{...eligibility,status:"refunded"}]){
+    assert.equal(h.purchases.parseCreatorPurchasePage(page([item({refundEligibility})]),buyer),null);
+  }
+});
+
 test("Stripe tip refunds preserve original charges and validate none, partial, full and disputed RPC results", async () => {
   const tip = (changes = {}) => item({ sourceType: "creator_tip", sourceId: creator, productType: "creator_tip", productKey: null,
     provider: "stripe_connect", destination: { kind: "creator_channel", id: creator }, status: "completed", amountMinor: 500, ...changes });

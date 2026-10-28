@@ -36,7 +36,8 @@ export function creatorEventBroadcastStatusCopy(result: CreatorEventBroadcastRes
   if (result.state === "active") return "The broadcast is verified and ready. Use Start verified event to open the show for ticket holders.";
   if (result.state === "stopped") return "The broadcast has stopped. Your event and purchase history remain available.";
   if (result.reason.includes("host_tracks")) return "Enter the host room and turn on your camera or microphone before starting the broadcast.";
-  if (result.reason.includes("approval") || result.reason.includes("qualification") || result.reason.includes("worker")) return "Broadcast setup is awaiting platform verification. Your host room and event are saved; refresh readiness after setup is complete.";
+  if (result.reason.includes("approval") || result.reason.includes("qualification")) return "Your creator broadcast qualification must be current before starting. Once platform setup and this show’s readiness checks pass, you can start your own show without a separate approval for each show. Your host room and event are saved.";
+  if (result.reason.includes("worker")) return "Platform broadcast setup is not ready. Your host room and event are saved; refresh readiness when setup is complete.";
   if (result.reason.includes("cost_guard")) return "Live broadcasting is temporarily paused. Your event and ticket records are preserved.";
   if (result.state === "starting") return "The broadcast is starting. Refresh readiness until its stream and protected playback are verified.";
   if (result.state === "uncertain") return "The broadcast request is being reconciled. Refresh readiness to check the original attempt; starting again will not create a second broadcast.";

@@ -19,6 +19,7 @@ import { withAuthorityReadDeadline } from "../../_lib/entitlementAuthority";
 import { supabase } from "../../_lib/supabase";
 import { formatEventScheduleTime } from "../../_lib/eventSchedule";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
+import { EventTicketPolicy } from "../../components/monetization/event-ticket-policy";
 import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
@@ -44,6 +45,13 @@ type EventDestination = {
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
 const formatDate = formatEventScheduleTime;
+const formatTicketReplayTime = (value: string | null, timeZone: string) => {
+  if (!value || !Number.isFinite(Date.parse(value))) return "Unavailable in the recorded terms";
+  try {
+    return `${new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone }).format(new Date(value))} (${timeZone})`;
+  } catch { return "Unavailable in the recorded terms"; }
+};
 
 const formatEventType = (value: string | null) => {
   if (value === "watch_party_live") return "Watch-Party Event";
@@ -342,8 +350,12 @@ export default function PaidCreatorEventRoute() {
               <Text style={styles.body}>{offer.terms.description}</Text>
               <Text style={styles.body}>Online admission only. {offer.terms.capacityLimit == null ? "No virtual ticket limit is set." : `Capacity: ${offer.terms.capacityLimit} virtual tickets.`}</Text>
               <Text style={styles.body}>Sales open: {formatDate(offer.terms.salesOpenAt, "No separate opening time")} · Close: {formatDate(offer.terms.salesCloseAt, "No separate closing time")}</Text>
-              <Text style={styles.body}>{offer.terms.replayPolicy === "none" ? "This ticket does not include replay access." : offer.terms.replayPolicy === "until_expiration" ? `Configured replay access ends ${formatDate(offer.terms.replayExpiresAt)}.` : "Replay is configured without an expiration; entry still requires an authorized available replay."}</Text>
-              <Text style={styles.body}>Later changes do not rewrite recorded purchase terms. Cancellation, no-show, or a confirmed material schedule change makes affected buyers eligible to request a refund through their payment provider. The provider decides the outcome and timing.</Text>
+              <Text testID="event-ticket-replay-terms" style={styles.body}>{offer.terms.replayPolicy === "none" ? "This ticket does not include replay access."
+                : offer.terms.replayPolicy === "until_expiration"
+                  ? `Replay included from ${formatTicketReplayTime(offer.terms.replayAvailableAt, offer.terms.timeZone)} until ${formatTicketReplayTime(offer.terms.replayExpiresAt, offer.terms.timeZone)}. Playback still requires an authorized available replay.`
+                  : `Replay is configured without an expiration${offer.terms.replayAvailableAt ? `, available from ${formatTicketReplayTime(offer.terms.replayAvailableAt, offer.terms.timeZone)}` : "; original availability is not recorded"}. Entry still requires an authorized available replay.`}</Text>
+              {offer.terms.replayPolicy !== "none" ? <Text style={styles.body}>If promised replay misses its recorded availability deadline, you are eligible for provider refund review. Replay arriving later does not remove that eligibility. This is not a guaranteed or completed refund.</Text> : null}
+              <Text style={styles.body}>Later changes do not rewrite recorded purchase terms. Cancellation or a show that has not begun within 30 minutes of its advertised start makes buyers eligible for provider refund review. An earlier start, delay of at least 30 minutes, or a change of event-local date offers a choice to keep the ticket or request review. The provider decides the outcome and timing.</Text>
             </View> : null}
 
             {recordedPurchase ? <View style={styles.stateBox} testID="event-recorded-purchase">
@@ -355,8 +367,9 @@ export default function PaidCreatorEventRoute() {
                 <Text style={styles.body}>Purchased schedule: {formatDate(typeof recordedPurchase.terms.startsAt === "string" ? recordedPurchase.terms.startsAt : null)} in your device’s time zone. Creator’s time zone: {String(recordedPurchase.terms.timeZone ?? "Unavailable")}.</Text>
                 <Text style={styles.body}>{String(recordedPurchase.terms.includeText ?? "See My Tickets for recorded inclusion terms.")}</Text>
               </> : <Text style={styles.body}>Original terms are unavailable for this historical purchase. The current listing does not replace them.</Text>}
-              {recordedPurchase.refundEligibility ? <Text style={styles.body}>Eligible to request a refund: {recordedPurchase.refundEligibility.reasons.map(reason => reason.replace(/_/g, " ")).join(", ")}. Payment-provider review is required; this is not confirmation of a refund.</Text> : null}
+              {recordedPurchase.refundEligibility ? <Text style={styles.body}>A ticket remedy was recorded. Review ticket changes below for current eligibility and any schedule choice. Payment-provider review is required; this is not confirmation of a refund.</Text> : null}
               <Text style={styles.body}>Open My Tickets for receipts, full history, restore, and support.</Text>
+              <EventTicketPolicy key={`${eventId}:${recordedPurchase.id}`} eventId={eventId} purchaseId={recordedPurchase.id} initiallyExpanded />
             </View> : null}
 
             {confirmedEventPass ? (

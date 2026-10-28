@@ -70,6 +70,12 @@ test('owner purchase library executes current SQL across modes, history and deni
         values($1,$2,$3,$4,$5,$6,'material_schedule_change'),($7,$2,$8,$4,$5,$6,'event_canceled')`,
         [id(925),rows[3].source,buyer,id(924),rows[3].grant,rows[3].intent,id(926),other]);
     });
+    // Historical rows above intentionally bypass application triggers. Supply
+    // the same known-current snapshot a migration would have observed; do not
+    // fabricate historical broadcast delivery or rewrite original terms.
+    await db.query(`insert into private.creator_event_schedule_revisions(event_id,revision,starts_at,ends_at,time_zone,event_status,management_status)
+      select id,1,starts_at,ends_at,time_zone,status,management_status from public.creator_events e
+      where id=$1 and not exists(select 1 from private.creator_event_schedule_revisions r where r.event_id=e.id)`,[rows[3].source]);
     const result = await read();
     assert.equal(result.userId,buyer); assert.equal(result.items.length,8); assert.equal(result.nextCursor,null);
     for (const row of rows) {
@@ -248,7 +254,9 @@ test('owner purchase library executes current SQL across modes, history and deni
         values($1,$2,$3,$4,$5,'revenuecat_google_play',$6,'NON_RENEWING_PURCHASE','sandbox','event_canceled')`,[lateObligation,lateReceipt,lateIntent,buyer,creator,rows[3].product.provider_product_id]);
     });
     const latePaid=await lateItem();assert.equal(latePaid.status,'reconciliation_required');
-    assert.deepEqual(latePaid.refundEligibility.reasons,['event_canceled']);assert.equal(latePaid.grantsAccess,false);
+    assert.deepEqual(latePaid.refundEligibility.reasons,['event_canceled','material_schedule_change'],
+      'cancellation and the independently changed immutable original schedule both remain eligible after exact paid reconciliation');
+    assert.equal(latePaid.grantsAccess,false);
     assert.equal((await one('select count(*)::int count from public.paid_creator_event_passes where creator_event_id=$1 and access_grant_id is null',[rows[3].source])).count,0);
     await seed(async()=>{await db.query('update public.revenuecat_provider_reconciliation_obligations set user_id=$1 where id=$2',[other,lateObligation]);});
     assert.equal((await lateItem()).refundEligibility,null,'wrong-owner obligation cannot establish eligibility');

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { readCreatorAuthoringPrices, type CreatorSupportedPrice } from "../../_lib/creatorSupportedPrices";
 import { EventScheduleInputError, formatZonedEventScheduleInput, parseZonedEventScheduleInput } from "../../_lib/eventSchedule";
-import type { CreatorEventSummary } from "../../_lib/liveEvents";
+import { readNewCreatorEventReplayTermsError, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { configurePaidCreatorEventSale, type PaidCreatorEventOffer, type PaidCreatorEventOfferStatus } from "../../_lib/paidCreatorEvents";
 import { CreatorPricePicker } from "./creator-price-picker";
 
@@ -48,6 +48,8 @@ export function EventSaleEditor({ event, offer, onSaved, onClose }: {
     flight.current = true; setBusy(true); setNotice("");
     try {
       if (!event.startsAt || !event.endsAt) throw new EventScheduleInputError("Save valid event start and end times before setting up tickets.");
+      const replayError = readNewCreatorEventReplayTermsError(event);
+      if (replayError) throw new EventScheduleInputError(replayError);
       const limit = capacity.trim() ? Number(capacity) : null;
       if (limit !== null && (!/^\d+$/.test(capacity.trim()) || !Number.isSafeInteger(limit) || limit < 1)) throw new EventScheduleInputError("Capacity must be a whole number of virtual tickets, or blank for no limit.");
       if (!description.trim()) throw new EventScheduleInputError("Describe what this ticket includes before saving.");
@@ -85,8 +87,8 @@ export function EventSaleEditor({ event, offer, onSaved, onClose }: {
     <TextInput style={styles.input} value={closes} onChangeText={setCloses} editable={!busy} autoCapitalize="none" autoCorrect={false} accessibilityLabel="Event ticket sales close date and time" placeholder="Sales close" placeholderTextColor="#9AA5B8" />
     <Text style={styles.label}>Included access</Text>
     <TextInput style={[styles.input, styles.multiline]} value={description} onChangeText={setDescription} editable={!busy} multiline accessibilityLabel="What this event ticket includes" />
-    <Text style={styles.body}>Replay: {event.replayPolicy === "none" ? "Not included" : event.replayPolicy === "indefinite" ? "Configured without an expiry" : `Available until ${event.replayExpiresAt ?? "an expiry is saved"}`}. Ticket terms record this event’s schedule and replay settings. Later edits do not rewrite a buyer’s recorded terms.</Text>
-    <Text style={styles.body}>Cancellation, no-show, or a confirmed material schedule change makes affected buyers eligible to request a refund through their payment provider. The provider determines the outcome and timing.</Text>
+    <Text style={styles.body}>Replay: {event.replayPolicy === "none" ? "Not included — live-only admission" : event.replayPolicy === "indefinite" ? "Historical terms without expiry; new ticket offers require an explicit replay window" : `Available from ${formatZonedEventScheduleInput(event.replayAvailableAt, event.timeZone) || "an availability time is saved"} until ${formatZonedEventScheduleInput(event.replayExpiresAt, event.timeZone) || "an expiry is saved"} (${event.timeZone})`}. Ticket terms record this event’s schedule and replay settings. Later edits do not rewrite a buyer’s recorded terms.</Text>
+    <Text style={styles.body}>Cancellation makes affected buyers eligible for provider refund review immediately. A show that has not started within 30 minutes of its advertised start also qualifies. An earlier start, a delay of at least 30 minutes, or an event-local date change gives buyers notice and a choice to keep their ticket or request review. Accepting a new schedule keeps later cancellation and no-show protection. The payment provider determines any refund and its timing.</Text>
     <View style={styles.preview} testID="event-sale-buyer-preview">
       <Text style={styles.label}>Buyer preview</Text><Text style={styles.body}>{event.eventTitle} · {selected?.label ?? "Choose a supported price"} one-time</Text>
       <Text style={styles.body}>{formatZonedEventScheduleInput(event.startsAt, event.timeZone) || "Schedule required"} · {event.timeZone}</Text><Text style={styles.body}>{description}</Text>
