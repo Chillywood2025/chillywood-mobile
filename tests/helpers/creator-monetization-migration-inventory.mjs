@@ -32,6 +32,7 @@ export const monetizationAddedFunctionIdentities = new Map([
   ['private.bind_event_ticket_purchase_terms/0','private.bind_event_ticket_purchase_terms()'],
   ['private.capture_creator_event_verified_start/1','private.capture_creator_event_verified_start(uuid)'],
   ['private.capture_creator_event_replay_availability/1','private.capture_creator_event_replay_availability(uuid)'],
+  ['private.creator_event_replay_deadline_missed/3','private.creator_event_replay_deadline_missed(uuid,timestamp with time zone,timestamp with time zone)'],
   ['private.creator_event_broadcast_actor_current/4','private.creator_event_broadcast_actor_current(uuid,uuid,text,boolean)'],
   ['private.creator_event_broadcast_attempt_row/1','private.creator_event_broadcast_attempt_row(private.creator_event_broadcast_attempts)'],
   ['private.creator_event_schedule_is_material/4','private.creator_event_schedule_is_material(timestamp with time zone,text,timestamp with time zone,text)'],
