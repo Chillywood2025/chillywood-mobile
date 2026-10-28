@@ -47,6 +47,7 @@ import {
 } from "../../_lib/creatorVideos";
 import { readCreatorRelationshipFeedVideos } from "../../_lib/creatorFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
+import { NewLiveStreamsButton } from "../../components/live/new-live-streams-button";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
@@ -225,7 +226,7 @@ export default function HomeScreen() {
     progressGenerationRef.current += 1;
   }
   const discovery = useLiveDiscoveryFeed({ surface: "home", includeCircle: true, limit: 24 });
-  const liveDiscovery = useLiveDiscoveryFeed({ surface: "home", includeCircle: true, liveOnly: true, limit: 8 });
+  const liveDiscovery = useLiveDiscoveryFeed({ surface: "home", includeCircle: true, liveOnly: true, preserveBrowsePosition: true, limit: 8 });
   const safeAreaInsets = useSafeAreaInsets();
   const bottomTabBarHeight = useBottomTabBarHeight();
   const homeDiscoveryLoadGenerationRef = useRef(0);
@@ -743,6 +744,7 @@ export default function HomeScreen() {
   }
 
   function renderHomeEventRail(input: {
+    action?: React.ReactNode;
     title: string;
     subtitle: string;
     feedItems: DiscoveryFeedItem[];
@@ -758,6 +760,7 @@ export default function HomeScreen() {
       <AppSection
         subtitle={input.subtitle}
         title={input.title}
+        action={input.action}
       >
 
         {homeDiscoveryError ? (
@@ -1031,6 +1034,7 @@ export default function HomeScreen() {
 
           {renderHomeEventRail({
             title: "Live Now",
+            action: <NewLiveStreamsButton pendingItemCount={liveDiscovery.pendingItemCount} onRefresh={liveDiscovery.reload} />,
             subtitle: "Public rooms and events that are live now.",
             feedItems: liveDiscoveryItems,
             events: [],

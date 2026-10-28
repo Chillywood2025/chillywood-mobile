@@ -20607,6 +20607,22 @@ export type Database = {
         Args: { p_acceptances: Json; p_expected_account_id: string; p_expected_user_id: string; p_market: string; p_session_generation: string; p_capability?: string }
         Returns: Json
       }
+      can_receive_discovery_invalidation: {
+        Args: { p_topic: string }
+        Returns: boolean
+      }
+      authorize_discovery_invalidation_worker: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
+      flush_discovery_invalidations: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      read_discovery_invalidation_health: {
+        Args: never
+        Returns: Json
+      }
       anonymous_social_attachment_source_visible: {
         Args: { p_surface_type: string; p_surface_id: string }
         Returns: boolean

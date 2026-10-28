@@ -15,6 +15,8 @@ const compile = file => ts.transpileModule(fs.readFileSync(new URL(`../${file}`,
 }).outputText;
 const code = {
   feed: compile('_lib/discoveryFeed.ts'), lifecycle: compile('_lib/useLiveDiscoveryFeed.ts'),
+  sharedRead: compile('_lib/sharedLiveRead.ts'),
+  ranking: compile('_lib/discoveryRankingSignals.ts'),
   profile: compile('_lib/useProfileLiveState.ts'), cards: compile('components/live/profile-live-now.tsx'),
 };
 const creator = '10000000-0000-4000-8000-000000000001', other = '20000000-0000-4000-8000-000000000002';
@@ -32,6 +34,7 @@ const descendants = (node, predicate) => Array.isArray(node) ? node.flatMap(n =>
     : [...(predicate(node) ? [node] : []), ...descendants(node.props?.children, predicate)];
 
 async function mount(t, initial = [], initialReader = null) {
+  let now = Date.now();
   let authority = owner('viewer'), creatorId = creator, enabled = true, focused = true, tree, live;
   let rows = initial, reader = initialReader, displayedEventIds = [];
   const requests = [], routes = [], intervals = new Set(), timers = new Set(), listeners = new Set();
@@ -45,20 +48,28 @@ async function mount(t, initial = [], initialReader = null) {
     const context = {
       exports: {}, require: name => { if (!(name in imports)) throw Error(`Unexpected import ${name}`); return imports[name]; },
       AbortController, setTimeout: f => { timers.add(f); return f; }, clearTimeout: f => timers.delete(f),
+      Date: class extends Date { static now() { return now; } },
       setInterval: f => { intervals.add(f); return f; }, clearInterval: f => intervals.delete(f),
     };
     vm.runInNewContext(source, context); return context.exports;
   };
-  const feed = evaluate(code.feed, { './channelAudience': {}, './friendGraph': {}, './supabase': { supabase: {} } });
+  const feed = evaluate(code.feed, { './discoveryRankingSignals': { readDiscoveryCandidateRankingSignals: (...args) => ranking.readDiscoveryCandidateRankingSignals(...args) }, './supabase': { supabase: {} } });
+  const ranking = evaluate(code.ranking, {
+    './supabase': { supabase: new (require('@supabase/postgrest-js').PostgrestClient)('https://offline.invalid/rest/v1', { fetch: async () => new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }) }) },
+    './accountSessionAuthority': { getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority: (a,b) => !!a && !!b && a.userId===b.userId && a.sessionGeneration===b.sessionGeneration },
+  });
   const read = async options => { requests.push(options); return { items: reader ? await reader(options) : rows, signals: {} }; };
   const lifecycle = evaluate(code.lifecycle, {
     react: React, 'react-native': native, '@react-navigation/native': { useIsFocused: () => focused },
     './session': { useSession: () => ({ authority, authorityStatus: authority ? 'active' : 'unknown' }) },
+    './sharedLiveUpdates': { getDiscoveryLiveUpdateInterest: options => options, isDiscoveryLiveUpdateConnected: () => false, subscribeToLiveUpdates: () => () => {} },
+    './sharedLiveRead': evaluate(code.sharedRead, {}),
+    './discoveryRankingSignals': ranking,
     './accountSessionAuthority': {
       getCurrentAccountSessionAuthoritySnapshot: () => authority,
       sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.sessionGeneration === b.sessionGeneration,
     },
-    './discoveryFeed': { ...feed, readRankedPublicDiscoveryFeedItems: read },
+    './discoveryFeed': { ...feed, readPublicDiscoveryFeedItems: async options => (await read(options)).items },
     './circleSpectatorFeed': { readRankedCircleSpectatorFeedItems: () => assert.fail('Profile public lane must not broaden into Circle') },
   });
   const profile = evaluate(code.profile, { './discoveryFeed': feed, './useLiveDiscoveryFeed': lifecycle });
@@ -78,7 +89,7 @@ async function mount(t, initial = [], initialReader = null) {
     buttons: () => descendants(tree, x => x.props?.testID === 'profile-live-discovery-open-button'),
     retry: () => descendants(tree, x => x.props?.accessibilityLabel === 'Retry profile live sessions')[0],
     setReader: value => { reader = value; },
-    async refresh(value = rows) { rows = value; await React.act(async () => { for (const f of intervals) void f(); }); },
+    async refresh(value = rows) { rows = value; now += 30_000; await React.act(async () => { for (const f of intervals) void f(); }); },
     async creator(value) { creatorId = value; await render(); },
     async account(value) { authority = value ? owner(value) : null; await render(); },
     async enable(value) { enabled = value; await render(); },
