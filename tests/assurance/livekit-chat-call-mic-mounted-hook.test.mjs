@@ -1959,16 +1959,21 @@ test("terminated iOS video adopts a late native camera publication without waiti
     await waitFor(harness, () => runtime.cameraCalls.length === attempt + 1, `initial late-publication camera attempt ${attempt + 1}`);
   }
   await waitFor(harness, () => runtime.cameraCalls.length === 4, "initial camera retries exhausted");
-  await waitFor(harness, () => harness.getResult().channelState === "live", "call authority committed without camera");
-  assert.equal(harness.getResult().cameraEnabled, false);
-  assert.equal(runtime.durableCamera, false);
-
-  await harness.fireMediaWriteTimeout();
-
-  await waitFor(harness, () => harness.getResult().cameraEnabled, "late native publication converged local UI");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "call authority committed with observed late camera");
+  // The enabling promises rejected, but the SDK already owns a usable exact
+  // publication. Initial commit must project that observed capture rather
+  // than temporarily advertise Camera Off from a stale startup boolean.
+  assert.equal(harness.getResult().cameraEnabled, true);
   assert.equal(runtime.durableCamera, true);
   assert.equal(runtime.membershipTouches.at(-1).cameraEnabled, true);
   assert.equal(runtime.cameraCalls.length, 4);
+  const writesAtCommit = runtime.membershipTouches.length;
+  await harness.fireMediaWriteTimeout();
+  await harness.flush(32);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.cameraCalls.length, 4, "monitoring adopts capture without reacquiring it");
+  assert.equal(runtime.membershipTouches.slice(writesAtCommit).every(touch => touch.cameraEnabled), true, "monitoring never advertises a stale Camera Off snapshot");
   assert.equal(runtime.providerTokenCalls, 1);
   assert.equal(runtime.rooms.length, 1);
 });
@@ -4593,4 +4598,413 @@ test("mounted evidence: T2 is clear only when the contract names mounted exact-h
   assert.equal(contract.proofTiers.T2_MODEL, "MODEL_CLEAR_MOUNTED_HOOK_EXECUTION");
   assert.equal(contract.mountedHookEvidence.execution, "REACT_DOM_COMMIT_PHASE_EXACT_HOOK");
   assert.equal(contract.mountedHookEvidence.testFile, "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs");
+});
+
+// Startup microphone authority uses the same mounted hook as call controls.
+const startupOptions = (overrides = {}) => defaultHookOptions({
+  allowBackgroundAudio: false,
+  initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  ...overrides,
+});
+
+for (const platformOS of ["android", "ios"]) {
+  test(`${platformOS} foreground startup publishes requested microphone`, async t => {
+    const runtime = createLiveKitMountedRuntime({ platformOS });
+    const harness = await mountLiveKitHook(runtime, startupOptions());
+    t.after(() => harness.unmount());
+    assert.equal(runtime.micCalls.includes(true), true);
+    assert.equal(harness.getResult().micEnabled, true);
+    assert.equal(runtime.durableMic, true);
+  });
+  for (const appState of ["background", "inactive"]) {
+    test(`${platformOS} ${appState} startup defers microphone until foreground without losing requested intent`, async t => {
+      const runtime = createLiveKitMountedRuntime({ platformOS });
+      runtime.appState = appState;
+      const harness = await mountLiveKitHook(runtime, startupOptions());
+      t.after(() => harness.unmount());
+      assert.equal(runtime.micCalls.includes(true), false, "startup must not acquire unauthorized background microphone");
+      assert.equal(harness.getResult().micEnabled, false);
+      assert.equal(runtime.durableMic, false);
+      await harness.fireAppState("active");
+      await waitFor(harness, () => harness.getResult().micEnabled && runtime.durableMic, "foreground recovers retained microphone intent");
+    });
+  }
+}
+
+test("authorized iOS CallKit background startup retains microphone", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "ios" });
+  runtime.appState = "background";
+  const harness = await mountLiveKitHook(runtime, startupOptions({ allowBackgroundAudio: true }));
+  t.after(() => harness.unmount());
+  assert.equal(runtime.micCalls.includes(true), true);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(runtime.durableMic, true);
+});
+
+test("foreground startup preserves an explicit microphone-off preference", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const harness = await mountLiveKitHook(runtime, startupOptions({ initialMediaPreferences: { cameraEnabled: false, micEnabled: false } }));
+  t.after(() => harness.unmount());
+  assert.equal(runtime.micCalls.includes(true), false);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+});
+
+test("microphone acquisition that finishes after background is retired before startup commits", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const capture = deferred();
+  runtime.queueNative({ gate: capture, outcome: "success" });
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "initial capture pending");
+  await harness.fireAppState("background");
+  capture.resolve();
+  await waitFor(harness, () => !harness.getResult().loading, "startup settles");
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  const microphone = runtime.rooms[0].localParticipant.getTrackPublication("microphone");
+  assert.equal(microphone?.isMuted === false && microphone?.track?.mediaStreamTrack.readyState === "live", false);
+  await harness.fireAppState("active");
+  await waitFor(harness, () => harness.getResult().micEnabled && runtime.durableMic, "later foreground can recover");
+});
+
+test("late initial capture cannot revive its retired Room or stop a replacement microphone", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const capture = deferred();
+  runtime.queueNative({ gate: capture, outcome: "success" });
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "old capture pending");
+  await harness.commitRender(startupOptions({ invite: { ...startupOptions().invite, id: "invite-2" } }));
+  await waitFor(harness, () => runtime.rooms.length === 2 && harness.getResult().channelState === "live", "replacement live");
+  capture.resolve();
+  await harness.flush(32);
+  assert.equal(runtime.rooms[0].localParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(runtime.rooms[1].localParticipant.micTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(runtime.rooms[1].localParticipant.micEnabled, true);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("a startup publication whose native microphone is unusable cannot advertise Mic On", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  runtime.queueNative({ outcome: "mismatch" });
+  const harness = await mountLiveKitHook(runtime, startupOptions());
+  t.after(() => harness.unmount());
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.match(harness.getResult().mediaReconciliationMessage, /microphone/u);
+});
+
+test("unproved startup microphone retirement fails initialization and cleans up the exact Room", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const capture = deferred();
+  runtime.queueNative({ gate: capture, outcome: "success" });
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "initial capture pending");
+  await harness.fireAppState("background");
+  await harness.flush(32);
+  const participant = runtime.rooms[0].localParticipant;
+  const setMicrophoneEnabled = participant.setMicrophoneEnabled.bind(participant);
+  participant.setMicrophoneEnabled = enabled => {
+    if (!enabled) throw new Error("native mute rejected");
+    return setMicrophoneEnabled(enabled);
+  };
+  capture.resolve();
+  await waitFor(harness, () => harness.getResult().channelState === "error", "unsafe startup rejected");
+  assert.equal(participant.micTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(runtime.rooms[0].state, "disconnected");
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.stages.includes("local_audio_published"), false);
+});
+
+test("background while initial camera is pending cannot restore a stale microphone-on startup snapshot", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const camera = deferred();
+  runtime.queueCamera({ gate: camera, outcome: "success" });
+  const harness = await mountLiveKitHook(runtime, startupOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...startupOptions().invite, callType: "video" },
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.cameraCalls.includes(true), "initial camera capture pending after microphone");
+  await harness.fireAppState("background");
+  camera.resolve();
+  for (let attempt = 0; attempt < 8 && harness.getResult().loading; attempt += 1) {
+    await harness.flush(8);
+    if (runtime.timeoutCallbacks.some(callback => typeof callback === "function")) await harness.fireMediaWriteTimeout();
+  }
+  await waitFor(harness, () => !harness.getResult().loading, "video startup settles");
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.rooms[0].localParticipant.micEnabled, false);
+  assert.equal(runtime.rooms[0].localParticipant.micTrack.mediaStreamTrack.readyState, "ended", "muting must also retire native background capture");
+});
+
+test("background while initial speaker routing is pending cannot restore a stale microphone-on startup snapshot", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const speaker = deferred();
+  runtime.queueAudioOutput({ gate: speaker, outcome: "success" });
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.audioOutputCalls.length > 0, "speaker routing pending after capture");
+  await harness.fireAppState("background");
+  speaker.resolve();
+  await waitFor(harness, () => !harness.getResult().loading, "startup settles");
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.rooms[0].localParticipant.micEnabled, false);
+  assert.equal(runtime.rooms[0].localParticipant.micTrack.mediaStreamTrack.readyState, "ended", "muting must also retire native background capture");
+});
+
+for (const readBoundary of ["before acquisition", "after acquisition"]) {
+  test(`accepted iOS startup rejects a native active read invalidated ${readBoundary}`, async t => {
+    const runtime = createLiveKitMountedRuntime({ platformOS: "ios", nativeApplicationActive: true });
+    runtime.appState = "background";
+    if (readBoundary === "after acquisition") runtime.queueNativeApplicationActive({ outcome: true });
+    const nativeRead = runtime.deferNativeApplicationActive(true);
+    const harness = await mountLiveKitHook(runtime, startupOptions({
+      iosAcceptedCallKitMediaDescriptor: runtime.createAcceptedMediaDescriptor(),
+    }), { requireLive: false });
+    t.after(() => harness.unmount());
+    await waitFor(harness, () => runtime.nativeApplicationActiveReads === (readBoundary === "before acquisition" ? 1 : 2), "native startup read pending");
+    runtime.nativeApplicationActive = false;
+    await harness.fireAppState("background");
+    await harness.resolveDeferred(nativeRead);
+    await waitFor(harness, () => !harness.getResult().loading, "startup settles without foreground authority");
+    if (readBoundary === "before acquisition") assert.equal(runtime.micCalls.includes(true), false, "stale UIKit observation cannot authorize capture");
+    assert.equal(runtime.stages.includes("local_audio_published"), false, "revoked native authority cannot advertise first audio");
+    assert.equal(runtime.rooms[0].localParticipant.micEnabled, false);
+    assert.equal(harness.getResult().micEnabled, false);
+    assert.equal(runtime.durableMic, false);
+    assert.equal(runtime.membershipTouches.some(touch => touch.micEnabled), false);
+  });
+}
+
+test("retired iOS startup stops late microphone capture before any further native active read", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "ios", nativeApplicationActive: true });
+  runtime.appState = "background";
+  const capture = runtime.deferNative();
+  const harness = await mountLiveKitHook(runtime, startupOptions({
+    iosAcceptedCallKitMediaDescriptor: runtime.createAcceptedMediaDescriptor(),
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "initial capture pending");
+  await harness.fireStopper("logout");
+  const readsBeforeLateCapture = runtime.nativeApplicationActiveReads;
+  // A retired session must not depend on a new native read settling to stop
+  // capture. Deliberately leave this read pending until after the assertions.
+  const unusedRead = runtime.deferNativeApplicationActive(true);
+  t.after(() => unusedRead.resolve());
+  await harness.resolveDeferred(capture);
+  assert.equal(runtime.rooms[0].localParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(runtime.nativeApplicationActiveReads, readsBeforeLateCapture);
+  assert.equal(runtime.rooms[0].state, "disconnected");
+  assert.equal(runtime.membershipTouches.some(touch => touch.micEnabled), false);
+});
+
+for (const retirement of ["End", "account switch"]) {
+  test(`pending initial capture cannot cross ${retirement}`, async t => {
+    const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+    const capture = runtime.deferNative();
+    const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+    t.after(() => harness.unmount());
+    await waitFor(harness, () => runtime.micCalls.includes(true), "old capture pending");
+    const oldRoom = runtime.rooms[0];
+    if (retirement === "End") {
+      const operation = await harness.startOperation(() => harness.getResult().leaveRoom());
+      assert.equal(await settleOperation(operation, harness), true);
+    } else {
+      runtime.userId = "replacement-user";
+      runtime.queueMembershipJoin({ generation: "20000000-0000-4000-8000-000000000002" });
+      await harness.commitRender(startupOptions({
+        authenticatedUserId: runtime.userId,
+        invite: { ...startupOptions().invite, id: "invite-2", calleeUserId: runtime.userId },
+      }));
+      await waitFor(harness, () => runtime.rooms.length === 2 && harness.getResult().channelState === "live", "replacement account connected independently");
+    }
+    const writesBeforeLateCapture = runtime.membershipTouches.length;
+    await harness.resolveDeferred(capture);
+    await harness.flush(32);
+    assert.equal(oldRoom.localParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(oldRoom.state, "disconnected");
+    assert.equal(runtime.membershipTouches.length, writesBeforeLateCapture, "late startup has no durable authority");
+    assert.equal(harness.getResult().channelState, retirement === "End" ? "idle" : "live");
+    if (retirement === "account switch") {
+      assert.equal(runtime.rooms[1].localParticipant.micTrack.mediaStreamTrack.readyState, "live");
+      assert.equal(harness.getResult().micEnabled, true);
+      assert.equal(runtime.durableMic, true);
+    }
+  });
+}
+
+test("revoked CallKit audio ownership retires pending background startup and retains foreground intent", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "ios", microphonePermissionState: "granted" });
+  runtime.appState = "background";
+  const capture = runtime.deferNative();
+  const harness = await mountLiveKitHook(runtime, startupOptions({ allowBackgroundAudio: true }), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "owned background capture pending");
+  await harness.commitRender(startupOptions({ allowBackgroundAudio: false }));
+  await harness.resolveDeferred(capture);
+  await waitFor(harness, () => !harness.getResult().loading, "startup settles after owner revocation");
+  assert.equal(runtime.rooms.length, 1);
+  assert.equal(runtime.rooms[0].localParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(runtime.stages.includes("local_audio_published"), false);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  await harness.fireAppState("active");
+  await waitFor(harness, () => harness.getResult().micEnabled && runtime.durableMic, "foreground restores requested microphone");
+});
+
+test("background during initial durable write reprojects native capture before publishing startup state", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android", microphonePermissionState: "granted" });
+  const write = runtime.deferTouch();
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.membershipTouches.some(touch => touch.micEnabled), "initial membership write pending");
+  await harness.fireAppState("background");
+  await harness.resolveDeferred(write);
+  await waitFor(harness, () => !harness.getResult().loading, "startup reprojects newer background");
+  assert.equal(runtime.rooms[0].localParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.membershipTouches.at(-1).micEnabled, false);
+  assert.equal(runtime.mediaBroadcasts.some(broadcast => broadcast.payload?.micOn), false, "stale startup result is never broadcast as current");
+  await harness.fireAppState("active");
+  await waitFor(harness, () => harness.getResult().micEnabled && runtime.durableMic, "foreground recovers exact current capture");
+});
+
+test("a muted but still-live startup microphone cannot satisfy capture retirement", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const capture = runtime.deferNative();
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "initial capture pending");
+  await harness.fireAppState("background");
+  const track = runtime.rooms[0].localParticipant.micTrack;
+  const stop = track.stop.bind(track);
+  let stops = 0;
+  track.stop = () => { if (++stops > 1) stop(); };
+  await harness.resolveDeferred(capture);
+  await waitFor(harness, () => harness.getResult().channelState === "error", "unconfirmed retirement fails startup");
+  assert.equal(runtime.errors.some(error => error.message === "initial_microphone_retirement_unconfirmed"), true);
+  assert.equal(track.mediaStreamTrack.readyState, "ended", "exact Room teardown recovers failed first stop");
+  assert.equal(runtime.rooms[0].state, "disconnected");
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.stages.includes("local_audio_published"), false);
+});
+
+test("SDK publication during revoked startup capture cannot bypass first-audio authority", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const capture = runtime.deferNative();
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "initial capture pending");
+  await harness.fireAppState("background");
+  const participant = runtime.rooms[0].localParticipant;
+  // The locked SDK emits LocalTrackPublished before the enabling promise
+  // resolves. Model that ordering rather than only the promise return value.
+  participant.micEnabled = true;
+  await harness.emitRoom("LocalTrackPublished", {
+    isMuted: false,
+    source: "microphone",
+    track: participant.micTrack,
+  });
+  assert.equal(runtime.stages.includes("local_audio_published"), false);
+  assert.equal(harness.getResult().firstMediaState.localAudioPublished, false);
+  await harness.resolveDeferred(capture);
+  await waitFor(harness, () => !harness.getResult().loading, "revoked startup settles");
+  assert.equal(participant.micTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.stages.includes("local_audio_published"), false);
+});
+
+for (const replaceCall of [false, true]) {
+  test(`late startup retirement failure after write timeout cleans only its exact Room: replacement=${replaceCall}`, async t => {
+    const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+    const speaker = runtime.deferAudioOutput();
+    const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+    t.after(() => harness.unmount());
+    await waitFor(harness, () => runtime.audioOutputCalls.length > 0, "startup routing pending");
+    await harness.fireAppState("background");
+    await harness.flush(32);
+    const oldRoom = runtime.rooms[0];
+    const participant = oldRoom.localParticipant;
+    const setMicrophone = participant.setMicrophoneEnabled.bind(participant);
+    const mute = deferred();
+    let retirementPending = false;
+    participant.setMicrophoneEnabled = async enabled => {
+      if (!enabled && !retirementPending) {
+        retirementPending = true;
+        participant.setMicrophoneEnabled = setMicrophone;
+        await mute.promise;
+        throw new Error("late startup mute rejected");
+      }
+      return setMicrophone(enabled);
+    };
+    await harness.resolveDeferred(speaker);
+    await waitFor(harness, () => retirementPending, "startup microphone retirement pending");
+    await harness.fireMediaWriteTimeout();
+    await waitFor(harness, () => !harness.getResult().loading, "membership reservation times out before retirement fails");
+    if (replaceCall) {
+      runtime.appState = "active";
+      runtime.roomId = "ROOM-2";
+      await harness.commitRender(startupOptions({
+        roomId: runtime.roomId,
+        invite: { ...startupOptions().invite, id: "invite-2", communicationRoomId: runtime.roomId },
+      }));
+      await waitFor(harness, () => runtime.rooms.length === 2 && harness.getResult().channelState === "live", "replacement independently live");
+    }
+    await harness.resolveDeferred(mute);
+    await waitFor(harness, () => runtime.membershipLeaves === 1, "exact old membership is cleaned after late rejection");
+    await harness.flush(32);
+    assert.equal(oldRoom.state, "disconnected");
+    assert.equal(participant.micTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(harness.getResult().channelState, replaceCall ? "live" : "error");
+    if (replaceCall) {
+      assert.equal(runtime.rooms[1].localParticipant.micTrack.mediaStreamTrack.readyState, "live");
+      assert.equal(harness.getResult().micEnabled, true);
+      assert.equal(runtime.durableMic, true);
+    }
+  });
+}
+
+test("late startup capture is independently retired while prior End still owns cleanup", async t => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "android" });
+  const capture = runtime.deferNative();
+  const harness = await mountLiveKitHook(runtime, startupOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.micCalls.includes(true), "initial capture pending");
+  const leave = deferred();
+  runtime.queueMembershipLeave({ gate: leave, outcome: "success" });
+  const end = await harness.startOperation(() => harness.getResult().leaveRoom());
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "End stopped capture and is waiting on membership leave");
+  const oldRoom = runtime.rooms[0];
+  assert.equal(oldRoom.state, "disconnected");
+  const disconnect = oldRoom.disconnect.bind(oldRoom);
+  oldRoom.disconnect = async () => {
+    // The locked SDK returns early for an already-disconnected Room, even if
+    // an old getUserMedia operation has since produced a new live track.
+    if (oldRoom.state === "disconnected") return;
+    return disconnect();
+  };
+  const track = oldRoom.localParticipant.micTrack;
+  const stop = track.stop.bind(track);
+  let stops = 0;
+  track.stop = () => {
+    if (++stops === 1) throw new Error("late native stop rejected");
+    stop();
+  };
+  await harness.resolveDeferred(capture);
+  await waitFor(harness, () => track.mediaStreamTrack.readyState === "ended", "independent Room termination retires late capture despite cleanup owner");
+  await harness.resolveDeferred(leave);
+  assert.equal(await settleOperation(end, harness), true);
+  assert.equal(track.mediaStreamTrack.readyState, "ended");
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(harness.getResult().channelState, "idle");
+  assert.equal(runtime.durableMic, false);
 });
