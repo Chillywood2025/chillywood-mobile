@@ -80,6 +80,9 @@ export function subscribeToNotificationActivityChanges(authority?: AccountSessio
       // Retirement is permanent even if a delayed callback sees the same user.
       active = false;
       detach();
+      // Existing holders still own disposal, but a newly mounted consumer must
+      // not reuse their retired transport if this exact authority reappears.
+      if (transports.get(ownerKey) === transport) transports.delete(ownerKey);
     });
     transport = { references: 0, dispose: () => {
       active = false;

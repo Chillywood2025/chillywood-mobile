@@ -1,4 +1,5 @@
-import type { Json, Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import type { Database, Json, Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import { createClient } from "@supabase/supabase-js";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
@@ -15,7 +16,7 @@ import {
   readCreatorEventSummaries,
   readPublicEventSummaries,
 } from "./liveEvents";
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 import { normalizeProductNotificationCopy } from "./userFacingProductCopy";
 import {
   CHAT_CALL_INVITES_TABLE,
@@ -30,7 +31,7 @@ import {
 } from "./chillyChatCallSoundAssets";
 import { resolveApplicationRoute } from "./appLinks";
 import { resolveNotificationMessagePath, type NotificationMessageTarget } from "./notificationMessageTarget";
-import { getCurrentAccountSessionAuthoritySnapshot, readCurrentAccountSessionAuthority, subscribeToAccountSessionAuthority } from "./accountSessionAuthority";
+import { getCurrentAccountSessionAuthoritySnapshot, readCurrentAccountSessionAuthority, sameAccountSessionAuthority, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
 import { captureAccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
@@ -599,6 +600,63 @@ export function classifyNotificationAction(input: {
 
 const CALL_NOTIFICATION_STALE_GRACE_MS = 60_000;
 
+const NOTIFICATION_READ_DEADLINE_MS = 8_000;
+type NotificationReadOperation = {
+  authority: AccountSessionAuthorityBinding;
+  signal: AbortSignal;
+  assertCurrent: () => void;
+};
+
+async function withNotificationRead<T>(
+  userId: string | undefined,
+  signal: AbortSignal | undefined,
+  signedOut: T,
+  read: (operation: NotificationReadOperation) => Promise<T>,
+): Promise<T> {
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!authority && !normalizeText(userId)) return signedOut;
+  if (!authority || authority.state !== "ACTIVE" || authority.restoreOnly
+    || !authority.userId || authority.accountId !== authority.userId || !authority.sessionGeneration
+    || (normalizeText(userId) && normalizeText(userId) !== authority.userId)) {
+    throw new Error("Notification activity could not be refreshed.");
+  }
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  const retire = subscribeToAccountSessionAuthority(next => {
+    if (!sameAccountSessionAuthority(authority, next)) abort();
+  });
+  const timer = setTimeout(abort, NOTIFICATION_READ_DEADLINE_MS);
+  const operation: NotificationReadOperation = { authority, signal: controller.signal,
+    assertCurrent: () => {
+      if (controller.signal.aborted || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) {
+        throw new Error("Notification activity could not be refreshed.");
+      }
+    },
+  };
+  try {
+    operation.assertCurrent();
+    // Abort the real read, not just its observer. If a transport ignores abort,
+    // retain this promise until it settles so callers cannot overlap a retry.
+    const result = await read(operation);
+    operation.assertCurrent();
+    return result;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+    retire();
+  }
+}
+
+async function settleNotificationReads<T extends readonly unknown[]>(reads: { [K in keyof T]: PromiseLike<T[K]> }): Promise<T> {
+  // A failed sibling does not release ownership of reads still in transport.
+  const results = await Promise.allSettled(reads);
+  const failure = results.find(result => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
+  return results.map(result => (result as PromiseFulfilledResult<unknown>).value) as unknown as T;
+}
+
 const readCallInviteIdFromNotificationRow = (row: NotificationRow) => {
   const context = normalizeJsonRecord(row.target_context);
   return (
@@ -623,7 +681,9 @@ const isActiveCallNotificationRow = (row: NotificationRow) => {
 async function reconcileChillyChatCallNotificationRows(
   rows: NotificationRow[],
   viewerUserId: string,
+  operation: NotificationReadOperation,
 ): Promise<NotificationRow[]> {
+  operation.assertCurrent();
   const callRows = rows.filter(isActiveCallNotificationRow);
   if (!callRows.length) return rows;
 
@@ -633,14 +693,13 @@ async function reconcileChillyChatCallNotificationRows(
   const inviteStatusById = new Map<string, CallInviteStatusRow>();
 
   if (inviteIds.length) {
-    const inviteResponse = await withAuthorityReadDeadline(
-      supabase
+    const inviteResponse = await supabase
         .from(CHAT_CALL_INVITES_TABLE)
         .select("id,status,expires_at")
         .in("id", inviteIds)
-        .returns<CallInviteStatusRow[]>(),
-      null,
-    );
+        .abortSignal(operation.signal)
+        .returns<CallInviteStatusRow[]>();
+    operation.assertCurrent();
     if (!inviteResponse || inviteResponse.error || !inviteResponse.data) return rows;
     inviteResponse.data.forEach((invite) => {
       const inviteId = normalizeText(invite.id);
@@ -682,8 +741,22 @@ async function reconcileChillyChatCallNotificationRows(
 
   if (staleIds.size) {
     try {
-      await withAuthorityReadDeadline(
-        supabase
+      const subject = await captureAccountBoundSupabaseMutationSubject(viewerUserId,
+        { waitForReadSettlement: true, signal: operation.signal });
+      // Capture awaits auth/readback. Recheck cancellation and the exact session
+      // after that await, immediately before creating a write-capable client.
+      operation.assertCurrent();
+      if (!sameAccountSessionAuthority(operation.authority, subject.authority)) {
+        throw new Error("Notification activity could not be refreshed.");
+      }
+      const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        accessToken: async () => { operation.assertCurrent(); return subject.accessToken; },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      operation.assertCurrent();
+      // This is a mutation, not a read: do not abort it or race away transport
+      // ownership once dispatched. Cancellation cannot undo a server write.
+      await client
           .from(NOTIFICATIONS_TABLE)
           .update({
             read_at: nowIso,
@@ -692,14 +765,12 @@ async function reconcileChillyChatCallNotificationRows(
           .eq("user_id", viewerUserId)
           .eq("category", "chilly_chat_call")
           .is("dismissed_at", null)
-          .in("id", Array.from(staleIds)),
-        null,
-      );
+          .in("id", Array.from(staleIds));
     } catch {
       // Local reconciliation still prevents stale rows from rendering as actionable.
     }
   }
-
+  operation.assertCurrent();
   return nextRows;
 }
 
@@ -950,8 +1021,9 @@ async function readViewerEventReminderRows(eventIds: string[], viewerUserId: str
 export async function readNotificationList(
   userId?: string,
   limit = 50,
+  signal?: AbortSignal,
 ): Promise<NotificationRecord[]> {
-  const page = await readNotificationListPage(userId, limit);
+  const page = await readNotificationListPage(userId, limit, null, signal);
   return page.status === "resolved" ? page.items : [];
 }
 
@@ -959,12 +1031,25 @@ export async function readNotificationListPage(
   userId?: string,
   limit = 50,
   cursor?: NotificationListCursor | null,
+  signal?: AbortSignal,
 ): Promise<NotificationListPage> {
-  const viewerUserId = await readSessionUserId(userId);
-  if (!viewerUserId) {
-    return { status: "resolved", subjectUserId: null, items: [], nextCursor: null };
+  const viewerUserId = normalizeText(userId) || getCurrentAccountSessionAuthoritySnapshot()?.userId || null;
+  try {
+    return await withNotificationRead<NotificationListPage>(userId, signal,
+      { status: "resolved", subjectUserId: null, items: [], nextCursor: null },
+      operation => readNotificationPageForOperation(operation, limit, cursor));
+  } catch {
+    return { status: "unavailable", subjectUserId: viewerUserId, items: [], nextCursor: null };
   }
+}
 
+async function readNotificationPageForOperation(
+  operation: NotificationReadOperation,
+  limit: number,
+  cursor?: NotificationListCursor | null,
+): Promise<NotificationListPage> {
+  operation.assertCurrent();
+  const viewerUserId = operation.authority.userId;
   const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 100);
   let query = supabase
     .from(NOTIFICATIONS_TABLE)
@@ -982,19 +1067,15 @@ export async function readNotificationListPage(
       `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`,
     );
   }
-  const response = await withAuthorityReadDeadline(
-    query.limit(safeLimit).returns<NotificationRow[]>(),
-    null,
-  );
+  const response = await query.limit(safeLimit).abortSignal(operation.signal).returns<NotificationRow[]>();
+  operation.assertCurrent();
 
-  if (!response || response.error || !response.data || await readSessionUserId().catch(() => null) !== viewerUserId) {
+  if (!response || response.error || !response.data) {
     return { status: "unavailable", subjectUserId: viewerUserId, items: [], nextCursor: null };
   }
   const data = response.data;
-  const reconciledRows = await reconcileChillyChatCallNotificationRows(data, viewerUserId);
-  if (await readSessionUserId().catch(() => null) !== viewerUserId) {
-    return { status: "unavailable", subjectUserId: viewerUserId, items: [], nextCursor: null };
-  }
+  const reconciledRows = await reconcileChillyChatCallNotificationRows(data, viewerUserId, operation);
+  operation.assertCurrent();
   const items = reconciledRows
     .map((row) => parseNotificationRow(row))
     .filter(isDefined);
@@ -1016,13 +1097,12 @@ export async function readNotificationListPage(
 export async function readImportantNotificationList(
   userId?: string,
   limit = 20,
+  signal?: AbortSignal,
 ): Promise<NotificationRecord[]> {
-  const viewerUserId = await readSessionUserId(userId);
-  if (!viewerUserId) return [];
-
-  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 50);
-  const response = await withAuthorityReadDeadline(
-    supabase
+  return withNotificationRead(userId, signal, [], async operation => {
+    const viewerUserId = operation.authority.userId;
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 50);
+    const response = await supabase
       .from(NOTIFICATIONS_TABLE)
       .select("*")
       .eq("user_id", viewerUserId)
@@ -1030,32 +1110,32 @@ export async function readImportantNotificationList(
       .in("category", [...IMPORTANT_NOTIFICATION_CATEGORIES])
       .order("created_at", { ascending: false })
       .limit(safeLimit)
-      .returns<NotificationRow[]>(),
-    null,
-  );
+      .abortSignal(operation.signal)
+      .returns<NotificationRow[]>();
 
-  if (!response || response.error || !response.data) {
-    throw new Error("Important notifications could not be refreshed.");
-  }
-  const reconciledRows = await reconcileChillyChatCallNotificationRows(response.data, viewerUserId);
-  if (await readSessionUserId().catch(() => null) !== viewerUserId) {
-    throw new Error("Important notifications could not be refreshed.");
-  }
-  return reconciledRows
-    .map((row) => parseNotificationRow(row))
-    .filter(isDefined)
-    .filter((notification) => notification.isImportant);
+    operation.assertCurrent();
+    if (!response || response.error || !response.data) {
+      throw new Error("Important notifications could not be refreshed.");
+    }
+    const reconciledRows = await reconcileChillyChatCallNotificationRows(response.data, viewerUserId, operation);
+    operation.assertCurrent();
+    return reconciledRows
+      .map((row) => parseNotificationRow(row))
+      .filter(isDefined)
+      .filter((notification) => notification.isImportant);
+  });
 }
 
 export async function readNotificationActivityList(
   userId?: string,
   importantLimit = 20,
   recentLimit = 30,
+  signal?: AbortSignal,
 ): Promise<NotificationRecord[]> {
-  const [importantRows, recentRows] = await Promise.all([
-    readImportantNotificationList(userId, importantLimit),
-    readNotificationList(userId, recentLimit),
-  ]);
+  const [importantRows, recentRows] = await settleNotificationReads([
+    readImportantNotificationList(userId, importantLimit, signal),
+    readNotificationList(userId, recentLimit, signal),
+  ] as const);
   const seen = new Set<string>();
   return [...importantRows, ...recentRows].filter((notification) => {
     if (seen.has(notification.id)) return false;
@@ -1066,41 +1146,34 @@ export async function readNotificationActivityList(
 
 export async function readNotificationSummary(
   userId?: string,
+  signal?: AbortSignal,
 ): Promise<NotificationSummary> {
-  const viewerUserId = await readSessionUserId(userId);
-  if (!viewerUserId) {
-    return { totalCount: 0, unreadCount: 0, undismissedCount: 0, latestCreatedAt: null, categories: [] };
-  }
-  const [total, unread, undismissed, recentPage] = await Promise.all([
-    withAuthorityReadDeadline(
-      supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", viewerUserId),
-      null,
-    ),
-    withAuthorityReadDeadline(
-      supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
-        .eq("user_id", viewerUserId).is("read_at", null).is("dismissed_at", null),
-      null,
-    ),
-    withAuthorityReadDeadline(
-      supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
-        .eq("user_id", viewerUserId).is("dismissed_at", null),
-      null,
-    ),
-    readNotificationListPage(viewerUserId, 100),
-  ]);
-  if (!total || !unread || !undismissed || total.error || unread.error || undismissed.error || recentPage.status !== "resolved"
-    || await readSessionUserId().catch(() => null) !== viewerUserId) {
-    throw new Error("Notification activity could not be refreshed.");
-  }
-  const notifications = recentPage.items;
-
-  return {
-    totalCount: Number(total.count ?? 0),
-    unreadCount: Number(unread.count ?? 0),
-    undismissedCount: Number(undismissed.count ?? 0),
-    latestCreatedAt: notifications[0]?.createdAt ?? null,
-    categories: Array.from(new Set(notifications.map((notification) => notification.category))),
-  };
+  return withNotificationRead<NotificationSummary>(userId, signal,
+    { totalCount: 0, unreadCount: 0, undismissedCount: 0, latestCreatedAt: null, categories: [] }, async operation => {
+      const viewerUserId = operation.authority.userId;
+      const [total, unread, undismissed, recentPage] = await settleNotificationReads([
+        supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", viewerUserId)
+          .abortSignal(operation.signal),
+        supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
+          .eq("user_id", viewerUserId).is("read_at", null).is("dismissed_at", null).abortSignal(operation.signal),
+        supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
+          .eq("user_id", viewerUserId).is("dismissed_at", null).abortSignal(operation.signal),
+        // Preserve existing call reconciliation semantics even for summary-only
+        // consumers. This internal window is bounded; counts remain exact beyond it.
+        readNotificationPageForOperation(operation, 100),
+      ] as const);
+      operation.assertCurrent();
+      if (!total || !unread || !undismissed || total.error || unread.error || undismissed.error || recentPage.status !== "resolved") {
+        throw new Error("Notification activity could not be refreshed.");
+      }
+      return {
+        totalCount: Number(total.count ?? 0),
+        unreadCount: Number(unread.count ?? 0),
+        undismissedCount: Number(undismissed.count ?? 0),
+        latestCreatedAt: recentPage.items[0]?.createdAt ?? null,
+        categories: Array.from(new Set(recentPage.items.map(notification => notification.category))),
+      };
+    });
 }
 
 export async function markNotificationRead(

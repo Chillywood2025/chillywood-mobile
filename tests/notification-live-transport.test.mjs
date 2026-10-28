@@ -76,3 +76,19 @@ test('foreground reconnect uses unique channels and fences retired callbacks', (
   assert.equal(h.channels.length, 3);
   stop(); replacement(); listen();
 });
+
+test('restored exact authority does not reuse a retired transport with outstanding holders', () => {
+  const h = harness();
+  const first = h.api.subscribeToNotificationActivityChanges(h.authority);
+  const second = h.api.subscribeToNotificationActivityChanges(h.authority);
+  h.replace(null); assert.equal(h.channels[0].removed, true);
+  h.replace(binding());
+  const replacement = h.api.subscribeToNotificationActivityChanges(h.authority);
+  assert.equal(h.channels.length, 2, 'A to null to A starts a new live channel before old refs settle');
+  first(); second();
+  assert.equal(h.channels[1].removed, false, 'retired cleanup cannot dispose replacement transport');
+  const peer = h.api.subscribeToNotificationActivityChanges(h.authority);
+  assert.equal(h.channels.length, 2);
+  replacement(); assert.equal(h.channels[1].removed, false);
+  peer(); assert.equal(h.channels[1].removed, true);
+});

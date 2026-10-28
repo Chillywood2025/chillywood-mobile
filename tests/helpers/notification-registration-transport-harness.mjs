@@ -232,6 +232,8 @@ export function createNotificationRegistrationTransportHarness({
       } },
     };
     const mocks = {
+      '@supabase/supabase-js': { createClient: (url, key, options) => sdks.createMobileClient(url, key,
+        { ...options, global: { ...options?.global, fetch: http } }) },
       '@react-native-async-storage/async-storage': {
         getItem: async key => {
           if (runtimeState.storageGate?.key === key) {

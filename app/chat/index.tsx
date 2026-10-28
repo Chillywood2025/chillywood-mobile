@@ -1,9 +1,10 @@
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -40,10 +41,14 @@ import { useSession } from "../../_lib/session";
 import { createForegroundAuthenticatedUiCallIntent } from "../../_lib/nativeCallTransitionProvenance.mjs";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
+import { getCurrentAccountSessionAuthoritySnapshot } from "../../_lib/accountSessionAuthority";
+import { getNotificationActivityOwnerKey } from "../../_lib/notificationActivity";
 
 const CHAT_SUGGESTION_MIN_LENGTH = 2;
 const CHAT_SUGGESTION_DEBOUNCE_MS = 300;
 const CHAT_THREAD_PREVIEW_LIMIT = 4;
+const INBOX_READ_DEADLINE_MS = 15_000;
+const INBOX_FALLBACK_MS = 65_000;
 
 function buildThreadMap(items: ChatThreadSummary[]) {
   const map = new Map<string, ChatThreadSummary>();
@@ -88,8 +93,18 @@ function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
 export default function ChillyChatInboxScreen() {
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
-  const { isLoading: authLoading, isSignedIn, user } = useSession();
-  const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
+  const { isLoading: authLoading, isSignedIn, user, authority } = useSession();
+  const ownerKey = !authLoading && isSignedIn && authority?.userId === user?.id
+    ? getNotificationActivityOwnerKey(authority) : "";
+  const ownerRef = useRef(ownerKey);
+  ownerRef.current = ownerKey;
+  const focusedRef = useRef(false);
+  const lifetimeRef = useRef(0);
+  const flightsRef = useRef(new Map<string, { controller: AbortController; pending: boolean; promise: Promise<void> }>());
+  const loadThreadsRef = useRef<(refresh?: boolean) => Promise<void>>(async () => {});
+  const [storedThreads, setThreads] = useState<ChatThreadSummary[]>([]);
+  const [dataOwnerKey, setDataOwnerKey] = useState(ownerKey);
+  const threads = useMemo(() => dataOwnerKey === ownerKey ? storedThreads : [], [dataOwnerKey, ownerKey, storedThreads]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,25 +119,59 @@ export default function ChillyChatInboxScreen() {
   const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
   const [areThreadsExpanded, setAreThreadsExpanded] = useState(false);
 
-  const loadThreads = useCallback(async (refresh = false) => {
-    if (!isSignedIn || !user?.id) {
-      setThreads([]);
-      setError(null);
-      setRestrictedAccess(null);
-      setActiveFriendUserIds([]);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
+  const ownsInbox = useCallback(() => !!ownerKey && ownerRef.current === ownerKey
+    && focusedRef.current && AppState.currentState === "active"
+    && getNotificationActivityOwnerKey(getCurrentAccountSessionAuthoritySnapshot()) === ownerKey, [ownerKey]);
 
+  useEffect(() => {
+    setDataOwnerKey(ownerKey);
+    setThreads([]);
+    setActiveFriendUserIds([]);
+    setRestrictedAccess(null);
+    setError(null);
+    setSearchPeopleResults([]);
+    setSearchPeopleError(null);
+    setSearchQuery("");
+    setDebouncedSearchQuery("");
+    setQuickActionThreadId("");
+    setStartingChatUserId("");
+    setLoading(!!ownerKey);
+    setRefreshing(false);
+  }, [ownerKey]);
+
+  const loadThreads = useCallback(async (refresh = false) => {
+    if (!ownsInbox() || !user?.id) return;
+    const existing = flightsRef.current.get(ownerKey);
+    if (existing) {
+      existing.pending = true;
+      return existing.promise;
+    }
+    const lifetime = lifetimeRef.current;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const current = () => !signal.aborted && lifetimeRef.current === lifetime && ownsInbox();
+    const flight = { controller, pending: false, promise: Promise.resolve() };
+    flightsRef.current.set(ownerKey, flight);
     if (refresh) {
       setRefreshing(true);
     } else {
       setLoading(true);
     }
 
-    try {
-      const accountStatus = await readAccountAccessStatus(user.id).catch(() => null);
+    // A deadline releases UI busy state, not the actual in-flight ownership.
+    // Abort-ignoring readers must settle before a retry can start.
+    const deadline = setTimeout(() => {
+      if (current()) {
+        setError("Chi'lly Chat took too long to refresh. Your existing conversations are unchanged.");
+        setLoading(false);
+        setRefreshing(false);
+      }
+      controller.abort();
+    }, INBOX_READ_DEADLINE_MS);
+    flight.promise = Promise.resolve().then(async () => {
+      if (!current()) return;
+      const accountStatus = await readAccountAccessStatus(user.id, { signal });
+      if (!current()) return;
       if (accountStatus?.restricted) {
         setRestrictedAccess(accountStatus);
         setThreads([]);
@@ -132,52 +181,69 @@ export default function ChillyChatInboxScreen() {
       }
 
       setRestrictedAccess(null);
-      const nextThreads = await listChatThreads();
+      const nextThreads = await listChatThreads({ signal });
+      if (!current()) return;
       setThreads(nextThreads.filter((thread) => !getOfficialPlatformAccount(thread.otherMember?.userId)));
       setError(null);
-      void readActiveFriendUserIds()
-        .then((nextUserIds) => {
-          setActiveFriendUserIds(nextUserIds);
-        })
-        .catch(() => {
-          setActiveFriendUserIds([]);
-        });
-    } catch (loadError: any) {
+      // This is part of the same flight, including each block-override read.
+      // A failed refresh preserves the last known relationship hints.
+      const nextUserIds = await readActiveFriendUserIds({ signal, expectedUserId: user.id });
+      if (current()) setActiveFriendUserIds(nextUserIds);
+    }).catch((loadError: unknown) => {
+      if (!current()) return;
       setError(getUserFacingErrorMessage(loadError, "Unable to load Chi'lly Chat right now."));
-      setActiveFriendUserIds([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [isSignedIn, user?.id]);
+    }).finally(() => {
+      clearTimeout(deadline);
+      if (current()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+      if (flightsRef.current.get(ownerKey) === flight) flightsRef.current.delete(ownerKey);
+      if (flight.pending && ownerRef.current === ownerKey && ownsInbox()) void loadThreadsRef.current(true);
+    });
+    return flight.promise;
+  }, [ownerKey, ownsInbox, user?.id]);
+  loadThreadsRef.current = loadThreads;
 
   useFocusEffect(
     useCallback(() => {
-      if (authLoading) {
-        return () => {};
-      }
-
-      if (!isSignedIn) {
-        setThreads([]);
-        setError(null);
-        setRestrictedAccess(null);
-        setActiveFriendUserIds([]);
+      focusedRef.current = true;
+      lifetimeRef.current += 1;
+      let unsubscribe = () => {};
+      let fallback: ReturnType<typeof setInterval> | undefined;
+      const stop = () => {
+        lifetimeRef.current += 1;
+        unsubscribe();
+        unsubscribe = () => {};
+        if (fallback) clearInterval(fallback);
+        fallback = undefined;
+        // Keep the flight registered until the real source settles.
+        flightsRef.current.get(ownerKey)?.controller.abort();
         setLoading(false);
         setRefreshing(false);
-        return () => {};
-      }
-
-      void loadThreads();
+        setStartingChatUserId("");
+        setSearchPeopleLoading(false);
+      };
+      const start = () => {
+        if (!ownsInbox()) return;
+        void loadThreads();
+        unsubscribe = subscribeToInbox(() => { if (ownsInbox()) void loadThreads(true); });
+        fallback = setInterval(() => { if (ownsInbox()) void loadThreads(true); }, INBOX_FALLBACK_MS);
+      };
+      start();
       trackEvent("chat_inbox_opened", {
         surface: "chat-inbox",
       });
-
-      const unsubscribe = subscribeToInbox(() => {
-        void loadThreads(true);
+      const appStateSubscription = AppState.addEventListener("change", state => {
+        stop();
+        if (state === "active") start();
       });
-
-      return unsubscribe;
-    }, [authLoading, isSignedIn, loadThreads]),
+      return () => {
+        focusedRef.current = false;
+        stop();
+        appStateSubscription.remove();
+      };
+    }, [loadThreads, ownerKey, ownsInbox]),
   );
 
   const filteredThreads = useMemo(
@@ -218,6 +284,8 @@ export default function ChillyChatInboxScreen() {
   }, [searchQuery]);
 
   useEffect(() => {
+    if (!ownsInbox()) return;
+    const lifetime = lifetimeRef.current;
     const search = normalizePeopleSearchQuery(debouncedSearchQuery);
     const query = search.cleaned;
     if (!search.searchable || search.candidates.every((candidate) => candidate.length < CHAT_SUGGESTION_MIN_LENGTH)) {
@@ -234,19 +302,19 @@ export default function ChillyChatInboxScreen() {
     const timeout = setTimeout(() => {
       searchPublicPeople(query, { limit: 6 })
         .then((results) => {
-          if (!active) return;
+          if (!active || !ownsInbox() || lifetimeRef.current !== lifetime) return;
           const filtered = results
             .filter((person) => person.userId !== "")
             .filter((person) => (person.userId ? !threadByOtherUserId.has(person.userId) : true));
           setSearchPeopleResults(filtered);
         })
         .catch(() => {
-          if (!active) return;
+          if (!active || !ownsInbox() || lifetimeRef.current !== lifetime) return;
           setSearchPeopleResults([]);
           setSearchPeopleError("People search is unavailable right now.");
         })
         .finally(() => {
-          if (active) setSearchPeopleLoading(false);
+          if (active && ownsInbox() && lifetimeRef.current === lifetime) setSearchPeopleLoading(false);
         });
     }, 120);
 
@@ -254,7 +322,7 @@ export default function ChillyChatInboxScreen() {
       active = false;
       clearTimeout(timeout);
     };
-  }, [debouncedSearchQuery, threadByOtherUserId]);
+  }, [debouncedSearchQuery, ownsInbox, threadByOtherUserId]);
 
   const unreadThreadCount = useMemo(
     () => threads.filter((thread) => (thread.currentMember?.unreadCount ?? 0) > 0).length,
@@ -346,10 +414,14 @@ export default function ChillyChatInboxScreen() {
           text: "Delete from my inbox",
           style: "destructive",
           onPress: () => {
+            if (!ownsInbox()) return;
+            const lifetime = lifetimeRef.current;
+            flightsRef.current.get(ownerKey)?.controller.abort();
             setQuickActionThreadId("");
             setThreads((current) => current.filter((item) => item.threadId !== thread.threadId));
             void hideChatThreadFromInbox(thread.threadId)
               .then(() => {
+                if (!ownsInbox() || lifetimeRef.current !== lifetime) return;
                 trackEvent("chat_thread_hidden_from_inbox", {
                   surface: "chat-inbox",
                   threadId: thread.threadId,
@@ -357,6 +429,7 @@ export default function ChillyChatInboxScreen() {
                 void loadThreads(true);
               })
               .catch((hideError) => {
+                if (!ownsInbox() || lifetimeRef.current !== lifetime) return;
                 setThreads((current) => current.some((item) => item.threadId === thread.threadId) ? current : [thread, ...current]);
                 Alert.alert(
                   "Couldn't remove conversation",
@@ -370,7 +443,7 @@ export default function ChillyChatInboxScreen() {
         },
       ],
     );
-  }, [loadThreads]);
+  }, [loadThreads, ownerKey, ownsInbox]);
 
   const openProfileByPerson = useCallback((person: PublicPeopleSearchResult) => {
     const officialAccount = getOfficialPlatformAccount(person.userId);
@@ -391,6 +464,8 @@ export default function ChillyChatInboxScreen() {
     person: PublicPeopleSearchResult,
     startCall?: ChatCallType,
   ) => {
+    if (!ownsInbox()) return;
+    const lifetime = lifetimeRef.current;
     const officialAccount = getOfficialPlatformAccount(person.userId);
     if (officialAccount || person.isOfficial) {
       openProfileByPerson(person);
@@ -412,6 +487,7 @@ export default function ChillyChatInboxScreen() {
         avatarUrl: person.avatarUrl,
         tagline: person.shortBio,
       });
+      if (!ownsInbox() || lifetimeRef.current !== lifetime) return;
       trackEvent("chat_inbox_start_chat_created", {
         surface: "chat-inbox-search",
         targetUserId: person.userId,
@@ -421,15 +497,16 @@ export default function ChillyChatInboxScreen() {
       setSearchPeopleResults([]);
       openThread(thread, startCall);
     } catch (threadError) {
+      if (!ownsInbox() || lifetimeRef.current !== lifetime) return;
       const message = getUserFacingErrorMessage(
         threadError,
         "Unable to open Chi'lly Chat with this person right now.",
       );
       setSearchPeopleError(message);
     } finally {
-      setStartingChatUserId("");
+      if (ownsInbox() && lifetimeRef.current === lifetime) setStartingChatUserId("");
     }
-  }, [openProfileByPerson, openThread, threadByOtherUserId]);
+  }, [openProfileByPerson, openThread, ownsInbox, threadByOtherUserId]);
 
   const openSearchSuggestion = useCallback((person: PublicPeopleSearchResult) => {
     const thread = threadByOtherUserId.get(person.userId);

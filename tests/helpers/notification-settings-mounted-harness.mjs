@@ -174,6 +174,7 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     './accountBoundSupabaseMutation': mutation, './accountSessionAuthority': authority,
   });
   const realNotifications = load(compile(notificationSource), {
+    '@supabase/supabase-js': { createClient: () => { throw new Error('Settings must not dispatch Activity reconciliation.'); } },
     '@react-native-async-storage/async-storage': { getItem: async key => state.storageReader ? state.storageReader(key, storage.get(key) || null) : storage.get(key) || null,
       setItem: async (key, value) => { storage.set(key, value); } },
     'expo-constants': { easConfig: { projectId: 'fixture-project' } }, 'expo-device': { isDevice: actualPush }, 'expo-application': {},

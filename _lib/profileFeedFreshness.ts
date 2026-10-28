@@ -1,6 +1,8 @@
 /** Active-screen fallback, not a push-delivery or concurrent-capacity claim.
  * One coalesced pass per 120–180 seconds; hints are rate-limited to 30 seconds.
  * Errors back off up to ten minutes. Disposal retires in-flight results.
+ * A deadline requests cancellation; it does not release source ownership until
+ * check settles. Checks with concurrent readers must await all their readers.
  */
 type FreshnessTimer = ReturnType<typeof setTimeout> | number;
 export function startProfileFeedFreshness(options: {
@@ -42,14 +44,15 @@ export function startProfileFeedFreshness(options: {
     lastStarted = now();
     const request = new AbortController();
     inFlight = request;
-    let rejectAbort: () => void = () => {};
-    const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = () => reject(new Error("Freshness request retired.")); });
-    request.signal.addEventListener("abort", rejectAbort, { once: true });
     const deadline = schedule(() => request.abort(), 20_000);
-    try { await Promise.race([Promise.resolve().then(() => options.check(request.signal)), aborted]); failures = 0; }
+    try {
+      await Promise.resolve().then(() => options.check(request.signal));
+      if (request.signal.aborted) throw new Error("Freshness request retired.");
+      failures = 0;
+    }
     catch { request.abort(); failures = Math.min(3, failures + 1); }
     finally {
-      cancel(deadline); request.signal.removeEventListener("abort", rejectAbort);
+      cancel(deadline);
       if (inFlight === request) inFlight = null;
       running = false; arm(interval());
     }

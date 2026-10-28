@@ -71,7 +71,7 @@ function harness({ now = "2026-10-16T08:30:00Z", zone = "America/Los_Angeles", l
   } };
   const schedule = (fn, delay, interval = false) => { const id = ++sequence; timers.set(id, { fn, due: state.now + delay, delay, interval }); return id; };
   const native = {
-    AppState: { addEventListener: (type, callback) => { assert.equal(type, "change"); activations.add(callback); return { remove: () => activations.delete(callback) }; } },
+    AppState: { currentState: "active", addEventListener: (type, callback) => { assert.equal(type, "change"); activations.add(callback); return { remove: () => activations.delete(callback) }; } },
     Platform: { OS: "ios", select: value => value.ios ?? value.default },
     useWindowDimensions: () => ({ fontScale: 1 }), StyleSheet: { create: value => value, absoluteFillObject: {} },
   };
@@ -82,7 +82,7 @@ function harness({ now = "2026-10-16T08:30:00Z", zone = "America/Los_Angeles", l
       return React.createElement(React.Fragment, null, ...React.Children.toArray(props.children).filter(React.isValidElement));
     };
   }
-  const globals = { React, Date: ClockDate, Intl: intl, console,
+  const globals = { React, Date: ClockDate, Intl: intl, console, AbortController,
     setTimeout: (fn, delay) => schedule(fn, delay), clearTimeout: id => timers.delete(id),
     setInterval: (fn, delay) => schedule(fn, delay, true), clearInterval: id => timers.delete(id),
   };
@@ -347,12 +347,16 @@ test("whole inbox loads threads, preserves row order/navigation and updates time
   h.native.FlatList = ({ data, renderItem, ListHeaderComponent }) => React.createElement(React.Fragment, null,
     ListHeaderComponent, ...data.map(item => React.createElement(React.Fragment, { key: item.threadId }, renderItem({ item }))));
   h.native.Alert = { alert: noop };
+  const inboxAuthority = { userId: "u", accountId: "u", sessionGeneration: "inbox-one", state: "ACTIVE", restoreOnly: false };
+  const inboxOwnerKey = a => a ? JSON.stringify([a.userId, a.accountId, a.sessionGeneration]) : "";
   const Screen = h.load("app/chat/index.tsx", {
     "expo-router": { useRouter: () => ({ push: value => routes.push(value) }), useFocusEffect: callback => React.useEffect(callback, [callback]) },
     "react-native-safe-area-context": { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     "../../components/ui/ProfileMediaImage": { ProfileMediaImage: () => null },
     "../../components/ui/chillywood-branded-surface": { ChillywoodBrandedSurface: h.native.View },
-    "../../_lib/session": { useSession: () => ({ isLoading: false, isSignedIn: true, user: { id: "u" } }) },
+    "../../_lib/session": { useSession: () => ({ isLoading: false, isSignedIn: true, user: { id: "u" }, authority: inboxAuthority }) },
+    "../../_lib/accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => inboxAuthority },
+    "../../_lib/notificationActivity": { getNotificationActivityOwnerKey: inboxOwnerKey },
     "../../_lib/accountAccess": { readAccountAccessStatus: async () => ({ restricted: false }) },
     "../../_lib/analytics": { trackEvent: noop }, "../../_lib/displayText": { decodeVisiblePercentEscapes: value => value },
     "../../_lib/chat": { listChatThreads: async () => rows, subscribeToInbox: () => noop },

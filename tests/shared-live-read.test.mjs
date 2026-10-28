@@ -27,9 +27,22 @@ test('different generations and different canonical interests never share result
   const read=fixture();let calls=0;const source=async()=>++calls;
   await Promise.all([read('one','scope',new AbortController().signal,source),read('two','scope',new AbortController().signal,source),read('one','other',new AbortController().signal,source)]);assert.equal(calls,3);
 });
-test('late old completion cannot delete the replacement flight after abort',async()=>{
+test('retired source keeps ownership until settlement and never serves late data to a new reader',async()=>{
   const read=fixture(),old=deferred(),fresh=deferred(),a=new AbortController();let calls=0;
   const p=read('a','s',a.signal,()=>old.promise);await Promise.resolve();const rejected=assert.rejects(p,/retired/);a.abort();await rejected;
-  const source=()=>{calls++;return fresh.promise;},q=read('a','s',new AbortController().signal,source);await Promise.resolve();old.resolve('old');await Promise.resolve();await Promise.resolve();
-  const r=read('a','s',new AbortController().signal,source);await Promise.resolve();assert.equal(calls,1);fresh.resolve('fresh');assert.deepEqual(await Promise.all([q,r]),['fresh','fresh']);
+  const source=()=>{calls++;return fresh.promise;};
+  for(let i=0;i<10;i++)await assert.rejects(read('a','s',new AbortController().signal,source),/retired/);
+  assert.equal(calls,0,'abort-ignoring source must not overlap a replacement');
+  old.resolve('old');await new Promise(resolve=>setImmediate(resolve));
+  const q=read('a','s',new AbortController().signal,source),r=read('a','s',new AbortController().signal,source);
+  await Promise.resolve();assert.equal(calls,1);fresh.resolve('fresh');assert.deepEqual(await Promise.all([q,r]),['fresh','fresh']);
+});
+test('saturated ownership rejects excess work instead of bypassing the single-flight bound',async()=>{
+  const read=fixture(),held=deferred();let calls=0;
+  const source=()=>{calls++;return held.promise;};
+  const pending=Array.from({length:128},(_,i)=>read('a',String(i),new AbortController().signal,source));
+  await Promise.resolve();assert.equal(calls,128);
+  await assert.rejects(read('a','overflow',new AbortController().signal,source),/capacity/);
+  assert.equal(calls,128);held.resolve('done');await Promise.all(pending);
+  assert.equal(await read('a','overflow',new AbortController().signal,source),'done');assert.equal(calls,129);
 });

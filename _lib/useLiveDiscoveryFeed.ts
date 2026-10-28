@@ -19,6 +19,10 @@ export type LiveDiscoveryFeedOptions = Omit<PublicDiscoveryFeedReadOptions, 'ite
   preserveBrowsePosition?: boolean;
 };
 const empty = () => ({ items: [] as DiscoveryFeedItem[], publicItems: [] as DiscoveryFeedItem[], circleItems: [] as DiscoveryFeedItem[], signals: {} as DiscoveryFeedRankingSignals, ready: false, pendingItemCount: 0 });
+const settledValue = <T,>(result: PromiseSettledResult<T>): T => {
+  if (result.status === 'rejected') throw result.reason;
+  return result.value;
+};
 
 // Read-only refresh; audience and playback access continue to be enforced by the existing views and destinations.
 export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
@@ -92,7 +96,9 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
             readSharedLiveSnapshot(JSON.stringify([authority?.userId, authority?.accountId, authority?.sessionGeneration, guest]),
               JSON.stringify([settings, refreshHead, stable ? previous.publicItems.map(item => item.id) : [], stable ? previous.circleItems.map(item => item.id) : []]),
               ownedController.signal, async sharedSignal => {
-                const [publicRows, circleRows, publicPinned, circlePinned] = await Promise.all([
+                // An early failure must not release shared ownership while a
+                // sibling source still runs, even if it ignores cancellation.
+                const reads = await Promise.allSettled([
               refreshHead ? readPublicDiscoveryFeedItems({ ...settings, signal: sharedSignal }) : Promise.resolve(previous.publicItems),
               !refreshHead ? Promise.resolve(previous.circleItems)
                 : settings.includeCircle && !guest ? readCircleSpectatorFeedItems({ ...settings, signal: sharedSignal }) : Promise.resolve([]),
@@ -103,6 +109,9 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
                 ? readCircleSpectatorFeedItems({ ...settings, itemIds: previous.circleItems.map(item => item.id), limit: 50, signal: sharedSignal }).then(items => rankCircleSpectatorFeedItems(items))
                 : Promise.resolve(null),
                 ]);
+                const publicRows = settledValue(reads[0]), circleRows = settledValue(reads[1]);
+                const publicPinned = settledValue(reads[2]), circlePinned = settledValue(reads[3]);
+                if (sharedSignal.aborted) throw new Error('Discovery read retired.');
                 const signals = !refreshHead ? previous.signals : guest ? {} : await readDiscoveryCandidateRankingSignals([...publicRows, ...circleRows], sharedSignal);
                 return [{ items: rankDiscoveryFeedItems(publicRows, signals), signals }, { items: rankCircleSpectatorFeedItems(circleRows, signals) }, publicPinned, circlePinned] as const;
               }),

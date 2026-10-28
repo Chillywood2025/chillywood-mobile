@@ -9,6 +9,10 @@ type Pair = { user_low_id: string; user_high_id: string; status: string };
 type Block = { channel_user_id: string; blocked_user_id: string };
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const empty = (): DiscoveryFeedRankingSignals => ({ followedChannelIds: [], chillyCircleUserIds: [], categoryKeys: [] });
+const settledValue = <T,>(result: PromiseSettledResult<T>): T => {
+  if (result.status === 'rejected') throw result.reason;
+  return result.value;
+};
 
 /** Ranking only, never access authority. Five bounded reads independent of the
  * viewer's graph degree; every result still passes existing table RLS. */
@@ -43,15 +47,18 @@ export async function readDiscoveryCandidateRankingSignals(items: readonly Candi
   const incomingBlockQuery = supabase.from('channel_audience_blocks').select('channel_user_id,blocked_user_id')
     .eq('blocked_user_id', viewer).in('channel_user_id', ids).limit(DISCOVERY_RANKING_CANDIDATE_LIMIT);
   if (signal) for (const query of [followerQuery, lowQuery, highQuery, outgoingBlockQuery, incomingBlockQuery]) query.abortSignal(signal);
-  const results = await Promise.all([
+  // Preserve ownership of the complete bounded graph read through an early
+  // transport failure; no sibling may escape the shared read's lifetime.
+  const settled = await Promise.allSettled([
     followerQuery.returns<{ channel_user_id: string; follower_user_id: string }[]>(),
     lowQuery.returns<Pair[]>(), highQuery.returns<Pair[]>(),
     outgoingBlockQuery.returns<Block[]>(), incomingBlockQuery.returns<Block[]>(),
   ]);
   if (signal?.aborted) throw new Error('Discovery ranking read aborted.');
   if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error('Discovery ranking account changed.');
-  if (results.some(result => result.error || !Array.isArray(result.data))) throw new Error('Discovery ranking is unavailable.');
-  const [follows, lows, highs, outgoingBlocks, incomingBlocks] = results;
+  const follows = settledValue(settled[0]), lows = settledValue(settled[1]), highs = settledValue(settled[2]);
+  const outgoingBlocks = settledValue(settled[3]), incomingBlocks = settledValue(settled[4]);
+  if ([follows, lows, highs, outgoingBlocks, incomingBlocks].some(result => result.error || !Array.isArray(result.data))) throw new Error('Discovery ranking is unavailable.');
   const blocked = new Set<string>();
   for (const row of outgoingBlocks.data!) if (row.channel_user_id === viewer && candidates.has(row.blocked_user_id)) blocked.add(row.blocked_user_id);
   for (const row of incomingBlocks.data!) if (row.blocked_user_id === viewer && candidates.has(row.channel_user_id)) blocked.add(row.channel_user_id);

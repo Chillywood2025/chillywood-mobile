@@ -91,6 +91,18 @@ const FRIEND_RELATIONSHIP_SELECT =
 const DEFAULT_FRIEND_LIST_LIMIT = 24;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const assertFriendReadActive = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+  const error = new Error("Chi'lly Circle read retired.");
+  error.name = "AbortError";
+  throw error;
+};
+async function settleFriendReads<T>(reads: PromiseLike<T>[]): Promise<T[]> {
+  const outcomes = await Promise.allSettled(reads);
+  const failure = outcomes.find(result => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
+  return outcomes.map(result => (result as PromiseFulfilledResult<T>).value);
+}
 
 const unwrapMaybeSingle = <T>(value: T | T[] | null): T | null => {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -168,30 +180,35 @@ async function readFriendRelationshipRow(
 async function readChillyCircleBlockOverride(
   viewerUserId: string,
   otherUserId: string,
+  signal?: AbortSignal,
 ): Promise<boolean> {
+  assertFriendReadActive(signal);
   const normalizedViewerUserId = toText(viewerUserId);
   const normalizedOtherUserId = toText(otherUserId);
   if (!normalizedViewerUserId || !normalizedOtherUserId || normalizedViewerUserId === normalizedOtherUserId) return false;
 
-  const [
-    { data: blockedByOther, error: blockedByOtherError },
-    { data: blockedByViewer, error: blockedByViewerError },
-  ] = await Promise.all([
-    supabase
+  let otherQuery = supabase
       .from(CHANNEL_AUDIENCE_BLOCKS_TABLE)
       .select("channel_user_id,blocked_user_id")
       .eq("channel_user_id", normalizedOtherUserId)
-      .eq("blocked_user_id", normalizedViewerUserId)
-      .returns<ChannelAudienceBlockRow>()
-      .maybeSingle(),
-    supabase
+      .eq("blocked_user_id", normalizedViewerUserId);
+  let viewerQuery = supabase
       .from(CHANNEL_AUDIENCE_BLOCKS_TABLE)
       .select("channel_user_id,blocked_user_id")
       .eq("channel_user_id", normalizedViewerUserId)
-      .eq("blocked_user_id", normalizedOtherUserId)
-      .returns<ChannelAudienceBlockRow>()
-      .maybeSingle(),
+      .eq("blocked_user_id", normalizedOtherUserId);
+  if (signal) {
+    otherQuery = otherQuery.abortSignal(signal);
+    viewerQuery = viewerQuery.abortSignal(signal);
+  }
+  const [
+    { data: blockedByOther, error: blockedByOtherError },
+    { data: blockedByViewer, error: blockedByViewerError },
+  ] = await settleFriendReads([
+    otherQuery.returns<ChannelAudienceBlockRow>().maybeSingle(),
+    viewerQuery.returns<ChannelAudienceBlockRow>().maybeSingle(),
   ]);
+  assertFriendReadActive(signal);
 
   if (blockedByOtherError || blockedByViewerError) return false;
   return !!blockedByOther || !!blockedByViewer;
@@ -592,29 +609,38 @@ export async function readFriendListSummary(options?: {
   };
 }
 
-export async function readActiveFriendUserIds(): Promise<string[]> {
+export async function readActiveFriendUserIds(options: { signal?: AbortSignal; expectedUserId?: string } = {}): Promise<string[]> {
+  const { signal, expectedUserId } = options;
+  assertFriendReadActive(signal);
   const viewerUserId = await getSignedInFriendUserId();
+  assertFriendReadActive(signal);
+  if (expectedUserId && viewerUserId !== expectedUserId) throw new Error("Chi'lly Circle account changed.");
   if (!viewerUserId) {
     return [];
   }
 
-  const [
-    { data: lowRows, error: lowError },
-    { data: highRows, error: highError },
-  ] = await Promise.all([
-    supabase
+  let lowQuery = supabase
       .from(USER_FRIENDSHIPS_TABLE)
       .select(FRIEND_RELATIONSHIP_SELECT)
       .eq("user_low_id", viewerUserId)
-      .eq("status", "active")
-      .returns<FriendRelationshipRow[]>(),
-    supabase
+      .eq("status", "active");
+  let highQuery = supabase
       .from(USER_FRIENDSHIPS_TABLE)
       .select(FRIEND_RELATIONSHIP_SELECT)
       .eq("user_high_id", viewerUserId)
-      .eq("status", "active")
-      .returns<FriendRelationshipRow[]>(),
+      .eq("status", "active");
+  if (signal) {
+    lowQuery = lowQuery.abortSignal(signal);
+    highQuery = highQuery.abortSignal(signal);
+  }
+  const [
+    { data: lowRows, error: lowError },
+    { data: highRows, error: highError },
+  ] = await settleFriendReads([
+    lowQuery.returns<FriendRelationshipRow[]>(),
+    highQuery.returns<FriendRelationshipRow[]>(),
   ]);
+  assertFriendReadActive(signal);
 
   if (lowError || highError) {
     throw new UserFacingError("circle_action", "Chi'lly Circle could not load right now.");
@@ -622,14 +648,16 @@ export async function readActiveFriendUserIds(): Promise<string[]> {
 
   const friendUserIds = new Set<string>();
   for (const row of [...(lowRows ?? []), ...(highRows ?? [])]) {
+    assertFriendReadActive(signal);
     const relationship = parseFriendRelationshipRow(row);
     if (!relationship || relationship.status !== "active") continue;
     const otherUserId = relationship.userLowId === viewerUserId
       ? relationship.userHighId
       : relationship.userLowId;
-    if (otherUserId && !(await readChillyCircleBlockOverride(viewerUserId, otherUserId))) {
+    if (otherUserId && !(await readChillyCircleBlockOverride(viewerUserId, otherUserId, signal))) {
       friendUserIds.add(otherUserId);
     }
+    assertFriendReadActive(signal);
   }
 
   return [...friendUserIds];
