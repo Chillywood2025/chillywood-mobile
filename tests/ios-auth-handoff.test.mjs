@@ -12,7 +12,7 @@ const safari = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebK
 const pages = [renderResetPasswordPage(), renderSignupConfirmationPage(), renderIosHandoffPage()];
 const paths = ["reset-password", "auth-callback", "auth-handoff"];
 const canonical = (type, token = hash) => `https://chillywoodstream.com/${type === "email" ? "auth-callback" : "reset-password"}?token_hash=${token}&type=${type}`;
-const bridge = (type, token = hash) => `https://chillywood-legal.pages.dev/auth-handoff#token_hash=${token}&type=${type}`;
+const bridge = (type, token = hash) => `https://chillywood-legal.pages.dev/auth-handoff/#token_hash=${token}&type=${type}`;
 
 function load(url, index = 2, options = {}) {
   const events = new Map();
@@ -89,6 +89,7 @@ for (const type of ["recovery", "email"]) for (const token of [hash, `pkce_${has
     start.event("open-app", "click");
     assert.deepEqual(start.navigations, [bridge(type, token)]);
     assert.equal(new URL(start.navigations[0]).search, "");
+    assert.equal(new URL(start.navigations[0]).pathname, "/auth-handoff/", "enter the hosted 200 route without a fragment-carrying redirect");
     const next = load(start.navigations[0]);
     assert.deepEqual(next.scrubs, [[null, "", "/auth-handoff"]]);
     assert.equal(next.link.hidden, false);
@@ -109,8 +110,8 @@ for (const type of ["recovery", "email"]) for (const token of [hash, `pkce_${has
   });
 }
 
-for (const suffix of ["/", "/index.html"]) test(`bridge alias ${suffix}`, () => {
-  assert.equal(load(bridge("email").replace("/auth-handoff#", `/auth-handoff${suffix}#`)).link.hidden, false);
+for (const suffix of ["", "/index.html"]) test(`bridge alias ${suffix}`, () => {
+  assert.equal(load(bridge("email").replace("/auth-handoff/#", `/auth-handoff${suffix}#`)).link.hidden, false);
 });
 
 const hostile = [
