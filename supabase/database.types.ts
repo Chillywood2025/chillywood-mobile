@@ -20607,6 +20607,26 @@ export type Database = {
         Args: { p_acceptances: Json; p_expected_account_id: string; p_expected_user_id: string; p_market: string; p_session_generation: string; p_capability?: string }
         Returns: Json
       }
+      anonymous_social_attachment_source_visible: {
+        Args: { p_surface_type: string; p_surface_id: string }
+        Returns: boolean
+      }
+      read_profile_relationship_feed_page: {
+        Args: { p_before_created_at?: string | null; p_before_id?: string | null; p_snapshot_at?: string | null; p_limit?: number }
+        Returns: { id: string; source_type: string; source_id: string; creator_user_id: string; source_context: string; created_at: string; snapshot_at: string }[]
+      }
+      read_authorized_profile_post_counts: {
+        Args: { p_post_id: string }
+        Returns: { like_count: number; comment_count: number }[]
+      }
+      read_authorized_profile_feed_candidates: {
+        Args: { p_actors: Json; p_before_created_at?: string | null; p_before_id?: string | null; p_snapshot_at?: string | null; p_limit?: number }
+        Returns: { id: string; created_at: string }[]
+      }
+      read_profile_post_engagement_batch: {
+        Args: { p_post_ids: string[] }
+        Returns: { post_id: string; like_count: number; comment_count: number; liked_by_viewer: boolean }[]
+      }
       wave1_creator_eligibility_readback: { Args: never; Returns: Json }
       wave1_entitlement_authority_readback: { Args: { p_entitlement_key: string }; Returns: Json }
       wave1_legal_requirements_readback: { Args: { p_capability?: string }; Returns: Json }

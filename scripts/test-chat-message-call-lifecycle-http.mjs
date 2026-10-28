@@ -84,6 +84,8 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
     "./chillyChatCallDispatchSchema": loadSource("_lib/chillyChatCallDispatchSchema.ts", {}),
   });
   const attachments = loadSource("_lib/socialAttachments.ts", {
+    "@supabase/supabase-js": { createClient },
+    "./accountBoundSupabaseMutation": mutation,
     "./supabase": bootstrap, "./userFacingErrors": errors,
     "./imageUploadNormalization": unavailableModule("attachment upload"),
     "./mediaStorage": unavailableModule("attachment provider"),

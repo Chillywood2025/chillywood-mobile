@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {profileFeedFiles, profileFeedFunctions, assertProfileFeedInventory} from './helpers/profile-feed-runtime-inventory.mjs';
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
@@ -346,7 +347,7 @@ const targets=new Set([
   'watch_party_room_self_access_allowed_internal/2','resolve_watch_party_livekit_viewer_authority/3',
   'apply_revenuecat_terminal_quarantine_projection_internal/1',
 ].map(x=>`public.${x}`));
-const schemas="('public','private','cognitive_runtime')";
+const schemas="('public','private','cognitive_runtime','profile_engagement_private')";
 const queries={
   functions:`select p.oid,n.nspname||'.'||p.proname||'/'||p.pronargs key,p.oid::regprocedure::text identity,
     pg_get_functiondef(p.oid) definition,p.proowner,p.proacl,p.prosecdef,p.proleakproof,p.provolatile,p.proparallel,
@@ -383,7 +384,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+profileFeedFunctions.length);
+    await assertProfileFeedInventory(db,before.functions);
     assert.deepEqual(before.functions.filter(fn=>referenceAndRenditionFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
       [...referenceAndRenditionFunctionIdentities].sort(),'exact Brand reference and legacy rendition helper signatures are present');
     assert.deepEqual(before.brandIndexGuard.map(fn=>fn.key), ['extensions.guard_platform_brand_index_helper_ddl_v1/0']);
@@ -437,7 +439,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+profileFeedFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>profileFeedFiles.includes(file)),profileFeedFiles, 'exact profile feed migration bundle');
     assert.deepEqual(replayReport.files.filter(file=>brandReferenceFiles.includes(file)),brandReferenceFiles);
     assert.deepEqual(replayReport.files.filter(file=>legacyRenditionFiles.includes(file)),legacyRenditionFiles);
     assert.deepEqual(replayReport.files.filter(file=>r2QualificationFiles.includes(file)),r2QualificationFiles,

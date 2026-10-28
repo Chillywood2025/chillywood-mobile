@@ -168,6 +168,7 @@ jobs:
           supabase start
           supabase db reset
           supabase test db
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs
           node scripts/test-content-inspection-postgres.mjs
           node scripts/test-deleted-content-retention-postgres.mjs
           node scripts/test-deleted-media-retirement-postgres.mjs

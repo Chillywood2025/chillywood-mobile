@@ -1,4 +1,4 @@
-// Test-only schema replay for the October runtime-authority repair. No network,
+// Test-only schema replay for the October runtime-authority repair. No provider network,
 // production rows or production credentials. Managed services are local doubles.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,8 +55,10 @@ export function splitSQL(source) {
 }
 
 export async function createDatabase({overlayLiveDrift = false, applyRepair = false, includeHeldStudio = false,
-  implicitApiGrants = true, excludeMigrations = []} = {}) {
-  const db = new PGlite({extensions: {pgcrypto, pg_trgm}});
+  implicitApiGrants = true, excludeMigrations = [], databaseFactory = null} = {}) {
+  // A test-supplied native adapter must expose the same exec/query/close methods.
+  // Default replay and every statement/double below remain unchanged.
+  const db = databaseFactory ? await databaseFactory() : new PGlite({extensions: {pgcrypto, pg_trgm}});
   const replayReport = {files: [], statements: 0, skipped: [], implicitApiGrants, excludedMigrations: [...excludeMigrations],
     infrastructure: 'Empty catalog-derived auth/storage; controlled cron/vault/realtime; no provider transport'};
   try {

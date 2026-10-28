@@ -584,7 +584,11 @@ export async function readPublicPlatformIdentity(userId: string): Promise<UserPr
   return data ? parseRemoteUserProfile(data) : null;
 }
 
-async function syncUserProfileToRemote(profile: UserProfile, binding: UserDataAccountBinding): Promise<boolean> {
+async function syncUserProfileToRemote(
+  profile: UserProfile,
+  binding: UserDataAccountBinding,
+  client: typeof supabase = supabase,
+): Promise<boolean> {
   assertUserDataAccountBindingIsCurrent(binding);
   const userId = getBoundUserId(binding);
   if (!userId) return false;
@@ -595,7 +599,7 @@ async function syncUserProfileToRemote(profile: UserProfile, binding: UserDataAc
       username: profile.username,
       displayName: profile.displayName ?? "",
     });
-    const { error } = await supabase
+    const { error } = await client
       .from(USER_PROFILES_TABLE)
       .upsert(toUserProfileUpsertRow(userId, profile), { onConflict: "user_id" });
     assertUserDataAccountBindingIsCurrent(binding);
@@ -627,7 +631,11 @@ async function syncUserProfileToRemote(profile: UserProfile, binding: UserDataAc
   }
 }
 
-async function refreshSignedInIdentitySnapshots(profile: UserProfile, binding: UserDataAccountBinding): Promise<void> {
+async function refreshSignedInIdentitySnapshots(
+  profile: UserProfile,
+  binding: UserDataAccountBinding,
+  client: typeof supabase = supabase,
+): Promise<void> {
   assertUserDataAccountBindingIsCurrent(binding);
   const userId = getBoundUserId(binding);
   if (!userId) return;
@@ -638,7 +646,7 @@ async function refreshSignedInIdentitySnapshots(profile: UserProfile, binding: U
   const now = new Date().toISOString();
 
   await Promise.allSettled([
-    supabase
+    client
       .from("chat_thread_members")
       .update({
         display_name: displayName,
@@ -646,7 +654,7 @@ async function refreshSignedInIdentitySnapshots(profile: UserProfile, binding: U
         tagline,
       })
       .eq("user_id", userId),
-    supabase
+    client
       .from("communication_room_memberships")
       .update({
         display_name: displayName,
@@ -654,7 +662,7 @@ async function refreshSignedInIdentitySnapshots(profile: UserProfile, binding: U
         updated_at: now,
       })
       .eq("user_id", userId),
-    supabase
+    client
       .from("watch_party_room_memberships")
       .update({
         display_name: displayName,
@@ -1242,21 +1250,96 @@ export async function saveUserProfile(profile: UserProfile, expectedUserId?: str
   }
 }
 
-/** User-initiated Studio saves require server acknowledgement before marking the draft saved. */
-export async function saveUserProfileRemote(profile: UserProfile, expectedUserId: string): Promise<void> {
-  const binding = captureUserDataAccountBinding();
+async function captureProfileSaveOperation(
+  expectedUserId: string,
+  expectedAuthority?: AccountSessionAuthorityBinding,
+) {
+  const binding = expectedAuthority ?? captureUserDataAccountBinding();
+  assertUserDataAccountBindingIsCurrent(binding);
   const userId = getBoundUserId(binding);
   if (!expectedUserId || userId !== expectedUserId) {
     throw new Error("Account changed before the profile could be saved.");
   }
+  const subject = await captureAccountBoundSupabaseMutationSubject(expectedUserId);
+  assertUserDataAccountBindingIsCurrent(binding);
+  const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+  });
+  return { binding: subject.authority, client };
+}
+
+/** User-initiated Studio saves require server acknowledgement before marking the draft saved. */
+export async function saveUserProfileRemote(
+  profile: UserProfile,
+  expectedUserId: string,
+  expectedAuthority?: AccountSessionAuthorityBinding,
+): Promise<void> {
+  const { binding, client } = await captureProfileSaveOperation(expectedUserId, expectedAuthority);
   const normalized = normalizeUserProfile(profile);
-  const remoteSynced = await syncUserProfileToRemote(normalized, binding);
+  const remoteSynced = await syncUserProfileToRemote(normalized, binding, client);
   assertUserDataAccountBindingIsCurrent(binding);
   if (!remoteSynced) {
     throw new Error("Platform details could not be saved. Your changes are still ready to retry.");
   }
   await writeAccountValue(USER_PROFILE_KEY, binding, normalized);
-  await refreshSignedInIdentitySnapshots(normalized, binding);
+  await refreshSignedInIdentitySnapshots(normalized, binding, client);
+}
+
+/** About owns only the tagline. A retained editor must not overwrite a newer
+ * avatar, privacy setting, or other profile field from its pre-save snapshot.
+ */
+export async function saveUserProfileAbout(
+  tagline: string,
+  expectedUserId: string,
+  expectedAuthority?: AccountSessionAuthorityBinding,
+): Promise<UserProfile> {
+  const { binding, client } = await captureProfileSaveOperation(expectedUserId, expectedAuthority);
+  const normalizedTagline = tagline.trim().slice(0, 160) || undefined;
+  const { data, error } = await client.from(USER_PROFILES_TABLE)
+    .update({ tagline: normalizedTagline ?? null })
+    .eq("user_id", binding.userId)
+    .select("user_id")
+    .maybeSingle();
+  assertUserDataAccountBindingIsCurrent(binding);
+  if (error || !data) throw new Error(error?.message || "About could not be saved. Please try again.");
+  return cacheAcknowledgedUserProfile({ tagline: normalizedTagline }, binding, client);
+}
+
+/** Cache only a server-acknowledged Profile patch, under its initiating session.
+ * Do not upsert the whole profile again: that can overwrite concurrent edits and
+ * must never capture a replacement account after the write request settles.
+ */
+const profileCacheWrites = new Map<string, Promise<UserProfile>>();
+export async function cacheAcknowledgedUserProfile(
+  patch: Partial<UserProfile>,
+  binding: AccountSessionAuthorityBinding,
+  client: typeof supabase,
+): Promise<UserProfile> {
+  assertUserDataAccountBindingIsCurrent(binding);
+  // Same-user session replacement shares the disk key, so it also shares this
+  // queue; every queued operation still revalidates its exact generation.
+  const scope = JSON.stringify([binding.userId, binding.accountId]);
+  const previous = profileCacheWrites.get(scope);
+  // About and appearance can acknowledge together. Serialize read/merge/write
+  // AND identity refresh so neither can publish the other's pre-merge snapshot.
+  const pending = (previous ?? Promise.resolve()).catch(() => undefined).then(async () => {
+    assertUserDataAccountBindingIsCurrent(binding);
+    const current = await readAccountValue<UserProfile | null>(USER_PROFILE_KEY, binding, null, true);
+    if (!current) throw new Error("Profile was saved, but the local profile is unavailable. Reload your Profile.");
+    const normalized = normalizeUserProfile({ ...current, ...patch });
+    if (!await writeAccountValue(USER_PROFILE_KEY, binding, normalized)) {
+      throw new Error("Profile was saved, but this device could not refresh its profile cache. Reload your Profile.");
+    }
+    await refreshSignedInIdentitySnapshots(normalized, binding, client);
+    return normalized;
+  });
+  profileCacheWrites.set(scope, pending);
+  try {
+    return await pending;
+  } finally {
+    if (profileCacheWrites.get(scope) === pending) profileCacheWrites.delete(scope);
+  }
 }
 
 // ── Last Party Session (for auto-rejoin) ──────────────────────────────────────

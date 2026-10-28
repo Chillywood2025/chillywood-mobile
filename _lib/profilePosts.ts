@@ -1,12 +1,17 @@
-import type { Tables, TablesInsert } from "../supabase/database.types";
+import type { Database, Tables, TablesInsert } from "../supabase/database.types";
+import { createClient } from "@supabase/supabase-js";
+import { assertAccountBoundSupabaseMutationSubjectCurrent, captureAccountBoundSupabaseMutationSubject, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 
 import {
   createSocialAttachmentForSurface,
   readSocialAttachmentsForSurfaces,
+  isSocialAttachmentOutcomeAmbiguous,
   type SocialAttachment,
   type SocialAttachmentFile,
 } from "./socialAttachments";
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
+import { decodeProfileFeedCursor, encodeProfileFeedCursor, profileFeedPageLimit, type ProfileFeedPage } from "./profileFeedPagination";
+import { UserFacingError } from "./userFacingErrors";
 
 export const PROFILE_POSTS_TABLE = "profile_posts";
 export const PROFILE_POST_COMMENTS_TABLE = "profile_post_comments";
@@ -111,7 +116,8 @@ async function readAuthorProfiles(userIds: string[]) {
     .in("user_id", normalizedIds)
     .returns<UserProfileRow[]>();
 
-  if (error || !data) return new Map<string, UserProfileRow>();
+  if (error) throw error;
+  if (!data) throw new Error("Profile authors could not be loaded.");
   return new Map(data.map((row) => [normalizeText(row.user_id), row]));
 }
 
@@ -151,10 +157,26 @@ async function getSignedInUserId() {
   return normalizeText(data.session?.user?.id) || null;
 }
 
-async function getRequiredUserId() {
-  const userId = await getSignedInUserId();
-  if (!userId) throw new Error("Sign in before posting.");
-  return userId;
+function mutationClient(subject: AccountBoundSupabaseMutationSubject) {
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+  });
+}
+
+async function readCreateOutcome<T>(request: PromiseLike<{ data: T | null; error: unknown }>, kind: "post" | "comment"): Promise<T> {
+  const uncertain = () => new UserFacingError("attachment_action", `Your ${kind} may already be saved. Refresh before trying again to avoid a duplicate.`);
+  let result: { data: T | null; error: unknown };
+  try { result = await request; } catch { throw uncertain(); }
+  if (result.error || !result.data) {
+    const code = result.error && typeof result.error === "object" && "code" in result.error ? String(result.error.code) : "";
+    // An explicit SQL rejection rolled back the statement. A lost HTTP response
+    // is not proof of failure and must not invite an immediate duplicate create.
+    if ((/^[0-9A-Z]{5}$/.test(code) && code !== "08007" && code !== "40003") || code === "PGRST301" || code === "PGRST302") throw result.error;
+    throw uncertain();
+  }
+  return result.data;
 }
 
 export async function readProfilePosts(
@@ -176,10 +198,12 @@ export async function readProfilePosts(
     .limit(limit);
 
   const { data, error } = await query.returns<ProfilePostRow[]>();
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error("Profile posts could not be loaded.");
   const attachmentsByPostId = await readSocialAttachmentsForSurfaces(
     "profile_post",
     data.map((row) => row.id),
+    { throwOnUnavailable: true },
   );
   return data.map((row) => parseProfilePost(row, attachmentsByPostId.get(normalizeText(row.id)) ?? []));
 }
@@ -187,8 +211,11 @@ export async function readProfilePosts(
 export async function createProfilePost(input: {
   body: string;
   attachmentFile?: SocialAttachmentFile | null;
+  expectedUserId?: string;
 }): Promise<ProfilePost> {
-  const userId = await getRequiredUserId();
+  const subject = await captureAccountBoundSupabaseMutationSubject(input.expectedUserId);
+  const userId = subject.authority.userId;
+  const client = mutationClient(subject);
   const body = normalizeText(input.body);
   if (!body) throw new Error("Write an update before posting.");
   if (body.length > PROFILE_POST_BODY_LIMIT) {
@@ -203,14 +230,13 @@ export async function createProfilePost(input: {
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const data = await readCreateOutcome<ProfilePostRow>(client
     .from(PROFILE_POSTS_TABLE)
     .insert(payload)
     .select(PROFILE_POST_SELECT)
-    .returns<ProfilePostRow>()
-    .single();
-
-  if (error || !data) throw error ?? new Error("Unable to post this update right now.");
+    .returns<ProfilePostRow[]>()
+    .single(), "post");
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
 
   const post = parseProfilePost(data);
   if (!input.attachmentFile) return post;
@@ -220,27 +246,66 @@ export async function createProfilePost(input: {
       surfaceType: "profile_post",
       surfaceId: post.id,
       file: input.attachmentFile,
+      mutationSubject: subject,
     });
     return {
       ...post,
       attachments: [attachment],
     };
   } catch (attachmentError) {
-    await deleteProfilePost(post.id).catch(() => undefined);
+    if (isSocialAttachmentOutcomeAmbiguous(attachmentError)) {
+      throw new UserFacingError("attachment_action", "Your post was saved, but its attachment could not be confirmed. Refresh before retrying.");
+    }
+    const rollback = await client.from(PROFILE_POSTS_TABLE).delete().eq("id", post.id);
+    if (rollback.error) throw new UserFacingError("attachment_action", "The post was created but its attachment failed. Refresh before retrying to avoid a duplicate.");
     throw attachmentError;
   }
 }
 
-export async function deleteProfilePost(postId: string): Promise<void> {
+export async function readProfilePostsPage(
+  userId: string, options: { limit?: number; cursor?: string | null } = {},
+): Promise<ProfileFeedPage<ProfilePost>> {
+  const owner = normalizeText(userId);
+  if (!owner) throw new Error("Profile owner is required.");
+  const scope = `profile-posts:${owner}`;
+  const cursor = decodeProfileFeedCursor(options.cursor, scope);
+  const limit = profileFeedPageLimit(options.limit);
+  let query = supabase.from(PROFILE_POSTS_TABLE).select(PROFILE_POST_SELECT)
+    .eq("user_id", owner).is("deleted_at", null).eq("visibility", "public")
+    .in("moderation_status", ["clean", "reported"])
+    .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
+  if (cursor) query = query.or(`created_at.lt.${cursor.at},and(created_at.eq.${cursor.at},id.lt.${cursor.id})`);
+  const { data, error } = await query.returns<ProfilePostRow[]>();
+  if (error) throw error;
+  if (!data) throw new Error("Profile posts could not be loaded.");
+  const rows = data.slice(0, limit);
+  const attachments = await readSocialAttachmentsForSurfaces("profile_post", rows.map(row => row.id), { throwOnUnavailable: true });
+  const last = rows.at(-1);
+  const hasMore = data.length > limit;
+  return {
+    items: rows.map(row => parseProfilePost(row, attachments.get(normalizeText(row.id)) ?? [])), hasMore,
+    nextCursor: hasMore && last ? encodeProfileFeedCursor({ version: 1, scope, at: last.created_at, id: last.id }) : null,
+  };
+}
+
+/** Exact post links do not depend on the first page of the owner's profile. RLS remains authoritative. */
+export async function readProfilePostById(postId: string): Promise<ProfilePost | null> {
+  const [post] = await readProfilePostsByIds([postId], { limit: 1 });
+  return post ?? null;
+}
+
+export async function deleteProfilePost(postId: string, expectedUserId?: string): Promise<void> {
   const normalizedPostId = normalizeText(postId);
   if (!normalizedPostId) return;
 
-  const { error } = await supabase
+  const subject = await captureAccountBoundSupabaseMutationSubject(expectedUserId);
+  const { error } = await mutationClient(subject)
     .from(PROFILE_POSTS_TABLE)
     .delete()
     .eq("id", normalizedPostId);
 
   if (error) throw error;
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
 }
 
 export async function readProfilePostEngagementState(postId: string): Promise<ProfilePostEngagementState> {
@@ -286,6 +351,27 @@ export async function readProfilePostEngagementState(postId: string): Promise<Pr
   };
 }
 
+/** A bounded page-sized RPC, not three round trips for every card. Missing keys remain unavailable. */
+export async function readProfilePostEngagementStates(postIds: string[], signal?: AbortSignal): Promise<Record<string, ProfilePostEngagementState>> {
+  if (signal?.aborted) throw new Error("Post engagement request retired.");
+  const ids = [...new Set(postIds.map(normalizeText).filter(Boolean))];
+  if (ids.length > 50) throw new Error("Read engagement for at most 50 posts at a time.");
+  if (!ids.length) return {};
+  const viewerUserId = await getSignedInUserId();
+  if (signal?.aborted) throw new Error("Post engagement request retired.");
+  let request = supabase.rpc("read_profile_post_engagement_batch", { p_post_ids: ids });
+  if (signal) request = request.abortSignal(signal);
+  const { data, error } = await request;
+  if (signal?.aborted) throw new Error("Post engagement request retired.");
+  if (error) throw error;
+  if (!data) throw new Error("Post engagement could not be loaded.");
+  return Object.fromEntries(data.map(row => [row.post_id, {
+    postId: row.post_id, viewerUserId,
+    likeCount: Math.max(0, Number(row.like_count)), commentCount: Math.max(0, Number(row.comment_count)),
+    likedByViewer: row.liked_by_viewer, canLike: !!viewerUserId, canComment: !!viewerUserId,
+  }]));
+}
+
 export async function readProfilePostComments(
   postId: string,
   options?: { limit?: number },
@@ -304,10 +390,11 @@ export async function readProfilePostComments(
     .limit(limit)
     .returns<ProfilePostCommentRow[]>();
 
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error("Profile comments could not be loaded.");
   const [authors, attachmentsByCommentId] = await Promise.all([
     readAuthorProfiles(data.map((row) => row.user_id)),
-    readSocialAttachmentsForSurfaces("profile_post_comment", data.map((row) => row.id)),
+    readSocialAttachmentsForSurfaces("profile_post_comment", data.map((row) => row.id), { throwOnUnavailable: true }),
   ]);
   return data.map((row) => (
     parseProfilePostComment(row, authors, attachmentsByCommentId.get(normalizeText(row.id)) ?? [])
@@ -331,10 +418,12 @@ export async function readProfilePostsByIds(
     .in("moderation_status", ["clean", "reported"])
     .returns<ProfilePostRow[]>();
 
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error("Profile posts could not be loaded.");
   const attachmentsByPostId = await readSocialAttachmentsForSurfaces(
     "profile_post",
     data.map((row) => row.id),
+    { throwOnUnavailable: true },
   );
   const order = new Map(normalizedPostIds.map((id, index) => [id, index]));
   return data
@@ -344,13 +433,45 @@ export async function readProfilePostsByIds(
     ));
 }
 
+/** Flat chronological pages preserve the existing one-level reply model; callers append by ID. */
+export async function readProfilePostCommentsPage(
+  postId: string, options: { limit?: number; cursor?: string | null } = {},
+): Promise<ProfileFeedPage<ProfilePostComment>> {
+  const target = normalizeText(postId);
+  if (!target) throw new Error("Profile post is required.");
+  const scope = `profile-comments:${target}`;
+  const cursor = decodeProfileFeedCursor(options.cursor, scope);
+  const limit = profileFeedPageLimit(options.limit);
+  let query = supabase.from(PROFILE_POST_COMMENTS_TABLE).select(PROFILE_POST_COMMENT_SELECT)
+    .eq("post_id", target).is("deleted_at", null).in("moderation_status", ["clean", "reported"])
+    .order("created_at", { ascending: true }).order("id", { ascending: true }).limit(limit + 1);
+  if (cursor) query = query.or(`created_at.gt.${cursor.at},and(created_at.eq.${cursor.at},id.gt.${cursor.id})`);
+  const { data, error } = await query.returns<ProfilePostCommentRow[]>();
+  if (error) throw error;
+  if (!data) throw new Error("Profile comments could not be loaded.");
+  const rows = data.slice(0, limit);
+  const [authors, attachments] = await Promise.all([
+    readAuthorProfiles(rows.map(row => row.user_id)),
+    readSocialAttachmentsForSurfaces("profile_post_comment", rows.map(row => row.id), { throwOnUnavailable: true }),
+  ]);
+  const last = rows.at(-1);
+  const hasMore = data.length > limit;
+  return {
+    items: rows.map(row => parseProfilePostComment(row, authors, attachments.get(normalizeText(row.id)) ?? [])), hasMore,
+    nextCursor: hasMore && last ? encodeProfileFeedCursor({ version: 1, scope, at: last.created_at, id: last.id }) : null,
+  };
+}
+
 export async function createProfilePostComment(input: {
   postId: string;
   body: string;
   parentCommentId?: string | null;
   attachmentFile?: SocialAttachmentFile | null;
+  expectedUserId?: string;
 }): Promise<ProfilePostComment> {
-  const userId = await getRequiredUserId();
+  const subject = await captureAccountBoundSupabaseMutationSubject(input.expectedUserId);
+  const userId = subject.authority.userId;
+  const client = mutationClient(subject);
   const postId = normalizeText(input.postId);
   const body = normalizeText(input.body);
   if (!postId) throw new Error("Profile post id is required.");
@@ -368,16 +489,19 @@ export async function createProfilePostComment(input: {
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const data = await readCreateOutcome<ProfilePostCommentRow>(client
     .from(PROFILE_POST_COMMENTS_TABLE)
     .insert(payload)
     .select(PROFILE_POST_COMMENT_SELECT)
-    .returns<ProfilePostCommentRow>()
-    .single();
+    .returns<ProfilePostCommentRow[]>()
+    .single(), "comment");
 
   const created = data as ProfilePostCommentRow | null;
-  if (error || !created) throw error ?? new Error("Unable to post this comment right now.");
-  const authors = await readAuthorProfiles([created.user_id]);
+  if (!created) throw new Error("Unable to post this comment right now.");
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  // Author enrichment must not turn a successful create into a misleading failure/retry.
+  const authors = await readAuthorProfiles([created.user_id]).catch(() => new Map<string, UserProfileRow>());
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   const comment = parseProfilePostComment(created, authors);
   if (!input.attachmentFile) return comment;
 
@@ -386,45 +510,57 @@ export async function createProfilePostComment(input: {
       surfaceType: "profile_post_comment",
       surfaceId: comment.id,
       file: input.attachmentFile,
+      mutationSubject: subject,
     });
     return {
       ...comment,
       attachments: [attachment],
     };
   } catch (attachmentError) {
-    await deleteProfilePostComment(comment.id).catch(() => undefined);
+    if (isSocialAttachmentOutcomeAmbiguous(attachmentError)) {
+      throw new UserFacingError("attachment_action", "Your comment was saved, but its attachment could not be confirmed. Refresh before retrying.");
+    }
+    const rollback = await client.from(PROFILE_POST_COMMENTS_TABLE).delete().eq("id", comment.id);
+    if (rollback.error) throw new UserFacingError("attachment_action", "The comment was created but its attachment failed. Refresh before retrying to avoid a duplicate.");
     throw attachmentError;
   }
 }
 
-export async function deleteProfilePostComment(commentId: string): Promise<void> {
+export async function deleteProfilePostComment(commentId: string, expectedUserId?: string): Promise<void> {
   const normalizedCommentId = normalizeText(commentId);
   if (!normalizedCommentId) return;
 
-  const { error } = await supabase
+  const subject = await captureAccountBoundSupabaseMutationSubject(expectedUserId);
+  const { error } = await mutationClient(subject)
     .from(PROFILE_POST_COMMENTS_TABLE)
     .delete()
     .eq("id", normalizedCommentId);
 
   if (error) throw error;
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
 }
 
-export async function setProfilePostLike(postId: string, liked: boolean): Promise<ProfilePostEngagementState> {
+export async function setProfilePostLike(postId: string, liked: boolean, expectedUserId?: string): Promise<ProfilePostEngagementState> {
   const normalizedPostId = normalizeText(postId);
   if (!normalizedPostId) {
     throw new Error("Profile post id is required.");
   }
 
-  const userId = await getRequiredUserId();
+  const subject = await captureAccountBoundSupabaseMutationSubject(expectedUserId);
+  const userId = subject.authority.userId;
+  const client = mutationClient(subject);
   if (!liked) {
-    const { error } = await supabase
+    const { error } = await client
       .from(PROFILE_POST_LIKES_TABLE)
       .delete()
       .eq("post_id", normalizedPostId)
       .eq("user_id", userId);
 
     if (error) throw error;
-    return readProfilePostEngagementState(normalizedPostId);
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    const result = await readProfilePostEngagementState(normalizedPostId);
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    return result;
   }
 
   const payload: ProfilePostLikeInsert = {
@@ -433,10 +569,13 @@ export async function setProfilePostLike(postId: string, liked: boolean): Promis
     created_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase
+  const { error } = await client
     .from(PROFILE_POST_LIKES_TABLE)
     .upsert(payload, { onConflict: "post_id,user_id" });
 
   if (error) throw error;
-  return readProfilePostEngagementState(normalizedPostId);
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  const result = await readProfilePostEngagementState(normalizedPostId);
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  return result;
 }

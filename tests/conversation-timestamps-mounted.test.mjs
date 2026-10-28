@@ -451,7 +451,26 @@ test("audited surfaces retain exact original StyleSheet colors, backgrounds and 
     const original = execFileSync("git", ["show", `934db4003e604e9ac42aa6feb9d4511e1c80a97b:${file}`], { cwd: rootPath, encoding: "utf8" });
     const before = ts.createSourceFile(file, original, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const after = ast(file);
-    const styles = source => nodes(source, n => ts.isCallExpression(n) && n.expression.getText(source) === "StyleSheet.create").map(n => n.getText(source));
+    const additions = file === "app/profile/[userId].tsx" ? [
+      'virtualizedFeedItem: { width: "100%" }',
+      'profileListHeader: { gap: 16 }',
+      'feedFreshnessOverlay: { position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, alignItems: "center" }',
+      'feedFreshnessButton: { backgroundColor: "#29131D", borderColor: "#DC143C", borderWidth: 1, borderRadius: 24, paddingHorizontal: 18, paddingVertical: 12 }',
+    ] : [];
+    const styles = source => nodes(source, n => ts.isCallExpression(n) && n.expression.getText(source) === "StyleSheet.create").map(n => {
+      if (!additions.length) return n.getText(source);
+      assert.ok(ts.isObjectLiteralExpression(n.arguments[0]), `${file}: literal style inventory`);
+      return n.arguments[0].properties.map(property => property.getText(source));
+    });
+    // Permit only the reviewed virtualization wrappers and new-post overlay. Every original
+    // style property remains text-exact and ordered; unknown additions fail.
+    if (additions.length) {
+      const current = styles(after);
+      assert.equal(current.length, 1, file);
+      assert.deepEqual(current[0].slice(0, additions.length), additions, file);
+      assert.deepEqual(current[0].slice(additions.length), styles(before)[0], file);
+      continue;
+    }
     assert.deepEqual(styles(after), styles(before), file);
   }
 });

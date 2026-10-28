@@ -1,4 +1,10 @@
-import type { Tables, TablesInsert } from "../supabase/database.types";
+import { createClient } from "@supabase/supabase-js";
+import type { Database, Tables, TablesInsert } from "../supabase/database.types";
+import {
+  assertAccountBoundSupabaseMutationSubjectCurrent,
+  captureAccountBoundSupabaseMutationSubject,
+  type AccountBoundSupabaseMutationSubject,
+} from "./accountBoundSupabaseMutation";
 import { normalizeImageUploadFile } from "./imageUploadNormalization";
 import {
   createSignedMediaDownload,
@@ -10,13 +16,19 @@ import {
   usesPrivateOriginMediaGateway,
   type MediaStorageProvider,
 } from "./mediaStorage";
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
 import { UserFacingError } from "./userFacingErrors";
 
 export const SOCIAL_ATTACHMENT_BUCKET = "social-attachments";
 export const SOCIAL_ATTACHMENT_SIGNED_URL_SECONDS = 60 * 60;
 export const SOCIAL_ATTACHMENT_MAX_BYTES = 250 * 1024 * 1024;
 export const SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE = "This attachment is too large for comments/chat right now.";
+
+const AMBIGUOUS_ATTACHMENT_MESSAGE = "This attachment may have been saved. Refresh before posting again.";
+const ATTACHMENT_INSERT_FAILURE_MESSAGE = "Unable to upload that attachment right now. Try again.";
+export const isSocialAttachmentOutcomeAmbiguous = (error: unknown) =>
+  error instanceof UserFacingError && error.code === "attachment_action"
+    && error.message === AMBIGUOUS_ATTACHMENT_MESSAGE;
 
 export const SOCIAL_ATTACHMENT_PICKER_TYPES = [
   "image/jpeg",
@@ -308,7 +320,7 @@ export const isSocialAttachmentScanPublicSafe = (status?: string | null) => (
   (SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES as readonly string[]).includes(normalizeScanStatus(status))
 );
 
-async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAttachment> {
+async function parseSocialAttachment(row: SocialAttachmentRow, signUrl = true): Promise<SocialAttachment> {
   const storagePath = toText(row.storage_path);
   const storageProvider = normalizeMediaStorageProvider(row.storage_provider);
   const storageBucket = getMediaStorageProviderBucket({
@@ -322,7 +334,7 @@ async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAt
   const canDisplayAttachment = moderationStatus !== "hidden"
     && moderationStatus !== "removed"
     && isSocialAttachmentScanPublicSafe(scanStatus);
-  const signedUrl = canDisplayAttachment
+  const signedUrl = signUrl && canDisplayAttachment
     ? usesPrivateOriginMediaGateway(storageProvider) && storageObjectKey
       ? await createSignedMediaDownload({
         surfaceType: "social_attachment",
@@ -364,6 +376,7 @@ async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAt
 export async function readSocialAttachmentsForSurfaces(
   surfaceType: SocialAttachmentSurfaceType,
   surfaceIds: string[],
+  options: { throwOnUnavailable?: boolean } = {},
 ): Promise<Map<string, SocialAttachment[]>> {
   const normalizedSurfaceIds = Array.from(new Set(surfaceIds.map(toText).filter(Boolean)));
   const empty = new Map<string, SocialAttachment[]>();
@@ -383,11 +396,14 @@ export async function readSocialAttachmentsForSurfaces(
       .order("created_at", { ascending: true })
       .limit(surfaceIdBatch.length * 4)
       .returns<SocialAttachmentRow[]>();
-    if (error || !data) return empty;
+    if (error || !data) {
+      if (options.throwOnUnavailable) throw new UserFacingError("attachment_action", "Attachments could not be loaded. Try again.");
+      return empty;
+    }
     for (const row of data) rows[rows.length] = row;
   }
 
-  const attachments = await Promise.all(rows.map(parseSocialAttachment));
+  const attachments = await Promise.all(rows.map((row) => parseSocialAttachment(row)));
   return attachments.reduce((map, attachment) => {
     const current = map.get(attachment.surfaceId) ?? [];
     current.push(attachment);
@@ -400,16 +416,32 @@ export async function createSocialAttachmentForSurface(input: {
   surfaceType: SocialAttachmentSurfaceType;
   surfaceId: string;
   file: SocialAttachmentFile;
+  mutationSubject?: AccountBoundSupabaseMutationSubject;
 }): Promise<SocialAttachment> {
   try {
     const surfaceId = toText(input.surfaceId);
     if (!surfaceId) throw new UserFacingError("attachment_action", "Attachment target is missing.");
 
-    const { userId } = await getSignedInUserSession();
+    // Profile composers pass the subject captured before creating their parent
+    // row. Never recapture the replacement account midway through that action.
+    const subject = input.mutationSubject ?? (
+      input.surfaceType === "profile_post" || input.surfaceType === "profile_post_comment"
+        ? await captureAccountBoundSupabaseMutationSubject() : undefined
+    );
+    const assertCurrent = () => {
+      if (subject) assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    };
+    assertCurrent();
+    const userId = subject?.authority.userId ?? (await getSignedInUserSession()).userId;
+    const client = subject ? createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+    }) : supabase;
     const id = createClientId();
     const normalized = await normalizeImageUploadFile(input.file);
     const preparedUpload = await (async () => {
       try {
+        assertCurrent();
         const validationMessage = getSocialAttachmentValidationMessage(normalized.file);
         if (validationMessage) throw new UserFacingError("attachment_action", validationMessage);
 
@@ -417,6 +449,7 @@ export async function createSocialAttachmentForSurface(input: {
         const fileName = getReadableSocialAttachmentName({ name: normalized.file.name });
         const storagePath = `${userId}/${input.surfaceType}/${surfaceId}/${id}.${getFileExtension(normalized.file)}`;
         const uploadedObject = await uploadFileToMediaStorage({
+          ...(subject ? { accessToken: subject.accessToken, assertOperationCurrent: assertCurrent } : {}),
           surfaceType: "social_attachment",
           uri: toText(normalized.file.uri),
           objectKey: storagePath,
@@ -460,24 +493,58 @@ export async function createSocialAttachmentForSurface(input: {
       updated_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
+    const rollbackUpload = () => deleteStoredMediaObject({
+      // Cleanup retains A's token even if B signed in. It must never adopt B.
+      ...(subject ? { accessToken: subject.accessToken } : {}),
+      surfaceType: "social_attachment",
+      provider: uploadedObject.provider,
+      bucket: uploadedObject.bucket,
+      objectKey: uploadedObject.objectKey,
+    }).catch(() => {
+      // No payloads, paths or provider errors: failed cleanup remains eligible
+      // for server-side reservation reconciliation rather than false success.
+      if (subject) console.warn("Profile attachment upload cleanup could not be confirmed.");
+    });
+    try { assertCurrent(); } catch (error) {
+      await rollbackUpload();
+      throw error;
+    }
+    const { data, error } = await client
       .from("social_attachments")
       .insert(payload)
       .select(SOCIAL_ATTACHMENT_SELECT)
       .returns<SocialAttachmentRow>()
-      .single();
+      .single()
+      .then((result) => result, () => {
+        if (subject) {
+          console.warn("Profile attachment save outcome could not be confirmed; upload retained.");
+          throw new UserFacingError("attachment_action", AMBIGUOUS_ATTACHMENT_MESSAGE);
+        }
+        throw new UserFacingError("attachment_action", ATTACHMENT_INSERT_FAILURE_MESSAGE);
+      });
 
     if (error || !data) {
-      await deleteStoredMediaObject({
-        surfaceType: "social_attachment",
-        provider: uploadedObject.provider,
-        bucket: uploadedObject.bucket,
-        objectKey: uploadedObject.objectKey,
-      }).catch(() => undefined);
-      throw error ?? new Error("Unable to save this attachment right now.");
+      // A lost response is not proof that INSERT failed. Deleting its object
+      // would corrupt a committed row. Only explicit SQL rejection permits
+      // rollback; retain ambiguous uploads for server reconciliation.
+      const code = toText(error?.code);
+      const rejected = code === "42501" || /^23\d{3}$/.test(code);
+      if (!subject || rejected) await rollbackUpload();
+      else {
+        console.warn("Profile attachment save outcome could not be confirmed; upload retained.");
+        throw new UserFacingError("attachment_action", AMBIGUOUS_ATTACHMENT_MESSAGE);
+      }
+      throw new UserFacingError("attachment_action", ATTACHMENT_INSERT_FAILURE_MESSAGE);
     }
 
-    return parseSocialAttachment(data);
+    try { assertCurrent(); } catch {
+      // Acknowledged committed child must also protect its parent from rollback
+      // when the initiating account was replaced while the response was held.
+      throw new UserFacingError("attachment_action", AMBIGUOUS_ATTACHMENT_MESSAGE);
+    }
+    // Newly uploaded profile media is pending scan. Do not start a shared-
+    // session signing request while acknowledging this account-bound mutation.
+    return parseSocialAttachment(data, !subject);
   } catch (error) {
     if (error instanceof UserFacingError) throw error;
     if (error instanceof Error && error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE) throw new UserFacingError("attachment_action", SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE);
