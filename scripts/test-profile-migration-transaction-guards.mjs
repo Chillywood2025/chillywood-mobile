@@ -8,10 +8,10 @@ import {createDatabase} from '../tests/helpers/database-runtime-authority-fixtur
 import {databaseFactory, localNativeOptions} from '../tests/helpers/native-profile-database.mjs';
 
 const files=[
- '20261027210217_profile_relationship_feed_cursor.sql',
- '20261027211112_profile_public_read_role_isolation.sql',
- '20261027214412_profile_engagement_sharded_counters.sql',
- '20261027221629_profile_feed_guarded_candidate_fastpath.sql',
+ '20261028005149_profile_relationship_feed_cursor.sql',
+ '20261028005306_profile_public_read_role_isolation.sql',
+ '20261028005432_profile_engagement_sharded_counters.sql',
+ '20261028005725_profile_feed_guarded_candidate_fastpath.sql',
 ];
 const sources=files.map(file=>readFileSync(`supabase/migrations/${file}`,'utf8'));
 const options=localNativeOptions();

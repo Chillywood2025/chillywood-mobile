@@ -120,7 +120,7 @@ try {
   insert into auth.users select 'u'||n from generate_series(1,5000) n;
   insert into public.profile_posts(id,user_id) values(${literal(post)},'owner'),(${literal(post2)},'owner');`);
 
-  const migration = readFileSync('supabase/migrations/20261027214412_profile_engagement_sharded_counters.sql', 'utf8');
+  const migration = readFileSync('supabase/migrations/20261028005432_profile_engagement_sharded_counters.sql', 'utf8');
   console.log(`Migration SHA256: ${createHash('sha256').update(migration).digest('hex')}`);
   const boundary = 'lock table public.profile_post_likes, public.profile_post_comments in share row exclusive mode;';
   const index = migration.indexOf(boundary) + boundary.length;

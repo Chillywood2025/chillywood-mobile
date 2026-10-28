@@ -10,40 +10,44 @@
   "runtimeComparison": "Parse PostgreSQL-aware statement boundaries; remove only top-level BEGIN, COMMIT and timeout SET LOCAL statements; trim each statement boundary; assert arrays equal. Hash JSON serialization of unchanged runtime statements.",
   "mapping": [
     {
-      "file": "20261027210217_profile_relationship_feed_cursor.sql",
+      "file": "20261028005149_profile_relationship_feed_cursor.sql",
       "measuredPayloadSha256": "0e49604cfbfaae97ded4750112319a3e526546f8b0ec8e5bd68989da5b4a5c94",
       "guardedPayloadSha256": "3841645f4ef65c6393cc85b77e4b23a56d4b90ecaea436f585ec3de00878920b",
       "runtimeStatementsIdentical": true,
       "previousStatementCount": 16,
       "guardedStatementCount": 20,
-      "runtimeStatementsSha256": "691eae35034985df87052122f7672a4f1ed46910d0c84a9ce842385687359778"
+      "runtimeStatementsSha256": "691eae35034985df87052122f7672a4f1ed46910d0c84a9ce842385687359778",
+      "candidateFile": "20261027210217_profile_relationship_feed_cursor.sql"
     },
     {
-      "file": "20261027211112_profile_public_read_role_isolation.sql",
+      "file": "20261028005306_profile_public_read_role_isolation.sql",
       "measuredPayloadSha256": "5b9697c29b8eb8b95f1c6bc80df18c3a7e9c78fa77984af277eeb8bbb0d885f1",
       "guardedPayloadSha256": "456d9898f05e109f98e0f23e877f659cd2086ad397e8753575c05e76cae4b357",
       "runtimeStatementsIdentical": true,
       "previousStatementCount": 11,
       "guardedStatementCount": 15,
-      "runtimeStatementsSha256": "49e34ccc2bb5b35802b4bece99d2685b93171174c6adc39db273df961aeb238f"
+      "runtimeStatementsSha256": "49e34ccc2bb5b35802b4bece99d2685b93171174c6adc39db273df961aeb238f",
+      "candidateFile": "20261027211112_profile_public_read_role_isolation.sql"
     },
     {
-      "file": "20261027214412_profile_engagement_sharded_counters.sql",
+      "file": "20261028005432_profile_engagement_sharded_counters.sql",
       "measuredPayloadSha256": "9f5a9e4319b1dd25e20ad6663e5ad01d24373e69a4c7744b9991303624a4a854",
       "guardedPayloadSha256": "0aac25388cd402fea09c83c801c8710e76850e8e502c4ed09b87ba11c55981e0",
       "runtimeStatementsIdentical": true,
       "previousStatementCount": 27,
       "guardedStatementCount": 29,
-      "runtimeStatementsSha256": "8ce123eb5b24a652cb3f6f6db3cfc597a076fa8291f9e5eeeeffc8a500f83c49"
+      "runtimeStatementsSha256": "8ce123eb5b24a652cb3f6f6db3cfc597a076fa8291f9e5eeeeffc8a500f83c49",
+      "candidateFile": "20261027214412_profile_engagement_sharded_counters.sql"
     },
     {
-      "file": "20261027221629_profile_feed_guarded_candidate_fastpath.sql",
+      "file": "20261028005725_profile_feed_guarded_candidate_fastpath.sql",
       "measuredPayloadSha256": "019417d25a634928dced5bf2697d57aa288c197d6580b6e246ec5341d439238a",
       "guardedPayloadSha256": "e5439086a1269eec3065f7b6bdee8d73d80fc92d975c97c2b1e487a323552284",
       "runtimeStatementsIdentical": true,
       "previousStatementCount": 5,
       "guardedStatementCount": 9,
-      "runtimeStatementsSha256": "e1c32372749d67a6d92685966ea5db52963ed6d646ba44ba79ed766c1b8c79ca"
+      "runtimeStatementsSha256": "e1c32372749d67a6d92685966ea5db52963ed6d646ba44ba79ed766c1b8c79ca",
+      "candidateFile": "20261027221629_profile_feed_guarded_candidate_fastpath.sql"
     }
   ],
   "authorization": {
@@ -123,5 +127,6 @@
     "previousQualifiedSha256": "c9bf463c001b2e54cc702ffb7a4a93e0e6d6d7dcfecfcde69d1d157bed2bc9f0",
     "finalPayloadSha256": "e5439086a1269eec3065f7b6bdee8d73d80fc92d975c97c2b1e487a323552284",
     "change": "Removed exactly one redundant final newline after COMMIT. All parsed SQL statements and runtime definitions are unchanged. Prior authorization/counter/concurrency evidence retains original tested hashes; atomicity is rerun on final bytes."
-  }
+  },
+  "deploymentAliasNote": "Mapping file fields resolve installed identities from 2026-10-28. candidateFile preserves original qualification identity. Historical atomicity observations, measured payloads, hashes, engines and timings are unchanged; no measurements are relabeled as rerun."
 }

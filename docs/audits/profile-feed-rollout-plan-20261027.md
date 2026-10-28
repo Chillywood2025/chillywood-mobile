@@ -1,5 +1,10 @@
 # Profile/feed internal rollout plan — 2026-10-27
 
+Historical predeployment plan. The four backend migrations were subsequently
+installed on 2026-10-28; see [the deployment record](profile-feed-deployment-20261028.md)
+for candidate-to-installed identities and verification. Candidate names below
+remain provenance, not current filesystem paths. Client OTA remains unpublished.
+
 Status: DRAFT FOR REVIEW; source and CI remain unfrozen. This document does not
 record a deployment, provider change, signed artifact verification, or physical
 qualification. Scope is PR627 profile/feed repairs only, not monetization,
