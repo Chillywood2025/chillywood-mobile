@@ -335,7 +335,39 @@ requireText(chatThread, "iosAcceptedCallKitMediaDescriptor: acceptedIosNativeMed
 requireText(liveKitSession, "doesIosAcceptedCallKitMediaDescriptorOwnSession", "Cold-start camera recovery must validate the unforgeable exact accepted CallKit descriptor.");
 requireText(liveKitSession, "const nativeApplicationActive = await readIosNativeApplicationActive();", "A CallKit witness must be combined with current UIKit state before camera publication.");
 requireText(liveKitSession, "currentWitness?.inviteId === inviteId", "The exact invite witness must be rechecked after the asynchronous native-state read.");
-if ((liveKitSession.match(/await readApplicationActiveForMedia\(\)/gu) ?? []).length !== 3) failures.push("The shared camera publisher and reconciliation state must await the authoritative foreground gate.");
+// Additional startup authority reads must not invalidate the camera boundary.
+// Conversely, an await elsewhere cannot substitute for either publisher read
+// or the reconciliation read. Bind each required await to its owning scope.
+const foregroundGateScopes = [
+  { start: "  const publishCameraForCurrentForeground =", end: "  const restoreCameraPublicationForCurrentSession =", count: 2 },
+  { start: "  const reconcileLatestCommittedNativeMedia =", end: "  const scheduleLatestNativeMediaReconciliation =", count: 1 },
+];
+const foregroundAwait = /await readApplicationActiveForMedia\(\)/gu;
+const foregroundGateScopesPass = (source) => {
+  const uncommented = stripComments(source);
+  return foregroundGateScopes.every(({ start, end, count }) => {
+    if (uncommented.split(start).length !== 2 || uncommented.split(end).length !== 2) return false;
+    const first = uncommented.indexOf(start);
+    const last = uncommented.indexOf(end);
+    return last > first && (uncommented.slice(first, last).match(foregroundAwait) ?? []).length === count;
+  });
+};
+if (!foregroundGateScopesPass(liveKitSession)) failures.push("The shared camera publisher and reconciliation state must await the authoritative foreground gate in their own scopes.");
+// Negative controls retain the global await count by relocating each required
+// read outside its owner. A global-count-only guard would accept these bypasses.
+for (const { start, end } of foregroundGateScopes) {
+  const first = liveKitSession.indexOf(start);
+  const last = liveKitSession.indexOf(end, first);
+  const scope = liveKitSession.slice(first, last);
+  for (const match of scope.matchAll(foregroundAwait)) {
+    const at = first + match.index;
+    const relocatedRead = liveKitSession.slice(0, at) + "true"
+      + liveKitSession.slice(at + match[0].length)
+      + "\nasync function unrelatedForegroundRead() { await readApplicationActiveForMedia(); }\n";
+    if (foregroundGateScopesPass(relocatedRead)) failures.push("The foreground gate guard accepted a required read relocated outside its owner.");
+  }
+}
+if (!foregroundGateScopesPass(`${liveKitSession}\nasync function additionalStartupRead() { await readApplicationActiveForMedia(); }\n`)) failures.push("Additional foreground authority reads must not invalidate the scoped camera guard.");
 if ((liveKitSession.match(/await publishCameraForCurrentForeground\(/gu) ?? []).length !== 4) failures.push("Initial, reconciliation, manual enable, and rollback restore paths must use the shared foreground-authorized publisher.");
 if ((liveKitSession.match(/setCameraEnabled\(\s*true,/gu) ?? []).length !== 1) failures.push("Only the shared foreground-authorized publisher may directly enable camera media.");
 const directCameraPublicationTargets = [
