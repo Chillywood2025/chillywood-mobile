@@ -1,7 +1,7 @@
 {
   "purpose": "Sanitized engineering evidence summary, not production capacity or deployment authority",
   "engine": "PostgreSQL 17.11",
-  "migration": "20261028043447_discovery_scoped_invalidation_outbox.sql",
+  "migration": "20261028145327_discovery_scoped_invalidation_outbox.sql",
   "migration_sha256": "32b5fd76092012c03efb01f2e18a1d83381b63b9cf904daf377162f28be0b54c",
   "environment": "Disposable local native database; synthetic warm-cache measurements",
   "independent_concurrency_and_failure_checks_passed": 16,

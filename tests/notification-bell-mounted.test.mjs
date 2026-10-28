@@ -67,6 +67,14 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   let backendCount = 1; let durableRead = outcome === 'noop'; let durableDismissed = outcome === 'noop';
   let session = activeSession();
   const received = new Set(); const allReceived = []; const activations = new Set();
+  const authorityListeners = new Set();
+  const focusEffects = new Set(); let focused = true;
+  let now = 1_000; let timerId = 0;
+  const timers = new Map();
+  const fakeSetTimeout = (callback, delay) => { const id = ++timerId; timers.set(id, { at: now + delay, callback }); return id; };
+  const fakeClearTimeout = id => timers.delete(id);
+  class ClockDate extends Date { static now() { return now; } }
+  const appState = { currentState: 'active', addEventListener: (_type, callback) => { activations.add(callback); return { remove: () => activations.delete(callback) }; } };
   const channels = [];
   const realtime = { channel(name) {
     const channel = { name, handlers: [], removed: false,
@@ -78,8 +86,10 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   let summaryReader = async () => ({ unreadCount: backendCount, undismissedCount: 1, totalCount: 1, latestCreatedAt: notification.createdAt, categories: [] });
   const invalidationContext = { exports: {}, require: name => {
     if (name === './supabase') return { supabase: realtime };
+    if (name === 'react-native') return { AppState: appState };
     assert.equal(name, './accountSessionAuthority');
-    return { getCurrentAccountSessionAuthoritySnapshot: () => session.authority };
+    return { getCurrentAccountSessionAuthoritySnapshot: () => session.authority,
+      subscribeToAccountSessionAuthority: callback => { authorityListeners.add(callback); return () => authorityListeners.delete(callback); } };
   } };
   vm.runInNewContext(compiledInvalidation, invalidationContext);
   const invalidation = invalidationContext.exports;
@@ -122,7 +132,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   native.StyleSheet = { create: value => value, absoluteFillObject: {} };
   native.Platform = { OS: 'ios', select: value => value.ios ?? value.default };
   native.useWindowDimensions = () => ({ fontScale: 1 });
-  native.AppState = { addEventListener: (_type, callback) => { activations.add(callback); return { remove: () => activations.delete(callback) }; } };
+  native.AppState = appState;
   // Load the actual timestamp dependency graph; these action tests still use
   // shallow native hosts, while conversation-timestamps mounts the full tree.
   const timestampModules = new Map();
@@ -147,25 +157,32 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     dismissNotification: async id => { markCalls++; const result = await actionContext.exports.dismissNotification(id); results.push(result);
       if (result.status === 'completed' || result.status === 'noop') { row.isDismissed = true; backendCount = 0; }
       if (markResultGate) await markResultGate; return result; },
-    readNotificationSummary: async id => { summaryReads++; requestedUsers.push(id); return summaryReader(id); },
+    readNotificationSummary: async (id, signal) => { summaryReads++; requestedUsers.push(id); return summaryReader(id, signal); },
     readImportantNotificationList: async () => [],
     readNotificationListPage: (...args) => { pageReads++; return pageReader(...args); },
     resolveNotificationPath: targetContext.exports.resolveNotificationMessagePath,
   };
+  const budgetContext = { exports: {}, Date: ClockDate, setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout };
+  vm.runInNewContext(compile(readSource('_lib/notificationHintBudget.ts')), budgetContext);
   const deps = {
     '../../components/social/conversation-timestamp': loadTimestamp('components/social/conversation-timestamp.tsx'),
     '../../_lib/conversationTimestamp': loadTimestamp('_lib/conversationTimestamp.ts'),
     '../../hooks/use-conversation-clock': loadTimestamp('hooks/use-conversation-clock.ts'),
     react: React,
     'react-native': native,
-    'expo-router': { router: { push: value => routes.push(value) }, useFocusEffect: callback => React.useEffect(callback, [callback]) },
+    'expo-router': { router: { push: value => routes.push(value) }, useFocusEffect: callback => React.useEffect(() => {
+      const entry = { callback, cleanup: focused ? callback() : null }; focusEffects.add(entry);
+      return () => { entry.cleanup?.(); focusEffects.delete(entry); };
+    }, [callback]) },
     '@expo/vector-icons/MaterialIcons': { __esModule: true, default: () => null },
     '../../_lib/notifications': services,
     '../../_lib/session': { useSession: () => session },
     '../../_lib/notificationActivity': invalidation,
+    '../../_lib/notificationHintBudget': budgetContext.exports,
     '../ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: () => null },
   };
-  const context = { exports: {}, require: name => { assert.ok(name in deps, `unexpected import ${name}`); return deps[name]; }, Date, console };
+  const context = { exports: {}, require: name => { assert.ok(name in deps, `unexpected import ${name}`); return deps[name]; }, Date: ClockDate, console,
+    AbortController, setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout };
   vm.runInNewContext(compiledBell, context, { filename: 'actual-notification-bell-button.js' });
   const foregroundContext = { exports: {}, normalizeText: value => String(value ?? '').trim(), normalizeNotificationPath: value => String(value ?? '').trim(),
     Notifications: { addNotificationReceivedListener: listener => { received.add(listener); allReceived.push(listener); return { remove: () => received.delete(listener) }; } } };
@@ -174,7 +191,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     useSession: () => session, usePathname: () => pathname,
     isRoomSafeIncomingCallPath: path => path === '/room',
     subscribeToForegroundActivityNotifications: foregroundContext.exports.subscribeToForegroundActivityNotifications,
-    AppState: { addEventListener: (_type, callback) => { activations.add(callback); return { remove: () => activations.delete(callback) }; } }, styles: {},
+    AppState: appState, styles: {},
   };
   vm.runInNewContext(compiledBridge, bridgeContext, { filename: 'actual-room-activity-root.js' });
   const root = createRoot(container());
@@ -220,8 +237,17 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     async loadMore() { const node = descend(captures.get('Modal').children, n => n.props?.accessibilityLabel === 'Load more notifications')[0]; assert.ok(node); await React.act(async () => { node.props.onPress(); await settle(); }); },
     async emit(data = { notificationType: 'missed_call', path: '/chat/thread-a' }) { await React.act(async () => { for (const callback of received) callback({ request: { content: { data } } }); await settle(); }); },
     async oldEmit(index, data = {}) { await React.act(async () => { allReceived[index]({ request: { content: { data } } }); await settle(); }); },
-    async foreground() { await React.act(async () => { for (const callback of activations) callback('active'); await settle(); }); },
-    async replaceSession(value) { session = value; await React.act(async () => { render(); await settle(); }); },
+    async appState(state) { await React.act(async () => { appState.currentState = state; for (const callback of [...activations]) callback(state); await settle(); }); },
+    async focus(value) { await React.act(async () => { focused = value; for (const entry of focusEffects) {
+      if (value) entry.cleanup = entry.callback(); else { entry.cleanup?.(); entry.cleanup = null; }
+    } await settle(); }); },
+    async foreground() { await React.act(async () => { appState.currentState = 'background'; for (const callback of [...activations]) callback('background');
+      appState.currentState = 'active'; for (const callback of [...activations]) callback('active'); await settle(); }); },
+    async advance(ms) { await React.act(async () => { const until = now + ms;
+      for (;;) { const due = [...timers].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at)[0];
+        if (!due) break; now = due[1].at; timers.delete(due[0]); due[1].callback(); await settle(); }
+      now = until; await settle(); }); },
+    async replaceSession(value) { session = value; await React.act(async () => { for (const callback of [...authorityListeners]) callback(); render(); await settle(); }); },
     async resolve(pending, value) { await React.act(async () => { pending.resolve(value); await settle(); }); },
   };
 }
@@ -293,11 +319,12 @@ test('live badge rejects foreign-recipient receipts and preserves creator room t
   assert.equal(h.snapshot().routes, 0, 'a receipt does not navigate or mutate room media');
 });
 
-test('late older refresh cannot overwrite the newer authoritative unread summary', async t => {
+test('manual refresh retires the older source without overlap and rereads after actual settlement', async t => {
   const h = await mount(t, 'completed'); const old = deferred();
   h.setSummaryReader(() => old.promise); await h.openTray();
   h.setSummaryReader(async () => summary(3)); await h.openTray();
-  assert.equal(h.snapshot().label, '3 unread notifications');
+  assert.equal(h.snapshot().label, '1 unread notifications', 'retain durable count while the abort-ignoring old source still owns transport');
+  assert.equal(h.snapshot().summaryReads, 2, 'manual retries queue once, not a second underlying read');
   await h.resolve(old, summary(2));
   assert.equal(h.snapshot().label, '3 unread notifications');
 });
@@ -306,7 +333,7 @@ test('retired account read and old native listener cannot mutate the replacement
   const h = await mount(t, 'completed', { withRoot: true }); const old = deferred();
   h.setSummaryReader(() => old.promise); await h.openTray();
   h.setSummaryReader(async () => summary(4)); await h.replaceSession(activeSession('account-b', 'generation-b'));
-  assert.equal(h.snapshot().label, '4 unread notifications');
+  assert.equal(h.snapshot().label, 'Notifications', 'old account rows and badge are hidden before pending source settlement');
   const reads = h.snapshot().summaryReads;
   await h.oldEmit(0, { category: 'creator_money_sale', path: '/channel-settings' });
   assert.equal(h.snapshot().summaryReads, reads, 'a captured retired listener cannot invalidate the new owner');
@@ -415,6 +442,7 @@ test('in-app-only insert and update refresh both bells through the single actual
   h.setCount(2); await h.database('INSERT', { user_id: 'account-a', unreadCount: 999 });
   assert.equal(h.snapshot().label, '2 unread notifications'); assert.equal(h.snapshot().peerLabel, '2 unread notifications');
   h.setCount(0); await h.database('UPDATE', { user_id: 'account-a', read_at: 'durable' });
+  await h.advance(5_000);
   assert.equal(h.snapshot().label, 'Notifications'); assert.equal(h.snapshot().toast, false);
   const reads = h.snapshot().summaryReads;
   await h.database('INSERT', { user_id: 'account-b' }); await h.database('UPDATE', {});
@@ -426,9 +454,79 @@ test('database initial subscribe and reconnect reread missed durable rows withou
   await h.databaseStatus('CHANNEL_ERROR'); await h.databaseStatus('TIMED_OUT');
   assert.equal(h.snapshot().summaryReads, reads);
   h.setCount(2); await h.databaseStatus('SUBSCRIBED'); assert.equal(h.snapshot().label, '2 unread notifications');
-  h.setCount(3); await h.databaseStatus('SUBSCRIBED'); assert.equal(h.snapshot().label, '3 unread notifications');
+  h.setCount(3); await h.databaseStatus('SUBSCRIBED'); await h.advance(5_000); assert.equal(h.snapshot().label, '3 unread notifications');
   assert.equal(h.channels.length, 1, 'reconnect does not accumulate application-owned observers');
 });
+
+test('closed bell reads summary only and budgets a burst to one leading and one trailing hint', async t => {
+  const h = await mount(t, 'completed', { withRoot: true });
+  const before = h.snapshot();
+  assert.equal(before.pageReads, 0, 'closed bell does not hydrate the tray');
+  h.setCount(2); await h.database('INSERT', { user_id: 'account-a' });
+  h.setCount(8);
+  for (let i = 0; i < 50; i++) await h.database('UPDATE', { user_id: 'account-a' });
+  assert.equal(h.snapshot().summaryReads, before.summaryReads + 1);
+  assert.equal(h.snapshot().label, '2 unread notifications');
+  await h.advance(4_999); assert.equal(h.snapshot().summaryReads, before.summaryReads + 1);
+  await h.advance(1);
+  assert.equal(h.snapshot().summaryReads, before.summaryReads + 2);
+  assert.equal(h.snapshot().label, '8 unread notifications'); assert.equal(h.snapshot().pageReads, 0);
+  await h.advance(10_000); assert.equal(h.snapshot().summaryReads, before.summaryReads + 2, 'no polling when hints stop');
+  await h.openTray(); assert.equal(h.snapshot().pageReads, 1, 'manual tray open bypasses budget with fresh hydration');
+});
+
+test('confirmed action bypasses an automatic hint budget for every current bell', async t => {
+  const h = await mount(t, 'completed', { withRoot: true, withPeerBell: true });
+  await h.openTray(); await h.database('UPDATE', { user_id: 'account-a' });
+  const before = h.snapshot(); await h.openRow();
+  assert.equal(h.snapshot().label, 'Notifications'); assert.equal(h.snapshot().peerLabel, 'Notifications');
+  assert.equal(h.snapshot().summaryReads, before.summaryReads + 2, 'confirmed mutation is not delayed five seconds');
+});
+
+test('deadline aborts a source but retains ownership across manual retries and foreground resume', async t => {
+  const h = await mount(t, 'completed', { withRoot: true }); const held = deferred(); let signal;
+  await h.openTray();
+  h.setSummaryReader((_id, nextSignal) => { signal = nextSignal; return held.promise; });
+  await h.database('INSERT', { user_id: 'account-a' }); const reads = h.snapshot().summaryReads;
+  await h.advance(10_000);
+  assert.equal(signal.aborted, true); assert.match(h.snapshot().trayText, /could not be refreshed/);
+  assert.equal(h.snapshot().label, '1 unread notifications'); assert.match(h.snapshot().rowText, /Unread/);
+  h.setSummaryReader(async () => summary(6));
+  await h.openTray(); await h.openTray(); await h.foreground(); await h.advance(20_000);
+  assert.equal(h.snapshot().summaryReads, reads, 'abort-ignoring source cannot overlap retries');
+  await h.resolve(held, summary(99));
+  assert.equal(h.snapshot().summaryReads, reads + 1); assert.equal(h.snapshot().label, '6 unread notifications');
+  assert.doesNotMatch(h.snapshot().trayText, /could not be refreshed/);
+});
+
+for (const lifecycle of ['focus', 'background']) {
+  test(`${lifecycle} retirement suppresses old action navigation without pretending the durable write was cancelled`, async t => {
+    const h = await mount(t, 'completed'); const held = deferred();
+    await h.openTray(); h.setMarkResultGate(held.promise); await h.openRow();
+    assert.equal(h.snapshot().durableRead, true, 'the dispatched mutation already completed; only UI delivery is held');
+    if (lifecycle === 'focus') { await h.focus(false); await h.focus(true); }
+    else { await h.appState('background'); await h.appState('active'); }
+    await h.resolve(held);
+    assert.equal(h.snapshot().routes, 0, 'returning to this screen cannot adopt the older interaction');
+    assert.equal(h.snapshot().rowDisabled, false, 'actual action ownership is released after settlement');
+    assert.equal(h.snapshot().label, 'Notifications', 'fresh read reconciles the durable result');
+  });
+
+  test(`${lifecycle} retirement fences held results and trailing hints, then reads fresh on return`, async t => {
+    const h = await mount(t, 'completed', { withRoot: true }); const held = deferred(); let signal;
+    h.setSummaryReader((_id, nextSignal) => { signal = nextSignal; return held.promise; });
+    await h.database('INSERT', { user_id: 'account-a' }); await h.database('UPDATE', { user_id: 'account-a' });
+    const reads = h.snapshot().summaryReads;
+    if (lifecycle === 'focus') await h.focus(false); else await h.appState('background');
+    assert.equal(signal.aborted, true);
+    await h.advance(5_000); await h.resolve(held, summary(99));
+    assert.equal(h.snapshot().summaryReads, reads); assert.equal(h.snapshot().label, '1 unread notifications');
+    h.setSummaryReader(async () => summary(7));
+    if (lifecycle === 'focus') await h.focus(true); else await h.appState('active');
+    assert.equal(h.snapshot().label, '7 unread notifications');
+    assert.equal(h.snapshot().summaryReads, reads + 1);
+  });
+}
 
 test('database cleanup and late callbacks cannot cross account or session replacement or logout', async t => {
   const h = await mount(t, 'completed', { withRoot: true });
@@ -438,8 +536,9 @@ test('database cleanup and late callbacks cannot cross account or session replac
   assert.equal(h.channels[0].removed, true); assert.equal(h.channels.length, 2);
   const reads = h.snapshot().summaryReads;
   await h.database('INSERT', { user_id: 'account-a' }, 0); await h.databaseStatus('SUBSCRIBED', 0);
+  assert.equal(h.snapshot().summaryReads, reads, 'retired callbacks cannot queue another owner read');
   await h.resolve(held, summary(99));
-  assert.equal(h.snapshot().summaryReads, reads); assert.equal(h.snapshot().label, '4 unread notifications');
+  assert.equal(h.snapshot().summaryReads, reads + 1, 'only the queued replacement-owner read starts after settlement'); assert.equal(h.snapshot().label, '4 unread notifications');
   await h.replaceSession(activeSession('account-b', 'replacement-b'));
   assert.equal(h.channels[1].removed, true);
   const nextReads = h.snapshot().summaryReads;

@@ -4,16 +4,19 @@ const retired = () => new Error('Live read retired.');
 
 /** Coalesce identical in-flight reads, never cache their results. One consumer
  * abort cannot cancel another consumer. Authority generation is part of key.
+ * Keep ownership until the source settles, even if it ignores cancellation.
+ * Retired flights reject new readers instead of overlapping or serving stale data.
  */
 export function readSharedLiveSnapshot<T>(ownerKey: string, requestKey: string, signal: AbortSignal,
   read: (signal: AbortSignal) => Promise<T>): Promise<T> {
   if (signal.aborted) return Promise.reject(retired());
   const key = JSON.stringify([ownerKey, requestKey]);
   let flight = flights.get(key);
+  if (flight?.controller.signal.aborted) return Promise.reject(retired());
   if (!flight) {
-    // Bound bookkeeping. Unrelated excess requests keep their existing reader
-    // deadlines; they do not evict or cancel other screens' canonical reads.
-    if (flights.size >= 128) return read(signal);
+    // Bound both bookkeeping and work. Do not bypass ownership when saturated;
+    // callers can retry after their normal backoff once existing sources settle.
+    if (flights.size >= 128) return Promise.reject(new Error('Live read capacity reached.'));
     const controller = new AbortController();
     const owned: Flight = { controller, readers: 0, promise: Promise.resolve() };
     owned.promise = Promise.resolve().then(() => {
@@ -33,7 +36,7 @@ export function readSharedLiveSnapshot<T>(ownerKey: string, requestKey: string, 
       signal.removeEventListener('abort', abort);
       owned.readers -= 1;
       if (!owned.readers && flights.get(key) === owned) {
-        flights.delete(key); owned.controller.abort();
+        owned.controller.abort();
       }
       return true;
     };

@@ -27,11 +27,13 @@ test('errors back off and retired background/account lifetime cannot dispatch a 
  const h=clock(async()=>{throw new Error('offline');});await h.advance(150000);assert.equal(h.calls,1);await h.advance(299999);assert.equal(h.calls,1);await h.advance(1);assert.equal(h.calls,2);
  h.retire();h.controller.hint();await h.advance(600000);assert.equal(h.calls,2);assert.equal(h.timers.size,0);
 });
-test('twenty-second deadline aborts a hung request and permits backed-off retry',async()=>{
+test('twenty-second deadline aborts a hung request without overlapping a source that ignores abort',async()=>{
  const signals=[],hold=deferred(),h=clock(signal=>{signals.push(signal);return hold.promise;});
  await h.advance(150000);assert.equal(signals[0].aborted,false);await h.advance(20000);assert.equal(signals[0].aborted,true);
- await h.advance(300000);assert.equal(h.calls,2);h.controller.dispose();assert.equal(signals[1].aborted,true);
- hold.resolve();for(let i=0;i<8;i++)await Promise.resolve();assert.equal(h.timers.size,0);
+ await h.advance(600000);assert.equal(h.calls,1);assert.equal(h.timers.size,0);
+ hold.resolve();for(let i=0;i<8;i++)await Promise.resolve();
+ await h.advance(299999);assert.equal(h.calls,1);await h.advance(1);assert.equal(h.calls,2);
+ h.controller.dispose();assert.equal(h.timers.size,0);
 });
 test('early failure aborts the sibling request rather than leaving transport pending',async()=>{
  let signal;const hold=deferred(),h=clock(value=>{signal=value;return Promise.all([Promise.reject(new Error('head failed')),hold.promise]);});
@@ -78,12 +80,14 @@ const screen=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===
 const effect=screen.body.statements.find(n=>ts.isExpressionStatement(n)&&n.getText(ast).startsWith('useEffect(')&&n.getText(ast).includes('startProfileFeedFreshness'));
 assert.ok(effect,'test must execute production freshness effect');
 function mountedEffect(overrides={}){let cleanup,options,unsubscribe=0,disposed=0,current=true;const prompts=[],calls=[];
- const c={exports:{},currentUserId:'viewer',focused:true,feedAppActive:true,activeTab:'home',profilePostsReady:true,canViewFullProfile:true,isOfficialProfile:false,isSelfProfile:true,socialIdentity:'viewer:one',authority:{userId:'viewer'},AppState:{currentState:'active'},
- isSocialIdentityCurrent:()=>current,freshnessSnapshotRef:{current:{refreshRevision:1,items:[],posts:[],head:null}},visibleFeedPostIdsRef:{current:Array.from({length:20},(_,i)=>`p${i}`)},engagementRevisionsRef:{current:new Map()},
+ const c={exports:{},AbortController,currentUserId:'viewer',focused:true,feedAppActive:true,activeTab:'home',profilePostsReady:true,canViewFullProfile:true,isOfficialProfile:false,isSelfProfile:true,socialIdentity:'viewer:one',authority:{userId:'viewer',accountId:'viewer',sessionGeneration:'one'},AppState:{currentState:'active'},
+ isSocialIdentityCurrent:()=>current,freshnessSnapshotRef:{current:{refreshRevision:1,items:[],posts:[],head:null}},freshnessReadPendingRef:{current:false},visibleFeedPostIdsRef:{current:Array.from({length:20},(_,i)=>`p${i}`)},engagementRevisionsRef:{current:new Map()},
  profilePostUiById:{p0:{engagement:{likeCount:1,commentCount:1},commentsOpen:true,comments:[{id:'old'}],commentDraft:'unsent',commentAttachmentFile:{uri:'local'},commentsCursor:'next'}},
  readOwnProfileFeedHead:async()=>{calls.push('head');return{id:'new',createdAt:'2026-10-27T22:00:00Z',rowId:'row'};},readProfilePostEngagementStates:async ids=>{calls.push(ids);return{p0:{likeCount:2,commentCount:2}};},
  setFeedFreshness:value=>prompts.push(typeof value==='function'?value(prompts.at(-1)??{identity:'viewer:one',available:false}):value),hasNewProfileFeedHead:api.hasNewProfileFeedHead,
- startProfileFeedFreshness:value=>{options={...value,check:(signal=new AbortController().signal)=>value.check(signal)};return{hint:()=>{},dispose:()=>disposed++};},getNotificationActivityOwnerKey:()=> 'owner',subscribeToNotificationActivity:()=>()=>unsubscribe++,useEffect:fn=>{cleanup=fn();},...overrides};
+ startProfileFeedFreshness:value=>{options={...value,check:(signal=new AbortController().signal)=>value.check(signal)};return{hint:()=>{},dispose:()=>disposed++};},getNotificationActivityOwnerKey:binding=>JSON.stringify([binding.userId,binding.accountId,binding.sessionGeneration]),
+ readSharedLiveSnapshot:load('_lib/sharedLiveRead.ts').readSharedLiveSnapshot,
+ subscribeToNotificationActivity:()=>()=>unsubscribe++,useEffect:fn=>{cleanup=fn();},...overrides};
  c.freshnessAuthorityRef={current:c.authority};c.freshnessIdentityCurrentRef={current:c.isSocialIdentityCurrent};
  c.setProfilePostUiById=fn=>{c.profilePostUiById=fn(c.profilePostUiById);};vm.runInNewContext(compile(effect.getText(ast)),c);
  return{c,prompts,calls,get options(){return options;},stop:()=>cleanup?.(),retire:()=>current=false,get disposed(){return disposed;},get unsubscribe(){return unsubscribe;}};}
@@ -95,6 +99,44 @@ test('production quiet refresh preserves thread/draft/paging and exposes changed
  const m=mountedEffect();await m.options.check();assert.equal(m.prompts[0].available,true);const p=m.c.profilePostUiById.p0;
  assert.equal(p.engagement.likeCount,2);assert.equal(p.commentsRefreshAvailable,true);assert.equal(p.commentDraft,'unsent');assert.equal(p.commentAttachmentFile.uri,'local');assert.equal(p.comments[0].id,'old');assert.equal(p.commentsCursor,'next');m.stop();
 });
+test('overlapping production consumers share only metadata while engagement revisions remain local',async()=>{
+ const head=deferred(),counts=deferred(),shared=load('_lib/sharedLiveRead.ts').readSharedLiveSnapshot;
+ let headReads=0,engagementReads=0;
+ const overrides={readSharedLiveSnapshot:shared,readOwnProfileFeedHead:()=>{headReads++;return head.promise;},readProfilePostEngagementStates:ids=>{engagementReads++;assert.equal(ids.length,12);return counts.promise;}};
+ const a=mountedEffect(overrides),b=mountedEffect(overrides),p=a.options.check(),q=b.options.check();
+ await Promise.resolve();assert.equal(headReads,1);assert.equal(engagementReads,2);
+ a.c.engagementRevisionsRef.current.set('viewer:one:p0',1);
+ head.resolve({id:'new',createdAt:'2026-10-27T22:00:00Z',rowId:'row'});counts.resolve({p0:{likeCount:8,commentCount:2}});
+ await Promise.all([p,q]);assert.equal(a.c.profilePostUiById.p0.engagement.likeCount,1);assert.equal(b.c.profilePostUiById.p0.engagement.likeCount,8);
+ for(const m of [a,b]){assert.equal(m.prompts.at(-1).available,true);assert.equal(m.c.profilePostUiById.p0.commentDraft,'unsent');m.stop();}
+});
+test('production head sharing is separated by exact account, session, social identity and refresh revision',async()=>{
+ const head=deferred(),shared=load('_lib/sharedLiveRead.ts').readSharedLiveSnapshot;let calls=0;
+ const common={readSharedLiveSnapshot:shared,readOwnProfileFeedHead:()=>{calls++;return head.promise;}};
+ const consumers=[mountedEffect(common),mountedEffect(common),
+  mountedEffect({...common,authority:{userId:'viewer',accountId:'other-account',sessionGeneration:'one'}}),
+  mountedEffect({...common,authority:{userId:'viewer',accountId:'viewer',sessionGeneration:'two'}}),
+  mountedEffect({...common,socialIdentity:'other-profile:one'}),
+  mountedEffect({...common,freshnessSnapshotRef:{current:{refreshRevision:2,items:[],posts:[],head:null}}})];
+ const pending=consumers.map(m=>m.options.check());await Promise.resolve();assert.equal(calls,5);
+ head.resolve(null);await Promise.all(pending);for(const m of consumers)m.stop();
+});
+test('aborting one production consumer does not cancel another consumer metadata read',async()=>{
+ const head=deferred(),shared=load('_lib/sharedLiveRead.ts').readSharedLiveSnapshot;let sharedSignal;
+ const common={readSharedLiveSnapshot:shared,readOwnProfileFeedHead:signal=>{sharedSignal=signal;return head.promise;}};
+ const a=mountedEffect(common),b=mountedEffect(common),controller=new AbortController();
+ const p=a.options.check(controller.signal),q=b.options.check();await Promise.resolve();
+ const rejected=assert.rejects(p,/retired/);controller.abort();await rejected;assert.equal(sharedSignal.aborted,false);
+ head.resolve({id:'new',createdAt:'2026-10-27T22:00:00Z',rowId:'row'});await q;
+ assert.equal(a.prompts.length,0);assert.equal(b.prompts.at(-1).available,true);a.stop();b.stop();
+});
+test('failed production head cancels engagement but retains its flight until abort-ignoring engagement settles',async()=>{
+ const counts=deferred();let signal,settled=false;
+ const m=mountedEffect({readOwnProfileFeedHead:async()=>{throw new Error('head offline');},readProfilePostEngagementStates:(_ids,value)=>{signal=value;return counts.promise;}});
+ const pending=m.options.check().finally(()=>{settled=true;});const rejected=assert.rejects(pending,/head offline/);
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(signal.aborted,true);assert.equal(settled,false);
+ counts.resolve({p0:{likeCount:9,commentCount:2}});await rejected;assert.equal(m.c.profilePostUiById.p0.engagement.likeCount,1);m.stop();
+});
 test('detected prompt remains sticky when a newer known local post becomes head',async()=>{
  const m=mountedEffect();await m.options.check();assert.equal(m.prompts.at(-1).available,true);
  m.c.freshnessSnapshotRef.current.posts=[{id:'local',createdAt:'2026-10-27T22:00:01Z'}];
@@ -103,7 +145,7 @@ test('detected prompt remains sticky when a newer known local post becomes head'
 });
 test('late response from a transport ignoring abort cannot publish after deadline',async()=>{
  const hold=deferred(),m=mountedEffect({readOwnProfileFeedHead:()=>hold.promise}),request=new AbortController();
- const pending=m.options.check(request.signal);request.abort();hold.resolve({id:'new',createdAt:'2026-10-27T22:00:00Z',rowId:'row'});await pending;
+ const pending=m.options.check(request.signal);await Promise.resolve();const rejected=assert.rejects(pending,/retired/);request.abort();hold.resolve({id:'new',createdAt:'2026-10-27T22:00:00Z',rowId:'row'});await rejected;
  assert.equal(m.prompts.length,0);assert.equal(m.c.profilePostUiById.p0.engagement.likeCount,1);m.stop();
 });
 test('actual captured route identity rejects replacement render before cleanup, including viewer-specific likes',async()=>{
@@ -185,4 +227,29 @@ test('mounted production effect survives typing and replacement authority object
   assert.equal(starts,1);assert.equal(stops,0);
   m.c.focused=false;await React.act(async()=>root.render(React.createElement(Host)));assert.equal(stops,1);
  }finally{await React.act(async()=>root.unmount());}
+});
+for(const transition of ['blur','background'])test(`mounted ${transition} and resume retains local engagement ownership until source settlement`,async()=>{
+ const React=require('react'),{createRoot}=require('react-dom/client');
+ const noop=()=>{},doc={addEventListener:noop,removeEventListener:noop,defaultView:globalThis,nodeType:9};
+ const container={addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'};
+ doc.documentElement=container;globalThis.document=doc;globalThis.window=globalThis;globalThis.HTMLIFrameElement=class{};globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const held=deferred();let reads=0,options,request,lastSignal;
+ const m=mountedEffect({readProfilePostEngagementStates:(_ids,signal)=>{reads++;lastSignal=signal;return reads===1?held.promise:Promise.resolve({p0:{likeCount:4,commentCount:3}});}});m.stop();
+ m.c.useEffect=React.useEffect;
+ m.c.startProfileFeedFreshness=value=>{options=value;const owned=new AbortController();request=owned;return{hint:noop,dispose:()=>owned.abort()};};
+ const context=vm.createContext(m.c),code=compile(effect.getText(ast));
+ function Host(){vm.runInContext(code,context);return null;}
+ const root=createRoot(container),render=()=>React.act(async()=>root.render(React.createElement(Host)));
+ try{
+  await render();const pending=options.check(request.signal);await new Promise(resolve=>setImmediate(resolve));assert.equal(reads,1);
+  if(transition==='blur')m.c.focused=false;else{m.c.feedAppActive=false;m.c.AppState.currentState='background';}
+  await render();assert.equal(lastSignal.aborted,true);
+  m.c.focused=true;m.c.feedAppActive=true;m.c.AppState.currentState='active';await render();
+  for(let i=0;i<3;i++)await options.check(request.signal);
+  assert.equal(reads,1,'resume cannot overlap an abort-ignoring local engagement reader');
+  held.resolve({p0:{likeCount:99,commentCount:99}});await pending;
+  assert.equal(m.c.profilePostUiById.p0.engagement.likeCount,1,'retired response cannot publish');
+  await options.check(request.signal);assert.equal(reads,2);assert.equal(m.c.profilePostUiById.p0.engagement.likeCount,4);
+  assert.equal(m.c.profilePostUiById.p0.commentDraft,'unsent');
+ }finally{held.resolve({});await React.act(async()=>root.unmount());}
 });

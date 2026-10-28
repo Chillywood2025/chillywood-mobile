@@ -188,7 +188,7 @@
       "owningSystem": "search_ranking_integrity_operator",
       "componentType": "foundation_only_off",
       "supportedPlatforms": ["shared", "ios", "android"],
-      "paths": ["supabase/functions/discovery-invalidation-worker/index.ts", "supabase/functions/_shared/discovery-invalidation-worker.mjs", "supabase/migrations/20261028043447_discovery_scoped_invalidation_outbox.sql"],
+      "paths": ["supabase/functions/discovery-invalidation-worker/index.ts", "supabase/functions/_shared/discovery-invalidation-worker.mjs", "supabase/migrations/20261028145327_discovery_scoped_invalidation_outbox.sql"],
       "schedulerCadence": "none installed; separately authorized bounded dispatcher required",
       "allowedReads": ["private scoped invalidation queue, current public source revisions, bounded transport insertion confirmation and aggregate health"],
       "allowedWrites": ["exact claimed invalidation statuses, scoped pacing, opaque Broadcast insertion and sanitized retry/dead-letter state"],

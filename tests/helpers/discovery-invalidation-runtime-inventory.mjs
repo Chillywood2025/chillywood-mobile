@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 // Exact additive identities; historical migration/function baselines remain
 // unchanged. The final column is the complete non-owner EXECUTE ACL.
-export const discoveryInvalidationFiles = ['20261028043447_discovery_scoped_invalidation_outbox.sql'];
+export const discoveryInvalidationFiles = ['20261028145327_discovery_scoped_invalidation_outbox.sql'];
 export const discoveryInvalidationFunctions = [
   ['private.discovery_public_invalidation_scopes/1', 'private.discovery_public_invalidation_scopes(public.discovery_feed_items)', []],
   ['private.enqueue_discovery_scope_invalidations/0', 'private.enqueue_discovery_scope_invalidations()', []],

@@ -109,6 +109,7 @@ import {
 } from "../../_lib/profileSocialFeed";
 import { readOwnProfileFeedHead, readOwnProfileFeedPage, type ProfileFeedHead } from "../../_lib/profileFeedReader";
 import { hasNewProfileFeedHead, startProfileFeedFreshness } from "../../_lib/profileFeedFreshness";
+import { readSharedLiveSnapshot } from "../../_lib/sharedLiveRead";
 import { getNotificationActivityOwnerKey, subscribeToNotificationActivity } from "../../_lib/notificationActivity";
 import {
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
@@ -1397,6 +1398,9 @@ export default function ProfileScreen() {
   freshnessSnapshotRef.current = { items: feedPages.items, posts: profilePosts, head: feedPages.head, refreshRevision: feedPages.refreshRevision };
   const freshnessAuthorityRef = useRef(authority); freshnessAuthorityRef.current = authority;
   const freshnessIdentityCurrentRef = useRef(isSocialIdentityCurrent); freshnessIdentityCurrentRef.current = isSocialIdentityCurrent;
+  // The permit outlives focus/background effect cleanup. It owns no shared
+  // engagement data and is released only when this screen's readers settle.
+  const freshnessReadPendingRef = useRef(false);
   useEffect(() => {
     const subscription = AppState.addEventListener("change", next => setFeedAppActive(next === "active"));
     return () => subscription.remove();
@@ -1413,49 +1417,70 @@ export default function ProfileScreen() {
     // Freeze this lifetime's predicate. Reading the ref after an account switch
     // could adopt the replacement identity before passive cleanup has run.
     const ownsIdentity = freshnessIdentityCurrentRef.current;
+    const ownerKey = getNotificationActivityOwnerKey(freshnessAuthorityRef.current);
     const current = () => !retired && AppState.currentState === "active" && ownsIdentity();
     const controller = startProfileFeedFreshness({
       isCurrent: current,
       check: async (signal) => {
-        const revision = freshnessSnapshotRef.current.refreshRevision;
-        const ids = visibleFeedPostIdsRef.current.slice(0, 12);
-        const revisions = new Map(ids.map(id => [id, engagementRevisionsRef.current.get(`${socialIdentity}:${id}`) ?? 0]));
-        const [head, counts] = await Promise.all([
-          isSelfProfile ? readOwnProfileFeedHead(signal) : Promise.resolve(null),
-          ids.length ? readProfilePostEngagementStates(ids, signal) : Promise.resolve({} as Record<string, ProfilePostEngagementState>),
-        ]);
-        if (signal.aborted || !current() || revision !== freshnessSnapshotRef.current.refreshRevision) return;
-        if (isSelfProfile) {
-          const snapshot = freshnessSnapshotRef.current;
-          const known = [
-            ...snapshot.items.filter(item => item.type !== "spectator_entry").map(item => ({ id: item.id, createdAt: item.rankTime })),
-            ...snapshot.posts.map(post => ({ id: `relationship-profile_post-${post.id}`, createdAt: post.createdAt })),
-          ];
-          setFeedFreshness(previous => signal.aborted || !current()
-            || revision !== freshnessSnapshotRef.current.refreshRevision ? previous : ({
-              identity: socialIdentity,
-              available: (previous.identity === socialIdentity && previous.available)
-                || hasNewProfileFeedHead(head, known, snapshot.head),
-              retry: previous.identity === socialIdentity && previous.retry,
-            }));
-        }
-        setProfilePostUiById(previous => {
-          if (signal.aborted || !current() || revision !== freshnessSnapshotRef.current.refreshRevision) return previous;
-          const next = { ...previous };
-          for (const id of ids) {
-            if (!counts[id] || !next[id] || next[id].likeBusy || next[id].commentBusy || next[id].deletingCommentId
-              || revisions.get(id) !== (engagementRevisionsRef.current.get(`${socialIdentity}:${id}`) ?? 0)) continue;
-            // Counts update quietly. Loaded comment text, draft, attachment,
-            // reply target and cursor are intentionally never replaced here.
-            next[id] = { ...next[id], engagement: counts[id], engagementReady: true,
-              commentsRefreshAvailable: next[id].commentsRefreshAvailable || (!!next[id].commentsOpen
-                && next[id].engagement?.commentCount !== counts[id].commentCount) };
+        if (freshnessReadPendingRef.current) return;
+        freshnessReadPendingRef.current = true;
+        try {
+          const revision = freshnessSnapshotRef.current.refreshRevision;
+          const ids = visibleFeedPostIdsRef.current.slice(0, 12);
+          const revisions = new Map(ids.map(id => [id, engagementRevisionsRef.current.get(`${socialIdentity}:${id}`) ?? 0]));
+          const reads = new AbortController();
+          const abortReads = () => reads.abort();
+          signal.addEventListener("abort", abortReads, { once: true });
+          if (signal.aborted) reads.abort();
+          const retireSiblings = <T,>(promise: Promise<T>) => promise.catch(error => { reads.abort(); throw error; });
+          const results = await Promise.allSettled([
+            // Share only canonical metadata. Visible engagement and optimistic
+            // revisions belong to this screen, not to another mounted consumer.
+            retireSiblings(isSelfProfile ? readSharedLiveSnapshot(ownerKey,
+              JSON.stringify(["profile-feed-head", socialIdentity, revision]), reads.signal, readOwnProfileFeedHead) : Promise.resolve(null)),
+            retireSiblings(ids.length ? readProfilePostEngagementStates(ids, reads.signal) : Promise.resolve({} as Record<string, ProfilePostEngagementState>)),
+          ]);
+          signal.removeEventListener("abort", abortReads);
+          // Keep the controller's flight owned until both source readers settle,
+          // even when a transport ignores the sibling's cancellation request.
+          const [headResult, countsResult] = results;
+          if (headResult.status === "rejected") throw headResult.reason;
+          if (countsResult.status === "rejected") throw countsResult.reason;
+          const head = headResult.value;
+          const counts = countsResult.value;
+          if (signal.aborted || !current() || revision !== freshnessSnapshotRef.current.refreshRevision) return;
+          if (isSelfProfile) {
+            const snapshot = freshnessSnapshotRef.current;
+            const known = [
+              ...snapshot.items.filter(item => item.type !== "spectator_entry").map(item => ({ id: item.id, createdAt: item.rankTime })),
+              ...snapshot.posts.map(post => ({ id: `relationship-profile_post-${post.id}`, createdAt: post.createdAt })),
+            ];
+            setFeedFreshness(previous => signal.aborted || !current()
+              || revision !== freshnessSnapshotRef.current.refreshRevision ? previous : ({
+                identity: socialIdentity,
+                available: (previous.identity === socialIdentity && previous.available)
+                  || hasNewProfileFeedHead(head, known, snapshot.head),
+                retry: previous.identity === socialIdentity && previous.retry,
+              }));
           }
-          return next;
-        });
+          setProfilePostUiById(previous => {
+            if (signal.aborted || !current() || revision !== freshnessSnapshotRef.current.refreshRevision) return previous;
+            const next = { ...previous };
+            for (const id of ids) {
+              if (!counts[id] || !next[id] || next[id].likeBusy || next[id].commentBusy || next[id].deletingCommentId
+                || revisions.get(id) !== (engagementRevisionsRef.current.get(`${socialIdentity}:${id}`) ?? 0)) continue;
+              // Counts update quietly. Loaded comment text, draft, attachment,
+              // reply target and cursor are intentionally never replaced here.
+              next[id] = { ...next[id], engagement: counts[id], engagementReady: true,
+                commentsRefreshAvailable: next[id].commentsRefreshAvailable || (!!next[id].commentsOpen
+                  && next[id].engagement?.commentCount !== counts[id].commentCount) };
+            }
+            return next;
+          });
+        } finally { freshnessReadPendingRef.current = false; }
       },
     });
-    const unsubscribe = subscribeToNotificationActivity(getNotificationActivityOwnerKey(freshnessAuthorityRef.current), controller.hint);
+    const unsubscribe = subscribeToNotificationActivity(ownerKey, controller.hint);
     return () => { retired = true; controller.dispose(); unsubscribe(); };
   }, [activeTab, canViewFullProfile, currentUserId, feedAppActive, focused,
     isOfficialProfile, isSelfProfile, profilePostsReady, socialIdentity]);

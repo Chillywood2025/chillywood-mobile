@@ -20,6 +20,7 @@ function fixture() {
   let now = Date.now();
   let healthy = false;
   let rankingRows = {};
+  let rankingResponse;
   const hints = new Set();
   let authority = owner(), snapshot = authority, status = 'active', focused = true, response, rows = [item()];
   const queries = [], rankingQueries = [], starts = [], intervals = new Map(), timeouts = new Map(), listeners = new Set(), cache = new Map();
@@ -45,6 +46,7 @@ function fixture() {
         const observed = { table, operations, signal };
         if (!['discovery_feed_items','circle_spectator_feed_items'].includes(table)) {
           rankingQueries.push(observed);
+          if (rankingResponse) return rankingResponse(observed);
           return { data: (rankingRows[table] ?? []).filter(row => filters.every(filter => filter(row))).slice(0,max), error: null };
         }
         queries.push(observed);
@@ -82,7 +84,7 @@ function fixture() {
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context);
     cache.set(file, exports); return exports;
   }
-  return { load, queries, rankingQueries, rankingRows: value => { rankingRows=value; }, starts, app, listeners, intervals, timeouts, hints, healthy: value => { healthy = value; }, advance: ms => { now += ms; }, rows: value => { rows = value; }, response: value => { response = value; }, database: value => { database = value; },
+  return { load, queries, rankingQueries, rankingRows: value => { rankingRows=value; }, rankingResponse: value => { rankingResponse=value; }, starts, app, listeners, intervals, timeouts, hints, healthy: value => { healthy = value; }, advance: ms => { now += ms; }, rows: value => { rows = value; }, response: value => { response = value; }, database: value => { database = value; },
     account: (value, nextStatus = value ? 'active' : 'unknown') => { authority = value; snapshot = value; status = nextStatus; }, snapshot: value => { snapshot = value; }, focus: value => { focused = value; } };
 }
 
@@ -165,13 +167,40 @@ for (const transition of ['account', 'creator', 'blur', 'background', 'disabled'
   await h.resolve(held, { data: [item('old')], error: null }); assert.equal(h.result().items.length, 0);
   assert.equal(h.queries[0].signal.aborted, true);
 });
-test('held read times out honestly, ignores late results, and can retry', async t => {
+test('held read times out honestly, blocks overlapping retries, and retries after source settlement', async t => {
   const held = deferred(), h = await mount(t, h => h.response(() => held.promise));
   await h.tick(12000); assert.ok(h.result().error); assert.equal(h.result().loading, false);
   assert.equal(h.queries[0].signal.aborted, true);
   h.response(async () => ({ data: [item('fresh')], error: null }));
-  await React.act(async () => h.result().reload()); assert.equal(h.result().items[0]?.id, 'fresh');
-  await h.resolve(held, { data: [item('late')], error: null }); assert.equal(h.result().items[0]?.id, 'fresh');
+  for(let i=0;i<3;i++)await React.act(async () => h.result().reload());
+  assert.equal(h.queries.length,1,'a source that ignores abort still owns its transport');assert.ok(h.result().error);
+  await h.resolve(held, { data: [item('late')], error: null }); assert.equal(h.result().items.length,0);
+  await React.act(async () => h.result().reload()); assert.equal(h.result().items[0]?.id, 'fresh');assert.equal(h.queries.length,2);
+});
+test('failed public source cannot release a shared read while an abort-ignoring Circle sibling is held',async t=>{
+  const held=deferred(),h=await mount(t);
+  h.response(({table})=>table==='discovery_feed_items'?Promise.reject(new Error('public failed')):held.promise);
+  await h.options({includeCircle:true});const count=h.queries.length;
+  await h.tick(12000);assert.ok(h.result().error);
+  for(let i=0;i<3;i++)await React.act(async()=>h.result().reload());
+  assert.equal(h.queries.length,count,'failed sibling cannot release the still-running source');
+  assert.equal(h.queries.at(-1).signal.aborted,true);
+  await h.resolve(held,{data:[],error:null});assert.equal(h.result().items.length,0);
+  h.response(({table})=>Promise.resolve({data:table==='discovery_feed_items'?[item('fresh')]:[],error:null}));
+  await React.act(async()=>h.result().reload());assert.equal(h.result().items[0]?.id,'fresh');assert.equal(h.queries.length,count+2);
+});
+test('failed ranking source retains shared ownership until every bounded graph reader settles',async t=>{
+  const held=deferred(),h=await mount(t,h=>{
+    h.rows([item('candidate',{owner_user_id:other,channel_user_id:other,host_user_id:other})]);
+    h.rankingResponse(({table})=>table==='channel_followers'?Promise.reject(new Error('ranking failed')):held.promise);
+  });
+  assert.equal(h.rankingQueries.length,5);await h.tick(12000);assert.ok(h.result().error);
+  for(let i=0;i<3;i++)await React.act(async()=>h.result().reload());
+  assert.equal(h.queries.length,1);assert.equal(h.rankingQueries.length,5);
+  assert.ok(h.rankingQueries.every(query=>query.signal.aborted));
+  await h.resolve(held,{data:[],error:null});assert.equal(h.result().items.length,0);
+  h.rankingResponse(null);await React.act(async()=>h.result().reload());
+  assert.equal(h.result().items[0]?.id,'candidate');assert.equal(h.queries.length,2);assert.equal(h.rankingQueries.length,10);
 });
 test('reload and interval coalesce while a read is held; old reload cannot read a new owner', async t => {
   const held = deferred(), h = await mount(t, h => h.response(() => held.promise));
