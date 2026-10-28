@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {assertBrandNativeCleanShutdown} from './helpers/brand-reference-native-shutdown.mjs';
+import {pullBrandNativeImage,runBrandImagePullAttempt} from './helpers/brand-reference-image-pull.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=fileURLToPath(new URL('../../',import.meta.url));
@@ -59,7 +60,7 @@ for(const key of Object.keys(env))if(key.startsWith('PG')||key.startsWith('SUPAB
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const summary={status:'running',startedAt:new Date().toISOString(),syntheticOnly:true,container,imageReference,imageDigest,
  sourceHead:process.env.GITHUB_SHA,runner:{os:process.platform,architecture:process.arch},stages:[],
- sourceHashes:Object.fromEntries(['tests/brand-reference-native-ci.mjs','supabase/migrations/20261025121430_platform_brand_reference_scan_performance.sql','supabase/migrations/20261025141347_platform_brand_reference_candidate_indexes.sql'].map(file=>[file,sha(readFileSync(root+file))])),
+ sourceHashes:Object.fromEntries(['tests/brand-reference-native-ci.mjs','tests/helpers/brand-reference-image-pull.mjs','supabase/migrations/20261025121430_platform_brand_reference_scan_performance.sql','supabase/migrations/20261025141347_platform_brand_reference_candidate_indexes.sql'].map(file=>[file,sha(readFileSync(root+file))])),
  limitations:['Native source replay uses explicit managed-service doubles; canonical managed Supabase validation remains separate.',
   'Synthetic runner latency does not establish production latency. No deployment is performed.']};
 const save=phase=>{summary.phase=phase;summary.updatedAt=new Date().toISOString();writeFileSync(summaryPath,JSON.stringify(summary,null,2)+'\n');console.log(summary.updatedAt+' '+phase);};
@@ -97,7 +98,22 @@ try{
  assert.equal(process.platform,'linux');assert.equal(process.arch,'x64');
  if(env.DOCKER_HOST)assert.match(env.DOCKER_HOST,/^unix:\/\//);
  assert.match(checked(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker context'),/^unix:\/\//);
- await command('pull-image','docker',['pull','--platform','linux/amd64',imageReference],300);
+ const pullController=new AbortController();
+ const cancelPull=()=>pullController.abort();
+ process.once('SIGINT',cancelPull);process.once('SIGTERM',cancelPull);
+ try{
+  await pullBrandNativeImage({imageReference,signal:pullController.signal,
+   onBackoff:retry=>{summary.imagePullBackoffs??=[];summary.imagePullBackoffs.push(retry);save('bounded registry throttling backoff');},
+   runAttempt:async({label,args,timeoutMs,deadline,now,signal})=>{
+    save(label);const entry={label,args,startedAt:new Date().toISOString(),timeoutSeconds:timeoutMs/1000};summary.stages.push(entry);
+    const log=createWriteStream(evidence+'brand-native-ci-'+label+'.log',{flags:'wx'});
+    const result=await runBrandImagePullAttempt({args,cwd:root,env,timeoutMs,deadline,now,signal,
+     onOutput:chunk=>{log.write(chunk);process.stdout.write(chunk);}});
+    await new Promise(resolve=>log.end(resolve));
+    const {diagnostic,...outcome}=result;Object.assign(entry,outcome,{completedAt:new Date().toISOString()});save(label+' completed');
+    return result;
+   }});
+ }finally{process.removeListener('SIGINT',cancelPull);process.removeListener('SIGTERM',cancelPull);}
  const image=JSON.parse(checked(docker(['image','inspect',imageReference]),'verify image identity'))[0];
  assert.ok(image.RepoDigests?.includes(imageReference),'the exact immutable manifest must be present');
  assert.match(image.Id,/^sha256:[0-9a-f]{64}$/);const imageID=image.Id;
