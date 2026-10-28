@@ -2,7 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-aTbFxfUp4iAdAXp+02uL36RyXaESxD1YlxsoEdHYSZo='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-EOUK0adlX1x7ExcPYLPqG8zlG8lZZGQ1/aS5jEu2XK8='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Open Chi'llywood signup confirmation</title>
@@ -123,7 +123,7 @@
     return;
   }
   if (iosSafari) {
-    target = `https://chillywood-legal.pages.dev/auth-handoff#${new URL(target).search.slice(1)}`;
+    target = `https://chillywood-legal.pages.dev/auth-handoff/#${new URL(target).search.slice(1)}`;
     button.textContent = "Continue with Safari (step 1 of 2)";
   } else {
     const canonical = new URL(target);
