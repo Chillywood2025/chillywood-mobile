@@ -6,7 +6,7 @@ import {createDatabase} from '../../tests/helpers/database-runtime-authority-fix
 
 let databaseFactory;
 if(process.env.NATIVE_PG_ADAPTER) ({databaseFactory}=await import(pathToFileURL(process.env.NATIVE_PG_ADAPTER).href));
-const migration='supabase/migrations/20261027221629_profile_feed_guarded_candidate_fastpath.sql';
+const migration='supabase/migrations/20261028005725_profile_feed_guarded_candidate_fastpath.sql';
 const source=readFileSync(migration,'utf8');
 const {db,replayReport}=await createDatabase({includeHeldStudio:true,applyRepair:true,databaseFactory});
 const u=n=>`9b470000-0000-4000-8000-${String(n).padStart(12,'0')}`;

@@ -9,9 +9,9 @@ import { createDatabase } from '../../tests/helpers/database-runtime-authority-f
 // Historical pre-counter baseline: the subsequent counter migration must not
 // be applied to fixtures whose bulk seed deliberately suppresses write hooks.
 const {db,replayReport}=await createDatabase({includeHeldStudio:true,applyRepair:true,
-  excludeMigrations:['20261027214412_profile_engagement_sharded_counters.sql']});
+  excludeMigrations:['20261028005432_profile_engagement_sharded_counters.sql']});
 const post='9b471000-0000-4000-8000-000000000002';
-const migrationURL=new URL('../migrations/20261027210217_profile_relationship_feed_cursor.sql',import.meta.url);
+const migrationURL=new URL('../migrations/20261028005149_profile_relationship_feed_cursor.sql',import.meta.url);
 const sql=readFileSync(migrationURL,'utf8');
 const hashes={migration:createHash('sha256').update(sql).digest('hex'),script:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex')};
 const queryAsViewer=async(sql,args=[])=>{

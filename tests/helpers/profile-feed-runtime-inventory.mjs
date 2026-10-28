@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 
 // Additive inventory: do not rewrite the historical replay/function baselines.
 export const profileFeedFiles = [
-  '20261027210217_profile_relationship_feed_cursor.sql',
-  '20261027211112_profile_public_read_role_isolation.sql',
-  '20261027214412_profile_engagement_sharded_counters.sql',
-  '20261027221629_profile_feed_guarded_candidate_fastpath.sql',
+  '20261028005149_profile_relationship_feed_cursor.sql',
+  '20261028005306_profile_public_read_role_isolation.sql',
+  '20261028005432_profile_engagement_sharded_counters.sql',
+  '20261028005725_profile_feed_guarded_candidate_fastpath.sql',
 ];
 // Exact new identities (the counter migration replaces, rather than adds,
 // read_profile_post_engagement_batch). The final column is non-owner EXECUTE.

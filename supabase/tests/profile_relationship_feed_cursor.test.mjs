@@ -8,9 +8,9 @@ import { pathToFileURL } from 'node:url';
 import { isAbsolute } from 'node:path';
 import { createDatabase } from '../../tests/helpers/database-runtime-authority-fixture.mjs';
 
-const roleMigration='20261027211112_profile_public_read_role_isolation.sql';
-const evidenceFiles=['supabase/migrations/20261027210217_profile_relationship_feed_cursor.sql',
-  'supabase/migrations/20261027221629_profile_feed_guarded_candidate_fastpath.sql',
+const roleMigration='20261028005306_profile_public_read_role_isolation.sql';
+const evidenceFiles=['supabase/migrations/20261028005149_profile_relationship_feed_cursor.sql',
+  'supabase/migrations/20261028005725_profile_feed_guarded_candidate_fastpath.sql',
   'tests/helpers/native-profile-database.mjs',
   `supabase/migrations/${roleMigration}`,'supabase/tests/profile_relationship_feed_cursor.test.mjs',
   'supabase/tests/profile_relationship_feed_cursor_test.sql'];
@@ -52,7 +52,7 @@ const referencePage = (cursor = null, limit = 20) => user(1, `
   order by item.created_at desc,item.id desc limit $4`,
   [u(1),cursor?.created_at??null,cursor?.id??null,limit+1]);
 const explainProductionQuery = async (cursor = null) => {
-  const source=readFileSync(new URL('../migrations/20261027210217_profile_relationship_feed_cursor.sql',import.meta.url),'utf8');
+  const source=readFileSync(new URL('../migrations/20261028005149_profile_relationship_feed_cursor.sql',import.meta.url),'utf8');
   const start=source.indexOf('  return query\n');
   const end=source.indexOf(';\nend;',start);
   assert.ok(start>=0&&end>start,'exact production RETURN QUERY found');

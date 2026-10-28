@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {isAbsolute} from 'node:path';
 import {createDatabase} from '../../tests/helpers/database-runtime-authority-fixture.mjs';
-const name='20261027214412_profile_engagement_sharded_counters.sql';
+const name='20261028005432_profile_engagement_sharded_counters.sql';
 const source=readFileSync(new URL(`../migrations/${name}`,import.meta.url),'utf8');
 let databaseFactory;
 if(process.env.NATIVE_PG_ADAPTER){
