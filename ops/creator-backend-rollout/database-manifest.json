@@ -1,0 +1,404 @@
+{
+  "schemaVersion": 1,
+  "migrationQuerySha256": "cb7c21435e3eee37dd1d03144a9b05b34ba0cb518e35067dc44905ed517af8ca",
+  "migrationQueryBytes": 576507,
+  "sourceHead": "8d1ca9efe4ec78f1e0a5e9a7b4413933b8f3ae29",
+  "sourceCount": 25,
+  "transforms": [
+    {
+      "sourcePath": "supabase/migrations/20261026165859_creator_event_protected_playback.sql",
+      "kind": "limit_check_function_bodies_to_cutover_transaction",
+      "statementIndex": 0,
+      "sourceByteOffset": 234,
+      "removedByteLength": 34,
+      "removedText": "set check_function_bodies = false;",
+      "replacementText": "set local check_function_bodies = false;"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027021608_creator_monetization_reference_guard_integration.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 0,
+      "sourceByteOffset": 0,
+      "removedByteLength": 6,
+      "removedText": "begin;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027021608_creator_monetization_reference_guard_integration.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 5,
+      "sourceByteOffset": 1085,
+      "removedByteLength": 8,
+      "removedText": "\ncommit;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034836_creator_tip_settlement_authority.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 0,
+      "sourceByteOffset": 0,
+      "removedByteLength": 6,
+      "removedText": "begin;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034836_creator_tip_settlement_authority.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 5,
+      "sourceByteOffset": 26806,
+      "removedByteLength": 8,
+      "removedText": "\ncommit;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034844_creator_merch_payment_refund_reconciliation.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 0,
+      "sourceByteOffset": 0,
+      "removedByteLength": 6,
+      "removedText": "begin;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034844_creator_merch_payment_refund_reconciliation.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 7,
+      "sourceByteOffset": 14548,
+      "removedByteLength": 9,
+      "removedText": "\n\ncommit;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034858_creator_connect_observed_configuration.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 0,
+      "sourceByteOffset": 0,
+      "removedByteLength": 6,
+      "removedText": "begin;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034858_creator_connect_observed_configuration.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 9,
+      "sourceByteOffset": 11236,
+      "removedByteLength": 9,
+      "removedText": "\n\ncommit;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034920_buyer_purchase_partial_refund_presentation.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 0,
+      "sourceByteOffset": 0,
+      "removedByteLength": 6,
+      "removedText": "begin;",
+      "replacementText": ""
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034920_buyer_purchase_partial_refund_presentation.sql",
+      "kind": "remove_top_level_transaction_wrapper",
+      "statementIndex": 3,
+      "sourceByteOffset": 24499,
+      "removedByteLength": 8,
+      "removedText": "\ncommit;",
+      "replacementText": ""
+    }
+  ],
+  "components": [
+    {
+      "sequence": 1,
+      "sourcePath": "supabase/migrations/20261026104519_creator_event_offer_lifecycle.sql",
+      "sourceSha256": "83893eb5524bab183ec2eeff94485a44891a145a4649b561fd3fbaf8ffd2452b",
+      "sourceBytes": 5938,
+      "transformedSha256": "83893eb5524bab183ec2eeff94485a44891a145a4649b561fd3fbaf8ffd2452b",
+      "transformedBytes": 5938,
+      "bodyByteOffset": 161,
+      "runtimeStatements": 2
+    },
+    {
+      "sequence": 2,
+      "sourcePath": "supabase/migrations/20261026105832_live_stage_purchase_fulfillment_authority.sql",
+      "sourceSha256": "e3fc5362645b1dba5a534eb1b899a07ec248467bc3c7dffaf60fdcbedc15c931",
+      "sourceBytes": 25319,
+      "transformedSha256": "e3fc5362645b1dba5a534eb1b899a07ec248467bc3c7dffaf60fdcbedc15c931",
+      "transformedBytes": 25319,
+      "bodyByteOffset": 6184,
+      "runtimeStatements": 3
+    },
+    {
+      "sequence": 3,
+      "sourcePath": "supabase/migrations/20261026164032_scheduled_virtual_event_reservations.sql",
+      "sourceSha256": "5badc692822cefbc4914591a4ecf63d041a0ffa5f35c4d01e312a694fbf543a6",
+      "sourceBytes": 43176,
+      "transformedSha256": "5badc692822cefbc4914591a4ecf63d041a0ffa5f35c4d01e312a694fbf543a6",
+      "transformedBytes": 43176,
+      "bodyByteOffset": 31583,
+      "runtimeStatements": 71
+    },
+    {
+      "sequence": 4,
+      "sourcePath": "supabase/migrations/20261026164507_creator_supported_prices_and_purchase_quotes.sql",
+      "sourceSha256": "cd51a09dbac2a405c26d5a853c1bd59ed762204fcfbc4d9138a9847c2c8c3bfc",
+      "sourceBytes": 130974,
+      "transformedSha256": "cd51a09dbac2a405c26d5a853c1bd59ed762204fcfbc4d9138a9847c2c8c3bfc",
+      "transformedBytes": 130974,
+      "bodyByteOffset": 74847,
+      "runtimeStatements": 78
+    },
+    {
+      "sequence": 5,
+      "sourcePath": "supabase/migrations/20261026164625_buyer_creator_purchases_library.sql",
+      "sourceSha256": "4b6898e7b6a8f47e0704db0283e6378e0be5967201dabba50193aa1d735ed6d1",
+      "sourceBytes": 23763,
+      "transformedSha256": "4b6898e7b6a8f47e0704db0283e6378e0be5967201dabba50193aa1d735ed6d1",
+      "transformedBytes": 23763,
+      "bodyByteOffset": 205896,
+      "runtimeStatements": 5
+    },
+    {
+      "sequence": 6,
+      "sourcePath": "supabase/migrations/20261026165705_creator_event_lifecycle_controls.sql",
+      "sourceSha256": "3d02b7b8e5ed79d7af09b0f86857c037499372d0c570d5c1b70d0dcf73330b83",
+      "sourceBytes": 13851,
+      "transformedSha256": "3d02b7b8e5ed79d7af09b0f86857c037499372d0c570d5c1b70d0dcf73330b83",
+      "transformedBytes": 13851,
+      "bodyByteOffset": 229735,
+      "runtimeStatements": 22
+    },
+    {
+      "sequence": 7,
+      "sourcePath": "supabase/migrations/20261026165859_creator_event_protected_playback.sql",
+      "sourceSha256": "efd64ffbe1540df731d8e5878b6426c8f38c1e26f94b2e86d5643ee336e6036a",
+      "sourceBytes": 13657,
+      "transformedSha256": "1b7ef6ef285f81d78671dac34f5b05dfa7f3f8c052d32a4ba70bf203ff17c7d9",
+      "transformedBytes": 13663,
+      "bodyByteOffset": 243662,
+      "runtimeStatements": 20
+    },
+    {
+      "sequence": 8,
+      "sourcePath": "supabase/migrations/20261026170150_buyer_event_refund_eligibility_history.sql",
+      "sourceSha256": "54a3b1a94f680a34dfe37fc9fb9bdfb6c4e80544f7eec7ab90d92aed4961afb9",
+      "sourceBytes": 4574,
+      "transformedSha256": "54a3b1a94f680a34dfe37fc9fb9bdfb6c4e80544f7eec7ab90d92aed4961afb9",
+      "transformedBytes": 4574,
+      "bodyByteOffset": 257407,
+      "runtimeStatements": 5
+    },
+    {
+      "sequence": 9,
+      "sourcePath": "supabase/migrations/20261026172448_creator_event_broadcast_preparation.sql",
+      "sourceSha256": "e834dda41b01753734e2491f2d381ffde6814ddbb7bbf675d7343692d44ef4c6",
+      "sourceBytes": 8381,
+      "transformedSha256": "e834dda41b01753734e2491f2d381ffde6814ddbb7bbf675d7343692d44ef4c6",
+      "transformedBytes": 8381,
+      "bodyByteOffset": 262060,
+      "runtimeStatements": 13
+    },
+    {
+      "sequence": 10,
+      "sourcePath": "supabase/migrations/20261026173441_creator_event_broadcast_producer_authority.sql",
+      "sourceSha256": "1f986084198aa62d252eded7816848fb2f072748776bfc6d189ec58a323693c1",
+      "sourceBytes": 32662,
+      "transformedSha256": "1f986084198aa62d252eded7816848fb2f072748776bfc6d189ec58a323693c1",
+      "transformedBytes": 32662,
+      "bodyByteOffset": 270528,
+      "runtimeStatements": 47
+    },
+    {
+      "sequence": 11,
+      "sourcePath": "supabase/migrations/20261026175927_creator_tip_checkout_retry_quotes.sql",
+      "sourceSha256": "f2ad2c65515347daee73fecb331df4ba91deb77bad8c49dd8130bb036ddfeb46",
+      "sourceBytes": 10726,
+      "transformedSha256": "f2ad2c65515347daee73fecb331df4ba91deb77bad8c49dd8130bb036ddfeb46",
+      "transformedBytes": 10726,
+      "bodyByteOffset": 303268,
+      "runtimeStatements": 14
+    },
+    {
+      "sequence": 12,
+      "sourcePath": "supabase/migrations/20261026180230_creator_money_checkout_attempt_claims.sql",
+      "sourceSha256": "40740841d09b6b3d0c26a8480d6a3d6df25865c2ede441698936431d9a220357",
+      "sourceBytes": 10660,
+      "transformedSha256": "40740841d09b6b3d0c26a8480d6a3d6df25865c2ede441698936431d9a220357",
+      "transformedBytes": 10660,
+      "bodyByteOffset": 314076,
+      "runtimeStatements": 9
+    },
+    {
+      "sequence": 13,
+      "sourcePath": "supabase/migrations/20261026180500_event_checkout_attempt_claims.sql",
+      "sourceSha256": "ae680f5f02168693f6d1902e31c783fc2e0507457fe7fb3e95553a86dddde1f8",
+      "sourceBytes": 14281,
+      "transformedSha256": "ae680f5f02168693f6d1902e31c783fc2e0507457fe7fb3e95553a86dddde1f8",
+      "transformedBytes": 14281,
+      "bodyByteOffset": 324810,
+      "runtimeStatements": 19
+    },
+    {
+      "sequence": 14,
+      "sourcePath": "supabase/migrations/20261026184512_creator_event_broadcast_recovery.sql",
+      "sourceSha256": "e5416e265177ddfb5d21092093923a18b094ae7da318deb3518f8fb930b0943f",
+      "sourceBytes": 11077,
+      "transformedSha256": "e5416e265177ddfb5d21092093923a18b094ae7da318deb3518f8fb930b0943f",
+      "transformedBytes": 11077,
+      "bodyByteOffset": 339168,
+      "runtimeStatements": 9
+    },
+    {
+      "sequence": 15,
+      "sourcePath": "supabase/migrations/20261027021608_creator_monetization_reference_guard_integration.sql",
+      "sourceSha256": "49845a15ffb030da0f8da00579d6b4bff712db78596f29135a5ed48d5099b1f8",
+      "sourceBytes": 1094,
+      "transformedSha256": "9332ae3272c93becfa01b152c040bf3a5068fed6f7184d3365ea56c50b97589c",
+      "transformedBytes": 1080,
+      "bodyByteOffset": 350338,
+      "runtimeStatements": 4
+    },
+    {
+      "sequence": 16,
+      "sourcePath": "supabase/migrations/20261027034836_creator_tip_settlement_authority.sql",
+      "sourceSha256": "f372ee859f497eaf584c3e6115ec7499a9f43caf2cb67ea3974495de5de3d9f7",
+      "sourceBytes": 26815,
+      "transformedSha256": "8065828152b5fd8ca11e079f3c81c52726600f5599c77342bae8d4ada5e962b0",
+      "transformedBytes": 26801,
+      "bodyByteOffset": 351495,
+      "runtimeStatements": 4
+    },
+    {
+      "sequence": 17,
+      "sourcePath": "supabase/migrations/20261027034844_creator_merch_payment_refund_reconciliation.sql",
+      "sourceSha256": "40918db86262219a8669f216b5224402d63d5e2e7aa1e608203c072ec8660f73",
+      "sourceBytes": 14558,
+      "transformedSha256": "30f3de8b8ef919a7a6481c8b45b9486401668a173492a0ef78b69c67059ad3e8",
+      "transformedBytes": 14543,
+      "bodyByteOffset": 378384,
+      "runtimeStatements": 6
+    },
+    {
+      "sequence": 18,
+      "sourcePath": "supabase/migrations/20261027034858_creator_connect_observed_configuration.sql",
+      "sourceSha256": "25054f8ed86758dcd73e7501fcfaa605cfcbb20705ccf1d70276085cdfd5c1e8",
+      "sourceBytes": 11246,
+      "transformedSha256": "da558b6e00595362ff99aaf653870e9cdc80f26a215963ab4e51d252b89a0a47",
+      "transformedBytes": 11231,
+      "bodyByteOffset": 393010,
+      "runtimeStatements": 8
+    },
+    {
+      "sequence": 19,
+      "sourcePath": "supabase/migrations/20261027034920_buyer_purchase_partial_refund_presentation.sql",
+      "sourceSha256": "8058b7a2f2a2f7cd4d801279ffa3e5f76e01e815265016c8f4e377a1e978e046",
+      "sourceBytes": 24508,
+      "transformedSha256": "78c748d88858cc8952ebe276b20ddcc243272893738532ce510f45c274e6a33a",
+      "transformedBytes": 24494,
+      "bodyByteOffset": 404328,
+      "runtimeStatements": 2
+    },
+    {
+      "sequence": 20,
+      "sourcePath": "supabase/migrations/20261027085819_creator_event_ticket_schedule_policy.sql",
+      "sourceSha256": "1d86c133e869506779a66f4dc2abe3e5b13150d723254988050050db4de3a4f7",
+      "sourceBytes": 38648,
+      "transformedSha256": "1d86c133e869506779a66f4dc2abe3e5b13150d723254988050050db4de3a4f7",
+      "transformedBytes": 38648,
+      "bodyByteOffset": 428903,
+      "runtimeStatements": 53
+    },
+    {
+      "sequence": 21,
+      "sourcePath": "supabase/migrations/20261027085833_creator_event_explicit_replay_terms.sql",
+      "sourceSha256": "ba6b16537f2a538ca25e46a55413076612bea3cef210bed291a53e660b50b79e",
+      "sourceBytes": 6880,
+      "transformedSha256": "ba6b16537f2a538ca25e46a55413076612bea3cef210bed291a53e660b50b79e",
+      "transformedBytes": 6880,
+      "bodyByteOffset": 467631,
+      "runtimeStatements": 12
+    },
+    {
+      "sequence": 22,
+      "sourcePath": "supabase/migrations/20261027091942_creator_event_reconciliation_identity_order.sql",
+      "sourceSha256": "d7af837f691661e889e5e9c672c645388a6bcf4910d02878e1cb6c60ce9a0a8d",
+      "sourceBytes": 55746,
+      "transformedSha256": "d7af837f691661e889e5e9c672c645388a6bcf4910d02878e1cb6c60ce9a0a8d",
+      "transformedBytes": 55746,
+      "bodyByteOffset": 474599,
+      "runtimeStatements": 2
+    },
+    {
+      "sequence": 23,
+      "sourcePath": "supabase/migrations/20261027094021_creator_event_replay_deadline_remedy.sql",
+      "sourceSha256": "5b05aa3642b9c268ca1f334bc470858bf3d818e780e69ac426c8e9bc90ff036d",
+      "sourceBytes": 14493,
+      "transformedSha256": "5b05aa3642b9c268ca1f334bc470858bf3d818e780e69ac426c8e9bc90ff036d",
+      "transformedBytes": 14493,
+      "bodyByteOffset": 530426,
+      "runtimeStatements": 29
+    },
+    {
+      "sequence": 24,
+      "sourcePath": "supabase/migrations/20261028214433_creator_replay_observation_lock_order.sql",
+      "sourceSha256": "f5f27d0e48884a609e665f916d003387a2c0d008e25cc2a96b0f7314d825ddc3",
+      "sourceBytes": 2632,
+      "transformedSha256": "f5f27d0e48884a609e665f916d003387a2c0d008e25cc2a96b0f7314d825ddc3",
+      "transformedBytes": 2632,
+      "bodyByteOffset": 545001,
+      "runtimeStatements": 1
+    },
+    {
+      "sequence": 25,
+      "sourcePath": "supabase/migrations/20261029044327_creator_replay_observation_commit_order.sql",
+      "sourceSha256": "275b215a2a256264f99a26bb58d3c8dc5a7227581785fd0983b730ff08202595",
+      "sourceBytes": 27267,
+      "transformedSha256": "275b215a2a256264f99a26bb58d3c8dc5a7227581785fd0983b730ff08202595",
+      "transformedBytes": 27267,
+      "bodyByteOffset": 547717,
+      "runtimeStatements": 16
+    }
+  ],
+  "bodySha256": "ea0e46744a63c610e5617c44bff1bd1766466d6a57d029af29a75072f929f043",
+  "bodyBytes": 574984,
+  "payloadSha256": "044888d2c4cd005259974bdd71c7845a9c55fbb61f17fffa8c6d296e19ec895b",
+  "payloadBytes": 576522,
+  "payloadBodyByteOffset": 1529,
+  "lockedTables": [
+    "public.access_grants",
+    "public.creator_channel_subscription_offers",
+    "public.creator_content_prices",
+    "public.creator_event_transactions",
+    "public.creator_events",
+    "public.creator_payout_accounts",
+    "public.creator_payout_eligibility_records",
+    "public.creator_replay_library_items",
+    "public.creator_tip_events",
+    "public.creator_tip_settings",
+    "public.creator_tip_transactions",
+    "public.creator_vip_pass_offers",
+    "public.merch_orders",
+    "public.monetization_product_store_mappings",
+    "public.monetization_products",
+    "public.monetization_webhook_events",
+    "public.money_access_ledger_events",
+    "public.money_purchase_intents",
+    "public.paid_creator_event_passes",
+    "public.paid_creator_events",
+    "public.paid_event_events",
+    "public.paid_live_watch_party_offers",
+    "public.paid_live_watch_party_passes",
+    "public.paid_watch_party_offers",
+    "public.paid_watch_party_tickets",
+    "public.platform_money_kill_switches",
+    "public.provider_events",
+    "public.revenuecat_consumable_transaction_intents",
+    "public.revenuecat_provider_reconciliation_obligations",
+    "public.revenuecat_unbound_initial_authority",
+    "public.revenuecat_unbound_terminal_authority",
+    "public.room_broadcast_sessions",
+    "public.room_ticket_events",
+    "public.spectator_hls_playback_records",
+    "public.stripe_merch_events",
+    "public.watch_party_room_memberships",
+    "public.watch_party_rooms"
+  ]
+}
