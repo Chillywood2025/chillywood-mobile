@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "projectId": "bmkkhihfbmsnnmcqkoly",
+  "observedDate": "2026-10-29",
+  "archivePath": "statements.json.gz",
+  "archiveSha256": "bd393482f06b6d690b9acdeb7c93c5eba1103fac20f05af2b807eb11fcb42042",
+  "decodedArchiveSha256": "914a17e7cacf0665329c808698be07c06ad2b1af995438f59bf8532db1cd293f",
+  "runtimeSourceHead": "4dc4c3b2cb002e0c72557baef72fd810b921db83",
+  "deployed": [
+    {
+      "version": "20261029091757",
+      "name": "creator_backend_atomic_rollout",
+      "statementCount": 1,
+      "statementSha256": [
+        "cb7c21435e3eee37dd1d03144a9b05b34ba0cb518e35067dc44905ed517af8ca"
+      ]
+    }
+  ],
+  "sourceComponents": [
+    {
+      "sourcePath": "supabase/migrations/20261026104519_creator_event_offer_lifecycle.sql",
+      "sourceSha256": "83893eb5524bab183ec2eeff94485a44891a145a4649b561fd3fbaf8ffd2452b"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026105832_live_stage_purchase_fulfillment_authority.sql",
+      "sourceSha256": "e3fc5362645b1dba5a534eb1b899a07ec248467bc3c7dffaf60fdcbedc15c931"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026164032_scheduled_virtual_event_reservations.sql",
+      "sourceSha256": "5badc692822cefbc4914591a4ecf63d041a0ffa5f35c4d01e312a694fbf543a6"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026164507_creator_supported_prices_and_purchase_quotes.sql",
+      "sourceSha256": "cd51a09dbac2a405c26d5a853c1bd59ed762204fcfbc4d9138a9847c2c8c3bfc"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026164625_buyer_creator_purchases_library.sql",
+      "sourceSha256": "4b6898e7b6a8f47e0704db0283e6378e0be5967201dabba50193aa1d735ed6d1"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026165705_creator_event_lifecycle_controls.sql",
+      "sourceSha256": "3d02b7b8e5ed79d7af09b0f86857c037499372d0c570d5c1b70d0dcf73330b83"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026165859_creator_event_protected_playback.sql",
+      "sourceSha256": "efd64ffbe1540df731d8e5878b6426c8f38c1e26f94b2e86d5643ee336e6036a"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026170150_buyer_event_refund_eligibility_history.sql",
+      "sourceSha256": "54a3b1a94f680a34dfe37fc9fb9bdfb6c4e80544f7eec7ab90d92aed4961afb9"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026172448_creator_event_broadcast_preparation.sql",
+      "sourceSha256": "e834dda41b01753734e2491f2d381ffde6814ddbb7bbf675d7343692d44ef4c6"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026173441_creator_event_broadcast_producer_authority.sql",
+      "sourceSha256": "1f986084198aa62d252eded7816848fb2f072748776bfc6d189ec58a323693c1"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026175927_creator_tip_checkout_retry_quotes.sql",
+      "sourceSha256": "f2ad2c65515347daee73fecb331df4ba91deb77bad8c49dd8130bb036ddfeb46"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026180230_creator_money_checkout_attempt_claims.sql",
+      "sourceSha256": "40740841d09b6b3d0c26a8480d6a3d6df25865c2ede441698936431d9a220357"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026180500_event_checkout_attempt_claims.sql",
+      "sourceSha256": "ae680f5f02168693f6d1902e31c783fc2e0507457fe7fb3e95553a86dddde1f8"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261026184512_creator_event_broadcast_recovery.sql",
+      "sourceSha256": "e5416e265177ddfb5d21092093923a18b094ae7da318deb3518f8fb930b0943f"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027021608_creator_monetization_reference_guard_integration.sql",
+      "sourceSha256": "49845a15ffb030da0f8da00579d6b4bff712db78596f29135a5ed48d5099b1f8"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034836_creator_tip_settlement_authority.sql",
+      "sourceSha256": "f372ee859f497eaf584c3e6115ec7499a9f43caf2cb67ea3974495de5de3d9f7"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034844_creator_merch_payment_refund_reconciliation.sql",
+      "sourceSha256": "40918db86262219a8669f216b5224402d63d5e2e7aa1e608203c072ec8660f73"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034858_creator_connect_observed_configuration.sql",
+      "sourceSha256": "25054f8ed86758dcd73e7501fcfaa605cfcbb20705ccf1d70276085cdfd5c1e8"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027034920_buyer_purchase_partial_refund_presentation.sql",
+      "sourceSha256": "8058b7a2f2a2f7cd4d801279ffa3e5f76e01e815265016c8f4e377a1e978e046"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027085819_creator_event_ticket_schedule_policy.sql",
+      "sourceSha256": "1d86c133e869506779a66f4dc2abe3e5b13150d723254988050050db4de3a4f7"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027085833_creator_event_explicit_replay_terms.sql",
+      "sourceSha256": "ba6b16537f2a538ca25e46a55413076612bea3cef210bed291a53e660b50b79e"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027091942_creator_event_reconciliation_identity_order.sql",
+      "sourceSha256": "d7af837f691661e889e5e9c672c645388a6bcf4910d02878e1cb6c60ce9a0a8d"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261027094021_creator_event_replay_deadline_remedy.sql",
+      "sourceSha256": "5b05aa3642b9c268ca1f334bc470858bf3d818e780e69ac426c8e9bc90ff036d"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261028214433_creator_replay_observation_lock_order.sql",
+      "sourceSha256": "f5f27d0e48884a609e665f916d003387a2c0d008e25cc2a96b0f7314d825ddc3"
+    },
+    {
+      "sourcePath": "supabase/migrations/20261029044327_creator_replay_observation_commit_order.sql",
+      "sourceSha256": "275b215a2a256264f99a26bb58d3c8dc5a7227581785fd0983b730ff08202595"
+    }
+  ],
+  "sourceTransformsManifest": "ops/creator-backend-rollout/database-manifest.json",
+  "historyRewritten": false,
+  "productionRowsIncluded": false,
+  "scope": "One canonical deployed identity maps to25 source components. Original source migrations remain fresh-database inputs, not pending production migrations. Do not reapply these components to this production project."
+}

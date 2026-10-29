@@ -5,7 +5,43 @@ The replay deadlock repair is merged in #626, at
 `8d1ca9efe4ec78f1e0a5e9a7b4413933b8f3ae29`. Production lacks the feature's
 tables and functions, so applying only the two lock repairs cannot work.
 The user authorized the broader backend rollout while keeping live money and
-payouts off. This document records preparation, not a deployment receipt.
+payouts off. The backend deployment below completed from the exact validated
+source head; the same pull request retains the resulting deployment history.
+
+## Deployment receipt
+
+Protected Required Validation passed for
+`4dc4c3b2cb002e0c72557baef72fd810b921db83` in run40842554621; the release-review
+gate found no open findings. Fifteen temporary retry bridges were deployed with
+unchanged JWT settings and exact source readback. All210 regional OPTIONS probes
+(15 functions across14 supported regions) returned the expected503 marker.
+The drain lasted440 seconds after regional verification. Logs showed only the
+bridge versions for every affected function (196 recorded requests; the210
+client-side probe receipts are retained independently), and there were zero
+active application transactions. No completeness claim is made for log delivery.
+
+Canonical migration `20261029091757_creator_backend_atomic_rollout` succeeded.
+Its single retained statement matches the submitted query exactly. All473 prior
+history records are unchanged. The immutable archive and25-source identity map
+are under `supabase/deployed-history/2026-10-29-creator-rollout`.
+
+All105 expected function definitions and owner/security/ACL attributes match
+readback. All25 events have observation anchors; the pending queue is empty;
+the fact FK targets the private anchor, the commit trigger is enabled/deferred,
+and all three observation tables have RLS and FORCE RLS. Ten final Edge endpoints
+were deployed, including the new broadcast endpoint. Six unchanged writers were
+restored from their captured deployed bytes. All16 code/JWT readbacks match; no
+temporary bridge source remains. All224 restoration OPTIONS probes (16 endpoints
+across14 regions) returned normal200/204 responses without the bridge marker.
+The security advisor returned no findings for the changed functions or replay
+observation tables. No worker schedule was added.
+
+Live money and payouts remain off in both settings and kill switches. Provider
+webhooks remain sandbox-only. Tip/merch receipt states are unchanged and terminal;
+the same two June RevenueCat received records remain pre-existing reconciliation
+debt. No provider transaction, provider configuration change or client release
+was performed. Regional restoration probes are retained in the private task
+evidence; source readback is not end-to-end provider or installed-device proof.
 
 ## Cutover boundary
 
