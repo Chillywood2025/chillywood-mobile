@@ -27,9 +27,11 @@ export const monetizationImplementationFiles = [
   '20261027091942_creator_event_reconciliation_identity_order.sql',
   '20261027094021_creator_event_replay_deadline_remedy.sql',
   '20261028214433_creator_replay_observation_lock_order.sql',
+  '20261029044327_creator_replay_observation_commit_order.sql',
 ];
 export const monetizationAuditFiles = [...monetizationBaselineFiles, ...monetizationImplementationFiles];
 export const monetizationAddedFunctionIdentities = new Map([
+  ['private.flush_creator_event_replay_observations/0','private.flush_creator_event_replay_observations()'],
   ['private.seed_creator_event_replay_observation_anchor/0','private.seed_creator_event_replay_observation_anchor()'],
   ['private.bind_event_ticket_purchase_terms/0','private.bind_event_ticket_purchase_terms()'],
   ['private.capture_creator_event_verified_start/1','private.capture_creator_event_verified_start(uuid)'],

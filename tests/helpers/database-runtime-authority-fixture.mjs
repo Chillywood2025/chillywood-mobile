@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {pg_trgm} from '@electric-sql/pglite/contrib/pg_trgm';
+import {managedRequestContextSQL, managedExtensionUsageSQL} from './database-managed-request-context.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const migrationDirectory = path.join(root, 'supabase/migrations');
@@ -91,14 +92,12 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
       await db.exec(`create table ${name.split('.').map(quoteIdentifier).join('.')} (${definitions.join(',')});`);
     }
     await db.exec(`
-      create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
-      create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;
-      create function auth.role() returns text language sql stable as $$select auth.jwt()->>'role'$$;
-      create function auth.email() returns text language sql stable as $$select auth.jwt()->>'email'$$;
+      ${managedRequestContextSQL}
       create function storage.foldername(text) returns text[] language sql immutable as $$select (string_to_array($1,'/'))[1:array_length(string_to_array($1,'/'),1)-1]$$;
       create function storage.filename(text) returns text language sql immutable as $$select reverse(split_part(reverse($1),'/',1))$$;
       create function storage.extension(text) returns text language sql immutable as $$select reverse(split_part(reverse($1),'.',1))$$;
       grant usage on schema auth,storage to anon,authenticated,service_role;
+      ${managedExtensionUsageSQL}
       create publication supabase_realtime;
       create table cron.job(jobid bigint generated always as identity primary key,jobname text,schedule text,command text,active bool default true,username text default 'postgres',database text default 'postgres');
       create function cron.schedule(text,text,text) returns bigint language sql as $$insert into cron.job(jobname,schedule,command) values($1,$2,$3) returning jobid$$;

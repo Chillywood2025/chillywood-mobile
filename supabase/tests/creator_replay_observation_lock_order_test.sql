@@ -121,6 +121,10 @@ select lives_ok($$insert into public.creator_events(id,host_user_id,event_title,
 select is((select count(*)::integer from private.creator_event_replay_observation_anchors
   where event_id in('63e1a670-62e4-4bb6-980a-58a74ecaa101','63e1a670-62e4-4bb6-980a-58a74ecaa102')),2,
   'new event insertion automatically creates one anchor per event');
+-- Observe the completed source state before asserting capture behavior; the
+-- successor migration defers source observations until transaction completion.
+set constraints private.creator_event_replay_observation_commit immediate;
+set constraints private.creator_event_replay_observation_commit deferred;
 select is((select count(*)::integer from private.creator_event_replay_availability_facts
   where event_id in('63e1a670-62e4-4bb6-980a-58a74ecaa101','63e1a670-62e4-4bb6-980a-58a74ecaa102')),0,
   'anchor creation does not manufacture observations for unpaid draft events');
@@ -166,6 +170,8 @@ select is((select count(*)::integer from public.creator_events event
   join private.creator_event_replay_availability_facts fact on fact.event_id=anchor.event_id
   where event.id='63e1a670-62e4-4bb6-980a-58a74ecaa101'),1,
   'failed history mutations preserve the event, anchor, and original fact');
+set constraints private.creator_event_replay_observation_commit immediate;
+set constraints private.creator_event_replay_observation_commit deferred;
 select results_eq(
   $$select to_jsonb(fact) from private.creator_event_replay_availability_facts fact
     where fact.event_id<>'63e1a670-62e4-4bb6-980a-58a74ecaa101' order by to_jsonb(fact)$$,
