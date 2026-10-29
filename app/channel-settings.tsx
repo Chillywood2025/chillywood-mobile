@@ -31,6 +31,11 @@ import {
   resolveFeatureConfig,
 } from "../_lib/appConfig";
 import { trackEvent } from "../_lib/analytics";
+import { useCreatorAuthoringPrice } from "../_lib/useCreatorAuthoringPrice";
+import { CreatorPricePicker } from "../components/monetization/creator-price-picker";
+import { EventScheduleInputError, getDeviceEventTimeZone, formatZonedEventScheduleInput, parseZonedEventScheduleInput, type EventTimeDisambiguation } from "../_lib/eventSchedule";
+import { EventSaleEditor } from "../components/monetization/event-sale-editor";
+import { EventLifecycleControls } from "../components/monetization/event-lifecycle-controls";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
 import { captureAccountBoundSupabaseMutationSubject } from "../_lib/accountBoundSupabaseMutation";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
@@ -79,7 +84,6 @@ import {
 import {
   listMyPaidWatchPartyOffers,
   listMyPaidWatchPartyTransactions,
-  savePaidWatchPartyOffer,
   type PaidWatchPartyOffer,
   type PaidWatchPartyTransaction,
 } from "../_lib/paidWatchPartyTickets";
@@ -430,6 +434,8 @@ type ChannelEventEditorState = {
   status: CreatorEventStatus;
   startsAt: string;
   endsAt: string;
+  timeZone: string;
+  timeDisambiguation: EventTimeDisambiguation;
   linkedTitleId: string;
   replayPolicy: CreatorEventReplayPolicy;
   replayAvailableAt: string;
@@ -477,6 +483,8 @@ const createEmptyEventEditorState = (): ChannelEventEditorState => ({
   status: "draft",
   startsAt: "",
   endsAt: "",
+  timeZone: getDeviceEventTimeZone(),
+  timeDisambiguation: "reject",
   linkedTitleId: "",
   replayPolicy: "none",
   replayAvailableAt: "",
@@ -490,7 +498,7 @@ const createEmptyVideoEditorState = (): ChannelVideoEditorState => ({
   description: "",
   visibility: "draft",
   accessMode: "free",
-  priceDollars: "0.99",
+  priceDollars: "",
 });
 
 const createEmptyClipStudioEditorState = (): ClipStudioEditorState => ({
@@ -609,32 +617,12 @@ const formatCapturePolicyLabel = (value: "best_effort" | "host_managed") => (
   value === "host_managed" ? "Host Managed" : "Best Effort"
 );
 
-const parseDollarInputToCents = (value: string) => {
-  const normalized = String(value ?? "").replace(/[^0-9.]/g, "");
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.round(parsed * 100));
-};
-
 const formatCentsAsDollarInput = (value: number) => (
   (Math.max(0, Math.trunc(value || 0)) / 100).toFixed(2)
 );
 
-const toDatetimeLocalValue = (value: string | null) => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) return "";
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) return normalized.slice(0, 16);
-  const offset = parsed.getTimezoneOffset();
-  return new Date(parsed.getTime() - offset * 60_000).toISOString().slice(0, 16);
-};
-
-const fromDatetimeLocalValue = (value: string) => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) return null;
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? normalized : parsed.toISOString();
-};
+const toDatetimeLocalValue = formatZonedEventScheduleInput;
+const fromDatetimeLocalValue = parseZonedEventScheduleInput;
 
 const formatEventTypeLabel = (value: CreatorEventType) => {
   switch (value) {
@@ -661,7 +649,7 @@ const formatEventStatusLabel = (value: CreatorEventStatus) => {
 const formatReplayPolicyLabel = (value: CreatorEventReplayPolicy) => {
   switch (value) {
     case "indefinite":
-      return "Replay Kept";
+      return "Existing Replay Without Expiry";
     case "until_expiration":
       return "Replay Until Expiration";
     default:
@@ -1444,6 +1432,7 @@ export function ChannelStudioScreen() {
   const [creatorPaidWatchPartyOffers, setCreatorPaidWatchPartyOffers] = useState<PaidWatchPartyOffer[]>([]);
   const [creatorPaidWatchPartyTransactions, setCreatorPaidWatchPartyTransactions] = useState<PaidWatchPartyTransaction[]>([]);
   const [creatorPaidEventOffers, setCreatorPaidEventOffers] = useState<PaidCreatorEventOffer[]>([]);
+  const [paidEventOffersAvailable, setPaidEventOffersAvailable] = useState(false);
   const [creatorPaidEventTransactions, setCreatorPaidEventTransactions] = useState<PaidCreatorEventTransaction[]>([]);
   const [creatorVipPassOffers, setCreatorVipPassOffers] = useState<CreatorVipPassOffer[]>([]);
   const [creatorVipTransactions, setCreatorVipTransactions] = useState<CreatorVipTransaction[]>([]);
@@ -1494,6 +1483,7 @@ export function ChannelStudioScreen() {
   const [eventSaving, setEventSaving] = useState(false);
   const [eventNotice, setEventNotice] = useState<string | null>(null);
   const [eventEditor, setEventEditor] = useState<ChannelEventEditorState>(createEmptyEventEditorState);
+  const [selectedEventSaleId, setSelectedEventSaleId] = useState<string | null>(null);
   const [videosLoading, setVideosLoading] = useState(false);
   const [videosLoadError, setVideosLoadError] = useState<string | null>(null);
   const [videoSaving, setVideoSaving] = useState(false);
@@ -1516,6 +1506,21 @@ export function ChannelStudioScreen() {
   const clipSaveInFlightRef = useRef(false);
   const paidVideoSaveInFlightRef = useRef(false);
   const [selectedPaidVideo, setSelectedPaidVideo] = useState<CreatorVideo | null>(null);
+  const paidVideoPrice = useCreatorAuthoringPrice("paid_content", {
+    sourceId: videoEditor.editingVideoId,
+    preferredAmount: creatorPaidVideoOffers.find(offer => offer.videoId === videoEditor.editingVideoId)?.priceCents,
+    enabled: activeMoneyManageTarget === "paid_videos" && !!videoEditor.editingVideoId,
+  });
+  const vipPrice = useCreatorAuthoringPrice("vip_pass", {
+    preferredAmount: creatorVipPassOffers[0]?.priceCents,
+    enabled: activeMoneyManageTarget === "vip_passes",
+  });
+  const subscriptionPrice = useCreatorAuthoringPrice("channel_subscription", {
+    preferredAmount: creatorChannelSubscriptionOffers[0]?.priceCents,
+    enabled: activeMoneyManageTarget === "channel_subscriptions",
+  });
+  const vipSaveInFlightRef = useRef(false);
+  const subscriptionSaveInFlightRef = useRef(false);
   const paidVideoRouteGenerationRef = useRef(0);
   const eventSaveInFlightRef = useRef(false);
   const brandProfileSaveInFlightRef = useRef(false);
@@ -1539,6 +1544,13 @@ export function ChannelStudioScreen() {
     eventEditor.replayPolicy !== "none"
     || eventEditor.status === "live_now"
     || eventEditor.status === "replay_available";
+  const editedSavedEvent = creatorEvents.find(event => event.id === eventEditor.editingEventId);
+  const editedPublishedEventRequiresLifecycle = !!eventEditor.editingEventId
+    && (!editedSavedEvent || editedSavedEvent.status !== "draft")
+    && (!paidEventOffersAvailable || !editedSavedEvent || creatorPaidEventOffers.some(offer =>
+      // An archived/canceled offer with no confirmed passes may still have a
+      // dispatched payment or expired reservation whose outcome is unresolved.
+      offer.creatorEventId === eventEditor.editingEventId));
   const videoTitleReady = videoEditor.title.trim().length > 0;
   const videoSubmitRequirement = videoEditor.editingVideoId
     ? videoTitleReady
@@ -1729,6 +1741,7 @@ export function ChannelStudioScreen() {
       setCreatorPaidWatchPartyOffers([]);
       setCreatorPaidWatchPartyTransactions([]);
       setCreatorPaidEventOffers([]);
+      setPaidEventOffersAvailable(false);
       setCreatorPaidEventTransactions([]);
       setCreatorVipPassOffers([]);
       setCreatorVipTransactions([]);
@@ -1749,6 +1762,7 @@ export function ChannelStudioScreen() {
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
       setPayoutSetupNotice(null);
+      setPayoutSetupBusy(null);
       setPlatformBranding(null);
       setPlatformVisibilitySaving(null);
       setPlatformVisibilityNotice(null);
@@ -1786,7 +1800,7 @@ export function ChannelStudioScreen() {
       listMyPaidVideoTransactions(50).catch(() => []),
       listMyPaidWatchPartyOffers().catch(() => []),
       listMyPaidWatchPartyTransactions(50).catch(() => []),
-      listMyPaidCreatorEventOffers().catch(() => []),
+      listMyPaidCreatorEventOffers({ throwOnUnavailable: true }).catch(() => null),
       listMyPaidCreatorEventTransactions(50).catch(() => []),
       listMyCreatorVipPassOffers().catch(() => []),
       listMyCreatorVipTransactions(50).catch(() => []),
@@ -1862,7 +1876,8 @@ export function ChannelStudioScreen() {
         setCreatorPaidVideoTransactions(resolvedCreatorPaidVideoTransactions);
         setCreatorPaidWatchPartyOffers(resolvedCreatorPaidWatchPartyOffers);
         setCreatorPaidWatchPartyTransactions(resolvedCreatorPaidWatchPartyTransactions);
-        setCreatorPaidEventOffers(resolvedCreatorPaidEventOffers);
+        if (resolvedCreatorPaidEventOffers) setCreatorPaidEventOffers(resolvedCreatorPaidEventOffers);
+        setPaidEventOffersAvailable(resolvedCreatorPaidEventOffers !== null);
         setCreatorPaidEventTransactions(resolvedCreatorPaidEventTransactions);
         setCreatorVipPassOffers(resolvedCreatorVipPassOffers);
         setCreatorVipTransactions(resolvedCreatorVipTransactions);
@@ -1912,6 +1927,7 @@ export function ChannelStudioScreen() {
         setCreatorPaidWatchPartyOffers([]);
         setCreatorPaidWatchPartyTransactions([]);
         setCreatorPaidEventOffers([]);
+        setPaidEventOffersAvailable(false);
         setCreatorPaidEventTransactions([]);
         setCreatorVipPassOffers([]);
         setCreatorVipTransactions([]);
@@ -1970,6 +1986,7 @@ export function ChannelStudioScreen() {
   }, [canUseChannelSettings, user?.id]);
 
   const refreshCreatorPayouts = useCallback(async () => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
     if (!user?.id) {
       setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
       return;
@@ -1979,10 +1996,12 @@ export function ChannelStudioScreen() {
       creatorUserId: String(user.id),
       limit: 5,
     });
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return;
     setCreatorPayoutSummary(nextSummary);
   }, [user?.id]);
 
   const refreshCreatorTips = useCallback(async () => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
     if (!user?.id) {
       setCreatorTipSettings(null);
       setCreatorTipTransactions([]);
@@ -1993,53 +2012,30 @@ export function ChannelStudioScreen() {
       readMyCreatorTipSettings().catch(() => null),
       listMyCreatorTipTransactions(25).catch(() => []),
     ]);
+    if (!replayActionsMountedRef.current || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return;
     setCreatorTipSettings(nextSettings);
     setCreatorTipTransactions(nextTransactions);
   }, [user?.id]);
 
   const refreshPaidEvents = useCallback(async () => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
     if (!user?.id) {
       setCreatorPaidEventOffers([]);
+      setPaidEventOffersAvailable(false);
       setCreatorPaidEventTransactions([]);
       return;
     }
 
     const [nextOffers, nextTransactions] = await Promise.all([
-      listMyPaidCreatorEventOffers().catch(() => []),
+      listMyPaidCreatorEventOffers({ throwOnUnavailable: true }).catch(() => null),
       listMyPaidCreatorEventTransactions(50).catch(() => []),
     ]);
-    setCreatorPaidEventOffers(nextOffers);
+    if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return false;
+    if (nextOffers) setCreatorPaidEventOffers(nextOffers);
+    setPaidEventOffersAvailable(nextOffers !== null);
+    if (!nextOffers) setEventNotice("Event ticket settings could not be refreshed. Previously verified settings are preserved; refresh before changing entry.");
     setCreatorPaidEventTransactions(nextTransactions);
-  }, [user?.id]);
-
-  const refreshVipPasses = useCallback(async () => {
-    if (!user?.id) {
-      setCreatorVipPassOffers([]);
-      setCreatorVipTransactions([]);
-      return;
-    }
-
-    const [nextOffers, nextTransactions] = await Promise.all([
-      listMyCreatorVipPassOffers().catch(() => []),
-      listMyCreatorVipTransactions(50).catch(() => []),
-    ]);
-    setCreatorVipPassOffers(nextOffers);
-    setCreatorVipTransactions(nextTransactions);
-  }, [user?.id]);
-
-  const refreshChannelSubscriptions = useCallback(async () => {
-    if (!user?.id) {
-      setCreatorChannelSubscriptionOffers([]);
-      setCreatorChannelSubscriptionTransactions([]);
-      return;
-    }
-
-    const [nextOffers, nextTransactions] = await Promise.all([
-      listMyChannelSubscriptionOffers().catch(() => []),
-      listMyChannelSubscriptionTransactions(50).catch(() => []),
-    ]);
-    setCreatorChannelSubscriptionOffers(nextOffers);
-    setCreatorChannelSubscriptionTransactions(nextTransactions);
+    return nextOffers !== null;
   }, [user?.id]);
 
   const refreshCreatorSandboxConfigs = useCallback(async () => {
@@ -2143,7 +2139,7 @@ export function ChannelStudioScreen() {
       listMyPaidVideoTransactions(50).catch(() => []),
       listMyPaidWatchPartyOffers().catch(() => []),
       listMyPaidWatchPartyTransactions(50).catch(() => []),
-      listMyPaidCreatorEventOffers().catch(() => []),
+      listMyPaidCreatorEventOffers({ throwOnUnavailable: true }).catch(() => null),
       listMyPaidCreatorEventTransactions(50).catch(() => []),
       listMyCreatorVipPassOffers().catch(() => []),
       listMyCreatorVipTransactions(50).catch(() => []),
@@ -2160,7 +2156,8 @@ export function ChannelStudioScreen() {
     setCreatorPaidVideoTransactions(nextPaidVideoTransactions);
     setCreatorPaidWatchPartyOffers(nextPaidWatchPartyOffers);
     setCreatorPaidWatchPartyTransactions(nextPaidWatchPartyTransactions);
-    setCreatorPaidEventOffers(nextPaidEventOffers);
+    if (nextPaidEventOffers) setCreatorPaidEventOffers(nextPaidEventOffers);
+    setPaidEventOffersAvailable(nextPaidEventOffers !== null);
     setCreatorPaidEventTransactions(nextPaidEventTransactions);
     setCreatorVipPassOffers(nextVipOffers);
     setCreatorVipTransactions(nextVipTransactions);
@@ -2229,8 +2226,18 @@ export function ChannelStudioScreen() {
   }, [creatorTipSettings, refreshCreatorTips, saveCreatorTipSandboxSetupConfig, tipSettingsBusy, user?.id]);
 
   const handleSaveChannelSubscription = useCallback(async (enabled: boolean) => {
-    if (channelSubscriptionSaving) return;
-
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === user?.id
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent() || subscriptionSaveInFlightRef.current) return;
+    const price = subscriptionPrice.selectedPrice;
+    const existing = creatorChannelSubscriptionOffers[0];
+    if (enabled && (!subscriptionPrice.isCurrent() || !price)) {
+      setChannelSubscriptionNotice("Choose an available price before saving. Refresh prices if they could not load.");
+      return;
+    }
+    if (!enabled && !existing) return;
+    subscriptionSaveInFlightRef.current = true;
     setChannelSubscriptionSaving(true);
     setChannelSubscriptionNotice(null);
     trackEvent(enabled ? "money_feature_enabled" : "money_feature_paused", {
@@ -2246,35 +2253,40 @@ export function ChannelStudioScreen() {
           "Subscribe to this creator's Platform. While active, it includes this creator's ordinary Paid Videos, but not Premium, VIP-only content, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators' Platforms.",
         status: enabled ? "sandbox" : "paused",
         title: "Platform subscription",
+        priceId: enabled ? price?.priceKey : undefined,
+        offerId: !enabled ? existing?.id : undefined,
       });
-      if (enabled) {
-        await saveCreatorSetupConfig({
-          displayName: "Sandbox Platform Subscription",
-          metadata: {
-            provider_product_type: "creator_channel_subscription",
-            setup_surface: "money_center_channel_subscription_manager",
-          },
-          productKey: "channel_subscription_sandbox_monthly_499",
-          sourceId: savedOffer.id,
-          sourceType: "channel_subscription",
-        });
-      }
+      if (!isCurrent()) return;
+      if (savedOffer.creatorId !== authority?.userId || savedOffer.status !== (enabled ? "sandbox" : "paused")
+        || savedOffer.priceCents !== (enabled ? price?.amountMinor : existing?.priceCents)
+        || savedOffer.currency !== (enabled ? price?.currency : existing?.currency)) throw new Error("Unconfirmed subscription settings");
+      setCreatorChannelSubscriptionOffers(current => [savedOffer, ...current.filter(offer => offer.id !== savedOffer.id)]);
       setChannelSubscriptionNotice(
         enabled
-          ? `Platform Subscription saved in sandbox mode. Fans can subscribe only through verified ${storeProviderPair} checkout.`
+          ? `Platform Subscription saved at ${price?.label} in sandbox mode. ${price?.availabilityLabel}. Production sales and payouts remain unchanged.`
           : "Platform Subscription paused. Fans cannot start a new subscription right now.",
       );
-      await refreshChannelSubscriptions();
     } catch (error) {
-      setChannelSubscriptionNotice(formatCreatorSetupError(error, "Platform Subscription settings could not be saved right now."));
+      if (isCurrent()) setChannelSubscriptionNotice(formatCreatorSetupError(error, "Platform Subscription settings could not be confirmed. Your selection is preserved; refresh status before retrying."));
     } finally {
-      setChannelSubscriptionSaving(false);
+      subscriptionSaveInFlightRef.current = false;
+      if (isCurrent()) setChannelSubscriptionSaving(false);
     }
-  }, [channelSubscriptionSaving, refreshChannelSubscriptions, saveCreatorSetupConfig, storeProviderPair, user?.id]);
+  }, [creatorChannelSubscriptionOffers, subscriptionPrice, user?.id]);
 
   const handleSaveVipPass = useCallback(async (enabled: boolean) => {
-    if (vipPassSaving) return;
-
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === user?.id
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent() || vipSaveInFlightRef.current) return;
+    const price = vipPrice.selectedPrice;
+    const existing = creatorVipPassOffers[0];
+    if (enabled && (!vipPrice.isCurrent() || !price)) {
+      setVipPassNotice("Choose an available price before saving. Refresh prices if they could not load.");
+      return;
+    }
+    if (!enabled && !existing) return;
+    vipSaveInFlightRef.current = true;
     setVipPassSaving(true);
     setVipPassNotice(null);
     trackEvent(enabled ? "money_feature_enabled" : "money_feature_paused", {
@@ -2290,31 +2302,26 @@ export function ChannelStudioScreen() {
           "VIP is a one-time 30-day status and VIP-only shelf for this Platform. It does not include Premium, ordinary Paid Video ownership, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, Platform Subscriptions, or other creators' Platforms.",
         status: enabled ? "sandbox" : "paused",
         title: "VIP Pass",
+        priceId: enabled ? price?.priceKey : undefined,
+        offerId: !enabled ? existing?.id : undefined,
       });
-      if (enabled) {
-        await saveCreatorSetupConfig({
-          displayName: "Sandbox VIP Pass",
-          metadata: {
-            provider_product_type: "creator_vip_pass",
-            setup_surface: "money_center_vip_pass_manager",
-          },
-          productKey: "vip_pass_sandbox_499",
-          sourceId: savedOffer.id,
-          sourceType: "vip_pass",
-        });
-      }
+      if (!isCurrent()) return;
+      if (savedOffer.creatorId !== authority?.userId || savedOffer.status !== (enabled ? "sandbox" : "paused")
+        || savedOffer.priceCents !== (enabled ? price?.amountMinor : existing?.priceCents)
+        || savedOffer.currency !== (enabled ? price?.currency : existing?.currency)) throw new Error("Unconfirmed VIP settings");
+      setCreatorVipPassOffers(current => [savedOffer, ...current.filter(offer => offer.id !== savedOffer.id)]);
       setVipPassNotice(
         enabled
-          ? `VIP Pass saved in sandbox mode. Fans can get VIP only through verified ${storeProviderPair} checkout.`
+          ? `VIP Pass saved at ${price?.label} in sandbox mode. ${price?.availabilityLabel}. Production sales and payouts remain unchanged.`
           : "VIP Pass paused. Fans cannot get VIP right now.",
       );
-      await refreshVipPasses();
     } catch (error) {
-      setVipPassNotice(formatCreatorSetupError(error, "VIP Pass settings could not be saved right now."));
+      if (isCurrent()) setVipPassNotice(formatCreatorSetupError(error, "VIP Pass settings could not be confirmed. Your selection is preserved; refresh status before retrying."));
     } finally {
-      setVipPassSaving(false);
+      vipSaveInFlightRef.current = false;
+      if (isCurrent()) setVipPassSaving(false);
     }
-  }, [refreshVipPasses, saveCreatorSetupConfig, storeProviderPair, user?.id, vipPassSaving]);
+  }, [creatorVipPassOffers, user?.id, vipPrice]);
 
   const handleRefreshSandboxTesterExperience = useCallback(async () => {
     if (sandboxSetupBusy) return;
@@ -2376,151 +2383,34 @@ export function ChannelStudioScreen() {
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? null;
 
     if (latestPublicVideo) {
-      try {
-        await savePaidVideoOffer({
-          currency: "usd",
-          isPaid: true,
-          priceCents: 99,
-          videoId: latestPublicVideo.id,
-        });
-        await saveCreatorSandboxMonetizationConfig({
-          displayName: "Sandbox Paid Video",
-          metadata: {
-            no_live_payout: true,
-            setup_surface: "money_center_sandbox_tester_experience",
-          },
-          productKey: "paid_content_access_sandbox_099",
-          sourceId: latestPublicVideo.id,
-          sourceType: "paid_content",
-        });
-        completed.push("Paid Video");
-      } catch {
-        blockers.push("Paid Video could not be saved for the latest public video.");
+      if (creatorPaidVideoOffers.some(offer => offer.videoId === latestPublicVideo.id && offer.isPaid && ["sandbox", "active"].includes(offer.status))) {
+        completed.push("Paid Video (existing price preserved)");
+      } else {
+        blockers.push("Choose an available price in Paid Video Manager before testing paid access.");
       }
     } else {
       blockers.push("No public safe video is available for Paid Video.");
     }
 
     const existingWatchPartyOffer = creatorPaidWatchPartyOffers
-      .find((offer) => !!offer.partyId && ["sandbox", "paused", "draft", "sold_out"].includes(offer.status));
+      .find((offer) => !!offer.partyId && ["sandbox", "active", "sold_out"].includes(offer.status));
     if (existingWatchPartyOffer?.partyId) {
-      try {
-        const savedWatchPartyOffer = await savePaidWatchPartyOffer({
-          partyId: existingWatchPartyOffer.partyId,
-          priceCents: 99,
-          seatLimit: existingWatchPartyOffer.seatLimit ?? 25,
-          status: "sandbox",
-          title: formatWatchPartySeatPassDisplayTitle(existingWatchPartyOffer.title),
-        });
-        await saveCreatorSandboxMonetizationConfig({
-          displayName: "Party Room Pass",
-          metadata: {
-            no_live_payout: true,
-            party_id: savedWatchPartyOffer.partyId,
-            setup_surface: "money_center_sandbox_tester_experience",
-          },
-          productKey: "watch_party_live_ticket_sandbox_099",
-          sourceId: savedWatchPartyOffer.id,
-          sourceType: "watch_party_live",
-        });
-        completed.push("Party Room Pass");
-      } catch {
-        blockers.push("Party Room Pass needs a valid creator-owned Party Room.");
-      }
+      completed.push("Party Room Pass (existing price preserved)");
     } else {
-      blockers.push("Create one Party Room before paid Party Room entry can be configured.");
+      blockers.push("Open your Party Room and choose an available entry price before testing paid access.");
     }
 
-    let eventForPass = creatorEvents
-      .filter((event) => !["expired", "canceled", "ended"].includes(event.status))
-      .sort((a, b) => Date.parse(a.startsAt ?? "") - Date.parse(b.startsAt ?? ""))[0] ?? null;
-    if (!eventForPass) {
-      const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const endsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString();
-      const created = await createCreatorEvent({
-        endsAt,
-        eventTitle: "Sandbox Event Pass Demo",
-        eventType: "live_first",
-        hostUserId: String(user.id),
-        startsAt,
-        status: "scheduled",
-      });
-      if ("error" in created) {
-        blockers.push("Event Pass needs a valid creator event.");
-      } else {
-        eventForPass = created;
-        setCreatorEvents((current) => [created, ...current.filter((event) => event.id !== created.id)]);
-      }
-    }
-    if (eventForPass) {
-      try {
-        const savedEventOffer = await savePaidCreatorEventOffer({
-          capacityLimit: null,
-          creatorEventId: eventForPass.id,
-          description: "Sandbox Event Pass test flow. No live payout.",
-          priceCents: 99,
-          status: "sandbox",
-        });
-        await saveCreatorSandboxMonetizationConfig({
-          displayName: "Sandbox Event Pass",
-          metadata: {
-            event_offer_id: savedEventOffer.id,
-            no_live_payout: true,
-            setup_surface: "money_center_sandbox_tester_experience",
-          },
-          productKey: "event_pass_sandbox_099",
-          sourceId: eventForPass.id,
-          sourceType: "event",
-        });
-        completed.push("Event Pass");
-      } catch {
-        blockers.push("Event Pass could not be saved for the selected event.");
-      }
-    }
+    if (creatorPaidEventOffers.some(offer => ["sandbox", "active", "sold_out"].includes(offer.status))) {
+      completed.push("Event Pass (existing price and terms preserved)");
+    } else blockers.push("Create an event and choose a supported price, schedule, and capacity in its ticket settings before testing Event Passes.");
 
-    try {
-      const savedChannelSubscriptionOffer = await saveChannelSubscriptionOffer({
-        description:
-          "Sandbox creator-specific Platform Subscription test flow. While active it includes this creator's ordinary Paid Videos, but not Premium, VIP-only content, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.",
-        status: "sandbox",
-        title: "Platform subscription",
-      });
-      await saveCreatorSandboxMonetizationConfig({
-        displayName: "Sandbox Platform Subscription",
-        metadata: {
-          no_live_payout: true,
-          setup_surface: "money_center_sandbox_tester_experience",
-        },
-        productKey: "channel_subscription_sandbox_monthly_499",
-        sourceId: savedChannelSubscriptionOffer.id,
-        sourceType: "channel_subscription",
-      });
-      completed.push("Platform Subscription");
-    } catch {
-      blockers.push("Platform Subscription could not be saved.");
-    }
+    if (creatorChannelSubscriptionOffers.some(offer => ["sandbox", "active"].includes(offer.status))) {
+      completed.push("Platform Subscription (existing price preserved)");
+    } else blockers.push("Choose an available price in Platform Subscription Manager before testing membership.");
 
-    try {
-      const savedVipOffer = await saveCreatorVipPassOffer({
-        description:
-          "Sandbox one-time 30-day creator-specific VIP test flow with VIP-only shelf access. It does not include Premium, ordinary Paid Video ownership, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, Platform Subscriptions, or other creators.",
-        status: "sandbox",
-        title: "VIP Pass",
-      });
-      await saveCreatorSandboxMonetizationConfig({
-        displayName: "Sandbox VIP Pass",
-        metadata: {
-          no_live_payout: true,
-          setup_surface: "money_center_sandbox_tester_experience",
-        },
-        productKey: "vip_pass_sandbox_499",
-        sourceId: savedVipOffer.id,
-        sourceType: "vip_pass",
-      });
-      completed.push("VIP Pass");
-    } catch {
-      blockers.push("VIP Pass could not be saved.");
-    }
+    if (creatorVipPassOffers.some(offer => ["sandbox", "active"].includes(offer.status))) {
+      completed.push("VIP Pass (existing price preserved)");
+    } else blockers.push("Choose an available price in VIP Pass Manager before testing VIP.");
 
     await refreshSandboxTesterExperience();
     setSandboxSetupState(blockers.length ? "partial" : "complete");
@@ -2547,9 +2437,12 @@ export function ChannelStudioScreen() {
       setSandboxSetupBusy(false);
     }
   }, [
-    creatorEvents,
+    creatorPaidEventOffers,
+    creatorChannelSubscriptionOffers,
+    creatorPaidVideoOffers,
     creatorPaidWatchPartyOffers,
     creatorTipSettings,
+    creatorVipPassOffers,
     creatorVideos,
     refreshSandboxTesterExperience,
     saveCreatorTipSandboxSetupConfig,
@@ -2560,7 +2453,10 @@ export function ChannelStudioScreen() {
 
   const handleStartPayoutProviderSetup = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
-    if (!creatorUserId || payoutSetupBusy) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === creatorUserId
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!creatorUserId || !isCurrent() || payoutSetupBusy) return;
 
     setPayoutSetupBusy("setup");
     setPayoutSetupNotice(null);
@@ -2572,6 +2468,12 @@ export function ChannelStudioScreen() {
 
     try {
       const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
+      if (!isCurrent()) return;
+      if (accountPayload.status === "configuration_review_required") {
+        setPayoutSetupNotice(accountPayload.message || "Provider account configuration needs review. Refresh status before continuing setup. Payouts remain inactive.");
+        await refreshCreatorPayouts();
+        return;
+      }
       if (accountPayload.status === "not_configured") {
         setPayoutSetupNotice("Payout readiness/status flow is active. Provider setup is not configured, and no payout movement is enabled.");
         await refreshCreatorPayouts();
@@ -2583,8 +2485,9 @@ export function ChannelStudioScreen() {
         refreshUrl: createPayoutSetupRedirectUrl("refresh"),
         returnUrl: createPayoutSetupRedirectUrl("return"),
       });
+      if (!isCurrent()) return;
 
-      if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required") {
+      if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required" || linkPayload.status === "configuration_review_required") {
         setPayoutSetupNotice(linkPayload.message || "Payout provider setup needs owner/provider resolution. No payout movement is enabled.");
         await refreshCreatorPayouts();
         return;
@@ -2598,6 +2501,7 @@ export function ChannelStudioScreen() {
       }
 
       const canOpen = await Linking.canOpenURL(onboardingUrl).catch(() => true);
+      if (!isCurrent()) return;
       if (!canOpen) {
         setPayoutSetupNotice("Payout setup link could not be opened on this device.");
         await refreshCreatorPayouts();
@@ -2605,34 +2509,41 @@ export function ChannelStudioScreen() {
       }
 
       await Linking.openURL(onboardingUrl);
+      if (!isCurrent()) return;
       setPayoutSetupNotice("Payout setup opened. Withdrawals are not active yet.");
       await refreshCreatorPayouts();
+      if (!isCurrent()) return;
       await refreshCreatorTips();
     } catch {
-      setPayoutSetupNotice("Payout setup could not be started. No payout or transfer was created.");
+      if (isCurrent()) setPayoutSetupNotice("Payout setup could not be started. No payout or transfer was created.");
     } finally {
-      setPayoutSetupBusy(null);
+      if (isCurrent()) setPayoutSetupBusy(null);
     }
   }, [payoutSetupBusy, refreshCreatorPayouts, refreshCreatorTips, user?.id]);
 
   const handleRefreshPayoutProviderStatus = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
-    if (!creatorUserId || payoutSetupBusy) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === creatorUserId
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!creatorUserId || !isCurrent() || payoutSetupBusy) return;
 
     setPayoutSetupBusy("sync");
     setPayoutSetupNotice(null);
 
     try {
       const syncPayload = await syncCreatorPayoutProviderStatus(creatorUserId);
+      if (!isCurrent()) return;
       setPayoutSetupNotice(
         syncPayload.message || "Payout provider status was checked. Withdrawals are not active yet.",
       );
       await refreshCreatorPayouts();
+      if (!isCurrent()) return;
       await refreshCreatorTips();
     } catch {
-      setPayoutSetupNotice("Payout provider status could not be refreshed. No money action was created.");
+      if (isCurrent()) setPayoutSetupNotice("Payout provider status could not be refreshed. No money action was created.");
     } finally {
-      setPayoutSetupBusy(null);
+      if (isCurrent()) setPayoutSetupBusy(null);
     }
   }, [payoutSetupBusy, refreshCreatorPayouts, refreshCreatorTips, user?.id]);
 
@@ -4200,7 +4111,7 @@ export function ChannelStudioScreen() {
       description: video.description,
       visibility: video.visibility,
       accessMode: paidOffer?.isPaid && (paidOffer.status === "sandbox" || paidOffer.status === "active") ? "paid" : "free",
-      priceDollars: paidOffer?.priceCents ? formatCentsAsDollarInput(paidOffer.priceCents) : "0.99",
+      priceDollars: paidOffer?.priceCents ? formatCentsAsDollarInput(paidOffer.priceCents) : "",
     });
     setSelectedVideoFile(null);
     setVideoLifecycleState("idle");
@@ -4210,6 +4121,10 @@ export function ChannelStudioScreen() {
 
   const savePaidVideoSetup = async () => {
     if (!videoEditor.editingVideoId || paidVideoSaveInFlightRef.current) return;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === user?.id
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
     const unavailableReason = selectedPaidVideo?.id === videoEditor.editingVideoId
       ? getPaidVideoSetupUnavailableReason(selectedPaidVideo)
       : "Select a video again before saving its paid access settings.";
@@ -4218,33 +4133,33 @@ export function ChannelStudioScreen() {
       return;
     }
     const isPaid = videoEditor.accessMode === "paid";
-    const priceCents = parseDollarInputToCents(videoEditor.priceDollars);
-    if (isPaid && priceCents !== 99) {
-      setVideoNotice("The current sandbox Paid Video catalog supports the exact $0.99 tier only.");
+    const price = paidVideoPrice.selectedPrice;
+    const priceCents = price?.amountMinor ?? 0;
+    if (isPaid && (!paidVideoPrice.isCurrent() || !price)) {
+      setVideoNotice("Choose an available price before saving. Refresh prices if they could not load.");
       return;
     }
     paidVideoSaveInFlightRef.current = true;
     setVideoSaving(true);
     setVideoNotice(null);
     try {
-      const saved = await savePaidVideoOffer({ videoId: videoEditor.editingVideoId, isPaid, priceCents: isPaid ? priceCents : 99, currency: "usd" });
+      const saved = await savePaidVideoOffer({ videoId: videoEditor.editingVideoId, isPaid, priceCents: isPaid ? priceCents : 0, currency: "usd" });
+      if (!isCurrent()) return;
       const status = String((saved as Record<string, unknown> | null)?.status ?? "");
       if (status === "blocked") throw new Error(String((saved as Record<string, unknown>).reason ?? "Paid video setup is unavailable."));
-      if (isPaid) {
-        await saveCreatorSetupConfig({ displayName: "Sandbox Paid Video", metadata: { setup_surface: "money_center_paid_video_manager" }, productKey: "paid_content_access_sandbox_099", sourceId: videoEditor.editingVideoId, sourceType: "paid_content" });
-      }
       const offers = await listMyPaidVideoOffers({ throwOnUnavailable: true });
+      if (!isCurrent()) return;
       const confirmed = offers.find((offer) => offer.videoId === videoEditor.editingVideoId && offer.creatorId === String(user?.id ?? ""));
-      if (!confirmed || confirmed.isPaid !== isPaid || (isPaid && (confirmed.priceCents !== 99 || !["sandbox", "active"].includes(confirmed.status)))) {
+      if (!confirmed || confirmed.isPaid !== isPaid || (isPaid && (confirmed.priceCents !== priceCents || confirmed.currency !== price?.currency || !["sandbox", "active"].includes(confirmed.status)))) {
         throw new Error("The saved access settings could not be verified for this video. Your selection is preserved; refresh before retrying.");
       }
       setCreatorPaidVideoOffers(offers);
-      setVideoNotice(isPaid ? "Paid Video setup saved at $0.99 in sandbox mode. Production sales and payouts remain unchanged." : "Free access saved. The prior paid offer is no longer available for new purchases.");
+      setVideoNotice(isPaid ? `Paid Video setup saved at ${price?.label} in sandbox mode. ${price?.availabilityLabel}. Production sales and payouts remain unchanged.` : "Free access saved. The prior paid offer is no longer available for new purchases.");
     } catch (error) {
-      setVideoNotice(formatCreatorSetupError(error, "Paid Video setup could not be confirmed. Your selection is preserved; refresh status before retrying."));
+      if (isCurrent()) setVideoNotice(formatCreatorSetupError(error, "Paid Video setup could not be confirmed. Your selection is preserved; refresh status before retrying."));
     } finally {
       paidVideoSaveInFlightRef.current = false;
-      setVideoSaving(false);
+      if (isCurrent()) setVideoSaving(false);
     }
   };
 
@@ -4907,12 +4822,14 @@ export function ChannelStudioScreen() {
       eventType: event.eventType,
       visibility: event.visibility,
       status: event.status,
-      startsAt: toDatetimeLocalValue(event.startsAt),
-      endsAt: toDatetimeLocalValue(event.endsAt),
+      startsAt: toDatetimeLocalValue(event.startsAt, event.timeZone),
+      endsAt: toDatetimeLocalValue(event.endsAt, event.timeZone),
+      timeZone: event.timeZone,
+      timeDisambiguation: "reject",
       linkedTitleId: event.linkedTitleId ?? "",
       replayPolicy: event.replayPolicy,
-      replayAvailableAt: toDatetimeLocalValue(event.replayAvailableAt),
-      replayExpiresAt: toDatetimeLocalValue(event.replayExpiresAt),
+      replayAvailableAt: toDatetimeLocalValue(event.replayAvailableAt, event.timeZone),
+      replayExpiresAt: toDatetimeLocalValue(event.replayExpiresAt, event.timeZone),
       reminderReady: event.reminderReady,
     });
     setLiveReplayAccepted(false);
@@ -4922,6 +4839,11 @@ export function ChannelStudioScreen() {
 
   const onSaveEvent = async () => {
     if (!user?.id || eventSaveInFlightRef.current) return;
+
+    if (eventEditor.status === "draft" && editedPublishedEventRequiresLifecycle) {
+      setEventNotice("Use Manage this event to pause sales or cancel a published ticketed event. Refresh ticket settings if they are unavailable.");
+      return;
+    }
 
     if (!eventEditor.editingEventId && !creatorPostingEnabled) {
       setEventNotice("Creator event creation is temporarily paused. Existing events can still be managed.");
@@ -4942,15 +4864,16 @@ export function ChannelStudioScreen() {
         eventType: eventEditor.eventType,
         visibility: eventEditor.visibility,
         status: eventEditor.status,
-        startsAt: fromDatetimeLocalValue(eventEditor.startsAt),
-        endsAt: fromDatetimeLocalValue(eventEditor.endsAt),
+        startsAt: fromDatetimeLocalValue(eventEditor.startsAt, eventEditor.timeZone, eventEditor.timeDisambiguation, "Start time"),
+        endsAt: fromDatetimeLocalValue(eventEditor.endsAt, eventEditor.timeZone, eventEditor.timeDisambiguation, "End time"),
+        timeZone: eventEditor.timeZone,
         linkedTitleId:
           eventEditor.eventType === "watch_party_live"
             ? String(eventEditor.linkedTitleId).trim() || null
             : null,
         replayPolicy: eventEditor.replayPolicy,
-        replayAvailableAt: fromDatetimeLocalValue(eventEditor.replayAvailableAt),
-        replayExpiresAt: fromDatetimeLocalValue(eventEditor.replayExpiresAt),
+        replayAvailableAt: eventEditor.replayPolicy === "none" ? null : fromDatetimeLocalValue(eventEditor.replayAvailableAt, eventEditor.timeZone, eventEditor.timeDisambiguation, "Replay available time"),
+        replayExpiresAt: eventEditor.replayPolicy !== "until_expiration" ? null : fromDatetimeLocalValue(eventEditor.replayExpiresAt, eventEditor.timeZone, eventEditor.timeDisambiguation, "Replay expiration"),
         reminderReady: eventEditor.reminderReady,
       };
 
@@ -4963,6 +4886,9 @@ export function ChannelStudioScreen() {
         return;
       }
 
+      // Keep the confirmed row if the schedule read fails, so a saved draft
+      // remains editable without treating its status as unknown or published.
+      setCreatorEvents((current) => [result, ...current.filter((event) => event.id !== result.id)]);
       setEventEditor((current) => ({ ...current, editingEventId: result.id }));
       const refreshed = await loadCreatorEvents().catch(() => false);
       if (!refreshed) {
@@ -4971,8 +4897,8 @@ export function ChannelStudioScreen() {
       }
       resetEventEditor();
       setEventNotice(eventEditor.editingEventId ? "Creator event updated." : "Creator event created.");
-    } catch {
-      setEventNotice("Unable to save creator event right now.");
+    } catch (error) {
+      setEventNotice(error instanceof EventScheduleInputError ? error.message : getUserFacingErrorMessage(error, "Unable to save creator event right now."));
     } finally {
       eventSaveInFlightRef.current = false;
       setEventSaving(false);
@@ -4980,30 +4906,22 @@ export function ChannelStudioScreen() {
   };
 
   const onSavePaidEventOffer = async (event: CreatorEventSummary, paid: boolean) => {
+    if (!paidEventOffersAvailable) { setEventNotice("Refresh event ticket settings before changing entry."); return; }
+    if (paid) { setSelectedEventSaleId(event.id); return; }
     if (paidEventSavingId) return;
+    const prior = paidEventOfferByCreatorEventId.get(event.id);
+    if (!prior) { setEventNotice("This Event is already free to enter."); return; }
+    if (prior.passesSold > 0) { setEventNotice("Existing ticket purchases need their terms preserved. Pause new sales while a paid-to-free conversion policy is reviewed."); return; }
     setPaidEventSavingId(event.id);
     setEventNotice(null);
     try {
       const saved = await savePaidCreatorEventOffer({
         creatorEventId: event.id,
-        description: "An Event Pass grants access to this exact Event only.",
-        priceCents: 99,
-        capacityLimit: null,
-        status: paid ? "sandbox" : "canceled",
+        description: prior.description,
+        priceCents: prior.priceCents,
+        capacityLimit: prior.capacityLimit,
+        status: "canceled",
       });
-      if (paid) {
-        await saveCreatorSetupConfig({
-          displayName: "Event Pass",
-          metadata: {
-            event_offer_id: saved.id,
-            setup_surface: "live_event_editor",
-            viewer_route: "/event/[eventId]",
-          },
-          productKey: "event_pass_sandbox_099",
-          sourceId: event.id,
-          sourceType: "event",
-        });
-      }
       trackEvent("money_offer_created", {
         creator_id: user?.id ?? null,
         feature_key: "paid_events",
@@ -5012,12 +4930,8 @@ export function ChannelStudioScreen() {
         route_name: "channel-studio",
         source_surface: "live_events",
       });
-      await refreshPaidEvents();
-      setEventNotice(
-        paid
-          ? `Event access is Paid at ${formatMonetizationCurrency(saved.priceCents, saved.currency)}. Viewers receive an Event Pass for this exact Event through verified ${storeProviderPair} checkout.`
-          : "Event access is Free. The prior Event Pass offer is no longer purchasable; historical financial identity remains unchanged.",
-      );
+      if (!await refreshPaidEvents()) return;
+      setEventNotice("Event access is Free. The prior Event Pass offer is no longer purchasable; historical financial identity remains unchanged.");
     } catch (error) {
       setEventNotice(formatCreatorSetupError(error, "Unable to save Paid Event settings right now."));
     } finally {
@@ -8819,11 +8733,12 @@ export function ChannelStudioScreen() {
               {selectedVideo ? (
                 <View style={styles.eventEmptyCard} testID="money-paid-video-editor">
                   <Text style={styles.eventEmptyTitle}>{selectedVideo.title}</Text>
-                  <Text style={styles.eventEmptyBody}>Choose access for this exact video. The current sandbox paid tier is $0.99.</Text>
+                  <Text style={styles.eventEmptyBody}>Choose access and an available store price for this exact video.</Text>
                   <View style={styles.eventActionRow}>
-                    {(["free", "paid"] as const).map((accessMode) => <TouchableOpacity key={accessMode} style={[styles.chip, videoEditor.accessMode === accessMode && styles.chipActive]} disabled={videoSaving} accessibilityRole="button" accessibilityState={{ selected: videoEditor.accessMode === accessMode, disabled: videoSaving }} onPress={() => updateVideoEditor({ accessMode, priceDollars: "0.99" })}><Text style={styles.chipText}>{accessMode === "free" ? "Free" : "Paid · $0.99"}</Text></TouchableOpacity>)}
+                    {(["free", "paid"] as const).map((accessMode) => <TouchableOpacity key={accessMode} style={[styles.chip, videoEditor.accessMode === accessMode && styles.chipActive]} disabled={videoSaving} accessibilityRole="button" accessibilityState={{ selected: videoEditor.accessMode === accessMode, disabled: videoSaving }} onPress={() => updateVideoEditor({ accessMode })}><Text style={styles.chipText}>{accessMode === "free" ? "Free" : "Paid"}</Text></TouchableOpacity>)}
                   </View>
-                  <AppActionButton label={videoSaving ? "Saving..." : "Save video access"} disabled={videoSaving} onPress={() => void savePaidVideoSetup()} testID="money-paid-video-save-button" />
+                  {videoEditor.accessMode === "paid" ? <CreatorPricePicker prices={paidVideoPrice.prices} selectedPriceKey={paidVideoPrice.selectedPriceKey} onSelect={paidVideoPrice.select} loading={paidVideoPrice.loading} error={paidVideoPrice.error} onRetry={paidVideoPrice.refresh} disabled={videoSaving} testID="paid-video-price" /> : null}
+                  <AppActionButton label={videoSaving ? "Saving..." : "Save video access"} disabled={videoSaving || (videoEditor.accessMode === "paid" && !paidVideoPrice.selectedPrice)} onPress={() => void savePaidVideoSetup()} testID="money-paid-video-save-button" />
                 </View>
               ) : null}
               {videoNotice ? <Text style={styles.noticeText}>{videoNotice}</Text> : null}
@@ -8921,6 +8836,7 @@ export function ChannelStudioScreen() {
                         <Text style={styles.eventEmptyBody}>
                           {formatMonetizationCurrency(offer.priceCents, offer.currency)} · Party Room {offer.partyId ?? "not linked"} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} passes active.
                         </Text>
+                        <AppActionButton label="Manage Party Room price" disabled={!offer.partyId} onPress={() => router.push({ pathname: "/watch-party", params: { partyId: offer.partyId, mode: "party", source: "money-center" } })} testID="money-manager-watch-party-price-button" />
                         <TouchableOpacity
                           style={[styles.eventSecondaryButton, watchPartySetupSavingId === offer.id && styles.eventPrimaryButtonDisabled]}
                           activeOpacity={0.86}
@@ -8950,7 +8866,7 @@ export function ChannelStudioScreen() {
               <TouchableOpacity
                 style={styles.eventPrimaryButton}
                 activeOpacity={0.88}
-                onPress={() => router.push({ pathname: "/watch-party", params: { mode: "live", source: "money-center" } })}
+                onPress={() => router.push({ pathname: "/watch-party", params: { mode: "party", source: "money-center" } })}
                 hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                 accessibilityRole="button"
                 accessibilityLabel="Create Watch-Party target"
@@ -8972,11 +8888,12 @@ export function ChannelStudioScreen() {
                   Creator-specific recurring membership. While active it includes this creator’s ordinary Paid Videos, but not Premium, VIP-only content, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.
                 </Text>
               </View>
+              <CreatorPricePicker prices={subscriptionPrice.prices} selectedPriceKey={subscriptionPrice.selectedPriceKey} onSelect={subscriptionPrice.select} loading={subscriptionPrice.loading} error={subscriptionPrice.error} onRetry={subscriptionPrice.refresh} disabled={channelSubscriptionSaving} testID="channel-subscription-price" />
               <View style={styles.eventActionRow}>
                 <TouchableOpacity
                   style={[styles.eventPrimaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
                   activeOpacity={0.88}
-                  disabled={channelSubscriptionSaving}
+                  disabled={channelSubscriptionSaving || !subscriptionPrice.selectedPrice}
                   onPress={() => handleSaveChannelSubscription(true)}
                   hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                   accessibilityRole="button"
@@ -9019,11 +8936,12 @@ export function ChannelStudioScreen() {
                   VIP is a one-time creator-specific 30-day pass with VIP-only shelf access. It is separate from Premium, Platform Subscriptions, ordinary Paid Video ownership, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, LiveKit authority, and other creators.
                 </Text>
               </View>
+              <CreatorPricePicker prices={vipPrice.prices} selectedPriceKey={vipPrice.selectedPriceKey} onSelect={vipPrice.select} loading={vipPrice.loading} error={vipPrice.error} onRetry={vipPrice.refresh} disabled={vipPassSaving} testID="vip-pass-price" />
               <View style={styles.eventActionRow}>
                 <TouchableOpacity
                   style={[styles.eventPrimaryButton, vipPassSaving && styles.eventPrimaryButtonDisabled]}
                   activeOpacity={0.88}
-                  disabled={vipPassSaving}
+                  disabled={vipPassSaving || !vipPrice.selectedPrice}
                   onPress={() => handleSaveVipPass(true)}
                   hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                   accessibilityRole="button"
@@ -10178,12 +10096,12 @@ export function ChannelStudioScreen() {
           </TouchableOpacity>
           <View style={styles.eventCardMonetizationRow}>
             <TouchableOpacity
-              style={[styles.eventSecondaryButton, styles.eventCardMonetizationButton, !paidEventOffer && styles.eventMonetizationChoiceSelected, paidEventBusy && styles.eventPrimaryButtonDisabled]}
+              style={[styles.eventSecondaryButton, styles.eventCardMonetizationButton, paidEventOffersAvailable && !paidEventOffer && styles.eventMonetizationChoiceSelected, paidEventBusy && styles.eventPrimaryButtonDisabled]}
               activeOpacity={0.86}
               onPress={() => onSavePaidEventOffer(event, false)}
-              disabled={paidEventBusy}
+              disabled={paidEventBusy || !!paidEventOffer?.passesSold || !paidEventOffersAvailable}
               accessibilityRole="button"
-              accessibilityState={{ selected: !paidEventOffer, disabled: paidEventBusy }}
+              accessibilityState={{ selected: paidEventOffersAvailable && !paidEventOffer, disabled: paidEventBusy || !!paidEventOffer?.passesSold || !paidEventOffersAvailable }}
               accessibilityLabel={`Make ${event.eventTitle} free to enter`}
             >
               {paidEventBusy ? (
@@ -10196,16 +10114,16 @@ export function ChannelStudioScreen() {
               style={[styles.eventPrimaryButton, styles.eventCardMonetizationButton, paidEventOffer && styles.eventMonetizationChoiceSelected, paidEventBusy && styles.eventPrimaryButtonDisabled]}
               activeOpacity={0.86}
               onPress={() => onSavePaidEventOffer(event, true)}
-              disabled={paidEventBusy}
+              disabled={paidEventBusy || !paidEventOffersAvailable}
               accessibilityRole="button"
-              accessibilityState={{ selected: !!paidEventOffer, disabled: paidEventBusy }}
-              accessibilityLabel={`Charge for ${event.eventTitle} entry with an Event Pass for 99 cents`}
+              accessibilityState={{ selected: !!paidEventOffer, disabled: paidEventBusy || !paidEventOffersAvailable }}
+              accessibilityLabel={`Configure tickets for ${event.eventTitle}`}
             >
               <ChillywoodPrimaryActionFill radius={14} />
               {paidEventBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.eventPrimaryButtonText}>Paid · $0.99</Text>
+                <Text style={styles.eventPrimaryButtonText}>{paidEventOffer ? "Manage tickets" : "Set up paid tickets"}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -10216,8 +10134,18 @@ export function ChannelStudioScreen() {
             Event Pass · Access to this exact Event. {paidEventOffer.passesSold}{paidEventOffer.capacityLimit ? ` / ${paidEventOffer.capacityLimit}` : ""} sold. Premium, Tips, Paid Videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, VIP, and subscriptions stay separate.
           </Text>
         ) : (
-          <Text style={styles.eventCardBody}>Viewer preview: Free entry to this exact Event.</Text>
+          <Text style={styles.eventCardBody}>{paidEventOffersAvailable ? "Viewer preview: Free entry to this exact Event." : "Ticket settings are unavailable. Refresh before changing entry; free access has not been verified."}</Text>
         )}
+        {paidEventOffer && paidEventOffer.passesSold > 0 ? <Text style={styles.eventCardBody}>Making this event free after ticket sales needs a separate policy review. Use Pause new sales to preserve existing ticket terms.</Text> : null}
+        {!paidEventOffersAvailable ? <TouchableOpacity onPress={() => void refreshPaidEvents()} style={styles.eventSecondaryButton} accessibilityRole="button" accessibilityLabel="Refresh event ticket settings"><Text style={styles.eventSecondaryButtonText}>Refresh ticket settings</Text></TouchableOpacity> : null}
+        <EventLifecycleControls event={event} hasPaidOffer={!!paidEventOffer} onChanged={(updated) => {
+          setCreatorEvents(current => current.map(entry => entry.id === updated.id ? updated : entry));
+          void refreshPaidEvents();
+        }} />
+        {selectedEventSaleId === event.id ? <EventSaleEditor event={event} offer={paidEventOffer ?? null} onClose={() => setSelectedEventSaleId(null)} onSaved={(saved) => {
+          setCreatorPaidEventOffers(current => [...current.filter(entry => entry.creatorEventId !== event.id), saved]);
+          setPaidEventOffersAvailable(true);
+        }} /> : null}
       </View>
     );
   };
@@ -10471,11 +10399,28 @@ export function ChannelStudioScreen() {
               <Text style={styles.sectionLabel}>
                 {eventEditor.editingEventId ? "Edit Event" : "Create Event"}
               </Text>
-              <Text style={styles.permissionCopy}>Enter local date and time for this device. Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}.</Text>
+              <Text style={styles.permissionCopy}>Choose the show’s time zone, then enter its local date and time. Buyers see the same instant in their own time zone.</Text>
+              <TextInput style={styles.input} accessibilityLabel="Event IANA time zone" placeholder="America/New_York" value={eventEditor.timeZone} editable={!eventSaving} autoCapitalize="none" autoCorrect={false} onChangeText={(timeZone) => updateEventEditor({ timeZone })} />
+              <View style={styles.chipRow}>
+                {(["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Phoenix", "Pacific/Honolulu"] as const).map((timeZone) => (
+                  <TouchableOpacity key={timeZone} style={[styles.chip, eventEditor.timeZone === timeZone && styles.chipActive]} accessibilityRole="button" accessibilityLabel={`Use ${timeZone} time zone`} accessibilityState={{ selected: eventEditor.timeZone === timeZone }} onPress={() => updateEventEditor({ timeZone })}>
+                    <Text style={[styles.chipText, eventEditor.timeZone === timeZone && styles.chipTextActive]}>{timeZone.split("/").at(-1)?.replaceAll("_", " ")}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.permissionCopy}>When clocks repeat an hour, choose which occurrence you mean. Nonexistent spring-forward times must be corrected.</Text>
+              <View style={styles.chipRow}>
+                {(["reject", "earlier", "later"] as const).map((choice) => (
+                  <TouchableOpacity key={choice} style={[styles.chip, eventEditor.timeDisambiguation === choice && styles.chipActive]} accessibilityRole="button" accessibilityLabel={`Repeated hour: ${choice === "reject" ? "ask me to choose" : choice}`} accessibilityState={{ selected: eventEditor.timeDisambiguation === choice }} onPress={() => updateEventEditor({ timeDisambiguation: choice })}>
+                    <Text style={[styles.chipText, eventEditor.timeDisambiguation === choice && styles.chipTextActive]}>{choice === "reject" ? "Check repeated hour" : `${choice === "earlier" ? "First" : "Second"} occurrence`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
               <TextInput
                 editable={!eventSaving}
                 style={styles.input}
                 placeholder="Event title"
+                accessibilityLabel="Event title"
                 placeholderTextColor="#8d8d8d"
                 value={eventEditor.eventTitle}
                 onChangeText={(text) => updateEventEditor({ eventTitle: text })}
@@ -10487,6 +10432,9 @@ export function ChannelStudioScreen() {
                   <TouchableOpacity
                     key={value}
                     style={[styles.chip, eventEditor.eventType === value && styles.chipActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Event type: ${formatEventTypeLabel(value)}`}
+                    accessibilityState={{ selected: eventEditor.eventType === value }}
                     onPress={() => updateEventEditor({ eventType: value })}
                   >
                     <Text style={[styles.chipText, eventEditor.eventType === value && styles.chipTextActive]}>
@@ -10498,11 +10446,18 @@ export function ChannelStudioScreen() {
 
               <Text style={styles.sectionLabel}>Status</Text>
               <View style={styles.chipRow}>
-                {(["draft", "scheduled", "live_now", "ended", "replay_available", "expired", "canceled"] as const).map((value) => (
+                {(["draft", "scheduled"] as const).map((value) => (
                   <TouchableOpacity
                     key={value}
                     style={[styles.chip, eventEditor.status === value && styles.chipActive]}
-                    onPress={() => updateEventEditor({ status: value, reminderReady: value === "scheduled" ? eventEditor.reminderReady : false })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Event status: ${formatEventStatusLabel(value)}`}
+                    accessibilityState={{ selected: eventEditor.status === value, disabled: !["draft", "scheduled"].includes(eventEditor.status) || (value === "draft" && editedPublishedEventRequiresLifecycle) }}
+                    disabled={!["draft", "scheduled"].includes(eventEditor.status) || (value === "draft" && editedPublishedEventRequiresLifecycle)}
+                    onPress={() => {
+                      if (value === "draft" && editedPublishedEventRequiresLifecycle) return;
+                      updateEventEditor({ status: value, reminderReady: value === "scheduled" ? eventEditor.reminderReady : false });
+                    }}
                   >
                     <Text style={[styles.chipText, eventEditor.status === value && styles.chipTextActive]}>
                       {formatEventStatusLabel(value)}
@@ -10510,6 +10465,9 @@ export function ChannelStudioScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <Text style={styles.permissionCopy}>Current status: {formatEventStatusLabel(eventEditor.status)}. Start, delay, reschedule, end, cancellation and no-show actions use Manage this event after saving. Starting requires a verified live broadcast.</Text>
+              {editedPublishedEventRequiresLifecycle ? <Text style={styles.permissionCopy}>Use Manage this event to pause sales or cancel a published ticketed event.{!paidEventOffersAvailable ? " Refresh ticket settings before changing status; Draft is unavailable while they are unverified." : " Existing ticket terms are preserved."}</Text> : null}
 
               <Text style={styles.sectionLabel}>Audience</Text>
               <View style={styles.chipRow}>
@@ -10533,6 +10491,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                 style={styles.input}
                 placeholder="Starts at (YYYY-MM-DDTHH:mm)"
+                accessibilityLabel="Event start date and time"
+                autoCapitalize="none"
+                autoCorrect={false}
                 placeholderTextColor="#8d8d8d"
                 value={eventEditor.startsAt}
                 onChangeText={(text) => updateEventEditor({ startsAt: text })}
@@ -10541,6 +10502,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                 style={styles.input}
                 placeholder="Ends at (YYYY-MM-DDTHH:mm)"
+                accessibilityLabel="Event end date and time, optional"
+                autoCapitalize="none"
+                autoCorrect={false}
                 placeholderTextColor="#8d8d8d"
                 value={eventEditor.endsAt}
                 onChangeText={(text) => updateEventEditor({ endsAt: text })}
@@ -10551,6 +10515,7 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                   style={styles.input}
                   placeholder="Linked title id"
+                  accessibilityLabel="Linked title id"
                   placeholderTextColor="#8d8d8d"
                   value={eventEditor.linkedTitleId}
                   onChangeText={(text) => updateEventEditor({ linkedTitleId: text })}
@@ -10558,11 +10523,16 @@ export function ChannelStudioScreen() {
               ) : null}
 
               <Text style={styles.sectionLabel}>Replay Policy</Text>
+              <Text style={styles.permissionCopy}>Tickets are live-only by default. Include replay only when you can offer its availability and expiration before purchase. Times use the event’s selected time zone.</Text>
               <View style={styles.chipRow}>
-                {(["none", "indefinite", "until_expiration"] as const).map((value) => (
+                {(["none", "until_expiration", ...(eventEditor.replayPolicy === "indefinite" ? ["indefinite"] : [])] as CreatorEventReplayPolicy[]).map((value) => (
                   <TouchableOpacity
                     key={value}
                     style={[styles.chip, eventEditor.replayPolicy === value && styles.chipActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Replay policy: ${formatReplayPolicyLabel(value)}`}
+                    disabled={eventSaving || value === "indefinite"}
+                    accessibilityState={{ selected: eventEditor.replayPolicy === value, disabled: eventSaving || value === "indefinite" }}
                     onPress={() => updateEventEditor({ replayPolicy: value })}
                   >
                     <Text style={[styles.chipText, eventEditor.replayPolicy === value && styles.chipTextActive]}>
@@ -10578,6 +10548,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                     style={styles.input}
                     placeholder="Replay available at (YYYY-MM-DDTHH:mm)"
+                    accessibilityLabel="Replay available date and time"
+                    autoCapitalize="none"
+                    autoCorrect={false}
                     placeholderTextColor="#8d8d8d"
                     value={eventEditor.replayAvailableAt}
                     onChangeText={(text) => updateEventEditor({ replayAvailableAt: text })}
@@ -10587,6 +10560,9 @@ export function ChannelStudioScreen() {
                 editable={!eventSaving}
                       style={styles.input}
                       placeholder="Replay expires at (YYYY-MM-DDTHH:mm)"
+                      accessibilityLabel="Replay expiration date and time"
+                      autoCapitalize="none"
+                      autoCorrect={false}
                       placeholderTextColor="#8d8d8d"
                       value={eventEditor.replayExpiresAt}
                       onChangeText={(text) => updateEventEditor({ replayExpiresAt: text })}
@@ -10598,6 +10574,8 @@ export function ChannelStudioScreen() {
               {liveReplayAcknowledgementRequired ? (
                 <TouchableOpacity
                   style={[styles.legalAcknowledgementRow, liveReplayAccepted && styles.legalAcknowledgementRowActive]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: liveReplayAccepted, disabled: eventSaving }}
                   activeOpacity={0.86}
                   onPress={() => setLiveReplayAccepted((current) => !current)}
                   disabled={eventSaving}
@@ -10619,6 +10597,9 @@ export function ChannelStudioScreen() {
                     <TouchableOpacity
                       key={value}
                       style={[styles.chip, active && styles.chipActive, disabled && styles.chipDisabled]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Event reminders ${value === "ready" ? "ready" : "off"}`}
+                      accessibilityState={{ selected: active, disabled }}
                       onPress={() => {
                         if (disabled) return;
                         updateEventEditor({ reminderReady: value === "ready" });
@@ -10640,6 +10621,9 @@ export function ChannelStudioScreen() {
                 <TouchableOpacity
                   style={styles.eventPrimaryButton}
                   onPress={onSaveEvent}
+                  accessibilityRole="button"
+                  accessibilityLabel={eventEditor.editingEventId ? "Update Event" : "Create Event"}
+                  accessibilityState={{ disabled: eventSaving, busy: eventSaving }}
                   activeOpacity={0.88}
                   disabled={eventSaving}
                 >

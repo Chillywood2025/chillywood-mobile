@@ -11,11 +11,15 @@ import {
 } from "../../_lib/paidCreatorEvents";
 import { buildSafetyReportContext, submitSafetyReport } from "../../_lib/moderation";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
-import { readCircleSpectatorFeedItems } from "../../_lib/circleSpectatorFeed";
 import { formatOneTimePrice, resolveEventCustomerPresentation } from "../../_lib/customerExperiencePresentation";
-import { readPublicDiscoveryFeedItems, type DiscoveryFeedItem } from "../../_lib/discoveryFeed";
+import { resolveCreatorEventDestination } from "../../_lib/creatorEventJourney";
+import { readMyCreatorPurchases, type CreatorPurchase } from "../../_lib/creatorPurchases";
+import { readEventReminderEnrollment, setEventReminderEnrollment, type EventReminderEnrollment } from "../../_lib/notifications";
+import { withAuthorityReadDeadline } from "../../_lib/entitlementAuthority";
 import { supabase } from "../../_lib/supabase";
+import { formatEventScheduleTime } from "../../_lib/eventSchedule";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
+import { EventTicketPolicy } from "../../components/monetization/event-ticket-policy";
 import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
@@ -28,6 +32,9 @@ type EventRow = {
   starts_at: string | null;
   ends_at: string | null;
   host_user_id: string | null;
+  time_zone: string | null;
+  management_status: string | null;
+  status_message: string | null;
 };
 
 type EventDestination = {
@@ -37,15 +44,13 @@ type EventDestination = {
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
-const formatDate = (value: string | null) => {
-  const parsed = Date.parse(String(value ?? ""));
-  if (!Number.isFinite(parsed)) return "Not scheduled";
-  return new Date(parsed).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+const formatDate = formatEventScheduleTime;
+const formatTicketReplayTime = (value: string | null, timeZone: string) => {
+  if (!value || !Number.isFinite(Date.parse(value))) return "Unavailable in the recorded terms";
+  try {
+    return `${new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone }).format(new Date(value))} (${timeZone})`;
+  } catch { return "Unavailable in the recorded terms"; }
 };
 
 const formatEventType = (value: string | null) => {
@@ -60,6 +65,13 @@ const LOCKED_COPY =
 
 const unavailableEventPassCopy = (status: string | null | undefined) => {
   const normalized = normalizeText(status).toLowerCase();
+  if (normalized === "access_check_failed" || normalized === "malformed_access_response") {
+    return "Your Event Pass access could not be verified. Refresh to try again. Check your store purchase history before attempting another purchase.";
+  }
+  if (["sale_not_open", "sales_not_open", "event_sales_not_open"].includes(normalized)) return "Advance ticket sales have not opened yet. Check the creator’s published sale window and refresh when sales open.";
+  if (["sale_closed", "sales_closed", "event_sales_closed"].includes(normalized)) return "New ticket sales have closed. If you already purchased a ticket, open My Tickets or refresh to verify your access.";
+  if (["sales_paused", "event_sales_paused"].includes(normalized)) return "The creator has paused new ticket sales. Existing purchases keep their recorded terms; refresh to verify your ticket.";
+  if (normalized === "reservation_pending" || normalized === "reconciliation_required") return "A purchase is still being checked. Open My Tickets before trying again so you do not start another charge.";
   if (normalized === "ended" || normalized === "expired") {
     return "This Event Pass is no longer available because the event has ended or expired. Event access stays locked until access is verified.";
   }
@@ -86,8 +98,13 @@ export default function PaidCreatorEventRoute() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [destination, setDestination] = useState<EventDestination | null>(null);
+  const [recordedPurchase, setRecordedPurchase] = useState<CreatorPurchase | null>(null);
+  const [reminder, setReminder] = useState<EventReminderEnrollment | null>(null);
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const reminderFlight = useRef(false);
   const loadGenerationRef = useRef(0);
   const purchaseLatchRef = useRef(createActionSingleFlightLatch());
+  const purchaseContextRef = useRef(0);
 
   const load = React.useCallback(async (options?: { preserveRendered?: boolean }) => {
     const generation = ++loadGenerationRef.current;
@@ -95,32 +112,30 @@ export default function PaidCreatorEventRoute() {
     else setLoading(true);
     setError("");
     try {
-      const [{ data: eventRow, error: eventError }, accessResult, publicItems, circleItems] = await Promise.all([
-        (supabase as any)
+      const [metadata, accessResult, entry, purchases, enrollment] = await Promise.all([
+        withAuthorityReadDeadline((supabase as any)
           .from("creator_events")
-          .select("id,event_title,event_type,visibility,status,starts_at,ends_at,host_user_id")
+          .select("id,event_title,event_type,visibility,status,starts_at,ends_at,host_user_id,time_zone,management_status,status_message")
           .eq("id", eventId)
-          .maybeSingle(),
+          .maybeSingle(), null) as Promise<{ data: EventRow | null; error: unknown } | null>,
         resolvePaidCreatorEventPassAccess(eventId),
-        readPublicDiscoveryFeedItems({ limit: 50 }).catch(() => [] as DiscoveryFeedItem[]),
-        readCircleSpectatorFeedItems({ limit: 50 }).catch(() => [] as DiscoveryFeedItem[]),
+        resolveCreatorEventDestination(eventId),
+        readMyCreatorPurchases(null, { sourceType: "event", sourceId: eventId }),
+        withAuthorityReadDeadline(readEventReminderEnrollment(eventId), null),
       ]);
       if (generation !== loadGenerationRef.current) return;
-      if (eventError) setError("Unable to load this Event right now.");
-      const nextEvent = (eventRow as EventRow | null) ?? null;
-      const eventItems = [...publicItems, ...circleItems]
-        .filter((item) => normalizeText(item.event_id) === eventId);
-      const liveItem = eventItems.find((item) => item.live_state === "live") ?? null;
-      const replayItem = eventItems.find((item) => item.item_type === "replay_later") ?? null;
-      setEvent(nextEvent);
+      if (!metadata || metadata.error) setError("Unable to load this Event right now. Refresh to try again.");
+      setEvent(metadata?.data ?? null);
       setAccess(accessResult);
-      setDestination(liveItem
-        ? { itemId: liveItem.id, kind: "live" }
-        : replayItem
-          ? { itemId: replayItem.id, kind: "replay" }
-          : null);
+      setRecordedPurchase(purchases.status === "resolved" ? purchases.items[0] ?? null : null);
+      setReminder(enrollment);
+      setDestination(entry.allowed && entry.itemId && entry.kind ? { itemId: entry.itemId, kind: entry.kind } : null);
     } catch {
       if (generation === loadGenerationRef.current) {
+        setAccess(null);
+        setRecordedPurchase(null);
+        setReminder(null);
+        setDestination(null);
         setError("Unable to load this Event right now. Pull down to try again.");
       }
     } finally {
@@ -132,6 +147,13 @@ export default function PaidCreatorEventRoute() {
   }, [eventId]);
 
   useEffect(() => {
+    purchaseContextRef.current += 1;
+    setEvent(null);
+    setAccess(null);
+    setRecordedPurchase(null);
+    setReminder(null);
+    setDestination(null);
+    setNotice("");
     if (!eventId) {
       setLoading(false);
       setError("Missing event id.");
@@ -146,7 +168,25 @@ export default function PaidCreatorEventRoute() {
     return () => {
       active = false;
       loadGenerationRef.current += 1;
+      purchaseContextRef.current += 1;
     };
+  }, [eventId, load]);
+
+  useEffect(() => {
+    let active = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      if (!active) return;
+      purchaseContextRef.current += 1;
+      loadGenerationRef.current += 1;
+      setAccess(null);
+      setRecordedPurchase(null);
+      setReminder(null);
+      setDestination(null);
+      setNotice("");
+      // Defer Supabase reads until the auth callback has released its lock.
+      void Promise.resolve().then(() => { if (active && eventId) return load(); });
+    });
+    return () => { active = false; subscription.unsubscribe(); };
   }, [eventId, load]);
 
   useEffect(() => {
@@ -158,6 +198,7 @@ export default function PaidCreatorEventRoute() {
 
   const onBuyEventPass = async () => {
     if (!eventId || !purchaseLatchRef.current.tryAcquire()) return;
+    const context = purchaseContextRef.current;
     setPurchaseLoading(true);
     setNotice("");
     setError("");
@@ -165,22 +206,37 @@ export default function PaidCreatorEventRoute() {
       const result = await purchasePaidCreatorEventPass({
         creatorEventId: eventId,
         sourceSurface: "event_page",
+        expectedTermsRevisionId: access?.offer?.termsRevisionId ?? undefined,
       });
+      if (context !== purchaseContextRef.current) return;
       setAccess(result.access);
       setNotice(result.message);
       if (result.ok) await load();
     } catch {
-      setError("Event Pass checkout is not available right now.");
+      if (context === purchaseContextRef.current) setError("Event Pass checkout is not available right now.");
     } finally {
       purchaseLatchRef.current.release();
       setPurchaseLoading(false);
     }
   };
 
+  const onToggleReminder = async () => {
+    if (reminderFlight.current || !reminder?.canEnroll || !reminder.viewerUserId) return;
+    const context = purchaseContextRef.current;
+    reminderFlight.current = true; setReminderBusy(true);
+    try {
+      const result = await setEventReminderEnrollment(eventId, reminder.state !== "active", reminder.viewerUserId);
+      if (context !== purchaseContextRef.current) return;
+      setNotice(result.message);
+      if (result.status === "completed" || result.status === "noop") await load({ preserveRendered: true });
+    } catch { if (context === purchaseContextRef.current) setNotice("The reminder could not be updated. Refresh and try again."); }
+    finally { reminderFlight.current = false; setReminderBusy(false); }
+  };
+
   const offer = access?.offer ?? null;
   const locked = !!access && !access.allowed && access.requiresPurchase;
   const soldOut = access?.reason === "sold_out";
-  const unavailable = !!access && !access.allowed && !access.requiresPurchase;
+  const unavailable = !access || (!access.allowed && !access.requiresPurchase);
   const confirmedEventPass = !!access?.allowed
     && access.reason === "event_pass_confirmed"
     && !!access.passId;
@@ -189,14 +245,17 @@ export default function PaidCreatorEventRoute() {
   const title = event?.event_title || offer?.title || "Creator event";
   const normalizedEventStatus = normalizeText(event?.status ?? offer?.status).toLowerCase();
   const terminalEventState = ["canceled", "cancelled", "ended", "replay_available", "expired"].includes(normalizedEventStatus);
-  const accessUnavailable = unavailable && !terminalEventState;
-  const hasEventAccess = confirmedEventPass || creatorPreview || freeEvent;
+  const verifiedTicketTerms = !!offer?.terms && offer.termsRevisionId === offer.terms.id;
+  const accessUnavailable = (unavailable || (locked && !verifiedTicketTerms)) && !terminalEventState && !soldOut;
+  // Exact destination authority also validates purchased replay terms when the
+  // legacy pass resolver reports an ended event.
+  const hasEventAccess = confirmedEventPass || creatorPreview || freeEvent || !!destination;
   const priceLabel = offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null;
   const oneTimePriceLabel = priceLabel ? formatOneTimePrice(priceLabel) : null;
   const customerState = resolveEventCustomerPresentation({
     status: event?.status ?? offer?.status,
     startsAt: event?.starts_at ?? offer?.startsAt,
-    isPaid: !!offer,
+    isPaid: !!offer || (recordedPurchase?.amountMinor ?? 0) > 0,
     accessAllowed: hasEventAccess,
     requiresPurchase: locked,
     soldOut,
@@ -205,6 +264,7 @@ export default function PaidCreatorEventRoute() {
     hasReplayDestination: destination?.kind === "replay",
   });
   const canPurchaseEventPass = locked
+    && verifiedTicketTerms
     && !terminalEventState
     && customerState.action === "buy_pass";
   const audienceLabel = event?.visibility === "circle"
@@ -214,7 +274,7 @@ export default function PaidCreatorEventRoute() {
       : "Public Event";
   const openAuthorizedDestination = () => {
     if (!destination?.itemId) return;
-    router.push(`/spectate/${encodeURIComponent(destination.itemId)}` as Parameters<typeof router.push>[0]);
+    router.push(`/event-watch/${encodeURIComponent(eventId)}` as Parameters<typeof router.push>[0]);
   };
 
   const onSubmitEventReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
@@ -268,12 +328,49 @@ export default function PaidCreatorEventRoute() {
               <Text style={styles.detail}>{audienceLabel}</Text>
               <Text style={styles.detail}>Starts {formatDate(event?.starts_at ?? offer?.startsAt ?? null)}</Text>
               <Text style={styles.detail}>Ends: {formatDate(event?.ends_at ?? offer?.endsAt ?? null)}</Text>
+              <Text style={styles.detail}>Times are shown in your device’s time zone.</Text>
+              {event?.time_zone ? <Text style={styles.detail}>Creator’s time zone: {event.time_zone}</Text> : null}
               {offer ? (
                 <>
                   <Text style={styles.detail}>Event Pass · {oneTimePriceLabel}</Text>
                 </>
               ) : null}
             </View>
+
+            {event?.management_status || event?.status_message ? <View style={styles.stateBox} testID="event-creator-update">
+              <Text style={styles.stateTitle}>{event.management_status === "no_show" ? "Creator marked this event as a no-show" : event.management_status === "delayed" ? "Event delayed" : event.management_status === "rescheduled" ? "Event rescheduled" : "Creator update"}</Text>
+              {event.status_message ? <Text style={styles.body}>{event.status_message}</Text> : null}
+              <Text style={styles.body}>Existing purchase records keep their agreed terms. Check My Tickets for purchase status and support options.</Text>
+            </View> : null}
+
+            {offer?.terms && !confirmedEventPass ? <View style={styles.stateBox} testID="event-purchase-terms">
+              <Text style={styles.stateTitle}>Review your ticket</Text>
+              <Text style={styles.body}>{offer.terms.title} · {oneTimePriceLabel}</Text>
+              <Text style={styles.body}>Starts {formatDate(offer.terms.startsAt)} in your device’s time zone. Creator’s time zone: {offer.terms.timeZone}.</Text>
+              <Text style={styles.body}>{offer.terms.description}</Text>
+              <Text style={styles.body}>Online admission only. {offer.terms.capacityLimit == null ? "No virtual ticket limit is set." : `Capacity: ${offer.terms.capacityLimit} virtual tickets.`}</Text>
+              <Text style={styles.body}>Sales open: {formatDate(offer.terms.salesOpenAt, "No separate opening time")} · Close: {formatDate(offer.terms.salesCloseAt, "No separate closing time")}</Text>
+              <Text testID="event-ticket-replay-terms" style={styles.body}>{offer.terms.replayPolicy === "none" ? "This ticket does not include replay access."
+                : offer.terms.replayPolicy === "until_expiration"
+                  ? `Replay included from ${formatTicketReplayTime(offer.terms.replayAvailableAt, offer.terms.timeZone)} until ${formatTicketReplayTime(offer.terms.replayExpiresAt, offer.terms.timeZone)}. Playback still requires an authorized available replay.`
+                  : `Replay is configured without an expiration${offer.terms.replayAvailableAt ? `, available from ${formatTicketReplayTime(offer.terms.replayAvailableAt, offer.terms.timeZone)}` : "; original availability is not recorded"}. Entry still requires an authorized available replay.`}</Text>
+              {offer.terms.replayPolicy !== "none" ? <Text style={styles.body}>If promised replay misses its recorded availability deadline, you are eligible for provider refund review. Replay arriving later does not remove that eligibility. This is not a guaranteed or completed refund.</Text> : null}
+              <Text style={styles.body}>Later changes do not rewrite recorded purchase terms. Cancellation or a show that has not begun within 30 minutes of its advertised start makes buyers eligible for provider refund review. An earlier start, delay of at least 30 minutes, or a change of event-local date offers a choice to keep the ticket or request review. The provider decides the outcome and timing.</Text>
+            </View> : null}
+
+            {recordedPurchase ? <View style={styles.stateBox} testID="event-recorded-purchase">
+              <Text style={styles.stateTitle}>Your latest purchase record</Text>
+              <Text style={styles.body}>Status: {recordedPurchase.status.replace(/_/g, " ")}. This record does not itself grant entry.</Text>
+              {recordedPurchase.termsAvailable ? <>
+                <Text style={styles.body}>{String(recordedPurchase.terms.title ?? recordedPurchase.title ?? "Event ticket")}</Text>
+                <Text style={styles.body}>{recordedPurchase.amountMinor == null ? "Price unavailable" : formatPaidCreatorEventPrice(recordedPurchase.amountMinor, recordedPurchase.currency ?? "usd")}</Text>
+                <Text style={styles.body}>Purchased schedule: {formatDate(typeof recordedPurchase.terms.startsAt === "string" ? recordedPurchase.terms.startsAt : null)} in your device’s time zone. Creator’s time zone: {String(recordedPurchase.terms.timeZone ?? "Unavailable")}.</Text>
+                <Text style={styles.body}>{String(recordedPurchase.terms.includeText ?? "See My Tickets for recorded inclusion terms.")}</Text>
+              </> : <Text style={styles.body}>Original terms are unavailable for this historical purchase. The current listing does not replace them.</Text>}
+              {recordedPurchase.refundEligibility ? <Text style={styles.body}>A ticket remedy was recorded. Review ticket changes below for current eligibility and any schedule choice. Payment-provider review is required; this is not confirmation of a refund.</Text> : null}
+              <Text style={styles.body}>Open My Tickets for receipts, full history, restore, and support.</Text>
+              <EventTicketPolicy key={`${eventId}:${recordedPurchase.id}`} eventId={eventId} purchaseId={recordedPurchase.id} initiallyExpanded />
+            </View> : null}
 
             {confirmedEventPass ? (
               <View testID="event-pass-access-granted-state">
@@ -328,7 +425,7 @@ export default function PaidCreatorEventRoute() {
                   <MoneyStatusChip label="Unavailable" tone="warning" />
                 </View>
                 <Text style={styles.body}>
-                  {unavailableEventPassCopy(event?.status || offer?.status || access?.reason)}
+                  {unavailableEventPassCopy(access?.reason || event?.status || offer?.status || "access_check_failed")}
                 </Text>
               </View>
             ) : event ? (
@@ -357,8 +454,17 @@ export default function PaidCreatorEventRoute() {
               </View>
             )}
 
-            {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {notice ? <Text style={styles.notice} accessibilityLiveRegion="polite">{notice}</Text> : null}
+            {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel="Refresh event access" accessibilityState={{ busy: refreshing }} onPress={() => void load({ preserveRendered: true })} disabled={refreshing} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>{refreshing ? "Refreshing..." : "Refresh Event"}</Text>
+            </Pressable>
+            {event?.status === "scheduled" ? <View style={styles.stateBox} testID="event-reminder-state">
+              <Text style={styles.stateTitle}>Event reminder</Text>
+              <Text style={styles.body}>{reminder?.state === "active" ? "You’re enrolled for this event’s reminder and creator updates. Delivery depends on notification settings." : reminder?.state === "signed_out" ? "Sign in to save a reminder for this event." : reminder?.canEnroll ? "Choose whether to receive this event’s reminder and creator updates." : "Reminders are unavailable for this event right now. Refresh to check again."}</Text>
+              {reminder?.canEnroll ? <Pressable testID="event-reminder-toggle" accessibilityRole="button" accessibilityLabel={reminder.state === "active" ? "Cancel event reminder" : "Remind me about this event"} accessibilityState={{disabled:reminderBusy,busy:reminderBusy}} disabled={reminderBusy} onPress={() => void onToggleReminder()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>{reminderBusy ? "Saving reminder…" : reminder.state === "active" ? "Cancel reminder" : "Remind me"}</Text></Pressable> : null}
+            </View> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel="Open My Tickets" onPress={() => router.push("/purchases" as Parameters<typeof router.push>[0])} style={styles.secondaryButton} testID="event-my-tickets-button"><Text style={styles.secondaryButtonText}>My Tickets & purchases</Text></Pressable>
 
             <Pressable
               accessibilityRole="button"
@@ -374,7 +480,7 @@ export default function PaidCreatorEventRoute() {
               accessibilityRole="button"
               accessibilityLabel="Back"
               testID="event-back-button"
-              onPress={() => router.back()}
+              onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
               style={styles.secondaryButton}
             >
               <Text style={styles.secondaryButtonText}>Back</Text>

@@ -2,7 +2,12 @@
 // against the actual full replay, not static names alone.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import fs from 'node:fs';
+import {createDatabase, splitSQL} from './helpers/database-runtime-authority-fixture.mjs';
+import {monetizationAuditFiles, monetizationImplementationFiles,
+  monetizationAddedFunctionIdentities, monetizationReplacedFunctionIdentities,
+  monetizationRenamedFunctionIdentities, monetizationRemovedFunctionIdentities,
+} from './helpers/creator-monetization-migration-inventory.mjs';
 import {profileFeedFiles, profileFeedFunctions, assertProfileFeedInventory} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles, discoveryInvalidationFunctions, assertDiscoveryInvalidationInventory} from './helpers/discovery-invalidation-runtime-inventory.mjs';
 
@@ -155,6 +160,8 @@ const brandReferenceFiles = [
   '20261025141347_platform_brand_reference_candidate_indexes.sql',
 ];
 const legacyRenditionFiles = ['20261025192059_legacy_rendition_playback_authority.sql'];
+// Creator/buyer successors have an independently replayed, exact identity map.
+// Historical repair scope remains unchanged; only declared additions count.
 // Existing scan/playback functions are replaced, not added. Keep only the
 // seven new identities in this schema count; the extensions guard is checked
 // separately so installing pg_trgm cannot widen the historical catalog scope.
@@ -381,11 +388,48 @@ const queries={
   policies:`select * from pg_policies where schemaname in ${schemas} order by schemaname,tablename,policyname`,
 };
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
+
+test('creator monetization has the exact declared catalog delta from the audit checkpoint', {timeout:180_000}, async()=>{
+  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:monetizationImplementationFiles});
+  try {
+    assert.deepEqual(replayReport.excludedMigrations,monetizationImplementationFiles);
+    assert.deepEqual(replayReport.files.filter(file=>monetizationImplementationFiles.includes(file)),[]);
+    const before=(await db.query(queries.functions)).rows;
+    for(const file of monetizationImplementationFiles){
+      const sql=fs.readFileSync(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8');
+      for(const statement of splitSQL(sql)){
+        const clean=statement.replace(/--[^\n]*/gu,'').trim();
+        if(!clean||/^(?:begin|commit|rollback)\s*;?$/iu.test(clean))continue;
+        await db.exec(statement);
+      }
+    }
+    const after=(await db.query(queries.functions)).rows;
+    const previous=new Map(before.map(fn=>[fn.identity,fn]));
+    const current=new Map(after.map(fn=>[fn.identity,fn]));
+    const identities=rows=>rows.map(fn=>[fn.key,fn.identity]).sort();
+    assert.deepEqual(identities(after.filter(fn=>!previous.has(fn.identity))),
+      [...monetizationAddedFunctionIdentities].sort(),'only the exact new signatures are added');
+    assert.deepEqual(identities(before.filter(fn=>!current.has(fn.identity))),
+      monetizationRemovedFunctionIdentities,'no historical signature disappears');
+    assert.deepEqual(identities(after.filter(fn=>previous.has(fn.identity)
+      &&fn.definition!==previous.get(fn.identity).definition)),
+    [...monetizationReplacedFunctionIdentities].sort(),'only the exact existing signatures change');
+    assert.deepEqual(after.flatMap(fn=>{
+      const old=before.find(candidate=>candidate.oid===fn.oid);
+      return old&&old.identity!==fn.identity?[[old.identity,fn.identity]]:[];
+    }).sort(),[...monetizationRenamedFunctionIdentities].sort(),'renamed predecessors retain their original OIDs');
+  } finally {await db.close();}
+});
+
 for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idempotence, Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async()=>{
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length);
+    for(const [label,identities] of [['added',monetizationAddedFunctionIdentities],['replaced',monetizationReplacedFunctionIdentities]]){
+      assert.deepEqual(before.functions.filter(fn=>identities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
+        [...identities].sort(),`exact creator monetization ${label} signatures are present`);
+    }
     await assertProfileFeedInventory(db,before.functions);
     await assertDiscoveryInvalidationInventory(db,before.functions);
     assert.deepEqual(before.functions.filter(fn=>referenceAndRenditionFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
@@ -441,7 +485,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles,
+      'exact creator/buyer monetization audit migrations replay in both Studio scenarios');
     assert.deepEqual(replayReport.files.filter(file=>profileFeedFiles.includes(file)),profileFeedFiles, 'exact profile feed migration bundle');
     assert.deepEqual(replayReport.files.filter(file=>discoveryInvalidationFiles.includes(file)),discoveryInvalidationFiles, 'exact scoped discovery migration bundle');
     assert.deepEqual(replayReport.files.filter(file=>brandReferenceFiles.includes(file)),brandReferenceFiles);

@@ -1,6 +1,9 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 import {
+  beginCreatorMoneyCheckout,
+  CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY,
   captureCreatorMoneyPurchaseAuthority,
   isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
@@ -387,11 +390,17 @@ export async function saveCreatorVipPassOffer(input: {
   title?: string | null;
   description?: string | null;
   status?: CreatorVipPassOfferStatus;
+  priceId?: string;
+  offerId?: string;
 }): Promise<CreatorVipPassOffer> {
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("set_creator_vip_pass_offer", {
+  const pause = input.status === "paused" && !!input.offerId;
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(pause ? "pause_creator_offer" : input.priceId ? "set_creator_vip_pass_offer_at_price" : "set_creator_vip_pass_offer", pause ? {
+    p_source_type: "vip_pass", p_offer_id: input.offerId,
+  } : {
     p_title: input.title ?? "VIP Pass",
     p_description: input.description ?? "Creator-specific VIP access for this Platform only.",
     p_status: input.status ?? "sandbox",
+    ...(input.priceId ? { p_price_id: input.priceId } : {}),
   });
   if (error) throw new Error("VIP Pass settings could not be saved.");
   const offer = data && typeof data === "object" && !Array.isArray(data)
@@ -494,7 +503,7 @@ export async function createCreatorVipPassPurchaseIntent(
     "create_creator_vip_pass_purchase_intent",
     { p_offer_id: offerId },
   );
-  if (!response || response.error) throw new Error("VIP Pass checkout is not available right now.");
+  if (!response || response.error) throw new Error("VIP checkout could not be confirmed. Open Purchases & My Tickets and refresh status before trying another purchase.");
   const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("VIP Pass checkout authority could not be verified.");
@@ -604,7 +613,7 @@ export async function purchaseCreatorVipPass(input: {
       access,
     };
   }
-  const intent = await createCreatorVipPassPurchaseIntent(access.offer.id, {
+  const expectedIntent: Omit<CreatorMoneyPurchaseIntentExpectation, "status"> = {
     userId: purchaseSubject.userId,
     sourceType: "vip_pass",
     sourceId: access.offer.id,
@@ -614,7 +623,8 @@ export async function purchaseCreatorVipPass(input: {
     environment: access.offer.status === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  }, purchaseSubject);
+  };
+  const intent = await createCreatorVipPassPurchaseIntent(access.offer.id, expectedIntent, purchaseSubject);
   if (intent.alreadyPurchased) {
     const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId, purchaseSubject, access);
     return {
@@ -638,6 +648,10 @@ export async function purchaseCreatorVipPass(input: {
     };
   }
 
+  if (!isCreatorMoneyStoreQuoteMatch(product, { productId, amountMinor: access.priceCents, currency: access.currency })) {
+    return { ok: false, message: CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, access, intentId: intent.id, productId };
+  }
+
   trackEvent("vip_purchase_started", {
     creator_id: access.creatorId ?? input.creatorId,
     feature_key: "vip_passes",
@@ -657,6 +671,9 @@ export async function purchaseCreatorVipPass(input: {
     };
   }
 
+  if (!await beginCreatorMoneyCheckout(purchaseSubject, intent.id, { ...expectedIntent, status: "pending", providerProductId: productId })) {
+    return { ok: false, message: CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY, access, intentId: intent.id, productId };
+  }
   try {
     await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
@@ -674,8 +691,8 @@ export async function purchaseCreatorVipPass(input: {
     return {
       ok: false,
       message: isRevenueCatUserCancellation(error)
-        ? "VIP Pass purchase was canceled. Nothing changed."
-        : "VIP Pass checkout could not be completed. Try again later.",
+        ? "VIP Pass checkout was canceled. Refresh Purchases & My Tickets to confirm its status before another attempt."
+        : "VIP payment could not be confirmed. Refresh Purchases & My Tickets. Do not purchase again while payment is unknown.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,

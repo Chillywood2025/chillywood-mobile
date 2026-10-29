@@ -114,7 +114,11 @@ assertIncludes(channelSettings, "money-manager-channel-subscription-enable-butto
 assertIncludes(channelSettings, "money-manager-vip-pass-enable-button", "VIP Pass manager action");
 assertIncludes(channelSettings, "money-manager-paid-events-open-live-button", "Event Pass manager event action");
 assertIncludes(channelSettings, "formatWatchPartySeatPassDisplayTitle", "Watch-Party Seat Pass stale title normalizer");
-assertIncludes(channelSettings, "title: formatWatchPartySeatPassDisplayTitle(existingWatchPartyOffer.title)", "Watch-Party setup save normalized title");
+// Bulk sandbox setup preserves authored offers. Title normalization remains
+// enforced on both readback surfaces below; setup must no longer rewrite a
+// chosen price or title just to manufacture a tester offer.
+assertIncludes(channelSettings, 'completed.push("Party Room Pass (existing price preserved)")', "Watch-Party setup preserves authored offer");
+assertNotIncludes(channelSettings, "setPaidWatchPartyOffer(", "bulk setup must not overwrite Party Room pricing");
 assertIncludes(channelSettings, "formatWatchPartySeatPassDisplayTitle(transaction.roomTitle)", "Watch-Party transaction room title normalization");
 assertIncludes(channelSettings, "formatWatchPartySeatPassDisplayTitle(config.displayName)", "saved Watch-Party setup config title normalization");
 assertIncludes(channelSettings, "accessibilityLabel={`Save setup config for ${displayTitle}`}", "Watch-Party setup accessibility title normalization");

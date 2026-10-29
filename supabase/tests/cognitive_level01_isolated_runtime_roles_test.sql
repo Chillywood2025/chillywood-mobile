@@ -411,7 +411,9 @@ select is(
           string_agg(
             rolname || '|' || nspname || '|' || signature,
             E'\n'
-            order by rolname, nspname, signature
+            -- Canonical byte ordering keeps the exact same grant tuple set
+            -- deterministic across C and managed en_US database locales.
+            order by rolname collate "C", nspname collate "C", signature collate "C"
           ),
           'UTF8'
         ),
@@ -421,7 +423,7 @@ select is(
     )
     from explicit_grants
   ),
-  '93b863048b2b08317daddb38d08ae0e2b0a3b981a2d859558b7eecf05b680753',
+  '1853b80ab8a532b29d4d0e5fcca93a4672bd27bbc52f100bd386516c27eda260',
   'exact role-to-function-signature grant manifest is deterministic'
 );
 

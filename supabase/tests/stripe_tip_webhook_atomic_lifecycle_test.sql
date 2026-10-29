@@ -280,7 +280,7 @@ insert into public."creator_tip_transactions" (
     '21000000-0000-4000-8000-000000000001',
     '22000000-0000-4000-8000-000000000001',
     500, 0, 0, 500, 'usd', 'stripe_connect', 'refunded', 'reversed',
-    'refunded', 'test', 'cs_atomic_refunded', 'pi_atomic_refunded', 0, 500,
+    'refunded', 'test', 'cs_test_atomic_refunded', 'pi_atomic_refunded', 0, 500,
     '{"compensation_required":false}'::jsonb, null, null
   ),
   (
@@ -288,7 +288,7 @@ insert into public."creator_tip_transactions" (
     '21000000-0000-4000-8000-000000000002',
     '22000000-0000-4000-8000-000000000002',
     600, 0, 0, 600, 'usd', 'stripe_connect', 'canceled', 'not_payable',
-    'canceled', 'test', 'cs_atomic_canceled', 'pi_atomic_canceled', 0, 0,
+    'canceled', 'test', 'cs_test_atomic_canceled', 'pi_atomic_canceled', 0, 0,
     '{"compensation_required":false}'::jsonb, null, null
   ),
   (
@@ -296,7 +296,7 @@ insert into public."creator_tip_transactions" (
     '21000000-0000-4000-8000-000000000003',
     '22000000-0000-4000-8000-000000000003',
     700, 0, 0, 700, 'usd', 'stripe_connect', 'succeeded', 'not_payable',
-    'paid', 'test', 'cs_atomic_paid', 'pi_atomic_paid', 700, 0,
+    'paid', 'test', 'cs_test_atomic_paid', 'pi_atomic_paid', 700, 0,
     '{"compensation_required":false}'::jsonb, null, null
   ),
   (
@@ -304,7 +304,7 @@ insert into public."creator_tip_transactions" (
     '21000000-0000-4000-8000-000000000004',
     '22000000-0000-4000-8000-000000000004',
     800, 0, 0, 800, 'usd', 'manual', 'failed', 'not_payable',
-    'failed', 'test', 'cs_atomic_manual', 'pi_atomic_manual', 0, 0,
+    'failed', 'test', 'cs_test_atomic_manual', 'pi_atomic_manual', 0, 0,
     '{"compensation_required":false}'::jsonb, null, null
   ),
   (
@@ -312,7 +312,7 @@ insert into public."creator_tip_transactions" (
     '21000000-0000-4000-8000-000000000005',
     '22000000-0000-4000-8000-000000000005',
     900, 0, 0, 900, 'usd', 'stripe_connect', 'failed', 'not_payable',
-    'failed', 'live', 'cs_atomic_live', 'pi_atomic_live', 0, 0,
+    'failed', 'live', 'cs_test_atomic_live', 'pi_atomic_live', 0, 0,
     '{"compensation_required":false}'::jsonb, null, null
   ),
   (
@@ -320,7 +320,7 @@ insert into public."creator_tip_transactions" (
     '21000000-0000-4000-8000-000000000006',
     '22000000-0000-4000-8000-000000000006',
     1000, 0, 0, 1000, 'usd', 'stripe_connect', 'failed', 'not_payable',
-    'failed', 'test', 'cs_atomic_stale_buyer', 'pi_atomic_stale_buyer', 0, 0,
+    'failed', 'test', 'cs_test_atomic_stale_buyer', 'pi_atomic_stale_buyer', 0, 0,
     '{"compensation_required":false}'::jsonb,
     '21000000-0000-4000-8000-000000000006',
     '23000000-0000-4000-8000-000000000006'
@@ -330,7 +330,7 @@ insert into public."creator_tip_transactions" (
     '21000000-0000-4000-8000-000000000007',
     '22000000-0000-4000-8000-000000000007',
     1000, 0, 0, 1000, 'usd', 'stripe_connect', 'succeeded', 'not_payable',
-    'paid', 'test', 'cs_atomic_partial', 'pi_atomic_partial', 1000, 0,
+    'paid', 'test', 'cs_test_atomic_partial', 'pi_atomic_partial', 1000, 0,
     '{"compensation_required":false}'::jsonb, null, null
   );
 set local session_replication_role = origin;
@@ -414,7 +414,14 @@ select is(
     '30000000-0000-4000-8000-000000000005',
     '20000000-0000-4000-8000-000000000004',
     jsonb_build_object(
-      'object_id', 'cs_atomic_manual',
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'checkout.session',
+      'object_status', 'complete',
+      'checkout_mode', 'payment',
+      'payment_status', 'paid',
+      'client_reference_id', '20000000-0000-4000-8000-000000000004',
+      'object_id', 'cs_test_atomic_manual',
       'payment_intent_id', 'pi_atomic_manual',
       'amount_cents', 800,
       'currency', 'usd',
@@ -454,7 +461,14 @@ select is(
     '30000000-0000-4000-8000-000000000006',
     '20000000-0000-4000-8000-000000000005',
     jsonb_build_object(
-      'object_id', 'cs_atomic_live',
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'checkout.session',
+      'object_status', 'complete',
+      'checkout_mode', 'payment',
+      'payment_status', 'paid',
+      'client_reference_id', '20000000-0000-4000-8000-000000000005',
+      'object_id', 'cs_test_atomic_live',
       'payment_intent_id', 'pi_atomic_live',
       'amount_cents', 900,
       'currency', 'usd',
@@ -494,7 +508,14 @@ select is(
     '30000000-0000-4000-8000-000000000007',
     '20000000-0000-4000-8000-000000000006',
     jsonb_build_object(
-      'object_id', 'cs_atomic_stale_buyer',
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'checkout.session',
+      'object_status', 'complete',
+      'checkout_mode', 'payment',
+      'payment_status', 'paid',
+      'client_reference_id', '20000000-0000-4000-8000-000000000006',
+      'object_id', 'cs_test_atomic_stale_buyer',
       'payment_intent_id', 'pi_atomic_stale_buyer',
       'amount_cents', 1000,
       'currency', 'usd',
@@ -545,7 +566,14 @@ select is(
     '30000000-0000-4000-8000-000000000004',
     '20000000-0000-4000-8000-000000000001',
     jsonb_build_object(
-      'object_id', 'cs_atomic_refunded',
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'checkout.session',
+      'object_status', 'complete',
+      'checkout_mode', 'payment',
+      'payment_status', 'paid',
+      'client_reference_id', '20000000-0000-4000-8000-000000000001',
+      'object_id', 'cs_test_atomic_refunded',
       'payment_intent_id', 'pi_atomic_refunded'
     ),
     jsonb_build_object(
@@ -588,7 +616,14 @@ select is(
     '30000000-0000-4000-8000-000000000001',
     '20000000-0000-4000-8000-000000000001',
     jsonb_build_object(
-      'object_id', 'cs_atomic_refunded',
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'checkout.session',
+      'object_status', 'complete',
+      'checkout_mode', 'payment',
+      'payment_status', 'paid',
+      'client_reference_id', '20000000-0000-4000-8000-000000000001',
+      'object_id', 'cs_test_atomic_refunded',
       'payment_intent_id', 'pi_atomic_refunded',
       'amount_cents', 500,
       'currency', 'usd',
@@ -671,7 +706,14 @@ select is(
     '30000000-0000-4000-8000-000000000002',
     '20000000-0000-4000-8000-000000000002',
     jsonb_build_object(
-      'object_id', 'cs_atomic_canceled',
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'checkout.session',
+      'object_status', 'complete',
+      'checkout_mode', 'payment',
+      'payment_status', 'paid',
+      'client_reference_id', '20000000-0000-4000-8000-000000000002',
+      'object_id', 'cs_test_atomic_canceled',
       'payment_intent_id', 'pi_atomic_canceled',
       'amount_cents', 600,
       'currency', 'usd',
@@ -717,8 +759,18 @@ select is(
     '30000000-0000-4000-8000-000000000003',
     '20000000-0000-4000-8000-000000000003',
     jsonb_build_object(
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'payment_intent',
+      'object_status', 'requires_payment_method',
+      'amount_received_cents', 0,
       'object_id', 'pi_atomic_paid',
-      'payment_intent_id', 'pi_atomic_paid'
+      'payment_intent_id', 'pi_atomic_paid',
+      'amount_cents', 700,
+      'currency', 'usd',
+      'metadata_tip_id', '20000000-0000-4000-8000-000000000003',
+      'metadata_sender_id', '21000000-0000-4000-8000-000000000003',
+      'metadata_creator_id', '22000000-0000-4000-8000-000000000003'
     ),
     jsonb_build_object(
       'metadata', jsonb_build_object('compensation_required', false)
@@ -747,6 +799,9 @@ with refund_cases(event_id, attempt_id, provider_facts) as (
       'evt_refund_wrong_amount',
       '40000000-0000-4000-8000-000000000101'::uuid,
       jsonb_build_object(
+        'event_livemode', false,
+        'object_livemode', false,
+        'object_type', 'charge',
         'object_id', 'ch_atomic_partial',
         'payment_intent_id', 'pi_atomic_partial',
         'amount_cents', 999,
@@ -759,6 +814,9 @@ with refund_cases(event_id, attempt_id, provider_facts) as (
       'evt_refund_wrong_currency',
       '40000000-0000-4000-8000-000000000102'::uuid,
       jsonb_build_object(
+        'event_livemode', false,
+        'object_livemode', false,
+        'object_type', 'charge',
         'object_id', 'ch_atomic_partial',
         'payment_intent_id', 'pi_atomic_partial',
         'amount_cents', 1000,
@@ -771,6 +829,9 @@ with refund_cases(event_id, attempt_id, provider_facts) as (
       'evt_refund_wrong_payment_intent',
       '40000000-0000-4000-8000-000000000103'::uuid,
       jsonb_build_object(
+        'event_livemode', false,
+        'object_livemode', false,
+        'object_type', 'charge',
         'object_id', 'ch_atomic_partial',
         'payment_intent_id', 'pi_wrong',
         'amount_cents', 1000,
@@ -783,6 +844,9 @@ with refund_cases(event_id, attempt_id, provider_facts) as (
       'evt_refund_invalid_cumulative',
       '40000000-0000-4000-8000-000000000104'::uuid,
       jsonb_build_object(
+        'event_livemode', false,
+        'object_livemode', false,
+        'object_type', 'charge',
         'object_id', 'ch_atomic_partial',
         'payment_intent_id', 'pi_atomic_partial',
         'amount_cents', 1000,
@@ -795,6 +859,9 @@ with refund_cases(event_id, attempt_id, provider_facts) as (
       'evt_refund_wrong_boolean',
       '40000000-0000-4000-8000-000000000105'::uuid,
       jsonb_build_object(
+        'event_livemode', false,
+        'object_livemode', false,
+        'object_type', 'charge',
         'object_id', 'ch_atomic_partial',
         'payment_intent_id', 'pi_atomic_partial',
         'amount_cents', 1000,
@@ -862,6 +929,9 @@ select is(
     '40000000-0000-4000-8000-000000000201',
     '20000000-0000-4000-8000-000000000007',
     jsonb_build_object(
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'charge',
       'object_id', 'ch_atomic_partial',
       'payment_intent_id', 'pi_atomic_partial',
       'amount_cents', 1000,
@@ -910,6 +980,9 @@ select is(
     '40000000-0000-4000-8000-000000000202',
     '20000000-0000-4000-8000-000000000007',
     jsonb_build_object(
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'charge',
       'object_id', 'ch_atomic_partial',
       'payment_intent_id', 'pi_atomic_partial',
       'amount_cents', 1000,
@@ -954,6 +1027,9 @@ select is(
     '40000000-0000-4000-8000-000000000203',
     '20000000-0000-4000-8000-000000000007',
     jsonb_build_object(
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'charge',
       'object_id', 'ch_atomic_partial',
       'payment_intent_id', 'pi_atomic_partial',
       'amount_cents', 1000,
@@ -1000,6 +1076,9 @@ select is(
     '40000000-0000-4000-8000-000000000204',
     '20000000-0000-4000-8000-000000000007',
     jsonb_build_object(
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'charge',
       'object_id', 'ch_atomic_partial',
       'payment_intent_id', 'pi_atomic_partial',
       'amount_cents', 1000,
@@ -1047,6 +1126,9 @@ select is(
     '40000000-0000-4000-8000-000000000205',
     '20000000-0000-4000-8000-000000000007',
     jsonb_build_object(
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'charge',
       'object_id', 'ch_atomic_partial',
       'payment_intent_id', 'pi_atomic_partial',
       'amount_cents', 1000,
@@ -1093,7 +1175,14 @@ select is(
     '40000000-0000-4000-8000-000000000206',
     '20000000-0000-4000-8000-000000000007',
     jsonb_build_object(
-      'object_id', 'cs_atomic_partial',
+      'event_livemode', false,
+      'object_livemode', false,
+      'object_type', 'checkout.session',
+      'object_status', 'complete',
+      'checkout_mode', 'payment',
+      'payment_status', 'paid',
+      'client_reference_id', '20000000-0000-4000-8000-000000000007',
+      'object_id', 'cs_test_atomic_partial',
       'payment_intent_id', 'pi_atomic_partial',
       'amount_cents', 1000,
       'currency', 'usd',

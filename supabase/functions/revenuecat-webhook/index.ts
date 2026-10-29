@@ -1399,6 +1399,7 @@ const writeIosConsumableFromRevenueCatEvent = async (
     p_raw_payload_hash: await hashText(rawBody),
     p_user_id: userId,
     p_input_reason: inputReason,
+    p_purchase_occurred_at: toIsoFromMs(event.purchased_at_ms),
   });
   if (error) throw new Error(`RevenueCat atomic App Store consumable transaction failed: ${error.message}`);
   const result = safeObject(data);
@@ -1469,12 +1470,19 @@ const writeLiveWatchPartyMoneyFromRevenueCatEvent = async (
   if (storePolicy.provider !== "revenuecat_app_store" && storePolicy.provider !== "revenuecat_google_play") {
     return ignoredDynamicMoneyAccess(environment, "live_watch_party_store_identity_required");
   }
+  const providerOccurredAt = toIsoFromMs(event.event_timestamp_ms);
+  // A purchase timestamp is provider authority. Receipt time cannot substitute
+  // for missing purchase evidence. Signed terminal events are dispatched by
+  // their durable original-transaction binding before reaching this writer.
+  if (ACTIVE_EVENT_TYPES.has(eventType) && !providerOccurredAt) {
+    return ignoredDynamicMoneyAccess(environment, "provider_occurred_at_missing_or_invalid");
+  }
   const { data, error } = await adminClient.rpc("process_revenuecat_live_watch_party_event_atomic", {
     p_amount_minor: providerValue.amountMinor,
     p_currency: providerValue.currency,
     p_environment: environment,
     p_event_type: eventType,
-    p_occurred_at: toIsoFromMs(event.event_timestamp_ms) ?? new Date().toISOString(),
+    p_occurred_at: providerOccurredAt ?? new Date().toISOString(),
     p_original_transaction_id: resolveOriginalTransactionId(event),
     p_provider: storePolicy.provider,
     p_provider_event_id: eventId,
@@ -1488,6 +1496,40 @@ const writeLiveWatchPartyMoneyFromRevenueCatEvent = async (
   const ledgerEventId = toText(result.ledgerEventId) || null;
   const providerEventId = toText(result.providerEventId) || null;
   const status = toText(result.status) === "processed" ? "processed" : "ignored";
+  if (status === "processed" && result.duplicateProviderEvent === true && providerEventId
+    && ACTIVE_EVENT_TYPES.has(eventType) && (!purchaseIntentId || !ledgerEventId)) {
+    // The Live Stage projector intentionally returns only the immutable event
+    // identity on exact replay. Recover notification provenance from its ledger
+    // so a prior notification-storage failure remains retryable. These reads
+    // never create, restore, or infer entitlement or payout authority.
+    const { data: ledger, error: ledgerError } = await adminClient.from("money_access_ledger_events")
+      .select("id,user_id,creator_id,source_id,source_type,product_id,metadata")
+      .eq("provider_event_id", providerEventId).eq("user_id", userId)
+      .eq("event_type", eventType).eq("environment", environment).maybeSingle();
+    if (ledgerError) throw new Error(`Live Watch-Party notification ledger lookup failed: ${ledgerError.message}`);
+    const boundIntentId = toText(safeObject(ledger?.metadata).purchase_intent_id);
+    const { data: intent, error: intentError } = await adminClient.from("money_purchase_intents")
+      .select("id,user_id,creator_id,source_id,source_type,product_id,product_key,product_type,provider,environment,metadata")
+      .eq("id", boundIntentId).eq("user_id", userId).maybeSingle();
+    if (intentError) throw new Error(`Live Watch-Party notification intent lookup failed: ${intentError.message}`);
+    const productType = toText(intent?.product_type);
+    const sourceType = productType === "live_watch_party_access_pass" ? "live_watch_party_access"
+      : productType === "live_watch_party_seat_pass" ? "live_watch_party_seat" : "";
+    if (!boundIntentId || !toText(ledger?.id) || !intent || !sourceType
+      || intent.provider !== storePolicy.provider || intent.environment !== environment
+      || !toText(intent.creator_id) || !toText(intent.product_key)
+      || intent.source_type !== sourceType || ledger?.source_type !== sourceType
+      || intent.source_id !== ledger?.source_id || intent.creator_id !== ledger?.creator_id
+      || intent.product_id !== ledger?.product_id) {
+      throw new Error("Live Watch-Party notification replay provenance unavailable.");
+    }
+    await createCreatorMoneyNotifications(adminClient, {
+      buyerUserId: userId, creatorId: toText(intent.creator_id), eventType,
+      ledgerEventId: toText(ledger?.id), metadata: safeObject(intent.metadata),
+      productKey: toText(intent.product_key), productType, providerEventId,
+      sourceId: toText(intent.source_id), sourceType,
+    });
+  }
   if (status === "processed" && purchaseIntentId && ledgerEventId && providerEventId) {
     const { data: intent, error: intentError } = await adminClient.from("money_purchase_intents")
       .select("creator_id,metadata,source_id,source_type")
@@ -1573,6 +1615,7 @@ const writeGooglePlayCreatorMoneyFromRevenueCatEvent = async (
     p_raw_payload_hash: await hashText(rawBody),
     p_user_id: userId,
     p_input_reason: inputReason,
+    p_purchase_occurred_at: toIsoFromMs(event.purchased_at_ms),
   });
   if (error) throw new Error(`RevenueCat atomic Google Play creator-money transaction failed: ${error.message}`);
 

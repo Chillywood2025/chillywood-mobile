@@ -53,12 +53,34 @@ function consumerOperations(file, table, selector) {
   return operations;
 }
 
-test('repair grants only reviewed, source-backed service operations on named tables', () => {
+test('historical grants stay exact and current service consumers remain source-backed', () => {
   assert.equal(new Set(requirements.map(row => row.table)).size, requirements.length);
   const expected = requirements.map(({table, privileges}) =>
     `grant ${privileges.map(p => p.toLowerCase()).join(', ')} on table public.${table} to service_role;`);
   assert.deepEqual(splitSQL(migration).map(clean).filter(Boolean), ['begin;', ...expected, 'commit;']);
-  for (const {table, privileges, consumers} of requirements) {
+  // This immutable grant predates moving Connect eligibility into the account
+  // transaction. Record the one retired caller explicitly; do not retain a dead
+  // Edge mutator or rewrite a historical migration to satisfy this inventory.
+  assert.deepEqual(requirements.filter(row => row.retiredConsumers).map(row => ({
+    table: row.table, consumers: row.consumers, retiredConsumers: row.retiredConsumers, retiredBy: row.retiredBy,
+  })), [{table: 'creator_payout_eligibility_records', consumers: [],
+    retiredConsumers: [{file: 'supabase/functions/_shared/stripe-connect.ts', operations: ['upsert']}],
+    retiredBy: '20261027034858_creator_connect_observed_configuration.sql'}]);
+  for (const {table, privileges, consumers, retiredConsumers, retiredBy} of requirements) {
+    if (retiredConsumers) {
+      assert.deepEqual(privileges, ['INSERT', 'SELECT', 'UPDATE'], 'historical privileges are unchanged');
+      for (const consumer of retiredConsumers) {
+        const actual = consumerOperations(consumer.file, table);
+        assert.deepEqual([...actual], [], 'the retired Edge table caller is absent');
+      }
+      const successor = fs.readFileSync(new URL(`supabase/migrations/${retiredBy}`, root), 'utf8');
+      assert.match(successor, /create or replace function private\.project_creator_connect_observed_eligibility\(\)/iu);
+      assert.match(successor, /insert into public\.creator_payout_eligibility_records/iu);
+      assert.match(successor, /execute function private\.project_creator_connect_observed_eligibility\(\)/iu);
+      assert.match(successor, /revoke all on function private\.project_creator_connect_observed_eligibility\(\) from public,\s*anon,\s*authenticated,\s*service_role/iu);
+      assert.equal(splitSQL(successor).map(clean).some(sql => /^grant\s/iu.test(sql)), false, 'projection adds no API grants');
+      continue;
+    }
     const justified = new Set();
     for (const consumer of consumers) {
       const actual = consumerOperations(consumer.file, table, consumer.selector);
@@ -115,6 +137,11 @@ const recentPublic = {
   'public.notification_qualified_views': {service_role: dml},
   'public.platform_brand_publications': {service_role: ['SELECT']},
   'public.platform_brand_publication_metadata': {authenticated: ['SELECT'], service_role: ['SELECT']},
+  'public.creator_event_offer_revisions': {authenticated: ['SELECT']},
+  'public.event_ticket_reservations': {authenticated: ['SELECT']},
+  'public.creator_money_provider_purchase_times': {},
+  'public.creator_money_purchase_quotes': {authenticated: ['SELECT'], service_role: ['SELECT']},
+  'public.creator_event_purchase_remedies': {authenticated: ['SELECT']},
 };
 
 function recentTables() {

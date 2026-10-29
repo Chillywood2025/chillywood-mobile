@@ -13,8 +13,10 @@ import {
   readStripeTestSecret,
   safeWriteAuditLog,
   sanitizeErrorMessage,
+  storedStripeConfiguration,
   toText,
   type AuthenticatedUser,
+  type CreatorPayoutAccountRow,
   type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
 
@@ -36,6 +38,8 @@ type TipCheckoutPayload = {
   privateNote?: unknown;
   return_url?: unknown;
   returnUrl?: unknown;
+  request_id?: unknown;
+  requestId?: unknown;
 };
 
 type StripeCheckoutSession = {
@@ -43,6 +47,11 @@ type StripeCheckoutSession = {
   livemode?: boolean;
   payment_intent?: string | null;
   url?: string | null;
+  client_reference_id?: string;
+  amount_total?: number;
+  currency?: string;
+  status?: string;
+  metadata?: Record<string,string>;
 };
 
 type TipSettingsRow = {
@@ -56,7 +65,7 @@ type TipSettingsRow = {
   tips_enabled?: boolean | null;
 };
 
-type PayoutAccountRow = {
+type PayoutAccountRow = CreatorPayoutAccountRow & {
   charges_enabled?: boolean | null;
   onboarding_status?: string | null;
   payouts_enabled?: boolean | null;
@@ -146,7 +155,9 @@ const safeRedirectUrl = (value: unknown, fallback: string, tipId: string) => {
   const raw = toText(value) || fallback;
   try {
     const parsed = new URL(raw);
-    if (!allowedWebOrigins.has(parsed.origin) && !allowedDeepLinkProtocols.has(parsed.protocol)) return fallback;
+    if (!allowedWebOrigins.has(parsed.origin) && !allowedDeepLinkProtocols.has(parsed.protocol)) {
+      const safe = new URL(fallback); safe.searchParams.set("tip_id", tipId); return safe.toString();
+    }
     parsed.searchParams.set("tip_id", tipId);
     return parsed.toString();
   } catch {
@@ -168,17 +179,18 @@ const encodeStripeForm = (params: Record<string, unknown>) => {
 const stripeRequest = async <T extends object>(
   secret: string,
   path: string,
-  input: { body: Record<string, unknown>; idempotencyKey: string },
+  input?: { body: Record<string, unknown>; idempotencyKey: string },
 ) => {
   const response = await fetch(`${STRIPE_API_BASE_URL}${path}`, {
-    body: encodeStripeForm(input.body),
+    body: input ? encodeStripeForm(input.body) : undefined,
     headers: {
       Authorization: `Bearer ${secret}`,
       "Content-Type": "application/x-www-form-urlencoded",
-      "Idempotency-Key": input.idempotencyKey,
+      ...(input ? { "Idempotency-Key": input.idempotencyKey } : {}),
       "Stripe-Version": STRIPE_API_VERSION,
     },
-    method: "POST",
+    method: input ? "POST" : "GET",
+    signal: AbortSignal.timeout(15_000), redirect: "error",
   });
   const payload = (await response.json().catch(() => null)) as (T & { error?: { message?: string; type?: string } }) | null;
   if (!response.ok) {
@@ -245,6 +257,11 @@ const readTipSettings = async (adminClient: SupabaseClientLike, creatorId: strin
   return data as TipSettingsRow | null;
 };
 
+const payoutAccountReadyForTip = (account: PayoutAccountRow | null) =>
+  !!account && account.charges_enabled === true && account.payouts_enabled === true
+  && account.onboarding_status === "ready_for_payouts"
+  && storedStripeConfiguration(account).configurationStatus === "match";
+
 const syncSettingsFromPayout = async (
   adminClient: SupabaseClientLike,
   creatorId: string,
@@ -255,7 +272,7 @@ const syncSettingsFromPayout = async (
   const providerStatus = toText(payoutAccount?.onboarding_status) || "setup_required";
   const chargesEnabled = payoutAccount?.charges_enabled === true;
   const payoutsEnabled = payoutAccount?.payouts_enabled === true;
-  const status = settings.tips_enabled === true && chargesEnabled && payoutsEnabled && providerStatus === "ready_for_payouts"
+  const status = settings.tips_enabled === true && payoutAccountReadyForTip(payoutAccount)
     ? "active"
     : settings.tips_enabled === true && providerStatus === "payouts_disabled"
       ? "blocked"
@@ -289,6 +306,7 @@ Deno.serve(async (req): Promise<Response> => {
   let adminClient: SupabaseClientLike | null = null;
   let currentUser: AuthenticatedUser | null = null;
   let tipId: string | null = null;
+  let attemptResponse: Record<string, unknown> | null = null;
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -332,6 +350,8 @@ Deno.serve(async (req): Promise<Response> => {
     const amountCents = toAmountCents(parsed.value.amount_cents ?? parsed.value.amountCents);
     const currency = toText(parsed.value.currency || "usd").toLowerCase();
     const privateNote = sanitizePrivateNote(parsed.value.private_note ?? parsed.value.privateNote);
+    const requestId = normalizeUuid(parsed.value.request_id ?? parsed.value.requestId);
+    if (!requestId) return jsonResponse(400, { error: "tip_request_id_required", message: "Use a durable tip checkout attempt." });
 
     if (!creatorId) return jsonResponse(400, { error: "creator_required", message: "Choose a creator to tip." });
     if (creatorId === currentUser.id) return jsonResponse(403, { error: "self_tip_blocked", message: "Creators cannot tip themselves." });
@@ -397,80 +417,13 @@ Deno.serve(async (req): Promise<Response> => {
     const providerAccountId = toText(payoutAccount?.provider_account_id);
     if (!providerAccountId) return jsonResponse(403, { error: "provider_not_connected", message: "This creator needs to connect payouts first." });
 
-    const { data: tipRow, error: tipError } = await adminClient
-      .from("creator_tip_transactions")
-      .insert({
-        buyer_account_id: buyerAuthority.accountId,
-        buyer_session_generation: buyerAuthority.sessionGeneration,
-        creator_id: creatorId,
-        creator_net_cents: amountCents,
-        currency,
-        idempotency_key: crypto.randomUUID(),
-        message_private: privateNote,
-        metadata: {
-          access_granted: false,
-          buyer_authority_bound: true,
-          checkout_created_by: FUNCTION_NAME,
-          live_money_action: false,
-          no_badge: true,
-          no_digital_content: true,
-          no_perk: true,
-          no_room_access: true,
-          no_vip: true,
-          pure_contribution_only: true,
-          test_mode: true,
-        },
-        payment_status: "pending",
-        platform_fee_cents: 0,
-        provider: "stripe_connect",
-        provider_account_id: providerAccountId,
-        provider_environment: "test",
-        provider_fee_cents: 0,
-        payout_status: "not_payable",
-        sender_id: currentUser.id,
-        service_fee_cents: 0,
-        status: "pending",
-        tip_amount_cents: amountCents,
-        total_paid_cents: amountCents,
-      })
-      .select("id,idempotency_key")
-      .single();
-
-    if (tipError) throw new Error(`Tip transaction insert failed: ${tipError.message}`);
-    tipId = toText((tipRow as { id?: unknown } | null)?.id);
-    const idempotencyKey = toText((tipRow as { idempotency_key?: unknown } | null)?.idempotency_key) || `tip-${tipId}`;
-    if (!tipId) throw new Error("Tip transaction insert did not return an id.");
-
+    tipId = crypto.randomUUID();
     const successUrl = safeRedirectUrl(parsed.value.return_url ?? parsed.value.returnUrl, DEFAULT_SUCCESS_URL, tipId);
     const cancelUrl = safeRedirectUrl(parsed.value.cancel_url ?? parsed.value.cancelUrl, DEFAULT_CANCEL_URL, tipId);
     const productName = `Tip ${creatorDisplayName}`;
 
-    const currentBuyerAuthority = await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id);
-    if (!sameBuyerSessionAuthority(buyerAuthority, currentBuyerAuthority)) {
-      const { error: authorityUpdateError } = await adminClient
-        .from("creator_tip_transactions")
-        .update({
-          failed_at: new Date().toISOString(),
-          payment_status: "failed",
-          status: "failed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", tipId)
-        .eq("sender_id", currentUser.id)
-        .eq("status", "pending");
-      if (authorityUpdateError) {
-        throw new Error(`Tip buyer authority failure update failed: ${authorityUpdateError.message}`);
-      }
-      return jsonResponse(403, {
-        error: "buyer_authority_changed",
-        checkoutCreated: false,
-        liveMoneyAction: false,
-        message: "Your account session changed before checkout. Nothing was charged.",
-      });
-    }
-
-    const session = await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {
-      body: {
+    const requestedBody = {
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
         cancel_url: cancelUrl,
         client_reference_id: tipId,
         "line_items[0][price_data][currency]": currency,
@@ -497,27 +450,66 @@ Deno.serve(async (req): Promise<Response> => {
         "payment_intent_data[metadata][rail]": "creator_tip",
         "payment_intent_data[transfer_data][destination]": providerAccountId,
         success_url: successUrl,
-      },
-      idempotencyKey: `chillywood-tip-checkout-${idempotencyKey}`,
+      };
+    const { data: reserved, error: reserveError } = await adminClient.rpc("reserve_creator_tip_checkout_attempt", {
+      p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
+      p_quote: { tipId, creatorId, amountCents, currency, privateNote, providerAccountId, body: requestedBody },
     });
+    if (reserveError || !reserved || typeof reserved !== "object") throw new Error("Tip checkout attempt could not be reserved.");
+    const attempt = reserved as Record<string, unknown>;
+    tipId = normalizeUuid(attempt.tipId);
+    if (!tipId || attempt.requestId !== requestId || attempt.buyerId !== currentUser.id || attempt.creatorId !== creatorId
+      || attempt.amountCents !== amountCents || attempt.currency !== currency || typeof attempt.body !== "object" || !attempt.body
+      || typeof attempt.idempotencyKey !== "string") throw new Error("Tip checkout quote could not be verified.");
+    attemptResponse = { requestId, buyerId: currentUser.id, creatorId, amountCents, currency, tipId,
+      provider: "stripe", providerKey: "stripe_connect", mode: "test", checkoutCreated: false,
+      liveMoneyAction: false, noAccessGranted: true, pureContributionOnly: true, url: null };
+    if (!["pending", "checkout_started"].includes(String(attempt.status))) return jsonResponse(200, {
+      ...attemptResponse, status: attempt.status, message: "This tip already has a recorded outcome. Refresh Purchases for its receipt.",
+    });
+    const currentBuyerAuthority = await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id);
+    if (!sameBuyerSessionAuthority(buyerAuthority, currentBuyerAuthority)) return jsonResponse(200, {
+      ...attemptResponse, status: "pending", error: "buyer_authority_changed",
+      message: "Your session changed. Check Purchases for the original attempt before trying again.",
+    });
+    const knownSession = toText(attempt.providerSessionId);
+    const latestPayout = await readCreatorPayoutAccount(adminClient, creatorId) as PayoutAccountRow | null;
+    const recipientCurrent = payoutAccountReadyForTip(latestPayout)
+      && (attempt.body as Record<string, unknown>)["payment_intent_data[transfer_data][destination]"] === toText(latestPayout?.provider_account_id);
+    if (!knownSession && !recipientCurrent) return jsonResponse(200, {
+      ...attemptResponse, status: "reconciliation_required", message: "The original recipient setup changed. This tip needs review before checkout can continue.",
+    });
+    if (!knownSession && attempt.retryAllowed !== true) return jsonResponse(200, {
+      ...attemptResponse, status: "reconciliation_required", message: "The original checkout needs reconciliation. No new checkout was started.",
+    });
+    if (knownSession && !/^cs_test_[A-Za-z0-9]+$/.test(knownSession)) throw new Error("Tip checkout session identity is invalid.");
+    // Retrieve known sessions; retry unknown creation only with frozen terms and key.
+    const session = knownSession
+      ? await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, `/checkout/sessions/${knownSession}`)
+      : await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {
+        body: attempt.body as Record<string, unknown>, idempotencyKey: String(attempt.idempotencyKey),
+      });
 
     const sessionId = toText(session.id);
     const sessionUrl = toText(session.url);
-    if (!sessionId || !sessionUrl) throw new Error("Stripe checkout session did not include an id and URL.");
-    if (session.livemode === true) throw new Error("Stripe checkout session was live-mode; refusing checkout.");
-
-    const { error: updateError } = await adminClient
-      .from("creator_tip_transactions")
-      .update({
-        checkout_started_at: new Date().toISOString(),
-        payment_status: "pending",
-        provider_checkout_session_id: sessionId,
-        provider_payment_intent_id: toText(session.payment_intent) || null,
-        status: "checkout_started",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tipId);
-    if (updateError) throw new Error(`Tip checkout update failed: ${updateError.message}`);
+    if (!/^cs_test_[A-Za-z0-9]+$/.test(sessionId) || (knownSession && sessionId !== knownSession)
+      || session.livemode !== false || session.client_reference_id !== tipId
+      || session.amount_total !== amountCents || session.currency !== currency
+      || session.metadata?.chillywood_tip_id !== tipId) throw new Error("Stripe checkout identity could not be verified.");
+    const { data: recorded, error: updateError } = await adminClient.rpc("record_creator_tip_checkout_session", {
+      p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
+      p_checkout_session_id: sessionId, p_payment_intent_id: toText(session.payment_intent) || null,
+    });
+    if (updateError || !recorded || typeof recorded !== "object") throw new Error("Tip checkout receipt could not be recorded.");
+    const saved = recorded as Record<string, unknown>;
+    if (saved.tipId !== tipId || saved.providerSessionId !== sessionId) throw new Error("Tip checkout receipt identity changed.");
+    if (!recipientCurrent || !sameBuyerSessionAuthority(buyerAuthority, await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id))
+      || !["pending", "checkout_started"].includes(String(saved.status)) || session.status !== "open") return jsonResponse(200, {
+      ...attemptResponse, status: saved.status, message: "Check Purchases for this original tip. No new payment link is available.",
+    });
+    const checkoutUrl = new URL(sessionUrl);
+    if (checkoutUrl.origin !== "https://checkout.stripe.com" || checkoutUrl.username || checkoutUrl.password
+      || !/^\/(?:c\/)?pay\//u.test(checkoutUrl.pathname)) throw new Error("Stripe checkout link could not be verified.");
 
     await adminClient.from("creator_tip_events").insert({
       actor_id: currentUser.id,
@@ -552,6 +544,7 @@ Deno.serve(async (req): Promise<Response> => {
     });
 
     return jsonResponse(200, {
+      ...attemptResponse,
       status: "checkout_created",
       provider: "stripe",
       providerKey: "stripe_connect",
@@ -579,6 +572,8 @@ Deno.serve(async (req): Promise<Response> => {
       targetType: "creator_tip_transaction",
     });
 
+    if (attemptResponse) return jsonResponse(200, { ...attemptResponse, status: "pending",
+      message: "Checkout could not be confirmed. Keep this original attempt and check Purchases before trying again." });
     return jsonResponse(500, {
       error: "creator_tip_checkout_failed",
       checkoutCreated: false,

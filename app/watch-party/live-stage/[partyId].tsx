@@ -140,6 +140,7 @@ import { useCommunicationRoomSession } from "../../../hooks/use-communication-ro
 import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
 import { AccessSheet, type AccessSheetReason } from "../../../components/monetization/access-sheet";
 import { MoneyScopeInfoButton } from "../../../components/monetization/MoneyScopeInfoButton";
+import { EventHostBroadcastControls } from "../../../components/monetization/event-host-broadcast-controls";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { NotificationBellButton } from "../../../components/notifications/notification-bell-button";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
@@ -973,6 +974,8 @@ export default function WatchPartyLiveStageScreen({
   const { partyId: partyIdParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{ partyId?: string; mode?: string; source?: string }>();
   const router = useRouter();
   const partyId = routePartyId ?? (Array.isArray(partyIdParam) ? partyIdParam[0] : partyIdParam) ?? "";
+  // This namespace selects the UI only. The panel resolves event ownership on the server.
+  const isPreparedEventRoom = /^EVENT[A-F0-9]{32}$/.test(partyId);
   const modeParamValue = routeMode ?? (Array.isArray(modeParam) ? modeParam[0] : modeParam);
   const source = String(routeSource ?? (Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "")).trim().toLowerCase();
   const requestedRouteStageMode = normalizeSharedRoomMode(modeParamValue, "live");
@@ -5535,7 +5538,14 @@ export default function WatchPartyLiveStageScreen({
             <Text style={styles.viewersText}>👁 {viewerCount}</Text>
           </Animated.View>
         </View>
-        {isHost ? (
+        {isHost && isPreparedEventRoom ? <EventHostBroadcastControls
+          roomId={partyId}
+          active={isFocused && mediaAppState === "active" && canUseBetaStage && authority?.userId === room?.hostUserId}
+          stageActive={shouldRenderLiveKitStage && liveKitStageSurfaceContract?.participantRole === "host"}
+          top={isLiveRoomSurface ? 88 : safeAreaInsets.top + 252}
+          maxHeight={Math.max(160, Math.min(360, windowHeight - safeAreaInsets.top - 380))}
+        /> : null}
+        {isHost && !isPreparedEventRoom ? (
           <View
             style={[
               styles.liveMoneyHostControls,

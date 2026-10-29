@@ -341,7 +341,7 @@ type NotificationPreferenceRow = Tables<"notification_preferences">;
 type NotificationPreferenceUpdate = TablesUpdate<"notification_preferences">;
 
 const CREATOR_EVENT_NOTIFICATION_SELECT =
-  "id,host_user_id,event_title,event_type,status,starts_at,ends_at,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
+  "id,host_user_id,event_title,event_type,status,starts_at,ends_at,time_zone,management_status,status_message,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
 
 export type NotificationActionGroup =
   | "action_required"

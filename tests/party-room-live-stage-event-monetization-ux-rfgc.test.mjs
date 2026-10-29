@@ -54,8 +54,8 @@ test("display-layer product names map onto unchanged internal authority identifi
 test("Party Room creator setup distinguishes Free, sandbox and saved payable entry", () => {
   assert.match(partySetup, /PARTY ROOM ENTRY/u);
   assert.match(partySetup, /: "Free"/u);
-  assert.match(partySetup, /Sandbox · \$0\.99/u);
-  assert.match(partySetup, /Set up sandbox Party Room entry at 99 cents/u);
+  assert.match(partySetup, /CreatorPricePicker prices=\{partyRoomPrice.prices\}/u);
+  assert.match(partySetup, /Save selected Party Room price/u);
   assert.match(partySetup, /Saved sandbox entry:/u);
   assert.match(partySetup, /Test-only; live money is not active/u);
   assert.match(partySetup, /Saved paid entry:/u);
@@ -252,7 +252,9 @@ test("Event Pass stays on the exact Event route and does not inherit generic Liv
   assert.doesNotMatch(eventRoute, /watch-party\/live-stage/u);
   assert.doesNotMatch(eventMoney, /live_watch_party_access_pass|live_watch_party_seat_pass/u);
   assert.match(channelSettings, /Choose Free or Paid entry for this exact Event/u);
-  assert.match(channelSettings, /status: paid \? "sandbox" : "canceled"/u);
+  assert.match(channelSettings, /<EventSaleEditor/u);
+  assert.match(channelSettings, /prior\.passesSold > 0/u);
+  assert.match(eventRoute, /event-watch\/\$\{encodeURIComponent\(eventId\)\}/u);
 });
 
 test("viewer discovery opens exact Party Room and Event destinations instead of buying from a generic catalog", () => {

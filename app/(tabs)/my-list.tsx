@@ -444,6 +444,9 @@ export default function MyListScreen() {
             <View style={styles.headerBlock}>
               <Text style={styles.header}>My Library</Text>
               <Text style={styles.headerBody}>Saved titles, unlocked creator videos, watch progress, followed Platforms, and saved replays live here.</Text>
+              <TouchableOpacity testID="library-purchases-link" accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" style={styles.emptyButton} onPress={() => router.push("/purchases")}>
+                <ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Purchases &amp; My Tickets</Text>
+              </TouchableOpacity>
               <View style={styles.libraryScopeRow}>
                 {[
                   [savedTitleCount, "Saved"],

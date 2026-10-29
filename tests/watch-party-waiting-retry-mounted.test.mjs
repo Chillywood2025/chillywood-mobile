@@ -66,7 +66,7 @@ const walk = (tree, predicate) => {
 };
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
-async function mount(t, { normal = false, prepared = true, viewer = false, initialLive = false, create = null, roomReader = null, age = 0, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null } = {}) {
+async function mount(t, { normal = false, prepared = true, viewer = false, initialLive = false, create = null, roomReader = null, age = 0, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null, catalog = null } = {}) {
   let tree;
   const runtime = { authority: owner(), focused: true, room: room(), params: { mode: 'live', partyId: 'ROOM01' }, premiumAllowed: true,
     reads: [], preparedReads: [], refreshes: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null,
@@ -139,14 +139,21 @@ async function mount(t, { normal = false, prepared = true, viewer = false, initi
     '../../_lib/watchPartyPreparedRoomReuse.mjs': { resolvePreparedWatchPartyRoomReuse },
     '../../_lib/watchPartyReturnNavigation.mjs': { WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE: 'waiting-room' },
     '../../_lib/creatorMoneyPurchaseAuthority': { isCreatorDigitalCheckoutShellAvailable: () => checkoutAvailable },
+    '../../_lib/creatorSupportedPrices': { readCreatorAuthoringPrices: async () => catalog ? catalog(runtime) : ({ status: 'resolved', subjectUserId: runtime.authority.userId, prices: [{ priceKey: 'fixture-price', amountMinor: 99, currency: 'usd', label: '$0.99', availablePlatforms: ['ios', 'android'], availabilityLabel: 'iOS and Android', environment: 'sandbox' }] }) },
     '../../_lib/accessEntitlements': { resolveRoomAccess: async () => ({ isAllowed: runtime.accessAllowed }) },
     '../../_lib/analytics': { trackEvent: noop }, '../../_lib/logger': { debugLog: noop, reportRuntimeError: noop },
     '../../_lib/performancePolicy': { ROOM_HEARTBEAT_MS: 15000 }, '../../_data/titles': { titles: [] },
     '../../_lib/creatorMonetizationSetup': { saveCreatorSandboxMonetizationConfig: async input => { runtime.setupWrites.push(input); return setupSave ? setupSave(input) : { id: 'config' }; } }, '../../_lib/watch-party/room-shared': { PLAYER_WATCH_PARTY_SOURCE: 'player' },
     '../../components/monetization/access-sheet': { AccessSheet: 'AccessSheet' },
+    '../../components/monetization/creator-price-picker': { CreatorPricePicker: 'CreatorPricePicker' },
     '../../components/ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: 'Fill' },
     './live-stage/[partyId]': { __esModule: true, default: 'LiveStage' },
   };
+  const priceHook = { exports: {}, require: name => name === 'react' ? React : mocks[`../../_lib/${name.slice(2)}`] };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('_lib/useCreatorAuthoringPrice.ts', 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText, priceHook);
+  mocks['../../_lib/useCreatorAuthoringPrice'] = priceHook.exports;
   for (const [path, name] of [['chat/internal-invite-sheet', 'InternalInviteSheet'], ['monetization/MoneyScopeInfoButton', 'MoneyScopeInfoButton'], ['system/beta-access-screen', 'BetaAccessScreen'], ['room/room-code-invite-card', 'RoomCodeInviteCard'], ['notifications/notification-bell-button', 'NotificationBellButton'], ['navigation/app-back-button', 'AppBackButton'], ['ui/typography', 'AppText']]) mocks[`../../components/${path}`] = { [name]: name };
   const context = { exports: {}, require: name => { assert.ok(name in mocks, `unmodeled import ${name}`); return mocks[name]; }, capture: value => { tree = value; return null; }, setInterval: () => 1, clearInterval: noop, URLSearchParams };
   vm.runInNewContext(code, context);
@@ -694,19 +701,19 @@ test('refocusing the actual waiting room still permits a fresh discovery save', 
   assert.match(h.text(), /Live discovery saved/);
 });
 
-const sandboxOffer = { id: 'offer-a', partyId: 'ROOM01', status: 'sandbox', priceCents: 99, currency: 'usd', seatLimit: 12 };
+const sandboxOffer = { id: 'offer-a', creatorId: 'host', partyId: 'ROOM01', status: 'sandbox', priceCents: 99, currency: 'usd', seatLimit: 12 };
 
 test('Party Room sandbox setup stays explicitly test-only after save and a fresh screen mount', async t => {
   const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => sandboxOffer });
   const paid = () => h.find(n => n.props?.testID === 'party-room-entry-paid');
-  assert.equal(paid().accessibilityLabel, 'Set up sandbox Party Room entry at 99 cents');
-  assert.match(h.text(), /Sandbox · \$0\.99/);
+  assert.equal(paid().accessibilityLabel, 'Save selected Party Room price');
+  assert.match(h.text(), /available store price/);
   await h.act(() => paid().onPress());
   assert.equal(h.runtime.paidWrites.length, 1);
   assert.equal(h.runtime.paidWrites[0].partyId, 'ROOM01');
   assert.equal(h.runtime.paidWrites[0].status, 'sandbox');
   assert.equal(h.runtime.paidWrites[0].priceCents, 99);
-  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.equal(h.runtime.setupWrites.length, 0);
   assert.equal(h.runtime.checkoutCalls, 0);
   assert.equal(paid().accessibilityState.selected, true);
   assert.match(h.text(), /Saved sandbox entry: \$0\.99\. Test-only; live money is not active/);
@@ -752,7 +759,7 @@ test('Party Room sandbox save failure preserves Free entry and never claims a sa
   assert.equal(h.runtime.checkoutCalls, 0);
   await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
   assert.equal(h.runtime.paidWrites.length, 2);
-  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.equal(h.runtime.setupWrites.length, 0);
   assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
   assert.equal(h.runtime.checkoutCalls, 0);
 });
@@ -787,26 +794,19 @@ test('Party Room sandbox status clears only after a successful Free save', async
   assert.equal(h.runtime.checkoutCalls, 0);
 });
 
-test('Party Room sandbox offer remains visibly saved when follow-up setup fails, and retry completes setup', async t => {
-  let attempts = 0;
-  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => sandboxOffer, setupSave: async () => {
-    if (++attempts === 1) throw Error('modeled setup failure after offer persisted');
-    return { id: 'config' };
-  } });
+test('Party Room selected price uses the authoritative offer without fixed-tier setup bookkeeping', async t => {
+  const price = { priceKey: 'catalog-299', amountMinor: 299, currency: 'usd', label: '$2.99', availabilityLabel: 'iOS only', availablePlatforms: ['ios'], environment: 'sandbox' };
+  const h = await mount(t, { normal: true, checkoutAvailable: true, catalog: async runtime => ({ status: 'resolved', subjectUserId: runtime.authority.userId, prices: [price] }), offerSave: async () => ({ ...sandboxOffer, priceCents: 299 }), setupSave: () => assert.fail('legacy fixed-tier setup must not run') });
   await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
-  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
-  assert.match(h.text(), /entry is saved, but setup could not finish\. Retry sandbox setup/);
-  assert.doesNotMatch(h.text(), /Viewer preview: Free entry|Sandbox Party Room entry saved at/);
+  assert.match(h.text(), /Saved sandbox entry: \$2\.99/);
+  assert.equal(h.runtime.paidWrites[0].priceCents, 299);
+  assert.match(h.text(), /iOS only/);
   assert.equal(h.find(n => n.props?.testID === 'party-room-entry-paid').disabled, false);
-  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
-  assert.equal(h.runtime.paidWrites.length, 2);
-  assert.equal(h.runtime.setupWrites.length, 2);
-  assert.match(h.text(), /Sandbox Party Room entry saved at \$0\.99/);
-  assert.doesNotMatch(h.text(), /setup could not finish/);
+  assert.equal(h.runtime.setupWrites.length, 0);
   assert.equal(h.runtime.checkoutCalls, 0);
 });
 
-for (const [field, value] of [['partyId', 'OTHER'], ['status', 'active'], ['status', 'canceled']]) {
+for (const [field, value] of [['partyId', 'OTHER'], ['creatorId', 'another-host'], ['priceCents', 299], ['currency', 'eur'], ['status', 'active'], ['status', 'canceled']]) {
   test(`Party Room sandbox save with mismatched ${field}=${value} cannot claim the requested setting`, async t => {
     const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => ({ ...sandboxOffer, [field]: value }) });
     await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
@@ -840,20 +840,21 @@ for (const transition of ['room', 'account', 'generation', 'focus']) {
   });
 }
 
-test('Party Room sandbox follow-up setup completion cannot publish success on a replacement room', async t => {
-  const pending = deferred();
-  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => sandboxOffer, setupSave: () => pending.promise });
-  let save;
-  await h.act(() => { save = h.find(n => n.props?.testID === 'party-room-entry-paid').onPress(); });
-  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
-  await replaceNormalRoom(h);
-  await h.act(async () => { pending.resolve({ id: 'config' }); await save; });
-  assert.doesNotMatch(h.text(), /Saved sandbox entry:|Sandbox Party Room entry saved/);
-  assert.equal(h.runtime.setupWrites.length, 1);
-  assert.equal(h.runtime.checkoutCalls, 0);
+test('Party Room unavailable catalog disables paid save and remains retryable', async t => {
+  let ready = false;
+  const price = { priceKey: 'catalog-999', amountMinor: 999, currency: 'usd', label: '$9.99', availabilityLabel: 'iOS only' };
+  const h = await mount(t, { normal: true, checkoutAvailable: true, catalog: async runtime => ({ status: ready ? 'resolved' : 'unavailable', subjectUserId: runtime.authority.userId, prices: ready ? [price] : [] }), offerSave: async () => ({ ...sandboxOffer, priceCents: 999 }) });
+  assert.equal(h.find(n => n.props?.testID === 'party-room-entry-paid').disabled, true);
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+  assert.equal(h.runtime.paidWrites.length, 0);
+  ready = true;
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-price').onRetry());
+  assert.equal(h.find(n => n.props?.testID === 'party-room-entry-paid').disabled, false);
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+  assert.equal(h.runtime.paidWrites[0].priceCents, 999);
 });
 
-test('Party Room sandbox duplicate saved callbacks dispatch only one offer and setup write', async t => {
+test('Party Room sandbox duplicate saved callbacks dispatch only one offer write', async t => {
   const pending = deferred();
   const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: () => pending.promise });
   const save = h.find(n => n.props?.testID === 'party-room-entry-paid').onPress;
@@ -861,7 +862,7 @@ test('Party Room sandbox duplicate saved callbacks dispatch only one offer and s
   await h.act(() => { first = save(); void save(); });
   assert.equal(h.runtime.paidWrites.length, 1);
   await h.act(async () => { pending.resolve(sandboxOffer); await first; });
-  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.equal(h.runtime.setupWrites.length, 0);
   assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
 });
 
@@ -874,7 +875,7 @@ test('Party Room sandbox save remains current when the same room audience change
   await h.act(async () => { pending.resolve(sandboxOffer); await save; });
   assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
   assert.equal(h.runtime.paidWrites.length, 1);
-  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.equal(h.runtime.setupWrites.length, 0);
   assert.equal(h.runtime.room.discoveryVisibility, 'public');
 });
 

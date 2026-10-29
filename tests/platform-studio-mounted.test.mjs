@@ -45,6 +45,9 @@ test('mounted Event form uses production event service; durable create plus read
  const inputWasLocked=h.input('Event title').props.editable===false;s.failRead();await h.resolve(s.gate);
  assert.match(h.text(),/Event saved.*schedule could not refresh/);assert.ok(h.button('Update Event'));
  await h.press(h.button('Update Event'));assert.equal(s.creates(),1);assert.equal(s.updates(),1);assert.ok(inputWasLocked,'held save locks keyboard edits');
+ assert.equal(h.calls.filter(([name])=>name==='updateCreatorEvent').length,1);
+ assert.equal(h.calls.find(([name])=>name==='updateCreatorEvent')[1],'event-1','retry updates the confirmed event id');
+ assert.equal(h.button('Event status: Draft').props.disabled,false,'confirmed draft stays editable after schedule read failure');
 });
 test('all nine mounted Studio tabs remain reachable with selected tab accessibility state',async t=>{
  const h=await mount(t);for(const label of ['Home','Content','Clip','Live','Audience','Moderation','Insights','Monetization','Brand']){
@@ -59,7 +62,7 @@ for(const outcome of ['success','wrong-target','unavailable','rejected']){
    listMyPaidVideoOffers:async()=>{if(!saved)return [];if(outcome==='unavailable')throw Error('offline');return [{id:'offer-B',videoId:outcome==='wrong-target'?'A':'B',creatorId:'owner',isPaid:true,priceCents:99,currency:'usd',status:'sandbox'}];},
    saveCreatorSandboxMonetizationConfig:async()=>({id:'config-B'}),
   }});
-  await h.press(h.button('Manage paid unlock for Title B'));await h.press(h.button('Paid · $0.99'));
+  await h.press(h.button('Manage paid unlock for Title B'));await h.press(h.button('Paid'));
   const save=h.find(n=>n.props.testID==='money-paid-video-save-button');await h.press(save);await React.act(async()=>{void save.props.onPress();});assert.equal(writes,1);
   await h.resolve(gate);if(outcome==='success')assert.match(h.text(),/Paid Video setup saved at \$0.99/);else {assert.doesNotMatch(h.text(),/Paid Video setup saved at/);assert.match(h.text(),/could not be confirmed/);}
   assert.ok(h.find(n=>n.props.testID==='money-paid-video-editor'),'selection stays visible after result');

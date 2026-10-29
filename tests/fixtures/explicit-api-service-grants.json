@@ -25,15 +25,15 @@
     "table": "creator_payout_accounts",
     "privileges": ["INSERT","SELECT","UPDATE"],
     "consumers": [
-      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["select","update","upsert"]}
+      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["insert","select","update"]}
     ]
   },
   {
     "table": "creator_payout_eligibility_records",
     "privileges": ["INSERT","SELECT","UPDATE"],
-    "consumers": [
-      {"file":"supabase/functions/_shared/stripe-connect.ts","operations":["upsert"]}
-    ]
+    "consumers": [],
+    "retiredConsumers": [{"file":"supabase/functions/_shared/stripe-connect.ts","operations":["upsert"]}],
+    "retiredBy": "20261027034858_creator_connect_observed_configuration.sql"
   },
   {
     "table": "creator_payout_onboarding_sessions",

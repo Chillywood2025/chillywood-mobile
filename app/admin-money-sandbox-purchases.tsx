@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "../_lib/moderation";
 import { resolveInternalTesterSandboxPurchaseMode } from "../_lib/monetization";
 import {
-  purchaseRevenueCatStoreProduct,
-  readRevenueCatNonSubscriptionProducts,
-} from "../_lib/revenuecat";
-import {
-  invokeCreatorMoneyPurchaseSubjectRpc,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
 } from "../_lib/creatorMoneyPurchaseAuthority";
+import { resolveCreatorSandboxPurchaseDestination } from "../_lib/creatorSandboxPurchaseDestination";
 import { launchCreatorMerchSandboxCheckout } from "../_lib/creatorMonetizationSetup";
 import { supabase } from "../_lib/supabase";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
@@ -90,6 +87,7 @@ const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
 export default function AdminMoneySandboxPurchasesScreen() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [accessSummary, setAccessSummary] = useState("Checking internal tester sandbox access...");
@@ -152,14 +150,11 @@ export default function AdminMoneySandboxPurchasesScreen() {
 
   const runSandboxPurchase = useCallback(async () => {
     if (!allowed || busy) return;
-    if (Platform.OS === "ios") {
-      const liveStageProduct = selectedProduct.sourceType === "live_watch_party_access"
-        || selectedProduct.sourceType === "live_watch_party_seat";
+    if (Platform.OS === "ios" && (selectedProduct.sourceType === "live_watch_party_access"
+      || selectedProduct.sourceType === "live_watch_party_seat")) {
       Alert.alert(
-        liveStageProduct ? "Live Stage checkout unavailable on iPhone" : "Use a finite App Store checkout",
-        liveStageProduct
-          ? "Live Stage Pass and Live Stage Seat Pass remain bound to the verified Google Play sandbox. They cannot be purchased on this iPhone build, and nothing was charged."
-          : "This generic sandbox screen cannot open dynamic Apple products. Use the dedicated contextual Tip or Party Room Pass flow; nothing was charged.",
+        "Live Stage checkout unavailable on iPhone",
+        "Live Stage Pass and Live Stage Seat Pass remain bound to the verified Google Play sandbox. They cannot be purchased on this iPhone build, and nothing was charged.",
       );
       return;
     }
@@ -170,7 +165,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
     }
 
     setBusy(true);
-    setStatus(`Creating sandbox intent for ${selectedProduct.label}...`);
+    setStatus(`Opening the exact ${selectedProduct.label} buyer flow...`);
 
     try {
       const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
@@ -178,52 +173,12 @@ export default function AdminMoneySandboxPurchasesScreen() {
         throw new Error("Billing identity is unavailable for the current account.");
       }
 
-      const { data: intent, error: intentError } = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
-        purchaseSubject,
-        "create_money_purchase_intent",
-        {
-        p_product_key: selectedProduct.key,
-        p_source_type: selectedProduct.sourceType,
-        p_source_id: safeSourceId,
-        p_metadata: {
-          proof_surface: "admin_money_sandbox_purchases",
-          sandbox_only: true,
-          not_payable: true,
-        },
-        },
-      );
-
-      if (intentError) throw intentError;
-      const intentRow = intent && typeof intent === "object" && !Array.isArray(intent)
-        ? intent as Record<string, unknown>
-        : null;
-      if (intentRow?.alreadyPurchased === true || intentRow?.alreadySubscribed === true) {
-        setStatus("This exact item is already owned. No new store purchase was opened.");
-        return;
-      }
-
-      setStatus(`Intent created. Loading RevenueCat product ${selectedProduct.providerProductId}...`);
-      const products = await readRevenueCatNonSubscriptionProducts([selectedProduct.providerProductId]);
+      const destination = await resolveCreatorSandboxPurchaseDestination(selectedProduct.sourceType, safeSourceId);
       if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
         throw new Error("Account changed before checkout. Nothing was charged.");
       }
-      const storeProduct = products.find((entry) => normalizeText(entry.identifier) === selectedProduct.providerProductId);
-      if (!storeProduct) {
-        throw new Error(`RevenueCat product ${selectedProduct.providerProductId} is not available on this build/account.`);
-      }
-
-      setStatus(`Opening ${STORE_PROVIDER_PAIR} sandbox purchase...`);
-      const result = await purchaseRevenueCatStoreProduct(storeProduct, { authority: purchaseSubject.authority });
-      const intentId = normalizeText(intentRow?.id);
-      const purchasedProductId = normalizeText(result.productIdentifier) || selectedProduct.providerProductId;
-      setStatus(
-        [
-          "Sandbox purchase completed.",
-          `Product: ${purchasedProductId}`,
-          intentId ? `Intent: ${intentId}` : "Intent: created",
-          "Webhook processing may take a moment. Refresh Owner/Admin Money Center for provider event, access grant, and sandbox not-payable ledger proof.",
-        ].join("\n"),
-      );
+      setStatus("Review the exact item, price and access on its buyer screen before starting checkout. No purchase was opened here.");
+      router.push(destination as Parameters<typeof router.push>[0]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sandbox purchase could not be completed.";
       setStatus(message);
@@ -231,7 +186,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
     } finally {
       setBusy(false);
     }
-  }, [allowed, busy, selectedProduct, sourceId, userId]);
+  }, [allowed, busy, router, selectedProduct, sourceId, userId]);
 
   const runMerchSandboxCheckout = useCallback(async () => {
     if (!allowed || merchBusy) return;
@@ -281,7 +236,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
       <Text style={styles.kicker}>Internal test mode / Sandbox only / Not payable</Text>
       <Text style={styles.title}>Sandbox Purchase Testing</Text>
       <Text style={styles.body}>
-        Approved testers can start real sandbox purchases for digital access and physical merch. This screen cannot activate
+        Approved testers open the normal buyer screen to review an exact digital item before a sandbox purchase. Physical merch has a separate sandbox checkout. This screen cannot activate
         production money, payout execution, cash-out, withdrawal, transfer, payable balances, LiveKit publish authority, host
         power, speaker authority, moderator power, or admin power.
       </Text>
@@ -363,7 +318,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
           value={sourceId}
         />
         <Text style={styles.hint}>
-          Use a real source UUID. Creator tip defaults to the signed-in user id when available. Access still depends on safety,
+          Use a real source UUID (offer UUID for Room and Live Stage passes). Creator tip opens the selected creator’s channel. Access still depends on safety,
           privacy, moderation, host approval, and resolver policy.
         </Text>
       </View>

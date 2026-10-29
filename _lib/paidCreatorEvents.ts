@@ -1,4 +1,5 @@
 import { trackEvent } from "./analytics";
+import "react-native-get-random-values";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
   captureCreatorMoneyPurchaseAuthority,
@@ -24,6 +25,7 @@ import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
 export const PAID_CREATOR_EVENT_SANDBOX_PRODUCT_KEY = "event_pass_sandbox_099";
 export const PAID_CREATOR_EVENT_SANDBOX_PROVIDER_PRODUCT_ID = "cw_event_pass_sandbox_099";
@@ -59,6 +61,21 @@ export type PaidCreatorEventOffer = {
   providerProductId: string | null;
   createdAt: string;
   updatedAt: string;
+  termsRevisionId: string | null;
+  timeZone: string;
+  salesOpenAt: string | null;
+  salesCloseAt: string | null;
+  salesPaused: boolean;
+  terms: PaidCreatorEventTerms | null;
+};
+
+export type PaidCreatorEventTerms = {
+  id: string; offerId: string; creatorEventId: string; revision: number;
+  title: string; description: string; priceCents: number; currency: string;
+  startsAt: string; endsAt: string | null; timeZone: string;
+  salesOpenAt: string | null; salesCloseAt: string | null; capacityLimit: number | null;
+  attendance: "virtual"; replayPolicy: "none" | "indefinite" | "until_expiration";
+  replayAvailableAt: string | null; replayExpiresAt: string | null;
 };
 
 export type PaidCreatorEventAccess = {
@@ -168,8 +185,82 @@ const parseOffer = (row: Record<string, unknown>): PaidCreatorEventOffer | null 
     providerProductId: toText(row.providerProductId) || null,
     createdAt: toText(row.createdAt),
     updatedAt: toText(row.updatedAt),
+    termsRevisionId: toText(row.termsRevisionId) || null,
+    timeZone: toText(row.timeZone) || "UTC",
+    salesOpenAt: toText(row.salesOpenAt) || null,
+    salesCloseAt: toText(row.salesCloseAt) || null,
+    salesPaused: row.salesPaused === true,
+    terms: parsePaidCreatorEventTerms(row.terms, { offerId: id, creatorEventId }),
   };
 };
+
+export function parsePaidCreatorEventTerms(value: unknown, expected: { offerId: string; creatorEventId: string }): PaidCreatorEventTerms | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (!ACCESS_UUID_PATTERN.test(toText(row.id)) || row.offerId !== expected.offerId
+    || row.creatorEventId !== expected.creatorEventId || row.attendance !== "virtual"
+    || !Number.isSafeInteger(row.revision) || Number(row.revision) < 1
+    || !Number.isSafeInteger(row.priceCents) || Number(row.priceCents) < 1
+    || row.currency !== "usd" || !Number.isFinite(Date.parse(toText(row.startsAt)))
+    || !["none", "indefinite", "until_expiration"].includes(toText(row.replayPolicy))) return null;
+  const timeZone = toText(row.timeZone);
+  try { new Intl.DateTimeFormat("en-US", { timeZone }).format(0); } catch { return null; }
+  for (const key of ["endsAt", "salesOpenAt", "salesCloseAt", "replayAvailableAt", "replayExpiresAt"]) {
+    if (row[key] != null && !Number.isFinite(Date.parse(toText(row[key])))) return null;
+  }
+  if (row.capacityLimit != null && (!Number.isSafeInteger(row.capacityLimit) || Number(row.capacityLimit) < 1)) return null;
+  return {
+    id: toText(row.id), offerId: expected.offerId, creatorEventId: expected.creatorEventId,
+    revision: Number(row.revision), title: toText(row.title), description: toText(row.description),
+    priceCents: Number(row.priceCents), currency: "usd", startsAt: toText(row.startsAt),
+    endsAt: row.endsAt == null ? null : toText(row.endsAt), timeZone,
+    salesOpenAt: row.salesOpenAt == null ? null : toText(row.salesOpenAt),
+    salesCloseAt: row.salesCloseAt == null ? null : toText(row.salesCloseAt),
+    capacityLimit: row.capacityLimit == null ? null : Number(row.capacityLimit), attendance: "virtual",
+    replayPolicy: row.replayPolicy as PaidCreatorEventTerms["replayPolicy"],
+    replayAvailableAt: row.replayAvailableAt == null ? null : toText(row.replayAvailableAt),
+    replayExpiresAt: row.replayExpiresAt == null ? null : toText(row.replayExpiresAt),
+  };
+}
+
+export async function configurePaidCreatorEventSale(input: {
+  creatorEventId: string; description: string; priceCents: number; capacityLimit: number | null;
+  status: PaidCreatorEventOfferStatus; timeZone: string; salesOpenAt: string | null; salesCloseAt: string | null;
+  expectedUpdatedAt: string;
+  expectedTerms: Pick<PaidCreatorEventTerms, "title" | "startsAt" | "endsAt" | "replayPolicy" | "replayAvailableAt" | "replayExpiresAt">;
+}): Promise<PaidCreatorEventOffer> {
+  if (!Number.isFinite(Date.parse(input.expectedUpdatedAt)) || !input.expectedTerms) throw new Error("Refresh the event schedule before saving ticket terms.");
+  const authority = captureCreatorMoneyPurchaseAuthority();
+  if (!authority || !isCreatorMoneyPurchaseAuthorityCurrent(authority)) throw new Error("Sign in to the creator account before saving ticket terms.");
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("configure_paid_creator_event_sale", {
+    p_creator_event_id: input.creatorEventId, p_description: input.description,
+    p_price_cents: input.priceCents, p_capacity_limit: input.capacityLimit, p_status: input.status,
+    p_time_zone: input.timeZone, p_sales_open_at: input.salesOpenAt, p_sales_close_at: input.salesCloseAt,
+    p_expected_updated_at: input.expectedUpdatedAt,
+  }, authority.userId);
+  if (error) throw new Error("Event ticket settings could not be verified. Your changes are still here; refresh before retrying.");
+  const offer = data && typeof data === "object" ? parseOffer(data) : null;
+  const sameTime = (actual: string | null, expected: string | null) => actual === null || expected === null
+    ? actual === expected : Date.parse(actual) === Date.parse(expected);
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(authority) || !offer || !offer.terms || offer.termsRevisionId !== offer.terms.id
+    || offer.creatorEventId !== input.creatorEventId || offer.creatorId !== authority.userId
+    || offer.priceCents !== input.priceCents || offer.currency !== "usd"
+    || offer.capacityLimit !== input.capacityLimit || offer.description !== input.description
+    || offer.terms.priceCents !== input.priceCents || offer.terms.currency !== "usd"
+    || offer.terms.capacityLimit !== input.capacityLimit || offer.terms.description !== input.description
+    || offer.timeZone !== input.timeZone || offer.terms.timeZone !== input.timeZone
+    || offer.title !== input.expectedTerms.title || offer.terms.title !== input.expectedTerms.title
+    || !sameTime(offer.startsAt, input.expectedTerms.startsAt) || !sameTime(offer.endsAt, input.expectedTerms.endsAt)
+    || !sameTime(offer.terms.startsAt, input.expectedTerms.startsAt) || !sameTime(offer.terms.endsAt, input.expectedTerms.endsAt)
+    || offer.terms.replayPolicy !== input.expectedTerms.replayPolicy
+    || !sameTime(offer.terms.replayAvailableAt, input.expectedTerms.replayAvailableAt)
+    || !sameTime(offer.terms.replayExpiresAt, input.expectedTerms.replayExpiresAt)
+    || !sameTime(offer.salesOpenAt, input.salesOpenAt) || !sameTime(offer.salesCloseAt, input.salesCloseAt)
+    || !sameTime(offer.terms.salesOpenAt, input.salesOpenAt) || !sameTime(offer.terms.salesCloseAt, input.salesCloseAt)
+    || (input.status === "paused" ? !offer.salesPaused || !["active", "sandbox"].includes(offer.status) : offer.status !== input.status || offer.salesPaused)
+  ) throw new Error("Event ticket terms could not be verified. Refresh before retrying.");
+  return offer;
+}
 
 const parseTransaction = (row: Record<string, unknown>): PaidCreatorEventTransaction | null => {
   const id = toText(row.id);
@@ -326,6 +417,15 @@ const normalizeAccess = (value: unknown, expectedCreatorEventId: string): PaidCr
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const createEventCheckoutAttemptId = () => {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map(value => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 const purchaseErrorText = (error: unknown, key: string) => {
   if (!error || typeof error !== "object") return "";
   return toText((error as Record<string, unknown>)[key]);
@@ -347,10 +447,14 @@ const isRevenueCatUserCancellation = (error: unknown) => {
 export const formatPaidCreatorEventPrice = (amountCents: number, currency = "usd") =>
   formatMonetizationCurrency(amountCents, currency);
 
-export async function listMyPaidCreatorEventOffers(): Promise<PaidCreatorEventOffer[]> {
+export async function listMyPaidCreatorEventOffers(options?: { throwOnUnavailable?: boolean }): Promise<PaidCreatorEventOffer[]> {
   const { data, error } = await rpcClient.rpc("list_my_paid_creator_event_offers");
-  if (error) return [];
-  return parseJsonArray(data, parseOffer);
+  const offers = parseJsonArray(data, parseOffer);
+  if (error || !Array.isArray(data) || offers.length !== data.length) {
+    if (options?.throwOnUnavailable) throw new Error("Event ticket settings could not be verified.");
+    return [];
+  }
+  return offers;
 }
 
 export async function listMyPaidCreatorEventTransactions(limit = 50): Promise<PaidCreatorEventTransaction[]> {
@@ -410,11 +514,13 @@ export async function createPaidCreatorEventPassPurchaseIntent(
   offerId: string,
   expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
   subject: CreatorMoneyPurchaseSubject,
+  termsRevisionId: string,
 ) {
+  if (!ACCESS_UUID_PATTERN.test(termsRevisionId)) throw new Error("Refresh the Event Pass terms before checkout.");
   const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
     subject,
-    "create_paid_creator_event_pass_purchase_intent",
-    { p_event_id: offerId },
+    "create_reserved_creator_event_purchase_intent",
+    { p_event_id: offerId, p_expected_revision_id: termsRevisionId },
   );
   if (!response || response.error) throw new Error("Event Pass checkout is not available right now.");
   const data = response.data;
@@ -471,6 +577,7 @@ export async function waitForPaidCreatorEventPassAccess(
 export async function purchasePaidCreatorEventPass(input: {
   creatorEventId: string;
   sourceSurface: string;
+  expectedTermsRevisionId?: string;
 }): Promise<PaidCreatorEventPurchaseResult> {
   const initiatingAuthority = captureCreatorMoneyPurchaseAuthority();
   const access = await resolvePaidCreatorEventPassAccess(input.creatorEventId);
@@ -482,6 +589,13 @@ export async function purchasePaidCreatorEventPass(input: {
   }
   if (!access.requiresPurchase || !access.offer?.id) {
     return { ok: false, message: "This Event Pass is not available right now.", access };
+  }
+  if (!input.expectedTermsRevisionId || !access.offer.terms
+    || input.expectedTermsRevisionId !== access.offer.termsRevisionId
+    || access.offer.terms.id !== input.expectedTermsRevisionId
+    || access.offer.terms.priceCents !== access.priceCents
+    || access.offer.terms.currency !== access.currency) {
+    return { ok: false, message: "Event ticket details changed or could not be verified. Refresh and review the price, time, and included access before checkout.", access };
   }
   if (
     !access.creatorId
@@ -536,7 +650,7 @@ export async function purchasePaidCreatorEventPass(input: {
     environment: access.offer.status === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  }, purchaseSubject);
+  }, purchaseSubject, input.expectedTermsRevisionId);
   if (intent.alreadyPurchased) {
     const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId, purchaseSubject, access);
     return {
@@ -550,12 +664,29 @@ export async function purchasePaidCreatorEventPass(input: {
   }
 
   const productId = intent.providerProductId;
-  const products = await readRevenueCatNonSubscriptionProducts([productId]);
+  const cancelUnstarted = async () => {
+    try {
+      if (await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) await invokeCreatorMoneyPurchaseSubjectRpc(
+        purchaseSubject, "cancel_unstarted_creator_event_reservation", { p_purchase_intent_id: intent.id },
+      );
+    } catch { /* Cleanup uncertainty never authorizes checkout or a second charge. */ }
+  };
+  let products: Awaited<ReturnType<typeof readRevenueCatNonSubscriptionProducts>>;
+  try { products = await readRevenueCatNonSubscriptionProducts([productId]); }
+  catch {
+    await cancelUnstarted();
+    return { ok: false, message: "Store checkout could not be prepared. No new charge was started. Refresh My Tickets before trying again.", access, intentId: intent.id, productId };
+  }
   const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? null;
-  if (!product) {
+  if (!product || !isCreatorMoneyStoreQuoteMatch(product, {
+    productId,
+    amountMinor: access.priceCents,
+    currency: access.currency,
+  })) {
+    await cancelUnstarted();
     return {
       ok: false,
-      message: "The Event Pass is not available on this device yet. Nothing was charged.",
+      message: CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY.replace("Nothing was charged.", "No new charge was started by this attempt."),
       access,
       intentId: intent.id,
       productId,
@@ -572,13 +703,40 @@ export async function purchasePaidCreatorEventPass(input: {
   });
 
   if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    await cancelUnstarted();
     return {
       ok: false,
-      message: "Your session changed before Event Pass checkout. Nothing was charged.",
+      message: "Your session changed before Event Pass checkout. No new charge was started by this attempt.",
       access,
       intentId: intent.id,
       productId,
     };
+  }
+
+  let checkoutAttemptId: string;
+  try { checkoutAttemptId = createEventCheckoutAttemptId(); }
+  catch {
+    await cancelUnstarted();
+    return { ok: false, message: "Secure checkout could not be prepared. No new charge was started. Refresh My Tickets before trying again.", access, intentId: intent.id, productId };
+  }
+  // From this point an uncertain claim may already be committed. Never release
+  // it or invoke the SDK unless this exact attempt is positively confirmed.
+  let reservation: { data: Record<string, unknown> | null; error: unknown } | null;
+  try {
+    reservation = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+      purchaseSubject, "begin_creator_event_checkout", { p_purchase_intent_id: intent.id, p_checkout_attempt_id: checkoutAttemptId },
+    );
+  } catch { reservation = null; }
+  const held = reservation?.error ? null : reservation?.data;
+  if (!held || !ACCESS_UUID_PATTERN.test(toText(held.id)) || held.purchaseIntentId !== intent.id
+    || held.checkoutAttemptId !== checkoutAttemptId || held.startAuthorized !== true
+    || held.state !== "held" || held.buyerId !== purchaseSubject.userId
+    || held.offerId !== access.offer.id || held.creatorEventId !== input.creatorEventId
+    || held.termsRevisionId !== input.expectedTermsRevisionId
+    || held.priceCents !== access.priceCents || held.currency !== access.currency
+    || !Number.isFinite(Date.parse(toText(held.expiresAt))) || Date.parse(toText(held.expiresAt)) <= Date.now()
+    || !await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    return { ok: false, message: "This ticket reservation is no longer ready for checkout. Check My Tickets for a pending purchase, then refresh this Event. No new charge was started.", access, intentId: intent.id, productId };
   }
 
   try {
@@ -598,8 +756,8 @@ export async function purchasePaidCreatorEventPass(input: {
     return {
       ok: false,
       message: isRevenueCatUserCancellation(error)
-        ? "Event Pass purchase was canceled. Nothing changed."
-        : "Event Pass checkout could not be completed. Try again later.",
+        ? "Event Pass checkout was canceled. Check My Tickets if your store still shows a pending purchase."
+        : "Event Pass checkout could not be confirmed. Check My Tickets and your store purchase history before trying again.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,

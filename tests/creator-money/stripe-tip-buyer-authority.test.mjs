@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { loadStudioFunctions } from "../helpers/studio-source-harness.mjs";
 
 const checkout = readFileSync("supabase/functions/create-creator-tip-checkout/index.ts", "utf8");
 const webhook = readFileSync("supabase/functions/stripe-tip-webhook/index.ts", "utf8");
@@ -46,32 +47,16 @@ const loadSameBuyerAuthority = () => {
 };
 
 const loadStripeTipIdentityMatchers = () => {
-  const uuidSource = sliceBetween(webhook, "const normalizeUuid", "const readStripeTipWebhookSecret")
-    .replace("value: unknown", "value");
-  const paymentIntentSource = sliceBetween(
-    webhook,
-    "const paymentIntentFromObject",
-    "const checkoutSessionFromObject",
-  ).replace("object: StripeObject | null", "object");
-  const completionSource = sliceBetween(
-    webhook,
-    "const providerCompletionMatchesTip",
-    "const providerRemovalOrFailureMatchesTip",
-  )
-    .replace("eventType: string", "eventType")
-    .replace("object: StripeObject | null", "object")
-    .replace("tip: TipTransactionRow", "tip");
-  const removalSource = sliceBetween(
-    webhook,
-    "const providerRemovalOrFailureMatchesTip",
-    "const tipEventTypeForStripeEvent",
-  )
-    .replace("eventType: string", "eventType")
-    .replace("object: StripeObject | null", "object")
-    .replace("tip: TipTransactionRow", "tip");
-  return Function(
-    `"use strict"; const toText = (value) => typeof value === "string" ? value.trim() : String(value ?? "").trim(); ${uuidSource}; ${paymentIntentSource}; ${completionSource}; ${removalSource}; return { providerCompletionMatchesTip, providerRemovalOrFailureMatchesTip };`,
-  )();
+  // Capture the exact production declarations and their real pure dependencies.
+  // The TypeScript compiler handles annotations instead of handwritten erasure.
+  const text = loadStudioFunctions("supabase/functions/_shared/stripe-connect.ts", ["toText"], {});
+  const settlement = loadStudioFunctions("supabase/functions/_shared/stripe-payment-settlement.ts", [
+    "positiveMinorAmount", "checkoutSettlementOutcome", "paymentIntentSettlementOutcome",
+  ], {});
+  return loadStudioFunctions("supabase/functions/stripe-tip-webhook/index.ts", [
+    "normalizeUuid", "paymentIntentFromObject", "providerPaymentFactsMatchTip",
+    "providerCompletionMatchesTip", "providerRemovalOrFailureMatchesTip",
+  ], { ...text, ...settlement });
 };
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -118,25 +103,27 @@ test("tip checkout rejects a session-generation change immediately before Stripe
 test("authoritative buyer readback precedes transaction creation and is revalidated before Stripe mutation", () => {
   const handler = sliceBetween(checkout, "Deno.serve", "} catch (error)");
   const firstAuthority = handler.indexOf("const buyerAuthority = await readBuyerSessionAuthority");
-  const transactionInsert = handler.indexOf('.from("creator_tip_transactions")\n      .insert');
+  const transactionInsert = handler.indexOf('adminClient.rpc("reserve_creator_tip_checkout_attempt"');
   const secondAuthority = handler.indexOf("const currentBuyerAuthority = await readBuyerSessionAuthority");
-  const stripeMutation = handler.indexOf("const session = await stripeRequest");
+  const stripeMutation = handler.indexOf('const session = knownSession');
   assert.ok(firstAuthority >= 0);
   assert.ok(transactionInsert > firstAuthority);
   assert.ok(secondAuthority > transactionInsert);
   assert.ok(stripeMutation > secondAuthority);
   assert.match(handler, /if \(!sameBuyerSessionAuthority\(buyerAuthority, currentBuyerAuthority\)\)/u);
-  assert.match(handler, /payment_status: "failed"[\s\S]+status: "failed"/u);
+  assert.match(handler, /attemptResponse, status: "pending", error: "buyer_authority_changed"/u);
   assert.match(handler, /error: "buyer_authority_changed"/u);
   assert.match(handler, /checkoutCreated: false/u);
   const insert = sliceBetween(
     handler,
-    '.from("creator_tip_transactions")\n      .insert',
-    '.select("id,idempotency_key")',
+    'adminClient.rpc("reserve_creator_tip_checkout_attempt"',
+    'if (reserveError',
   );
-  assert.match(insert, /buyer_account_id: buyerAuthority\.accountId/u);
-  assert.match(insert, /buyer_session_generation: buyerAuthority\.sessionGeneration/u);
-  assert.match(insert, /buyer_authority_bound: true/u);
+  assert.match(insert, /p_buyer_id: buyerAuthority\.accountId/u);
+  assert.match(insert, /p_session_id: buyerAuthority\.sessionGeneration/u);
+  const quoteMigration = readFileSync('supabase/migrations/20261026175927_creator_tip_checkout_retry_quotes.sql','utf8');
+  assert.match(quoteMigration, /creator_tip_buyer_session_authority_internal\(p_buyer_id,p_session_id\)/u);
+  assert.match(quoteMigration, /"buyer_authority_bound":true/u);
 });
 
 test("buyer authority RPC is user-scoped and fails closed on error or malformed readback", () => {
@@ -250,7 +237,7 @@ test("a captured payment with stale buyer authority remains a provider fact but 
 test("provider completion is exact-bound to the Stripe object, buyer, creator, amount, and currency", () => {
   const matcher = sliceBetween(
     webhook,
-    "const providerCompletionMatchesTip",
+    "const providerPaymentFactsMatchTip",
     "const tipEventTypeForStripeEvent",
   );
   assert.match(matcher, /providerObjectId === toText\(tip\.provider_checkout_session_id\)/u);
@@ -261,7 +248,10 @@ test("provider completion is exact-bound to the Stripe object, buyer, creator, a
   assert.match(matcher, /metadataSenderId === senderId/u);
   assert.match(matcher, /metadataCreatorId === creatorId/u);
   assert.match(matcher, /metadataTipId === tipId/u);
-  assert.match(matcher, /!toText\(tip\.provider_payment_intent_id\)[\s\S]+providerObjectId === toText\(tip\.provider_payment_intent_id\)/u);
+  const completion = sliceBetween(webhook, "const providerCompletionMatchesTip", "const providerRemovalOrFailureMatchesTip");
+  assert.match(completion, /checkoutSettlementOutcome\(eventType, object\) === "succeeded"/u);
+  assert.match(completion, /paymentIntentSettlementOutcome\(eventType, object\) === "succeeded"/u);
+  assert.match(completion, /providerPaymentFactsMatchTip\(eventType, object, tip\)/u);
   const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");
   assert.match(projector, /provider_completion_exact/u);
 });
@@ -285,6 +275,12 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
   };
   const checkout = {
     id: "cs_test_exact",
+    object: "checkout.session",
+    livemode: false,
+    mode: "payment",
+    status: "complete",
+    payment_status: "paid",
+    client_reference_id: tip.id,
     payment_intent: "pi_test_exact",
     amount_total: 499,
     currency: "usd",
@@ -293,11 +289,18 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
   assert.equal(providerCompletionMatchesTip("checkout.session.completed", checkout, tip), true);
   const paymentIntent = {
     id: "pi_test_exact",
+    object: "payment_intent",
+    livemode: false,
+    status: "succeeded",
     amount: 499,
+    amount_received: 499,
     currency: "usd",
     metadata,
   };
-  assert.equal(providerCompletionMatchesTip("payment_intent.succeeded", paymentIntent, tip), true);
+  assert.equal(providerCompletionMatchesTip("payment_intent.succeeded", paymentIntent, tip), false,
+    "metadata alone cannot bind an unrecorded PaymentIntent");
+  const boundTip = { ...tip, provider_payment_intent_id: "pi_test_exact" };
+  assert.equal(providerCompletionMatchesTip("payment_intent.succeeded", paymentIntent, boundTip), true);
   for (const malformed of [
     { ...checkout, id: "cs_test_other" },
     { ...checkout, amount_total: 500 },
@@ -305,6 +308,13 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
     { ...checkout, metadata: { ...metadata, fan_user_id: tip.creator_id } },
     { ...checkout, metadata: { ...metadata, creator_user_id: tip.sender_id } },
     { ...checkout, metadata: { ...metadata, chillywood_tip_id: userId } },
+    { ...checkout, livemode: true },
+    { ...checkout, livemode: undefined },
+    { ...checkout, payment_status: "unpaid" },
+    { ...checkout, payment_status: "no_payment_required" },
+    { ...checkout, payment_status: undefined },
+    { ...checkout, client_reference_id: userId },
+    { ...checkout, client_reference_id: undefined },
   ]) assert.equal(providerCompletionMatchesTip("checkout.session.completed", malformed, tip), false);
   assert.equal(providerCompletionMatchesTip(
     "payment_intent.succeeded",
@@ -312,9 +322,33 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
     { ...tip, provider_payment_intent_id: "pi_test_other" },
   ), false);
 
-  const boundTip = { ...tip, provider_payment_intent_id: "pi_test_exact" };
+  assert.equal(providerCompletionMatchesTip("checkout.session.completed",
+    { ...checkout, payment_intent: "pi_test_other" }, boundTip), false);
+  const expiredCheckout = { ...checkout, status: "expired", payment_status: "unpaid", payment_intent: null };
+  assert.equal(providerRemovalOrFailureMatchesTip("checkout.session.expired", expiredCheckout, tip), true);
+  for (const malformed of [
+    { ...expiredCheckout, client_reference_id: userId },
+    { ...expiredCheckout, client_reference_id: undefined },
+    { ...expiredCheckout, payment_status: "paid" },
+    { ...expiredCheckout, payment_status: "no_payment_required" },
+    { ...expiredCheckout, payment_status: undefined },
+  ]) assert.equal(providerRemovalOrFailureMatchesTip("checkout.session.expired", malformed, tip), false);
+  for (const malformed of [
+    { ...paymentIntent, object: "checkout.session" },
+    { ...paymentIntent, livemode: true },
+    { ...paymentIntent, status: "processing" },
+    { ...paymentIntent, amount_received: 498 },
+    { ...paymentIntent, amount: 500, amount_received: 500 },
+    { ...paymentIntent, currency: "eur" },
+    { ...paymentIntent, metadata: { ...metadata, fan_user_id: tip.creator_id } },
+    { ...paymentIntent, metadata: { ...metadata, creator_user_id: tip.sender_id } },
+    { ...paymentIntent, metadata: { ...metadata, chillywood_tip_id: userId } },
+  ]) assert.equal(providerCompletionMatchesTip("payment_intent.succeeded", malformed, boundTip), false);
+
   const validRefund = {
     id: "ch_test_exact",
+    object: "charge",
+    livemode: false,
     payment_intent: "pi_test_exact",
     amount: 499,
     amount_refunded: 100,
@@ -333,6 +367,9 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
     { ...validRefund, amount_refunded: 0 },
     { ...validRefund, amount_refunded: 500 },
     { ...validRefund, refunded: true },
+    { ...validRefund, object: "payment_intent" },
+    { ...validRefund, livemode: true },
+    { ...validRefund, livemode: undefined },
   ]) {
     assert.equal(
       providerRemovalOrFailureMatchesTip("charge.refunded", malformedRefund, boundTip),
@@ -344,11 +381,11 @@ test("cross-user, cross-creator, cross-object, amount, and currency substitution
 test("mismatched provider lifecycle identity reaches the atomic fail-closed projector", () => {
   const lifecycleMatcher = sliceBetween(
     webhook,
-    "const providerRemovalOrFailureMatchesTip",
+    "const providerPaymentFactsMatchTip",
     "const tipEventTypeForStripeEvent",
   );
-  assert.match(lifecycleMatcher, /object\.id\) === toText\(tip\.provider_checkout_session_id\)/u);
-  assert.match(lifecycleMatcher, /object\.id\) === toText\(tip\.provider_payment_intent_id\)/u);
+  assert.match(lifecycleMatcher, /providerObjectId === toText\(tip\.provider_checkout_session_id\)/u);
+  assert.match(lifecycleMatcher, /providerObjectId === toText\(tip\.provider_payment_intent_id\)/u);
   assert.match(lifecycleMatcher, /paymentIntentId === toText\(tip\.provider_payment_intent_id\)/u);
 
   const projector = sliceBetween(webhook, "const updateTipForEvent", "Deno.serve");

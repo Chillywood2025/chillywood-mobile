@@ -1,11 +1,15 @@
 import { Platform } from "react-native";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
 import { supabase } from "./supabase";
 import {
+  beginCreatorMoneyCheckout,
+  CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
   invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
+  type CreatorMoneyPurchaseIntentExpectation,
 } from "./creatorMoneyPurchaseAuthority";
 import {
   getRevenueCatProductionReadiness,
@@ -20,7 +24,9 @@ import {
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { getRuntimeConfig } from "./runtimeConfig";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
-import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "./accountSessionAuthority";
+import { rememberCreatorTipCheckoutReceipt, retireConfirmedCreatorTipCheckoutAttempt, withCreatorTipCheckoutAttempt } from "./creatorTipCheckoutAttempt";
 
 export type CreatorTipStatus = "setup_incomplete" | "active" | "paused" | "blocked";
 
@@ -119,7 +125,7 @@ const creatorTipsClient = supabase as unknown as {
   functions: {
     invoke: <T = unknown>(
       fn: string,
-      options?: { body?: Record<string, unknown> },
+      options?: { body?: Record<string, unknown>; headers?: Record<string, string>; signal?: AbortSignal },
     ) => Promise<{ data: T | null; error: unknown }>;
   };
 };
@@ -323,14 +329,21 @@ export async function listMyCreatorTipTransactions(limit = 25): Promise<CreatorT
     .filter((row) => !!row.id);
 }
 
-export async function readMyTipTransactionStatus(tipId: string) {
-  const { data, error } = await creatorTipsClient.rpc("get_my_tip_transaction_status", {
+export async function readMyTipTransactionStatus(tipId: string): Promise<Record<string, unknown>> {
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!authority || authority.restoreOnly || !CREATOR_TIP_UUID_PATTERN.test(tipId)) throw new Error("Verify the current account before checking this tip.");
+  const subject = await captureAccountBoundSupabaseMutationSubject(authority.userId);
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "get_my_tip_transaction_status", {
     p_tip_transaction_id: tipId,
   });
-  if (error) throw error;
-  return data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : { status: "not_found" };
+  if (error || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Tip status could not be verified for the current account.");
+  const row = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null;
+  if (row?.status === "not_found") return { status: "not_found" };
+  if (!row || row.id !== tipId || row.senderId !== authority.userId || !CREATOR_TIP_UUID_PATTERN.test(toText(row.creatorId))
+    || row.accessGranted !== false || row.pureContributionOnly !== true) throw new Error("The exact tip receipt could not be verified.");
+  await retireConfirmedCreatorTipCheckoutAttempt({ buyerId: authority.userId, creatorId: String(row.creatorId), tipId, status: toText(row.status) });
+  if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed while checking tip status.");
+  return row;
 }
 
 export async function createCreatorTipCheckout(input: {
@@ -357,34 +370,52 @@ export async function createCreatorTipCheckout(input: {
     };
   }
 
-  const { data, error } = await creatorTipsClient.functions.invoke("create-creator-tip-checkout", {
-    body: {
-      amount_cents: input.amountCents,
-      cancel_url: input.cancelUrl,
-      creator_id: input.creatorId,
-      currency: input.currency ?? "usd",
-      private_note: input.privateNote ?? null,
-      return_url: input.returnUrl,
-    },
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!authority || authority.restoreOnly || (input.currency ?? "usd") !== "usd") throw new Error("Verify the exact account and USD tip amount before checkout.");
+  const subject = await captureAccountBoundSupabaseMutationSubject(authority.userId);
+  if (!sameAccountSessionAuthority(authority, subject.authority)) throw new Error("Account changed before tip checkout.");
+  return withCreatorTipCheckoutAttempt<CreatorTipCheckoutResult>({ buyerId: authority.userId, creatorId: input.creatorId, amountCents: input.amountCents, currency: "usd" }, async attempt => {
+    if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before tip checkout.");
+    const controller = new AbortController();
+    // Cancel transport waiting only; the durable attempt remains unresolved.
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    let response: { data: unknown; error: unknown };
+    try {
+      response = await creatorTipsClient.functions.invoke("create-creator-tip-checkout", {
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${subject.accessToken}`, "x-chillywood-platform": Platform.OS },
+        body: {
+          request_id: attempt.requestId, amount_cents: attempt.amountCents, currency: attempt.currency,
+          cancel_url: input.cancelUrl, creator_id: attempt.creatorId, private_note: input.privateNote ?? null, return_url: input.returnUrl,
+        },
+      });
+    } catch { throw new Error("Tip checkout outcome is unknown. Refresh Purchases & My Tickets before another attempt."); }
+    finally { clearTimeout(timeout); }
+    const { data, error } = response;
+    if (error || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Tip checkout outcome is unknown. Refresh Purchases & My Tickets before another attempt.");
+    const row = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null;
+    if (!row || row.requestId !== attempt.requestId || row.buyerId !== attempt.buyerId || row.creatorId !== attempt.creatorId
+      || row.amountCents !== attempt.amountCents || row.currency !== attempt.currency || !CREATOR_TIP_UUID_PATTERN.test(toText(row.tipId))
+      || row.provider !== "stripe" || row.providerKey !== "stripe_connect" || row.mode !== "test"
+      || typeof row.status !== "string" || !row.status.trim()
+      || typeof row.checkoutCreated !== "boolean" || (row.checkoutCreated && row.status !== "checkout_created")
+      || row.liveMoneyAction !== false || row.noAccessGranted !== true || row.pureContributionOnly !== true) {
+      throw new Error("Tip checkout identity could not be verified. Keep this attempt and refresh purchase status.");
+    }
+    let url: string | null = null;
+    if (row.checkoutCreated) {
+      try {
+        const parsed = new URL(String(row.url));
+        if (parsed.origin !== "https://checkout.stripe.com" || parsed.username || parsed.password || !/^\/(?:c\/)?pay\//u.test(parsed.pathname)) throw new Error("checkout_url_invalid");
+        url = parsed.toString();
+      } catch { throw new Error("The verified Stripe checkout link is unavailable. Refresh this same attempt."); }
+    } else if (row.url !== null) throw new Error("Unconfirmed tip checkout cannot provide a payment link.");
+    await rememberCreatorTipCheckoutReceipt(attempt, String(row.tipId));
+    if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before opening tip checkout.");
+    return { status: toText(row.status), provider: "stripe", providerKey: "stripe_connect", mode: "test", checkoutCreated: row.checkoutCreated,
+      liveMoneyAction: false, noAccessGranted: true, pureContributionOnly: true, tipId: String(row.tipId), url,
+      message: toText(row.message) || undefined, error: toText(row.error) || undefined };
   });
-  if (error) throw error;
-  const row = data && typeof data === "object" && !Array.isArray(data)
-    ? data as Record<string, unknown>
-    : {};
-  return {
-    status: toText(row.status),
-    provider: toText(row.provider) || "stripe",
-    providerKey: toText(row.providerKey) || "stripe_connect",
-    mode: (toText(row.mode) || "test") as CreatorTipCheckoutResult["mode"],
-    checkoutCreated: row.checkoutCreated === true,
-    liveMoneyAction: row.liveMoneyAction === true,
-    noAccessGranted: row.noAccessGranted === true,
-    pureContributionOnly: row.pureContributionOnly === true,
-    tipId: toText(row.tipId) || null,
-    url: toText(row.url) || null,
-    message: toText(row.message) || undefined,
-    error: toText(row.error) || undefined,
-  };
 }
 
 export async function purchaseCreatorTipWithStore(input: {
@@ -533,11 +564,11 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId: null,
       productId,
-      message: "Tip checkout could not be started right now.",
+      message: "Tip checkout could not be confirmed. Open Purchases & My Tickets and refresh status before trying another tip.",
     };
   }
   const intent = intentResponse.data;
-  const validatedIntent = validateCreatorMoneyPurchaseIntent(intent, {
+  const expectedIntent: CreatorMoneyPurchaseIntentExpectation = {
     userId: purchaseSubject.userId,
     sourceType: "creator_tip",
     sourceId: creatorId,
@@ -548,7 +579,8 @@ export async function purchaseCreatorTipWithStore(input: {
     status: "pending",
     amountMinor: amountCents,
     currency: "usd",
-  });
+  };
+  const validatedIntent = validateCreatorMoneyPurchaseIntent(intent, expectedIntent);
   if (!validatedIntent) {
     return {
       ok: false,
@@ -572,6 +604,10 @@ export async function purchaseCreatorTipWithStore(input: {
     };
   }
 
+  if (!isCreatorMoneyStoreQuoteMatch(storeProduct, { productId, amountMinor: amountCents, currency })) {
+    return { ok: false, message: CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, intentId, productId };
+  }
+
   if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
     return {
       ok: false,
@@ -581,6 +617,9 @@ export async function purchaseCreatorTipWithStore(input: {
     };
   }
 
+  if (!await beginCreatorMoneyCheckout(purchaseSubject, intentId, expectedIntent)) {
+    return { ok: false, intentId, productId, message: CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY };
+  }
   let purchase;
   try {
     purchase = await purchaseRevenueCatStoreProduct(storeProduct, { authority: purchaseSubject.authority });
@@ -590,10 +629,10 @@ export async function purchaseCreatorTipWithStore(input: {
       intentId,
       productId,
       message: isRevenueCatUserCancellation(error)
-        ? "Tip canceled. Nothing changed."
+        ? "Tip checkout was canceled. Refresh Purchases & My Tickets to confirm its status before another attempt."
         : Platform.OS === "ios"
-          ? "App Store tip could not be completed. Try again later."
-          : "Google Play tip could not be completed. Try again later.",
+          ? "App Store tip payment could not be confirmed. Refresh Purchases & My Tickets before another attempt."
+          : "Google Play tip payment could not be confirmed. Refresh Purchases & My Tickets before another attempt.",
     };
   }
   if (toText(purchase.productIdentifier) !== productId) {
@@ -601,14 +640,14 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId,
       productId,
-      message: "The store response did not match this tip. No tip was recorded.",
+      message: "The store response did not match this tip. Refresh Purchases & My Tickets; do not send another tip while payment is unknown.",
     };
   }
   return {
     ok: true,
     intentId,
     productId,
-    message: "Tip received. Creator credit appears only after the store confirms it.",
+    message: "Store checkout returned. Check Purchases & My Tickets for verified tip status. Creator credit depends on provider confirmation, and no access is included.",
   };
 }
 

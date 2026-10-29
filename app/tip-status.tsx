@@ -11,15 +11,21 @@ import {
 import { trackEvent } from "../_lib/analytics";
 import { formatMonetizationCurrency } from "../_lib/creatorMonetization";
 import { readMyTipTransactionStatus } from "../_lib/creatorTips";
+import { useSession } from "../_lib/session";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 const normalizeParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
 
 export default function TipStatusScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams<{ tip_id?: string | string[]; tipId?: string | string[] }>();
   const tipId = normalizeParam(params.tip_id ?? params.tipId);
+  const { user, authority } = useSession();
+  return <TipStatusSession key={`${tipId}:${user?.id ?? ""}:${authority?.sessionGeneration ?? ""}`} tipId={tipId} />;
+}
+
+function TipStatusSession({ tipId }: { tipId: string }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
@@ -100,6 +106,12 @@ export default function TipStatusScreen() {
         tone: "error" as const,
       };
     }
+    if (currentStatus === "refunded") {
+      return { title: "Tip refunded", body: "The provider reports this tip refunded. Purchase history keeps the receipt; no access was included.", tone: "muted" as const };
+    }
+    if (currentStatus === "disputed") {
+      return { title: "Tip under review", body: "The provider reports a dispute. Check Purchases & My Tickets for status; a final financial outcome is not yet confirmed.", tone: "pending" as const };
+    }
     return {
       title: error || "Tip status unavailable",
       body: "No content, badge, VIP, room access, or perk was unlocked.",
@@ -119,7 +131,16 @@ export default function TipStatusScreen() {
           <Text style={styles.amount}>{formatMonetizationCurrency(amountCents, currency)}</Text>
         ) : null}
         <Text style={styles.body}>{presentation.body}</Text>
-        <TouchableOpacity style={styles.button} activeOpacity={0.86} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.button} accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" onPress={() => router.push("/purchases")}>
+          <Text style={styles.buttonText}>Purchases &amp; My Tickets</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          activeOpacity={0.86}
+          accessibilityRole="button"
+          accessibilityLabel="Done viewing tip status"
+          onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)"); }}
+        >
           <ChillywoodPrimaryActionFill radius={14} />
           <Text style={styles.buttonText}>Done</Text>
         </TouchableOpacity>

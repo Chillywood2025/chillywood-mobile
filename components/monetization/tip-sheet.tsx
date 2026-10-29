@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -9,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -28,6 +28,7 @@ import {
 } from "../../_lib/creatorTips";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { useSession } from "../../_lib/session";
+import { readCreatorSupportedPrices, type CreatorSupportedPrice } from "../../_lib/creatorSupportedPrices";
 import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
 import { CreatorMoneyHeader, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "./money-ui";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
@@ -43,7 +44,6 @@ type TipSheetProps = {
   onClose: () => void;
 };
 
-const DEFAULT_AMOUNTS = [100, 300, 500, 1000];
 const STORE_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 
 type IosTipOption = {
@@ -63,15 +63,34 @@ export function TipSheet({
   sandboxTester = false,
   onClose,
 }: TipSheetProps) {
-  const { user } = useSession();
+  const router = useRouter();
+  const { user, authority } = useSession();
+  const contextKey = `${user?.id ?? ""}:${authority?.sessionGeneration ?? ""}:${creatorId}`;
+  const contextRef = useRef(contextKey); contextRef.current = contextKey;
   const [selectedAmount, setSelectedAmount] = useState(300);
-  const [customAmount, setCustomAmount] = useState("");
-  const [privateNote, setPrivateNote] = useState("");
   const [selectedIosTipKey, setSelectedIosTipKey] = useState<IosStoreProductKey>("tip_tier_1");
   const [iosProductPriceLabels, setIosProductPriceLabels] = useState<Record<string, string>>({});
   const [iosPricesLoading, setIosPricesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [noticeState, setNoticeState] = useState({ key: "", text: "" });
+  const notice = noticeState.key === contextKey ? noticeState.text : "";
+  const setNotice = (text: string) => setNoticeState({ key: contextKey, text });
+  const [catalog, setCatalog] = useState<{ key: string; prices: CreatorSupportedPrice[]; loading: boolean; unavailable: boolean }>({ key: "", prices: [], loading: true, unavailable: false });
+  const [catalogRetry, setCatalogRetry] = useState(0);
+  const supportedPrices = useMemo(() => catalog.key === contextKey ? catalog.prices : [], [catalog, contextKey]);
+  const catalogLoading = catalog.key !== contextKey || catalog.loading;
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    const key = contextKey;
+    setCatalog({ key, prices: [], loading: true, unavailable: false });
+    void readCreatorSupportedPrices("creator_tip", creatorId).then(result => {
+      if (!active || contextRef.current !== key) return;
+      setCatalog({ key, prices: result.prices, loading: false, unavailable: result.status !== "resolved" });
+      if (result.prices[0]) setSelectedAmount(result.prices[0].amountMinor);
+    });
+    return () => { active = false; };
+  }, [catalogRetry, contextKey, creatorId, visible]);
 
   const providerReadGateRef = useRef(createBoundedVisibleReadGate());
   const openingResetGateRef = useRef(createBoundedVisibleReadGate());
@@ -91,7 +110,7 @@ export function TipSheet({
   );
 
   const iosTipOptions = useMemo(() => {
-    return iosTipCatalog.map((entry) => ({
+    return iosTipCatalog.filter(entry => supportedPrices.some(price => price.providerProductId === entry.productId && price.amountMinor === entry.referencePriceMinor)).map((entry) => ({
       stableKey: entry.stableKey,
       productId: entry.productId,
       referencePriceMinor: entry.referencePriceMinor,
@@ -100,19 +119,23 @@ export function TipSheet({
         tipStatus?.currency ?? "usd",
       ),
     }));
-  }, [iosProductPriceLabels, iosTipCatalog, tipStatus?.currency]);
+  }, [iosProductPriceLabels, iosTipCatalog, supportedPrices, tipStatus?.currency]);
 
   const selectedIosProduct = iosTipOptions.find((option) => option.stableKey === selectedIosTipKey)
     ?? iosTipOptions[0]
     ?? null;
+  useEffect(() => {
+    if (Platform.OS !== "ios" || iosTipOptions.length === 0 || iosTipOptions.some(option => option.stableKey === selectedIosTipKey)) return;
+    setSelectedIosTipKey(iosTipOptions[0].stableKey);
+    setSelectedAmount(iosTipOptions[0].referencePriceMinor);
+  }, [iosTipOptions, selectedIosTipKey]);
 
   const amounts = useMemo(() => {
     if (Platform.OS === "ios") {
       return iosTipOptions.map((entry) => entry.referencePriceMinor);
     }
-    const values = tipStatus?.suggestedAmountsCents?.length ? tipStatus.suggestedAmountsCents : DEFAULT_AMOUNTS;
-    return Array.from(new Set(values.filter((amount) => amount > 0))).slice(0, 6);
-  }, [iosTipOptions, tipStatus?.suggestedAmountsCents]);
+    return Array.from(new Set(supportedPrices.map(price => price.amountMinor)));
+  }, [iosTipOptions, supportedPrices]);
 
   useEffect(() => {
     if (!providerReadGateRef.current.shouldRun(visible)) return;
@@ -167,28 +190,26 @@ export function TipSheet({
         ? tipStatus.defaultAmountCents
         : amounts[0] ?? 300;
     setSelectedAmount(defaultAmount);
-    setCustomAmount("");
-    setPrivateNote("");
-    setNotice("");
+    setNoticeState({ key: contextKey, text: "" });
     trackEvent("tip_sheet_opened", {
       creator_id: creatorId,
       route_name: "channel",
       source_surface: sourceSurface,
     });
-  }, [amounts, creatorId, iosTipCatalog, sourceSurface, tipStatus?.defaultAmountCents, visible]);
+  }, [amounts, contextKey, creatorId, iosTipCatalog, sourceSurface, tipStatus?.defaultAmountCents, visible]);
 
   const amountCents = Platform.OS === "ios"
     ? (selectedIosProduct?.referencePriceMinor ?? selectedAmount)
-    : Math.round(Number(customAmount.replace(/[^0-9.]/g, "")) * 100) || selectedAmount;
+    : selectedAmount;
   const minAmount = Platform.OS === "ios" ? amounts[0] ?? 99 : tipStatus?.minAmountCents ?? 100;
   const maxAmount = Platform.OS === "ios" ? amounts.at(-1) ?? 999 : tipStatus?.maxAmountCents ?? 50000;
-  const amountValid = Platform.OS === "ios"
+  const amountValid = !catalogLoading && supportedPrices.some(price => price.amountMinor === amountCents) && (Platform.OS === "ios"
     ? selectedIosProduct != null
       && Number.isInteger(amountCents)
       && amountCents > 0
     : Number.isInteger(amountCents)
       && amountCents >= minAmount
-      && amountCents <= maxAmount;
+      && amountCents <= maxAmount);
   const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
   // Tester mode changes copy only. Exact server-normalized creator authority
   // remains mandatory before any store purchase can be attempted.
@@ -210,6 +231,7 @@ export function TipSheet({
       return;
     }
     if (!checkoutLatchRef.current.tryAcquire()) return;
+    const checkoutContext = contextKey;
 
     setBusy(true);
     setNotice("");
@@ -228,19 +250,20 @@ export function TipSheet({
         creatorId,
         currency: tipStatus?.currency ?? "usd",
         iosStoreProductKey: Platform.OS === "ios" ? selectedIosProduct?.stableKey : undefined,
-        privateNote: privateNote.trim() ? privateNote.trim() : null,
         sourceSurface,
         userId: String(user.id),
       });
+
+      if (contextRef.current !== checkoutContext) return;
 
       if (!result.ok) {
         setNotice(result.message || "Tips are unavailable right now.");
         return;
       }
 
-      setNotice("Tip received. Support will be confirmed after the store finishes processing. It did not unlock access.");
+      setNotice(result.message || "Store checkout returned. Check Purchases & My Tickets for verified tip status. No access is included.");
     } catch {
-      setNotice(`${STORE_NAME} tip could not be started. Try again later.`);
+      if (contextRef.current === checkoutContext) setNotice(`${STORE_NAME} tip could not be confirmed. Refresh Purchases & My Tickets before another attempt.`);
     } finally {
       checkoutLatchRef.current.release();
       setBusy(false);
@@ -273,6 +296,11 @@ export function TipSheet({
           />
 
           {showSandboxCopy ? <MoneyStatusChip label={`No real charge · ${STORE_NAME}`} tone="warning" /> : null}
+          {catalogLoading ? <Text accessibilityLiveRegion="polite" style={styles.secondaryButtonText}>Checking supported tip amounts…</Text> : null}
+          {!catalogLoading && (catalog.unavailable || supportedPrices.length === 0) ? <>
+            <Text accessibilityRole="alert" style={styles.secondaryButtonText}>No supported tip amount could be confirmed for this creator and store.</Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh supported tip amounts" style={styles.secondaryButton} onPress={() => setCatalogRetry(value => value + 1)}><Text style={styles.secondaryButtonText}>Refresh amounts</Text></TouchableOpacity>
+          </> : null}
 
           <View style={styles.amountGrid}>
             {Platform.OS === "ios" ? (
@@ -285,9 +313,10 @@ export function TipSheet({
                     activeOpacity={0.86}
                     style={[styles.amountButton, isSelected && styles.amountButtonActive]}
                     accessibilityRole="button"
+                    disabled={busy || !canTipInSandbox}
+                    accessibilityState={{ selected: isSelected, disabled: busy || !canTipInSandbox }}
                     accessibilityLabel={`Choose ${option.priceLabel} App Store tip amount`}
                     onPress={() => {
-                      setCustomAmount("");
                       setSelectedAmount(option.referencePriceMinor);
                       setSelectedIosTipKey(option.stableKey);
                     }}
@@ -304,42 +333,22 @@ export function TipSheet({
                   key={amount}
                   testID="tip-amount-option"
                   activeOpacity={0.86}
-                  style={[styles.amountButton, !customAmount.trim() && selectedAmount === amount && styles.amountButtonActive]}
+                  style={[styles.amountButton, selectedAmount === amount && styles.amountButtonActive]}
                   accessibilityRole="button"
+                  disabled={busy || !canTipInSandbox}
+                  accessibilityState={{ selected: selectedAmount === amount, disabled: busy || !canTipInSandbox }}
                   accessibilityLabel={`Choose ${formatMonetizationCurrency(amount, tipStatus?.currency ?? "usd")} tip amount`}
                   onPress={() => {
-                    setCustomAmount("");
                     setSelectedAmount(amount);
                   }}
                 >
-                  <Text style={[styles.amountText, !customAmount.trim() && selectedAmount === amount && styles.amountTextActive]}>
+                  <Text style={[styles.amountText, selectedAmount === amount && styles.amountTextActive]}>
                     {formatMonetizationCurrency(amount, tipStatus?.currency ?? "usd")}
                   </Text>
                 </TouchableOpacity>
               ))
             )}
           </View>
-
-          {Platform.OS !== "ios" ? (
-            <TextInput
-              value={customAmount}
-              onChangeText={setCustomAmount}
-              keyboardType="decimal-pad"
-              placeholder="Custom amount"
-              placeholderTextColor="#8791A3"
-              style={styles.input}
-              accessibilityLabel="Custom tip amount"
-            />
-          ) : null}
-          <TextInput
-            value={privateNote}
-            onChangeText={(value) => setPrivateNote(value.slice(0, 280))}
-            placeholder="Private note, optional"
-            placeholderTextColor="#8791A3"
-            multiline
-            style={[styles.input, styles.noteInput]}
-            accessibilityLabel="Private note for creator"
-          />
 
           <MoneyScopeStrip
             includes="A private creator-support contribution."
@@ -352,13 +361,13 @@ export function TipSheet({
 
           <TouchableOpacity
             activeOpacity={0.88}
-            disabled={busy}
-            style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
+            disabled={busy || !amountValid || !canTipInSandbox}
+            style={[styles.primaryButton, (busy || !amountValid || !canTipInSandbox) && styles.primaryButtonDisabled]}
             onPress={startCheckout}
             testID="tip-confirm-button"
             accessibilityRole="button"
             accessibilityLabel={`Tip ${creatorName || "creator"} ${formatMonetizationCurrency(amountCents, tipStatus?.currency ?? "usd")}. This supports the creator and does not unlock access.`}
-            accessibilityState={{ disabled: busy, busy }}
+            accessibilityState={{ disabled: busy || !amountValid || !canTipInSandbox, busy }}
           >
             <ChillywoodPrimaryActionFill radius={14} />
             {busy ? (
@@ -369,6 +378,9 @@ export function TipSheet({
             ) : (
               <Text style={styles.primaryButtonText}>Continue to tip</Text>
             )}
+          </TouchableOpacity>
+          <TouchableOpacity disabled={busy} style={styles.secondaryButton} accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" onPress={() => { onClose(); router.push("/purchases"); }}>
+            <Text style={styles.secondaryButtonText}>Purchases &amp; My Tickets</Text>
           </TouchableOpacity>
           <TouchableOpacity
             disabled={busy}

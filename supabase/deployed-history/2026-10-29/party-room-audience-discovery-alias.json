@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "projectId": "bmkkhihfbmsnnmcqkoly",
+  "recordType": "Read-only historical migration alias reconciliation; not deployment authority",
+  "reviewedSourceCommit": "26d140a880427ccd7ca2767ba91315e76f78d56e",
+  "remoteVersion": "20261011083648",
+  "remoteName": "party_room_audience_discovery",
+  "statementCount": 1,
+  "joinedStatementSha256": "418fe30022d1506d0a473a67762539ac64af509c0f13f2857eeaa11b40474671",
+  "canonicalSourcePath": "supabase/migrations/20261011023525_party_room_audience_discovery.sql",
+  "canonicalSourceVersion": "20261011023525",
+  "canonicalSourceSha256": "418fe30022d1506d0a473a67762539ac64af509c0f13f2857eeaa11b40474671",
+  "representation": "The single stored statement has exactly the UTF-8 bytes of the canonical source file.",
+  "retainedReadOnlySnapshot": {
+    "artifact": "remote-history-hashes-initial.json",
+    "sha256": "d2da8bc61a7b8071133a7e470f719e5c4962e89632a992107bf38d0b0274efa6",
+    "location": "Private task evidence/integration; raw response is not committed."
+  },
+  "productionMutation": false,
+  "historicalFilesModified": false,
+  "replayAuthorized": false,
+  "scope": "Records an already-deployed version alias. Does not rename or replay the active source migration."
+}

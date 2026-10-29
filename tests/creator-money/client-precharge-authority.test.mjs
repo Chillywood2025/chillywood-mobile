@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import { eventContract, heldReservation, TERMS_ID } from "../fixtures/event-purchase-contract.mjs";
 
 const CREATOR_ID = "11111111-1111-4111-8111-111111111111";
 const VIEWER_ID = "22222222-2222-4222-8222-222222222222";
@@ -39,6 +40,8 @@ const instantiate = (path, mocks) => {
       ? mocks[id]
       : id === "./entitlementAuthority"
         ? { withAuthorityReadDeadline: async (operation) => await operation }
+        : id === "./creatorMoneyStoreQuote"
+          ? instantiate("_lib/creatorMoneyStoreQuote.ts", {})
         : inert,
   );
   return module.exports;
@@ -63,6 +66,7 @@ const eventOffer = (overrides = {}) => ({
   providerProductId: "cw_event_pass_sandbox_099",
   createdAt: "2026-08-24T00:00:00.000Z",
   updatedAt: "2026-08-24T00:00:00.000Z",
+  ...eventContract(OFFER_ID, SOURCE_ID),
   ...overrides,
 });
 
@@ -206,7 +210,7 @@ const loadPurchaseRuntime = ({
     : Promise.resolve();
   const resolverStarted = new Promise((resolve) => { markResolverStarted = resolve; });
   const supabase = {
-    rpc: async (name) => {
+    rpc: async (name,args) => {
       if (name === resolverRpc) {
         markResolverStarted();
         await resolverGate;
@@ -216,6 +220,7 @@ const loadPurchaseRuntime = ({
         intentCalls += 1;
         return { data: intent, error: null };
       }
+      if (name === "begin_creator_event_checkout") return { data: {...heldReservation(VIEWER_ID, OFFER_ID, SOURCE_ID, INTENT_ID),checkoutAttemptId:args.p_checkout_attempt_id,startAuthorized:true}, error: null };
       return { data: null, error: new Error(`unexpected_rpc:${name}`) };
     },
   };
@@ -235,12 +240,12 @@ const loadPurchaseRuntime = ({
     purchaseRevenueCatStoreProduct: async () => { purchaseCalls += 1; },
     readRevenueCatNonSubscriptionProducts: async () => {
       productReads += 1;
-      return [{ identifier: access.providerProductId }];
+      return [{ identifier: access.providerProductId, price: access.priceCents / 100, currencyCode: "USD" }];
     },
     readRevenueCatOfferings: async () => { productReads += 1; return null; },
     readRevenueCatSubscriptionProducts: async () => {
       productReads += 1;
-      return [{ identifier: access.providerProductId }];
+      return [{ identifier: access.providerProductId, price: access.priceCents / 100, currencyCode: "USD" }];
     },
     restoreRevenueCatPurchases: async () => { purchaseCalls += 1; return {}; },
   };
@@ -323,8 +328,8 @@ test("malformed or wrong-product intent readbacks cannot reach RevenueCat across
       path: "_lib/paidCreatorEvents.ts",
       resolverRpc: "resolve_paid_creator_event_pass_access",
       access: eventAccess,
-      intentRpc: "create_paid_creator_event_pass_purchase_intent",
-      purchase: (api) => api.purchasePaidCreatorEventPass({ creatorEventId: SOURCE_ID, sourceSurface: "test" }),
+      intentRpc: "create_reserved_creator_event_purchase_intent",
+      purchase: (api) => api.purchasePaidCreatorEventPass({ creatorEventId: SOURCE_ID, sourceSurface: "test", expectedTermsRevisionId: TERMS_ID }),
       validIntent: safeIntent({
         providerProductId: eventAccess.providerProductId,
         sourceType: "event",
@@ -417,8 +422,8 @@ test("delayed creator purchase access cannot adopt account B before intent or pr
       path: "_lib/paidCreatorEvents.ts",
       resolverRpc: "resolve_paid_creator_event_pass_access",
       access: eventAccess,
-      intentRpc: "create_paid_creator_event_pass_purchase_intent",
-      purchase: (api) => api.purchasePaidCreatorEventPass({ creatorEventId: SOURCE_ID, sourceSurface: "test" }),
+      intentRpc: "create_reserved_creator_event_purchase_intent",
+      purchase: (api) => api.purchasePaidCreatorEventPass({ creatorEventId: SOURCE_ID, sourceSurface: "test", expectedTermsRevisionId: TERMS_ID }),
     },
     {
       path: "_lib/creatorVipPasses.ts",
@@ -582,7 +587,7 @@ const loadSeatRuntime = ({ providerProductId, intent, subjectStable = true, prod
       readRevenueCatCustomerInfo: inert,
       readRevenueCatNonSubscriptionProducts: async () => {
         productReads += 1;
-        return productAvailable ? [{ identifier: product.productId }] : [];
+        return productAvailable ? [{ identifier: product.productId, price: product.referencePriceMinor / 100, currencyCode: "USD" }] : [];
       },
       purchaseRevenueCatStoreProduct: async () => { purchaseCalls += 1; },
     },
@@ -712,7 +717,7 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
         getRevenueCatProductionReadiness: inert,
         readRevenueCatNonSubscriptionProducts: async () => {
           productReads += 1;
-          return [{ identifier: "cw_creator_tip_sandbox_099" }];
+          return [{ identifier: "cw_creator_tip_sandbox_099", price: 0.99, currencyCode: "USD" }];
         },
         purchaseRevenueCatStoreProduct: async () => { purchaseCalls += 1; },
       },

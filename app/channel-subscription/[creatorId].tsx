@@ -208,7 +208,11 @@ export default function ChannelSubscriptionScreen() {
             testID="platform-subscription-back-button"
             style={styles.backButton}
             activeOpacity={0.82}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else if (creatorId) router.replace({ pathname: "/channel/[userId]", params: { userId: creatorId } });
+              else router.replace("/(tabs)");
+            }}
             accessibilityRole="button"
             accessibilityLabel="Go back from Platform Subscription"
           >
@@ -293,6 +297,9 @@ export default function ChannelSubscriptionScreen() {
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" style={styles.secondaryButton} onPress={() => router.push("/purchases")}>
+              <Text style={styles.secondaryButtonText}>Purchases &amp; My Tickets</Text>
+            </TouchableOpacity>
             <View style={styles.ownerActionStack}>
               <TouchableOpacity
                 style={[styles.primaryButton, busy && styles.buttonDisabled]}

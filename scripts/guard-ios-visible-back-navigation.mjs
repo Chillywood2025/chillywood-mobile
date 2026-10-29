@@ -58,7 +58,13 @@ for (const [surface, source, testId, accessibilityLabel, expectedControlCount] o
     assert.match(control, /\n\s+accessible\n/u, `${surface} Back must be explicitly accessible`);
     assert.match(control, /\n\s+focusable\n/u, `${surface} Back must be focusable`);
     assert.match(control, /hitSlop=\{12\}/u, `${surface} Back must retain an expanded touch target`);
-    assert.match(control, /onPress=\{\(\) => router\.back\(\)\}/u, `${surface} must retain stack Back behavior`);
+    if (testId === "platform-subscription-back-button") {
+      assert.match(control, /onPress=\{\(\) => \{\s*if \(router\.canGoBack\(\)\) router\.back\(\);/u, `${surface} must use stack Back when history exists`);
+      assert.match(control, /else if \(creatorId\) router\.replace\(\{ pathname: "\/channel\/\[userId\]", params: \{ userId: creatorId \} \}\);/u, `${surface} must recover cold links to the exact creator channel`);
+      assert.match(control, /else router\.replace\("\/\(tabs\)"\);\s*\}\}/u, `${surface} must recover missing-creator cold links to home`);
+    } else {
+      assert.match(control, /onPress=\{\(\) => router\.back\(\)\}/u, `${surface} must retain stack Back behavior`);
+    }
     assert.match(control, /accessibilityRole="button"/u, `${surface} Back must be announced as a button`);
     assert.ok(
       control.includes(`accessibilityLabel="${accessibilityLabel}"`),

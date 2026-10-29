@@ -1,5 +1,5 @@
 begin;
-select plan(59);
+select plan(64);
 
 select has_table('public','paid_live_watch_party_offers','1. exact live offers table exists');
 select has_table('public','paid_live_watch_party_passes','2. exact live passes table exists');
@@ -49,6 +49,21 @@ insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values
   ('b1000000-0000-4000-8000-000000000002',false,false,timezone('utc'::text,now())),
   ('b1000000-0000-4000-8000-000000000003',false,false,timezone('utc'::text,now()))
 on conflict (id) do nothing;
+-- Initial fulfillment now rechecks the exact issuing session. Seed valid
+-- synthetic sessions and current account legal acceptances, not fictional
+-- generation strings which could never pass real purchase authority.
+insert into auth.sessions(id,user_id) values
+  ('81000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000001'),
+  ('81000000-0000-4000-8000-000000000002','b1000000-0000-4000-8000-000000000002'),
+  ('81000000-0000-4000-8000-000000000003','b1000000-0000-4000-8000-000000000003');
+insert into public.wave1_legal_acceptances(
+  user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source
+)
+select session_row.user_id,public.wave1_sha256(session_row.user_id::text),document.document_key,document.version,
+  document.market,'member',document.capability,session_row.id::text,'service_reconciliation'
+from auth.sessions session_row cross join public.wave1_legal_document_versions document
+where session_row.id in ('81000000-0000-4000-8000-000000000001','81000000-0000-4000-8000-000000000002','81000000-0000-4000-8000-000000000003')
+  and document.active and document.market='UNITED_STATES' and document.capability='account';
 insert into public.watch_party_rooms(party_id,host_user_id,room_type,is_active) values
   ('RFGC-LIVE-A','a1000000-0000-4000-8000-000000000001','live',true),
   ('RFGC-LIVE-B','a1000000-0000-4000-8000-000000000001','live',true),
@@ -97,23 +112,39 @@ insert into public.money_purchase_intents(
     (select id from public.monetization_products where product_key='live_watch_party_access_pass_sandbox_099'),
     'live_watch_party_access_pass_sandbox_099','live_watch_party_access_pass','revenuecat_google_play','cw_live_watch_party_access_sandbox_099',
     'live_watch_party_access','c1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000001',
-    'sandbox','pending',99,'usd','rfgc-live-access-b1',timezone('utc'::text,now())+interval '15 minutes','rfgc-session-b1','{}'),
+    'sandbox','pending',99,'usd','rfgc-live-access-b1',timezone('utc'::text,now())+interval '15 minutes','81000000-0000-4000-8000-000000000001','{}'),
   ('d1000000-0000-4000-8000-000000000002','b1000000-0000-4000-8000-000000000002',
     (select id from public.monetization_products where product_key='live_watch_party_seat_pass_sandbox_099'),
     'live_watch_party_seat_pass_sandbox_099','live_watch_party_seat_pass','revenuecat_google_play','cw_live_watch_party_seat_sandbox_099',
     'live_watch_party_seat','c1000000-0000-4000-8000-000000000002','a1000000-0000-4000-8000-000000000001',
-    'sandbox','pending',99,'usd','rfgc-live-seat-b2',timezone('utc'::text,now())+interval '15 minutes','rfgc-session-b2-seat','{}'),
+    'sandbox','pending',99,'usd','rfgc-live-seat-b2',timezone('utc'::text,now())+interval '15 minutes','81000000-0000-4000-8000-000000000002','{}'),
   ('d1000000-0000-4000-8000-000000000003','b1000000-0000-4000-8000-000000000002',
     (select id from public.monetization_products where product_key='live_watch_party_access_pass_sandbox_099'),
     'live_watch_party_access_pass_sandbox_099','live_watch_party_access_pass','revenuecat_google_play','cw_live_watch_party_access_sandbox_099',
     'live_watch_party_access','c1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000001',
-    'sandbox','pending',99,'usd','rfgc-live-access-b2',timezone('utc'::text,now())+interval '15 minutes','rfgc-session-b2-access','{}'),
+    'sandbox','pending',99,'usd','rfgc-live-access-b2',timezone('utc'::text,now())+interval '15 minutes','81000000-0000-4000-8000-000000000002','{}'),
   ('d1000000-0000-4000-8000-000000000004','b1000000-0000-4000-8000-000000000003',
     (select id from public.monetization_products where product_key='live_watch_party_access_pass_sandbox_099'),
     'live_watch_party_access_pass_sandbox_099','live_watch_party_access_pass','revenuecat_google_play','cw_live_watch_party_access_sandbox_099',
     'live_watch_party_access','c1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000001',
-    'sandbox','pending',99,'usd','rfgc-live-access-b3',timezone('utc'::text,now())+interval '15 minutes','rfgc-session-b3-access','{}');
+    'sandbox','pending',99,'usd','rfgc-live-access-b3',timezone('utc'::text,now())+interval '15 minutes','81000000-0000-4000-8000-000000000003','{}');
 set local session_replication_role=origin;
+
+-- A still-pending initial purchase must not outlive its exact issuing session.
+update auth.sessions set not_after=timezone('utc'::text,now())-interval '1 hour'
+where id='81000000-0000-4000-8000-000000000003';
+select is((public.process_revenuecat_live_watch_party_event_atomic(
+  'revenuecat_google_play','rfgc-stale-session-b3','NON_RENEWING_PURCHASE','b1000000-0000-4000-8000-000000000003',
+  'cw_live_watch_party_access_sandbox_099','sandbox',timezone('utc'::text,now()),99,'usd',repeat('a',64),'rfgc-stale-original-b3')->>'reason'),
+  'purchase_intent_session_authority_not_current','60. expired issuing session cannot grant a new Live Stage pass');
+select is((select count(*)::integer from public.paid_live_watch_party_passes where buyer_id='b1000000-0000-4000-8000-000000000003'),
+  0,'61. stale initial charge creates no pass');
+select is((select status from public.money_purchase_intents where id='d1000000-0000-4000-8000-000000000004'),
+  'pending','62. stale initial charge does not consume the pending intent');
+select is((select count(*)::integer from public.revenuecat_provider_reconciliation_obligations
+  where original_transaction_id='rfgc-stale-original-b3' and reported_amount_minor=99 and reported_currency='usd'),
+  1,'63. denied signed charge retains exact refund/provider reconciliation obligation');
+update auth.sessions set not_after=null where id='81000000-0000-4000-8000-000000000003';
 
 select lives_ok($$select public.process_revenuecat_live_watch_party_event_atomic(
   'revenuecat_google_play','rfgc-access-b1-active','NON_RENEWING_PURCHASE','b1000000-0000-4000-8000-000000000001',
@@ -198,13 +229,17 @@ update public.platform_money_kill_switches set state='sandbox_only'
 where key='live_watch_party_access_enabled';
 update public.paid_live_watch_party_offers set price_cents=199
 where id='c1000000-0000-4000-8000-000000000001';
-select throws_ok($$select public.process_revenuecat_live_watch_party_event_atomic(
+select lives_ok($$select public.process_revenuecat_live_watch_party_event_atomic(
   'revenuecat_google_play','rfgc-stale-offer','NON_RENEWING_PURCHASE','b1000000-0000-4000-8000-000000000003',
   'cw_live_watch_party_access_sandbox_099','sandbox',timezone('utc'::text,now()),99,'usd',repeat('3',64),'rfgc-stale-offer-original')$$,
-  'live_watch_party_active_offer_binding_stale','42. active event cannot grant after offer mapping changes');
+  '42. a verified receipt honors its immutable purchase after the creator reprices the current offer');
 select is((select count(*)::integer from public.paid_live_watch_party_passes
-  where buyer_id='b1000000-0000-4000-8000-000000000003'),0,
-  '43. stale offer mismatch creates no pass authority');
+  where buyer_id='b1000000-0000-4000-8000-000000000003'),1,
+  '43. original purchase terms create exactly one bound pass despite a later offer reprice');
+select is((select amount_minor from public.money_access_ledger_events
+  where metadata->>'original_transaction_id'='rfgc-stale-offer-original'
+    and event_type='NON_RENEWING_PURCHASE'),99,
+  'the original agreed99 economics remain immutable after the current offer changes to199');
 select is((select creator_id::text from public.money_access_ledger_events
   where metadata->>'original_transaction_id'='rfgc-original-access-b1' and event_type='REFUND'),
   'a1000000-0000-4000-8000-000000000001',

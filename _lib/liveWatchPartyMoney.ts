@@ -1,12 +1,16 @@
 import { Platform } from "react-native";
+import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
 import {
+  beginCreatorMoneyCheckout,
+  CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY,
   captureCreatorMoneyPurchaseAuthority,
   isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
   invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
+  type CreatorMoneyPurchaseIntentExpectation,
 } from "./creatorMoneyPurchaseAuthority";
 import {
   purchaseRevenueCatStoreProduct,
@@ -347,7 +351,7 @@ export async function purchaseLiveWatchPartyOffer(input: {
     if (response?.error?.message?.includes("live_stage_entry_required_before_seat_pass")) {
       throw new Error("A Live Stage Pass is required before a Live Stage Seat Pass can be purchased for this paid Live Stage. Nothing was charged.");
     }
-    throw new Error(response?.error?.message || "The Live Stage purchase could not start.");
+    throw new Error("Live Stage checkout could not be confirmed. Open Purchases & My Tickets and refresh status before trying another purchase.");
   }
   const data = response.data;
   const row = data && typeof data === "object" && !Array.isArray(data)
@@ -373,7 +377,7 @@ export async function purchaseLiveWatchPartyOffer(input: {
     ? "live_watch_party_access"
     : "live_watch_party_seat";
   const providerProductId = exactText(row?.providerProductId);
-  const intent = validateCreatorMoneyPurchaseIntent(data, {
+  const expectedIntent: CreatorMoneyPurchaseIntentExpectation = {
     userId: subject.userId,
     sourceType,
     sourceId: input.offerId,
@@ -384,7 +388,8 @@ export async function purchaseLiveWatchPartyOffer(input: {
     status: "pending",
     amountMinor: input.priceCents,
     currency: "usd",
-  });
+  };
+  const intent = validateCreatorMoneyPurchaseIntent(data, expectedIntent);
   if (
     !intent
     || exactText(row?.partyId) !== exactText(input.partyId)
@@ -398,6 +403,9 @@ export async function purchaseLiveWatchPartyOffer(input: {
   if (!await revalidateCreatorMoneyPurchaseSubject(subject)) throw new Error("Account changed before checkout.");
   const storeProduct = products.find((product) => exactText(product.identifier) === intent.providerProductId);
   if (!storeProduct) throw new Error("The Live Stage Pass is unavailable on this device. Nothing was charged.");
+  if (!isCreatorMoneyStoreQuoteMatch(storeProduct, { productId: intent.providerProductId, amountMinor: input.priceCents, currency: "usd" })) {
+    throw new Error(CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY);
+  }
   if (input.passType === "live_watch_party_seat_pass") {
     if (!await revalidateCreatorMoneyPurchaseSubject(subject)) throw new Error("Account changed before checkout.");
     const latestEntryAccess = await readLiveWatchPartyMoneyAccess(input.partyId);
@@ -419,12 +427,13 @@ export async function purchaseLiveWatchPartyOffer(input: {
     }
     return access;
   };
+  if (!await beginCreatorMoneyCheckout(subject, intent.id, expectedIntent)) throw new Error(CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY);
   let purchase;
   try {
     purchase = await purchaseRevenueCatStoreProduct(storeProduct, { authority: subject.authority });
   } catch (error) {
     if (isRevenueCatUserCancellation(error)) {
-      throw new Error("Live Stage checkout was canceled. Nothing changed.");
+      throw new Error("Live Stage checkout was canceled. Refresh Purchases & My Tickets to confirm its status before another attempt.");
     }
     const recoveredAccess = await waitForExactPass();
     if (isLiveWatchPartyPassConfirmed(recoveredAccess, input.passType, input.offerId)) {
@@ -436,7 +445,7 @@ export async function purchaseLiveWatchPartyOffer(input: {
         confirmed: true,
       };
     }
-    throw new Error("Live Stage checkout could not be verified. Check your access before trying again.");
+    throw new Error("Live Stage payment could not be confirmed. Refresh Purchases & My Tickets. Do not purchase again while payment is unknown.");
   }
   if (!await revalidateCreatorMoneyPurchaseSubject(subject)) throw new Error("Account changed while checkout completed.");
   const access = await waitForExactPass();

@@ -88,7 +88,11 @@ try{
  }));
  async function authority(f,subject=buyer,session=buyerSession,party=f.party){if(repairApplied)authorityModes.add(`${f.store}:${subject===host?'host':'buyer'}:${session===null?'target':'current'}`);return service(async()=>(await db.query(`select public.resolve_watch_party_livekit_viewer_authority($1,$2,$3) result`,[party,subject,session])).rows[0].result);}
  for(const f of fixtures)await step(`${f.store}_captured_live_exact_price_gap`,()=>isolate(async()=>{
-  await db.query(`update public.money_purchase_intents set amount_minor=100 where id=$1`,[f.intent]);const result=await authority(f);assert.equal(result.allowed,true,JSON.stringify(result));return result;
+  // The later immutable-quote guard now prevents the historical corruption
+  // before the captured read-side defect can be reached. Do not disable it to
+  // manufacture an impossible candidate state.
+  await assert.rejects(()=>db.query(`update public.money_purchase_intents set amount_minor=100 where id=$1`,[f.intent]),/purchase_intent_quote_immutable/);
+  return {mutationRejected:'purchase_intent_quote_immutable',historicalReadSideInjectionPrevented:true};
  }));
  const quarantineFixture=fixtures.find(f=>f.store===finalQuarantineStore)||fixtures[0];
  await step('captured_live_existing_host_quarantine_projection_conflict',async()=>{
@@ -149,7 +153,10 @@ try{
   await denial('missing_current_account_legal',f,async()=>{await db.query(`delete from public.wave1_legal_acceptances where user_id=$1 and capability='account'`,[buyer]);return true;});
   await denial('missing_creator_money_legal',f,async()=>{await db.query(`delete from public.wave1_legal_acceptances where user_id=$1 and capability='creator_money'`,[host]);return true;});
   await denial('expired_grant',f,async()=>{await db.query(`update public.access_grants set expires_at=now()-interval '1 second' where id=$1`,[f.grant]);return true;});
-  await denial('mismatched_intent_offer_amount',f,async()=>{await db.query(`update public.money_purchase_intents set amount_minor=100 where id=$1`,[f.intent]);return true;});
+  await step(`${f.store}_mismatched_intent_offer_amount`,()=>isolate(async()=>{
+   await assert.rejects(()=>db.query(`update public.money_purchase_intents set amount_minor=100 where id=$1`,[f.intent]),/purchase_intent_quote_immutable/);
+   return {mutationRejected:'purchase_intent_quote_immutable'};
+  }));
   await denial('mismatched_event_sku',f,async()=>{await db.query(`update public.provider_events set metadata=jsonb_set(metadata,'{provider_product_id}','"wrong-sku"') where id=$1`,[f.event]);return true;});
   await denial('terminal_exact_link',f,async()=>{await db.query(`update public.revenuecat_consumable_transaction_intents set terminal=true where purchase_intent_id=$1`,[f.intent]);return true;});
   await denial('ambiguous_exact_link',f,async()=>{await db.query(`update public.revenuecat_consumable_transaction_intents set binding_state='ambiguous_legacy' where purchase_intent_id=$1`,[f.intent]);return true;});

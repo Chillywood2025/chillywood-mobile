@@ -28,6 +28,9 @@ export type CreatorEventRecord = {
   status: CreatorEventStatus;
   startsAt: string | null;
   endsAt: string | null;
+  timeZone: string;
+  managementStatus: string | null;
+  statusMessage: string | null;
   linkedTitleId: string | null;
   replayPolicy: CreatorEventReplayPolicy;
   replayAvailableAt: string | null;
@@ -73,6 +76,7 @@ export type CreateCreatorEventInput = {
   status?: CreatorEventStatus;
   startsAt?: string | null;
   endsAt?: string | null;
+  timeZone?: string;
   linkedTitleId?: string | null;
   replayPolicy?: CreatorEventReplayPolicy;
   replayAvailableAt?: string | null;
@@ -88,6 +92,7 @@ export type UpdateCreatorEventInput = {
   status?: CreatorEventStatus;
   startsAt?: string | null;
   endsAt?: string | null;
+  timeZone?: string;
   linkedTitleId?: string | null;
   replayPolicy?: CreatorEventReplayPolicy;
   replayAvailableAt?: string | null;
@@ -95,12 +100,12 @@ export type UpdateCreatorEventInput = {
   reminderReady?: boolean;
 };
 
-type CreatorEventRow = Tables<"creator_events"> & { visibility?: string | null };
-type CreatorEventInsert = TablesInsert<"creator_events"> & { visibility?: CreatorEventVisibility };
-type CreatorEventUpdate = TablesUpdate<"creator_events"> & { visibility?: CreatorEventVisibility };
+type CreatorEventRow = Tables<"creator_events"> & { visibility?: string | null; time_zone?: string; management_status?: string | null; status_message?: string | null };
+type CreatorEventInsert = TablesInsert<"creator_events"> & { visibility?: CreatorEventVisibility; time_zone?: string };
+type CreatorEventUpdate = TablesUpdate<"creator_events"> & { visibility?: CreatorEventVisibility; time_zone?: string };
 
 const CREATOR_EVENT_SELECT =
-  "id,host_user_id,event_title,event_type,visibility,status,starts_at,ends_at,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
+  "id,host_user_id,event_title,event_type,visibility,status,starts_at,ends_at,time_zone,management_status,status_message,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
 
 const isDefined = <T>(value: T | null): value is T => value !== null;
 
@@ -141,12 +146,16 @@ const normalizeCreatorEventReplayPolicy = (value: unknown): CreatorEventReplayPo
   return "none";
 };
 
-const normalizeIsoTimestamp = (value: unknown): string | null => {
+const readTimestampToken = (value: unknown): string | null => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return null;
-  const parsed = Date.parse(normalized);
-  if (!Number.isFinite(parsed)) return null;
-  return new Date(parsed).toISOString();
+  if (!Number.isFinite(Date.parse(normalized))) return null;
+  return normalized;
+};
+
+const normalizeIsoTimestamp = (value: unknown): string | null => {
+  const token = readTimestampToken(value);
+  return token ? new Date(token).toISOString() : null;
 };
 
 export const parseCreatorEventRow = (row: CreatorEventRow | null): CreatorEventRecord | null => {
@@ -166,13 +175,18 @@ export const parseCreatorEventRow = (row: CreatorEventRow | null): CreatorEventR
     status: normalizeCreatorEventStatus(row.status),
     startsAt: normalizeIsoTimestamp(row.starts_at),
     endsAt: normalizeIsoTimestamp(row.ends_at),
+    timeZone: String(row.time_zone ?? "UTC"),
+    managementStatus: row.management_status?.trim() || null,
+    statusMessage: row.status_message?.trim() || null,
     linkedTitleId: String(row.linked_title_id ?? "").trim() || null,
     replayPolicy: normalizeCreatorEventReplayPolicy(row.replay_policy),
     replayAvailableAt: normalizeIsoTimestamp(row.replay_available_at),
     replayExpiresAt: normalizeIsoTimestamp(row.replay_expires_at),
     reminderReady: !!row.reminder_ready,
     createdAt: normalizeIsoTimestamp(row.created_at) ?? new Date().toISOString(),
-    updatedAt: normalizeIsoTimestamp(row.updated_at) ?? new Date().toISOString(),
+    // PostgreSQL retains microseconds; Date would round the optimistic-lock
+    // token and make every subsequent management action reject a fresh row.
+    updatedAt: readTimestampToken(row.updated_at) ?? new Date().toISOString(),
   };
 };
 
@@ -195,7 +209,7 @@ export const readEventReplayAvailability = (
   const replayAvailableAtMillis = event.replayAvailableAt ? Date.parse(event.replayAvailableAt) : null;
   const replayExpiresAtMillis = event.replayExpiresAt ? Date.parse(event.replayExpiresAt) : null;
   const statusExpired = event.status === "expired";
-  const timeExpired = replayExpiresAtMillis != null && Number.isFinite(replayExpiresAtMillis) && nowMillis > replayExpiresAtMillis;
+  const timeExpired = replayExpiresAtMillis != null && Number.isFinite(replayExpiresAtMillis) && nowMillis >= replayExpiresAtMillis;
   const pendingReplay = replayAvailableAtMillis != null && Number.isFinite(replayAvailableAtMillis) && nowMillis < replayAvailableAtMillis;
   const expired = statusExpired || timeExpired;
   const availableByStatus =
@@ -269,8 +283,26 @@ export const buildCreatorEventSummary = (
   };
 };
 
+export const readNewCreatorEventReplayTermsError = (value: {
+  replayPolicy?: CreatorEventReplayPolicy;
+  replayAvailableAt?: string | null;
+  replayExpiresAt?: string | null;
+  endsAt?: string | null;
+}): string | null => {
+  if (!value.replayPolicy || value.replayPolicy === "none") return null;
+  if (value.replayPolicy !== "until_expiration") return "New replay offers need an explicit availability time and expiration. Existing purchased replay terms are preserved.";
+  const available = Date.parse(value.replayAvailableAt ?? "");
+  const expires = Date.parse(value.replayExpiresAt ?? "");
+  const ends = Date.parse(value.endsAt ?? "");
+  if (![available, expires, ends].every(Number.isFinite)) return "Choose the event end, replay availability, and replay expiration before offering replay.";
+  if (available < ends) return "Replay availability cannot be before the event’s scheduled end.";
+  if (expires <= available) return "Replay expiration must be after replay availability.";
+  return null;
+};
+
 const buildValidatedEventWriteShape = (
   value: CreateCreatorEventInput | (CreatorEventRecord & UpdateCreatorEventInput),
+  existing?: CreatorEventRecord,
 ): { payload: CreatorEventInsert | CreatorEventUpdate } | { error: CreatorEventWriteError } => {
   const hostUserId = String(value.hostUserId ?? "").trim();
   const eventTitle = String(value.eventTitle ?? "").trim();
@@ -279,11 +311,20 @@ const buildValidatedEventWriteShape = (
   const status = normalizeCreatorEventStatus(value.status);
   const startsAt = normalizeIsoTimestamp(value.startsAt);
   const endsAt = normalizeIsoTimestamp(value.endsAt);
+  const timeZone = String(value.timeZone ?? "UTC").trim();
+  try { new Intl.DateTimeFormat("en-US", { timeZone }).format(0); }
+  catch { return { error: { message: "Choose a valid IANA time zone before saving." } }; }
   const linkedTitleId = String(value.linkedTitleId ?? "").trim() || null;
   const replayPolicy = normalizeCreatorEventReplayPolicy(value.replayPolicy);
   let replayAvailableAt = normalizeIsoTimestamp(value.replayAvailableAt);
   let replayExpiresAt = normalizeIsoTimestamp(value.replayExpiresAt);
   let reminderReady = !!value.reminderReady;
+
+  for (const field of ["startsAt", "endsAt", "replayAvailableAt", "replayExpiresAt"] as const) {
+    if (value[field] != null && String(value[field]).trim() && !normalizeIsoTimestamp(value[field])) {
+      return { error: { message: "Event dates must be valid. Correct the date before saving." } };
+    }
+  }
 
   if (!hostUserId) {
     return { error: { message: "Creator event writes require a host user id." } };
@@ -310,12 +351,13 @@ const buildValidatedEventWriteShape = (
     replayExpiresAt = null;
   }
 
-  if (replayPolicy === "until_expiration" && !replayExpiresAt) {
-    return { error: { message: "Expiring replay windows need a replay expiration time." } };
-  }
+  if (replayPolicy === "indefinite") replayExpiresAt = null;
 
-  if (replayAvailableAt && replayExpiresAt && Date.parse(replayExpiresAt) < Date.parse(replayAvailableAt)) {
-    return { error: { message: "Replay expiration cannot be earlier than replay availability." } };
+  const replayTermsChanged = !existing || replayPolicy !== existing.replayPolicy
+    || replayAvailableAt !== existing.replayAvailableAt || replayExpiresAt !== existing.replayExpiresAt;
+  if (replayTermsChanged) {
+    const replayError = readNewCreatorEventReplayTermsError({ replayPolicy, replayAvailableAt, replayExpiresAt, endsAt });
+    if (replayError) return { error: { message: replayError } };
   }
 
   if (status !== "scheduled" || !startsAt) {
@@ -331,6 +373,7 @@ const buildValidatedEventWriteShape = (
       status,
       starts_at: startsAt,
       ends_at: endsAt,
+      time_zone: timeZone,
       linked_title_id: linkedTitleId,
       replay_policy: replayPolicy,
       replay_available_at: replayAvailableAt,
@@ -366,6 +409,7 @@ const getCreatorEventCreateFlightKey = (input: CreateCreatorEventInput) => JSON.
   input.status ?? "draft",
   input.startsAt ?? null,
   input.endsAt ?? null,
+  input.timeZone ?? "UTC",
   input.linkedTitleId ?? null,
   input.replayPolicy ?? "none",
   input.replayAvailableAt ?? null,
@@ -393,6 +437,7 @@ async function createCreatorEventOnce(
     status: String(validatedPayload.status ?? "draft").trim(),
     starts_at: validatedPayload.starts_at ?? null,
     ends_at: validatedPayload.ends_at ?? null,
+    time_zone: validatedPayload.time_zone ?? "UTC",
     linked_title_id: validatedPayload.linked_title_id ?? null,
     replay_policy: String(validatedPayload.replay_policy ?? "none").trim(),
     replay_available_at: validatedPayload.replay_available_at ?? null,
@@ -455,14 +500,14 @@ export async function updateCreatorEvent(
     eventType: input.eventType ?? current.eventType,
     visibility: input.visibility ?? current.visibility,
     status: input.status ?? current.status,
-    startsAt: input.startsAt ?? current.startsAt,
-    endsAt: input.endsAt ?? current.endsAt,
-    linkedTitleId: input.linkedTitleId ?? current.linkedTitleId,
+    startsAt: input.startsAt === undefined ? current.startsAt : input.startsAt,
+    endsAt: input.endsAt === undefined ? current.endsAt : input.endsAt,
+    linkedTitleId: input.linkedTitleId === undefined ? current.linkedTitleId : input.linkedTitleId,
     replayPolicy: input.replayPolicy ?? current.replayPolicy,
-    replayAvailableAt: input.replayAvailableAt ?? current.replayAvailableAt,
-    replayExpiresAt: input.replayExpiresAt ?? current.replayExpiresAt,
+    replayAvailableAt: input.replayAvailableAt === undefined ? current.replayAvailableAt : input.replayAvailableAt,
+    replayExpiresAt: input.replayExpiresAt === undefined ? current.replayExpiresAt : input.replayExpiresAt,
     reminderReady: input.reminderReady ?? current.reminderReady,
-  });
+  }, current);
 
   if ("error" in validated) return validated;
 

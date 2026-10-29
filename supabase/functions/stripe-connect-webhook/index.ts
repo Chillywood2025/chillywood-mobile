@@ -10,7 +10,9 @@ import {
   optionsResponse,
   parseStripeEvent,
   readCreatorPayoutAccountByProviderId,
+  readStripeTestSecret,
   readStripeWebhookSecret,
+  retrieveStripeConnectAccount,
   safeAccountStatusPayload,
   safeWriteAuditLog,
   sanitizeErrorMessage,
@@ -20,7 +22,6 @@ import {
   type SupabaseClientLike,
   updateProviderWebhookEvent,
   upsertCreatorPayoutAccountFromStripe,
-  upsertEligibilityRecord,
   verifyStripeWebhookSignature,
   writeAuditLog,
 } from "../_shared/stripe-connect.ts";
@@ -89,7 +90,7 @@ Deno.serve(async (req) => {
     }
 
     event = parseStripeEvent(rawBody);
-    if (event.livemode === true) {
+    if (event.livemode !== false) {
       await safeWriteAuditLog(adminClient, {
         action: "stripe_connect_webhook_failed",
         metadata: {
@@ -118,10 +119,14 @@ Deno.serve(async (req) => {
 
     const accountFromEvent = stripeAccountFromEvent(event);
     const providerAccountId = toText(accountFromEvent?.id ?? event.account) || null;
+    if (event.type === "account.updated" && (!accountFromEvent || !providerAccountId
+      || accountFromEvent.livemode === true || (event.account && event.account !== providerAccountId))) {
+      throw new Error("account.updated webhook did not match its connected account binding.");
+    }
     const eventRecord = await insertProviderWebhookEvent(adminClient, event, providerAccountId);
     eventRowId = toText(eventRecord.row?.id) || null;
 
-    if (eventRecord.duplicate) {
+    if (eventRecord.duplicate && ["processed", "ignored"].includes(toText(eventRecord.row?.status))) {
       return jsonResponse(200, {
         status: "duplicate",
         provider: "stripe",
@@ -239,7 +244,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    const normalizedAccount = normalizeStripeAccount(accountFromEvent);
+    // Account event snapshots can arrive out of order. A verified event wakes
+    // a read of the currently bound test account; its old payload is not state.
+    const stripeSecret = readStripeTestSecret();
+    if (!stripeSecret.configured) throw new Error(stripeSecret.message);
+    const currentAccount = await retrieveStripeConnectAccount(stripeSecret.secret, providerAccountId);
+    if (currentAccount.id !== providerAccountId) throw new Error("Stripe account response did not match the requested account binding.");
+    const normalizedAccount = normalizeStripeAccount(currentAccount);
     const processedAuditId = await writeAuditLog(adminClient, {
       action: "stripe_connect_webhook_processed",
       afterState: safeAccountStatusPayload(normalizedAccount),
@@ -255,7 +266,7 @@ Deno.serve(async (req) => {
       targetUserId: payoutAccount.creator_user_id,
     });
 
-    const updatedAccount = await upsertCreatorPayoutAccountFromStripe(
+    await upsertCreatorPayoutAccountFromStripe(
       adminClient,
       payoutAccount.creator_user_id,
       normalizedAccount,
@@ -263,7 +274,6 @@ Deno.serve(async (req) => {
       processedAuditId,
       FUNCTION_NAME,
     );
-    await upsertEligibilityRecord(adminClient, updatedAccount.creator_user_id, updatedAccount.id, normalizedAccount, processedAuditId);
 
     if (eventRowId) {
       await updateProviderWebhookEvent(adminClient, eventRowId, {
