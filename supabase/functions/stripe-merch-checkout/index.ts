@@ -16,15 +16,17 @@ import {
   type AuthenticatedUser,
   type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
-import { readExactBetaAccess } from "../_shared/exact-subject-authority.ts";
+import { parseExactCurrentSessionAuthority, readExactBetaAccess } from "../_shared/exact-subject-authority.ts";
 
 const FUNCTION_NAME = "stripe-merch-checkout";
 const STRIPE_API_BASE_URL = "https://api.stripe.com/v1";
 const STRIPE_API_VERSION = "2026-02-25.clover";
-const DEFAULT_SUCCESS_URL = "chillywoodmobile://money/merch/sandbox/success";
-const DEFAULT_CANCEL_URL = "chillywoodmobile://money/merch/sandbox/cancel";
+const DEFAULT_SUCCESS_URL = "chillywoodmobile://merch/orders";
+const DEFAULT_CANCEL_URL = "chillywoodmobile://merch/orders";
 
 type MerchCheckoutPayload = {
+  attempt_id?: unknown;
+  variant_id?: unknown;
   cancel_url?: unknown;
   cancelUrl?: unknown;
   product_id?: unknown;
@@ -64,32 +66,10 @@ type StripeCheckoutSession = {
   url?: string | null;
 };
 
-const allowedWebOrigins = new Set([
-  "https://chillywoodstream.com",
-  "https://www.chillywoodstream.com",
-]);
-
-const allowedDeepLinkProtocols = new Set([
-  "chillywoodmobile:",
-  "com.chillywood.mobile:",
-]);
-
 const normalizeQuantity = (value: unknown) => {
   const quantity = Number(value ?? 1);
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) return null;
   return quantity;
-};
-
-const safeRedirectUrl = (value: unknown, fallback: string) => {
-  const raw = toText(value) || fallback;
-  try {
-    const parsed = new URL(raw);
-    if (allowedWebOrigins.has(parsed.origin) || allowedDeepLinkProtocols.has(parsed.protocol)) return parsed.toString();
-  } catch {
-    return fallback;
-  }
-
-  return fallback;
 };
 
 const stripeRequest = async <T extends object>(
@@ -226,67 +206,72 @@ Deno.serve(async (req) => {
       );
     }
 
-    const amountSubtotal = (product.price_minor ?? 0) * quantity;
-    const { data: order, error: orderError } = await adminClient
-      .from("merch_orders")
-      .insert({
-        amount_subtotal_minor: amountSubtotal,
-        amount_total_minor: amountSubtotal,
-        buyer_id: currentUser.id,
-        creator_id: product.creator_id ?? null,
-        currency: product.currency ?? "usd",
-        environment: "sandbox",
-        fulfillment_status: "not_started",
-        metadata: {
-          cash_out_enabled: false,
-          checkout_created_by: FUNCTION_NAME,
-          creates_digital_access: false,
-          app_access_record_created: false,
-          live_money_action: false,
-          physical_merch_only: true,
-          premium_entitlement_created: false,
-          revenuecat_entitlement_created: false,
-          sandbox_only: true,
-        },
-        order_status: "pending",
-        payment_status: "pending",
-        product_id: product.id,
-        provider: "stripe_physical_goods",
-        shipping_required: true,
-      })
-      .select("id")
-      .single();
-
-    if (orderError) throw new Error(`Merch order insert failed: ${orderError.message}`);
-    const orderId = toText((order as { id?: unknown } | null)?.id);
-    if (!orderId) throw new Error("Merch order insert did not return an id.");
-
-    const { error: itemError } = await adminClient
-      .from("merch_order_items")
-      .insert({
-        currency: product.currency ?? "usd",
-        order_id: orderId,
-        product_id: product.id,
-        quantity,
-        unit_amount_minor: product.price_minor,
-      });
-
-    if (itemError) throw new Error(`Merch order item insert failed: ${itemError.message}`);
-
-    const productName = toText(product.title ?? product.display_name) || "Chi'llywood sandbox merch";
-    const successUrl = safeRedirectUrl(parsed.value.success_url ?? parsed.value.successUrl, DEFAULT_SUCCESS_URL);
-    const cancelUrl = safeRedirectUrl(parsed.value.cancel_url ?? parsed.value.cancelUrl, DEFAULT_CANCEL_URL);
+    const attemptId = toText(parsed.value.attempt_id);
+    const variantId = toText(parsed.value.variant_id);
+    if (variantId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(variantId)) {
+      return jsonResponse(400, { error: "invalid_variant", message: "Choose a valid size/color option." });
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attemptId)) {
+      return jsonResponse(400, { error: "invalid_attempt", message: "A stable checkout attempt id is required." });
+    }
+    // Freeze buyer/session authority in the original JWT. SQL owns inventory,
+    // publication/visibility checks and retry identity atomically.
+    const authorityResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/wave1_session_authority_readback`, {
+      method: "POST",
+      headers: { apikey: supabaseAnonKey, Authorization: req.headers.get("Authorization") ?? "", "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const authority = authorityResponse.ok
+      ? parseExactCurrentSessionAuthority(await authorityResponse.json().catch(() => null), currentUser.id) : null;
+    if (!authority) return jsonResponse(401, { error: "invalid_session", checkoutCreated: false });
+    const reservationResult = await adminClient.rpc("reserve_merch_checkout_for_actor", {
+      p_buyer_id: authority.userId, p_session_id: authority.sessionGeneration,
+      p_product_id: product.id, p_quantity: quantity, p_attempt_id: attemptId,
+      p_variant_id: variantId || null,
+    });
+    const reservation = reservationResult.data as {
+      id?: string; title?: string; priceMinor?: number; currency?: string; createdAt?: string;
+      variantId?: string | null; sku?: string | null; size?: string | null; color?: string | null;
+    } | null;
+    if (reservationResult.error || !reservation?.id || !Number.isFinite(Date.parse(reservation.createdAt ?? "")) || !Number.isInteger(reservation.priceMinor)
+      || (reservation.priceMinor ?? 0) <= 0 || reservation.currency !== "usd") {
+      const safeReasons: Record<string, string> = {
+        merch_existing_pending_order_check_orders: "You already have a pending order for this product. Resume it from My orders instead of starting another.",
+        merch_pending_order_limit_check_orders: "You have three unresolved sandbox orders. Check My orders before starting another.",
+        merch_attempt_closed_check_orders: "This checkout window has ended. Check My orders for provider confirmation; do not start a replacement payment.",
+        merch_sold_out: "There is not enough available stock. Refresh the shop or choose a smaller quantity.",
+        merch_variant_unavailable: "Choose an available size/color option. Refresh the shop if the option has changed.",
+        merch_variant_not_expected: "This product no longer uses that option. Refresh the shop before checkout.",
+        merch_creator_not_ready: "This creator is not ready to accept sandbox orders. Your existing order status remains available.",
+        merch_platform_unavailable: "This Platform is not available to your account. Your existing order status remains available.",
+      };
+      const reason = Object.keys(safeReasons).find(key => reservationResult.error?.message?.includes(key));
+      return jsonResponse(409, { error: "merch_reservation_unavailable", checkoutCreated: false,
+        message: reason ? safeReasons[reason] : "This product or checkout attempt is unavailable. Refresh the shop and check My orders before retrying." });
+    }
+    const orderId = reservation.id;
+    // Only immutable reservation snapshots contribute to provider parameters.
+    // Renaming an option after checkout cannot alter an idempotent retry.
+    const optionName = [reservation.size, reservation.color].filter(Boolean).join(" / ");
+    const productName = `${reservation.title || "Chi'llywood sandbox merch"}${optionName ? ` — ${optionName}` : ""}`;
+    // These fixed return destinations are not proof of payment; My orders reads
+    // the signed-webhook projection. Caller redirects cannot alter retry params.
+    const successUrl = `${DEFAULT_SUCCESS_URL}?orderId=${encodeURIComponent(orderId)}`;
+    const cancelUrl = `${DEFAULT_CANCEL_URL}?orderId=${encodeURIComponent(orderId)}`;
     const session = await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {
       body: {
         cancel_url: cancelUrl,
+        expires_at: Math.floor(Date.parse(reservation.createdAt ?? "") / 1000) + 3600,
         client_reference_id: orderId,
-        "line_items[0][price_data][currency]": product.currency ?? "usd",
+        "line_items[0][price_data][currency]": reservation.currency,
         "line_items[0][price_data][product_data][metadata][chillywood_merch_product_id]": product.id,
+        "line_items[0][price_data][product_data][metadata][chillywood_merch_variant_id]": reservation.variantId ?? undefined,
+        "line_items[0][price_data][product_data][metadata][sku]": reservation.sku ?? undefined,
         "line_items[0][price_data][product_data][metadata][creates_digital_access]": "false",
         "line_items[0][price_data][product_data][metadata][environment]": "sandbox",
         "line_items[0][price_data][product_data][metadata][rail]": "physical_merch",
         "line_items[0][price_data][product_data][name]": productName,
-        "line_items[0][price_data][unit_amount]": product.price_minor,
+        "line_items[0][price_data][unit_amount]": reservation.priceMinor,
         "line_items[0][quantity]": quantity,
         "metadata[buyer_user_id]": currentUser.id,
         "metadata[chillywood_order_id]": orderId,
@@ -309,7 +294,7 @@ Deno.serve(async (req) => {
     const sessionId = toText(session.id);
     const sessionUrl = toText(session.url);
     if (!sessionId || !sessionUrl) throw new Error("Stripe checkout session did not include an id and URL.");
-    if (session.livemode === true) throw new Error("Stripe checkout session was live-mode; refusing checkout.");
+    if (session.livemode !== false) throw new Error("Stripe checkout session did not confirm test mode; refusing checkout.");
 
     const { error: updateError } = await adminClient
       .from("merch_orders")

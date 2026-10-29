@@ -23,7 +23,8 @@ export type PlatformBrandAssetType =
   | "background_image"
   | "avatar"
   | "logo"
-  | "watermark";
+  | "watermark"
+  | "merch_product_image";
 
 export type PlatformBrandFitMode = "fill" | "fit" | "center";
 export type PlatformBrandThemePreset = "city_night" | "studio_red" | "clean_dark" | "spotlight" | "classic";
@@ -226,6 +227,7 @@ const normalizeAssetType = (value: unknown): PlatformBrandAssetType => {
     || normalized === "avatar"
     || normalized === "logo"
     || normalized === "watermark"
+    || normalized === "merch_product_image"
   ) {
     return normalized;
   }
@@ -592,6 +594,7 @@ export async function readPlatformBrandStudio(ownerUserId: string, options?: { t
       .from("platform_brand_assets")
       .select(PLATFORM_BRAND_ASSET_SELECT)
       .eq("owner_user_id", normalizedOwnerId)
+      .neq("asset_type", "merch_product_image")
       .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(50)
@@ -873,6 +876,8 @@ export async function uploadPlatformBrandAsset(input: {
   assetType: PlatformBrandAssetType;
   file: PlatformBrandAssetFile;
   attempt?: PlatformBrandUploadAttempt;
+  // A caller with an exact account-bound operation can freeze the upload token.
+  accessToken?: string;
   assertOperationCurrent?: () => void;
 }): Promise<PlatformBrandAsset> {
   input.assertOperationCurrent?.();
@@ -880,7 +885,7 @@ export async function uploadPlatformBrandAsset(input: {
   if (!ownerUserId) throw new Error("Sign in before choosing Platform media.");
   const validationMessage = getPlatformBrandAssetValidationMessage(input.file, input.assetType);
   if (validationMessage) throw new Error(validationMessage);
-  const accessToken = await getSignedInAccessToken();
+  const accessToken = input.accessToken ?? await getSignedInAccessToken();
   input.assertOperationCurrent?.();
 
   const pending = input.attempt?.payload;

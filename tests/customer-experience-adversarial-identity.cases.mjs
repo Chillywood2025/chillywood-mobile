@@ -1024,7 +1024,8 @@ test("physical merch checkout freezes the tap account and uses one canonical lau
   assert.ok(launchBody.indexOf("getCurrentAccountSessionAuthoritySnapshot()") < launchBody.indexOf("await captureAccountBoundSupabaseMutationSubject"));
   assert.match(launchBody, /Authorization: `Bearer \$\{subject\.accessToken\}`/u);
   assert.match(launchBody, /assertAccountBoundSupabaseMutationSubjectCurrent\(subject\)[\s\S]*?Linking\.openURL/u);
-  assert.match(app, /await launchCreatorMerchSandboxCheckout\(\)/u);
+  assert.match(app, /router\.push\("\/merch\/studio"/u);
+  assert.doesNotMatch(app, /await launchCreatorMerchSandboxCheckout\(\)/u);
   assert.doesNotMatch(app, /functions\/v1\/stripe-merch-checkout/u);
 });
 

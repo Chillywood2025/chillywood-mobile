@@ -61,12 +61,13 @@ test('Brand read consumers exclude archived historical-clean assets before signi
   {id:'empty-retained',owner_user_id:'owner',asset_state:'archived',moderation_status:'clean',scan_status:'clean',deleted_at:archivedAsset.deletedAt},
   {id:'empty-claimed',owner_user_id:'owner',asset_state:'archived',moderation_status:'pending_review',scan_status:'clean',deleted_at:archivedAsset.deletedAt},
   {id:'live',owner_user_id:'owner',asset_state:'published',moderation_status:'clean',scan_status:'clean',deleted_at:null},
+  {id:'merch-photo',owner_user_id:'owner',asset_type:'merch_product_image',asset_state:'draft',moderation_status:'clean',scan_status:'clean',deleted_at:null},
   {id:'review',owner_user_id:'owner',asset_state:'draft',moderation_status:'pending_review',scan_status:'pending_scan',deleted_at:null},
  ];
  const queries=[],parsed=[];
  const query=table=>{
   const calls=[],builder={};
-  for(const method of ['select','eq','in','is','order','limit'])builder[method]=(...args)=>{calls.push([method,...args]);return builder;};
+  for(const method of ['select','eq','neq','in','is','order','limit'])builder[method]=(...args)=>{calls.push([method,...args]);return builder;};
   builder.maybeSingle=()=>table==='public_profile'?Promise.resolve({data:profile,error:null}):builder;
   builder.returns=async()=>{
    if(table==='platform_brand_profiles')return {data:profile,error:null};
@@ -74,7 +75,7 @@ test('Brand read consumers exclude archived historical-clean assets before signi
    assert.ok(calls.some(([method,column,value])=>method==='is'&&column==='deleted_at'&&value===null),
     'each recent, selected, review and public lookup must exclude tombstones');
    const data=rows.filter(row=>calls.every(([method,column,value])=>
-    method==='eq'||method==='is'?row[column]===value:method==='in'?value.includes(row[column]):true));
+    method==='eq'||method==='is'?row[column]===value:method==='neq'?row[column]!==value:method==='in'?value.includes(row[column]):true));
    return {data,error:null};
   };
   return builder;
@@ -89,6 +90,8 @@ test('Brand read consumers exclude archived historical-clean assets before signi
  });
  const studio=await api.readPlatformBrandStudio('owner',{throwOnUnavailable:true});
  assert.deepEqual(Array.from(studio.assets,asset=>asset.id),['live','review']);
+ assert.ok(queries.some(calls=>calls.some(([method,column,value])=>method==='neq'&&column==='asset_type'&&value==='merch_product_image')),
+  'product photos remain separate from the Brand Studio picker');
  assert.equal(studio.heroImage,null);assert.equal(studio.heroVideo,null);
  assert.deepEqual(Array.from(await api.readPlatformBrandReviewQueue(),asset=>asset.id),['review']);
  const published=await api.readPublicPlatformBranding('owner',{throwOnUnavailable:true});
