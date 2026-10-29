@@ -34,8 +34,14 @@ It removes only ten parser-identified top-level BEGIN/COMMIT statements and
 changes one SET to SET LOCAL. Function bodies otherwise retain source bytes.
 The reviewed offsets, input/output hashes and37 sorted predecessor table locks
 are in `database-manifest.json`. `prepare-database.mjs` fails if any byte differs.
-It uses5-second lock and120-second statement limits. Qualified payload SHA256:
+It uses5-second lock and120-second per-statement limits. Standalone payload SHA256:
 `044888d2c4cd005259974bdd71c7845a9c55fbb61f17fffa8c6d296e19ec895b`.
+The canonical-tool input omits only that standalone outer BEGIN/COMMIT; the
+executor owns the transaction and appends its history record. Tool-input SHA256:
+`cb7c21435e3eee37dd1d03144a9b05b34ba0cb518e35067dc44905ed517af8ca`.
+Native single-transaction tests model this ownership; they do not establish the
+hosted migration API's internal history-commit implementation. Immediate schema
+and history readback is required, and an ambiguous outcome must not be reapplied.
 
 Atomic commit prevents direct clients seeing intermediate schema states.
 Table locks alone are not proof that every previously compiled RPC body drained.
@@ -54,8 +60,13 @@ Existing final-state evidence: two clean canonical database CI runs,
 The previous final-three atomic qualification passed25 checks. The new combined
 payload adds an intentional failure after all454 runtime statements, complete
 catalog/data rollback comparison, and successful catalog comparison against
-independently replayed source. Native PostgreSQL17.6 results must also pass before
-application. Local payload reproduction and bridge/bundler tests are included.
+independently replayed source. The standalone PostgreSQL17.6 run passed34 checks,
+including16 event identity anchors, an empty pending queue and unchanged roles.
+The executor-owned transaction variant passed15 checks: an injected P0001 after
+the full query and synthetic history insertion restores all predecessor schema
+and rows with zero history rows; success commits exactly one history row and
+matches the independently verified final catalog. Local payload reproduction
+and bridge/bundler tests pass10 checks.
 
 Fresh read-only production checks found16 unchanged predecessor definitions,
 owners, signatures, settings and ACLs;473 history entries; no creator-related

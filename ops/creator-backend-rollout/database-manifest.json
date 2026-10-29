@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "migrationQuerySha256": "cb7c21435e3eee37dd1d03144a9b05b34ba0cb518e35067dc44905ed517af8ca",
+  "migrationQueryBytes": 576507,
   "sourceHead": "8d1ca9efe4ec78f1e0a5e9a7b4413933b8f3ae29",
   "sourceCount": 25,
   "transforms": [

@@ -45,10 +45,21 @@ export function prepareDatabase(readSource, plan = manifest) {
   return payload;
 }
 
+// Migration executors append their history record and own the transaction.
+// An embedded COMMIT would detach that record from the schema changes.
+export function prepareMigration(readSource) {
+  const standalone = prepareDatabase(readSource);
+  const header = "-- Atomic creator backend cutover; reviewed source transformations are in manifest.json.\n";
+  requireValue(standalone.startsWith(header + "begin;\n") && standalone.endsWith("commit;\n"), "Standalone enclosure mismatch");
+  const query = header + standalone.slice(header.length + "begin;\n".length, -"commit;\n".length);
+  requireValue(Buffer.byteLength(query) === manifest.migrationQueryBytes && sha256(query) === manifest.migrationQuerySha256, "Migration query mismatch");
+  return query;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const [, , repo, sourceRef] = process.argv;
     requireValue(process.argv.length === 4, "Usage: node prepare-database.mjs /absolute/repo FULL_COMMIT_SHA");
-    process.stdout.write(prepareDatabase(gitReader(path.resolve(repo), sourceRef)));
+    process.stdout.write(prepareMigration(gitReader(path.resolve(repo), sourceRef)));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

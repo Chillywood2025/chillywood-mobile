@@ -1,9 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { prepareDatabase, manifest } from "./prepare-database.mjs";
+import { prepareDatabase, prepareMigration, manifest } from "./prepare-database.mjs";
 import { gitReader, sha256 } from "./prepare-edge.mjs";
 const read = gitReader(fileURLToPath(new URL("../../", import.meta.url)), manifest.sourceHead);
+
+test("migration input leaves transaction and history commit to the canonical executor", () => {
+  const query = prepareMigration(read);
+  assert.equal(sha256(query), "cb7c21435e3eee37dd1d03144a9b05b34ba0cb518e35067dc44905ed517af8ca");
+  assert.equal(Buffer.byteLength(query), 576507);
+  const standalone = prepareDatabase(read);
+  assert.equal(query, standalone.replace("\nbegin;\nset local", "\nset local").slice(0, -"commit;\n".length));
+});
 
 test("frozen source reproduces the separately qualified atomic payload byte for byte", () => {
   const payload = prepareDatabase(read);
