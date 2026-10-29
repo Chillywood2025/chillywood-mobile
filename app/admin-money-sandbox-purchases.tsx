@@ -9,7 +9,6 @@ import {
   revalidateCreatorMoneyPurchaseSubject,
 } from "../_lib/creatorMoneyPurchaseAuthority";
 import { resolveCreatorSandboxPurchaseDestination } from "../_lib/creatorSandboxPurchaseDestination";
-import { launchCreatorMerchSandboxCheckout } from "../_lib/creatorMonetizationSetup";
 import { supabase } from "../_lib/supabase";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
 
@@ -69,7 +68,6 @@ const SANDBOX_PRODUCTS: SandboxProduct[] = [
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SANDBOX_EVENT_PASS_PROOF_SOURCE_ID = "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004";
-const SANDBOX_MERCH_PRODUCT_KEY = "cw_merch_test_tee_sandbox";
 
 const scopeForSandboxProduct = (product: SandboxProduct): MoneyScopeKey => {
   if (product.sourceType === "watch_party_live") return "watch_party_ticket";
@@ -95,9 +93,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
   const [selectedKey, setSelectedKey] = useState<SandboxProductKey>("watch_party_live_ticket_sandbox_099");
   const [sourceId, setSourceId] = useState("");
   const [status, setStatus] = useState("Sandbox purchase proof is idle.");
-  const [merchStatus, setMerchStatus] = useState("Stripe physical merch sandbox checkout is idle.");
   const [busy, setBusy] = useState(false);
-  const [merchBusy, setMerchBusy] = useState(false);
 
   const selectedProduct = useMemo(
     () => SANDBOX_PRODUCTS.find((entry) => entry.key === selectedKey) ?? SANDBOX_PRODUCTS[0],
@@ -187,29 +183,6 @@ export default function AdminMoneySandboxPurchasesScreen() {
       setBusy(false);
     }
   }, [allowed, busy, router, selectedProduct, sourceId, userId]);
-
-  const runMerchSandboxCheckout = useCallback(async () => {
-    if (!allowed || merchBusy) return;
-    setMerchBusy(true);
-    setMerchStatus("Creating Stripe sandbox Checkout session for physical merch...");
-
-    try {
-      const result = await launchCreatorMerchSandboxCheckout();
-      setMerchStatus(
-        [
-          "Stripe sandbox Checkout session created.",
-          `Order: ${result.orderId}`,
-          "Physical merch only. No digital access, RevenueCat entitlement, Premium entitlement, payout, cash-out, withdrawal, transfer, or payable balance was created.",
-        ].join("\n"),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Stripe merch sandbox checkout could not be created.";
-      setMerchStatus(message);
-      Alert.alert("Merch sandbox checkout stopped", message);
-    } finally {
-      setMerchBusy(false);
-    }
-  }, [allowed, merchBusy]);
 
   if (loading) {
     return (
@@ -345,22 +318,16 @@ export default function AdminMoneySandboxPurchasesScreen() {
         <MoneyScopeInfoButton scope="merch_physical_good" label="What does merch include?" />
         <View style={styles.statusBox}>
           <Text style={styles.statusText}>
-            Product: {SANDBOX_MERCH_PRODUCT_KEY}{"\n"}
-            Mode: Stripe test/sandbox{"\n"}
-            Payable state: Not payable
+            The legacy fixed test-product checkout is retired. Set up a published sandbox product in Merch Shop, then use that creator’s Platform Shop from an eligible buyer account. Products, stock, and order status now share one catalog. No live sales or real shipment.
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          disabled={merchBusy}
-          onPress={runMerchSandboxCheckout}
-          style={[styles.primaryButton, merchBusy ? styles.primaryButtonDisabled : null]}
+          onPress={() => router.push("/merch/studio" as Parameters<typeof router.push>[0])}
+          style={styles.primaryButton}
         >
-          <Text style={styles.primaryButtonText}>{merchBusy ? "Creating Stripe sandbox session..." : "Start physical merch sandbox checkout"}</Text>
+          <Text style={styles.primaryButtonText}>Open Merch Shop setup</Text>
         </Pressable>
-        <View style={styles.statusBox}>
-          <Text style={styles.statusText}>{merchStatus}</Text>
-        </View>
       </View>
 
       <View style={styles.section}>

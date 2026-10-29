@@ -9330,6 +9330,14 @@ export function ChannelStudioScreen() {
       testID = "money-center-ways-to-earn-panel",
     ) => (
       <View testID={testID}>
+        {renderStudioActionRow({
+          title: "Merch Shop",
+          accessibilityLabel: "Manage Merch Shop",
+          testID: "studio-merch-shop-button",
+          body: "Add physical products, manage stock and orders, and preview your public Shop. Checkout remains sandbox-only; no real shipping or payouts.",
+          value: "Manage shop",
+          onPress: () => router.push("/merch/studio" as Parameters<typeof router.push>[0]),
+        })}
         <View style={styles.eventEmptyCard}>
           <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
           <Text style={styles.eventEmptyBody}>

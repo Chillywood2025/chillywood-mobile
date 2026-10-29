@@ -60,5 +60,6 @@ test("admin digital action delegates to contextual flow and revalidates identity
   const source = readFileSync("app/admin-money-sandbox-purchases.tsx", "utf8");
   assert.doesNotMatch(source, /purchaseRevenueCatStoreProduct|create_money_purchase_intent|readRevenueCatNonSubscriptionProducts/);
   assert.match(source, /await resolveCreatorSandboxPurchaseDestination[\s\S]*?await revalidateCreatorMoneyPurchaseSubject[\s\S]*?router\.push\(destination/);
-  assert.match(source, /await launchCreatorMerchSandboxCheckout\(\)/);
+  assert.match(source, /router\.push\("\/merch\/studio"/);
+  assert.doesNotMatch(source, /await launchCreatorMerchSandboxCheckout\(\)/);
 });

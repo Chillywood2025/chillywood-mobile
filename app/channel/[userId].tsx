@@ -22,8 +22,6 @@ import {
 } from "../../_lib/channelAudience";
 import {
   formatMonetizationCurrency,
-  readCreatorMiniPlatformCommerceSurface,
-  type CreatorMiniPlatformCommerceSurface,
 } from "../../_lib/creatorMonetization";
 import {
   readCreatorTipPublicStatus,
@@ -79,7 +77,7 @@ import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monet
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
-import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
+import { AppActionButton, AppEmptyState, AppSection } from "../../components/ui/app-surface";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { PlatformLiveNow } from "../../components/live/platform-live-now";
 import { StableImage } from "../../components/ui/StableImage";
@@ -204,7 +202,6 @@ export default function PublicChannelScreen() {
   const [audienceState, setAudienceState] = useState<PublicChannelAudienceState | null>(null);
   const [videos, setVideos] = useState<CreatorVideo[]>([]);
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
-  const [commerceSurface, setCommerceSurface] = useState<CreatorMiniPlatformCommerceSurface | null>(null);
   const [tipStatus, setTipStatus] = useState<CreatorTipPublicStatus | null>(null);
   const [sandboxTesterActive, setSandboxTesterActive] = useState(false);
   const [tipSheetVisible, setTipSheetVisible] = useState(false);
@@ -253,7 +250,6 @@ export default function PublicChannelScreen() {
         setAudienceState(null);
         setVideos([]);
         setEvents([]);
-        setCommerceSurface(null);
         setTipStatus(null);
         setSandboxTesterActive(false);
         setSubscriptionAccess(null);
@@ -321,12 +317,11 @@ export default function PublicChannelScreen() {
       const videosPromise = showOwnerControls
         ? readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50, throwOnUnavailable: true })
         : readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50, throwOnUnavailable: true });
-      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
+      const [publicVideos, publicEvents, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
         videosPromise,
         supportsCreatorLiveContent
           ? readPublicEventSummaries(routeUserId, { throwOnUnavailable: true })
           : Promise.resolve([]),
-        readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
         resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
         resolveCreatorVipPassAccess(routeUserId).catch(() => null),
@@ -342,7 +337,6 @@ export default function PublicChannelScreen() {
       setAudienceState(nextAudienceState);
       setVideos(publicVideos);
       setEvents(publicEvents.filter((event) => event.isLiveNow || event.isUpcoming));
-      setCommerceSurface(nextCommerceSurface);
       setTipStatus(nextTipStatus);
       setSandboxTesterActive(nextSandboxTesterActive === true);
       setSubscriptionAccess(nextSubscriptionAccess);
@@ -1008,6 +1002,11 @@ export default function PublicChannelScreen() {
             <AppActionButton label="Report" onPress={openReport} variant="danger" />
           ) : null}
           <AppActionButton label="View Profile" onPress={openProfile} />
+          <AppActionButton
+            label="Shop"
+            testID="platform-shop-button"
+            onPress={() => router.push({ pathname: "/merch/[creatorId]", params: { creatorId: routeUserId } } as unknown as Parameters<typeof router.push>[0])}
+          />
           {showOwnerControls ? (
             <AppActionButton label="Manage Platform" onPress={() => openStudio()} style={styles.actionButtonWide} variant="success" />
           ) : null}
@@ -1203,46 +1202,6 @@ export default function PublicChannelScreen() {
       )}
     </AppSection>
   );
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
-  const renderMiniPlatformCommerce = () => {
-    const products = commerceSurface?.products ?? [];
-    return (
-      <AppSection title="Platform Store" statusLabel={products.length ? "Preview" : "Not active"} statusTone={products.length ? "warning" : "muted"}>
-        {products.length ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.shelfScroll}
-            contentContainerStyle={styles.shelfRow}
-          >
-            {products.map((product) => (
-              <View key={product.id} style={styles.shelfCard}>
-                <View style={styles.shelfCopy}>
-                  <Text style={styles.cardKicker}>{product.productType.replaceAll("_", " ").toUpperCase()}</Text>
-                  <Text style={styles.shelfTitle} numberOfLines={2}>{product.title}</Text>
-                  {product.description ? (
-                    <Text style={styles.shelfBody} numberOfLines={2}>{product.description}</Text>
-                  ) : null}
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>
-                      {formatMonetizationCurrency(product.priceCents, product.currency)}
-                    </Text>
-                    <AppStatusPill label="Checkout pending" tone="warning" />
-                  </View>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <AppEmptyState
-            title="Commerce not active"
-            body={`${commerceSurface?.message ?? "Platform commerce is not active yet."} Tips, paid content, products, and orders stay disabled until provider and legal checks are complete.`}
-          />
-        )}
-      </AppSection>
-    );
-  };
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderSandboxTesterSurface = () => {
