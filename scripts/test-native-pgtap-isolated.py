@@ -127,7 +127,8 @@ def main():
     def inventory():
         paths = set((repo / 'supabase/migrations').glob('*.sql')) | set((repo / 'supabase/tests').glob('*.sql'))
         paths |= set((repo / 'tests/helpers').glob('*.mjs'))
-        paths |= {repo / 'tests/fixtures/storage-delete-protection-production-20261029.sql',
+        paths |= {repo / 'tests/fixtures/storage-table-authority-production-20261029.sql',
+                  repo / 'tests/fixtures/storage-delete-protection-production-20261029.sql',
                   repo / 'tests/fixtures/realtime-delete-filter-production-20261022.sql',
                   repo / 'tests/fixtures/database-managed-schema-20261015.json'}
         paths |= {repo / 'scripts/export-event-reservation-runtime-fixture.mjs', Path(__file__).resolve(), repo / 'package-lock.json'}
@@ -331,6 +332,17 @@ def main():
             'definition_md5': '4371ae544fb1ef704f9c5d42265ac324',
             'trigger': 'CREATE TRIGGER protect_objects_delete BEFORE DELETE ON storage.objects FOR EACH STATEMENT EXECUTE FUNCTION storage.protect_delete()'},
               'managed Storage guard owner, default ACL, exact definition and statement trigger match captured metadata')
+        # The retained synthetic schema omitted managed Storage table authority.
+        # This bounded fixture restores captured ownership, exact ACL tuples and
+        # RLS together; its transaction asserts all row policies and other guards
+        # plus global roles/schema privileges remain byte-identical.
+        storage_authority_fixture = repo / 'tests/fixtures/storage-table-authority-production-20261029.sql'
+        report['managed_storage_table_authority_overlay'] = execute(
+            'managed-storage-table-authority-overlay', storage_authority_fixture.read_text(), 60)
+        report['managed_storage_table_authority_overlay']['source'] = str(storage_authority_fixture.relative_to(repo))
+        report['managed_storage_table_authority_overlay']['source_sha256'] = digest(storage_authority_fixture)
+        check(report['managed_storage_table_authority_overlay']['passed'],
+              'managed Storage table owner, exact ACL and RLS match captured authority with all definitions and global roles preserved')
         # This captured managed filter implementation is pure local SQL. It does
         # not assert an installed Realtime service or replace application code.
         realtime_fixture = repo / 'tests/fixtures/realtime-delete-filter-production-20261022.sql'

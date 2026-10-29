@@ -84,13 +84,27 @@ both new synthetic rows to insert instead of assuming the obsolete, unversioned
 Storage conflict target. Existing assertions and application controls remain.
 The managed pg_net extension and migration-history catalog are not fabricated.
 
+The retained clone also omitted Storage table ownership, privileges and RLS.
+A native-only fixture restores the captured owner and exact 64 ACL tuples for
+both Storage tables together with enabled RLS in one transaction. It verifies
+that policies, delete guards, definitions, schema privileges and global roles
+remain identical. The unchanged owner-authority test then passes all 35 checks,
+including cross-owner and restricted-access denials. No live grant is changed.
+
 The unchanged 5-second payload performance assertion and short-lived content
 inspection authorization need isolated reruns after competing CPU work finishes.
 Two staff/Owner tests also expose a pre-existing authority mismatch: the actual
 live normalizer grants service_role EXECUTE, matching the synthetic bootstrap,
 while those tests require its denial. Read-only catalog evidence confirms this;
 neither the tests nor live security settings are weakened or silently changed.
-These failures block a passing full-suite claim until resolved.
+These failures block a passing native-clone full-suite claim until resolved.
+They do not describe the separate canonical clean-Supabase result: at
+`26d140a880427ccd7ca2767ba91315e76f78d56e`, GitHub's Database job completed
+all 153 SQL files and 5,528 assertions, followed by its required concurrency
+checks. That run's overall validation failed in the Brand harness because its
+data-URL module could not resolve a relative import. The harness now uses its
+existing database-factory injection seam, and the Brand job passes at `4664ed25`.
+Neither earlier result qualifies a later commit; exact final CI remains required.
 
 The final native runner uses explicit file/statement/lock/suite budgets and marks
 timeouts, malformed or incomplete TAP, skipped/TODO assertions, unrun files, dirty
@@ -131,6 +145,13 @@ and delivery report. Earlier checkpoint or diagnostic results do not qualify a
 later head. Mounted, PGlite, Edge-handler, native PostgreSQL, CI, deployment and
 physical-device evidence are separate categories.
 
+At `4664ed25f6d23c86476b5e5233dfaa1cb7fc75e1`, all eight native concurrent-flow
+cases and the separate lifecycle/worker and approval/provider cases passed.
+The two actual repair migrations also passed atomic rollback checks against
+complete schema/function/trigger/ACL and retained business-state fingerprints.
+Subsequent fixture-only changes do not alter these migration bytes; the final
+source binding and full-suite receipts must record that distinction.
+
 ## Release and rollback boundary
 
 Merge requires the exact final commit's `Chi'llywood / Required Validation`, all
@@ -165,3 +186,8 @@ constitute production restore or installed-device proof.
 No live payments, payouts, auctions, credentials, branch protections or phone
 settings are changed by this repair. A green code result alone does not establish
 deployment, real provider delivery or physical Android/iOS verification.
+
+Earlier creator audit documents describe dated implementation checkpoints. This
+record and final exact-head receipts supersede their pending-feature and policy
+language; those older documents are not new approval requirements or final
+qualification claims.
