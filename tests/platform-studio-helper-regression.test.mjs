@@ -468,10 +468,11 @@ test("Brand Studio keeps older selected media visible beyond its recent50 list a
     parseProfile: (profile) => profile, parseAsset: async (row) => row,
     supabase: { from: (table) => {
       const query = {}, calls = [];
-      for (const method of ["select", "eq", "in", "is", "order", "limit", "maybeSingle"]) query[method] = (...args) => { calls.push([method, ...args]); return query; };
+      for (const method of ["select", "eq", "neq", "in", "is", "order", "limit", "maybeSingle"]) query[method] = (...args) => { calls.push([method, ...args]); return query; };
       query.returns = async () => {
         if (table === "platform_brand_profiles") return { data: { heroImageAssetId: "older-selected" }, error: null };
         if (calls.some(([method]) => method === "in")) { contexts.push(calls); return { data: [{ id: "older-selected" }], error: selectedError }; }
+        assert.ok(calls.some(([method, column, value]) => method === "neq" && column === "asset_type" && value === "merch_product_image"), "recent Brand picker excludes product photos");
         return { data: recent, error: null };
       };
       return query;

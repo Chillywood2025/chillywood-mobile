@@ -128,6 +128,9 @@ async function operationSql(db, table, privilege) {
 // New public tables must be deliberately classified, not automatically granted.
 // Private tables remain inaccessible to all three API roles, including service.
 const recentPublic = {
+  // Exact-session creator/buyer RPCs own SKU reads and reservations; even
+  // service transport has no direct table privilege on this inventory.
+  'public.merch_product_variants': {},
   'public.ios_native_call_state_issuances': {},
   'public.ios_native_call_state_connections': {},
   'public.notification_activity_events': {service_role: dml},

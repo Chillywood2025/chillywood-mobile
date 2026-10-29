@@ -27,14 +27,22 @@ end $$;
 revoke all on function private.guard_merch_photo_brand_reference() from public,anon,authenticated,service_role;
 create trigger aaa_merch_photo_brand_reference before insert or update on public.platform_brand_profiles
  for each row execute function private.guard_merch_photo_brand_reference();
-create trigger aaa_merch_photo_brand_reference before insert or update on public.platform_brand_publications
- for each row execute function private.guard_merch_photo_brand_reference();
+do $$ begin
+ if to_regclass('public.platform_brand_publications') is not null then
+  create trigger aaa_merch_photo_brand_reference before insert or update on public.platform_brand_publications
+   for each row execute function private.guard_merch_photo_brand_reference();
+ end if;
+end $$;
 
 create function private.guard_merch_photo_asset() returns trigger
 language plpgsql security definer set search_path='' as $$
 declare metadata jsonb;
 begin
  if new.asset_type<>'merch_product_image' then return new; end if;
+ -- Product publication owns this new kind, never generic Brand publication.
+ -- In held-Studio schemas the legacy Brand SELECT policy otherwise considers
+ -- published clean assets public without requiring a publication snapshot.
+ if new.asset_state='published' then raise exception 'merch_photo_product_publication_only'; end if;
  perform private.platform_brand_retention_lock();
  if tg_op='UPDATE' and new.moderation_status='clean'
    and new.moderation_status is distinct from old.moderation_status

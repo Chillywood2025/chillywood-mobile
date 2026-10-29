@@ -3,6 +3,48 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 
+test('held Studio replay retains draft reference guard without generic photo publication',{timeout:240000},async()=>{
+ const {db}=await createDatabase({applyRepair:true,includeHeldStudio:false,implicitApiGrants:false});
+ const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
+ try {
+  assert.equal(await one("select to_regclass('public.platform_brand_publications') is null"),true);
+  assert.equal(await one("select count(*)::int from pg_trigger where tgrelid='public.platform_brand_profiles'::regclass and tgname='aaa_merch_photo_brand_reference' and tgenabled='O'"),1);
+  const id=randomUUID(),owner=randomUUID(),viewer=randomUUID(),viewerSession=randomUUID(),product=randomUUID(),key=`${owner}/merch_product_image/${id}.png`;
+  await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false)`);
+  await db.exec('alter table storage.objects enable row level security; grant select on storage.objects to authenticated');
+  await db.query('insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values($1,false,false,now()),($2,false,false,now())',[owner,viewer]);
+  await db.query('insert into auth.sessions(id,user_id) values($1,$2)',[viewerSession,viewer]);
+  await db.query("insert into public.user_profiles(user_id,username,display_name) values($1,'held_owner','Held owner'),($2,'held_viewer','Held viewer') on conflict(user_id) do nothing",[owner,viewer]);
+  await db.query(`insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
+   select $1::uuid,public.wave1_sha256($1::text),document_key,version,market,'member',capability,$2,'service_reconciliation'
+   from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='account'`,[viewer,viewerSession]);
+  await db.query("insert into storage.objects(id,bucket_id,name,version,metadata) values($1,'platform-brand-assets',$2,'held-v1','{\"size\":79,\"mimetype\":\"image/png\"}')",[randomUUID(),key]);
+  await db.query("insert into public.platform_brand_assets(id,owner_user_id,asset_type,storage_object_key,storage_path,mime_type,file_size_bytes) values($1,$2,'merch_product_image',$3,$3,'image/png',79)",[id,owner,key]);
+  // Controlled review/scan output for this optional-schema delivery boundary;
+  // the next test separately executes the actual scanner and review pipeline.
+  await db.query("update public.platform_brand_assets set scan_status='clean',moderation_status='clean' where id=$1",[id]);
+  await db.query(`insert into public.merch_products(id,creator_id,display_name,title,price_minor,currency,provider,status,
+   fulfillment_model,environment,is_physical_good,creates_digital_access,publication_status,stock_quantity,photo_asset_id)
+   values($1,$2,'Held photo','Held photo',1200,'usd','stripe_physical_goods','sandbox','manual','sandbox',true,false,'draft',2,$3)`,[product,owner,id]);
+  await assert.rejects(()=>db.query("update public.platform_brand_assets set asset_state='published' where id=$1",[id]),/merch_photo_product_publication_only/);
+  await assert.rejects(()=>db.query('insert into public.platform_brand_profiles(owner_user_id,hero_image_asset_id) values($1,$2)',[owner,id]),/merch_photo_product_reference_only/);
+  await db.exec("select set_config('request.jwt.claims','{}',false),set_config('request.jwt.claim.role','anon',false); set role anon");
+  assert.equal(await one('select count(*)::int from public.platform_brand_assets where id=$1',[id]),0,'held legacy SELECT policy cannot expose staged product photo');
+  await db.exec('reset role');
+  await db.query("select set_config('request.jwt.claims',$1,false),set_config('request.jwt.claim.role','authenticated',false)",[JSON.stringify({sub:viewer,session_id:viewerSession,role:'authenticated'})]);
+  await db.exec('set role authenticated');
+  assert.equal(await one('select count(*)::int from public.platform_brand_assets where id=$1',[id]),0,'authenticated viewer cannot read approved clean draft product photo');
+  assert.equal(await one("select count(*)::int from storage.objects where bucket_id='platform-brand-assets' and name=$1",[key]),0,'held legacy storage policy cannot expose approved clean draft product photo');
+  await db.exec('reset role');
+  await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false)`);
+  await db.query("update public.merch_products set publication_status='published' where id=$1",[product]);
+  await db.query("select set_config('request.jwt.claims',$1,false),set_config('request.jwt.claim.role','authenticated',false)",[JSON.stringify({sub:viewer,session_id:viewerSession,role:'authenticated'})]);
+  await db.exec('set role authenticated');
+  assert.equal(await one('select count(*)::int from public.platform_brand_assets where id=$1',[id]),1,'dedicated product policy permits approved clean published photo without Studio');
+  assert.equal(await one("select count(*)::int from storage.objects where bucket_id='platform-brand-assets' and name=$1",[key]),1);
+ } finally {await db.close();}
+});
+
 // Entire source migration chain, actual RLS/session/scan/reference functions.
 // PGlite substitutes managed auth/storage catalogs, not business authority.
 test('merch photos preserve real ownership, private scanning, binding and retained references',{timeout:240000},async()=>{
@@ -58,7 +100,7 @@ test('merch photos preserve real ownership, private scanning, binding and retain
   await assert.rejects(()=>one('select public.approve_creator_merch_photo($1,$2,$3)',[product.id,asset,bound.updatedAt]),/changed_reload/);
   assert.equal((await one('select public.approve_creator_merch_photo($1,$2,$3)',[product.id,asset,approval.updatedAt])).photoStatus,'ready');
   assert.equal((await one('select public.approve_creator_merch_photo($1,$2,$3)',[product.id,asset,approval.updatedAt])).photoCanApprove,false,'acknowledgement retry is idempotent');
-  await db.query("update public.platform_brand_assets set asset_state='published' where id=$1",[asset]);
+  await assert.rejects(()=>db.query("update public.platform_brand_assets set asset_state='published' where id=$1",[asset]),/merch_photo_product_publication_only/,'generic Brand publication cannot publish a product photo');
   await actor(buyer,buyerSession);
   assert.equal(await one('select count(*)::int from public.platform_brand_assets where id=$1',[asset]),0,'published asset state cannot override draft product');
   assert.equal(await one("select count(*)::int from storage.objects where bucket_id='platform-brand-assets' and name=$1",[key]),0,'old permissive storage policy cannot bypass merch publication');
@@ -75,8 +117,8 @@ test('merch photos preserve real ownership, private scanning, binding and retain
   assert.equal(await one("select count(*)::int from storage.objects where bucket_id='platform-brand-assets' and name=$1",[key]),0,'private Platform revokes new signed delivery');
   await admin();await db.query("update public.user_profiles set platform_access_visibility='public' where user_id=$1",[owner]);
   await admin();
-  // Restore the deliberately manipulated asset-state fixture, then exercise
-  // the real scanner requeue/claim/completion transition (no scan flag bypass).
+  // Keep the product-scoped asset in draft state, then exercise the real
+  // scanner requeue/claim/completion transition (no scan flag bypass).
   await db.query("update public.platform_brand_assets set asset_state='draft' where id=$1",[asset]);
   await one("select public.enqueue_media_scan_job('platform_brand_assets','merch_product_image',$1,$2,'supabase','platform-brand-assets',$3,'image/png',79,-2147483648,'{}')",[asset,owner,key]);
   await one("select public.claim_media_scan_jobs(1,'merch-photo-rescan')");

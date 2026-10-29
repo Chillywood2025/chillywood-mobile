@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {createDatabase, splitSQL} from './helpers/database-runtime-authority-fixture.mjs';
+import {createDatabase, splitSQL, merchStorefrontFiles} from './helpers/database-runtime-authority-fixture.mjs';
 import {monetizationAuditFiles, monetizationImplementationFiles,
   monetizationAddedFunctionIdentities, monetizationReplacedFunctionIdentities,
   monetizationRenamedFunctionIdentities, monetizationRemovedFunctionIdentities,
@@ -13,6 +13,44 @@ import {discoveryInvalidationFiles, discoveryInvalidationFunctions, assertDiscov
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
+// Reviewed physical storefront/SKU/photo successor delta, measured against the
+// full pre-storefront catalog. Exact identities retain overload and wrapper
+// coverage; a numerical count alone cannot admit an unexpected function.
+const merchAddedFunctionIdentities = new Map([
+  ["private.guard_merch_photo_asset/0","private.guard_merch_photo_asset()"],
+  ["private.guard_merch_photo_brand_reference/0","private.guard_merch_photo_brand_reference()"],
+  ["private.guard_merch_product_photo_reference/0","private.guard_merch_product_photo_reference()"],
+  ["public.approve_creator_merch_photo/3","approve_creator_merch_photo(uuid,uuid,timestamp with time zone)"],
+  ["public.assign_merch_product_photo/3","assign_merch_product_photo(uuid,uuid,timestamp with time zone)"],
+  ["public.check_creator_merch_photo_target/1","check_creator_merch_photo_target(uuid)"],
+  ["public.configure_creator_merch_variants/4","configure_creator_merch_variants(uuid,text,jsonb,timestamp with time zone)"],
+  ["public.configure_creator_merch_variants_before_photo_lock/4","configure_creator_merch_variants_before_photo_lock(uuid,text,jsonb,timestamp with time zone)"],
+  ["public.discard_creator_merch_photo/1","discard_creator_merch_photo(uuid)"],
+  ["public.list_creator_merch_products/4","list_creator_merch_products(uuid,boolean,uuid,integer)"],
+  ["public.list_my_merch_orders/4","list_my_merch_orders(text,uuid,integer,uuid)"],
+  ["public.merch_order_projection_before_variants/1","merch_order_projection_before_variants(merch_orders)"],
+  ["public.merch_order_projection_internal/1","merch_order_projection_internal(merch_orders)"],
+  ["public.merch_photo_public_access_allowed/1","merch_photo_public_access_allowed(uuid)"],
+  ["public.merch_product_projection_before_photos_internal/1","merch_product_projection_before_photos_internal(merch_products)"],
+  ["public.merch_product_projection_before_variants/1","merch_product_projection_before_variants(merch_products)"],
+  ["public.merch_product_projection_internal/1","merch_product_projection_internal(merch_products)"],
+  ["public.merch_seller_ready_internal/1","merch_seller_ready_internal(uuid)"],
+  ["public.process_stripe_merch_webhook_before_photo_lock/4","process_stripe_merch_webhook_before_photo_lock(text,text,text,jsonb)"],
+  ["public.process_stripe_merch_webhook_lifecycle_before_storefront/4","process_stripe_merch_webhook_lifecycle_before_storefront(text,text,text,jsonb)"],
+  ["public.read_creator_merch_photo_status/1","read_creator_merch_photo_status(uuid)"],
+  ["public.reserve_merch_checkout/3","reserve_merch_checkout(uuid,integer,uuid)"],
+  ["public.reserve_merch_checkout/4","reserve_merch_checkout(uuid,integer,uuid,uuid)"],
+  ["public.reserve_merch_checkout_for_actor/5","reserve_merch_checkout_for_actor(uuid,uuid,uuid,integer,uuid)"],
+  ["public.reserve_merch_checkout_for_actor/6","reserve_merch_checkout_for_actor(uuid,uuid,uuid,integer,uuid,uuid)"],
+  ["public.reserve_merch_checkout_for_actor_before_photo_lock/6","reserve_merch_checkout_for_actor_before_photo_lock(uuid,uuid,uuid,integer,uuid,uuid)"],
+  ["public.save_creator_merch_product/8","save_creator_merch_product(uuid,text,text,text,integer,integer,text,timestamp with time zone)"],
+  ["public.save_creator_merch_product_before_photo_lock/8","save_creator_merch_product_before_photo_lock(uuid,text,text,text,integer,integer,text,timestamp with time zone)"],
+  ["public.save_creator_merch_product_before_variants/8","save_creator_merch_product_before_variants(uuid,text,text,text,integer,integer,text,timestamp with time zone)"],
+  ["public.update_creator_merch_fulfillment/3","update_creator_merch_fulfillment(uuid,text,text)"],
+]);
+const merchReplacedFunctionIdentities = new Map([["public.process_stripe_merch_webhook_lifecycle/4","process_stripe_merch_webhook_lifecycle(text,text,text,jsonb)"]]);
+const merchRenamedFunctionIdentities = [["process_stripe_merch_webhook_lifecycle(text,text,text,jsonb)","process_stripe_merch_webhook_lifecycle_before_storefront(text,text,text,jsonb)"]];
+
 const brandRetentionFiles = [
   '20261021134043_platform_brand_exact_retention_lifecycle.sql',
   '20261021134053_media_scan_exact_byte_receipts.sql',
@@ -390,9 +428,11 @@ const queries={
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
 
 test('creator monetization has the exact declared catalog delta from the audit checkpoint', {timeout:180_000}, async()=>{
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:monetizationImplementationFiles});
+  const excluded=[...monetizationImplementationFiles,...merchStorefrontFiles];
+  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:excluded});
   try {
-    assert.deepEqual(replayReport.excludedMigrations,monetizationImplementationFiles);
+    assert.deepEqual(replayReport.excludedMigrations,excluded);
+    assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),[], 'dependent storefront belongs after this historical audit checkpoint');
     assert.deepEqual(replayReport.files.filter(file=>monetizationImplementationFiles.includes(file)),[]);
     const before=(await db.query(queries.functions)).rows;
     for(const file of monetizationImplementationFiles){
@@ -421,16 +461,49 @@ test('creator monetization has the exact declared catalog delta from the audit c
   } finally {await db.close();}
 });
 
+
+test('physical merch successors have the exact declared catalog delta', {timeout:180_000}, async()=>{
+  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:merchStorefrontFiles});
+  try {
+    assert.deepEqual(replayReport.excludedMigrations,merchStorefrontFiles);
+    assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),[]);
+    // The prerequisite settlement implementation is present in this checkpoint.
+    assert.ok(replayReport.files.includes('20261027034844_creator_merch_payment_refund_reconciliation.sql'));
+    const before=(await db.query(queries.functions)).rows;
+    for(const file of merchStorefrontFiles){
+      const sql=fs.readFileSync(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8');
+      for(const statement of splitSQL(sql)){
+        const clean=statement.replace(/--[^\n]*/gu,'').trim();
+        if(!clean||/^(?:begin|commit|rollback)\s*;?$/iu.test(clean))continue;
+        await db.exec(statement);
+      }
+    }
+    const after=(await db.query(queries.functions)).rows;
+    const previous=new Map(before.map(fn=>[fn.identity,fn]));
+    const current=new Map(after.map(fn=>[fn.identity,fn]));
+    const identities=rows=>rows.map(fn=>[fn.key,fn.identity]).sort();
+    assert.deepEqual(identities(after.filter(fn=>!previous.has(fn.identity))),[...merchAddedFunctionIdentities].sort(),'only exact new merch signatures are added');
+    assert.deepEqual(identities(before.filter(fn=>!current.has(fn.identity))),[],'no historical signature disappears');
+    assert.deepEqual(identities(after.filter(fn=>previous.has(fn.identity)&&fn.definition!==previous.get(fn.identity).definition)),[...merchReplacedFunctionIdentities].sort(),'only retained payment entrypoint is wrapped');
+    assert.deepEqual(after.flatMap(fn=>{
+      const old=before.find(candidate=>candidate.oid===fn.oid);
+      return old&&old.identity!==fn.identity?[[old.identity,fn.identity]]:[];
+    }).sort(),merchRenamedFunctionIdentities,'original settlement implementation retains its OID');
+  } finally {await db.close();}
+});
+
 for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idempotence, Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async()=>{
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length+merchAddedFunctionIdentities.size);
     for(const [label,identities] of [['added',monetizationAddedFunctionIdentities],['replaced',monetizationReplacedFunctionIdentities]]){
       assert.deepEqual(before.functions.filter(fn=>identities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
         [...identities].sort(),`exact creator monetization ${label} signatures are present`);
     }
     await assertProfileFeedInventory(db,before.functions);
+    assert.deepEqual(before.functions.filter(fn=>merchAddedFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
+      [...merchAddedFunctionIdentities].sort(),'exact physical storefront/SKU/photo signatures are present');
     await assertDiscoveryInvalidationInventory(db,before.functions);
     assert.deepEqual(before.functions.filter(fn=>referenceAndRenditionFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
       [...referenceAndRenditionFunctionIdentities].sort(),'exact Brand reference and legacy rendition helper signatures are present');
@@ -485,7 +558,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),merchStorefrontFiles, 'exact physical storefront/SKU/photo successors replay');
     assert.deepEqual(replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles,
       'exact creator/buyer monetization audit migrations replay in both Studio scenarios');
     assert.deepEqual(replayReport.files.filter(file=>profileFeedFiles.includes(file)),profileFeedFiles, 'exact profile feed migration bundle');

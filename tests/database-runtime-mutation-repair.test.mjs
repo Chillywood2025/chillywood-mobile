@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
-import {createDatabase,repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
+import {createDatabase,repairMigrationPath,merchStorefrontFiles} from './helpers/database-runtime-authority-fixture.mjs';
 import {monetizationAuditFiles} from './helpers/creator-monetization-migration-inventory.mjs';
 import {profileFeedFiles} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles} from './helpers/discovery-invalidation-runtime-inventory.mjs';
@@ -248,7 +248,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
     }
     // This remains a full-current-chain repair test, including reviewed successors.
     check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),merchStorefrontFiles, 'exact physical storefront/SKU/photo successors replay');
     check('exact creator/buyer monetization audit successors',replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles);
     assert.deepEqual(replayReport.files.filter(file=>profileFeedFiles.includes(file)),profileFeedFiles, 'exact profile feed migration bundle');
     assert.deepEqual(replayReport.files.filter(file=>discoveryInvalidationFiles.includes(file)),discoveryInvalidationFiles, 'exact scoped discovery migration bundle');

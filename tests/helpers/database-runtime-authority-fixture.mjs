@@ -19,6 +19,15 @@ export const heldStudioVersion = '20261015073423';
 export const heldStudioBundleVersions = Object.freeze([
   heldStudioVersion, '20261019020049', '20261019020052',
 ]);
+// Post-monetization physical storefront successors, in dependency order. A
+// historical pre-monetization checkpoint must explicitly exclude this bundle
+// too: its inventory wrapper requires the retained merch settlement lifecycle.
+// Normal/full-chain fixtures always replay all three files.
+export const merchStorefrontFiles = Object.freeze([
+  '20261029191508_creator_merch_storefront.sql',
+  '20261029195422_creator_merch_sku_inventory.sql',
+  '20261029195448_creator_merch_product_photos.sql',
+]);
 
 // PostgreSQL-aware statement boundaries: strings, quoted identifiers, tagged
 // dollar bodies, nested block comments and line comments are kept intact.
