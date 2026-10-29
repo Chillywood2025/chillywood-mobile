@@ -61,6 +61,24 @@ begin
 end;
 $$;
 
+-- A replay may be inserted after provider reconciliation starts. Every replay
+-- INSERT/UPDATE statement must acquire the existing media-retention lock before
+-- it owns any replay tuple, including INSERT ... ON CONFLICT and empty writes.
+-- Provider reconciliation takes its stop job first and no longer prelocks replay
+-- rows. Physical replay DELETE has no media-retention side effect and retains
+-- its existing behavior; its observation is already deferred until commit.
+create function private.lock_creator_replay_media_statement()
+returns trigger language plpgsql security definer set search_path='' as $$
+begin
+  perform private.platform_brand_retention_lock();
+  return null;
+end;
+$$;
+revoke all on function private.lock_creator_replay_media_statement() from public,anon,authenticated,service_role;
+create trigger creator_replay_media_before_statement
+  before insert or update on public.creator_replay_library_items
+  for each statement execute function private.lock_creator_replay_media_statement();
+
 create or replace function public.read_my_creator_purchases(
   p_limit integer default 50,p_before_created_at timestamptz default null,p_before_id uuid default null,
   p_source_type text default null,p_source_id uuid default null
@@ -115,11 +133,6 @@ begin
   then raise exception 'event_broadcast_receipt_binding_invalid'; end if;
   if provider_status<>'UNKNOWN' and (p_egress_id is null or p_provider_binding_verified is distinct from true)
   then raise exception 'event_broadcast_provider_binding_required'; end if;
-  -- Direct creator replay edits own this row before the shared media-retention
-  -- guard runs. Lock an existing replay before any public source write, so a
-  -- provider cannot own that guard while waiting for the creator's replay row.
-  perform 1 from public.creator_replay_library_items
-    where broadcast_session_id=a.broadcast_session_id order by id for update;
   -- All provider branches lock the stop job before broadcast/playback rows.
   -- This matches queueing and avoids ACTIVE's former broadcast -> job inversion.
   perform 1 from private.creator_event_broadcast_stop_jobs where attempt_id=a.id for update;

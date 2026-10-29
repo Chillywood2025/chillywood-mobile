@@ -31,6 +31,7 @@ export const monetizationImplementationFiles = [
 ];
 export const monetizationAuditFiles = [...monetizationBaselineFiles, ...monetizationImplementationFiles];
 export const monetizationAddedFunctionIdentities = new Map([
+  ['private.lock_creator_replay_media_statement/0','private.lock_creator_replay_media_statement()'],
   ['private.flush_creator_event_replay_observations/0','private.flush_creator_event_replay_observations()'],
   ['private.seed_creator_event_replay_observation_anchor/0','private.seed_creator_event_replay_observation_anchor()'],
   ['private.bind_event_ticket_purchase_terms/0','private.bind_event_ticket_purchase_terms()'],

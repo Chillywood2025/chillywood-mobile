@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {pg_trgm} from '@electric-sql/pglite/contrib/pg_trgm';
-import {managedRequestContextSQL, managedExtensionUsageSQL} from './database-managed-request-context.mjs';
+import {managedRequestContextSQL, managedExtensionUsageSQL, managedStorageObjectIDDefaultSQL} from './database-managed-request-context.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const migrationDirectory = path.join(root, 'supabase/migrations');
@@ -93,6 +93,7 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
     }
     await db.exec(`
       ${managedRequestContextSQL}
+      ${managedStorageObjectIDDefaultSQL}
       create function storage.foldername(text) returns text[] language sql immutable as $$select (string_to_array($1,'/'))[1:array_length(string_to_array($1,'/'),1)-1]$$;
       create function storage.filename(text) returns text language sql immutable as $$select reverse(split_part(reverse($1),'/',1))$$;
       create function storage.extension(text) returns text language sql immutable as $$select reverse(split_part(reverse($1),'.',1))$$;

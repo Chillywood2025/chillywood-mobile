@@ -200,6 +200,104 @@ def buyer_replay(owner, observer, repo, apply, check, report):
     report['outcomes'] = [changed, committed, wallet, buyer_commit]
 
 
+def provider_absent(owner, observer, repo, apply, check, report, expect):
+    """Provider, request-save, and authenticated edit race with no initial replay."""
+    fixture = (repo / 'tests/fixtures/event-replay-deadline-policy.sql').read_text()
+    terminal = "  perform public.record_creator_event_broadcast_provider(event,host.user_id,host.session_id,(source->>'attemptId')::uuid,'EG_replay_deadline','COMPLETE',\n    source->>'privateOrigin'||'/'||(source->>'outputPrefix')||'/index.m3u8',source->>'outputPrefix'||'/index.m3u8',true,true);"
+    check(fixture.count(terminal) == 1, 'one terminal callback removed for concurrent execution')
+    apply('active-event', fixture.replace(terminal, '  -- COMPLETE runs concurrently below.'))
+    context = json.loads(observer.scalar('select context from event_reservation_fixture.replay_deadline_context;'))
+    source = context['source']
+    attempt, broadcast = literal(source['attemptId']), literal(source['broadcastId'])
+    check(observer.scalar('select count(*) from public.creator_replay_library_items where broadcast_session_id='
+                          + broadcast + ';') == '0', 'provider begins with no replay row to prelock')
+    apply('two-gates', "create function event_reservation_fixture.pause_absent_replay() returns trigger language plpgsql as $$"
+        "begin if tg_table_name='creator_event_broadcast_provider_receipts' then if new.attempt_id=" + attempt
+        + " and new.provider_status='COMPLETE' then perform pg_advisory_xact_lock(2147483400,91); end if; "
+        'else if new.id=' + broadcast + " and new.broadcast_status='ended' then "
+        'perform pg_advisory_xact_lock(2147483400,92); end if; end if; return new; end; $$; '
+        'create trigger zz_absent_replay_receipt after insert on private.creator_event_broadcast_provider_receipts '
+        'for each row execute function event_reservation_fixture.pause_absent_replay(); '
+        'create trigger zz_absent_replay_broadcast after update on public.room_broadcast_sessions '
+        'for each row execute function event_reservation_fixture.pause_absent_replay();')
+    provider = owner.session('provider')
+    saver = owner.session('save-replay-service')
+    editor = owner.session('creator-replay-edit')
+    observer.require('select pg_advisory_lock(2147483400,91),pg_advisory_lock(2147483400,92);')
+    provider.require('begin;')
+    provider.service()
+    callback = 'select public.record_creator_event_broadcast_provider(' + ','.join(map(literal, [
+        context['eventId'], context['hostId'], context['hostSession'], source['attemptId'], 'EG_replay_deadline',
+        'COMPLETE', source['privateOrigin'] + '/' + source['outputPrefix'] + '/index.m3u8',
+        source['outputPrefix'] + '/index.m3u8'])) + ',true,true);'
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        complete = pool.submit(provider.execute, callback)
+        wait_for(lambda: complete.done() or has_edge(blockers(observer, [provider]), provider, observer),
+                 'provider at receipt gate after absent replay lookup')
+        check(not complete.done(), 'provider waits at receipt before public media writes')
+        saver.require('begin;')
+        saver.service()
+        saved = saver.require('insert into public.creator_replay_library_items(owner_user_id,source_type,source_room_id,'
+            'party_id,broadcast_session_id,title,visibility,rights_status,save_status,money_status,playback_record_id,metadata) '
+            'select ' + literal(context['hostId']) + "::text,'live_stage',b.source_room_id,b.source_room_id,b.id,"
+            "'Synthetic request-save replay','draft',b.rights_status,'ready','free',h.id,"
+            "jsonb_build_object('created_by','request-save-replay','replay_destination','content_library') "
+            'from public.room_broadcast_sessions b join public.spectator_hls_playback_records h '
+            'on h.broadcast_session_id=b.id where b.id=' + broadcast + ' returning id;')
+        check(len(saved['rows']) == 1, 'service save creates exact reachable draft replay')
+        replay = saved['rows'][0]
+        saver.require('commit;')
+        check(True, 'save INSERT commits while provider is still at the early receipt gate')
+        observer.require('select pg_advisory_unlock(2147483400,91);')
+        def at_broadcast_gate():
+            return observer.scalar("select exists(select 1 from pg_locks where locktype='advisory' "
+                'and not granted and pid=' + str(provider.pid)
+                + ' and classid=2147483400 and objid=92);') == 't'
+
+        wait_for(lambda: complete.done() or at_broadcast_gate(), 'provider first public broadcast gate')
+        check(not complete.done() and at_broadcast_gate(), 'provider waits after first broadcast write owns Brand')
+        editor.require('begin;')
+        editor.claim(context['hostId'], context['hostSession'])
+        edit = pool.submit(editor.execute, "update public.creator_replay_library_items set visibility='draft',"
+            'updated_at=clock_timestamp() where id=' + literal(replay) + ' returning id;')
+        wait_for(lambda: edit.done() or has_edge(blockers(observer, [provider, editor]), editor, provider),
+                 'newly saved replay edit contends with provider')
+        state = blockers(observer, [provider, editor])
+        report['observations'].append({'stage': 'before_release', 'backends': state})
+        check(not edit.done() and has_edge(state, editor, provider), 'authenticated edit waits for provider Brand lock')
+        observer.require('select pg_advisory_unlock(2147483400,92);')
+        if expect == 'deadlock':
+            wait_for(lambda: has_edge(blockers(observer, [provider, editor]), provider, editor)
+                     and has_edge(blockers(observer, [provider, editor]), editor, provider),
+                     'provider UPSERT and creator edit reciprocal lock cycle')
+            report['observations'].append({'stage': 'cycle', 'backends': blockers(observer, [provider, editor])})
+            check(True, 'actual reciprocal lock edges captured')
+            wait_for(lambda: (complete.done() and complete.result()['sqlstate'] == '40P01')
+                     or (edit.done() and edit.result()['sqlstate'] == '40P01'), 'native SQLSTATE40P01')
+            for future, session in [(complete, provider), (edit, editor)]:
+                if future.done() and future.result()['sqlstate'] == '40P01':
+                    session.require('rollback;')
+            outcomes = [complete.result(timeout=30), edit.result(timeout=30)]
+            check(sorted(result['sqlstate'] for result in outcomes) == ['00000', '40P01'],
+                  'native40P01 on the pre-statement-gate control and successful survivor')
+            for result, session in zip(outcomes, [provider, editor]):
+                if result['sqlstate'] == '00000':
+                    session.require('commit;')
+        else:
+            result = complete.result(timeout=30)
+            check(result['sqlstate'] == '00000', 'provider completion succeeds without waiting on replay tuple')
+            provider.require('commit;')
+            changed = edit.result(timeout=30)
+            check(changed['sqlstate'] == '00000' and changed['rows'] == [replay],
+                  'authenticated replay edit succeeds after provider commit')
+            editor.require('commit;')
+            outcomes = [result, changed]
+            check(True, 'all three real transactions commit')
+            check(observer.scalar('select count(*) from private.creator_event_replay_observation_pending;') == '0',
+                  'commits fully drain pending observations')
+        report['outcomes'] = outcomes
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, default=ROOT)
@@ -210,7 +308,7 @@ def main():
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--patch', type=Path, action='append', default=[])
     parser.add_argument('--expect', choices=['deadlock', 'success'], required=True)
-    parser.add_argument('--case', choices=['provider', 'provider-late', 'multi-event', 'worker', 'wallet-first', 'lifecycle-first', 'buyer-replay'], default='provider')
+    parser.add_argument('--case', choices=['provider', 'provider-late', 'multi-event', 'worker', 'wallet-first', 'lifecycle-first', 'buyer-replay', 'provider-absent'], default='provider')
     args = parser.parse_args()
     if not re.fullmatch(r'chillywood-event-offer-audit-[a-z0-9-]+', args.container):
         parser.error('--container must name an isolated chillywood-event-offer-audit fixture')
@@ -283,6 +381,11 @@ def main():
             report['patches'].append({'path': str(patch), 'sha256': hashlib.sha256(patch.read_bytes()).hexdigest()})
             apply(patch.stem, patch.read_text())
         apply('broadcast-fixture', (args.repo / 'tests/fixtures/event-broadcast-producer-authority.sql').read_text())
+        if args.case == 'provider-absent':
+            provider_absent(owner, observer, args.repo, apply, check, report, args.expect)
+            check(json.loads(observer.scalar(switches)) == {'live_money_enabled': 'off', 'payouts_enabled': 'off'}, 'money switches unchanged')
+            report['passed'] = True
+            return
         if args.case == 'buyer-replay':
             check(args.expect == 'success', 'buyer-replay case qualifies the final repaired path')
             buyer_replay(owner, observer, args.repo, apply, check, report)
@@ -366,9 +469,9 @@ def main():
                 results = [complete.result(timeout=30), edit.result(timeout=30)]
                 check(sorted(r['sqlstate'] for r in results) == ['00000', '40P01'], 'exact native40P01 and successful survivor')
             else:
-                if args.case in ['provider','provider-late']:
+                if args.case == 'provider-late':
                     check(not edit.done() and has_edge(report['observations'][-1]['backends'],creator,provider),
-                          'creator edit waits for provider replay-row reservation')
+                          'creator edit waits for provider Brand gate before locking replay tuple')
                     observer.require('select pg_advisory_unlock(2147483600,71);')
                     provider_result = complete.result(timeout=30)
                     check(provider_result['sqlstate'] == '00000', 'provider completes while creator waits without reciprocal dependency')
@@ -379,6 +482,9 @@ def main():
                     if args.case == 'worker':
                         check(json.loads(edit.result()['rows'][-1]) == [], 'worker leaves the provider-owned attempt for safe later processing')
                     creator.require('commit;')
+                    if args.case == 'provider':
+                        check(not complete.done() and has_edge(blockers(observer, [provider, creator]), provider, observer),
+                              'creator replay edit commits while provider still waits at the early receipt gate')
                     observer.require('select pg_advisory_unlock(2147483600,71);')
                     results = [complete.result(timeout=30), edit.result()]
                 check(all(r['sqlstate'] == '00000' for r in results), 'provider completion and competing operation both succeed')

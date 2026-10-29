@@ -129,6 +129,8 @@ insert into public.media_upload_reservations (
   'video/mp4', 1024, transaction_timestamp()
 );
 
+-- Both synthetic keys are new in this rolled-back fixture. Require both rows
+-- instead of assuming a pre-versioning (bucket_id,name) unique constraint.
 insert into storage.objects (bucket_id, name, owner, owner_id, metadata)
 values
   (
@@ -144,8 +146,7 @@ values
     '11111111-1111-4111-8111-111111111111',
     '11111111-1111-4111-8111-111111111111',
     '{"mimetype":"image/jpeg","size":2048}'::jsonb
-  )
-on conflict (bucket_id, name) do nothing;
+  );
 
 set local request.jwt.claims =
   '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test","session_id":"11111111-1111-4111-8111-111111111101"}';

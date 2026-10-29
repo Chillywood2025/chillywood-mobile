@@ -46,6 +46,30 @@ select ok(not exists(select 1 from pg_constraint
 select is((select count(*)::integer from private.creator_event_replay_observation_pending),0,
   'completed earlier transactions leave no pending observations');
 
+select ok(exists(select 1 from pg_trigger
+  where tgrelid='public.creator_replay_library_items'::regclass
+    and tgname='creator_replay_media_before_statement' and tgtype=22
+    and tgenabled in('O','A') and tgqual is null and tgattr=''::int2vector
+    and not tgisinternal and not tgdeferrable
+    and tgfoid='private.lock_creator_replay_media_statement()'::regprocedure),
+  'every replay INSERT/UPDATE statement takes the media lock before tuple writes');
+select ok((select prosecdef and proconfig @> array['search_path=""'] from pg_proc
+  where oid='private.lock_creator_replay_media_statement()'::regprocedure),
+  'replay statement locking uses an empty definer search path');
+select ok(not exists(select 1 from unnest(array['anon','authenticated','service_role']) api_role
+  where has_function_privilege(api_role,'private.lock_creator_replay_media_statement()','EXECUTE')),
+  'API roles cannot invoke the statement-lock trigger function directly');
+select ok(not exists(select 1 from pg_proc procedure
+  cross join lateral aclexplode(coalesce(procedure.proacl,acldefault('f',procedure.proowner))) privilege
+  where procedure.oid='private.lock_creator_replay_media_statement()'::regprocedure and privilege.grantee=0),
+  'PUBLIC cannot invoke the statement-lock trigger function directly');
+select is((select count(*)::integer from pg_trigger
+  where tgrelid='public.creator_replay_library_items'::regclass
+    and tgfoid in('private.guard_deleted_media_references()'::regprocedure,
+      'private.guard_platform_brand_retention_references()'::regprocedure)
+    and tgtype=23 and tgenabled in('O','A')),2,
+  'the existing replay media-retention row guards remain enabled after the statement lock');
+
 -- Notification activity written by an AFTER event trigger takes the shared
 -- media guard. The lifecycle prelock must run before those AFTER side effects.
 select ok(exists(select 1 from pg_trigger lifecycle

@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "projectId": "bmkkhihfbmsnnmcqkoly",
+  "observedDate": "2026-10-29",
+  "archivePath": "statements.json",
+  "archiveSha256": "49872a7305452277888b23999a6cf83dc3dacee0560fbaa0a4219399c8e06fe9",
+  "scope": "Three already-deployed records omitted from previous archives. Historical source files and database history are unchanged.",
+  "comparisonMethod": "Use the actual deployed ordered statement boundaries. Verify every statement as an exact sequential source substring and reconstruct the full source using only recorded outer semicolon/LF gaps. No ad-hoc SQL splitter or semantic normalization is used.",
+  "cliSplitterExecuted": false,
+  "cliSplitterLimitation": "Cached Supabase CLI 2.109.1 is a packaged binary; its TypeScript splitter was not separately available locally. Exact deployed segmentation is verified directly instead.",
+  "retainedReadOnlyResult": {
+    "artifact": "three-statement-history-readback-20261029.json",
+    "sha256": "a9962fa53b68651fe4fc97c1b86400328d8d9625c0bc57582e844ca6b6fc88a5",
+    "location": "Private task evidence/integration"
+  },
+  "deployed": [
+    {
+      "version": "20260928164743",
+      "name": "communication_terminal_self_leave",
+      "statementCount": 31,
+      "joinedSha256": "97f4f1529ac92d258a85d2a02d73186c39060e9381a8cc8f4015dc86bc485e71",
+      "statementSha256": [
+        "b8d30a2ee1dbdb40922929ec075fe23298bd13714cbe19711b7fc0c941f82205",
+        "08c6c8d830eb8e15b395f7d6ee7b5b9dd372df34c6aa52fe47eee0211fcc1943",
+        "6f64fc84b7b6159434ef195573f490f494c08671d2cdb2c96c5809c2f27ba3ab",
+        "3cd92848781509b62f7003684d4ee1640d5f46c446880ff5e34236e71c11c932",
+        "7c107ebf4a5fd18799f5932229218362999671624066b6cd66f1cdafb6e1c476",
+        "b6f97f2d00fa63d54cd9db8075dfd29706f789c9b4eaa8852ed5cd833a8c578c",
+        "0d126cfad1d680cc2448714d5f4484ce0985ff4fe033e67ec8ccd17271453ce6",
+        "5406f736394c116f80baaaa8434ea9cb8014346c228844fc449f19d29574b3e6",
+        "d8eb9e4bb09cd13838571e3e15034bd02e638e2820ed341a9e385aa538f57147",
+        "242c056616d9c359c5f1cbd40a9f146e3e4bd966016182b266cc68786644db18",
+        "ddfa1675452b65a4cae332a63454991eb5d6b9b80f7be44bc4707c1d83c844c2",
+        "55e26706d9bf5a4a6c132efcac4ef59005eeada6c30e4fe204cbd00a75806675",
+        "cd203bfe7eccbe6e4c339082b7f5dec60c10b94e5d93d136f8907816d336f51c",
+        "12bcb12240de1c451829d1871b171e1eecea6c8887df5b90499a4b67bc175670",
+        "494d7e01363f73cd32358dd23af4ac00fe6765c5d067fbd78e15e7b5a81efea7",
+        "e7fa99280d5da7463166f217b271778e34280a137c2638faf8938972d54c01dd",
+        "2f17ce99ca5ae18c00ac38ed10f763434c48858fdad029bad924341cab4f26e6",
+        "40ce44d96eac52c793bb657d1e5a42eb0f411cbd397ab2d096be2dee78124342",
+        "5d90a073676014052a904da4ff974752b52b50398d040c9b9c040e1ac2d04c8e",
+        "9bb409cb7a9ba8f7bc8e0e79a7986a2d9703f56fd01729ae241822042e653660",
+        "fbfc567ff3bd150f0f78c90ce6b314ed54a294b6f011cfbb6ff76d45c8206aab",
+        "7b2f8e8231d5419e49f3b161994489989504f794b23501656eccbb341774659b",
+        "05ddc27cbbc448f008b777536295f36b47b25ac07e0efb364eacbeb24abbf2a6",
+        "6692200c989d153b877882afec44e2f3d254534bc230691f6a3e95a9d8355751",
+        "017c084da1f557c65c67b8037b3a60a2a8a7e4580b2e3220c1d5a3136ae6725e",
+        "2de88c07fe27b3792d3f23a9c832675af6168e5371f23577f6358b6d47eda1d7",
+        "20a01d6d3493cfe342b4b00e17e867ddf05bf311b38cfc3d9b49f2dc3cf95bd4",
+        "ce33d4d311b958d7aaf99045b40666cdb7a011c5af8cad023edd2e30154880e2",
+        "eb51e67467f6c04a8b9288ce400e3560093a357905985d1494dc783a860ac9b3",
+        "653375ab19d9a8282f1cbecd812ac5b291d03d66683b59f54136e92eac9b3c54",
+        "919e59e1440f0ae8adb30d649940613054bd8d128a78780ae1d6b4c492f2921e"
+      ],
+      "sourcePath": "supabase/migrations/20260928164743_communication_terminal_self_leave.sql",
+      "sourceSha256": "15ec276cab2c6d3cec66953473e60c69fcd8e2e6d40fc3d082c13f3e4b80a513",
+      "exactOrderedStatementSubstrings": true,
+      "sourcePrefixAndInterStatementGaps": [
+        "",
+        ";\n\n",
+        ";\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n",
+        ";\n\n",
+        ";\n\n",
+        ";\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n",
+        ";\n\n",
+        ";\n",
+        ";\n"
+      ],
+      "sourceTrailingGap": ";\n",
+      "exactSourceReconstruction": true
+    },
+    {
+      "version": "20260929004448",
+      "name": "communication_private_state_invalidation",
+      "statementCount": 5,
+      "joinedSha256": "7e726396eeec8d73956a0f4869122fd07251d64481424a6a57d0ae459870112a",
+      "statementSha256": [
+        "5177681389384e7276fd5c43ba0016369a9449e16d0bced228f6b76cc3bf699f",
+        "7d4dd95fcc90a48651ce51c915afee4f1f83697e69ef3a75fe813621146d36d4",
+        "f243b6c0728730b72a31374274518b316209fe80dee61e9f72b15d9ba613fe65",
+        "4cd39fe8168e5c876a71446d05dc6339b5fba16da59a37ddebe786c133ab34c7",
+        "f35e877634af43ecad5595c2daec46e594e54586b33d768ae71d82fa8ac82e95"
+      ],
+      "sourcePath": "supabase/migrations/20260929004448_communication_private_state_invalidation.sql",
+      "sourceSha256": "26358f49a2e2c850590acde4fa31dddd7de6823aa7a2be722a43def280552c7d",
+      "exactOrderedStatementSubstrings": true,
+      "sourcePrefixAndInterStatementGaps": [
+        "",
+        ";\n\n",
+        ";\n\n",
+        ";\n\n",
+        ";\n\n"
+      ],
+      "sourceTrailingGap": ";\n",
+      "exactSourceReconstruction": true
+    },
+    {
+      "version": "20261019000210",
+      "name": "circle_request_rpc_anon_execute_closure",
+      "statementCount": 1,
+      "joinedSha256": "945251b83943dd720f8e73a4f25091cd85145e4358b8940b6084d9c261f1d676",
+      "statementSha256": [
+        "945251b83943dd720f8e73a4f25091cd85145e4358b8940b6084d9c261f1d676"
+      ],
+      "sourcePath": "supabase/migrations/20261019000210_circle_request_rpc_anon_execute_closure.sql",
+      "sourceSha256": "c668d1d245946992dd2b6f8a258bfd414546af9ce79a1c1eb4ae7ce22f941bd5",
+      "exactOrderedStatementSubstrings": true,
+      "sourcePrefixAndInterStatementGaps": [
+        ""
+      ],
+      "sourceTrailingGap": ";\n",
+      "exactSourceReconstruction": true
+    }
+  ],
+  "productionMutation": false,
+  "historicalSourceModified": false,
+  "replayAuthorized": false,
+  "privacyReview": {
+    "resultFields": [
+      "version",
+      "name",
+      "statements",
+      "joined_sha256"
+    ],
+    "allArchivedStatementContentAlreadyInTrackedSource": true,
+    "credentialsOrPrivateProviderPayloadsAdded": false,
+    "userRowsOrActorMetadataIncluded": false
+  }
+}

@@ -57,6 +57,10 @@ def literal(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def identifier(value):
+    return '"' + str(value).replace('"', '""') + '"'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, default=Path(__file__).resolve().parent.parent)
@@ -107,9 +111,25 @@ def main():
             raise RuntimeError(result.stderr)
         return result.stdout.strip()
 
+    def database_acl_snapshot(db):
+        return json.loads(query("select json_build_object('owner',owner.rolname,"
+            "'encoding',pg_encoding_to_char(database.encoding),'collate',database.datcollate,"
+            "'ctype',database.datctype,'acl',coalesce((select json_agg(json_build_object("
+            "'grantor',grantor.rolname,'grantee',case when privilege.grantee=0 then 'PUBLIC' else grantee.rolname end,"
+            "'privilege',privilege.privilege_type,'grantable',privilege.is_grantable) "
+            "order by privilege.grantor,privilege.grantee,privilege.privilege_type,privilege.is_grantable) "
+            "from aclexplode(coalesce(database.datacl,acldefault('d',database.datdba))) privilege "
+            "join pg_roles grantor on grantor.oid=privilege.grantor "
+            "left join pg_roles grantee on grantee.oid=privilege.grantee),'[]'::json)) "
+            "from pg_database database join pg_roles owner on owner.oid=database.datdba "
+            "where database.datname=" + literal(db) + ';', db='postgres'))
+
     def inventory():
         paths = set((repo / 'supabase/migrations').glob('*.sql')) | set((repo / 'supabase/tests').glob('*.sql'))
         paths |= set((repo / 'tests/helpers').glob('*.mjs'))
+        paths |= {repo / 'tests/fixtures/storage-delete-protection-production-20261029.sql',
+                  repo / 'tests/fixtures/realtime-delete-filter-production-20261022.sql',
+                  repo / 'tests/fixtures/database-managed-schema-20261015.json'}
         paths |= {repo / 'scripts/export-event-reservation-runtime-fixture.mjs', Path(__file__).resolve(), repo / 'package-lock.json'}
         return {str(path.relative_to(repo)): digest(path) for path in sorted(paths)}
 
@@ -242,8 +262,36 @@ def main():
         template_schema = schema_snapshot(TEMPLATE)
         (evidence / 'template-schema.sql').write_bytes(template_schema)
         report['template_schema_sha256'] = hashlib.sha256(template_schema).hexdigest()
+        # CREATE DATABASE ... TEMPLATE copies object ACLs, but not pg_database.datacl.
+        # Preserve the template database privilege boundary explicitly on the owned clone.
+        template_database = database_acl_snapshot(TEMPLATE)
+        report['template_database'] = template_database
+        check(template_database['owner'] == 'postgres'
+              and all(privilege['grantor'] == 'postgres' for privilege in template_database['acl']),
+              'prepared template database owner and all ACL grantors are the existing fixture owner')
+        check(query("select count(*) from pg_db_role_setting where setdatabase=(select oid from pg_database where datname="
+              + literal(TEMPLATE) + ');', db='postgres') == '0',
+              'prepared template has no omitted database-specific role settings')
         subprocess.run(['docker', 'exec', CONTAINER, 'createdb', '-h', '/tmp', '-U', 'postgres', '--template=' + TEMPLATE, database],
                        check=True, capture_output=True, timeout=90)
+        cloned_database = database_acl_snapshot(database)
+        check(all(cloned_database[key] == template_database[key] for key in ('owner','encoding','collate','ctype')),
+              'clone database owner, encoding and locale match the prepared template')
+        acl_sql = []
+        for grantee_name in sorted({privilege['grantee'] for privilege in cloned_database['acl']}):
+            grantee = 'public' if grantee_name == 'PUBLIC' else identifier(grantee_name)
+            acl_sql.append('revoke all privileges on database ' + identifier(database) + ' from ' + grantee + ';')
+        for privilege in template_database['acl']:
+            if privilege['privilege'] not in ('CONNECT','CREATE','TEMPORARY'):
+                raise AssertionError('unexpected source database privilege')
+            grantee = 'public' if privilege['grantee'] == 'PUBLIC' else identifier(privilege['grantee'])
+            acl_sql.append('grant ' + privilege['privilege'] + ' on database ' + identifier(database)
+                + ' to ' + grantee + (' with grant option' if privilege['grantable'] else '') + ';')
+        (evidence / 'clone-database-acl.sql').write_text('\n'.join(acl_sql) + '\n')
+        query("begin; set local statement_timeout='10s'; set local lock_timeout='10s';\n"
+              + '\n'.join(acl_sql) + '\ncommit;', db='postgres')
+        check(database_acl_snapshot(database) == template_database,
+              'clone database ACL exactly matches the prepared template, including PUBLIC/runtime TEMP denial')
         check(schema_snapshot(database) == template_schema, 'fresh clone schema is byte-identical to retained template dump')
         report['forward_migrations'] = []
         for patch in patches:
@@ -253,14 +301,68 @@ def main():
             check(entry['passed'], 'new forward migration applied: ' + patch.name)
         application_before = schema_snapshot(database, application_only=True)
         overlay = subprocess.check_output(['node', '--input-type=module', '-e',
-            "import {managedRequestContextSQL,managedExtensionUsageSQL} from './tests/helpers/database-managed-request-context.mjs';"
-            "process.stdout.write(managedRequestContextSQL.replaceAll('create function auth.','create or replace function auth.')+'\\n'+managedExtensionUsageSQL);"],
+            "import {managedRequestContextSQL,managedExtensionUsageSQL,managedStorageObjectIDDefaultSQL} from './tests/helpers/database-managed-request-context.mjs';"
+            "process.stdout.write(managedRequestContextSQL.replaceAll('create function auth.','create or replace function auth.')+'\\n'+managedExtensionUsageSQL+'\\n'+managedStorageObjectIDDefaultSQL);"],
             cwd=repo, text=True, timeout=30)
         (evidence / 'managed-fixture-overlay.sql').write_text(overlay)
         report['managed_fixture_overlay'] = execute('managed-fixture-overlay', overlay, 60)
         check(report['managed_fixture_overlay']['passed'], 'managed request claims and extensions schema usage match Supabase fixtures')
         check(schema_snapshot(database, application_only=True) == application_before,
               'managed fixture overlay leaves all public/private application definitions unchanged')
+        # Preserve the real managed statement-level delete guard in the native
+        # fixture. Never set storage.allow_delete_query in the harness.
+        storage_guard_fixture = repo / 'tests/fixtures/storage-delete-protection-production-20261029.sql'
+        check(query("select to_regprocedure('storage.protect_delete()') is null and not exists("
+                    "select 1 from pg_trigger where tgrelid='storage.objects'::regclass "
+                    "and tgname='protect_objects_delete');") == 't',
+              'captured managed Storage delete guard is absent before isolated overlay')
+        report['managed_storage_delete_guard_overlay'] = execute('managed-storage-delete-guard-overlay', storage_guard_fixture.read_text(), 60)
+        report['managed_storage_delete_guard_overlay']['source'] = str(storage_guard_fixture.relative_to(repo))
+        report['managed_storage_delete_guard_overlay']['source_sha256'] = digest(storage_guard_fixture)
+        check(report['managed_storage_delete_guard_overlay']['passed'], 'captured managed Storage delete guard applied locally')
+        storage_guard = json.loads(query("select json_build_object('owner',pg_get_userbyid(proowner),"
+            "'acl',proacl::text,'security_definer',prosecdef,'config',proconfig,"
+            "'definition_md5',md5(pg_get_functiondef(oid)),"
+            "'trigger',(select pg_get_triggerdef(oid) from pg_trigger where tgrelid='storage.objects'::regclass "
+            "and tgname='protect_objects_delete')) from pg_proc where oid='storage.protect_delete()'::regprocedure;"))
+        report['managed_storage_delete_guard_overlay']['catalog'] = storage_guard
+        check(storage_guard == {
+            'owner': 'supabase_storage_admin', 'acl': None, 'security_definer': False, 'config': None,
+            'definition_md5': '4371ae544fb1ef704f9c5d42265ac324',
+            'trigger': 'CREATE TRIGGER protect_objects_delete BEFORE DELETE ON storage.objects FOR EACH STATEMENT EXECUTE FUNCTION storage.protect_delete()'},
+              'managed Storage guard owner, default ACL, exact definition and statement trigger match captured metadata')
+        # This captured managed filter implementation is pure local SQL. It does
+        # not assert an installed Realtime service or replace application code.
+        realtime_fixture = repo / 'tests/fixtures/realtime-delete-filter-production-20261022.sql'
+        check(query("select to_regtype('realtime.equality_op') is null "
+                    "and to_regtype('realtime.wal_column') is null "
+                    "and to_regtype('realtime.user_defined_filter') is null "
+                    "and not exists(select 1 from pg_proc where pronamespace='realtime'::regnamespace "
+                    "and proname in ('check_equality_op','is_visible_through_filters'));") == 't',
+              'retained synthetic Realtime filter objects are absent before captured fixture overlay')
+        report['managed_realtime_filter_overlay'] = execute('managed-realtime-filter-overlay', realtime_fixture.read_text(), 60)
+        report['managed_realtime_filter_overlay']['source'] = str(realtime_fixture.relative_to(repo))
+        report['managed_realtime_filter_overlay']['source_sha256'] = digest(realtime_fixture)
+        check(report['managed_realtime_filter_overlay']['passed'], 'captured managed Realtime filter SQL applied locally')
+        report['managed_realtime_filter_overlay']['definition_md5'] = query(
+            "select md5(pg_get_functiondef('realtime.is_visible_through_filters(realtime.wal_column[],realtime.user_defined_filter[])'::regprocedure));")
+        # Reservation preparation enables only synthetic sandbox rails. Restore
+        # the App Store source seed from 20260715151250_ios_app_store_mappings.sql
+        # before unchanged suite assertions; no real provider is contacted.
+        money_state_sql = "select json_object_agg(key,state order by key) from public.platform_money_kill_switches;"
+        report['template_money_switches'] = json.loads(query(money_state_sql))
+        check(report['template_money_switches'].get('revenuecat_app_store_enabled') == 'sandbox_only',
+              'App Store template preseed matches the recorded synthetic reservation fixture')
+        report['template_app_store_default_restore'] = execute('template-app-store-default-restore',
+            "begin; update public.platform_money_kill_switches set state='off' "
+            "where key='revenuecat_app_store_enabled' and state='sandbox_only'; commit;", 60)
+        check(report['template_app_store_default_restore']['passed'], 'owned clone App Store switch restored to source-seeded off default')
+        expected_switches = dict(report['template_money_switches'], revenuecat_app_store_enabled='off')
+        check(json.loads(query(money_state_sql)) == expected_switches
+              and query("select public.ios_creator_money_expected_environment_internal() is null;") == 't',
+              'only the clone App Store fixture state changed and off resolves no purchase environment')
+        check(schema_snapshot(database, application_only=True) == application_before,
+              'captured infrastructure and fixture-state overlays preserve application definitions and grants')
         query('create extension if not exists pgtap with schema extensions;')
         report['pgtap'] = query("select extversion from pg_extension where extname='pgtap';")
         all_paths = sorted((repo / 'supabase/tests').glob('*.sql'))
@@ -282,6 +384,10 @@ def main():
         report['remaining_database_sessions'] = json.loads(query("select coalesce(json_agg(pid),'[]'::json) from pg_stat_activity "
             "where datname=current_database() and pid<>pg_backend_pid();"))
         check(not report['remaining_database_sessions'], 'all test database sessions closed')
+        check(database_acl_snapshot(TEMPLATE) == template_database,
+              'original template database ACL and locale remained unchanged')
+        check(database_acl_snapshot(database) == template_database,
+              'test rollback left the clone database ACL equal to the original template')
         check(schema_snapshot(TEMPLATE) == template_schema, 'retained template schema remained unchanged')
         check(inventory() == report['source_sha256'], 'source bytes stayed frozen throughout the run')
         check(subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip() == report['source_head'],

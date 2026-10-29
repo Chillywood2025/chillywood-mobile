@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {brandReferenceNativeContainer,brandNativeSpawnSync,brandNativeSpawn,brandNativePreflight} from './helpers/brand-reference-native-target.mjs';
+import {createDatabase,repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
 
 if(process.argv.includes('--help')){
  console.log('BRAND_REFERENCE_TEST_CONTAINER=brand-ref-perf-* node tests/brand-reference-guards-native.mjs [--benchmark] [--keep-fixture]. Requires a fresh disposable PostgreSQL cluster in a network-disabled container with no mounts and socket /tmp. Source migrations intentionally reject pre-existing cognitive runtime roles, so a new database in a previously replayed cluster is insufficient. Replays source schema with managed-service doubles into a newly generated database. Optional benchmark adds 429749 synthetic audit rows and times complete clearance calls. --keep-fixture retains the exact printed database for follow-up; otherwise it is dropped. No provider/scanner evidence.');
@@ -31,6 +32,7 @@ const reportPath=fileURLToPath(new URL('../../brand-reference-index-native-guard
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const report={status:'running',startedAt:new Date().toISOString(),container,database,benchmark,keepFixture,
  sourceHashes:Object.fromEntries(['tests/brand-reference-guards-native.mjs','tests/helpers/database-runtime-authority-fixture.mjs',
+ 'tests/helpers/database-managed-request-context.mjs',
  'supabase/migrations/20261025121430_platform_brand_reference_scan_performance.sql',
  'supabase/migrations/20261025141347_platform_brand_reference_candidate_indexes.sql'].map(file=>[file,sha(readFileSync(root+file))])),
  checks:labels,pgtap:tapResults,syntheticOnly:true};
@@ -42,17 +44,13 @@ let created=false;
 // migration replay policy. It supplies empty auth/storage catalog shapes and
 // explicit cron/vault/realtime doubles; no snapshot overlay or data is loaded.
 async function fixtureSQL(){
- let source=readFileSync(new URL('../tests/helpers/database-runtime-authority-fixture.mjs',import.meta.url),'utf8');
- for(const anchor of ["import {PGlite} from '@electric-sql/pglite';","import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';","const root = fileURLToPath(new URL('../../', import.meta.url));"]){assert.ok(source.includes(anchor),`fixture adapter anchor: ${anchor}`);}
- source=source.replace("import {PGlite} from '@electric-sql/pglite';",`export const nativeStatements=[]; class PGlite { async exec(sql){nativeStatements.push(sql);} async close(){} }`)
-  .replace("import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';",'const pgcrypto={};')
-  .replace("import {pg_trgm} from '@electric-sql/pglite/contrib/pg_trgm';",'const pg_trgm={};')
-  .replace("const root = fileURLToPath(new URL('../../', import.meta.url));",`const root=${JSON.stringify(root)};`);
- const fixture=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
- const {replayReport}=await fixture.createDatabase({includeHeldStudio:true,applyRepair:true});
- assert.ok(fixture.repairMigrationPath,'runtime authority repair source is required');
- replayReport.files.push(fixture.repairMigrationPath.split('/').at(-1));
- let sql=fixture.nativeStatements.join('\n');
+ const nativeStatements=[];
+ class CaptureDatabase {async exec(sql){nativeStatements.push(sql);} async close(){}}
+ const {replayReport}=await createDatabase({includeHeldStudio:true,applyRepair:true,
+  databaseFactory:async()=>new CaptureDatabase()});
+ assert.ok(repairMigrationPath,'runtime authority repair source is required');
+ replayReport.files.push(repairMigrationPath.split('/').at(-1));
+ let sql=nativeStatements.join('\n');
  // Roles are cluster-scoped and may already belong to the sibling synthetic
 // benchmark. Do not alter or drop them; only create missing fixture roles.
  sql=sql.replace(/create role (anon|authenticated|service_role|supabase_admin|supabase_auth_admin|supabase_storage_admin)( bypassrls)?;/g,
