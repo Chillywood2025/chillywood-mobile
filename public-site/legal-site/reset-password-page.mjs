@@ -107,7 +107,7 @@ function authLanding(signup, bridge = false) {
     return;
   }
   if (iosSafari) {
-    target = `https://chillywood-legal.pages.dev/auth-handoff#${new URL(target).search.slice(1)}`;
+    target = `https://chillywood-legal.pages.dev/auth-handoff/#${new URL(target).search.slice(1)}`;
     button.textContent = "Continue with Safari (step 1 of 2)";
   } else {
     const canonical = new URL(target);

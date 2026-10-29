@@ -6,7 +6,7 @@
 /reset-password
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-RgZOnMles/eaFEUxSMr5QGGFWyMaogwNfh6mcDWfcaM='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-4VD4Ltvt5RuQ83RalcpYLdG9C5umi8EbyWje4n0Cpq0='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -17,7 +17,7 @@
 /reset-password/
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-RgZOnMles/eaFEUxSMr5QGGFWyMaogwNfh6mcDWfcaM='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-4VD4Ltvt5RuQ83RalcpYLdG9C5umi8EbyWje4n0Cpq0='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -28,7 +28,7 @@
 /reset-password/index.html
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-RgZOnMles/eaFEUxSMr5QGGFWyMaogwNfh6mcDWfcaM='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-4VD4Ltvt5RuQ83RalcpYLdG9C5umi8EbyWje4n0Cpq0='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -39,7 +39,7 @@
 /auth-callback
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-aTbFxfUp4iAdAXp+02uL36RyXaESxD1YlxsoEdHYSZo='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-EOUK0adlX1x7ExcPYLPqG8zlG8lZZGQ1/aS5jEu2XK8='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -50,7 +50,7 @@
 /auth-callback/
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-aTbFxfUp4iAdAXp+02uL36RyXaESxD1YlxsoEdHYSZo='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-EOUK0adlX1x7ExcPYLPqG8zlG8lZZGQ1/aS5jEu2XK8='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -61,7 +61,7 @@
 /auth-callback/index.html
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-aTbFxfUp4iAdAXp+02uL36RyXaESxD1YlxsoEdHYSZo='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-EOUK0adlX1x7ExcPYLPqG8zlG8lZZGQ1/aS5jEu2XK8='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -72,7 +72,7 @@
 /auth-handoff
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-WyVfpsRFP/39Q6IQWJ39x58Z7d8HFyRgk3T/JWL7U1E='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-dCj5VwZVRRLzmtzUFSp3yzj+7ADtQom3XDCP4Hrm7h0='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -83,7 +83,7 @@
 /auth-handoff/
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-WyVfpsRFP/39Q6IQWJ39x58Z7d8HFyRgk3T/JWL7U1E='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-dCj5VwZVRRLzmtzUFSp3yzj+7ADtQom3XDCP4Hrm7h0='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow
@@ -94,7 +94,7 @@
 /auth-handoff/index.html
   Cache-Control: no-store
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-WyVfpsRFP/39Q6IQWJ39x58Z7d8HFyRgk3T/JWL7U1E='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-dCj5VwZVRRLzmtzUFSp3yzj+7ADtQom3XDCP4Hrm7h0='; style-src 'sha256-MUtFiiiPrallO8RXyFZfVuqej1hNZXVPj3Ya/xVljcw='; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   X-Robots-Tag: noindex, nofollow

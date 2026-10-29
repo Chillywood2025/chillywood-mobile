@@ -180,7 +180,7 @@ try {
   for (const type of ["recovery", "email"]) for (const hash of [token, `pkce_${token}`]) {
     const route = type === "email" ? "/auth-callback" : "/reset-password";
     const canonical = `https://chillywoodstream.com${route}?token_hash=${hash}&type=${type}`;
-    const intermediate = `https://chillywood-legal.pages.dev/auth-handoff#token_hash=${hash}&type=${type}`;
+    const intermediate = `https://chillywood-legal.pages.dev/auth-handoff/#token_hash=${hash}&type=${type}`;
     await load(canonical, safari, "", type === "email" ? renderSignupConfirmationPage() : html);
     currentHtml = renderIosHandoffPage();
     currentCsp = currentHtml.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
