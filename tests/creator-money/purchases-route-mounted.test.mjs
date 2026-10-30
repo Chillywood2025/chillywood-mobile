@@ -111,6 +111,7 @@ test("negative control proves pending-navigation protection is exercised", async
 
 async function mountTip(t, options = {}) {
   const nodes = new Map(), purchases = [], routes = [];
+  let catalogReads = 0;
   let session = { user: { id: "buyer" }, authority: { sessionGeneration: "one" } };
   const host = name => function NativeHost(props) {
     const id = React.useId(); nodes.set(id, { type: name, props });
@@ -133,8 +134,11 @@ async function mountTip(t, options = {}) {
     "../../_lib/boundedVisibleReadGate": load("_lib/boundedVisibleReadGate.ts", {}),
     "../../_lib/iosAppStoreCommerce": iosCatalog,
     "../../_lib/revenuecat": { readRevenueCatNonSubscriptionProducts: async () => [] },
-    "../../_lib/creatorSupportedPrices": { readCreatorSupportedPrices: async () => options.unavailable
-      ? { status: "unavailable", prices: [] } : { status: "resolved", subjectUserId: options.catalogBuyer ?? "buyer", prices: options.prices ?? [tipPrice()] } },
+    "../../_lib/creatorSupportedPrices": { readCreatorSupportedPrices: async () => {
+      catalogReads++;
+      return options.reader ? options.reader() : options.unavailable
+        ? { status: "unavailable", prices: [] } : { status: "resolved", subjectUserId: options.catalogBuyer ?? "buyer", prices: options.prices ?? [tipPrice()] };
+    } },
     "../../_lib/creatorTips": { ...tipApi, purchaseCreatorTipWithStore: async input => { purchases.push(input); return options.purchase ? options.purchase(input) : { ok: false, message: "Payment pending" }; } },
     "../../_lib/creatorMonetization": { formatMonetizationCurrency: amount => `$${(amount / 100).toFixed(2)}` },
     "./MoneyScopeInfoButton": { MoneyScopeInfoButton: host("MoneyScopeInfoButton") },
@@ -145,6 +149,9 @@ async function mountTip(t, options = {}) {
   const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen, props)));
   t.after(() => React.act(async () => root.unmount()));
   return { purchases, routes, nodes, node: id => [...nodes.values()].find(node => node.props.testID === id),
+    catalogReads: () => catalogReads,
+    async render(changes = {}) { Object.assign(props, changes); await React.act(async () => root.render(React.createElement(Screen, { ...props }))); },
+    async refreshCatalog() { const node = [...nodes.values()].find(node => node.props.accessibilityLabel === "Refresh supported tip amounts"); assert.ok(node); await React.act(async () => node.props.onPress()); },
     async press(id) { const node = [...nodes.values()].find(node => node.props.testID === id); assert.ok(node && !node.props.disabled); await React.act(async () => { void node.props.onPress(); }); },
     async switchSession() { session = { ...session, authority: { sessionGeneration: "two" } }; await React.act(async () => root.render(React.createElement(Screen, props))); },
     async resolve(d, value) { await React.act(async () => d.resolve(value)); },
@@ -155,6 +162,31 @@ function tipPrice(overrides = {}) {
   return { amountMinor: 99, providerProductId: "cw_creator_tip_sandbox_099", productKey: "creator_tip_sandbox_099",
     provider: "revenuecat_google_play", platform: "android", environment: "sandbox", currency: "usd", status: "sandbox", ...overrides };
 }
+
+test("mounted tip catalog reads are bounded across rerenders and reopen, with explicit retry and stale-result cleanup", async t => {
+  const h = await mountTip(t);
+  assert.equal(h.catalogReads(), 1);
+  for (let i = 0; i < 25; i++) await h.render({ creatorName: `Artist ${i}` });
+  assert.equal(h.catalogReads(), 1, "presentation rerenders must not repeat catalog reads");
+  await h.press("tip-confirm-button");
+  assert.equal(h.catalogReads(), 1, "checkout status rerenders must not repeat catalog reads");
+  await h.render({ visible: false });
+  assert.equal(h.catalogReads(), 1, "closing must not read a catalog");
+  await h.render({ visible: true });
+  assert.equal(h.catalogReads(), 2, "reopening refreshes the catalog once");
+  await h.switchSession();
+  assert.equal(h.catalogReads(), 3, "a replacement session gets its own catalog read");
+
+  const pending = deferred(); let calls = 0;
+  const delayed = await mountTip(t, { reader: () => ++calls === 1 ? pending.promise : { status: "resolved", subjectUserId: "buyer", prices: [] } });
+  await delayed.render({ visible: false });
+  await delayed.render({ visible: true });
+  await delayed.resolve(pending, { status: "resolved", subjectUserId: "buyer", prices: [tipPrice()] });
+  assert.equal(delayed.node("tip-amount-option"), undefined, "closed opening's late catalog cannot overwrite the new empty catalog");
+  assert.equal(delayed.catalogReads(), 2);
+  await delayed.refreshCatalog();
+  assert.equal(delayed.catalogReads(), 3, "explicit retry performs one new catalog read");
+});
 
 test("mounted tip chooser exposes supported store amount and rejects unavailable catalog", async t => {
   const h = await mountTip(t);
