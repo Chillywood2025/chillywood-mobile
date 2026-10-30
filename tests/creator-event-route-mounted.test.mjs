@@ -62,6 +62,7 @@ async function mount(t, options = {}) {
     "../../components/monetization/money-ui": Object.fromEntries(["MoneyOfferCard", "MoneyScopeStrip", "MoneyStatusChip", "MoneySuccessReceipt"].map(name => [name, host(name)])),
     "../../components/safety/report-sheet": { ReportSheet: () => null },
     "../../components/monetization/event-ticket-policy": { EventTicketPolicy: host("EventTicketPolicy") },
+    "../../components/monetization/event-auction-panel": { EventAuctionPanel: host("EventAuctionPanel") },
   }, options.source).default;
   const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen)));
   t.after(() => React.act(async () => root.unmount()));

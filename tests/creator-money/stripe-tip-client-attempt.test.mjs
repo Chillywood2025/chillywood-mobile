@@ -61,6 +61,11 @@ test("storage loss/corruption, wrong owner and invalid minor units fail before c
 });
 
 const compiledTips = ts.transpileModule(fs.readFileSync("_lib/creatorTips.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+const customQuotes={exports:{}};
+new Function('exports','module','require',ts.transpileModule(fs.readFileSync('_lib/creatorTipCustomQuote.ts','utf8'),{
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+}).outputText)(customQuotes.exports,customQuotes,()=>({}));
+const capabilityId='ef000000-0000-4000-8000-000000000001';
 const checkoutInput = { creatorId: creator, amountCents: 300, currency: "usd", returnUrl: "chillywood://tip-status", cancelUrl: "chillywood://tip-status" };
 function tipClient(store, options = {}) {
   let authority = { userId: buyer, sessionGeneration: "one", restoreOnly: false };
@@ -71,11 +76,20 @@ function tipClient(store, options = {}) {
   const mocks = {
     "./creatorSupportedPrices": { readCreatorSupportedPrices: async () => { throw new Error("Stripe tips must not call the store catalog"); } },
     "react-native": { Platform: { OS: options.platform ?? "android" } }, "./creatorMoneyStoreQuote": {}, "./creatorMoneyPurchaseAuthority": {},
-    "./revenuecat": {}, "./iosAppStoreCommerce": {}, "./paymentRailPolicy": {}, "./runtimeConfig": {}, "./entitlementAuthority": {},
+    "./revenuecat": { purchaseRevenueCatStoreProduct: () => assert.fail('external checkout must not call a native store SDK'),
+      readRevenueCatNonSubscriptionProducts: () => assert.fail('external checkout must not substitute a store SKU') },
+    "./iosAppStoreCommerce": {}, "./paymentRailPolicy": {}, "./runtimeConfig": {}, "./entitlementAuthority": {},
     "./creatorTipCheckoutAttempt": load(store),
+    "./creatorTipCustomQuote": customQuotes.exports,
     "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority: (a, b) => a?.userId === b?.userId && a?.sessionGeneration === b?.sessionGeneration },
     "./accountBoundSupabaseMutation": { captureAccountBoundSupabaseMutationSubject: async () => ({ authority, accessToken: "frozen-token" }),
-      invokeAccountBoundSupabaseMutationRpc: async () => ({ data: { id: tipId, creatorId: creator, senderId: options.wrongSender ? creator : buyer,
+      invokeAccountBoundSupabaseMutationRpc: async (_subject,name) => name==='get_creator_tip_amount_quote' ? {data:{
+        available:true,feature:'creator_tip',provider:'stripe_connect',buyerId:buyer,sessionId:'one',creatorId:creator,
+        amountCents:300,currency:'usd',platform:'ios',routeKind:'external_browser_checkout',storefrontCountry:'US',
+        environment:'test',paymentMethod:'card',capabilityId,minAmountMinor:50,maxAmountMinor:100000,
+        expiresAt:'2099-01-01T00:00:00Z',eligibilityExpiresAt:'2099-01-01T00:00:00Z',noAccessGranted:true,liveMoneyAction:false,
+        ...options.quote,
+      },error:null} : ({ data: { id: tipId, creatorId: creator, senderId: options.wrongSender ? creator : buyer,
         status: options.status ?? "paid", amountCents: 300, currency: "usd", accessGranted: false, pureContributionOnly: true }, error: null }) },
     "./supabase": { supabase: { functions: { invoke: async (name, input) => {
       calls.push({ name, input }); if (options.switchAccount) authority = { ...authority, sessionGeneration: "two" };
@@ -112,4 +126,23 @@ test("a creator or other buyer receipt cannot retire this buyer's unresolved Str
   const store = storage(), h = tipClient(store, { wrongSender: true }); await h.api.createCreatorTipCheckout(checkoutInput);
   await assert.rejects(h.api.readMyTipTransactionStatus(tipId), /exact tip receipt/); assert.equal(store.rows.size, 1);
   const pending = tipClient(store, { status: "checkout_started" }); await pending.api.readMyTipTransactionStatus(tipId); assert.equal(store.rows.size, 1);
+});
+
+test('iOS explicit US external tip requires fresh exact server capability; legacy and unsupported routes stay blocked',async()=>{
+  const input={...checkoutInput,capabilityId,returnUrl:'chillywoodmobile://tip-status',cancelUrl:'chillywoodmobile://tip-status'};
+  const valid=tipClient(storage(),{platform:'ios'});const result=await valid.api.createCreatorTipCheckout(input);
+  assert.equal(result.checkoutCreated,true);assert.equal(valid.calls.length,1);
+  assert.equal(valid.calls[0].input.body.capability_id,capabilityId);
+  assert.equal(valid.calls[0].input.body.return_url,'chillywoodmobile://tip-status');
+  assert.equal(valid.calls[0].input.headers['x-chillywood-platform'],'ios');
+  for(const quote of [{available:false},{storefrontCountry:'CA'},{storefrontCountry:undefined},{routeKind:'android_external_content_link'},
+    {routeKind:undefined},{platform:'android'},{buyerId:creator},{sessionId:'old'},{creatorId:buyer},{amountCents:299},
+    {capabilityId:creator},{expiresAt:'2000-01-01T00:00:00Z'},{eligibilityExpiresAt:'2000-01-01T00:00:00Z'}]) {
+    const store=storage(),h=tipClient(store,{platform:'ios',quote});
+    await assert.rejects(h.api.createCreatorTipCheckout(input),/approved US external-browser/);
+    assert.equal(h.calls.length,0);assert.equal(store.rows.size,0,'unqualified route cannot create an attempt');
+  }
+  const android=tipClient(storage(),{platform:'android'});
+  await assert.rejects(android.api.createCreatorTipCheckout(input),/native external-link integration/);
+  assert.equal(android.calls.length,0);
 });

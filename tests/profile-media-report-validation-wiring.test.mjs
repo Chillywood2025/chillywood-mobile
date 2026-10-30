@@ -65,7 +65,7 @@ test('profile moderation behavior, mutations, pgTAP and native queues are on req
   assert.equal(plan.categories.database, true);
   assert.equal(plan.categories.sensitive, true);
   const workflow = fs.readFileSync(new URL('../.github/workflows/required-validation.yml', import.meta.url), 'utf8');
-  assert.match(workflow, /node --test tests\/\*\.test\.mjs/u);
+  assert.match(workflow, /node --test --test-concurrency=1 tests\/\*\.test\.mjs/u);
   assert.match(workflow, /supabase test db/u);
   assert.match(workflow, /node scripts\/test-database-runtime-authority-concurrency\.mjs/u);
   const runner = fs.readFileSync(new URL('../scripts/test-database-runtime-authority-concurrency.mjs', import.meta.url), 'utf8');

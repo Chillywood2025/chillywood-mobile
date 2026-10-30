@@ -110,7 +110,7 @@ test("negative control proves pending-navigation protection is exercised", async
 });
 
 async function mountTip(t, options = {}) {
-  const nodes = new Map(), purchases = [], routes = [];
+  const nodes = new Map(), purchases = [], routes = [], external = [], listeners = new Set(), receiptReads = [];
   let catalogReads = 0;
   let session = { user: { id: "buyer" }, authority: { sessionGeneration: "one" } };
   const host = name => function NativeHost(props) {
@@ -118,13 +118,16 @@ async function mountTip(t, options = {}) {
     React.useEffect(() => () => nodes.delete(id), [id]);
     return React.createElement(React.Fragment, null, ...React.Children.toArray(props.children).filter(child => typeof child === "object"));
   };
-  const native = { Platform: { OS: options.platform ?? "android" }, Alert: { alert: noop }, StyleSheet: { create: x => x } };
+  const native = { Platform: { OS: options.platform ?? "android" }, Linking: { openURL: async url => external.push(url) },
+    AppState: { addEventListener: (_event,listener) => { listeners.add(listener);return {remove:()=>listeners.delete(listener)}; } },
+    Alert: { alert: noop }, StyleSheet: { create: x => x } };
   const iosCatalog = load("_lib/iosAppStoreCommerce.ts", {});
   const tipApi = load("_lib/creatorTips.ts", {
     "react-native": native, "./creatorSupportedPrices": {}, "./creatorMoneyStoreQuote": {}, "./supabase": {},
     "./creatorMoneyPurchaseAuthority": {}, "./revenuecat": {}, "./iosAppStoreCommerce": iosCatalog,
     "./paymentRailPolicy": {}, "./runtimeConfig": {}, "./entitlementAuthority": {},
     "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {}, "./creatorTipCheckoutAttempt": {},
+    "./creatorTipCustomQuote": {},
   });
   for (const name of ["ActivityIndicator", "KeyboardAvoidingView", "Modal", "Pressable", "ScrollView", "Text", "TextInput", "TouchableOpacity", "View"]) native[name] = host(name);
   const Screen = load("components/monetization/tip-sheet.tsx", {
@@ -139,8 +142,14 @@ async function mountTip(t, options = {}) {
       return options.reader ? options.reader() : options.unavailable
         ? { status: "unavailable", prices: [] } : { status: "resolved", subjectUserId: options.catalogBuyer ?? "buyer", prices: options.prices ?? [tipPrice()] };
     } },
-    "../../_lib/creatorTips": { ...tipApi, purchaseCreatorTipWithStore: async input => { purchases.push(input); return options.purchase ? options.purchase(input) : { ok: false, message: "Payment pending" }; } },
+    "../../_lib/creatorTips": { ...tipApi, readMyTipTransactionStatus: async id => {receiptReads.push(id);return {status:options.receiptStatus ?? 'pending'};}, createCreatorTipCheckout: async input => { external.push(input); return {checkoutCreated:true,tipId:'tip-synthetic',url:'https://checkout.stripe.com/c/pay/test'}; }, purchaseCreatorTipWithStore: async input => { purchases.push(input); return options.purchase ? options.purchase(input) : { ok: false, message: "Payment pending" }; } },
     "../../_lib/creatorMonetization": { formatMonetizationCurrency: amount => `$${(amount / 100).toFixed(2)}` },
+    "../../_lib/creatorTipAmount": load("_lib/creatorTipAmount.ts", {}),
+    "../../_lib/creatorTipCustomQuote": {
+      readCreatorTipCustomQuote: async (creatorId,amountCents) => options.customQuote ? options.customQuote(creatorId,amountCents) : null,
+      readCreatorTipCustomAvailability: async (creatorId,amountCents) => options.customAvailability ? options.customAvailability(creatorId,amountCents)
+        : { quote: options.customQuote ? await options.customQuote(creatorId,amountCents) : null, message: "" },
+    },
     "./MoneyScopeInfoButton": { MoneyScopeInfoButton: host("MoneyScopeInfoButton") },
     "./money-ui": Object.fromEntries(["CreatorMoneyHeader", "MoneyScopeStrip", "MoneyStatusChip", "MoneySuccessReceipt"].map(name => [name, host(name)])),
     "../ui/chillywood-visual-system": { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: host("Fill") },
@@ -148,12 +157,14 @@ async function mountTip(t, options = {}) {
   const props = { visible: true, creatorId: "creator", creatorName: "Artist", sourceSurface: "test", onClose: noop, tipStatus: { creatorId: "creator", canTip: true, currency: "usd", minAmountCents: 99, maxAmountCents: 999, suggestedAmountsCents: [100, 300], ...options.tipStatus } };
   const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen, props)));
   t.after(() => React.act(async () => root.unmount()));
-  return { purchases, routes, nodes, node: id => [...nodes.values()].find(node => node.props.testID === id),
+  return { purchases, routes, external, receiptReads, nodes, node: id => [...nodes.values()].find(node => node.props.testID === id),
+    async foreground() { await React.act(async()=>{for(const listener of listeners)listener('active');}); },
     catalogReads: () => catalogReads,
     async render(changes = {}) { Object.assign(props, changes); await React.act(async () => root.render(React.createElement(Screen, { ...props }))); },
     async refreshCatalog() { const node = [...nodes.values()].find(node => node.props.accessibilityLabel === "Refresh supported tip amounts"); assert.ok(node); await React.act(async () => node.props.onPress()); },
     async press(id) { const node = [...nodes.values()].find(node => node.props.testID === id); assert.ok(node && !node.props.disabled); await React.act(async () => { void node.props.onPress(); }); },
     async switchSession() { session = { ...session, authority: { sessionGeneration: "two" } }; await React.act(async () => root.render(React.createElement(Screen, props))); },
+    async typeAmount(value) { const node = [...nodes.values()].find(node => node.props.testID === "tip-custom-amount"); await React.act(async () => node.props.onChangeText(value)); },
     async resolve(d, value) { await React.act(async () => d.resolve(value)); },
   };
 }
@@ -193,7 +204,7 @@ test("mounted tip chooser exposes supported store amount and rejects unavailable
   const amountNodes = [...h.nodes.values()].filter(node => node.props.testID === "tip-amount-option");
   assert.equal(amountNodes.length, 1); assert.match(amountNodes[0].props.accessibilityLabel, /0\.99/);
   assert.equal(amountNodes[0].props.accessibilityState.selected, true);
-  assert.ok(![...h.nodes.values()].some(node => node.props.accessibilityLabel === "Custom tip amount"));
+  assert.equal(h.node("tip-custom-amount").props.accessibilityLabel, "Custom tip amount in USD");
   assert.ok(![...h.nodes.values()].some(node => node.props.accessibilityLabel === "Private note for creator"), "unsupported store note must not silently discard buyer text");
   await h.press("tip-confirm-button"); assert.equal(h.purchases[0].amountCents, 99);
   const denied = await mountTip(t, { unavailable: true }); assert.equal(denied.node("tip-confirm-button").props.disabled, true); assert.equal(denied.purchases.length, 0);
@@ -204,6 +215,67 @@ test("iOS tip catalog excluding default99 visibly and accessibly selects actual2
   assert.equal(h.node("tip-amount-option").props.accessibilityState.selected, true);
   assert.match(h.node("tip-amount-option").props.accessibilityLabel, /2\.99/);
   await h.press("tip-confirm-button"); assert.equal(h.purchases[0].amountCents, 299); assert.equal(h.purchases[0].iosStoreProductKey, "tip_tier_2");
+});
+
+test("buyer-entered amounts stay exact: no rounding, wrong SKU or alternate provider fallback", async t => {
+  const h = await mountTip(t);
+  for (const text of ["2.37", "0.999", "1e2", "", "-0.99", "90071992547409.92"]) {
+    await h.typeAmount(text);
+    assert.equal(h.node("tip-custom-amount").props.value, text);
+    assert.equal(h.node("tip-confirm-button").props.disabled, true);
+    assert.ok(h.node("tip-custom-amount-unavailable"));
+  }
+  assert.equal(h.purchases.length, 0);
+  await h.typeAmount("0.99");
+  assert.equal(h.node("tip-confirm-button").props.disabled, false);
+  await h.press("tip-confirm-button");
+  assert.equal(h.purchases[0].amountCents, 99);
+  await h.typeAmount("2.37");
+  await h.press("tip-amount-option");
+  assert.equal(h.node("tip-custom-amount").props.value, "0.99");
+  assert.equal(h.node("tip-custom-amount-unavailable"), undefined);
+});
+
+test("typed iOS exact amount selects its own SKU and does not retain the preset SKU", async t => {
+  const h = await mountTip(t, { platform: "ios", prices: [99, 299].map((amountMinor, i) => tipPrice({
+    amountMinor, providerProductId: `com.chillywood.tip.tier${i + 1}`, platform: "ios", provider: "revenuecat_app_store",
+  })) });
+  await h.typeAmount("2.99"); await h.press("tip-confirm-button");
+  assert.equal(h.purchases[0].amountCents, 299);
+  assert.equal(h.purchases[0].iosStoreProductKey, "tip_tier_2");
+  await h.typeAmount("2.98");
+  assert.equal(h.node("tip-confirm-button").props.disabled, true);
+  await h.switchSession();
+  assert.notEqual(h.node("tip-custom-amount").props.value, "2.98");
+});
+
+test("eligible custom amount requires explicit Stripe action and fresh exact capability; never substitutes a SKU", async t => {
+  let available=true;
+  const h=await mountTip(t,{platform:'ios',tipStatus:{minAmountCents:100},customQuote:async(creatorId,amountCents)=>available?{
+    creatorId,amountCents,capabilityId:'ef000000-0000-4000-8000-000000000001',platform:'ios',currency:'usd',environment:'test',minAmountMinor:50,maxAmountMinor:100000,
+  }:null});
+  await h.typeAmount('0.51');
+  assert.equal(h.node('tip-confirm-button').props.disabled,true,'store SKU must not be used for arbitrary amount');
+  assert.ok(h.node('tip-custom-stripe-checkout'));assert.equal(h.external.length,0);
+  await h.press('tip-custom-stripe-checkout');
+  assert.equal(h.purchases.length,0);assert.equal(h.external[0].amountCents,51);
+  assert.equal(h.external[0].capabilityId,'ef000000-0000-4000-8000-000000000001');
+  assert.equal(h.external[1],'https://checkout.stripe.com/c/pay/test');
+  await h.foreground();assert.deepEqual(h.receiptReads,['tip-synthetic']);
+  assert.match(h.node('tip-success-receipt').props.body,/not confirmed yet/,'browser return is not payment confirmation');
+  available=false;await h.press('tip-custom-stripe-checkout');
+  assert.equal(h.external.length,2,'retired route blocks before checkout');
+  await h.switchSession();await h.foreground();assert.equal(h.receiptReads.length,1,'old-session receipt is not refreshed in a replacement session');
+});
+
+test("verified provider minimum is visible without changing the buyer-entered amount", async t => {
+  const h=await mountTip(t,{customAvailability:async()=>({quote:null,message:'Minimum for this verified payment route: $0.50 USD. Your amount has not been changed.'})});
+  await h.typeAmount('0.49');
+  assert.equal(h.node('tip-custom-amount').props.value,'0.49');
+  assert.match(h.node('tip-custom-amount-unavailable').props.children,/\$0\.50 USD/);
+  assert.equal(h.node('tip-confirm-button').props.disabled,true);
+  assert.equal(h.node('tip-custom-stripe-checkout'),undefined);
+  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
 });
 
 test("mounted tip chooser does not advertise unmapped amounts or another buyer's catalog", async t => {

@@ -109,6 +109,8 @@ import {
   listMyChannelSubscriptionOffers,
   listMyChannelSubscriptionTransactions,
   saveChannelSubscriptionOffer,
+  parseChannelSubscriptionRequestedPrice,
+  requestChannelSubscriptionPrice,
   type ChannelSubscriptionOffer,
   type ChannelSubscriptionTransaction,
 } from "../_lib/channelSubscriptions";
@@ -1442,6 +1444,7 @@ export function ChannelStudioScreen() {
   const [creatorChannelSubscriptionTransactions, setCreatorChannelSubscriptionTransactions] = useState<ChannelSubscriptionTransaction[]>([]);
   const [channelSubscriptionSaving, setChannelSubscriptionSaving] = useState(false);
   const [channelSubscriptionNotice, setChannelSubscriptionNotice] = useState<string | null>(null);
+  const [subscriptionRequestedPrice, setSubscriptionRequestedPrice] = useState("");
   const [creatorSandboxConfigs, setCreatorSandboxConfigs] = useState<CreatorMonetizationConfig[]>([]);
   const [watchPartySetupSavingId, setWatchPartySetupSavingId] = useState<string | null>(null);
   const [sandboxTesterActive, setSandboxTesterActive] = useState(false);
@@ -1751,6 +1754,7 @@ export function ChannelStudioScreen() {
       setCreatorChannelSubscriptionTransactions([]);
       setChannelSubscriptionSaving(false);
       setChannelSubscriptionNotice(null);
+      setSubscriptionRequestedPrice("");
       setCreatorSandboxConfigs([]);
       setWatchPartySetupSavingId(null);
       setSandboxTesterActive(false);
@@ -1940,6 +1944,7 @@ export function ChannelStudioScreen() {
         setSandboxSetupNotice(null);
         setChannelSubscriptionSaving(false);
         setChannelSubscriptionNotice(null);
+        setSubscriptionRequestedPrice("");
         setPaidEventSavingId(null);
         setTipSettingsNotice(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
@@ -2273,6 +2278,29 @@ export function ChannelStudioScreen() {
       if (isCurrent()) setChannelSubscriptionSaving(false);
     }
   }, [creatorChannelSubscriptionOffers, subscriptionPrice, user?.id]);
+
+  const handleRequestSubscriptionPrice = useCallback(async () => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && authority?.userId === user?.id
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent() || subscriptionSaveInFlightRef.current) return;
+    const amount = parseChannelSubscriptionRequestedPrice(subscriptionRequestedPrice);
+    if (amount === null) {
+      setChannelSubscriptionNotice("Enter a positive USD amount with at most two decimal places.");
+      return;
+    }
+    subscriptionSaveInFlightRef.current = true;
+    setChannelSubscriptionSaving(true);
+    try {
+      await requestChannelSubscriptionPrice(amount);
+      if (isCurrent()) setChannelSubscriptionNotice(`Requested ${formatChannelSubscriptionPrice(amount)}. Pending store provisioning—not available for purchase. This does not change your subscription offer or existing subscribers.`);
+    } catch {
+      if (isCurrent()) setChannelSubscriptionNotice("The price request could not be confirmed. Your amount is preserved. Your subscription offer was not changed.");
+    } finally {
+      subscriptionSaveInFlightRef.current = false;
+      if (isCurrent()) setChannelSubscriptionSaving(false);
+    }
+  }, [subscriptionRequestedPrice, user?.id]);
 
   const handleSaveVipPass = useCallback(async (enabled: boolean) => {
     const authority = getCurrentAccountSessionAuthoritySnapshot();
@@ -8889,6 +8917,16 @@ export function ChannelStudioScreen() {
                 </Text>
               </View>
               <CreatorPricePicker prices={subscriptionPrice.prices} selectedPriceKey={subscriptionPrice.selectedPriceKey} onSelect={subscriptionPrice.select} loading={subscriptionPrice.loading} error={subscriptionPrice.error} onRetry={subscriptionPrice.refresh} disabled={channelSubscriptionSaving} testID="channel-subscription-price" />
+              <Text style={styles.eventEmptyBody}>Choose an available initial monthly price above, or request another USD price. Requests are not purchasable until store provisioning is complete; approval is not guaranteed.</Text>
+              <TextInput value={subscriptionRequestedPrice} onChangeText={setSubscriptionRequestedPrice}
+                editable={!channelSubscriptionSaving} keyboardType="decimal-pad" placeholder="Requested monthly price (USD)"
+                accessibilityLabel="Requested monthly subscription price in US dollars" testID="channel-subscription-price-request-input"
+                style={styles.input} />
+              <TouchableOpacity onPress={handleRequestSubscriptionPrice} disabled={channelSubscriptionSaving || !subscriptionRequestedPrice}
+                accessibilityRole="button" accessibilityLabel="Request subscription price" testID="channel-subscription-price-request-button"
+                style={styles.eventSecondaryButton}>
+                <Text style={styles.eventSecondaryButtonText}>Request price · not yet purchasable</Text>
+              </TouchableOpacity>
               <View style={styles.eventActionRow}>
                 <TouchableOpacity
                   style={[styles.eventPrimaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}

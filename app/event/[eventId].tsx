@@ -20,6 +20,7 @@ import { supabase } from "../../_lib/supabase";
 import { formatEventScheduleTime } from "../../_lib/eventSchedule";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { EventTicketPolicy } from "../../components/monetization/event-ticket-policy";
+import { EventAuctionPanel } from "../../components/monetization/event-auction-panel";
 import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
@@ -337,6 +338,7 @@ export default function PaidCreatorEventRoute() {
               ) : null}
             </View>
 
+            <EventAuctionPanel eventId={eventId} />
             {event?.management_status || event?.status_message ? <View style={styles.stateBox} testID="event-creator-update">
               <Text style={styles.stateTitle}>{event.management_status === "no_show" ? "Creator marked this event as a no-show" : event.management_status === "delayed" ? "Event delayed" : event.management_status === "rescheduled" ? "Event rescheduled" : "Creator update"}</Text>
               {event.status_message ? <Text style={styles.body}>{event.status_message}</Text> : null}

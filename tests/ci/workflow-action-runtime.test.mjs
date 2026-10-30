@@ -90,10 +90,11 @@ function assertProjectRuntimeContract(workflows) {
         assert.equal(job.needs, "plan");
         assert.equal(job["continue-on-error"], undefined, "Product cannot suppress failures");
         assert.equal(job.steps.length, 9, "SDK tail must be the only added Product steps");
-        // Exact six pre-existing Node20 steps from reviewed main 4826e06a.
-        // Includes every original glob, mounted test, real-peer command and its failure semantics.
+        // Exact six Node20 steps, retaining reviewed main 4826e06a's commands
+        // with root-file concurrency deliberately bounded to one. Every glob,
+        // mounted test, real-peer command and failure semantic remains intact.
         assert.equal(createHash("sha256").update(JSON.stringify(job.steps.slice(0, 6))).digest("hex"),
-          "d73e43704e1073610958b349417de704db6aa5e11a51cca6311f1a3925b0b504",
+          "a44a8f34f0627710ade2aaba1726081d59c722ee494914f8dbee520ace7f808b",
           "Existing Node20 Product checks must remain exact and precede the SDK tail");
         assert.deepEqual(job.steps.slice(6), sdkTail, "SDK-only tail must run unconditionally with exact supported runtime and commands");
       }
@@ -132,7 +133,9 @@ const runtimeMutations = [
   ["extra Node22 step", j => { j.steps.push(structuredClone(j.steps[6])); }],
   ["job suppresses failure", j => { j["continue-on-error"] = true; }],
   ["job skips tests", j => { j.if = "false"; }],
-  ["existing root glob omitted", j => { j.steps[5].run = j.steps[5].run.replace("node --test tests/*.test.mjs\n", ""); }],
+  ["existing root glob omitted", j => { j.steps[5].run = j.steps[5].run.replace("node --test --test-concurrency=1 tests/*.test.mjs\n", ""); }],
+  ["bounded root concurrency removed", j => { j.steps[5].run = j.steps[5].run.replace("--test-concurrency=1 ", ""); }],
+  ["bounded root concurrency expanded", j => { j.steps[5].run = j.steps[5].run.replace("--test-concurrency=1", "--test-concurrency=2"); }],
 ];
 for (const [label, mutate] of runtimeMutations) {
   test(`runtime contract rejects ${label}`, () => {

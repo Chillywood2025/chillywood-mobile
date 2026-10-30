@@ -69,7 +69,7 @@ jobs:
     needs: plan
     # The paired call gate uses Playwright's pinned Chromium with OS libraries.
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # Native compatibility tests verify the recorded v3 cohort at its
@@ -83,7 +83,7 @@ jobs:
         run: node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
       - name: Run product and navigation regression tests
         run: |
-          node --test tests/*.test.mjs
+          node --test --test-concurrency=1 tests/*.test.mjs
           node --test tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs
           node --test tests/assurance/communication-operation-error-truth.test.mjs
           node --test tests/assurance/android-chat-call-mic-control.test.mjs
@@ -122,7 +122,7 @@ jobs:
       - run: npm ci
       - name: Run auth, entitlement, money, moderation and call authority regressions
         run: |
-          node --test tests/wave1/*.test.mjs tests/creator-money/*.test.mjs
+          node --test --test-concurrency=1 tests/wave1/*.test.mjs tests/creator-money/*.test.mjs
           npm run guard:admin-auth-safety
           npm run guard:first-owner-authority-policy
           npm run guard:creator-monetization-policy
@@ -168,6 +168,8 @@ jobs:
           supabase start
           supabase db reset
           supabase test db
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-subscription-bindings-native-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-event-auction-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs
           node scripts/test-content-inspection-postgres.mjs
           node scripts/test-deleted-content-retention-postgres.mjs

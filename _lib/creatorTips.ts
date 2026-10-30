@@ -28,6 +28,7 @@ import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "./accountSessionAuthority";
 import { rememberCreatorTipCheckoutReceipt, retireConfirmedCreatorTipCheckoutAttempt, withCreatorTipCheckoutAttempt } from "./creatorTipCheckoutAttempt";
+import { normalizeCreatorTipCustomQuote } from "./creatorTipCustomQuote";
 
 export type CreatorTipStatus = "setup_incomplete" | "active" | "paused" | "blocked";
 
@@ -369,8 +370,9 @@ export async function createCreatorTipCheckout(input: {
   privateNote?: string | null;
   returnUrl: string;
   cancelUrl: string;
+  capabilityId?: string;
 }): Promise<CreatorTipCheckoutResult> {
-  if (Platform.OS === "ios") {
+  if (Platform.OS === "ios" && !CREATOR_TIP_UUID_PATTERN.test(input.capabilityId ?? "")) {
     return {
       status: "ios_app_store_required",
       provider: "revenuecat",
@@ -386,10 +388,26 @@ export async function createCreatorTipCheckout(input: {
     };
   }
 
+  if (Platform.OS === "android" && input.capabilityId) {
+    throw new Error("Android external checkout needs the approved native external-link integration. No checkout was started.");
+  }
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   if (!authority || authority.restoreOnly || (input.currency ?? "usd") !== "usd") throw new Error("Verify the exact account and USD tip amount before checkout.");
   const subject = await captureAccountBoundSupabaseMutationSubject(authority.userId);
   if (!sameAccountSessionAuthority(authority, subject.authority)) throw new Error("Account changed before tip checkout.");
+  if (Platform.OS === "ios") {
+    const { data, error } = await invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "get_creator_tip_amount_quote", {
+      p_creator_id: input.creatorId, p_amount_cents: input.amountCents,
+    });
+    const quote = error ? null : normalizeCreatorTipCustomQuote(data, {
+      creatorId: input.creatorId, amountCents: input.amountCents, buyerId: authority.userId,
+      sessionId: authority.sessionGeneration, platform: "ios",
+    });
+    if (!quote || quote.capabilityId !== input.capabilityId
+      || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) {
+      throw new Error("An approved US external-browser tip quote could not be verified. No checkout was started.");
+    }
+  }
   return withCreatorTipCheckoutAttempt<CreatorTipCheckoutResult>({ buyerId: authority.userId, creatorId: input.creatorId, amountCents: input.amountCents, currency: "usd" }, async attempt => {
     if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before tip checkout.");
     const controller = new AbortController();
@@ -403,6 +421,7 @@ export async function createCreatorTipCheckout(input: {
         body: {
           request_id: attempt.requestId, amount_cents: attempt.amountCents, currency: attempt.currency,
           cancel_url: input.cancelUrl, creator_id: attempt.creatorId, private_note: input.privateNote ?? null, return_url: input.returnUrl,
+          capability_id: input.capabilityId ?? null,
         },
       });
     } catch { throw new Error("Tip checkout outcome is unknown. Refresh Purchases & My Tickets before another attempt."); }

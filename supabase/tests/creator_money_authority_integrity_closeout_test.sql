@@ -1604,27 +1604,21 @@ select throws_ok(
 -- authority.  Session rotation with exact replacement receipts is valid;
 -- adding any extant unaccepted session prevents a new provider period from
 -- extending access and records an explicit reconciliation disposition.
-insert into public.money_purchase_intents (
-  id, user_id, product_id, product_key, product_type, provider, provider_product_id,
-  source_type, source_id, creator_id, environment, status, amount_minor, currency,
-  idempotency_key, expires_at, session_generation, metadata
-)
-select
-  'a3000000-0000-4000-8000-000000000005',
-  'a1000000-0000-4000-8000-000000000005', mapping.product_id,
-  product.product_key, product.product_type, mapping.provider,
-  mapping.provider_product_id, 'channel_subscription',
-  'a8000000-0000-4000-8000-000000000001', fixture.creator_id,
-  'sandbox', 'pending', mapping.reference_price_minor, mapping.reference_currency,
-  'closeout-channel-renewal-intent', now() + interval '15 minutes',
-  'b5000000-0000-4000-8000-000000000005',
-  jsonb_build_object('sandbox_only', true, 'not_payable', true)
-from public.monetization_product_store_mappings mapping
-join public.monetization_products product on product.id = mapping.product_id
-cross join pg_temp.creator_money_closeout_fixture fixture
-where mapping.provider = 'revenuecat_app_store'
-  and mapping.provider_product_id = 'com.chillywood.channel.subscription.slot1'
-  and mapping.environment = 'sandbox';
+-- Issue through the real authenticated boundary so the exact store mapping,
+-- session and quote are server-bound rather than hand-constructing an intent.
+insert into public.sandbox_monetization_testers(user_id)
+values ('a1000000-0000-4000-8000-000000000005') on conflict do nothing;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000005","session_id":"b5000000-0000-4000-8000-000000000005"}',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.headers','{"x-chillywood-platform":"ios"}',true);
+set local role authenticated;
+do $$ begin
+  perform public.create_creator_channel_subscription_purchase_intent('a8000000-0000-4000-8000-000000000001');
+end $$;
+reset role;
+select set_config('request.jwt.claims','{}',true);
+select set_config('request.jwt.claim.role','',true);
+select set_config('request.headers','{}',true);
 
 create temporary table channel_subscription_rotation_results as
 select public.process_revenuecat_app_store_event_atomic(

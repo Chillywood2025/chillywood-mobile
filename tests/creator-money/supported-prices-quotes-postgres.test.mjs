@@ -5,12 +5,14 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 
 const migration='20261026164507_creator_supported_prices_and_purchase_quotes.sql';
 const referenceGuardsMigration='20261027021608_creator_monetization_reference_guard_integration.sql';
+const subscriptionBindingsMigration='20261030155923_creator_subscription_catalog_bindings.sql';
+const auctionPaymentMigration='20261030155939_creator_event_auction_payment_projection.sql';
 // Full migrated schema, real application predicates/triggers and provider SQL.
 // Only managed auth/storage infrastructure is the shared fixture; no network.
 test('catalog selection and immutable quote survive source edits, duplicates, terminal order and account changes', {timeout:240_000}, async t=>{
   // The guard integration requires the quote table created by this migration.
   // Keep the original pre-price negative control, then install both in order.
-  const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,excludeMigrations:[migration,referenceGuardsMigration]});
+  const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,excludeMigrations:[migration,referenceGuardsMigration,subscriptionBindingsMigration,auctionPaymentMigration]});
   let step='setup'; let checks=0;
   const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
@@ -46,6 +48,8 @@ test('catalog selection and immutable quote survive source edits, duplicates, te
     await service();
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${migration}`,import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${referenceGuardsMigration}`,import.meta.url),'utf8'));
+    await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${subscriptionBindingsMigration}`,import.meta.url),'utf8'));
+    await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${auctionPaymentMigration}`,import.meta.url),'utf8'));
     step='catalog and creator';
     await claim(host,hostSession);
     const ios=await scalar("select public.list_creator_supported_prices('watch_party_live','ios','sandbox')");

@@ -162,6 +162,33 @@ export const isIosChannelSubscriptionPriceSupported = (amountMinor: number, curr
   listIosChannelSubscriptionSlots().some(product =>
     isExactIosChannelSubscriptionProduct(product.productId, amountMinor, currency));
 
+/** A server-issued, immutable creator/offer/catalog version, not a client SKU
+ * template. New products need an approved server binding AND an exact live
+ * store quote. This does not provision products or claim provider verification. */
+export const isExactChannelSubscriptionCatalogBinding = (value: unknown, expected: {
+  creatorId: string; offerId: string; providerProductId: string;
+  amountMinor: number; currency: string; platform: "ios" | "android";
+  environment: string;
+}): boolean => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const binding = value as Record<string, unknown>;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return Number.isSafeInteger(binding.version) && Number(binding.version) > 0
+    && typeof binding.bindingId === "string" && uuid.test(binding.bindingId)
+    && typeof binding.priceId === "string" && uuid.test(binding.priceId)
+    && binding.creatorId === expected.creatorId && uuid.test(expected.creatorId)
+    && binding.offerId === expected.offerId && uuid.test(expected.offerId)
+    && typeof expected.providerProductId === "string" && expected.providerProductId.length > 0
+    && expected.providerProductId === expected.providerProductId.trim()
+    && binding.providerProductId === expected.providerProductId
+    && Number.isSafeInteger(expected.amountMinor) && expected.amountMinor > 0
+    && binding.amountMinor === expected.amountMinor
+    && binding.currency === "usd" && binding.currency === expected.currency
+    && binding.platform === expected.platform
+    && (expected.environment === "sandbox" || expected.environment === "production")
+    && binding.environment === expected.environment && binding.subscriptionPeriod === "P1M";
+};
+
 export const resolveIosFiniteAppStoreTier = (
   concept: IosFiniteAppStoreConcept,
   requestedAmountMinor: number,

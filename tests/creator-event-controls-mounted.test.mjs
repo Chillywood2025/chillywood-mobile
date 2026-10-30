@@ -23,6 +23,7 @@ async function mount(t,kind,options={}){
   const load=file=>{if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);
     const mocks={react:React,'react-native':native,'../ui/chillywood-visual-system':{CHILLYWOOD_VISUAL:{glassBackground:'#10151C'}},
       '../../_lib/accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>a?.userId===b?.userId&&a?.sessionGeneration===b?.sessionGeneration},
+      './event-auction-editor':{EventAuctionEditor:()=>null},
       '../../_lib/creatorSupportedPrices':{readCreatorAuthoringPrices:async()=>options.catalog??{status:'resolved',subjectUserId:owner,prices}},
       '../../_lib/paidCreatorEvents':{configurePaidCreatorEventSale:async input=>{calls.push(['save',input]);return options.save?options.save(input):{id:'offer',...input};}},
       '../../_lib/liveEvents':productionFunctions('_lib/liveEvents.ts',['readNewCreatorEventReplayTermsError'],{Date,Number}),

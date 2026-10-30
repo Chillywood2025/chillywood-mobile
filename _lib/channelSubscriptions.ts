@@ -25,7 +25,7 @@ import {
 import { Platform } from "react-native";
 import {
   isExactIosChannelSubscriptionProduct,
-  isIosChannelSubscriptionPriceSupported,
+  isExactChannelSubscriptionCatalogBinding,
   IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
@@ -451,6 +451,30 @@ export async function saveChannelSubscriptionOffer(input: {
   return offer;
 }
 
+/** Exact USD input, bounded only by the database integer representation. */
+export function parseChannelSubscriptionRequestedPrice(value: string): number | null {
+  if (!/^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value)) return null;
+  const [whole, fraction = ""] = value.split(".");
+  const amount = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return Number.isSafeInteger(amount) && amount > 0 && amount <= 2147483647 ? amount : null;
+}
+
+export async function requestChannelSubscriptionPrice(amountMinor: number): Promise<void> {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0 || amountMinor > 2147483647) {
+    throw new Error("Enter a positive USD amount with at most two decimal places.");
+  }
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(
+    "request_creator_channel_subscription_price", { p_amount_minor: amountMinor, p_currency: "usd" },
+  );
+  if (error || !data || typeof data.id !== "string"
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.id)
+    || data.amountMinor !== amountMinor || data.currency !== "usd"
+    || data.status !== "pending_provisioning" || typeof data.createdAt !== "string"
+    || !Number.isFinite(Date.parse(data.createdAt))) {
+    throw new Error("The price request could not be confirmed. Your subscription settings were not changed.");
+  }
+}
+
 export async function resolveChannelSubscriptionAccess(creatorId: string): Promise<ChannelSubscriptionAccess> {
   const response = await withAuthorityReadDeadline(
     rpcClient.rpc("resolve_creator_channel_subscription_access", { p_creator_id: creatorId }),
@@ -495,13 +519,29 @@ export async function createChannelSubscriptionPurchaseIntent(
   if (typeof row.alreadySubscribed !== "boolean") {
     throw new Error("Platform Subscription checkout authority could not be verified.");
   }
+  const hasCatalogBinding = Object.prototype.hasOwnProperty.call(row, "subscriptionCatalogBinding");
+  const catalogBindingValid = hasCatalogBinding && (Platform.OS === "ios" || Platform.OS === "android")
+    && isExactChannelSubscriptionCatalogBinding(row.subscriptionCatalogBinding, {
+      creatorId: expected.creatorId,
+      offerId,
+      providerProductId: typeof row.providerProductId === "string" ? row.providerProductId : "",
+      amountMinor: expected.amountMinor,
+      currency: expected.currency,
+      platform: Platform.OS,
+      environment: expected.environment,
+    });
+  // Historical access is checked by buyer/source/creator, not today's price.
+  // An existing subscriber's renewal cohort must never be repriced here.
+  if (!row.alreadySubscribed && hasCatalogBinding && !catalogBindingValid) {
+    throw new Error("Platform Subscription checkout authority could not be verified.");
+  }
   const validated = row.alreadySubscribed
     ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
-    : Platform.OS === "ios" && isExactIosChannelSubscriptionProduct(
+    : Platform.OS === "ios" && (catalogBindingValid || isExactIosChannelSubscriptionProduct(
       row.providerProductId,
       expected.amountMinor,
       expected.currency,
-    )
+    ))
       ? validateCreatorMoneyPurchaseIntent(data, {
           ...expected,
           provider: "revenuecat_app_store",
@@ -606,9 +646,6 @@ export async function purchaseChannelSubscription(input: {
   if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
     return { ok: false, message: "This creator subscription is not available right now.", access };
   }
-  if (Platform.OS === "ios" && !isIosChannelSubscriptionPriceSupported(access.priceCents, access.currency)) {
-    return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
-  }
 
   if (Platform.OS === "ios") {
     const decision = resolvePaymentRailPolicy({
@@ -690,7 +727,10 @@ export async function purchaseChannelSubscription(input: {
     };
   }
 
-  if (!await beginCreatorMoneyCheckout(purchaseSubject, intent.id, { ...expectedIntent, status: "pending", providerProductId: productId })) {
+  if (!await beginCreatorMoneyCheckout(purchaseSubject, intent.id, {
+    ...expectedIntent, status: "pending", providerProductId: productId,
+    provider: Platform.OS === "ios" ? "revenuecat_app_store" : "revenuecat_google_play",
+  })) {
     return { ok: false, message: CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY, access, intentId: intent.id, productId };
   }
   try {

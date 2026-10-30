@@ -170,7 +170,7 @@ test("channel subscription price support comes from exact monthly slots, not oth
   }
 });
 
-test("iOS subscription checkout gates catalog prices before intent or store calls", async () => {
+test("iOS subscription checkout no longer imposes a bundled price ceiling before server authority", async () => {
   for (const [priceCents, currency] of [[99, "usd"], [999, "usd"], [499, "eur"], [499, "usd"]]) {
     const calls = [];
     const offer = {
@@ -200,12 +200,36 @@ test("iOS subscription checkout gates catalog prices before intent or store call
     });
     const result = await api.purchaseChannelSubscription({ creatorId: CREATOR_ID, sourceSurface: "test" });
     assert.equal(result.ok, false);
-    if (priceCents === 499 && currency === "usd") {
-      assert.match(result.message, /Sign in again/u);
-      assert.deepEqual(calls, ["resolve_creator_channel_subscription_access", "prepare"]);
-    } else {
-      assert.equal(result.message, iosCatalog.IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY);
-      assert.deepEqual(calls, ["resolve_creator_channel_subscription_access"]);
+    assert.match(result.message, /Sign in again/u);
+    assert.deepEqual(calls, ["resolve_creator_channel_subscription_access", "prepare"]);
+  }
+});
+
+test("subscription intent accepts a new catalog price only with exact versioned creator binding", async () => {
+  for (const platform of ["ios", "android"]) {
+    const providerProductId = platform === "ios" ? "com.chillywood.test.creator.monthly.v2" : "test_creator_monthly_v2:monthly";
+    const expectation = expected({ sourceType: "channel_subscription", sourceId: OFFER_ID, amountMinor: 1299, providerProductId });
+    const binding = {
+      version: 1, bindingId: SOURCE_ID, priceId: INTENT_ID, creatorId: CREATOR_ID,
+      offerId: OFFER_ID, providerProductId, amountMinor: 1299, currency: "usd",
+      platform, environment: "sandbox", subscriptionPeriod: "P1M",
+    };
+    const response = { ...safeIntent({ sourceType: "channel_subscription", sourceId: OFFER_ID,
+      amountMinor: 1299, providerProductId, alreadySubscribed: false,
+      provider: platform === "ios" ? "revenuecat_app_store" : "revenuecat_google_play" }), subscriptionCatalogBinding: binding };
+    const api = loadIntentApi("_lib/channelSubscriptions.ts", platform, response);
+    assert.equal((await api.createChannelSubscriptionPurchaseIntent(OFFER_ID, expectation)).providerProductId, providerProductId);
+    for (const patch of [{ version: 0 }, { version: 1.5 }, { version: "1" }, { bindingId: "bad" }, { priceId: null }, { creatorId: VIEWER_ID },
+      { offerId: SOURCE_ID }, { amountMinor: 499 }, { currency: "eur" }, { platform: "web" },
+      { environment: "production" }, { subscriptionPeriod: "P1Y" }, { providerProductId: "different" }]) {
+      const invalid = loadIntentApi("_lib/channelSubscriptions.ts", platform,
+        { ...response, subscriptionCatalogBinding: { ...binding, ...patch } });
+      await assert.rejects(invalid.createChannelSubscriptionPurchaseIntent(OFFER_ID, expectation), /authority could not be verified/u);
+    }
+    if (platform === "ios") {
+      const { subscriptionCatalogBinding: _binding, ...unsupported } = response;
+      await assert.rejects(loadIntentApi("_lib/channelSubscriptions.ts", platform, unsupported)
+        .createChannelSubscriptionPurchaseIntent(OFFER_ID, expectation), /authority could not be verified/u);
     }
   }
 });
@@ -565,6 +589,26 @@ test("active historical purchases remain exact-source no-charge authority across
       malformed.createCreatorVipPassPurchaseIntent(OFFER_ID, currentExpectation),
       /authority could not be verified/u,
     );
+  }
+});
+
+test("subscription historical cohort readback never inherits the current new-buyer price", async () => {
+  const current = expected({ sourceType: "channel_subscription", sourceId: OFFER_ID,
+    amountMinor: 1299, providerProductId: "new_monthly_product" });
+  const historical = { ...safeIntent({ sourceType: "channel_subscription", sourceId: OFFER_ID,
+    amountMinor: 499, providerProductId: "com.chillywood.channel.subscription.slot1",
+    status: "consumed", alreadySubscribed: true }), subscriptionCatalogBinding: {
+      bindingId: SOURCE_ID, version: 1, creatorId: CREATOR_ID, offerId: OFFER_ID,
+      priceId: INTENT_ID, amountMinor: 499, currency: "usd", platform: "ios", environment: "sandbox",
+      providerProductId: "com.chillywood.channel.subscription.slot1", subscriptionPeriod: "P1M",
+    } };
+  for (const platform of ["ios", "android"]) {
+    assert.equal((await loadIntentApi("_lib/channelSubscriptions.ts", platform, historical)
+      .createChannelSubscriptionPurchaseIntent(OFFER_ID, current)).alreadySubscribed, true);
+    for (const patch of [{ creatorId: VIEWER_ID }, { sourceId: SOURCE_ID }, { userId: CREATOR_ID }, { status: "pending" }]) {
+      await assert.rejects(loadIntentApi("_lib/channelSubscriptions.ts", platform, { ...historical, ...patch })
+        .createChannelSubscriptionPurchaseIntent(OFFER_ID, current), /authority could not be verified/);
+    }
   }
 });
 

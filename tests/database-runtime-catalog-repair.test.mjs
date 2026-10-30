@@ -11,6 +11,66 @@ import {monetizationAuditFiles, monetizationImplementationFiles,
 import {profileFeedFiles, profileFeedFunctions, assertProfileFeedInventory} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles, discoveryInvalidationFunctions, assertDiscoveryInvalidationInventory} from './helpers/discovery-invalidation-runtime-inventory.mjs';
 
+// Explicit reviewed successors: excluded from historical delta checkpoints,
+// required in full-chain repair qualification alongside their real prerequisites.
+const flexibleCommerceFiles = [
+  "20261030155914_creator_external_payment_capabilities.sql",
+  "20261030155923_creator_subscription_catalog_bindings.sql",
+  "20261030155931_creator_event_auction_engine.sql",
+  "20261030155939_creator_event_auction_payment_projection.sql"
+];
+const flexibleCommerceAddedFunctionIdentities = new Map([
+  ["private.advance_creator_event_auction/1", "private.advance_creator_event_auction(uuid)"],
+  ["private.assert_creator_event_auction_buyer/2", "private.assert_creator_event_auction_buyer(private.creator_event_auctions,uuid)"],
+  ["private.bind_auction_event_ticket_purchase_terms/0", "private.bind_auction_event_ticket_purchase_terms()"],
+  ["private.creator_event_auction_grant_identity/3", "private.creator_event_auction_grant_identity(uuid,uuid,uuid)"],
+  ["private.creator_event_auction_intent_exact/1", "private.creator_event_auction_intent_exact(money_purchase_intents)"],
+  ["private.creator_event_auction_quote_safe_row/1", "private.creator_event_auction_quote_safe_row(private.creator_event_auction_quotes)"],
+  ["private.creator_event_auction_safe_row/1", "private.creator_event_auction_safe_row(private.creator_event_auctions)"],
+  ["private.creator_event_auction_source_valid/1", "private.creator_event_auction_source_valid(private.creator_event_auctions)"],
+  ["private.guard_bound_auction_product_identity/0", "private.guard_bound_auction_product_identity()"],
+  ["private.guard_creator_event_auction_quote/0", "private.guard_creator_event_auction_quote()"],
+  ["private.guard_creator_event_auction_terms/0", "private.guard_creator_event_auction_terms()"],
+  ["private.guard_creator_external_payment_evidence/0", "private.guard_creator_external_payment_evidence()"],
+  ["private.reserve_auction_event_ticket_after_intent/0", "private.reserve_auction_event_ticket_after_intent()"],
+  ["private.resolve_creator_external_payment_capability/8", "private.resolve_creator_external_payment_capability(uuid,uuid,text,uuid,integer,text,text,uuid)"],
+  ["public.approve_creator_channel_subscription_catalog_binding/4", "approve_creator_channel_subscription_catalog_binding(uuid,uuid,text,text)"],
+  ["public.bind_creator_event_auction_checkout/7", "bind_creator_event_auction_checkout(uuid,uuid,text,text,text,integer,text)"],
+  ["public.bind_creator_subscription_offer_catalog_internal/0", "bind_creator_subscription_offer_catalog_internal()"],
+  ["public.capture_creator_subscription_quote_binding_internal/0", "capture_creator_subscription_quote_binding_internal()"],
+  ["public.claim_creator_event_auction_checkout/4", "claim_creator_event_auction_checkout(uuid,uuid,uuid,uuid)"],
+  ["public.close_creator_event_auction/1", "close_creator_event_auction(uuid)"],
+  ["public.create_creator_channel_subscription_intent_pre_binding/1", "create_creator_channel_subscription_intent_pre_binding(uuid)"],
+  ["public.create_creator_event_auction/7", "create_creator_event_auction(uuid,uuid,integer,integer,timestamp with time zone,timestamp with time zone,text)"],
+  ["public.create_creator_event_auction_award_quote/2", "create_creator_event_auction_award_quote(uuid,uuid)"],
+  ["public.create_ios_creator_money_intent_pre_subscription_binding/4", "create_ios_creator_money_intent_pre_subscription_binding(text,uuid,integer,jsonb)"],
+  ["public.creator_money_existing_purchase_identity_pre_auction/3", "creator_money_existing_purchase_identity_pre_auction(uuid,text,uuid)"],
+  ["public.creator_money_historical_purchase_identity_pre_auction/4", "creator_money_historical_purchase_identity_pre_auction(uuid,text,uuid,uuid)"],
+  ["public.creator_subscription_catalog_binding_json_internal/1", "creator_subscription_catalog_binding_json_internal(creator_channel_subscription_catalog_bindings)"],
+  ["public.creator_subscription_catalog_binding_ready_internal/1", "creator_subscription_catalog_binding_ready_internal(uuid)"],
+  ["public.creator_subscription_price_request_self_read_internal/1", "creator_subscription_price_request_self_read_internal(uuid)"],
+  ["public.event_ticket_inventory_pre_auctions_internal/1", "event_ticket_inventory_pre_auctions_internal(uuid)"],
+  ["public.get_creator_tip_amount_quote/2", "get_creator_tip_amount_quote(uuid,integer)"],
+  ["public.guard_bound_creator_subscription_product_internal/0", "guard_bound_creator_subscription_product_internal()"],
+  ["public.guard_creator_subscription_catalog_binding_internal/0", "guard_creator_subscription_catalog_binding_internal()"],
+  ["public.guard_creator_subscription_intent_binding_internal/0", "guard_creator_subscription_intent_binding_internal()"],
+  ["public.ios_creator_money_store_mapping_id_pre_subscription_binding/2", "ios_creator_money_store_mapping_id_pre_subscription_binding(uuid,text)"],
+  ["public.list_creator_event_auctions/1", "list_creator_event_auctions(uuid)"],
+  ["public.list_creator_supported_prices_pre_subscription_binding/4", "list_creator_supported_prices_pre_subscription_binding(text,text,text,uuid)"],
+  ["public.money_purchase_intent_safe_row_pre_subscription_binding/1", "money_purchase_intent_safe_row_pre_subscription_binding(money_purchase_intents)"],
+  ["public.place_creator_event_auction_bid/4", "place_creator_event_auction_bid(uuid,integer,uuid,uuid)"],
+  ["public.prepare_creator_event_auction_checkout/4", "prepare_creator_event_auction_checkout(uuid,uuid,uuid,uuid)"],
+  ["public.process_stripe_event_auction_no_payment/2", "process_stripe_event_auction_no_payment(jsonb,text)"],
+  ["public.process_stripe_event_auction_receipt/2", "process_stripe_event_auction_receipt(jsonb,text)"],
+  ["public.read_creator_event_auction/1", "read_creator_event_auction(uuid)"],
+  ["public.read_creator_event_auction_bid_eligibility/2", "read_creator_event_auction_bid_eligibility(uuid,integer)"],
+  ["public.read_creator_tip_checkout_dispatch_authority/3", "read_creator_tip_checkout_dispatch_authority(uuid,uuid,uuid)"],
+  ["public.recover_creator_event_auction_checkout/4", "recover_creator_event_auction_checkout(uuid,uuid,uuid,uuid)"],
+  ["public.request_creator_channel_subscription_price/2", "request_creator_channel_subscription_price(integer,text)"],
+  ["public.revalidate_creator_event_auction_checkout/4", "revalidate_creator_event_auction_checkout(uuid,uuid,uuid,uuid)"],
+  ["public.set_creator_channel_subscription_offer_at_price_pre_binding/4", "set_creator_channel_subscription_offer_at_price_pre_binding(text,text,text,uuid)"],
+]);
+
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.
 // Reviewed physical storefront/SKU/photo successor delta, measured against the
@@ -428,7 +488,7 @@ const queries={
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
 
 test('creator monetization has the exact declared catalog delta from the audit checkpoint', {timeout:180_000}, async()=>{
-  const excluded=[...monetizationImplementationFiles,...merchStorefrontFiles];
+  const excluded=[...monetizationImplementationFiles,...merchStorefrontFiles,...flexibleCommerceFiles];
   const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:excluded});
   try {
     assert.deepEqual(replayReport.excludedMigrations,excluded);
@@ -463,9 +523,10 @@ test('creator monetization has the exact declared catalog delta from the audit c
 
 
 test('physical merch successors have the exact declared catalog delta', {timeout:180_000}, async()=>{
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:merchStorefrontFiles});
+  const excluded=[...merchStorefrontFiles,...flexibleCommerceFiles];
+  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:excluded});
   try {
-    assert.deepEqual(replayReport.excludedMigrations,merchStorefrontFiles);
+    assert.deepEqual(replayReport.excludedMigrations,excluded);
     assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),[]);
     // The prerequisite settlement implementation is present in this checkpoint.
     assert.ok(replayReport.files.includes('20261027034844_creator_merch_payment_refund_reconciliation.sql'));
@@ -496,11 +557,13 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length+merchAddedFunctionIdentities.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length+merchAddedFunctionIdentities.size+flexibleCommerceAddedFunctionIdentities.size);
     for(const [label,identities] of [['added',monetizationAddedFunctionIdentities],['replaced',monetizationReplacedFunctionIdentities]]){
       assert.deepEqual(before.functions.filter(fn=>identities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
         [...identities].sort(),`exact creator monetization ${label} signatures are present`);
     }
+    assert.deepEqual(before.functions.filter(fn=>flexibleCommerceAddedFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
+      [...flexibleCommerceAddedFunctionIdentities].sort(),'exact flexible commerce added signatures are present');
     await assertProfileFeedInventory(db,before.functions);
     assert.deepEqual(before.functions.filter(fn=>merchAddedFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
       [...merchAddedFunctionIdentities].sort(),'exact physical storefront/SKU/photo signatures are present');
@@ -558,7 +621,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length+flexibleCommerceFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>flexibleCommerceFiles.includes(file)),flexibleCommerceFiles, 'exact flexible commerce successor migrations replay');
     assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),merchStorefrontFiles, 'exact physical storefront/SKU/photo successors replay');
     assert.deepEqual(replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles,
       'exact creator/buyer monetization audit migrations replay in both Studio scenarios');

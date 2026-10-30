@@ -282,7 +282,7 @@ test("production parsers carry raw provenance into actual comment/message/call r
 test("required product job selects and executes this mounted suite", () => {
   const plan = computeValidationPlan([...sources.map(([file]) => file), "tests/conversation-timestamps-mounted.test.mjs"]);
   assert.equal(plan.categories.product, true);
-  assert.match(read(".github/workflows/required-validation.yml"), /node --test tests\/\*\.test\.mjs/);
+  assert.match(read(".github/workflows/required-validation.yml"), /node --test --test-concurrency=1 tests\/\*\.test\.mjs/);
 });
 
 test("whole notification tray executes service-to-row mapping and refreshes accessible dates", async t => {

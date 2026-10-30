@@ -131,6 +131,9 @@ const recentPublic = {
   // Exact-session creator/buyer RPCs own SKU reads and reservations; even
   // service transport has no direct table privilege on this inventory.
   'public.merch_product_variants': {},
+  'public.creator_channel_subscription_price_requests': {authenticated: ['SELECT'], service_role: ['SELECT']},
+  'public.creator_channel_subscription_catalog_bindings': {service_role: ['SELECT']},
+  'public.creator_channel_subscription_group_owners': {},
   'public.ios_native_call_state_issuances': {},
   'public.ios_native_call_state_connections': {},
   'public.notification_activity_events': {service_role: dml},
@@ -230,6 +233,45 @@ test('full fresh-schema replay works without implicit table/sequence grants', {t
       for (const role of roles.filter(role => !(intended[role] ?? []).includes('SELECT'))) {
         await assert.rejects(asRole(db, role, `select * from ${qualified(relation)} limit 0`),
           error => error.code === '42501', `${relation}: ${role} cannot directly read`);
+      }
+    }
+
+    for (const relation of [
+      'private.creator_external_payment_capabilities',
+      'private.creator_external_payment_eligibility',
+      'private.creator_event_auction_product_bindings',
+    ]) {
+      const column = (await db.query(`select attname from pg_attribute
+        where attrelid=$1::regclass and attnum>0 and not attisdropped order by attnum limit 1`, [relation])).rows[0].attname;
+      for (const role of roles) for (const sql of [
+        `insert into ${qualified(relation)} default values`,
+        `update ${qualified(relation)} set ${quote(column)}=${quote(column)} where false`,
+        `delete from ${qualified(relation)} where false`,
+      ]) {
+        // Use an actual column: a missing-column error is not ACL proof.
+        await assert.rejects(asRole(db, role, sql), error => error.code === '42501',
+          `${relation}: direct ${role} mutation is denied`);
+      }
+    }
+
+    // These two workflow columns are the complete service UPDATE authority.
+    // Table-wide UPDATE remains denied by the matrix above; every other column
+    // and every consumer role is explicitly checked below, not inferred from it.
+    for (const [table, writable] of [
+      ['creator_channel_subscription_price_requests', 'status'],
+      ['creator_channel_subscription_catalog_bindings', 'available_for_new_purchases'],
+    ]) {
+      const relation = `public.${table}`;
+      const columns = (await db.query(`select attname from pg_attribute
+        where attrelid=$1::regclass and attnum>0 and not attisdropped order by attnum`, [relation])).rows;
+      for (const role of roles) for (const {attname} of columns) {
+        const permitted = role === 'service_role' && attname === writable;
+        assert.equal((await db.query("select has_column_privilege($1,$2,$3,'UPDATE') allowed",
+          [role, relation, attname])).rows[0].allowed, permitted, `${relation}.${attname}: exact ${role} UPDATE`);
+        const sql = `update ${qualified(relation)} set ${quote(attname)}=${quote(attname)} where false`;
+        if (permitted) await asRole(db, role, sql);
+        else await assert.rejects(asRole(db, role, sql), error => error.code === '42501',
+          `${relation}.${attname}: unauthorized ${role} write is denied`);
       }
     }
 
