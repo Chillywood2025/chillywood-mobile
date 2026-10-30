@@ -12,7 +12,7 @@ const creator = "22222222-2222-4222-8222-222222222222";
 const offerId = "33333333-3333-4333-8333-333333333333";
 const intentId = "44444444-4444-4444-8444-444444444444";
 const productId = "cw_test_product";
-const realModules = new Set(["creatorMoneyStoreQuote", "creatorMoneyPurchaseAuthority", "creatorMonetization"]);
+const realModules = new Set(["creatorMoneyStoreQuote", "creatorMoneyPurchaseAuthority", "creatorMonetization", "iosAppStoreCommerce"]);
 const compiledModules = new Map();
 
 function runtime(options = {}) {
@@ -21,6 +21,8 @@ function runtime(options = {}) {
   const attemptIds = [];
   let sessionCurrent = true;
   const amount = options.amount ?? 99;
+  const platform = options.platform ?? "android";
+  const provider = platform === "ios" ? "revenuecat_app_store" : "revenuecat_google_play";
   const selectedProductId = options.tip ? "cw_creator_tip_sandbox_099" : productId;
   const product = { identifier: selectedProductId, price: amount / 100, currencyCode: "USD", ...options.product };
   const offer = {
@@ -48,17 +50,18 @@ function runtime(options = {}) {
     if (options.moneyClaimSwitchAccount) sessionCurrent = false;
     return { data: { id: intentId, userId: buyer, creatorId: creator,
       sourceType: options.sourceType ?? "paid_content", sourceId: options.tip ? creator : offerId,
-      provider: "revenuecat_google_play", providerProductId: selectedProductId, environment: "sandbox", status: "pending",
+      provider, providerProductId: selectedProductId, environment: "sandbox", status: "pending",
       amountMinor: amount, currency: "usd", quote: { amountMinor: amount, currency: "usd" },
       checkoutAttemptId: args.p_checkout_attempt_id, checkoutStartedAt: new Date().toISOString(), startAuthorized: !alreadyClaimed,
       ...options.moneyClaim }, error: options.moneyClaimError ?? null };
   };
   const mocks = {
+    "./creatorTipCustomQuote": { normalizeCreatorTipCustomQuote: () => { throw new Error("Native store quote tests must not enter external checkout"); } },
     "./creatorSupportedPrices": { readCreatorSupportedPrices: async () => ({ status: "resolved", subjectUserId: buyer,
       prices: [{ platform: "android", environment: "sandbox", currency: "usd", status: "sandbox",
         provider: "revenuecat_google_play", productKey: "creator_tip_sandbox_099",
         providerProductId: selectedProductId, amountMinor: amount }] }) },
-    "react-native": { Platform: { OS: "android" } },
+    "react-native": { Platform: { OS: platform } },
     "react-native-get-random-values": {},
     "./supabase": { supabase: { rpc: async () => ({ data: options.live ? {
       allowed: true, reason: "exact_live_access_pass", viewerOnly: true, seatEligible: false,
@@ -83,7 +86,7 @@ function runtime(options = {}) {
       isRevenueCatExistingPurchase: () => false,
       isRevenueCatUserCancellation: (e) => e.userCancelled === true,
     },
-    "./creatorVideos": {}, "./iosAppStoreCommerce": {}, "./paymentRailPolicy": {}, "./liveWatchPartyMoney": {},
+    "./creatorVideos": {}, "./paymentRailPolicy": { resolvePaymentRailPolicy: () => ({ allowed: true }) }, "./liveWatchPartyMoney": {},
   };
   function load(name, realAuthority = false) {
     if (cache.has(name)) return cache.get(name);
@@ -117,7 +120,7 @@ function runtime(options = {}) {
             }
             return { data: {
             id: intentId, userId: buyer, creatorId: creator, sourceType: options.sourceType ?? "paid_content",
-            sourceId: options.tip ? creator : offerId, provider: "revenuecat_google_play",
+            sourceId: options.tip ? creator : offerId, provider,
             providerProductId: selectedProductId, environment: "sandbox", status: "pending",
             amountMinor: amount, currency: "usd", alreadyPurchased: false, alreadySubscribed: false,
             partyId: "party-test", passType: options.passType, grantsPublish: false,
@@ -183,6 +186,32 @@ for (const test of cases) {
   }
 }
 const eventCase = cases.find(item => item.sourceType === "event");
+// A synthetic provisioned binding exercises the real subscription entry point;
+// it is not a seeded production SKU or evidence that a store has approved one.
+const subscriptionCase = cases.find(item => item.sourceType === "channel_subscription");
+for (const platform of ["ios", "android"]) {
+  const subscriptionCatalogBinding = { bindingId: intentId, version: 2, creatorId: creator,
+    offerId, priceId: offerId, providerProductId: productId, amountMinor: 1299,
+    currency: "usd", platform, environment: "sandbox", subscriptionPeriod: "P1M" };
+  const dynamic = { ...subscriptionCase, amount: 1299, platform, intent: { subscriptionCatalogBinding } };
+  const accepted = runtime(dynamic);
+  await accepted.load(dynamic.module)[dynamic.fn](dynamic.args);
+  assert.equal(accepted.calls(), 1, `${platform} new bound price reaches native purchase`);
+  for (const product of [{ price: 4.99 }, { currencyCode: "EUR" }, { identifier: "wrong_product" }]) {
+    const mismatch = runtime({ ...dynamic, product });
+    await mismatch.load(dynamic.module)[dynamic.fn](dynamic.args);
+    assert.equal(mismatch.calls(), 0, `${platform} new price must match live store quote`);
+  }
+  for (const patch of [{ creatorId: buyer }, { amountMinor: 499 }, { version: 0 }]) {
+    const malformed = runtime({ ...dynamic, intent: { subscriptionCatalogBinding: { ...subscriptionCatalogBinding, ...patch } } });
+    await assert.rejects(malformed.load(dynamic.module)[dynamic.fn](dynamic.args), /authority could not be verified/);
+    assert.equal(malformed.calls(), 0);
+  }
+  const state = { claimed: false };
+  const first = runtime({ ...dynamic, claimState: state }), second = runtime({ ...dynamic, claimState: state });
+  await Promise.all([first.load(dynamic.module)[dynamic.fn](dynamic.args), second.load(dynamic.module)[dynamic.fn](dynamic.args)]);
+  assert.equal(first.calls() + second.calls(), 1, `${platform} dynamic price retains atomic checkout claim`);
+}
 for (const reservation of [{state:"expired"},{expiresAt:"2000-01-01T00:00:00Z"},{buyerId:creator},
   {termsRevisionId:intentId},{creatorEventId:creator},{offerId:creator},{priceCents:199},{currency:"eur"},{purchaseIntentId:offerId},
   {startAuthorized:false},{checkoutAttemptId:intentId}]) {

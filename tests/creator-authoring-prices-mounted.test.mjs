@@ -8,6 +8,41 @@ const price = amount => ({ priceKey: `catalog-${amount}`, productKey: `product-$
 const catalog = async () => ({ status: 'resolved', subjectUserId: 'owner', prices: [price(99), price(299), price(499), price(999)] });
 const node = (h, id) => h.find(n => n.props.testID === id);
 
+test('mounted subscription request preserves desired amount and cannot activate an unsupported price', async t => {
+  const writes = []; let mode = 'wrong';
+  const helper = productionFunctions('_lib/channelSubscriptions.ts', ['parseChannelSubscriptionRequestedPrice', 'requestChannelSubscriptionPrice'], {
+    runCurrentAccountBoundSupabaseMutationRpc: async (name, payload) => {
+      writes.push({ name, payload });
+      return { data: { id: '11111111-1111-4111-8111-111111111111', amountMinor: mode === 'wrong' ? 499 : payload.p_amount_minor,
+        currency: 'usd', status: 'pending_provisioning', createdAt: '2026-10-30T00:00:00Z' }, error: null };
+    },
+  });
+  for (const malformed of ['', '0', '-1', '1.234', '1e2', ' 9.99', 'NaN', '21474836.48']) {
+    assert.equal(helper.parseChannelSubscriptionRequestedPrice(malformed), null);
+  }
+  assert.equal(helper.parseChannelSubscriptionRequestedPrice('12.99'), 1299);
+  const h = await mount(t, { route: { tab: 'monetization', manage: 'channel_subscriptions' }, overrides: {
+    readCreatorAuthoringPrices: catalog, ...helper,
+    formatChannelSubscriptionPrice: amount => `$${(amount / 100).toFixed(2)}/month`,
+    saveChannelSubscriptionOffer: () => assert.fail('request must not publish an offer'),
+  } });
+  await h.change(node(h, 'channel-subscription-price-request-input'), '12.99');
+  await h.press(node(h, 'channel-subscription-price-request-button'));
+  assert.match(h.text(), /request could not be confirmed/);
+  assert.equal(node(h, 'channel-subscription-price-request-input').props.value, '12.99');
+  mode = 'valid'; await h.press(node(h, 'channel-subscription-price-request-button'));
+  assert.match(h.text(), /Requested \$12\.99\/month\. Pending store provisioning—not available for purchase/);
+  assert.equal(node(h, 'money-manager-channel-subscription-enable-button').props.disabled, true);
+  for (const write of writes) {
+    assert.equal(write.name, 'request_creator_channel_subscription_price');
+    assert.equal(write.payload.p_amount_minor, 1299); assert.equal(write.payload.p_currency, 'usd');
+  }
+  const oldRequest = node(h, 'channel-subscription-price-request-button').props.onPress;
+  await h.account({ user: { id: 'next' }, isSignedIn: true, isLoading: false, authority: { userId: 'next', accountId: 'next', sessionGeneration: 'replacement', state: 'ACTIVE', restoreOnly: false }, authorityStatus: 'active' });
+  await React.act(async () => oldRequest());
+  assert.equal(writes.length, 2, 'old account callback cannot request a price');
+});
+
 test('mounted video price choice survives rejection, requires exact readback, and never resets to 99', async t => {
   let result = 'reject', saved = false; const writes = [];
   const helper = productionFunctions('_lib/creatorPaidVideos.ts', ['toText', 'savePaidVideoOffer'], {

@@ -23,13 +23,13 @@ const observedPayout=(id='acct_fixture',changes={})=>({
 });
 function harness(compiled=code){
   let handler,attempt=null,authorityReads=0,payoutReads=0,profile='First name',account='acct_fixture',payout={},payoutSequence=null,retryAllowed=true,failAfterAccept=false,recordFailure=false,retiredAt=Infinity,terminal=false;
-  const calls=[],sessions=new Map();
+  const calls=[],sessions=new Map(); let routeAllowed=true,expiryOffset=0;
   const settings={creator_id:creator,tips_enabled:true,status:'active',currency:'usd',min_amount_cents:100,max_amount_cents:50000,provider_charges_enabled:true,provider_payouts_enabled:true};
   const admin={from(table){const q={};for(const method of ['select','eq','in','gte','or','limit','update','insert'])q[method]=()=>q;
     q.update=value=>{if(table==='creator_tip_settings')Object.assign(settings,copy(value));return q;};
     const result=()=>({error:null,count:attempt?1:0,data:table==='platform_money_kill_switches'?{state:q.key==='live_money_enabled'?'off':'sandbox_only'}:table==='creator_tip_settings'?settings:table==='user_profiles'?{display_name:profile}:[]});
     q.eq=(key,value)=>{if(key==='key')q.key=value;return q;};q.maybeSingle=q.single=async()=>result();q.then=(ok,fail)=>Promise.resolve(result()).then(ok,fail);return q;},
-    async rpc(name,args){if(name==='reserve_creator_tip_checkout_attempt'){
+    async rpc(name,args){if(name==='read_creator_tip_checkout_dispatch_authority') return {data:{allowed:routeAllowed},error:null}; if(name==='reserve_creator_tip_checkout_attempt'){
       if(!attempt)attempt={tipId:args.p_quote.tipId,requestId:args.p_request_id,buyerId:args.p_buyer_id,creatorId:creator,amountCents:300,currency:'usd',status:'pending',body:copy(args.p_quote.body),providerSessionId:null,idempotencyKey:'stable-'+args.p_request_id};
       return {data:{...copy(attempt),retryAllowed},error:null};
     }if(name==='record_creator_tip_checkout_session'){
@@ -46,13 +46,13 @@ function harness(compiled=code){
     readStripeTestSecret:()=>({configured:true,secret:'synthetic-test-secret'}),safeWriteAuditLog:async()=>{},sanitizeErrorMessage:error=>String(error),toText:v=>String(v??'').trim(),
     fetch:async(url,init)=>{const body=init.body?Object.fromEntries(init.body):null;calls.push({url,method:init.method,key:init.headers['Idempotency-Key'],body});
       const id='cs_test_fixture';let value=sessions.get(id);
-      if(init.method==='POST'&&!value){value={id,livemode:false,status:'open',payment_intent:'pi_fixture',url:'https://checkout.stripe.com/c/pay/synthetic',client_reference_id:body.client_reference_id,amount_total:Number(body['line_items[0][price_data][unit_amount]']),currency:body['line_items[0][price_data][currency]'],metadata:{chillywood_tip_id:body['metadata[chillywood_tip_id]']}};sessions.set(id,value);}
+      if(init.method==='POST'&&!value){value={id,livemode:false,status:'open',expires_at:Number(body.expires_at)+expiryOffset,payment_intent:'pi_fixture',url:'https://checkout.stripe.com/c/pay/synthetic',client_reference_id:body.client_reference_id,amount_total:Number(body['line_items[0][price_data][unit_amount]']),currency:body['line_items[0][price_data][currency]'],metadata:{chillywood_tip_id:body['metadata[chillywood_tip_id]']}};sessions.set(id,value);}
       if(failAfterAccept){failAfterAccept=false;throw new Error('synthetic transport lost after provider acceptance');}
       return new Response(JSON.stringify(value));},
   };
   vm.runInNewContext(compiled,context,{filename:file});
   return {calls,run:async(changes={})=>{const r=await handler(new Request('https://local.invalid',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify({creator_id:creator,amount_cents:300,currency:'usd',request_id:request,...changes})}));return {status:r.status,body:await r.json()};},
-    set:changes=>{if('profile'in changes)profile=changes.profile;if('account'in changes)account=changes.account;if('payout'in changes)payout=changes.payout;if('payoutSequence'in changes){payoutSequence=changes.payoutSequence;payoutReads=0;}if('retryAllowed'in changes)retryAllowed=changes.retryAllowed;if('failAfterAccept'in changes)failAfterAccept=changes.failAfterAccept;if('recordFailure'in changes)recordFailure=changes.recordFailure;if('retiredAt'in changes)retiredAt=changes.retiredAt;if('terminal'in changes)terminal=changes.terminal;},attempt:()=>attempt,settings:()=>copy(settings)};
+    set:changes=>{if('expiryOffset'in changes)expiryOffset=changes.expiryOffset;if('routeAllowed'in changes)routeAllowed=changes.routeAllowed;if('profile'in changes)profile=changes.profile;if('account'in changes)account=changes.account;if('payout'in changes)payout=changes.payout;if('payoutSequence'in changes){payoutSequence=changes.payoutSequence;payoutReads=0;}if('retryAllowed'in changes)retryAllowed=changes.retryAllowed;if('failAfterAccept'in changes)failAfterAccept=changes.failAfterAccept;if('recordFailure'in changes)recordFailure=changes.recordFailure;if('retiredAt'in changes)retiredAt=changes.retiredAt;if('terminal'in changes)terminal=changes.terminal;},attempt:()=>attempt,settings:()=>copy(settings)};
 }
 
 test('actual endpoint freezes first request/key after lost provider reply and retrieves known sessions',async()=>{
@@ -81,6 +81,29 @@ test('session retirement before dispatch and during provider IO never returns a 
 });
 test('missing durable request identity is rejected before any provider request',async()=>{
   const h=harness();const result=await h.run({request_id:null});assert.equal(result.status,400);assert.equal(h.calls.length,0);
+});
+
+test('revoked external capability blocks new dispatch but preserves known-session reconciliation without payment link',async()=>{
+  const denied=harness();denied.set({routeAllowed:false});const result=await denied.run();
+  assert.equal(result.body.status,'reconciliation_required');assert.equal(denied.calls.length,0);
+  const known=harness();await known.run();known.set({routeAllowed:false});const receipt=await known.run();
+  assert.equal(known.calls[1].method,'GET');assert.equal(receipt.body.checkoutCreated,false);assert.equal(receipt.body.url,null);
+});
+
+test('custom checkout accepts only integer number cents, never coercing request strings or fractional values',async()=>{
+  for(const amount_cents of ['300','3e2',300.5,Number.MAX_SAFE_INTEGER+1,0,-1]){
+    const h=harness();const result=await h.run({amount_cents});assert.equal(result.status,400);assert.equal(h.calls.length,0);
+  }
+});
+
+test('provider expiry must match the frozen approval-bounded quote before any payment link is returned',async()=>{
+  const h=harness();h.set({expiryOffset:60});const result=await h.run();
+  assert.equal(result.body.checkoutCreated,false);assert.equal(result.body.url,null);assert.equal(result.body.status,'pending');
+  assert.equal(h.calls.length,1,'unknown provider result retains original attempt, never creates another checkout');
+  const predicate='|| !Number.isSafeInteger(session.expires_at) || session.expires_at !== (attempt.body as Record<string, unknown>).expires_at';
+  assert.ok(source.includes(predicate));
+  const mutant=harness(compile(source.replace(predicate,'')));mutant.set({expiryOffset:60});
+  assert.equal((await mutant.run()).body.checkoutCreated,true,'negative control exercises exact expiry check');
 });
 
 for(const [label,changes] of [

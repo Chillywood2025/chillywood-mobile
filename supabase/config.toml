@@ -241,3 +241,11 @@ verify_jwt = false
 # This endpoint returns status only and accepts no call mutation commands.
 [functions.ios-native-call-state]
 verify_jwt = false
+
+[functions.stripe-event-auction-checkout]
+verify_jwt = true
+
+[functions.stripe-event-auction-webhook]
+# Stripe cannot supply a Supabase JWT. The dedicated handler verifies the raw
+# body with its dedicated signing secret before the service-only projection.
+verify_jwt = false

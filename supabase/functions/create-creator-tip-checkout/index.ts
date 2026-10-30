@@ -40,6 +40,7 @@ type TipCheckoutPayload = {
   returnUrl?: unknown;
   request_id?: unknown;
   requestId?: unknown;
+  capability_id?: unknown;
 };
 
 type StripeCheckoutSession = {
@@ -51,6 +52,7 @@ type StripeCheckoutSession = {
   amount_total?: number;
   currency?: string;
   status?: string;
+  expires_at?: number;
   metadata?: Record<string,string>;
 };
 
@@ -90,9 +92,7 @@ const allowedDeepLinkProtocols = new Set([
 ]);
 
 const toAmountCents = (value: unknown) => {
-  const amount = Number(value);
-  if (!Number.isInteger(amount)) return null;
-  return amount;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
 };
 
 const normalizeUuid = (value: unknown) => {
@@ -395,11 +395,8 @@ Deno.serve(async (req): Promise<Response> => {
     if (!initialSettings?.tips_enabled) return jsonResponse(403, { error: "tips_not_enabled", message: "This creator has not enabled tips." });
 
     const settings = await syncSettingsFromPayout(adminClient, creatorId, initialSettings, payoutAccount);
-    const minAmount = Number(settings?.min_amount_cents ?? 100);
-    const maxAmount = Number(settings?.max_amount_cents ?? 50000);
-    if (amountCents < minAmount || amountCents > maxAmount) {
-      return jsonResponse(400, { error: "amount_out_of_range", message: "Choose a tip amount within the creator's allowed range." });
-    }
+    // New custom tips use a server-owned, buyer-session-bound capability's
+    // provider/method limits, not the creator's historical preset range.
     if (settings?.status !== "active" || !settings.provider_charges_enabled || !settings.provider_payouts_enabled) {
       await adminClient.from("creator_tip_events").insert({
         actor_id: currentUser.id,
@@ -442,6 +439,7 @@ Deno.serve(async (req): Promise<Response> => {
         "metadata[pure_contribution_only]": "true",
         "metadata[rail]": "creator_tip",
         mode: "payment",
+        "payment_method_types[0]": "card",
         "payment_intent_data[metadata][chillywood_tip_id]": tipId,
         "payment_intent_data[metadata][creator_user_id]": creatorId,
         "payment_intent_data[metadata][fan_user_id]": currentUser.id,
@@ -453,7 +451,8 @@ Deno.serve(async (req): Promise<Response> => {
       };
     const { data: reserved, error: reserveError } = await adminClient.rpc("reserve_creator_tip_checkout_attempt", {
       p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
-      p_quote: { tipId, creatorId, amountCents, currency, privateNote, providerAccountId, body: requestedBody },
+      p_quote: { tipId, creatorId, amountCents, currency, privateNote, providerAccountId,
+        capabilityId: normalizeUuid(parsed.value.capability_id), body: requestedBody },
     });
     if (reserveError || !reserved || typeof reserved !== "object") throw new Error("Tip checkout attempt could not be reserved.");
     const attempt = reserved as Record<string, unknown>;
@@ -476,6 +475,14 @@ Deno.serve(async (req): Promise<Response> => {
     const latestPayout = await readCreatorPayoutAccount(adminClient, creatorId) as PayoutAccountRow | null;
     const recipientCurrent = payoutAccountReadyForTip(latestPayout)
       && (attempt.body as Record<string, unknown>)["payment_intent_data[transfer_data][destination]"] === toText(latestPayout?.provider_account_id);
+    const { data: dispatchAuthority, error: dispatchAuthorityError } = await adminClient.rpc("read_creator_tip_checkout_dispatch_authority", {
+      p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
+    });
+    const routeCurrent = !dispatchAuthorityError && dispatchAuthority && typeof dispatchAuthority === "object"
+      && (dispatchAuthority as Record<string, unknown>).allowed === true;
+    if (!knownSession && !routeCurrent) return jsonResponse(200, {
+      ...attemptResponse, status: "reconciliation_required", message: "The approved payment route is no longer available. Keep this original attempt and check Purchases.",
+    });
     if (!knownSession && !recipientCurrent) return jsonResponse(200, {
       ...attemptResponse, status: "reconciliation_required", message: "The original recipient setup changed. This tip needs review before checkout can continue.",
     });
@@ -495,6 +502,7 @@ Deno.serve(async (req): Promise<Response> => {
     if (!/^cs_test_[A-Za-z0-9]+$/.test(sessionId) || (knownSession && sessionId !== knownSession)
       || session.livemode !== false || session.client_reference_id !== tipId
       || session.amount_total !== amountCents || session.currency !== currency
+      || !Number.isSafeInteger(session.expires_at) || session.expires_at !== (attempt.body as Record<string, unknown>).expires_at
       || session.metadata?.chillywood_tip_id !== tipId) throw new Error("Stripe checkout identity could not be verified.");
     const { data: recorded, error: updateError } = await adminClient.rpc("record_creator_tip_checkout_session", {
       p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
@@ -503,7 +511,11 @@ Deno.serve(async (req): Promise<Response> => {
     if (updateError || !recorded || typeof recorded !== "object") throw new Error("Tip checkout receipt could not be recorded.");
     const saved = recorded as Record<string, unknown>;
     if (saved.tipId !== tipId || saved.providerSessionId !== sessionId) throw new Error("Tip checkout receipt identity changed.");
-    if (!recipientCurrent || !sameBuyerSessionAuthority(buyerAuthority, await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id))
+    const { data: finalRoute, error: finalRouteError } = await adminClient.rpc("read_creator_tip_checkout_dispatch_authority", {
+      p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
+    });
+    if (!routeCurrent || finalRouteError || !finalRoute || typeof finalRoute !== "object" || (finalRoute as Record<string, unknown>).allowed !== true
+      || !recipientCurrent || !sameBuyerSessionAuthority(buyerAuthority, await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id))
       || !["pending", "checkout_started"].includes(String(saved.status)) || session.status !== "open") return jsonResponse(200, {
       ...attemptResponse, status: saved.status, message: "Check Purchases for this original tip. No new payment link is available.",
     });

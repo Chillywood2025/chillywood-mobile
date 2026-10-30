@@ -6,6 +6,7 @@ import { EventScheduleInputError, formatZonedEventScheduleInput, parseZonedEvent
 import { readNewCreatorEventReplayTermsError, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { configurePaidCreatorEventSale, type PaidCreatorEventOffer, type PaidCreatorEventOfferStatus } from "../../_lib/paidCreatorEvents";
 import { CreatorPricePicker } from "./creator-price-picker";
+import { EventAuctionEditor } from "./event-auction-editor";
 
 export function EventSaleEditor({ event, offer, onSaved, onClose }: {
   event: CreatorEventSummary; offer: PaidCreatorEventOffer | null;
@@ -94,6 +95,7 @@ export function EventSaleEditor({ event, offer, onSaved, onClose }: {
       <Text style={styles.body}>{formatZonedEventScheduleInput(event.startsAt, event.timeZone) || "Schedule required"} · {event.timeZone}</Text><Text style={styles.body}>{description}</Text>
       <Text style={styles.body}>{capacity.trim() ? `${capacity} virtual tickets` : "No virtual capacity limit"}</Text>
     </View>
+    <EventAuctionEditor key={`${event.id}:${offer?.termsRevisionId ?? "none"}`} event={event} offer={offer} />
     {notice ? <Text style={styles.notice} accessibilityLiveRegion="polite">{notice}</Text> : null}
     {busy ? <ActivityIndicator color="#DC143C" /> : null}
     <View style={styles.actions}>

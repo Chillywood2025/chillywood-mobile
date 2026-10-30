@@ -7,23 +7,27 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 // Real reservation, receipt, event lease and atomic projector over the complete
 // local migration chain. Only managed infrastructure is doubled; no provider IO.
 test('Stripe tip settlement requires raw provider authority and survives reorder/retry', {timeout:240_000}, async t => {
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});
+  const {db,replayReport}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   let checks=0,eventNumber=0;
   const eq=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
   const ok=(actual,label)=>{assert.ok(actual,label);checks++;};
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+    // Real current admission over explicitly synthetic trusted route/account
+    // evidence. Settlement assertions below are unchanged; no guard is bypassed.
+    await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
+    await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-capabilities.sql','utf8'));
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(a=>a.kind==='buyer1'),other=actors.find(a=>a.kind==='buyer2'),creator=actors.find(a=>a.kind==='creator');
     await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
     const tip='ec000000-0000-4000-8000-000000000001',request='ec000000-0000-4000-8000-000000000002';
     const checkout='cs_test_settlement1',intent='pi_settlement1';
-    const quote={tipId:tip,creatorId:creator.user_id,amountCents:300,currency:'usd',providerAccountId:'acct_fixture',body:{
+    const quote={tipId:tip,creatorId:creator.user_id,amountCents:300,currency:'usd',providerAccountId:'acct_fixture',capabilityId:'ef000000-0000-4000-8000-000000000001',body:{
       client_reference_id:tip,'metadata[chillywood_tip_id]':tip,'metadata[fan_user_id]':buyer.user_id,
       'metadata[creator_user_id]':creator.user_id,'line_items[0][price_data][currency]':'usd',
       'line_items[0][price_data][unit_amount]':300,'payment_intent_data[transfer_data][destination]':'acct_fixture',
-      mode:'payment',success_url:'chillywoodmobile://tip-status',expires_at:Math.floor(Date.now()/1000)+3600}};
+      mode:'payment','payment_method_types[0]':'card',success_url:'chillywoodmobile://tip-status',expires_at:Math.floor(Date.now()/1000)+3600}};
     const receipt=(paymentIntent=intent)=>one('select public.record_creator_tip_checkout_session($1,$2,$3,$4,$5)',[buyer.user_id,buyer.session_id,request,checkout,paymentIntent]);
     const seed=async({bindSession=true,bindIntent=true}={})=>{
       await one('select public.reserve_creator_tip_checkout_attempt($1,$2,$3,$4)',[buyer.user_id,buyer.session_id,request,quote]);

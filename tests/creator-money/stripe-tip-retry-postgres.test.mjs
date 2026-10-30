@@ -4,20 +4,22 @@ import fs from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 
 test('Stripe checkout retry uses real immutable authority and receipt SQL', {timeout:240_000}, async t=>{
-  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});let checks=0;
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});let checks=0;
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
   const deny=async(fn,rx)=>{await assert.rejects(fn,rx);checks++;};
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+    await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-capabilities.sql','utf8'));
+    await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(x=>x.kind==='buyer1'),other=actors.find(x=>x.kind==='buyer2'),host=actors.find(x=>x.kind==='creator');
     await db.exec("select set_config('request.jwt.claims','{\"role\":\"service_role\"}',false)");
     const request='ea000000-0000-4000-8000-000000000001',tip='ea000000-0000-4000-8000-000000000002';
-    const quote={tipId:tip,creatorId:host.user_id,amountCents:300,currency:'usd',privateNote:null,providerAccountId:'acct_fixture',body:{
+    const quote={tipId:tip,creatorId:host.user_id,amountCents:300,currency:'usd',privateNote:null,providerAccountId:'acct_fixture',capabilityId:'ef000000-0000-4000-8000-000000000001',body:{
       client_reference_id:tip,'metadata[chillywood_tip_id]':tip,'metadata[fan_user_id]':buyer.user_id,
       'metadata[creator_user_id]':host.user_id,'line_items[0][price_data][currency]':'usd','line_items[0][price_data][unit_amount]':300,
-      'payment_intent_data[transfer_data][destination]':'acct_fixture',mode:'payment',success_url:'chillywoodmobile://tip-status?original',expires_at:Math.floor(Date.now()/1000)+3600}};
+      'payment_intent_data[transfer_data][destination]':'acct_fixture','payment_method_types[0]':'card',mode:'payment',success_url:'chillywoodmobile://tip-status?original',expires_at:Math.floor(Date.now()/1000)+3600}};
     const reserve=(id=request,q=quote,actor=buyer)=>one('select public.reserve_creator_tip_checkout_attempt($1,$2,$3,$4)',[actor.user_id,actor.session_id,id,q]);
     const first=await reserve();eq(first.tipId,tip);eq(first.retryAllowed,true);
     const retry=await reserve(request,{...quote,providerAccountId:'acct_changed',body:{...quote.body,success_url:'changed'}});

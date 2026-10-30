@@ -64,7 +64,7 @@ export function splitSQL(source) {
   return statements;
 }
 
-export async function createDatabase({overlayLiveDrift = false, applyRepair = false, includeHeldStudio = false,
+export async function createDatabase({overlayLiveDrift = false, applyRepair = false, repairInMigrationOrder = false, includeHeldStudio = false,
   implicitApiGrants = true, excludeMigrations = [], databaseFactory = null} = {}) {
   // A test-supplied native adapter must expose the same exec/query/close methods.
   // Default replay and every statement/double below remain unchanged.
@@ -116,7 +116,11 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
       create view vault.decrypted_secrets as select *,secret as decrypted_secret from vault.secrets;
       create function vault.create_secret(text,text,text) returns uuid language sql as $$insert into vault.secrets(secret,name,description) values($1,$2,$3) returning id$$;
     `);
-    const files = fs.readdirSync(migrationDirectory).filter(name => name.endsWith('.sql') && name !== repairName
+    // Forward-feature qualification must retain the actual migration order:
+    // appending an old repair after newer migrations can overwrite new APIs.
+    // Legacy before/after repair tests retain their explicit final overlay.
+    const files = fs.readdirSync(migrationDirectory).filter(name => name.endsWith('.sql')
+      && (name !== repairName || (applyRepair && repairInMigrationOrder))
       && !excludeMigrations.includes(name)
       && (includeHeldStudio || !heldStudioBundleVersions.some(version => name.startsWith(`${version}_`)))).sort();
     for (const file of files) {
@@ -140,7 +144,7 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
     }
     if (overlayLiveDrift) await db.exec(fs.readFileSync(liveSnapshotPath, 'utf8'));
     const repairSql = repairMigrationPath ? fs.readFileSync(repairMigrationPath, 'utf8') : '';
-    if (applyRepair) {
+    if (applyRepair && !repairInMigrationOrder) {
       if (!repairSql.trim()) throw new Error('Repair migration is not available');
       await db.exec(repairSql);
     }

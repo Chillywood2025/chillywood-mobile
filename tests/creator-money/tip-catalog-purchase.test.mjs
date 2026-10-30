@@ -45,6 +45,7 @@ function runtime(options = {}) {
     "./paymentRailPolicy": { resolvePaymentRailPolicy: () => ({ allowed: true, provider: "revenuecat_app_store" }) },
     "./entitlementAuthority": {}, "./accountBoundSupabaseMutation": {},
     "./accountSessionAuthority": {}, "./creatorTipCheckoutAttempt": {},
+    "./creatorTipCustomQuote": {},
   });
   return { api, calls, price, purchase: () => api.purchaseCreatorTipWithStore({ creatorId: creator, userId: buyer, amountCents: amount }) };
 }
