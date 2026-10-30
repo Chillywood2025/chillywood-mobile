@@ -118,23 +118,30 @@ async function mountTip(t, options = {}) {
     return React.createElement(React.Fragment, null, ...React.Children.toArray(props.children).filter(child => typeof child === "object"));
   };
   const native = { Platform: { OS: options.platform ?? "android" }, Alert: { alert: noop }, StyleSheet: { create: x => x } };
+  const iosCatalog = load("_lib/iosAppStoreCommerce.ts", {});
+  const tipApi = load("_lib/creatorTips.ts", {
+    "react-native": native, "./creatorSupportedPrices": {}, "./creatorMoneyStoreQuote": {}, "./supabase": {},
+    "./creatorMoneyPurchaseAuthority": {}, "./revenuecat": {}, "./iosAppStoreCommerce": iosCatalog,
+    "./paymentRailPolicy": {}, "./runtimeConfig": {}, "./entitlementAuthority": {},
+    "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {}, "./creatorTipCheckoutAttempt": {},
+  });
   for (const name of ["ActivityIndicator", "KeyboardAvoidingView", "Modal", "Pressable", "ScrollView", "Text", "TextInput", "TouchableOpacity", "View"]) native[name] = host(name);
   const Screen = load("components/monetization/tip-sheet.tsx", {
     react: React, "react-native": native, "expo-router": { useRouter: () => ({ push: route => routes.push(route) }) },
     "../../_lib/session": { useSession: () => session }, "../../_lib/analytics": { trackEvent: noop },
     "../../_lib/actionSingleFlight.mjs": singleFlight,
     "../../_lib/boundedVisibleReadGate": load("_lib/boundedVisibleReadGate.ts", {}),
-    "../../_lib/iosAppStoreCommerce": { listIosStoreProductsForConcept: () => [{ stableKey: "tip_tier_1", productId: "real99", referencePriceMinor: 99 }, { stableKey: "tip_tier_2", productId: "real299", referencePriceMinor: 299 }] },
+    "../../_lib/iosAppStoreCommerce": iosCatalog,
     "../../_lib/revenuecat": { readRevenueCatNonSubscriptionProducts: async () => [] },
     "../../_lib/creatorSupportedPrices": { readCreatorSupportedPrices: async () => options.unavailable
-      ? { status: "unavailable", prices: [] } : { status: "resolved", prices: options.prices ?? [{ amountMinor: 99, providerProductId: "real99" }] } },
-    "../../_lib/creatorTips": { purchaseCreatorTipWithStore: async input => { purchases.push(input); return options.purchase ? options.purchase(input) : { ok: false, message: "Payment pending" }; } },
+      ? { status: "unavailable", prices: [] } : { status: "resolved", subjectUserId: options.catalogBuyer ?? "buyer", prices: options.prices ?? [tipPrice()] } },
+    "../../_lib/creatorTips": { ...tipApi, purchaseCreatorTipWithStore: async input => { purchases.push(input); return options.purchase ? options.purchase(input) : { ok: false, message: "Payment pending" }; } },
     "../../_lib/creatorMonetization": { formatMonetizationCurrency: amount => `$${(amount / 100).toFixed(2)}` },
     "./MoneyScopeInfoButton": { MoneyScopeInfoButton: host("MoneyScopeInfoButton") },
     "./money-ui": Object.fromEntries(["CreatorMoneyHeader", "MoneyScopeStrip", "MoneyStatusChip", "MoneySuccessReceipt"].map(name => [name, host(name)])),
     "../ui/chillywood-visual-system": { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: host("Fill") },
   }).TipSheet;
-  const props = { visible: true, creatorId: "creator", creatorName: "Artist", sourceSurface: "test", onClose: noop, tipStatus: { canTip: true, currency: "usd", minAmountCents: 99, maxAmountCents: 999, suggestedAmountsCents: [100, 300] } };
+  const props = { visible: true, creatorId: "creator", creatorName: "Artist", sourceSurface: "test", onClose: noop, tipStatus: { creatorId: "creator", canTip: true, currency: "usd", minAmountCents: 99, maxAmountCents: 999, suggestedAmountsCents: [100, 300], ...options.tipStatus } };
   const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen, props)));
   t.after(() => React.act(async () => root.unmount()));
   return { purchases, routes, nodes, node: id => [...nodes.values()].find(node => node.props.testID === id),
@@ -142,6 +149,11 @@ async function mountTip(t, options = {}) {
     async switchSession() { session = { ...session, authority: { sessionGeneration: "two" } }; await React.act(async () => root.render(React.createElement(Screen, props))); },
     async resolve(d, value) { await React.act(async () => d.resolve(value)); },
   };
+}
+
+function tipPrice(overrides = {}) {
+  return { amountMinor: 99, providerProductId: "cw_creator_tip_sandbox_099", productKey: "creator_tip_sandbox_099",
+    provider: "revenuecat_google_play", platform: "android", environment: "sandbox", currency: "usd", status: "sandbox", ...overrides };
 }
 
 test("mounted tip chooser exposes supported store amount and rejects unavailable catalog", async t => {
@@ -156,10 +168,25 @@ test("mounted tip chooser exposes supported store amount and rejects unavailable
 });
 
 test("iOS tip catalog excluding default99 visibly and accessibly selects actual299 option", async t => {
-  const h = await mountTip(t, { platform: "ios", prices: [{ amountMinor: 299, providerProductId: "real299" }] });
+  const h = await mountTip(t, { platform: "ios", prices: [tipPrice({ amountMinor: 299, providerProductId: "com.chillywood.tip.tier2", platform: "ios", provider: "revenuecat_app_store" })] });
   assert.equal(h.node("tip-amount-option").props.accessibilityState.selected, true);
   assert.match(h.node("tip-amount-option").props.accessibilityLabel, /2\.99/);
   await h.press("tip-confirm-button"); assert.equal(h.purchases[0].amountCents, 299); assert.equal(h.purchases[0].iosStoreProductKey, "tip_tier_2");
+});
+
+test("mounted tip chooser does not advertise unmapped amounts or another buyer's catalog", async t => {
+  for (const prices of [[tipPrice({ amountMinor: 299 })], [tipPrice({ providerProductId: "wrong" })], [tipPrice({ environment: "production" })]]) {
+    const h = await mountTip(t, { prices });
+    assert.equal(h.node("tip-amount-option"), undefined);
+    assert.equal(h.node("tip-confirm-button").props.disabled, true);
+  }
+  const h = await mountTip(t, { catalogBuyer: "previous-buyer" });
+  assert.equal(h.node("tip-confirm-button").props.disabled, true);
+  const bounds = await mountTip(t, { tipStatus: { minAmountCents: 100 } });
+  assert.equal(bounds.node("tip-amount-option"), undefined, "Android99 must not appear selectable below creator minimum");
+  assert.equal(bounds.node("tip-confirm-button").props.disabled, true);
+  const staleCreator = await mountTip(t, { tipStatus: { creatorId: "old-creator" } });
+  assert.equal(staleCreator.node("tip-confirm-button").props.disabled, true);
 });
 
 test("mounted tip result cannot display on a replaced account session", async t => {

@@ -658,7 +658,9 @@ export async function purchasePaidCreatorEventPass(input: {
       message: verifiedAccess.allowed
         ? "Event Pass active. You have access to this Event."
         : "Event Pass is still being confirmed.",
-      access: verifiedAccess,
+      access: verifiedAccess.requiresPurchase
+        ? { ...verifiedAccess, requiresPurchase: false, reason: "reconciliation_required" }
+        : verifiedAccess,
       intentId: intent.id,
     };
   }
@@ -736,7 +738,8 @@ export async function purchasePaidCreatorEventPass(input: {
     || held.priceCents !== access.priceCents || held.currency !== access.currency
     || !Number.isFinite(Date.parse(toText(held.expiresAt))) || Date.parse(toText(held.expiresAt)) <= Date.now()
     || !await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
-    return { ok: false, message: "This ticket reservation is no longer ready for checkout. Check My Tickets for a pending purchase, then refresh this Event. No new charge was started.", access, intentId: intent.id, productId };
+    return { ok: false, message: "This ticket reservation is no longer ready for checkout. Check My Tickets for a pending purchase, then refresh this Event. No new charge was started by this attempt.",
+      access: { ...access, requiresPurchase: false, reason: "reservation_pending" }, intentId: intent.id, productId };
   }
 
   try {
@@ -758,7 +761,9 @@ export async function purchasePaidCreatorEventPass(input: {
       message: isRevenueCatUserCancellation(error)
         ? "Event Pass checkout was canceled. Check My Tickets if your store still shows a pending purchase."
         : "Event Pass checkout could not be confirmed. Check My Tickets and your store purchase history before trying again.",
-      access: verifiedAccess,
+      access: verifiedAccess.requiresPurchase
+        ? { ...verifiedAccess, requiresPurchase: false, reason: "reconciliation_required" }
+        : verifiedAccess,
       intentId: intent.id,
       productId,
     };
@@ -769,7 +774,9 @@ export async function purchasePaidCreatorEventPass(input: {
     return {
       ok: false,
       message: "Purchase received. Waiting for the verified Event Pass to finish.",
-      access: verifiedAccess,
+      access: verifiedAccess.requiresPurchase
+        ? { ...verifiedAccess, requiresPurchase: false, reason: "reconciliation_required" }
+        : verifiedAccess,
       intentId: intent.id,
       productId,
     };

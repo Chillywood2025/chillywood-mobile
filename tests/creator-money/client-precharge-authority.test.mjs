@@ -690,6 +690,10 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
       functions: inert,
     };
     const api = instantiate("_lib/creatorTips.ts", {
+      "./creatorSupportedPrices": { readCreatorSupportedPrices: async () => ({ status: "resolved", subjectUserId: authUserId,
+        prices: [{ platform: "android", environment: "sandbox", currency: "usd", status: "sandbox",
+          provider: "revenuecat_google_play", productKey: "creator_tip_sandbox_099",
+          providerProductId: "cw_creator_tip_sandbox_099", amountMinor: 99 }] }) },
       "./creatorMoneyPurchaseAuthority": {
         prepareCreatorMoneyPurchaseSubject: async () => {
           identitySyncs += 1;

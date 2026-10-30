@@ -69,6 +69,7 @@ function tipClient(store, options = {}) {
     status: "checkout_created", provider: "stripe", providerKey: "stripe_connect", mode: "test", checkoutCreated: true,
     liveMoneyAction: false, noAccessGranted: true, pureContributionOnly: true, url: "https://checkout.stripe.com/c/pay/cs_test_synthetic" });
   const mocks = {
+    "./creatorSupportedPrices": { readCreatorSupportedPrices: async () => { throw new Error("Stripe tips must not call the store catalog"); } },
     "react-native": { Platform: { OS: options.platform ?? "android" } }, "./creatorMoneyStoreQuote": {}, "./creatorMoneyPurchaseAuthority": {},
     "./revenuecat": {}, "./iosAppStoreCommerce": {}, "./paymentRailPolicy": {}, "./runtimeConfig": {}, "./entitlementAuthority": {},
     "./creatorTipCheckoutAttempt": load(store),

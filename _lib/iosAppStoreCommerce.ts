@@ -136,13 +136,38 @@ export const findIosStoreProductByProductId = (productId: unknown): IosStoreProd
 export const findIosStoreProduct = (concept: IosStoreConcept, conceptTier: IosStoreProductTier): IosStoreProductRecord | null =>
   IOS_APP_STORE_PRODUCTS.find((entry) => entry.concept === concept && entry.conceptTier === conceptTier) ?? null;
 
+/** Catalog support is not slot allocation or provider availability. The server
+ * must still bind an exact slot to the buyer/creator and checkout must verify
+ * the live store quote before purchasing. */
+export const isExactIosChannelSubscriptionProduct = (
+  productId: unknown,
+  amountMinor: number,
+  currency: string,
+): boolean => {
+  if (typeof productId !== "string" || productId !== productId.trim()
+    || currency !== "usd" || !Number.isSafeInteger(amountMinor) || amountMinor <= 0) return false;
+  const product = findIosStoreProductByProductId(productId);
+  if (!product || product.concept !== "channel_subscription") return false;
+  const slot = product.slotNumber;
+  return product.productType === "auto_renewable_subscription"
+    && product.subscriptionPeriod === "P1M"
+    && typeof slot === "number" && Number.isSafeInteger(slot) && slot >= 1 && slot <= 8
+    && product.referencePriceMinor === amountMinor
+    && product.conceptTier === `slot${slot}`
+    && product.productId === `com.chillywood.channel.subscription.slot${slot}`
+    && product.subscriptionGroup === `chillywood_channel_slot_${slot}`;
+};
+
+export const isIosChannelSubscriptionPriceSupported = (amountMinor: number, currency: string): boolean =>
+  listIosChannelSubscriptionSlots().some(product =>
+    isExactIosChannelSubscriptionProduct(product.productId, amountMinor, currency));
+
 export const resolveIosFiniteAppStoreTier = (
   concept: IosFiniteAppStoreConcept,
   requestedAmountMinor: number,
 ): IosFiniteAppStoreTier | null => {
-  const amount = Number.isFinite(requestedAmountMinor) ? Math.max(0, Math.trunc(requestedAmountMinor)) : 0;
-  if (!amount) return null;
+  if (!Number.isSafeInteger(requestedAmountMinor) || requestedAmountMinor <= 0) return null;
   return listIosFiniteAppStoreTiers(concept).find((entry) =>
-    amount === entry.referencePriceMinor
+    requestedAmountMinor === entry.referencePriceMinor
   ) ?? null;
 };
