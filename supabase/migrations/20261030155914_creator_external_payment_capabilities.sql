@@ -40,9 +40,10 @@ alter table private.creator_external_payment_capabilities force row level securi
 alter table private.creator_external_payment_eligibility enable row level security;
 alter table private.creator_external_payment_eligibility force row level security;
 revoke all on private.creator_external_payment_capabilities,private.creator_external_payment_eligibility from public,anon,authenticated,service_role;
--- Trusted configuration is a separately authorized service operation, never a
--- client header, user_metadata claim or creator setting. No client write RPC.
-grant select,insert,update on private.creator_external_payment_capabilities,private.creator_external_payment_eligibility to service_role;
+-- Trusted qualification provisioning is not implemented by this migration.
+-- No API role receives direct private-table access. A future narrowly scoped
+-- provisioning/revocation RPC requires separate design and qualification;
+-- client headers, user_metadata claims and creator settings are not authority.
 
 create function private.guard_creator_external_payment_evidence()
 returns trigger language plpgsql security definer set search_path='' as $$

@@ -7,6 +7,12 @@ test('real SQL custom tip capability uses trusted eligibility and exact method b
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   let checks=0;
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
+  // Fixtures use the disposable owner; application RPCs use real API roles.
+  const asRole=async(role,sql,args=[])=>{
+    assert.ok(['authenticated','service_role'].includes(role));
+    await db.exec(`set role ${role}`);
+    try{return await one(sql,args);}finally{await db.exec('reset role');}
+  };
   const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
   const deny=async(fn,rx=/external_payment_capability_unavailable/)=>{await assert.rejects(fn,rx);checks++;};
   try {
@@ -56,13 +62,13 @@ test('real SQL custom tip capability uses trusted eligibility and exact method b
     eq((await resolve(51,other)).capabilityId,cap);
     await db.exec(resolverDefinition);await deny(()=>resolve(51,other));
     await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:buyer.user_id,session_id:buyer.session_id,role:'authenticated'})]);
-    const quote=await one('select public.get_creator_tip_amount_quote($1,51)',[creator.user_id]);
+    const quote=await asRole('authenticated','select public.get_creator_tip_amount_quote($1,51)',[creator.user_id]);
     eq(quote.available,true);eq(quote.amountCents,51);eq(quote.buyerId,buyer.user_id);
     eq('providerAccountId' in quote,false);eq('eligibilityId' in quote,false);
-    const below=await one('select public.get_creator_tip_amount_quote($1,49)',[creator.user_id]);
+    const below=await asRole('authenticated','select public.get_creator_tip_amount_quote($1,49)',[creator.user_id]);
     eq(below.available,false);eq(below.reason,'amount_below_provider_minimum');eq(below.minAmountMinor,50);eq(below.amountCents,49);
     eq('providerAccountId' in below,false);eq('eligibilityId' in below,false);
-    const above=await one('select public.get_creator_tip_amount_quote($1,100001)',[creator.user_id]);
+    const above=await asRole('authenticated','select public.get_creator_tip_amount_quote($1,100001)',[creator.user_id]);
     eq(above.available,false);eq(above.reason,'amount_above_provider_maximum');eq(above.maxAmountMinor,100000);
     await db.exec("select set_config('request.jwt.claims','{\"role\":\"service_role\"}',false)");
     const request='ef000000-0000-4000-8000-000000000002',tip='ef000000-0000-4000-8000-000000000003';
@@ -71,7 +77,7 @@ test('real SQL custom tip capability uses trusted eligibility and exact method b
       'metadata[creator_user_id]':creator.user_id,'line_items[0][price_data][currency]':'usd',
       'line_items[0][price_data][unit_amount]':51,'payment_intent_data[transfer_data][destination]':'acct_fixture',
       'payment_method_types[0]':'card',mode:'payment',expires_at:Math.floor(Date.now()/1000)+3600}};
-    const reserve=(value=q)=>one('select public.reserve_creator_tip_checkout_attempt($1,$2,$3,$4)',[buyer.user_id,buyer.session_id,request,value]);
+    const reserve=(value=q)=>asRole('service_role','select public.reserve_creator_tip_checkout_attempt($1,$2,$3,$4)',[buyer.user_id,buyer.session_id,request,value]);
     await deny(()=>reserve({...q,capabilityId:null}));
     await deny(()=>reserve({...q,providerAccountId:'acct_wrong'}),/tip_checkout_capability_mismatch/);
     await deny(()=>reserve({...q,body:{...q.body,'payment_method_types[0]':'bank_transfer'}}),/tip_checkout_capability_mismatch/);
@@ -83,7 +89,7 @@ test('real SQL custom tip capability uses trusted eligibility and exact method b
     await deny(()=>reserve({...q,capabilityId:short}),/tip_checkout_quote_invalid/);
     const first=await reserve();eq(first.amountCents,51);eq(first.externalCapability.capabilityId,cap);
     assert.ok(first.body.expires_at<=Math.floor(Date.parse(first.externalCapability.expiresAt)/1000),'provider link cannot outlive route approval');
-    const dispatch=()=>one('select public.read_creator_tip_checkout_dispatch_authority($1,$2,$3)',[buyer.user_id,buyer.session_id,request]);
+    const dispatch=()=>asRole('service_role','select public.read_creator_tip_checkout_dispatch_authority($1,$2,$3)',[buyer.user_id,buyer.session_id,request]);
     eq((await dispatch()).allowed,true);
     for(const mutation of [
       "update public.creator_tip_settings set tips_enabled=false",
@@ -104,7 +110,7 @@ test('real SQL custom tip capability uses trusted eligibility and exact method b
     await deny(()=>db.query('select * from private.creator_external_payment_capabilities'),/permission denied/);
     await deny(()=>db.query('insert into private.creator_external_payment_eligibility default values'),/permission denied/);
     await deny(()=>resolve(),/permission denied/);
-    await deny(()=>dispatch(),/permission denied/);
+    await deny(()=>one('select public.read_creator_tip_checkout_dispatch_authority($1,$2,$3)',[buyer.user_id,buyer.session_id,request]),/permission denied/);
     await db.exec('reset role');
     eq(await one("select count(*)::integer from pg_class where relname in ('creator_external_payment_capabilities','creator_external_payment_eligibility') and relrowsecurity and relforcerowsecurity"),2);
     t.diagnostic(`${checks} real SQL assertions passed; synthetic evidence only`);

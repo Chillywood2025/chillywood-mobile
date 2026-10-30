@@ -10,7 +10,8 @@ create table private.creator_event_auction_product_bindings(
 alter table private.creator_event_auction_product_bindings enable row level security;
 alter table private.creator_event_auction_product_bindings force row level security;
 revoke all on private.creator_event_auction_product_bindings from public,anon,authenticated,service_role;
-grant select,insert on private.creator_event_auction_product_bindings to service_role;
+-- Qualification provisioning remains a separate, unimplemented operation;
+-- no direct private-table grant substitutes for a qualified service RPC.
 create trigger auction_product_binding_immutable before update or delete on private.creator_event_auction_product_bindings
 for each row execute function private.guard_event_ticket_terms_immutable();
 

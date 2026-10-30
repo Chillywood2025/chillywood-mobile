@@ -94,3 +94,15 @@ actual tax configuration and signed completed tax evidence remain required.
 Handler tests assert the pinned header, exact request-key set, absence of the
 removed key and rejection of empty/incompatible returned methods. These are
 source contract tests, not a claim of a real provider-created Checkout Session.
+
+## Qualification provisioning gap
+
+Capability, exact-session eligibility, and auction-product binding tables remain
+private to database-owned authority: no API role, including `service_role`, has
+direct table privileges. Existing security-definer purchase functions consume
+qualified facts but do not provision them. A narrowly scoped, audited
+qualification/revocation API and its operational evidence remain unimplemented;
+this is an activation blocker, not permission to insert production facts.
+Isolated tests seed synthetic facts as the disposable database owner, then run
+application operations under their actual authenticated or service roles without
+disabling RLS or immutable-evidence triggers.
