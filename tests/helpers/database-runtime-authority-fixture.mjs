@@ -24,9 +24,9 @@ export const heldStudioBundleVersions = Object.freeze([
 // too: its inventory wrapper requires the retained merch settlement lifecycle.
 // Normal/full-chain fixtures always replay all three files.
 export const merchStorefrontFiles = Object.freeze([
-  '20261029191508_creator_merch_storefront.sql',
-  '20261029195422_creator_merch_sku_inventory.sql',
-  '20261029195448_creator_merch_product_photos.sql',
+  '20261030000957_creator_merch_storefront.sql',
+  '20261030001019_creator_merch_sku_inventory.sql',
+  '20261030001043_creator_merch_product_photos.sql',
 ]);
 
 // PostgreSQL-aware statement boundaries: strings, quoted identifiers, tagged
