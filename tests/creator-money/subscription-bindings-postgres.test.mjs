@@ -92,7 +92,12 @@ for(const implicitApiGrants of [true,false]) test(`creator subscription cohorts 
     const intents=[];
     for(const [i,platform] of [[1,'ios'],[2,'android']]){
       await claim(buyers[i],sessions[i],platform);
-      const intent=await scalar('select public.create_creator_channel_subscription_purchase_intent($1)',[offer.id]);
+      if(platform==='ios') await assert.rejects(()=>db.query(
+        "select public.create_ios_creator_money_purchase_intent('channel_subscription',$1,1599,'{}')",[offer.id]),
+      /ios_creator_money_exact_store_price_required/);
+      const intent=await scalar(platform==='ios'
+        ? "select public.create_ios_creator_money_purchase_intent('channel_subscription',$1,1299,'{}')"
+        : 'select public.create_creator_channel_subscription_purchase_intent($1)',[offer.id]);
       assert.equal(intent.amountMinor,1299); assert.equal(intent.quote.amountMinor,1299);
       assert.equal(intent.subscriptionCatalogBinding.platform,platform);
       assert.equal(intent.subscriptionCatalogBinding.creatorId,host);
@@ -100,6 +105,9 @@ for(const implicitApiGrants of [true,false]) test(`creator subscription cohorts 
       assert.deepEqual(intent.quote.terms.subscriptionCatalogBinding,intent.subscriptionCatalogBinding);
       assert.equal((await scalar('select public.begin_creator_money_checkout($1,gen_random_uuid())',[intent.id])).startAuthorized,true);
       await assert.rejects(()=>db.query('select public.create_creator_channel_subscription_purchase_intent($1)',[offer.id]),/source_purchase_intent_already_pending/);
+      if(platform==='ios') await assert.rejects(()=>db.query(
+        "select public.create_ios_creator_money_purchase_intent('channel_subscription',$1,1299,'{}')",[offer.id]),
+      /source_purchase_intent_already_pending/);
       await assert.rejects(()=>db.query('select * from public.creator_channel_subscription_catalog_bindings'),/permission denied/);
       intents.push(intent);
       await service();

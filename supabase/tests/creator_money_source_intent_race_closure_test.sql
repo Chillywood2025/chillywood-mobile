@@ -44,8 +44,44 @@ select ok(
   ) ilike '%creator_money_reject_live_source_intent_internal%'
   and pg_get_functiondef(
     'public.create_ios_creator_money_purchase_intent(text,uuid,integer,jsonb)'::regprocedure
-  ) ilike '%creator_money_source_has_history_internal%',
-  'direct App Store creator-money issuance rechecks the exact source under lock'
+  ) ilike '%create_ios_creator_money_intent_pre_subscription_binding%'
+  and pg_get_functiondef(
+    'public.create_ios_creator_money_intent_pre_subscription_binding(text,uuid,integer,jsonb)'::regprocedure
+  ) ilike '%creator-money-source-intent:%'
+  and pg_get_functiondef(
+    'public.create_ios_creator_money_intent_pre_subscription_binding(text,uuid,integer,jsonb)'::regprocedure
+  ) ilike '%creator_money_reject_live_source_intent_internal%'
+  and pg_get_functiondef(
+    'public.create_ios_creator_money_intent_pre_subscription_binding(text,uuid,integer,jsonb)'::regprocedure
+  ) ilike '%creator_money_source_has_history_internal%'
+  and strpos(pg_get_functiondef(
+    'public.create_ios_creator_money_purchase_intent(text,uuid,integer,jsonb)'::regprocedure
+  ),'pg_advisory_xact_lock') > 0
+  and strpos(pg_get_functiondef(
+    'public.create_ios_creator_money_purchase_intent(text,uuid,integer,jsonb)'::regprocedure
+  ),'return public.create_creator_channel_subscription_purchase_intent') > 0
+  and strpos(pg_get_functiondef(
+    'public.create_ios_creator_money_purchase_intent(text,uuid,integer,jsonb)'::regprocedure
+  ),'pg_advisory_xact_lock') < strpos(pg_get_functiondef(
+    'public.create_ios_creator_money_purchase_intent(text,uuid,integer,jsonb)'::regprocedure
+  ),'return public.create_creator_channel_subscription_purchase_intent')
+  and strpos(pg_get_functiondef(
+    'public.create_creator_channel_subscription_purchase_intent(uuid)'::regprocedure
+  ),'pg_advisory_xact_lock') > 0
+  and strpos(pg_get_functiondef(
+    'public.create_creator_channel_subscription_purchase_intent(uuid)'::regprocedure
+  ),'v_access:=public.resolve_creator_channel_subscription_access') > 0
+  and strpos(pg_get_functiondef(
+    'public.create_creator_channel_subscription_purchase_intent(uuid)'::regprocedure
+  ),'pg_advisory_xact_lock') < strpos(pg_get_functiondef(
+    'public.create_creator_channel_subscription_purchase_intent(uuid)'::regprocedure
+  ),'v_access:=public.resolve_creator_channel_subscription_access')
+  and pg_get_functiondef(
+    'public.create_creator_channel_subscription_purchase_intent(uuid)'::regprocedure
+  ) ilike '%creator_money_historical_intent_safe_row_internal%'
+  and not has_function_privilege('authenticated',
+    'public.create_ios_creator_money_intent_pre_subscription_binding(text,uuid,integer,jsonb)','EXECUTE'),
+  'direct App Store issuance preserves locked legacy history and locked exact subscription binding paths'
 );
 
 select ok(

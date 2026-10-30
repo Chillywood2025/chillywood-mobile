@@ -42,12 +42,28 @@ insert into public.money_purchase_intents(id,user_id,product_id,product_key,prod
  '{"sandbox_only":true,"not_payable":true}'::jsonb
  from (values
  ('9b553000-0000-4000-8000-000000000001'::uuid,'9b550000-0000-4000-8000-000000000002'::uuid,'com.chillywood.vip.tier1','vip_pass','9b552000-0000-4000-8000-000000000001'::uuid,'9b550000-0000-4000-8000-000000000102'::uuid),
- ('9b553000-0000-4000-8000-000000000002'::uuid,'9b550000-0000-4000-8000-000000000003'::uuid,'com.chillywood.paidvideo.tier1','paid_content','9b551000-0000-4000-8000-000000000002'::uuid,'9b550000-0000-4000-8000-000000000103'::uuid),
- ('9b553000-0000-4000-8000-000000000003'::uuid,'9b550000-0000-4000-8000-000000000004'::uuid,'com.chillywood.channel.subscription.slot1','channel_subscription','9b552000-0000-4000-8000-000000000002'::uuid,'9b550000-0000-4000-8000-000000000104'::uuid)
+ ('9b553000-0000-4000-8000-000000000002'::uuid,'9b550000-0000-4000-8000-000000000003'::uuid,'com.chillywood.paidvideo.tier1','paid_content','9b551000-0000-4000-8000-000000000002'::uuid,'9b550000-0000-4000-8000-000000000103'::uuid)
  ) f(intent_id,user_id,product_id,source_type,source_id,session_id)
  join public.monetization_product_store_mappings m on m.provider_product_id=f.product_id and m.provider='revenuecat_app_store' and m.environment='sandbox'
  join public.monetization_products p on p.id=m.product_id;
-select is((select count(*)::integer from public.money_purchase_intents where id::text like '9b553000-%'),3,'fixture has three exact pending purchase bindings');
+-- The subscription uses the real issuance function, including its immutable
+-- store mapping and current-session quote, not a forged legacy intent label.
+insert into public.sandbox_monetization_testers(user_id)
+values('9b550000-0000-4000-8000-000000000004');
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"9b550000-0000-4000-8000-000000000004","session_id":"9b550000-0000-4000-8000-000000000104"}',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.headers','{"x-chillywood-platform":"ios"}',true);
+set local role authenticated;
+do $$ begin
+  perform public.create_creator_channel_subscription_purchase_intent('9b552000-0000-4000-8000-000000000002');
+end $$;
+reset role;
+select set_config('request.jwt.claims','{}',true);
+select set_config('request.jwt.claim.role','',true);
+select set_config('request.headers','{}',true);
+select is((select count(*)::integer from public.money_purchase_intents
+ where creator_id='9b550000-0000-4000-8000-000000000001'
+ and user_id in('9b550000-0000-4000-8000-000000000002','9b550000-0000-4000-8000-000000000003','9b550000-0000-4000-8000-000000000004')),3,'fixture has three exact pending purchase bindings');
 select is(public.process_revenuecat_app_store_event_atomic('social_vip_initial','INITIAL_PURCHASE','9b550000-0000-4000-8000-000000000002','com.chillywood.vip.tier1','sandbox',now(),null,99,'usd',repeat('a',64),'social_vip_original',null)->>'status','processed','real local VIP reconciliation processes');
 select is(public.process_revenuecat_app_store_event_atomic('social_paid_initial','INITIAL_PURCHASE','9b550000-0000-4000-8000-000000000003','com.chillywood.paidvideo.tier1','sandbox',now(),null,99,'usd',repeat('b',64),'social_paid_original',null)->>'status','processed','real local paid video reconciliation processes');
 select is(public.process_revenuecat_app_store_event_atomic('social_sub_initial','INITIAL_PURCHASE','9b550000-0000-4000-8000-000000000004','com.chillywood.channel.subscription.slot1','sandbox',now(),now()+interval '30 days',499,'usd',repeat('c',64),'social_sub_original',null)->>'status','processed','real local subscription reconciliation processes');

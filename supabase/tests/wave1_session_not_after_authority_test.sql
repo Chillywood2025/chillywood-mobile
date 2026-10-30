@@ -140,8 +140,8 @@ select is(
       and procedure.proname <> 'wave1_session_authority_readback'
       and pg_get_functiondef(procedure.oid) like '%wave1_session_authority_readback%'
   ),
-  29,
-  'all twenty-nine direct SQL consumers inherit the one shared root correction'
+  30,
+  'all thirty direct SQL consumers inherit the one shared root correction'
 );
 
 select is(
@@ -159,6 +159,7 @@ select is(
     'begin_video_notification_view',
     'complete_content_notification_view',
     'create_channel_subscription_intent_pre_source_lock',
+    'create_creator_channel_subscription_purchase_intent',
     'create_creator_payout_request_safe',
     'create_event_pass_intent_pre_source_lock',
     'create_ios_app_store_intent_pre_source_lock',
@@ -189,6 +190,14 @@ select is(
 );
 
 -- L: a nullable cutoff is the provider-defined ordinary non-time-boxed state.
+select ok(
+  (select prosecdef and proconfig @> array['search_path=""']
+   from pg_proc where oid='public.create_creator_channel_subscription_purchase_intent(uuid)'::regprocedure)
+  and has_function_privilege('authenticated','public.create_creator_channel_subscription_purchase_intent(uuid)','EXECUTE')
+  and not has_function_privilege('public','public.create_creator_channel_subscription_purchase_intent(uuid)','EXECUTE')
+  and not has_function_privilege('anon','public.create_creator_channel_subscription_purchase_intent(uuid)','EXECUTE'),
+  'new direct subscription consumer retains fixed-path authenticated authority and no public/anon grant'
+);
 select is(
   public.wave1_session_authority_readback() ->> 'state',
   'ACTIVE',
@@ -229,6 +238,11 @@ select ok(
 
 -- D/O: a privileged SECURITY DEFINER creator-money mutation must stop before
 -- it can manufacture authority evidence.
+select throws_ok(
+  $$select public.create_creator_channel_subscription_purchase_intent('97000000-0000-4000-8000-000000000099')$$,
+  'P0001','buyer_session_authority_required',
+  'new direct subscription consumer rejects expired current session before reading offer or issuing money authority'
+);
 select throws_ok(
   $$
     select public.wave1_accept_legal_documents(
