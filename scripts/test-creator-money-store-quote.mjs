@@ -36,7 +36,7 @@ function runtime(options = {}) {
   };
   const cache = new Map();
   const context = vm.createContext({ console, Date, crypto: webcrypto, setTimeout: (fn) => { fn(); return 0; }, clearTimeout });
-  const sdkPurchase = async () => { nativeCalls += 1; throw { userCancelled: true }; };
+  const sdkPurchase = async () => { nativeCalls += 1; if (options.sdkReceived) return {}; throw { userCancelled: true }; };
   const products = async () => { if (options.productReadThrows) throw Error('catalog unavailable'); if (options.switchAccount) sessionCurrent = false; return [product]; };
   const moneyClaimState = options.claimState ?? { claimed: false };
   const claimMoney = async (_subject, name, args) => {
@@ -54,6 +54,10 @@ function runtime(options = {}) {
       ...options.moneyClaim }, error: options.moneyClaimError ?? null };
   };
   const mocks = {
+    "./creatorSupportedPrices": { readCreatorSupportedPrices: async () => ({ status: "resolved", subjectUserId: buyer,
+      prices: [{ platform: "android", environment: "sandbox", currency: "usd", status: "sandbox",
+        provider: "revenuecat_google_play", productKey: "creator_tip_sandbox_099",
+        providerProductId: selectedProductId, amountMinor: amount }] }) },
     "react-native": { Platform: { OS: "android" } },
     "react-native-get-random-values": {},
     "./supabase": { supabase: { rpc: async () => ({ data: options.live ? {
@@ -186,6 +190,8 @@ for (const reservation of [{state:"expired"},{expiresAt:"2000-01-01T00:00:00Z"},
   const result = await run.load(eventCase.module)[eventCase.fn](eventCase.args);
   assert.equal(run.calls(),0,"invalid reservation never reaches native checkout");
   assert.match(result.message,/reservation is no longer ready/);
+  assert.equal(result.access.requiresPurchase,false,'uncertain reservation hides retry purchase');
+  assert.equal(result.access.reason,'reservation_pending');
   assert.equal(run.cleanups(),0,'never cancel after begin, even denied or malformed readback');
 }
 for (const options of [{productReadThrows:true},{productReadThrows:true,cleanupThrows:true},{product:{price:1.99},cleanupThrows:true}]) {
@@ -199,6 +205,16 @@ await Promise.all([firstEvent.load(eventCase.module)[eventCase.fn](eventCase.arg
 assert.equal(firstEvent.calls()+secondEvent.calls(),1,'one atomic server claim allows only one SDK invocation');
 assert.equal(firstEvent.cleanups()+secondEvent.cleanups(),0,'no cleanup after claim or store cancellation');
 assert.notEqual(firstEvent.attemptIds[0],secondEvent.attemptIds[0],'each invocation has a new UUID');
+for (const options of [{beginUnknown:true},{sdkReceived:true},{},{intent:{alreadyPurchased:true,status:'consumed'}}]) {
+  const run=runtime({...eventCase,...options});
+  const result=await run.load(eventCase.module)[eventCase.fn](eventCase.args);
+  assert.equal(result.ok,false);
+  assert.equal(result.access.allowed,false,'pending checkout never grants early admission');
+  assert.equal(result.access.requiresPurchase,false,'pending checkout does not redisplay a buy button');
+  assert.equal(result.access.reason,options.beginUnknown?'reservation_pending':'reconciliation_required');
+  assert.equal(run.calls(),options.beginUnknown||options.intent?.alreadyPurchased?0:1);
+  assert.equal(run.cleanups(),0,'uncertain checkout is never released');
+}
 for (const id of [...firstEvent.attemptIds,...secondEvent.attemptIds]) assert.match(id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 const unknown=runtime({...eventCase,beginUnknown:true});
 const unknownResult=await unknown.load(eventCase.module)[eventCase.fn](eventCase.args);

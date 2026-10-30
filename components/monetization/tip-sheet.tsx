@@ -21,8 +21,8 @@ import {
   listIosStoreProductsForConcept,
   type IosStoreProductKey,
 } from "../../_lib/iosAppStoreCommerce";
-import { readRevenueCatNonSubscriptionProducts } from "../../_lib/revenuecat";
 import {
+  isCreatorTipStorePriceSupported,
   purchaseCreatorTipWithStore,
   type CreatorTipPublicStatus,
 } from "../../_lib/creatorTips";
@@ -69,8 +69,6 @@ export function TipSheet({
   const contextRef = useRef(contextKey); contextRef.current = contextKey;
   const [selectedAmount, setSelectedAmount] = useState(300);
   const [selectedIosTipKey, setSelectedIosTipKey] = useState<IosStoreProductKey>("tip_tier_1");
-  const [iosProductPriceLabels, setIosProductPriceLabels] = useState<Record<string, string>>({});
-  const [iosPricesLoading, setIosPricesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [noticeState, setNoticeState] = useState({ key: "", text: "" });
   const notice = noticeState.key === contextKey ? noticeState.text : "";
@@ -86,13 +84,16 @@ export function TipSheet({
     setCatalog({ key, prices: [], loading: true, unavailable: false });
     void readCreatorSupportedPrices("creator_tip", creatorId).then(result => {
       if (!active || contextRef.current !== key) return;
-      setCatalog({ key, prices: result.prices, loading: false, unavailable: result.status !== "resolved" });
-      if (result.prices[0]) setSelectedAmount(result.prices[0].amountMinor);
+      const prices = result.status === "resolved" && result.subjectUserId === user?.id
+        ? result.prices.filter(price => isCreatorTipStorePriceSupported(price)
+          && (Platform.OS === "ios" || (price.amountMinor >= (tipStatus?.minAmountCents ?? 100)
+            && price.amountMinor <= (tipStatus?.maxAmountCents ?? 50000)))) : [];
+      setCatalog({ key, prices, loading: false, unavailable: result.status !== "resolved" || prices.length === 0 });
+      if (prices[0]) setSelectedAmount(prices[0].amountMinor);
     });
     return () => { active = false; };
-  }, [catalogRetry, contextKey, creatorId, visible]);
+  }, [catalogRetry, contextKey, creatorId, tipStatus?.minAmountCents, tipStatus?.maxAmountCents, user?.id, visible]);
 
-  const providerReadGateRef = useRef(createBoundedVisibleReadGate());
   const openingResetGateRef = useRef(createBoundedVisibleReadGate());
   const checkoutLatchRef = useRef(createActionSingleFlightLatch());
 
@@ -104,22 +105,18 @@ export function TipSheet({
       referencePriceMinor: entry.referencePriceMinor,
     }));
   }, []);
-  const iosProductIdSignature = useMemo(
-    () => iosTipCatalog.map((option) => option.productId).join("\u001f"),
-    [iosTipCatalog],
-  );
 
   const iosTipOptions = useMemo(() => {
     return iosTipCatalog.filter(entry => supportedPrices.some(price => price.providerProductId === entry.productId && price.amountMinor === entry.referencePriceMinor)).map((entry) => ({
       stableKey: entry.stableKey,
       productId: entry.productId,
       referencePriceMinor: entry.referencePriceMinor,
-      priceLabel: iosProductPriceLabels[entry.productId] ?? formatMonetizationCurrency(
+      priceLabel: formatMonetizationCurrency(
         entry.referencePriceMinor,
-        tipStatus?.currency ?? "usd",
+        "usd",
       ),
     }));
-  }, [iosProductPriceLabels, iosTipCatalog, supportedPrices, tipStatus?.currency]);
+  }, [iosTipCatalog, supportedPrices]);
 
   const selectedIosProduct = iosTipOptions.find((option) => option.stableKey === selectedIosTipKey)
     ?? iosTipOptions[0]
@@ -136,45 +133,6 @@ export function TipSheet({
     }
     return Array.from(new Set(supportedPrices.map(price => price.amountMinor)));
   }, [iosTipOptions, supportedPrices]);
-
-  useEffect(() => {
-    if (!providerReadGateRef.current.shouldRun(visible)) return;
-    const productIds = iosProductIdSignature.split("\u001f").filter(Boolean);
-    if (Platform.OS === "ios" && productIds.length > 0) {
-      let active = true;
-      setIosPricesLoading(true);
-      const run = async () => {
-        try {
-          const products = await readRevenueCatNonSubscriptionProducts(productIds);
-          const next: Record<string, string> = {};
-          for (const product of products) {
-            const identifier = String((product as { identifier?: unknown }).identifier ?? "").trim();
-            if (!identifier) continue;
-            const safePrice = typeof (product as { priceString?: unknown }).priceString === "string"
-              ? String((product as { priceString?: unknown }).priceString).trim()
-              : "";
-            if (safePrice) {
-              next[identifier] = safePrice;
-            }
-          }
-          if (active) {
-            setIosProductPriceLabels((current) => {
-              const nextEntries = Object.entries(next);
-              const unchanged = Object.keys(current).length === nextEntries.length
-                && nextEntries.every(([key, value]) => current[key] === value);
-              return unchanged ? current : next;
-            });
-          }
-        } finally {
-          if (active) setIosPricesLoading(false);
-        }
-      };
-      void run();
-      return () => {
-        active = false;
-      };
-    }
-  }, [iosProductIdSignature, visible]);
 
   useEffect(() => {
     if (!openingResetGateRef.current.shouldRun(visible)) return;
@@ -213,7 +171,7 @@ export function TipSheet({
   const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
   // Tester mode changes copy only. Exact server-normalized creator authority
   // remains mandatory before any store purchase can be attempted.
-  const canTipInSandbox = tipStatus?.canTip === true;
+  const canTipInSandbox = tipStatus?.canTip === true && tipStatus.creatorId === creatorId;
 
   const startCheckout = async () => {
     if (!user?.id) {
@@ -227,7 +185,7 @@ export function TipSheet({
     }
 
     if (!amountValid) {
-      setNotice(`Choose an amount from ${formatMonetizationCurrency(minAmount)} to ${formatMonetizationCurrency(maxAmount)}.`);
+      setNotice("Choose one of the supported tip amounts shown. If none are available, refresh amounts.");
       return;
     }
     if (!checkoutLatchRef.current.tryAcquire()) return;
@@ -301,6 +259,7 @@ export function TipSheet({
             <Text accessibilityRole="alert" style={styles.secondaryButtonText}>No supported tip amount could be confirmed for this creator and store.</Text>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh supported tip amounts" style={styles.secondaryButton} onPress={() => setCatalogRetry(value => value + 1)}><Text style={styles.secondaryButtonText}>Refresh amounts</Text></TouchableOpacity>
           </> : null}
+          <Text style={styles.secondaryButtonText}>Amounts are in USD. Checkout is available only when the store price matches the selected amount.</Text>
 
           <View style={styles.amountGrid}>
             {Platform.OS === "ios" ? (
@@ -322,7 +281,7 @@ export function TipSheet({
                     }}
                   >
                     <Text style={[styles.amountText, isSelected && styles.amountTextActive]}>
-                      {iosPricesLoading ? option.priceLabel : option.priceLabel}
+                      {option.priceLabel}
                     </Text>
                   </TouchableOpacity>
                 );

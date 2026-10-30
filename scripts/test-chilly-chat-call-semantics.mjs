@@ -2728,9 +2728,18 @@ for (let index = 0; index < 25; index += 1) {
 assert.equal(gate.shouldRun(false), false);
 assert.equal(gate.shouldRun(true), true, "a later sheet opening may perform one new provider read");
 const tipSheetSource = await readFile(new URL("components/monetization/tip-sheet.tsx", root), "utf8");
-assert.match(tipSheetSource, /\}, \[iosProductIdSignature, visible\]\);/u);
-assert.match(tipSheetSource, /setIosProductPriceLabels\(\(current\) =>/u);
-assert.doesNotMatch(tipSheetSource, /readRevenueCatNonSubscriptionProducts\([\s\S]{0,120}iosTipOptions/u);
+assert.doesNotMatch(tipSheetSource, /readRevenueCatNonSubscriptionProducts|setIosProductPriceLabels/u,
+  "the sheet must not start a second, unchecked provider-price read or display an unbound localized quote");
+assert.match(tipSheetSource, /if \(!visible\) return;[\s\S]{0,240}readCreatorSupportedPrices\("creator_tip", creatorId\)/u,
+  "supported tip amounts are read only for the visible recipient");
+assert.match(tipSheetSource, /\}, \[catalogRetry, contextKey, creatorId, tipStatus\?\.minAmountCents, tipStatus\?\.maxAmountCents, user\?\.id, visible\]\);/u,
+  "catalog reads depend on explicit retry, visibility and primitive account/recipient/bounds, not catalog-derived render state");
+assert.match(tipSheetSource, /if \(!active \|\| contextRef\.current !== key\) return;/u,
+  "late catalog results cannot update a closed or replaced sheet context");
+assert.match(tipSheetSource, /result\.status === "resolved" && result\.subjectUserId === user\?\.id/u,
+  "catalog availability must belong to the current buyer");
+assert.match(tipSheetSource, /result\.prices\.filter\(price => isCreatorTipStorePriceSupported\(price\)/u,
+  "only exact supported store routes can enter the chooser");
 
 const copyChannel = (pushSent, presentationAcknowledged = false) => ({
   ...createChillyChatCallChannelResult(),

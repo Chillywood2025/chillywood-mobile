@@ -35,7 +35,7 @@ async function mount(t, options = {}) {
     React.useEffect(() => () => nodes.delete(id), [id]);
     return React.createElement(React.Fragment, null, ...React.Children.toArray(props.children).filter(child => typeof child === "object"));
   };
-  const native = { Platform: { OS: "android" }, Alert: { alert: noop }, AppState: { addEventListener: () => ({ remove: noop }) }, StyleSheet: { create: x => x } };
+  const native = { Platform: { OS: options.platform ?? "android" }, Alert: { alert: noop }, AppState: { addEventListener: () => ({ remove: noop }) }, StyleSheet: { create: x => x } };
   for (const name of ["ActivityIndicator", "Pressable", "RefreshControl", "ScrollView", "Text", "View"]) native[name] = host(name);
   const event = { id: eventId, event_title: "Sunday show", status: "scheduled", starts_at: "2026-11-02T01:00:00Z", visibility: "public", ...options.event };
   const supabase = { auth: { onAuthStateChange: callback => { authCallback = callback; return { data: { subscription: { unsubscribe: noop } } }; } }, from: () => {
@@ -79,6 +79,36 @@ test("mounted event shows sold-out state and cold deep-link Back recovers to hom
   assert.equal(h.node("event-pass-purchase-button"), undefined);
   await h.press("event-back-button");
   assert.deepEqual(h.routes, ["/(tabs)"]);
+});
+
+test("rescheduled sold-out events remain sold out rather than promising access confirmation", async t => {
+  const h=await mount(t,{event:{status:'rescheduled'},access:{allowed:false,requiresPurchase:false,reason:'sold_out',offer:null}});
+  assert.match(h.text(),/Event Passes are sold out/);
+  assert.doesNotMatch(h.text(),/This Event is free/);
+  assert.equal(h.node('event-pass-purchase-button'),undefined);
+});
+
+test("Sunday 8 PM presale on both platforms shows timezone and never offers early entry", async t => {
+  for (const platform of ['android','ios']) {
+    const startsAt='2099-01-05T01:00:00Z';
+    const h=await mount(t,{platform,event:{starts_at:startsAt,time_zone:'America/New_York'},
+      access:{...locked,offer:{...offer,terms:{...offer.terms,startsAt}}}});
+    assert.ok(h.node('event-pass-purchase-button'));
+    assert.match(h.node('event-pass-lock-card').props.body,/Entry opens when the Event goes live/);
+    assert.match(h.text(),/device’s time zone/);assert.match(h.text(),/America\/New_York/);
+    assert.equal(h.node('event-open-live-button'),undefined);
+    assert.equal(h.node('event-open-replay-button'),undefined);
+  }
+});
+
+test("pending checkout removes purchase action and points to My Tickets without granting entry",async t=>{
+  const h=await mount(t,{purchase:async()=>({ok:false,message:'Purchase received. Waiting for verification.',access:{...locked,requiresPurchase:false,reason:'reconciliation_required'}})});
+  await h.press('event-pass-purchase-button');
+  assert.equal(h.node('event-pass-purchase-button'),undefined);
+  assert.equal(h.node('event-pass-success-receipt'),undefined);
+  assert.equal(h.node('event-open-live-button'),undefined);
+  assert.match(h.text(),/purchase is still being checked/);
+  await h.press('event-my-tickets-button');assert.deepEqual(h.routes,['/purchases']);
 });
 
 test("mounted event suppresses a previous account's late purchase receipt and access", async t => {

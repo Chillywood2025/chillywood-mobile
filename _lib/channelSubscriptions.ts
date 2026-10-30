@@ -24,7 +24,8 @@ import {
 } from "./revenuecat";
 import { Platform } from "react-native";
 import {
-  findIosStoreProductByProductId,
+  isExactIosChannelSubscriptionProduct,
+  isIosChannelSubscriptionPriceSupported,
   IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
@@ -370,27 +371,6 @@ const findSubscriptionStoreProduct = async (productId: string) => {
   return products.find((product) => productIds.includes(toText(product.identifier))) ?? null;
 };
 
-const isExactIosChannelSubscriptionProduct = (
-  productId: unknown,
-  amountMinor: number,
-  currency: string,
-) => {
-  const product = findIosStoreProductByProductId(productId);
-  if (!product || product.concept !== "channel_subscription") return false;
-  const slotNumber = product.slotNumber;
-  return currency === "usd"
-    && product.productType === "auto_renewable_subscription"
-    && product.subscriptionPeriod === "P1M"
-    && Number.isSafeInteger(slotNumber)
-    && !!slotNumber
-    && slotNumber >= 1
-    && slotNumber <= 8
-    && product.referencePriceMinor === amountMinor
-    && product.conceptTier === `slot${slotNumber}`
-    && product.productId === `com.chillywood.channel.subscription.slot${slotNumber}`
-    && product.subscriptionGroup === `chillywood_channel_slot_${slotNumber}`;
-};
-
 export const formatChannelSubscriptionPrice = (amountCents: number, currency = "usd") =>
   `${formatMonetizationCurrency(amountCents, currency)}/month`;
 
@@ -626,7 +606,7 @@ export async function purchaseChannelSubscription(input: {
   if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
     return { ok: false, message: "This creator subscription is not available right now.", access };
   }
-  if (Platform.OS === "ios" && (access.currency !== "usd" || access.priceCents !== 499)) {
+  if (Platform.OS === "ios" && !isIosChannelSubscriptionPriceSupported(access.priceCents, access.currency)) {
     return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
   }
 

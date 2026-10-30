@@ -141,6 +141,73 @@ test("finite App Store tier selection is exact and rejects the old plus-one pric
   assert.equal(iosCatalog.resolveIosFiniteAppStoreTier("event_pass", 100), null);
   assert.equal(iosCatalog.resolveIosFiniteAppStoreTier("vip_pass", 500), null);
   assert.equal(iosCatalog.resolveIosFiniteAppStoreTier("paid_video", Number.NaN), null);
+  for (const concept of ["creator_tip", "seat_pass", "paid_video", "event_pass", "vip_pass"]) {
+    for (const amount of [99.1, 299.9, 499.01, 999.99, 0, -99, Infinity, "99"]) {
+      assert.equal(iosCatalog.resolveIosFiniteAppStoreTier(concept, amount), null, `${concept}:${amount}`);
+    }
+    for (const amount of [99, 299, 499, 999]) {
+      assert.equal(iosCatalog.resolveIosFiniteAppStoreTier(concept, amount)?.referencePriceMinor, amount);
+    }
+  }
+});
+
+test("channel subscription price support comes from exact monthly slots, not other catalog prices", () => {
+  const slots = iosCatalog.listIosChannelSubscriptionSlots();
+  assert.equal(slots.length, 8);
+  for (const slot of slots) {
+    assert.equal(iosCatalog.isExactIosChannelSubscriptionProduct(slot.productId, slot.referencePriceMinor, "usd"), true);
+    assert.equal(iosCatalog.isIosChannelSubscriptionPriceSupported(slot.referencePriceMinor, "usd"), true);
+  }
+  for (const amount of [99, 299, 999, 500, 499.1, 0, -499, NaN, Infinity, "499"]) {
+    assert.equal(iosCatalog.isIosChannelSubscriptionPriceSupported(amount, "usd"), false);
+  }
+  for (const currency of ["eur", "USD", "usd ", ""]) {
+    assert.equal(iosCatalog.isIosChannelSubscriptionPriceSupported(499, currency), false);
+  }
+  for (const id of ["com.chillywood.channel.subscription.slot0", "com.chillywood.channel.subscription.slot9",
+    "com.chillywood.premium.monthly", "com.chillywood.vip.tier3", ` ${slots[0].productId}`, null]) {
+    assert.equal(iosCatalog.isExactIosChannelSubscriptionProduct(id, 499, "usd"), false);
+  }
+});
+
+test("iOS subscription checkout gates catalog prices before intent or store calls", async () => {
+  for (const [priceCents, currency] of [[99, "usd"], [999, "usd"], [499, "eur"], [499, "usd"]]) {
+    const calls = [];
+    const offer = {
+      id: OFFER_ID, creatorId: CREATOR_ID, title: "Creator subscription", interval: "monthly",
+      priceCents, currency, status: "sandbox", provider: "revenuecat_google_play",
+      providerProductId: "cw_channel_subscription_monthly_499", providerProductKey: "channel_subscription",
+      providerEntitlementId: "creator_subscription",
+    };
+    const api = instantiate("_lib/channelSubscriptions.ts", {
+      "react-native": { Platform: { OS: "ios" } },
+      "./iosAppStoreCommerce": iosCatalog,
+      "./paymentRailPolicy": { resolvePaymentRailPolicy: () => ({ allowed: true }) },
+      "./creatorMoneyPurchaseAuthority": {
+        captureCreatorMoneyPurchaseAuthority: () => purchaseSubject.authority,
+        isCreatorMoneyPurchaseAuthorityCurrent: () => true,
+        prepareCreatorMoneyPurchaseSubject: async () => { calls.push("prepare"); return null; },
+        invokeCreatorMoneyPurchaseSubjectRpc: async () => { calls.push("intent"); throw new Error("unexpected_intent"); },
+      },
+      "./revenuecat": {
+        readRevenueCatOfferings: async () => { calls.push("store"); return {}; },
+        purchaseRevenueCatPackage: async () => { calls.push("purchase"); },
+      },
+      "./supabase": { supabase: { rpc: async (name) => {
+        calls.push(name);
+        return { error: null, data: { ...offer, allowed: false, reason: "subscription_required", requiresPurchase: true, offer } };
+      } } },
+    });
+    const result = await api.purchaseChannelSubscription({ creatorId: CREATOR_ID, sourceSurface: "test" });
+    assert.equal(result.ok, false);
+    if (priceCents === 499 && currency === "usd") {
+      assert.match(result.message, /Sign in again/u);
+      assert.deepEqual(calls, ["resolve_creator_channel_subscription_access", "prepare"]);
+    } else {
+      assert.equal(result.message, iosCatalog.IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY);
+      assert.deepEqual(calls, ["resolve_creator_channel_subscription_access"]);
+    }
+  }
 });
 
 test("iOS Event intents replace the persisted Google offer product with one exact App Store tier", async () => {

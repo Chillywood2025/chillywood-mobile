@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { readCreatorSupportedPrices, type CreatorSupportedPrice } from "./creatorSupportedPrices";
 import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
 import { supabase } from "./supabase";
@@ -117,6 +118,21 @@ const CREATOR_TIP_SANDBOX_PRODUCT_KEY = "creator_tip_sandbox_099";
 const CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID = "cw_creator_tip_sandbox_099";
 const CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR = 99;
 const CREATOR_TIP_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** Catalog rows are selectable only when this build has an exact purchase route. */
+export function isCreatorTipStorePriceSupported(price: CreatorSupportedPrice): boolean {
+  if (price.platform !== Platform.OS || price.environment !== "sandbox" || price.currency !== "usd"
+    || price.status !== "sandbox") return false;
+  if (Platform.OS === "android") {
+    return price.provider === "revenuecat_google_play"
+      && price.productKey === CREATOR_TIP_SANDBOX_PRODUCT_KEY
+      && price.providerProductId === CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID
+      && price.amountMinor === CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR;
+  }
+  if (Platform.OS !== "ios" || price.provider !== "revenuecat_app_store") return false;
+  const tier = resolveIosFiniteAppStoreTier("creator_tip", price.amountMinor);
+  return !!tier && tier.productId === price.providerProductId;
+}
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -516,6 +532,16 @@ export async function purchaseCreatorTipWithStore(input: {
       productId,
       message: "Sign in again before sending a tip.",
     };
+  }
+
+  // Re-read recipient-specific availability rather than trusting a sheet's old
+  // amount or another account's catalog. The server claim remains authoritative.
+  const catalog = await readCreatorSupportedPrices("creator_tip", creatorId);
+  if (catalog.status !== "resolved" || catalog.subjectUserId !== purchaseSubject.userId
+    || !catalog.prices.some(price => isCreatorTipStorePriceSupported(price)
+      && price.providerProductId === productId && price.amountMinor === amountCents)) {
+    return { ok: false, intentId: null, productId,
+      message: "This tip amount is no longer available for this creator and store. Refresh supported amounts. No new charge was started." };
   }
 
   const intentRpc = Platform.OS === "ios"

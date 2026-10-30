@@ -268,7 +268,7 @@ export function resolveEventCustomerPresentation(input: {
     };
   }
 
-  if (status === "rescheduled") {
+  if (status === "rescheduled" && !(input.soldOut && !input.accessAllowed)) {
     const canBuyPass = input.requiresPurchase && !input.soldOut;
     return {
       statusLabel: "Rescheduled",
