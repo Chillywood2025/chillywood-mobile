@@ -282,3 +282,9 @@ verify_jwt = false
 [functions.stripe-auction-test-transfer]
 # Disabled unless explicitly configured; exact existing server authority too.
 verify_jwt = true
+
+[functions.merch-reconciliation-driver]
+verify_jwt = true
+
+[functions.auction-observation-driver]
+verify_jwt = true

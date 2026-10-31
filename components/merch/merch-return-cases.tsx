@@ -5,7 +5,7 @@ import { useFocusEffect } from "expo-router";
 import { createMerchCheckoutAttemptId } from "../../_lib/creatorMerch";
 import { MERCH_CASE_ERROR, MERCH_CASE_REJECTED, MerchCaseRejectedError, readMerchReturnCases, respondMerchReturnCase, submitMerchReturnCase, type MerchCaseAction, type MerchCaseKind, type MerchReturnCase } from "../../_lib/merchReturnCases";
 
-type Props = { orderId: string; manage: boolean; paymentStatus: string; deadline?: string | null; onChanged: () => void };
+type Props = { orderId: string; caseId?: string; manage: boolean; paymentStatus: string; deadline?: string | null; onChanged: () => void };
 type Operation = { id: string; kind?: MerchCaseKind; caseId?: string; action?: MerchCaseAction; note: string; uncertain?: boolean };
 function Button({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}><Text style={{ color: CHILLYWOOD_VISUAL.textPrimary, paddingVertical: 8 }}>{label}</Text></Pressable>;
@@ -14,9 +14,9 @@ function Button({ label, disabled, onPress }: { label: string; disabled: boolean
 // retires draft text and completion handlers rather than reusing a buyer claim.
 export function MerchReturnCases(props: Props) {
   if (!["paid", "disputed", "partially_refunded", "refunded"].includes(props.paymentStatus)) return null;
-  return <Cases key={`${props.orderId}:${props.manage}`} {...props} />;
+  return <Cases key={`${props.orderId}:${props.manage}:${props.caseId ?? "all"}`} {...props} />;
 }
-function Cases({ orderId, manage, deadline, onChanged }: Props) {
+function Cases({ orderId, caseId, manage, deadline, onChanged }: Props) {
   const [cases, setCases] = useState<MerchReturnCase[] | null>(null), [note, setNote] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(false), [pending, setPending] = useState(false);
   const [rejected, setRejected] = useState(false);
@@ -64,6 +64,7 @@ function Cases({ orderId, manage, deadline, onChanged }: Props) {
     <Text accessibilityRole="header" style={{ color: CHILLYWOOD_VISUAL.textPrimary, fontWeight: "600" }}>Returns and delivery help</Text>
     <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>Opening a case does not issue a refund. Creators handle routine requests; Chi&apos;llywood staff review disputes. Unresolved cases keep affected earnings held.</Text>
     {Number.isFinite(deadlineTime) ? <Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Recorded return deadline: {new Date(deadlineTime).toLocaleString()} ({new Date(deadlineTime).toISOString()})</Text> : <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>A verified return deadline is not available yet. You can still report non-delivery.</Text>}
+    {caseId ? <Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Selected case: {caseId}. View return cases below to read and respond.</Text> : null}
     <Button label={cases ? "Refresh return cases" : "View return cases"} disabled={busy} onPress={() => void load()} />
     {cases ? <>
       {!cases.length ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>No return or delivery cases for this order.</Text> : null}
@@ -74,11 +75,12 @@ function Cases({ orderId, manage, deadline, onChanged }: Props) {
         {!returnOpen ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>The verified 30-day return window is not currently open. Delivery problems can still be reported for review.</Text> : null}
         <Button label="Report non-delivery" disabled={disabled} onPress={() => void submit({ kind: "non_delivery" })} />
       </> : null}
-      {cases.map(item => <View key={item.id} style={{ gap: 4 }}>
+      {caseId && !cases.some(item => item.id === caseId) ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>This case is unavailable for this order.</Text> : null}
+      {cases.filter(item => !caseId || item.id === caseId).map(item => <View key={item.id} style={{ gap: 4 }}>
         <Text selectable style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Case {item.id} · {item.kind === "return" ? "Return" : "Non-delivery"} · {item.status}</Text>
         {item.events.map(event => <Text key={event.id} style={{ color: CHILLYWOOD_VISUAL.textMuted }}>{event.actorRole} · {event.action} · {event.note}</Text>)}
         {item.status !== "closed" ? <>
-          {manage ? <Button label={`Respond to case ${item.id}`} disabled={disabled} onPress={() => void submit({ caseId: item.id, action: "creator_response" })} /> : null}
+          {manage ? <Button label={`Respond to case ${item.id}`} disabled={disabled} onPress={() => void submit({ caseId: item.id, action: "creator_response" })} /> : <Button label={`Reply to case ${item.id}`} disabled={disabled} onPress={() => void submit({ caseId: item.id, action: "buyer_response" })} />}
           <Button label={`Ask staff to review case ${item.id}`} disabled={disabled || item.status === "escalated"} onPress={() => void submit({ caseId: item.id, action: "escalate" })} />
           {!manage ? <Button label={`Close my case ${item.id}`} disabled={disabled} onPress={() => void submit({ caseId: item.id, action: "buyer_close" })} /> : null}
         </> : null}

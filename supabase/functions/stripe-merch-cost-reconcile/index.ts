@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv, readStripeTestSecret } from "../_shared/stripe-connect.ts";
 import { observeStripeMerchCosts, type MerchCostOrder } from "../_shared/stripe-merch-cost-observation.ts";
+import { observeMerchDisputes, type MerchDisputeContext } from "../_shared/merch-dispute-observation.ts";
 
 // JWT verification remains enabled. A user JWT is NOT worker authority. This
 // worker additionally requires the exact existing server credential. No new
@@ -23,6 +24,13 @@ Deno.serve(async (req: Request) => {
     if (!admin.configured) return jsonResponse(503, { error: "server_not_configured" });
     const context = await admin.client.rpc("get_merch_cost_reconciliation_context", { p_order_id: body.order_id });
     if (context.error || !context.data) throw Error("merch_order_context_unavailable");
+    const attempt = await admin.client.rpc("begin_merch_dispute_observation", { p_order_id: body.order_id });
+    if (attempt.error || !attempt.data) throw Error("merch_dispute_context_unavailable");
+    const disputes = await observeMerchDisputes(attempt.data as MerchDisputeContext, secret.secret, account);
+    const disputeResult = await admin.client.rpc("complete_merch_dispute_observation", {
+      p_attempt_id: attempt.data.id, p_facts: disputes,
+    });
+    if (disputeResult.error || !disputeResult.data) throw Error("merch_dispute_observation_not_recorded");
     const facts = await observeStripeMerchCosts(context.data as MerchCostOrder, secret.secret, account);
     const recorded = await admin.client.rpc("record_merch_provider_cost_observation", { p_order_id: body.order_id, p_facts: facts });
     if (recorded.error || !recorded.data) throw Error("merch_cost_observation_not_recorded");

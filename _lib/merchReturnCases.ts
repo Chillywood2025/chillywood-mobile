@@ -1,7 +1,7 @@
 import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export type MerchCaseKind = "return" | "non_delivery";
-export type MerchCaseAction = "creator_response" | "escalate" | "buyer_close" | "staff_resolve";
+export type MerchCaseAction = "creator_response" | "buyer_response" | "escalate" | "buyer_close" | "staff_resolve";
 export type MerchReturnCase = {
   id: string; orderId: string; kind: MerchCaseKind; status: "open" | "escalated" | "closed"; createdAt: string;
   events: { id: string; action: string; actorRole: string; note: string; createdAt: string }[];
@@ -62,4 +62,20 @@ export async function readMerchReturnReviewCases() {
 }
 export async function respondMerchReturnCase(caseId: string, requestId: string, action: MerchCaseAction, note: string) {
   await call("respond_merch_return_case", { p_case_id: caseId, p_request_id: requestId, p_action: action, p_note: note });
+}
+
+export async function canReviewMerchReturnCases(): Promise<boolean> {
+  try {
+    const results = await Promise.all(["admin.support.manage", "admin.refund_status.record"].map(p_permission_key =>
+      runCurrentAccountBoundSupabaseMutationRpc<unknown>("has_platform_permission", { p_permission_key })));
+    return results.every(result => !result.error && result.data === true);
+  } catch { return false; }
+}
+
+export type MerchReturnQueuePage = { cases: MerchReturnCase[]; totalCount: number; nextCursor: string | null };
+export async function readMerchReturnQueue(role: "creator" | "buyer" | "staff", after: string | null = null): Promise<MerchReturnQueuePage> {
+  const data = record(await call("list_merch_return_case_queue", { p_role: role, p_after: after, p_limit: 50 }));
+  if (data.role !== role || !Array.isArray(data.cases) || data.cases.length > 50 || !Number.isSafeInteger(data.totalCount) || Number(data.totalCount) < 0
+    || (data.nextCursor !== null && (typeof data.nextCursor !== "string" || !/^[0-9a-f-]{36}$/i.test(data.nextCursor)))) throw new Error(MERCH_CASE_ERROR);
+  return { cases: data.cases.map(parseCase), totalCount: Number(data.totalCount), nextCursor: data.nextCursor as string | null };
 }

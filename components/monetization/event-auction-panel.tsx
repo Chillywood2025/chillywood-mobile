@@ -1,8 +1,9 @@
+import { readAuctionNavigation } from "../../_lib/auctionNavigation";
 import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import { openCreatorExternalCheckout } from "../../_lib/openCreatorExternalCheckout";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import "react-native-get-random-values";
 import { getAccountNavigationTreeKey, getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { listCreatorEventAuctions, placeCreatorEventAuctionBid, readCreatorEventAuctionBidEligibility, type CreatorEventAuction } from "../../_lib/creatorEventAuctions";
@@ -22,11 +23,26 @@ const requestId = () => {
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 };
 export function EventAuctionPanel({ eventId }: { eventId: string }) {
+  const params = useLocalSearchParams();
+  const router = useRouter();
+  const hint = readAuctionNavigation(params, "event");
+  const [selectedHint, setSelectedHint] = useState<string | null>(null);
+  const consumed = useRef(new Set<string>());
+  const initialAccount = useRef(getAccountNavigationTreeKey(getCurrentAccountSessionAuthoritySnapshot()));
   const [accountKey, setAccountKey] = useState(() => getAccountNavigationTreeKey(getCurrentAccountSessionAuthoritySnapshot()));
   useEffect(() => subscribeToAccountSessionAuthority(value => setAccountKey(getAccountNavigationTreeKey(value))), []);
-  return <AuctionList key={`${eventId}:${accountKey}`} eventId={eventId} />;
+  useEffect(() => { setSelectedHint(null); }, [eventId]);
+  useEffect(() => {
+    if (!hint || consumed.current.has(hint)) return;
+    consumed.current.add(hint);
+    router.setParams({ auctionId: undefined, auctionTarget: undefined, auctionExpiresAt: undefined });
+    const current = getCurrentAccountSessionAuthoritySnapshot();
+    if (current && !current.restoreOnly && getAccountNavigationTreeKey(current) === initialAccount.current) setSelectedHint(hint);
+  }, [hint, router, eventId]);
+  const targetAuctionId = accountKey === initialAccount.current ? selectedHint : null;
+  return <AuctionList key={`${eventId}:${accountKey}`} eventId={eventId} targetAuctionId={targetAuctionId} />;
 }
-function AuctionList({ eventId }: { eventId: string }) {
+function AuctionList({ eventId, targetAuctionId }: { eventId: string; targetAuctionId: string | null }) {
   const [rows, setRows] = useState<CreatorEventAuction[]>([]);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
@@ -50,13 +66,19 @@ function AuctionList({ eventId }: { eventId: string }) {
     const subscription = AppState.addEventListener("change", state => { foreground = state === "active"; setVisible(foreground); check(); });
     return () => { focused = false; setVisible(false); clearInterval(timer); subscription.remove(); };
   }, [refresh]));
+  const selected = rows.find(row => row.id === targetAuctionId);
+  const ordered = selected ? [selected, ...rows.filter(row => row !== selected)] : rows;
   return <View style={styles.panel} testID="event-auction-panel">
     <Text style={styles.title}>Event ticket auctions</Text>
     <Text style={styles.body}>One virtual ticket per auction. No bidding fee. Only the winner pays, in a separate eligible checkout. A bid or award is not a ticket.</Text>
     {error ? <Text accessibilityLiveRegion="polite" style={styles.body}>{error}</Text> : null}
     {!busy && !error && !rows.length ? <Text style={styles.body}>No auctions are currently listed for this event.</Text> : null}
     {busy ? <ActivityIndicator accessibilityLabel="Refreshing auctions" /> : null}
-    {rows.map(row => <AuctionCard key={row.id} auction={row} refresh={refresh} verified={!error} visible={visible} />)}
+    {targetAuctionId && !busy && !error && !selected ? <Text accessibilityLiveRegion="polite" style={styles.body}>This notification’s auction is no longer available here. Other auctions are listed below.</Text> : null}
+    {ordered.map(row => <View key={row.id}>
+      {row === selected ? <Text accessibilityRole="header" style={styles.title}>Auction from your notification</Text> : null}
+      <AuctionCard auction={row} refresh={refresh} verified={!error} visible={visible} />
+    </View>)}
     <Action label="Refresh auctions" disabled={busy} onPress={() => void refresh()} />
     <Text style={styles.body}>Bids and payment status update automatically while this screen is open. You can also refresh anytime.</Text>
   </View>;

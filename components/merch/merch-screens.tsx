@@ -6,6 +6,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSession } from "../../_lib/session";
 import { MerchTrackingPanel } from "./merch-tracking-panel";
 import { MerchShippingDetails } from "./merch-shipping-details";
+import { MerchReturnQueue } from "./merch-return-queue";
 import { MerchReturnCases } from "./merch-return-cases";
 import { configureMerchVariants, createMerchCheckoutAttemptId, launchMerchCheckout, readMerchOrders, readMerchProducts, saveMerchProduct, updateMerchFulfillment, type MerchOrder, type MerchProduct, type MerchProductInput, type MerchVariantInput } from "../../_lib/creatorMerch";
 
@@ -97,7 +98,7 @@ function Shop({ creatorId }: { creatorId: string }) {
   </Shell>;
 }
 
-function OrderCard({ order, manage, onChanged }: { order: MerchOrder; manage: boolean; onChanged: () => void }) {
+function OrderCard({ order, manage, caseId, onChanged }: { caseId?: string; order: MerchOrder; manage: boolean; onChanged: () => void }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null); const latch = useRef(false), alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const focusGeneration = useRef(0);
@@ -126,30 +127,31 @@ function OrderCard({ order, manage, onChanged }: { order: MerchOrder; manage: bo
     <Text style={styles.body}>Payment: {order.paymentStatus} · Fulfillment: {order.fulfillmentStatus}</Text>
     <MerchShippingDetails orderId={order.id} paymentStatus={order.paymentStatus} refundedAmountMinor={order.refundedAmountMinor} fulfillmentStatus={order.fulfillmentStatus} />
     <MerchTrackingPanel orderId={order.id} trackingMode={order.shippingTrackingMode ?? null} manage={manage} paymentStatus={order.paymentStatus} onChanged={onChanged} />
-    <MerchReturnCases orderId={order.id} manage={manage} paymentStatus={order.paymentStatus} deadline={order.returnWindowEndsAt} onChanged={onChanged} />
+    <MerchReturnCases caseId={caseId} orderId={order.id} manage={manage} paymentStatus={order.paymentStatus} deadline={order.returnWindowEndsAt} onChanged={onChanged} />
     <Text style={styles.body}>{new Date(order.createdAt).toLocaleString()}</Text>
     {order.refundedAmountMinor > 0 ? <Text style={styles.notice}>Refunded: {money(order.refundedAmountMinor, order.currency)}</Text> : null}
     <Text style={styles.notice}>{order.netSharePolicyVersion === "physical_merch_net_90_10_v1" && order.platformNetShareBps === 1000 && order.creatorNetShareBps === 9000 ? order.netSettlementStatus === "held_unqualified" ? "Recorded merch terms: creator 90% / app 10% of net. Provider costs were observed; settlement remains held for fulfillment, returns and financial review. Not available for cash-out." : "Recorded merch terms: creator 90% / app 10% of net. Provider fees and final net are not yet verified." : "Historical order: no new revenue-share terms applied. Original settlement terms require verification."}</Text>
     <Text style={styles.notice}>{knownReturnTerms(order) ? `Recorded return terms: ${order.shippingTrackingMode === "untracked" ? "30 days from verified successful purchase" : "30 days from verified delivery"}. Unresolved returns, disputes or nondelivery claims keep affected creator earnings on hold.` : "Historical order: the new 30-day return terms have not been applied."}</Text>
     {knownReturnTerms(order) ? <Text style={styles.notice}>{order.shippingTrackingMode === "untracked" && !order.verifiedPurchaseAt ? "Return window has not started: verified successful purchase is required." : order.shippingTrackingMode !== "untracked" && !order.verifiedDeliveryAt ? "Return window has not started: verified delivery is required." : order.returnWindowStatus === "open" ? "The return window is open. Affected earnings remain held." : order.returnWindowStatus === "elapsed" ? "The return window has elapsed. This does not make earnings available for cash-out; other holds still apply." : "Return or dispute review is required. Affected earnings remain held."}</Text> : null}
+    {manage ? <Text style={styles.notice}>{order.providerDisputeRefreshStatus === "fresh" && order.providerDisputeCheckedAt ? `Payment review checked ${new Date(order.providerDisputeCheckedAt).toLocaleString()}.` : "Payment review needs refreshed verification."} This is an observation, not confirmation that earnings are available. Other holds still apply.</Text> : null}
     <Text style={styles.notice}>Sandbox order — no physical shipment. Fulfillment updates record test status only; they do not dispatch or deliver goods.</Text>
     {!manage && order.paymentStatus === "pending" ? <>
       <Text style={styles.notice}>{order.checkoutResumeReason || "Payment is not confirmed. Refresh this order before trying another purchase."}</Text>
       {order.checkoutResumeAvailable && order.checkoutAttemptId ? <Button label="Resume same sandbox checkout" disabled={busy} onPress={() => void resume()} /> : null}
     </> : null}
-    {(order.fulfillmentStatus === "blocked" || (order.paymentStatus === "pending" && !order.checkoutResumeAvailable)) ? <Button label="Get order help" onPress={() => router.push({ pathname: "/support", params: { orderId: order.id } })} /> : null}
+    {(order.fulfillmentStatus === "blocked" || (order.paymentStatus === "pending" && !order.checkoutResumeAvailable)) ? <Button label="Get order help" onPress={() => router.push({ pathname: "/support", params: { orderId: order.id, orderRole: manage ? "creator" : "buyer" } })} /> : null}
     {manage && order.paymentStatus === "paid" && order.refundedAmountMinor === 0 ? nextStatuses.map(status => <Button key={status} label={`Record sandbox ${status}`} disabled={busy} onPress={() => void update(status)} />) : null}
     {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
   </View>;
 }
-function Orders({ manage = false, orderId }: { manage?: boolean; orderId?: string }) {
+function Orders({ manage = false, orderId, caseId }: { manage?: boolean; orderId?: string; caseId?: string }) {
   const read = useCallback(async (cursor?: string) => { const result = await readMerchOrders({ role: manage ? "creator" : "buyer", cursor, orderId }); return { items: result.orders, nextCursor: result.nextCursor }; }, [manage, orderId]);
   const page = usePage(read);
-  return <><Button label="Refresh orders" disabled={page.loading} onPress={page.refresh} />{page.items.map(order => <OrderCard key={order.id} order={order} manage={manage} onChanged={page.refresh} />)}<PageStatus page={page} empty={orderId ? "This order is unavailable for your account." : "No orders yet."} /></>;
+  return <><Button label="Refresh orders" disabled={page.loading} onPress={page.refresh} />{page.items.map(order => <OrderCard key={order.id} order={order} manage={manage} caseId={caseId} onChanged={page.refresh} />)}<PageStatus page={page} empty={orderId ? "This order is unavailable for your account." : "No orders yet."} /></>;
 }
-export function MerchOrdersScreen({ orderId }: { orderId?: string }) {
+export function MerchOrdersScreen({ orderId, caseId }: { orderId?: string; caseId?: string }) {
   const router = useRouter();
-  return <SessionGate><Shell title="My merch orders">{orderId ? <Button label="All my orders" onPress={() => router.replace("/merch/orders")} /> : null}<Orders orderId={orderId} /></Shell></SessionGate>;
+  return <SessionGate><Shell title="My merch orders">{orderId ? <Button label="All my orders" onPress={() => router.replace("/merch/orders")} /> : null}<Orders orderId={orderId} caseId={caseId} /></Shell></SessionGate>;
 }
 
 type VariantDraft = MerchVariantInput & { available: string; committed: number };
@@ -305,14 +307,15 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
     <Button label="Save draft" disabled={busy} onPress={() => void save("draft")} /><Button label="Publish listing" disabled={busy} onPress={() => void save("published")} />{product ? <><Button label="Pause listing" disabled={busy} onPress={() => void save("paused")} /><Button label="Archive listing" disabled={busy} onPress={() => void save("archived")} /></> : null}<Button label="Cancel editing" disabled={busy} onPress={done} />
   </View>;
 }
-export function MerchStudioScreen() { return <SessionGate><Studio /></SessionGate>; }
-function Studio() {
+export function MerchStudioScreen({ orderId, caseId }: { orderId?: string; caseId?: string } = {}) { return <SessionGate><Studio key={`${orderId ?? "all"}:${caseId ?? "all"}`} orderId={orderId} caseId={caseId} /></SessionGate>; }
+function Studio({ orderId, caseId }: { orderId?: string; caseId?: string }) {
   const { user } = useSession(), router = useRouter();
-  const [tab, setTab] = useState<"products" | "orders">("products"), [editing, setEditing] = useState<MerchProduct | null | undefined>(undefined);
+  const [tab, setTab] = useState<"products" | "orders">(orderId ? "orders" : "products"), [editing, setEditing] = useState<MerchProduct | null | undefined>(undefined);
   const read = useCallback(async (cursor?: string) => { const result = await readMerchProducts({ owner: true, creatorId: user?.id, cursor }); return { items: result.products, nextCursor: result.nextCursor }; }, [user?.id]);
   const page = usePage(read);
   return <Shell title="Manage shop"><View style={styles.row}><Button label="Products" onPress={() => { setTab("products"); setEditing(undefined); }} /><Button label="Customer orders" onPress={() => { setTab("orders"); setEditing(undefined); }} /><Button label="Preview storefront" onPress={() => router.push({ pathname: "/merch/[creatorId]", params: { creatorId: user?.id ?? "" } })} /></View>
-    {tab === "orders" ? <Orders manage /> : editing !== undefined ? <Editor key={editing?.id ?? "new"} product={editing} done={() => { setEditing(undefined); void page.refresh(); }} /> : <><Button label="Add product" onPress={() => setEditing(null)} />{page.items.map(product => <View key={product.id} style={styles.card}><Text style={styles.heading}>{product.title}</Text><Text style={styles.body}>{product.publicationStatus} · {money(product.priceMinor, product.currency)} · {product.availableQuantity} available of {product.stockQuantity}</Text><Button label={`Edit ${product.title}`} onPress={() => setEditing(product)} /></View>)}<PageStatus page={page} empty="Add your first product. Save a draft, then publish it to your Platform shop." /></>}
+    <MerchReturnQueue role="creator" />
+    {tab === "orders" ? <>{orderId ? <Button label="All customer orders" onPress={() => router.replace("/merch/studio")} /> : null}<Orders manage orderId={orderId} caseId={caseId} /></> : editing !== undefined ? <Editor key={editing?.id ?? "new"} product={editing} done={() => { setEditing(undefined); void page.refresh(); }} /> : <><Button label="Add product" onPress={() => setEditing(null)} />{page.items.map(product => <View key={product.id} style={styles.card}><Text style={styles.heading}>{product.title}</Text><Text style={styles.body}>{product.publicationStatus} · {money(product.priceMinor, product.currency)} · {product.availableQuantity} available of {product.stockQuantity}</Text><Button label={`Edit ${product.title}`} onPress={() => setEditing(product)} /></View>)}<PageStatus page={page} empty="Add your first product. Save a draft, then publish it to your Platform shop." /></>}
   </Shell>;
 }
 const styles = StyleSheet.create({

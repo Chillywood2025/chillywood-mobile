@@ -26,7 +26,7 @@ const replayTermsLabel = (terms: Record<string, unknown>) => {
 const moneyLabel = (item: CreatorPurchase) => item.amountMinor === null || item.currency === null ? "Receipt amount unavailable"
   : new Intl.NumberFormat(undefined, { style: "currency", currency: item.currency.toUpperCase() }).format(item.amountMinor / 100);
 const matches = (item: CreatorPurchase, filter: Filter) => filter === "All"
-  || (filter === "Tickets & passes" && ["event", "watch_party_live", "live_watch_party_access", "live_watch_party_seat", "vip_pass"].includes(item.sourceType))
+  || (filter === "Tickets & passes" && ["event", "watch_party_live", "live_watch_party_access", "live_watch_party_seat", "vip_pass", "room_seat_auction"].includes(item.sourceType))
   || (filter === "Videos" && item.sourceType === "paid_content")
   || (filter === "Memberships" && item.sourceType === "channel_subscription")
   || (filter === "Tips" && item.sourceType === "creator_tip");
@@ -158,7 +158,9 @@ export default function PurchasesScreen() {
                       {!status.pending && item.destination ? <Pressable testID={`purchase-open-${item.id}`} accessibilityRole="button" accessibilityLabel={`View ${item.title ?? scope.title}`} style={styles.button} onPress={() => {
                         if (accountRef.current === accountKey && item.destination) router.push(creatorPurchaseDestinationRoute(item.destination) as Href);
                       }}><Text style={styles.buttonText}>View item</Text></Pressable> : null}
-                      <Pressable testID={`purchase-support-${item.id}`} accessibilityRole="button" accessibilityLabel={`Get help with ${scope.title}`} style={styles.button} onPress={() => router.push("/support")}><Text style={styles.buttonText}>Get help</Text></Pressable>
+                      <Pressable testID={`purchase-support-${item.id}`} accessibilityRole="button" accessibilityLabel={`Get help with ${scope.title}`} style={styles.button} onPress={() => {
+                        if (accountRef.current === accountKey) router.push({ pathname: "/support", params: { purchaseId: item.purchaseIntentId ?? item.id } });
+                      }}><Text style={styles.buttonText}>Get help</Text></Pressable>
                     </View>
                   </View>;
                 })}

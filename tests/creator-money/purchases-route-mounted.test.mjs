@@ -6,6 +6,32 @@ import { createRoot } from "react-dom/client";
 import * as singleFlight from "../../_lib/actionSingleFlight.mjs";
 import { noop, container, deferred, textOf, load, wallet, purchase, page, mount } from "./purchases-mounted-fixture.mjs";
 
+test("mounted auction receipts stay in ticket filters and open only their intended room kind", async t => {
+  const items = [purchase("stage", "active", {sourceType:"room_seat_auction",productType:"room_seat_pass",title:null,
+    destination:{kind:"live_stage",id:"EXACT-STAGE"},terms:{sourceKind:"stage_reserved_seat"}}),
+  purchase("party", "active", {sourceType:"room_seat_auction",productType:"room_seat_pass",title:null,
+    destination:{kind:"watch_party",id:"EXACT-PARTY"},terms:{sourceKind:"party_admission"}}),purchase("event")];
+  const h=await mount(t,{items});
+  await h.press("purchases-filter-Tickets & passes");
+  for(const item of items) assert.ok(h.node(`purchase-${item.id}`));
+  assert.match(h.text(),/Room Auction Pass/);assert.match(h.text(),/Host moderation and media controls remain separate/);
+  await h.press("purchase-open-stage"); await h.press("purchase-open-party");
+  assert.equal(h.routes[0].pathname,"/watch-party/live-stage/[partyId]");assert.equal(h.routes[0].params.partyId,"EXACT-STAGE");
+  assert.equal(h.routes[1].pathname,"/watch-party/[partyId]");assert.equal(h.routes[1].params.partyId,"EXACT-PARTY");
+  await h.press("purchases-filter-Videos");assert.equal(h.node("purchase-stage"),undefined);
+});
+
+test("purchase help preserves its receipt reference but cannot send an old account's reference", async t => {
+  const receipt="aa100000-0000-4000-8000-000000000001";
+  const h=await mount(t,{items:[purchase("history","pending",{purchaseIntentId:receipt})]});
+  const oldHelp=h.node("purchase-support-history").props.onPress;
+  await h.press("purchase-support-history");
+  assert.equal(h.routes[0].pathname,"/support");assert.equal(h.routes[0].params.purchaseId,receipt);
+  assert.deepEqual(Object.keys(h.routes[0].params),["purchaseId"],"no price, provider payload or private note in route");
+  await h.account(async()=>page([],{subjectUserId:"other",subjectSessionGeneration:"two"}),"two","other");
+  await React.act(async()=>oldHelp());assert.equal(h.routes.length,1);
+});
+
 test("mounted wallet shows immutable price/terms and exact event destination, with cold-link recovery", async t => {
   const h = await mount(t);
   assert.match(h.text(), /\$2\.99/); assert.match(h.text(), /America\/New_York/); assert.match(h.text(), /Premium is separate/);
@@ -79,7 +105,7 @@ test("mounted pending, unfulfilled and review purchases cannot navigate into ano
   const h = await mount(t, { items: [purchase("pending", "pending"), purchase("paid", "paid_unfulfilled"), purchase("review", "reconciliation_required"), purchase("dispute", "disputed")] });
   for (const id of ["pending", "paid", "review", "dispute"]) { assert.equal(h.node(`purchase-open-${id}`), undefined); assert.ok(h.node(`purchase-support-${id}`)); }
   assert.match(h.text(), /Do not purchase this item again/);
-  await h.press("purchase-support-paid"); assert.equal(h.routes[0], "/support");
+  await h.press("purchase-support-paid"); assert.equal(h.routes[0].pathname, "/support");assert.equal(h.routes[0].params.purchaseId,"paid");
 });
 
 test("mounted filters and pagination preserve exact historical rows and show empty/retry states", async t => {

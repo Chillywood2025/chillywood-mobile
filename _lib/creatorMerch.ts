@@ -28,6 +28,9 @@ export type MerchOrder = {
   verifiedDeliveryAt?: string | null; returnWindowEndsAt?: string | null;
   returnWindowStatus?: "historical_unqualified" | "awaiting_verified_delivery" | "awaiting_verified_purchase" | "open" | "elapsed" | "review_required";
   returnHoldReasons?: string[];
+  providerDisputeState?: "none" | "resolved" | "open" | "lost" | "unknown";
+  providerDisputeRefreshStatus?: "unknown" | "pending" | "stale" | "fresh";
+  providerDisputeCheckedAt?: string | null; providerDisputeFreshUntil?: string | null;
   netSharePolicyVersion?: string | null; platformNetShareBps?: number | null; creatorNetShareBps?: number | null;
   providerFeeMinor?: number | null; netBaseMinor?: number | null; platformShareMinor?: number | null; creatorShareMinor?: number | null;
   netSettlementStatus?: "unverified" | "held_unqualified";
@@ -107,10 +110,31 @@ export async function readMerchProducts(input: { creatorId?: string; owner?: boo
   return { ...page, products };
 }
 
-export function readMerchOrders(input: { role: "buyer" | "creator"; cursor?: string | null; orderId?: string }) {
-  return merchRpc<{ orders: MerchOrder[]; nextCursor: string | null }>("list_my_merch_orders", {
+/** Optional observation metadata fails closed without hiding the receipt itself.
+ * Fresh is observation freshness only, never payment/refund/payout authority. */
+export function parseMerchDisputeMetadata(row: Record<string, unknown>, now = Date.now()) {
+  const states = ["none", "resolved", "open", "lost", "unknown"] as const;
+  const statuses = ["unknown", "pending", "stale", "fresh"] as const;
+  const state = states.find(value => value === row.providerDisputeState) ?? "unknown";
+  let status = statuses.find(value => value === row.providerDisputeRefreshStatus) ?? "unknown";
+  const timestamp = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+  let checked = timestamp(row.providerDisputeCheckedAt), until = timestamp(row.providerDisputeFreshUntil);
+  if ((checked === null) !== (until === null) || (checked && until && (Date.parse(checked) > now || Date.parse(until) <= Date.parse(checked)
+    || Date.parse(until) - Date.parse(checked) > 12 * 60 * 60 * 1000))) {
+    checked = null; until = null; status = "unknown";
+  }
+  if (status === "fresh" && (!checked || !until || state === "unknown")) status = "unknown";
+  if (status === "fresh" && until && Date.parse(until) <= now) status = "stale";
+  return { providerDisputeState: state, providerDisputeRefreshStatus: status,
+    providerDisputeCheckedAt: checked, providerDisputeFreshUntil: until };
+}
+
+export async function readMerchOrders(input: { role: "buyer" | "creator"; cursor?: string | null; orderId?: string }) {
+  const page = await merchRpc<{ orders: MerchOrder[]; nextCursor: string | null }>("list_my_merch_orders", {
     p_role: input.role, p_before_id: input.cursor ?? null, p_limit: 20, p_order_id: input.orderId ?? null,
   });
+  if (!page || !Array.isArray(page.orders)) throw new Error("Order status could not be loaded.");
+  return { ...page, orders: page.orders.map(order => ({ ...order, ...parseMerchDisputeMetadata(order) })) };
 }
 
 export function saveMerchProduct(input: MerchProductInput) {
@@ -136,21 +160,41 @@ export function configureMerchVariants(input: {
   });
 }
 
+const MERCH_CHECKOUT_DEADLINE_MS = 20_000;
+const MERCH_CHECKOUT_UNKNOWN = "Checkout could not be confirmed in time. It may still be pending. Open My orders and resume the same order; do not start another purchase.";
+
+async function withMerchCheckoutDeadline<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Abort is best-effort. The independent deadline also releases the UI when a
+  // fetch/body/native promise ignores cancellation. Late transport completion
+  // never advances to navigation or creates a replacement payment attempt.
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { reject(new Error(MERCH_CHECKOUT_UNKNOWN)); controller.abort(); }, MERCH_CHECKOUT_DEADLINE_MS);
+  });
+  try { return await Promise.race([Promise.resolve().then(() => run(controller.signal)), deadline]); }
+  finally { if (timer !== undefined) clearTimeout(timer); }
+}
+
 export async function launchMerchCheckout(input: { productId: string; quantity: number; attemptId: string; variantId?: string | null; trackingMode?: "tracked" | "untracked" | null; expectedUnitPriceMinor?: number; expectedCurrency?: string; isPresentationCurrent?: () => boolean }) {
   if (!input.productId || !input.attemptId || !Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 10) {
     throw new Error("Choose a product and a quantity from 1 to 10.");
   }
   const subject = await captureAccountBoundSupabaseMutationSubject();
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-  const response = await fetch(`${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${subject.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ product_id: input.productId, quantity: input.quantity, attempt_id: input.attemptId, variant_id: input.variantId ?? null, tracking_mode: input.trackingMode ?? null, expected_unit_price_minor: input.expectedUnitPriceMinor ?? null, expected_currency: input.expectedCurrency ?? null }),
+  const { ok, payload } = await withMerchCheckoutDeadline(async signal => {
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    const response = await fetch(`${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`, {
+      method: "POST", signal,
+      headers: { Authorization: `Bearer ${subject.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: input.productId, quantity: input.quantity, attempt_id: input.attemptId, variant_id: input.variantId ?? null, tracking_mode: input.trackingMode ?? null, expected_unit_price_minor: input.expectedUnitPriceMinor ?? null, expected_currency: input.expectedCurrency ?? null }),
+    });
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    const payload = await response.json().catch(() => null) as { checkoutCreated?: boolean; orderId?: string; url?: string; message?: string } | null;
+    return { ok: response.ok, payload };
   });
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-  const payload = await response.json().catch(() => null) as { checkoutCreated?: boolean; orderId?: string; url?: string; message?: string } | null;
-  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-  if (!response.ok || !payload?.checkoutCreated || !payload.orderId || !payload.url) {
+  if (!ok || !payload?.checkoutCreated || !payload.orderId || !payload.url) {
     throw new Error(merchError(payload?.message || "Checkout was not confirmed. Check your orders before trying again."));
   }
   const url = new URL(payload.url);
@@ -163,7 +207,13 @@ export async function launchMerchCheckout(input: { productId: string; quantity: 
   if (input.isPresentationCurrent && !input.isPresentationCurrent()) {
     throw new Error("Checkout may be pending. Open My orders to check its status.");
   }
-  await Linking.openURL(url.toString());
+  // Native URL launch can also stall. A timeout cannot undo an OS launch that
+  // has begun, so keep the result explicitly unknown and retain the same order.
+  await withMerchCheckoutDeadline(() => {
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (input.isPresentationCurrent && !input.isPresentationCurrent()) throw new Error("Checkout may be pending. Open My orders to check its status.");
+    return Linking.openURL(url.toString());
+  });
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   return { orderId: payload.orderId };
 }

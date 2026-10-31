@@ -53,7 +53,8 @@ try {
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
   const claims=(who,role='authenticated')=>`set local role ${role};set local request.jwt.claims=${literal(JSON.stringify({role,sub:actors[who].id,session_id:actors[who].session}))};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const call=(who,sql,role)=>`begin;${claims(who,role)}select ${sql};commit;`;
-  const rpc=(who,sql)=>JSON.parse(query(call(who,sql)).split('\n').at(-1));
+  // PostgreSQL row/composite RPCs (including room join) are not JSON text.
+  const rpc=(who,sql)=>JSON.parse(query(call(who,`to_jsonb(${sql})`)).split('\n').at(-1));
   const create=party=>`public.create_creator_room_seat_auction('${party}','stage_reserved_seat',100,25,now()+interval '1 hour',now()+interval '2 hours','test',gen_random_uuid(),(public.prepare_creator_room_seat_auction('${party}')->>'roomSessionId')::uuid)`;
   for(const party of ['RACE-STAGE','RACE-CAPACITY','RACE-CAPACITY-TWO']) query(`begin;${claims('creator')}
     insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)

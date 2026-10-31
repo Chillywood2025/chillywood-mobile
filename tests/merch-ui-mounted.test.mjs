@@ -23,7 +23,7 @@ async function mount(t,{screen='MerchShopScreen',props={creatorId:'creator'},rpc
   const host=name=>function Host(p){const id=React.useId();nodes.set(id,{type:name,props:p});React.useLayoutEffect(()=>()=>nodes.delete(id),[id]);return React.createElement(React.Fragment,null,...React.Children.toArray(p.children).filter(v=>typeof v==='object'));};
   const native={StyleSheet:{create:x=>x},Linking:{openURL:async u=>opens.push(u)}};for(const n of ['View','Text','TextInput','Pressable','ScrollView','ActivityIndicator','Image'])native[n]=host(n);
   const visuals=createSharedVisualLoader(React,native,host);
-  function compile(file,imports,extras={}) {const exports={};let source=fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8');if(file==='components/merch/merch-screens.tsx'&&mutateScreen)source=mutateScreen(source);vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{exports,require:name=>visuals(name)??imports(name),console,Intl,Date,Map,Promise,URL,Error,Uint8Array,crypto:webcrypto,fetch:fetcher??(async()=>{throw Error('Unexpected fetch');}),...extras});return exports;}
+  function compile(file,imports,extras={}) {const exports={};let source=fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8');if(file==='components/merch/merch-screens.tsx'&&mutateScreen)source=mutateScreen(source);vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{exports,require:name=>visuals(name)??imports(name),console,Intl,Date,Map,Promise,URL,Error,Uint8Array,setTimeout,clearTimeout,AbortController,crypto:webcrypto,fetch:fetcher??(async()=>{throw Error('Unexpected fetch');}),...extras});return exports;}
   const helper=compile('_lib/creatorMerch.ts',name=>name==='react-native'?native:name.endsWith('/merchProductPhotos')?{resolveMerchProductPhotos:products=>photos.resolveMerchProductPhotos(products)}:name.endsWith('/supabase')?{SUPABASE_URL:'https://example.test'}:{
     runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{calls.push({name,args,actor:current.user.id});return {data:await rpc(name,args,current.user.id),error:null};},
     captureAccountBoundSupabaseMutationSubject:async()=>({accessToken:'fixture',authority:current.authority}),assertAccountBoundSupabaseMutationSubjectCurrent:s=>{assert.equal(s.authority,current.authority,'exact account unchanged');},
@@ -65,12 +65,16 @@ async function mount(t,{screen='MerchShopScreen',props={creatorId:'creator'},rpc
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useFocusEffect:fn=>React.useEffect(()=>focused?fn():undefined,[fn,focused]),
   }:name.endsWith('/creatorMerch')?helper:returnHelper);
+  const queuePanel=compile('components/merch/merch-return-queue.tsx',name=>name==='react'?React:name==='react-native'?native:name==='expo-router'?{useRouter:()=>({push:r=>routes.push(r)}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useFocusEffect:fn=>React.useEffect(()=>focused?fn():undefined,[fn,focused]),
+  }:returnHelper);
   const module=compile('components/merch/merch-screens.tsx',name=>name==='react'?React:name==='react-native'?native:name==='expo-router'?{
     useRouter:()=>({push:r=>routes.push(r),back:()=>routes.push('back'),replace:r=>routes.push(r),canGoBack:()=>true}),
     // Harness focus changes explicitly rerender the root.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useFocusEffect:fn=>React.useEffect(()=>focused?fn():undefined,[fn,focused]),
-  }:name.endsWith('/session')?{useSession:()=>current}:name.endsWith('/merchProductPhotos')?photos:name==='./merch-tracking-panel'?trackingPanel:name==='./merch-shipping-details'?shippingPanel:name==='./merch-return-cases'?returnPanel:helper);
+  }:name.endsWith('/session')?{useSession:()=>current}:name.endsWith('/merchProductPhotos')?photos:name==='./merch-tracking-panel'?trackingPanel:name==='./merch-shipping-details'?shippingPanel:name==='./merch-return-cases'?returnPanel:name==='./merch-return-queue'?queuePanel:helper);
   const root=createRoot(container()),render=()=>React.act(async()=>root.render(React.createElement(module[screen],props)));
   await render();t.after(()=>React.act(async()=>root.unmount()));
   const all=()=>[...nodes.values()],button=label=>all().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel===label);
@@ -215,7 +219,7 @@ test('pending SKU order displays immutable labels and resumes the same option',a
 });
 test('photo picker cancellation never allocates an asset or saves a product',async t=>{
  const h=await mount(t,{screen:'MerchStudioScreen',props:{},rpc:async()=>({products:[product()],nextCursor:null}),picker:async()=>null});
- await h.press('Edit Shirt tee');await h.press('Choose product photo');assert.equal(h.calls.length,1);assert.equal(h.button('Use this photo'),undefined);
+ await h.press('Edit Shirt tee');await h.press('Choose product photo');assert.equal(h.calls.filter(c=>c.name!=='list_merch_return_case_queue').length,1);assert.equal(h.button('Use this photo'),undefined);
 });
 test('photo upload failure retries same staged identity and assignment is explicit with latest revision',async t=>{
  let uploads=0;const attempts=[];const h=await mount(t,{screen:'MerchStudioScreen',props:{},picker:async()=>({uri:'file:///photo.jpg',mimeType:'image/jpeg',name:'photo.jpg'}),uploader:async input=>{attempts.push(input.attempt);if(++uploads===1)throw Error('Upload interrupted');return {id:'asset',scanStatus:'pending',moderationStatus:'clean'};},rpc:async(name)=>name==='check_creator_merch_photo_target'?true:name==='assign_merch_product_photo'?{...product(),photoAssetId:'asset',photoStatus:'pending_review',updatedAt:'photo-revision'}:name==='save_creator_merch_product_with_tracking'?product():{products:[product()],nextCursor:null}});
@@ -394,4 +398,41 @@ test('untracked order requires verified purchase proof and elapsed window never 
  const elapsed=await mount(t,{screen:'MerchOrdersScreen',props:{},rpc:async()=>({orders:[{...order('elapsed-purchase'),...terms,verifiedPurchaseAt:'2026-09-01T00:00:00Z',returnWindowStatus:'elapsed'}],nextCursor:null})});
  assert.match(elapsed.text(),/return window has elapsed/);assert.match(elapsed.text(),/does not make earnings available for cash-out/);
  assert.doesNotMatch(elapsed.text(),/verified delivery is required/);
+});
+
+test('creator order help retains creator context and exact order without buyer read',async t=>{
+ const id='ab333333-3333-4333-8333-333333333333';
+ const h=await mount(t,{screen:'MerchStudioScreen',props:{orderId:id},rpc:async(name,args)=>name==='list_creator_merch_products'?{products:[],nextCursor:null}:name==='list_my_merch_orders'?{orders:[{...order(id),fulfillmentStatus:'blocked'}],nextCursor:null}:{cases:[],canManage:false}});
+ const read=h.calls.find(x=>x.name==='list_my_merch_orders');assert.equal(read.args.p_role,'creator');assert.equal(read.args.p_order_id,id);
+ await h.press('Get order help');assert.deepEqual(JSON.parse(JSON.stringify(h.routes.at(-1))),{pathname:'/support',params:{orderId:id,orderRole:'creator'}});
+ await h.press('All customer orders');assert.equal(h.routes.at(-1),'/merch/studio');
+});
+
+test('creator queue badge discovers unresolved cases across orders, paginates and opens exact case with creator authority',async t=>{
+ const cursor='ab333333-3333-4333-8333-333333333333';
+ const h=await mount(t,{screen:'MerchStudioScreen',props:{},rpc:async(name,args)=>name==='list_merch_return_case_queue'?{role:'creator',totalCount:51,nextCursor:args.p_after?null:cursor,cases:[{id:args.p_after?'case-51':'case-1',orderId:'exact-order',kind:'non_delivery',status:'open',createdAt:'2026-10-01',events:[]}]}:{products:[],nextCursor:null}});
+ assert.ok(h.button('Unresolved return / delivery cases (51)'));await h.press('Unresolved return / delivery cases (51)');await h.press('Next case page');await h.press('Open case case-51');
+ assert.deepEqual(JSON.parse(JSON.stringify(h.routes.at(-1))),{pathname:'/merch/studio',params:{orderId:'exact-order',caseId:'case-51'}});
+ await h.press('Refresh case queue');assert.ok(h.button('Open case case-1'));
+});
+
+test('creator queue late page cannot disclose cases after exact-account replacement',async t=>{
+ const d=deferred();const h=await mount(t,{screen:'MerchStudioScreen',props:{},rpc:async(name,_args,actor)=>name==='list_merch_return_case_queue'?(actor==='buyer'?d.promise:{role:'creator',totalCount:0,nextCursor:null,cases:[]}):{products:[],nextCursor:null}});
+ await h.account('other');await h.resolve(d,{role:'creator',totalCount:99,nextCursor:null,cases:[]});assert.ok(h.button('Unresolved return / delivery cases (0)'));assert.doesNotMatch(h.text(),/\(99\)/);
+});
+
+test('creator case destination filters exact case after authorized exact-order read, not a different case',async t=>{
+ const row=id=>({id,orderId:'exact-order',kind:'non_delivery',status:'open',createdAt:'2026-10-01',events:[{id:id+'-event',action:'opened',actorRole:'buyer',note:id==='selected-case'?'SELECTED DETAILS':'OTHER CASE DETAILS',createdAt:'2026-10-01'}]});
+ const h=await mount(t,{screen:'MerchStudioScreen',props:{orderId:'exact-order',caseId:'selected-case'},rpc:async(name,args)=>{
+ if(name==='list_merch_return_case_queue')return {role:'creator',totalCount:2,nextCursor:null,cases:[]};
+ if(name==='read_merch_return_cases'){assert.equal(args.p_order_id,'exact-order');return {cases:[row('selected-case'),row('other-case')],canManage:true};}
+ if(name==='list_my_merch_orders')return {orders:[{...order('exact-order'),paymentStatus:'paid'}],nextCursor:null};
+ return {products:[],nextCursor:null};}});
+ await h.press('View return cases');assert.match(h.text(),/SELECTED DETAILS/);assert.doesNotMatch(h.text(),/OTHER CASE DETAILS/);assert.ok(h.button('Respond to case selected-case'));assert.equal(h.button('Respond to case other-case'),undefined);
+});
+
+for(const fresh of [false,true])test(`creator payment review shows neutral ${fresh?'checked':'needs refresh'} wording without promising availability`,async t=>{
+ const checked=new Date(Date.now()-60000).toISOString(),until=new Date(Date.now()+60000).toISOString();
+ const h=await mount(t,{screen:'MerchStudioScreen',props:{orderId:'review-order'},rpc:async name=>name==='list_merch_return_case_queue'?{role:'creator',totalCount:0,nextCursor:null,cases:[]}:name==='list_my_merch_orders'?{orders:[{...order('review-order'),providerDisputeState:'none',providerDisputeRefreshStatus:fresh?'fresh':'stale',providerDisputeCheckedAt:checked,providerDisputeFreshUntil:until}],nextCursor:null}:{products:[],nextCursor:null}});
+ assert.match(h.text(),fresh?/Payment review checked/:/Payment review needs refreshed verification/);assert.match(h.text(),/not confirmation that earnings are available/);
 });

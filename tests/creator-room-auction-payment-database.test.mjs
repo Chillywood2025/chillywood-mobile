@@ -3,12 +3,26 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import ts from 'typescript';
+
+const purchaseModule = {exports:{}};
+new Function('exports','require',ts.transpileModule(fs.readFileSync('_lib/creatorPurchases.ts','utf8'),
+  {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(purchaseModule.exports,
+  name=>{assert.ok(['./accountBoundSupabaseMutation','./accountSessionAuthority','./creatorMoneyPurchaseAuthority','./revenuecat'].includes(name));return {};});
+const wallet = purchaseModule.exports;
 
 test('synthetic verified Stripe room auction receipts preserve exact paid access and financial history', {timeout:180000}, async()=>{
   const realDateNow=Date.now; let clockOffset=0;
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true});
   try {
-    await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
+    // The shared SQL fixture historically casts arbitrary MD5 bytes to UUID.
+    // Use RFC-shaped fixture identities for the real strict client boundary;
+    // creator selection still executes the actual rollout hash predicate.
+    await db.exec(`create temporary table room_library_fixture_marker(id integer);
+      create function pg_temp.room_library_uuid_hash(text) returns text language sql as
+      $$select overlay(overlay(md5($1) placing '4' from 13 for 1) placing '8' from 17 for 1)$$`);
+    await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8')
+      .replaceAll('md5(', 'pg_temp.room_library_uuid_hash('));
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const rows=async s=>(await db.query(s)).rows;
@@ -40,11 +54,16 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
       values('auction_fixture_only','room_seat_pass','Synthetic auction event','stripe_room_auction','prod_AuctionFixture',
         'sandbox','sandbox',false,false) returning id`))[0].id;
     await db.exec(`insert into private.creator_room_auction_product_bindings values('${cap}','${product}','synthetic test only',now())`);
-    const prepare=async(name,buyer='buyer1',platform='ios')=>{
-      await db.exec(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)
+    const prepare=async(name,buyer='buyer1',platform='ios',sourceKind='stage_reserved_seat')=>{
+      if(sourceKind==='party_admission') {
+        await db.exec("insert into public.titles(id,title,video_url,is_published,status) values('12121212-1212-4212-8212-121212121212','Synthetic room title','https://fixture.invalid/title.mp4',true,'published')");
+        await db.exec(`insert into public.watch_party_rooms(party_id,title_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)
+          values('PAYMENT-${name}','12121212-1212-4212-8212-121212121212','${actors.creator.user_id}','title','open','party_pass',true,'private')`);
+        await rpc('creator',`public.set_paid_watch_party_offer('PAYMENT-${name}','Limited admission',99,1,'sandbox')`);
+      } else await db.exec(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)
        values('PAYMENT-${name}','${actors.creator.user_id}','live','open','open',true,'private')`);
       const setup=await rpc('creator',`public.prepare_creator_room_seat_auction('PAYMENT-${name}')`);
-      const auction=await rpc('creator',`public.create_creator_room_seat_auction('PAYMENT-${name}','stage_reserved_seat',237,1,
+      const auction=await rpc('creator',`public.create_creator_room_seat_auction('PAYMENT-${name}','${sourceKind}',237,1,
         clock_timestamp()+interval '600 milliseconds',now()+interval '1 hour','test','${randomUUID()}','${setup.roomSessionId}')`);
       const token='synthetic-room-native-'+randomUUID();
       if(platform==='android') await rpc(buyer,`public.admit_google_play_external_session('room_seat_auction',
@@ -84,6 +103,16 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
     const item=library.items.find(x=>x.purchaseIntentId===s.claim.purchaseIntentId);
     assert.equal(item.sourceType,'room_seat_auction');assert.equal(item.terms.sourceKind,'stage_reserved_seat');
     assert.equal(item.destination.id,'PAYMENT-PRIMARY');assert.equal(item.amountMinor,237);assert.ok(item.receipt);
+    const parsedLibrary=wallet.parseCreatorPurchasePage(library,actors.buyer1.user_id);
+    assert.ok(parsedLibrary,`actual SQL room auction projection passes the production purchase parser: ${JSON.stringify(library)}`);
+    assert.deepEqual(wallet.creatorPurchaseDestinationRoute(parsedLibrary.items.find(x=>x.id===item.id).destination),
+      {pathname:'/watch-party/live-stage/[partyId]',params:{partyId:'PAYMENT-PRIMARY'}});
+    assert.equal(wallet.parseCreatorPurchasePage(library,actors.buyer2.user_id),null,'receipt page cannot be rebound to another buyer');
+    for(const change of [
+      {destination:{kind:'watch_party',id:item.destination.id}}, {productType:'event_pass'}, {sourceId:'wrong'},
+      {terms:{...item.terms,sourceKind:'unknown'}}, {terms:{...item.terms,claimId:'wrong'}},
+      {terms:{...item.terms,roomSessionId:'wrong'}}, {provider:'revenuecat_google_play'},
+    ]) assert.equal(wallet.parseCreatorPurchasePage({...library,items:[{...item,...change}]},actors.buyer1.user_id),null);
     const access=await rpc('buyer1',`public.resolve_live_watch_party_money_access('PAYMENT-PRIMARY')`);
     assert.equal(access.allowed,true);assert.equal(access.seatEligible,true);assert.equal(access.seatApproved,false);
     assert.equal((await receive(good)).duplicate,true);
@@ -157,5 +186,15 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
     assert.deepEqual(obligation,{original_pre_tax_minor:217,original_tax_minor:20,state:'pending'});
     await receive(androidPaid);assert.equal(await count('private.google_play_external_report_outbox'),1);
     assert.equal(await count('public.creator_payout_requests'),0,'no payout activation');
+    const party=await prepare('PARTY','buyer1','ios','party_admission');
+    assert.equal((await receive(evidence(party,'PartyPaid'))).status,'fulfilled');
+    const partyLibrary=await rpc('buyer1','public.read_my_creator_purchases()');
+    const parsedParty=wallet.parseCreatorPurchasePage(partyLibrary,actors.buyer1.user_id);
+    assert.ok(parsedParty,'mixed stage, party and terminal auction receipts preserve the entire library');
+    const partyItem=parsedParty.items.find(x=>x.purchaseIntentId===party.claim.purchaseIntentId);
+    assert.equal(partyItem.terms.sourceKind,'party_admission');
+    assert.deepEqual(wallet.creatorPurchaseDestinationRoute(partyItem.destination),
+      {pathname:'/watch-party/[partyId]',params:{partyId:'PAYMENT-PARTY'}});
+    assert.equal(wallet.parseCreatorPurchasePage({...partyLibrary,items:[{...partyItem,destination:{...partyItem.destination,kind:'live_stage'}}]},actors.buyer1.user_id),null);
   }finally{Date.now=realDateNow;await db.close();}
 });

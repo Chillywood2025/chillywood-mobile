@@ -41,7 +41,12 @@ const flexibleCommerceFiles = [
   "20261030204252_auction_release_qualification_serialization.sql",
   "20261030204513_auction_verified_net_recovery_issuer.sql",
   "20261030210200_merch_private_fulfillment_address.sql",
-  "20261030212744_merch_return_cases.sql"
+  "20261030212744_merch_return_cases.sql",
+  "20261031011531_merch_provider_dispute_observations.sql",
+  "20261031011906_merch_return_buyer_replies.sql",
+  "20261031012501_merch_return_case_queues.sql",
+  "20261031012502_merch_reconciliation_driver.sql",
+  "20261031013158_auction_held_visibility_observer.sql"
 ];
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this

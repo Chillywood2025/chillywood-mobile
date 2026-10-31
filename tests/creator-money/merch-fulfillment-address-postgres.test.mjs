@@ -14,7 +14,9 @@ function load(file,{Deno={},modules={}}={}){
 
 test('signed exact Checkout → private SQL address under actual API roles → mounted shipping details; no financial authority',{timeout:240000},async()=>{
  const migration='20261030210200_merch_private_fulfillment_address.sql';
- const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
+ const successors=['20261030212744_merch_return_cases.sql','20261031011531_merch_provider_dispute_observations.sql',
+  '20261031011906_merch_return_buyer_replies.sql','20261031012501_merch_return_case_queues.sql','20261031012502_merch_reconciliation_driver.sql'];
+ const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const creator=await one("select md5('shipping-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('shipping-host:'||n::text)::uuid::text,20260814),100)=0 limit 1");
  const buyer=randomUUID(),other=randomUUID(),cs=randomUUID(),bs=randomUUID(),os=randomUUID();
@@ -47,7 +49,7 @@ test('signed exact Checkout → private SQL address under actual API roles → m
   const make=async()=>{await root();const id=randomUUID();await db.query(`insert into public.merch_orders(id,product_id,buyer_id,creator_id,provider,environment,order_status,fulfillment_status,payment_status,amount_subtotal_minor,amount_total_minor,currency,stripe_checkout_session_id,stripe_payment_intent_id)
    values($1,$2,$3,$4,'stripe_physical_goods','sandbox','pending','not_started','pending',1000,1000,'usd',$5,$6)`,[id,product,buyer,creator,'cs_test_'+id.replaceAll('-',''),'pi_'+id.replaceAll('-','')]);return id;};
   const legacy=await make();
-  await db.exec(readFileSync('supabase/migrations/'+migration,'utf8'));
+  for(const file of [migration,...successors])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
   assert.equal(await one('select fulfillment_address_policy_version from public.merch_orders where id=$1',[legacy]),null);
   const order=await make(),second=await make(),missing=await make();
   await assert.rejects(read(order),/unavailable/);

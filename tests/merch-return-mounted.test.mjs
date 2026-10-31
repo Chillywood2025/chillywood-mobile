@@ -33,11 +33,11 @@ for(const transition of ['account','order','blur','unmount'])test(`late case rea
  const d=deferred();const h=await mountReturns({rpc:async()=>d.promise});try{await h.press('View return cases',{wait:false});if(transition==='account')await h.account('other');else if(transition==='order')await h.order('other');else if(transition==='blur')await h.focus(false);else await h.close();await h.resolve(d,{cases:[item()],canManage:false});assert.doesNotMatch(h.text(),/SYNTHETIC CLAIM/);}finally{await h.close();}
 });
 test('staff resolution requires queue read and preserves same request on retry; never presents refund completion',async()=>{
- let fail=true;const calls=[];const h=await mountReturns({staff:true,actor:'staff',rpc:async(name,args)=>{calls.push({name,args});if(name==='respond_merch_return_case'){if(fail){fail=false;throw Error('uncertain');}return item('closed');}return {cases:[item('escalated')],canManage:true};}});
- try{await h.press('Open staff merch case review');assert.equal(calls[0].name,'list_merch_return_review_cases');await h.change('Reviewed buyer and creator evidence');await h.press('Resolve support case case-1');await h.press('Retry same staff resolution');assert.deepEqual(calls[1],calls[2]);assert.equal(calls[1].args.p_action,'staff_resolve');assert.match(h.text(),/not a refund/);assert.doesNotMatch(h.text(),/refund completed/i);}finally{await h.close();}
+ let fail=true;const calls=[];const h=await mountReturns({staff:true,actor:'staff',rpc:async(name,args)=>{calls.push({name,args});if(name==='respond_merch_return_case'){if(fail){fail=false;throw Error('uncertain');}return item('closed');}return {cases:[item('escalated')],role:'staff',totalCount:1,nextCursor:null};}});
+ try{await h.press('Open staff merch case review');assert.equal(calls[0].name,'list_merch_return_case_queue');await h.change('Reviewed buyer and creator evidence');await h.press('Resolve support case case-1');await h.press('Retry same staff resolution');assert.deepEqual(calls[1],calls[2]);assert.equal(calls[1].args.p_action,'staff_resolve');assert.match(h.text(),/not a refund/);assert.doesNotMatch(h.text(),/refund completed/i);}finally{await h.close();}
 });
 test('staff permission denial cannot render queue and replaced session cannot display late staff notes',async()=>{
- const d=deferred();const h=await mountReturns({staff:true,rpc:async()=>d.promise});try{await h.press('Open staff merch case review',{wait:false});await h.account('other');await h.resolve(d,{cases:[item('escalated')],canManage:true});assert.doesNotMatch(h.text(),/SYNTHETIC CLAIM/);}finally{await h.close();}
+ const d=deferred();const h=await mountReturns({staff:true,rpc:async()=>d.promise});try{await h.press('Open staff merch case review',{wait:false});await h.account('other');await h.resolve(d,{cases:[item('escalated')],role:'staff',totalCount:1,nextCursor:null});assert.doesNotMatch(h.text(),/SYNTHETIC CLAIM/);}finally{await h.close();}
  const denied=await mountReturns({staff:true,rpc:async()=>{throw Error('permission_denied');}});try{await denied.press('Open staff merch case review');assert.match(denied.text(),/unavailable/);assert.equal(denied.button('Resolve support case case-1'),undefined);}finally{await denied.close();}
 });
 
@@ -52,7 +52,7 @@ for (const message of ['merch_case_request_invalid', 'merch_case_return_window_u
 test('already-closed staff case releases pending request and permits queue refresh',async()=>{
  let closed=false;const h=await mountReturns({staff:true,actor:'staff',rpcEnvelope:true,rpc:async name=>{
   if(name==='respond_merch_return_case'){closed=true;return {data:null,error:{code:'P0001',message:'merch_case_already_closed'}};}
-  return {data:{cases:closed?[]:[item('escalated')],canManage:true},error:null};
+  return {data:{cases:closed?[]:[item('escalated')],canManage:true,role:'staff',totalCount:closed?0:1,nextCursor:null},error:null};
  }});
  try{await h.press('Open staff merch case review');await h.change('Stale resolution');await h.press('Resolve support case case-1');assert.match(h.text(),/update was rejected/);assert.equal(h.button('Retry same staff resolution'),undefined);await h.change('Updated resolution notes');await h.press('Open staff merch case review');assert.match(h.text(),/No escalated merch cases/);}finally{await h.close();}
 });
@@ -68,7 +68,7 @@ for(const error of [{message:'account_bound_rpc_timeout'},{code:'42501',message:
 for (const staff of [false,true]) test(`later SQL rejection cannot unlock an earlier uncertain ${staff?'staff':'buyer'} request`,async()=>{
  const calls=[];const h=await mountReturns({staff,actor:staff?'staff':'buyer',rpcEnvelope:true,rpc:async(name,args)=>{
   if(['submit_merch_return_case','respond_merch_return_case'].includes(name)){calls.push(args);return {data:null,error:calls.length===1?{message:'account_bound_rpc_timeout'}:{code:'P0001',message:staff?'merch_case_already_closed':'merch_case_return_window_unavailable'}};}
-  return {data:{cases:staff?[item('escalated')]:[],canManage:staff},error:null};
+  return {data:{cases:staff?[item('escalated')]:[],canManage:staff,role:'staff',totalCount:staff?1:0,nextCursor:null},error:null};
  }});
  try{await h.press(staff?'Open staff merch case review':'View return cases');await h.change('Original unresolved operation');await h.press(staff?'Resolve support case case-1':'Report non-delivery');await h.press(staff?'Retry same staff resolution':'Retry same case request');await assert.rejects(()=>h.change('Replacement'),/input unavailable/);assert.deepEqual(calls[0],calls[1]);assert.doesNotMatch(h.text(),/update was rejected/);}finally{await h.close();}
 });
@@ -76,7 +76,15 @@ for (const staff of [false,true]) test(`later SQL rejection cannot unlock an ear
 for (const staff of [false,true]) test(`blurred in-flight ${staff?'staff':'buyer'} request remains uncertain across refocus and rejection`,async()=>{
  const d=deferred(),calls=[];const h=await mountReturns({staff,actor:staff?'staff':'buyer',rpcEnvelope:true,rpc:async(name,args)=>{
   if(['submit_merch_return_case','respond_merch_return_case'].includes(name)){calls.push(args);return calls.length===1?d.promise:{data:null,error:{code:'P0001',message:staff?'merch_case_already_closed':'merch_case_return_window_unavailable'}};}
-  return {data:{cases:staff?[item('escalated')]:[],canManage:staff},error:null};
+  return {data:{cases:staff?[item('escalated')]:[],canManage:staff,role:'staff',totalCount:staff?1:0,nextCursor:null},error:null};
  }});
  try{await h.press(staff?'Open staff merch case review':'View return cases');await h.change('Still in flight');await h.press(staff?'Resolve support case case-1':'Report non-delivery',{wait:false});await h.focus(false);await h.focus(true);await h.press(staff?'Retry same staff resolution':'Retry same case request',{wait:false});await h.resolve(d,{data:item(),error:null});assert.deepEqual(calls[0],calls[1]);assert.ok(h.button(staff?'Retry same staff resolution':'Retry same case request'));assert.doesNotMatch(h.text(),/update was rejected/);}finally{await h.close();}
+});
+
+test('staff next page reaches unseen case, refresh resets cursor, and delayed next page cannot cross accounts',async()=>{
+ const cursor='ab333333-3333-4333-8333-333333333333',calls=[],d=deferred();let delayed=false;
+ const h=await mountReturns({staff:true,actor:'staff',rpc:async(name,args)=>{calls.push(args);if(args.p_after&&delayed)return d.promise;return {role:'staff',totalCount:51,nextCursor:args.p_after?null:cursor,cases:[{...item('escalated'),id:args.p_after?'case-51':'case-1'}]};}});
+ try{await h.press('Open staff merch case review');await h.press('Next staff case page');assert.ok(h.button('Resolve support case case-51'));assert.equal(calls.at(-1).p_after,cursor);
+ await h.press('Open staff merch case review');assert.equal(calls.at(-1).p_after,null);delayed=true;await h.press('Next staff case page',{wait:false});await h.account('other');await h.resolve(d,{role:'staff',totalCount:51,nextCursor:null,cases:[{...item('escalated'),id:'PRIVATE-STAFF'}]});assert.doesNotMatch(h.text(),/PRIVATE-STAFF/);
+ }finally{await h.close();}
 });

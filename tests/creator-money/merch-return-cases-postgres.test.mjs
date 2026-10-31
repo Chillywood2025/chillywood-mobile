@@ -7,7 +7,10 @@ import {mountReturns} from '../helpers/merch-return-mounted-harness.mjs';
 
 test('actual API actors: order-bound cases, immutable aggregate holds, scoped staff review, independent provider evidence',{timeout:240000},async()=>{
  const migration='20261030212744_merch_return_cases.sql';
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
+ const replies='20261031011906_merch_return_buyer_replies.sql';
+ const queue='20261031012501_merch_return_case_queues.sql';
+ const successors=['20261031011531_merch_provider_dispute_observations.sql',replies,queue,'20261031012502_merch_reconciliation_driver.sql'];
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const creator=await one("select md5('return-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('return-host:'||n::text)::uuid::text,20260814),100)=0 limit 1");
  const buyer=randomUUID(),other=randomUUID(),staff=randomUUID(),moderator=randomUUID();
@@ -37,7 +40,8 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
    await db.query(`insert into public.merch_orders(id,product_id,buyer_id,creator_id,provider,environment,order_status,fulfillment_status,payment_status,amount_subtotal_minor,amount_total_minor,currency,created_at)
     values($1,$2,$3,$4,'stripe_physical_goods','sandbox','paid','shipped','paid',1000,1000,'usd',clock_timestamp()-($5||' days')::interval)`,[id,product,buyer,creator,age]);return id;
   };
-  const historical=await make();await db.exec(readFileSync('supabase/migrations/'+migration,'utf8'));
+  const historical=await make();
+  for(const file of [migration,...successors])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
   assert.equal((await state(historical)).returnCaseProtocol,null);
   assert.ok((await state(historical)).returnHoldReasons.includes('merch_return_clearance_unknown'));
   const order=await make(),otherOrder=await make();
@@ -70,16 +74,28 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
    if(role!=='authenticated')await assert.rejects(one('select public.read_merch_return_cases($1)',[order]),/permission denied/);
   }
   assert.equal((await respond(first,'creator_response',creator)).status,'open');
+  await assert.rejects(respond(first,'creator_response',buyer),/action_denied/);
+  const replyId=randomUUID();const reply=await respond(first,'buyer_response',buyer,replyId,'Buyer additional evidence');
+  assert.equal(reply.status,'open');assert.equal(reply.refundExecuted,false);
+  assert.equal(reply.events.at(-1).actorRole,'buyer');assert.equal(reply.events.at(-1).note,'Buyer additional evidence');
+  assert.equal((await respond(first,'buyer_response',buyer,replyId,'Buyer additional evidence')).events.length,reply.events.length);
+  assert.equal((await state(order)).unresolvedReturnCaseCount,2);
+  await assert.rejects(respond(first,'buyer_response',other),/unavailable/);
+  await assert.rejects(respond(first,'buyer_response',creator),/action_denied/);
+  await assert.rejects(respond(first,'buyer_response',staff),/action_denied/);
+  await claim(buyer,sessions[other]);await assert.rejects(one('select public.respond_merch_return_case($1,$2,$3,$4)',[first.id,randomUUID(),'buyer_response','Stale reply']),/unavailable/);
   await assert.rejects(respond(first,'buyer_close',creator),/action_denied/);
   await assert.rejects(respond(first,'staff_resolve',moderator),/unavailable|action_denied/);
   await assert.rejects(respond(first,'staff_resolve',staff),/action_denied/);
   const esc=randomUUID();await respond(first,'escalate',buyer,esc);await respond(first,'escalate',buyer,esc);
+  assert.equal((await respond(first,'buyer_response')).status,'escalated','reply never silently clears staff review');
   await claim(moderator);await assert.rejects(one('select public.list_merch_return_review_cases(50)'),/unavailable/);
   await claim(staff);assert.equal((await one('select public.list_merch_return_review_cases(50)')).cases.length,1);
   await root();await db.query("update public.platform_staff_permission_grants set status='revoked' where target_user_id=$1 and permission_key='admin.refund_status.record'",[staff]);
   await assert.rejects(respond(first,'staff_resolve',staff),/unavailable|action_denied/);
   await root();await db.query("update public.platform_staff_permission_grants set status='active' where target_user_id=$1",[staff]);
   assert.equal((await respond(first,'staff_resolve',staff)).status,'closed');
+  await assert.rejects(respond(first,'buyer_response'),/already_closed/);
   projection=await state(order);assert.equal(projection.unresolvedReturnCaseCount,1);assert.ok(projection.netSettlementHoldReasons.includes('merch_case_unresolved'));
   await root();await db.query("update public.merch_orders set payment_status='disputed' where id=$1",[order]);
   await respond(second,'buyer_close');projection=await state(order);
@@ -123,7 +139,33 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
   }});
   try{await ui.press('View return cases');await ui.change('SQL-backed mounted non-delivery claim');await ui.press('Report non-delivery');
    assert.match(ui.text(),/SQL-backed mounted non-delivery claim/);assert.equal((await state(mountedOrder)).unresolvedReturnCaseCount,1);
+   await claim(buyer);const liveCase=(await one('select public.read_merch_return_cases($1)',[mountedOrder])).cases[0];
+   await respond(liveCase,'creator_response',creator,randomUUID(),'Creator asks for details');await ui.press('Refresh return cases');
+   assert.match(ui.text(),/Creator asks for details/);await ui.change('Buyer replies within same case');await ui.press(`Reply to case ${liveCase.id}`);
+   assert.match(ui.text(),/Buyer replies within same case/);assert.equal((await state(mountedOrder)).unresolvedReturnCaseCount,1);
   }finally{await ui.close();}
+  // Stable keyset discovery across 52 unresolved cases; closing an earlier row
+  // cannot offset-skip the unseen 51st case. No per-order client fanout.
+  const queueOrder=await make(),queueCases=[];
+  for(let i=0;i<52;i++){const c=await submit(queueOrder);await respond(c,'escalate');queueCases.push(c);}
+  const queueRead=async(role,after=null)=>one('select public.list_merch_return_case_queue($1,$2,50)',[role,after]);
+  await claim(creator);const creatorPage=await queueRead('creator');
+  assert.equal(creatorPage.cases.length,50);assert.ok(creatorPage.totalCount>=52);assert.ok(creatorPage.nextCursor);
+  await claim(staff);const staffPage=await queueRead('staff');assert.equal(staffPage.cases.length,50);assert.ok(staffPage.totalCount>=52);
+  await respond(staffPage.cases[0],'staff_resolve',staff);
+  await claim(staff);const staffNext=await queueRead('staff',staffPage.nextCursor);
+  assert.ok(staffNext.cases.length>=2);assert.equal(staffNext.nextCursor,null);
+  const staffSeen=new Set([...staffPage.cases,...staffNext.cases].map(c=>c.id));
+  for(const c of queueCases)assert.ok(staffSeen.has(c.id),'all escalated cases reachable including 51st');
+  await claim(creator);const creatorNext=await queueRead('creator',creatorPage.nextCursor);
+  const creatorSeen=new Set([...creatorPage.cases,...creatorNext.cases].map(c=>c.id));
+  for(const c of queueCases)assert.ok(creatorSeen.has(c.id),'all creator unresolved cases reachable after closure');
+  await claim(other);assert.equal((await queueRead('creator')).totalCount,0);assert.equal((await queueRead('buyer')).totalCount,0);
+  await assert.rejects(queueRead('creator',creatorPage.nextCursor),/unavailable/);
+  await assert.rejects(queueRead('staff'),/unavailable/);
+  await claim(creator,sessions[other]);await assert.rejects(queueRead('creator'),/unavailable/);
+  await claim(buyer);const buyerPage=await queueRead('buyer');assert.ok(buyerPage.totalCount>=51);
+  await root();await db.exec('set role anon');await assert.rejects(queueRead('buyer'),/permission denied/);
   await root();const missingCreator=randomUUID();
   await db.query(`insert into public.merch_orders(id,buyer_id,provider,environment,order_status,fulfillment_status,payment_status,amount_subtotal_minor,amount_total_minor,currency)
    values($1,$2,'stripe_physical_goods','sandbox','paid','shipped','paid',1000,1000,'usd')`,[missingCreator,buyer]);

@@ -42,9 +42,25 @@ const flexibleCommerceFiles = [
   "20261030204252_auction_release_qualification_serialization.sql",
   "20261030204513_auction_verified_net_recovery_issuer.sql",
   "20261030210200_merch_private_fulfillment_address.sql",
-  "20261030212744_merch_return_cases.sql"
+  "20261030212744_merch_return_cases.sql",
+  "20261031011531_merch_provider_dispute_observations.sql",
+  "20261031011906_merch_return_buyer_replies.sql",
+  "20261031012501_merch_return_case_queues.sql",
+  "20261031012502_merch_reconciliation_driver.sql",
+  "20261031013158_auction_held_visibility_observer.sql"
 ];
 const flexibleCommerceAddedFunctionIdentities = new Map([
+  ["public.list_merch_return_case_queue/3", "list_merch_return_case_queue(text,uuid,integer)"],
+  ["public.claim_merch_reconciliation_batch/0", "claim_merch_reconciliation_batch()"],
+  ["public.complete_merch_cost_refresh/3", "complete_merch_cost_refresh(uuid,uuid,boolean)"],
+  ["private.merch_return_hold_before_refresh_metadata/2", "private.merch_return_hold_before_refresh_metadata(merch_orders,timestamp with time zone)"],
+  ["public.claim_auction_observation_batch/0", "claim_auction_observation_batch()"],
+  ["public.complete_auction_observation/4", "complete_auction_observation(uuid,uuid,boolean,text)"],
+  ["private.creator_auction_held_projection/1", "private.creator_auction_held_projection(private.auction_platform_settlement_contracts)"],
+  ["public.list_creator_auction_held_earnings/2", "list_creator_auction_held_earnings(uuid,integer)"],
+  ["private.merch_return_hold_before_provider_disputes/2", "private.merch_return_hold_before_provider_disputes(merch_orders,timestamp with time zone)"],
+  ["public.begin_merch_dispute_observation/1", "begin_merch_dispute_observation(uuid)"],
+  ["public.complete_merch_dispute_observation/2", "complete_merch_dispute_observation(uuid,jsonb)"],
   ["private.freeze_merch_return_case_protocol/0", "private.freeze_merch_return_case_protocol()"],
   ["private.guard_merch_return_case_history/0", "private.guard_merch_return_case_history()"],
   ["private.stamp_merch_return_case_hold/0", "private.stamp_merch_return_case_hold()"],
@@ -753,6 +769,47 @@ test('physical merch successors have the exact declared catalog delta', {timeout
       const old=before.find(candidate=>candidate.oid===fn.oid);
       return old&&old.identity!==fn.identity?[[old.identity,fn.identity]]:[];
     }).sort(),merchRenamedFunctionIdentities,'original settlement implementation retains its OID');
+  } finally {await db.close();}
+});
+
+test('merch dispute and case successors retain explicit API boundaries', {timeout:120_000}, async()=>{
+  const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false});
+  try {
+    const tables=['merch_dispute_observation_attempts','merch_dispute_observations','merch_return_cases','merch_return_case_events',
+      'merch_reconciliation_driver','merch_cost_refresh_jobs','auction_observer_control','auction_observer_jobs'];
+    const rows=(await db.query(`select c.relname,c.relrowsecurity,c.relforcerowsecurity,
+      exists(select 1 from unnest(array['anon','authenticated','service_role']) r(role)
+        cross join unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p(privilege)
+        where has_table_privilege(r.role,c.oid,p.privilege)) as api_access
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='private' and c.relname=any($1::text[]) order by c.relname`,[tables])).rows;
+    assert.deepEqual(rows,tables.sort().map(relname=>({relname,relrowsecurity:true,relforcerowsecurity:true,api_access:false})),
+      'every private evidence/history table exists with forced RLS and no direct API grants');
+    const sequenceGrants=(await db.query(`select r.role,p.privilege,
+      has_sequence_privilege(r.role,'private.merch_dispute_observation_attempts_attempt_no_seq',p.privilege) as allowed
+      from unnest(array['anon','authenticated','service_role']) r(role)
+      cross join unnest(array['USAGE','SELECT','UPDATE']) p(privilege)`)).rows;
+    assert.equal(sequenceGrants.length,9);
+    assert.ok(sequenceGrants.every(row=>!row.allowed),'private dispute ordering sequence has no API access');
+    for(const [identity,allowed] of [
+      ['public.list_merch_return_case_queue(text,uuid,integer)','authenticated'],
+      ['public.claim_merch_reconciliation_batch()','service_role'],
+      ['public.complete_merch_cost_refresh(uuid,uuid,boolean)','service_role'],
+      ['public.claim_auction_observation_batch()','service_role'],
+      ['public.complete_auction_observation(uuid,uuid,boolean,text)','service_role'],
+      ['public.list_creator_auction_held_earnings(uuid,integer)','authenticated'],
+      ['private.creator_auction_held_projection(private.auction_platform_settlement_contracts)',null],
+      ['private.merch_return_hold_before_refresh_metadata(public.merch_orders,timestamp with time zone)',null],
+      ['public.begin_merch_dispute_observation(uuid)','service_role'],
+      ['public.complete_merch_dispute_observation(uuid,jsonb)','service_role'],
+      ['public.respond_merch_return_case(uuid,uuid,text,text)','authenticated'],
+      ['private.merch_return_hold_before_provider_disputes(public.merch_orders,timestamp with time zone)',null],
+      ['private.merch_return_hold_state(public.merch_orders,timestamp with time zone)',null],
+    ]) {
+      const grants=(await db.query(`select r.role,has_function_privilege(r.role,$1,'EXECUTE') as allowed
+        from unnest(array['anon','authenticated','service_role']) r(role)`,[identity])).rows;
+      assert.deepEqual(grants,['anon','authenticated','service_role'].map(role=>({role,allowed:role===allowed})),identity);
+    }
   } finally {await db.close();}
 });
 

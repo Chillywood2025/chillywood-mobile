@@ -82,6 +82,21 @@ test("wallet parses every state, preserves snapshot price, and distinguishes his
   assert.deepEqual(h.calls[0].args, { p_limit: 50, p_before_created_at: null, p_before_id: null });
 });
 
+test("room auction history has a typed source without becoming a fixed-price catalog offer", async () => {
+  const row=item({sourceType:"room_seat_auction",productType:"room_seat_pass",provider:"stripe_room_auction",
+    destination:{kind:"watch_party",id:"EXACT-ROOM"},terms:{sourceKind:"party_admission",claimId:uuid(4),roomSessionId:uuid(5)}});
+  const h=setup({rpc:async()=>({data:page([row]),error:null})});
+  assert.equal((await h.purchases.readMyCreatorPurchases(null,{sourceType:"room_seat_auction",sourceId:source})).status,"resolved");
+  assert.equal(h.calls[0].args.p_source_type,"room_seat_auction");
+  assert.ok(h.purchases.creatorPurchaseScope.room_seat_auction);
+  for(const invalid of [{sourceType:"unknown_auction"},{destination:{kind:"live_stage",id:"EXACT-ROOM"}},
+    {terms:{sourceKind:"party_admission"}},{sourceId:null},{creatorId:null},{purchaseIntentId:null}]) {
+    assert.equal(h.purchases.parseCreatorPurchasePage(page([{...row,...invalid}]),buyer),null);
+  }
+  assert.ok(h.purchases.parseCreatorPurchasePage(page([{...row,status:"reconciliation_required",terms:{},destination:null}]),buyer),
+    "unlinked review retains receipt history without inventing a room claim");
+});
+
 test("wallet retains unlinked review records and legacy Stripe tips without inventing content", () => {
   const h = setup();
   const unbound = item({ purchaseIntentId: null, sourceId: null, creatorId: null, productKey: null, title: null,

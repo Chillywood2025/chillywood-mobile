@@ -18,7 +18,8 @@ import { useSession } from "../../_lib/session";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { submitUserReport } from "../../_lib/userReports";
 import { BetaFeedbackSheet } from "../beta/beta-feedback-sheet";
-import { MerchReturnReview } from "../merch/merch-return-review";
+import { MerchReturnReviewGate } from "../merch/merch-return-review";
+import { merchOrderHelpDestination } from "../../_lib/merchOrderHelp";
 
 const SKYLINE_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 
@@ -53,7 +54,7 @@ const SUPPORT_CATEGORIES = [
 export function SupportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ topic?: string; orderId?: string }>();
+  const params = useLocalSearchParams<{ topic?: string; orderId?: string; orderRole?: string; purchaseId?: string }>();
   const { isSignedIn, user, authority, authorityStatus } = useSession();
   const { accessState, isActive } = useBetaProgram();
   const [feedbackVisible, setFeedbackVisible] = useState(false);
@@ -65,7 +66,8 @@ export function SupportScreen() {
   const topic = String(params.topic ?? "").trim().toLowerCase();
   // Navigation context only, not trusted support metadata or order authority.
   // The destination performs exact-session ownership checks before displaying it.
-  const orderId = typeof params.orderId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.orderId) ? params.orderId : null;
+  const orderHelp = merchOrderHelpDestination(params.orderId, params.orderRole);
+  const purchaseId = merchOrderHelpDestination(params.purchaseId, "buyer")?.params.orderId;
 
   const blockedCopy = useMemo(
     () => getBetaAccessBlockCopy(accessState.status, closedBeta ? "Support tools" : "Support"),
@@ -346,8 +348,9 @@ export function SupportScreen() {
           <View style={{ width: 18 }} />
         </View>
 
-        {orderId ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open this merch order for return or delivery help" onPress={() => router.push({ pathname: "/merch/orders", params: { orderId } })}><Text style={{ color: "#fff", padding: 16 }}>Open this merch order for return or delivery help</Text></TouchableOpacity> : null}
-        {authorityStatus === "active" && authority && !authority.restoreOnly ? <MerchReturnReview key={JSON.stringify(authority)} /> : null}
+        {purchaseId ? <View><Text selectable style={{ color: "#fff", padding: 16 }}>Purchase reference: {purchaseId}. Include this reference when asking for purchase help. This link does not confirm payment or access.</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Return to my purchases" onPress={() => router.push("/purchases")}><Text style={{ color: "#fff", padding: 16 }}>Return to my purchases</Text></TouchableOpacity></View> : null}
+        {orderHelp ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open this merch order for return or delivery help" onPress={() => router.push(orderHelp)}><Text style={{ color: "#fff", padding: 16 }}>Open this merch order for return or delivery help</Text></TouchableOpacity> : null}
+        {authorityStatus === "active" && authority && !authority.restoreOnly ? <MerchReturnReviewGate key={JSON.stringify(authority)} /> : null}
         <View style={styles.heroCard}>
           <Text style={styles.heroKicker}>{closedBeta ? "BETA SUPPORT" : "SUPPORT & FEEDBACK"}</Text>
           <Text style={styles.heroTitle}>

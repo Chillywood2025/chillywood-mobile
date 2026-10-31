@@ -8,7 +8,7 @@ import {webcrypto} from 'node:crypto';
 const noop=()=>{},doc={addEventListener:noop,removeEventListener:noop,defaultView:globalThis,nodeType:9};
 const container=()=>({addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'});
 const textOf=x=>Array.isArray(x)?x.map(textOf).join(' '):x==null||typeof x==='boolean'?'':typeof x==='object'?textOf(x.props?.children):String(x);
-export async function mountReturns({orderId='order-1',actor='buyer',rpc,rpcEnvelope=false,manage=false,deadline=null,staff=false}){
+export async function mountReturns({orderId='order-1',actor='buyer',rpc,rpcEnvelope=false,manage=false,deadline=null,staff=false,gate=false}){
  globalThis.IS_REACT_ACT_ENVIRONMENT=true;doc.documentElement=container();globalThis.document=doc;globalThis.window=globalThis;globalThis.HTMLIFrameElement=class {};
  const nodes=new Map(),pending=new Set();let focused=true,account=actor,id=orderId,closed=false;
  const host=name=>function Host(props){const key=React.useId();nodes.set(key,{name,props});React.useLayoutEffect(()=>()=>nodes.delete(key),[key]);return React.createElement(React.Fragment,null,...React.Children.toArray(props.children).filter(x=>typeof x==='object'));};
@@ -23,7 +23,7 @@ export async function mountReturns({orderId='order-1',actor='buyer',rpc,rpcEnvel
   useFocusEffect:fn=>React.useEffect(()=>focused?fn():undefined,[fn,focused]),
  }:name.endsWith('/creatorMerch')?commerce:helper);
  const root=createRoot(container());
- const render=()=>React.act(async()=>root.render(React.createElement(staff?panel.MerchReturnReview:panel.MerchReturnCases,{key:account,orderId:id,paymentStatus:'paid',manage,deadline,onChanged:noop})));
+ const render=()=>React.act(async()=>root.render(React.createElement(staff?(gate?panel.MerchReturnReviewGate:panel.MerchReturnReview):panel.MerchReturnCases,{key:account,orderId:id,paymentStatus:'paid',manage,deadline,onChanged:noop})));
  await render();
  const button=label=>[...nodes.values()].find(x=>x.name==='Pressable'&&x.props.accessibilityLabel===label);
  return {text:()=>[...nodes.values()].filter(x=>x.name==='Text').map(x=>textOf(x.props.children)).join('\n'),button,

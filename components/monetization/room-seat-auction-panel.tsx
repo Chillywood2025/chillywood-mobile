@@ -21,12 +21,12 @@ const requestId = () => {
   const h = [...bytes].map(n => n.toString(16).padStart(2, "0")).join("");
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 };
-export function RoomSeatAuctionPanel({ partyId }: { partyId: string }) {
+export function RoomSeatAuctionPanel({ partyId, targetAuctionId = null, targetSourceKind }: { partyId: string; targetAuctionId?: string | null; targetSourceKind?: string }) {
   const [accountKey, setAccountKey] = useState(() => getAccountNavigationTreeKey(getCurrentAccountSessionAuthoritySnapshot()));
   useEffect(() => subscribeToAccountSessionAuthority(value => setAccountKey(getAccountNavigationTreeKey(value))), []);
-  return <AuctionList key={`${partyId}:${accountKey}`} partyId={partyId} />;
+  return <AuctionList key={`${partyId}:${accountKey}`} partyId={partyId} targetAuctionId={targetAuctionId} targetSourceKind={targetSourceKind} />;
 }
-function AuctionList({ partyId }: { partyId: string }) {
+function AuctionList({ partyId, targetAuctionId = null, targetSourceKind }: { partyId: string; targetAuctionId?: string | null; targetSourceKind?: string }) {
   const [rows, setRows] = useState<CreatorRoomSeatAuction[]>([]);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
@@ -50,13 +50,19 @@ function AuctionList({ partyId }: { partyId: string }) {
     const subscription = AppState.addEventListener("change", state => { foreground = state === "active"; setVisible(foreground); check(); });
     return () => { focused = false; setVisible(false); clearInterval(timer); subscription.remove(); };
   }, [refresh]));
+  const selected = rows.find(row => row.id === targetAuctionId && row.sourceKind === targetSourceKind);
+  const ordered = selected ? [selected, ...rows.filter(row => row !== selected)] : rows;
   return <View style={styles.panel} testID="room-seat-auction-panel">
     <Text style={styles.title}>Room seat auctions</Text>
     <Text style={styles.body}>One reserved room-session spot per auction. No bidding fee. Only the winner pays, in a separate eligible checkout. A bid or award does not reserve a paid right.</Text>
     {error ? <Text accessibilityLiveRegion="polite" style={styles.body}>{error}</Text> : null}
     {!busy && !error && !rows.length ? <Text style={styles.body}>No auctions are currently listed for this room.</Text> : null}
     {busy ? <ActivityIndicator accessibilityLabel="Refreshing auctions" /> : null}
-    {rows.map(row => <AuctionCard key={row.id} auction={row} refresh={refresh} verified={!error} visible={visible} />)}
+    {targetAuctionId && !busy && !error && !selected ? <Text accessibilityLiveRegion="polite" style={styles.body}>This notification’s auction is no longer available here. Other auctions are listed below.</Text> : null}
+    {ordered.map(row => <View key={row.id}>
+      {row === selected ? <Text accessibilityRole="header" style={styles.title}>Auction from your notification</Text> : null}
+      <AuctionCard auction={row} refresh={refresh} verified={!error} visible={visible} />
+    </View>)}
     <Action label="Refresh auctions" disabled={busy} onPress={() => void refresh()} />
     <Text style={styles.body}>Bids and payment status update automatically while this screen is open. You can also refresh anytime.</Text>
   </View>;

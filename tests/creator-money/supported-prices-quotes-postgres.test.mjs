@@ -22,6 +22,7 @@ const successors=[
   '20261030204119_event_auction_release_policy.sql',
   '20261030204252_auction_release_qualification_serialization.sql',
   '20261030204513_auction_verified_net_recovery_issuer.sql',
+  '20261031013158_auction_held_visibility_observer.sql',
 ];
 // Full migrated schema, real application predicates/triggers and provider SQL.
 // Only managed auth/storage infrastructure is the shared fixture; no network.

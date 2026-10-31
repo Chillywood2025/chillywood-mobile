@@ -18,11 +18,12 @@ const textOf=n=>Array.isArray(n)?n.map(textOf).join(' '):n==null||typeof n==='bo
 const row={id:'auction',creatorEventId:'event',offerId:'offer',termsRevisionId:'revision',creatorId:'creator',startingAmountMinor:100,minIncrementMinor:25,highestAmountMinor:null,nextBidAmountMinor:100,myBidAmountMinor:null,awardAmountMinor:null,currency:'usd',environment:'test',state:'open',closesAt:'2099-01-01T11:00:00Z',paymentDeadline:'2099-01-01T12:00:00Z',serverNow:'2099-01-01T10:00:00Z',isHighestBidder:false,isWinner:false};
 row.latestCheckoutStartAt='2099-01-01T11:29:00Z';row.terms={title:'Virtual show',description:'This exact event',startsAt:'2099-01-02T00:00:00Z',endsAt:null,timeZone:'America/New_York',attendance:'virtual',replayPolicy:'none',replayAvailableAt:null,replayExpiresAt:null};
 async function mount(t,options={}){
- const nodes=new Map(),calls=[],timers=new Map();let timerId=0,appListener,focused=true;let authority={userId:'buyer',sessionGeneration:'one'},subscribers=new Set(),rows=options.rows??[row];
+ const nodes=new Map(),calls=[],timers=new Map();let timerId=0,appListener,focused=true;let authority=options.noAuthority?null:{userId:'buyer',sessionGeneration:'one',restoreOnly:!!options.restoreOnly},subscribers=new Set(),rows=options.rows??[row];
  const host=name=>function Native(props){const id=React.useId();nodes.set(id,{type:name,props});React.useEffect(()=>()=>nodes.delete(id),[id]);return React.createElement(React.Fragment,null,...React.Children.toArray(props.children).filter(c=>typeof c==='object'));};
  const native={Platform:{OS:options.platform??'ios'},Linking:{openURL:async url=>calls.push(['browser',url])},StyleSheet:{create:x=>x},AppState:{currentState:'active',addEventListener:(_,fn)=>{appListener=fn;return {remove:()=>{appListener=null;}};}}};for(const n of ['View','Text','TextInput','Pressable','ActivityIndicator','Modal','ScrollView','ImageBackground'])native[n]=host(n);
  const visuals=createSharedVisualLoader(React,native,host);
- const cache=new Map();const load=file=>{if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);const mocks={react:React,'react-native':native,'expo-router':{useFocusEffect:cb=>React.useEffect(()=>focused?cb():undefined,[cb,focused])},'react-native-get-random-values':{},
+ const router={setParams:params=>calls.push(['setParams',params])};
+ const cache=new Map();const load=file=>{if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);const mocks={react:React,'react-native':native,'expo-router':{useRouter:()=>router,useLocalSearchParams:()=>options.routeParams??{},useFocusEffect:cb=>React.useEffect(()=>focused?cb():undefined,[cb,focused])},'react-native-get-random-values':{},
  '../../_lib/openCreatorExternalCheckout':{openCreatorExternalCheckout:async(url,current)=>{if(current())await native.Linking.openURL(url);}},
  '../../_lib/google-play-external-content-links':{withGooglePlayExternalContentLink:async callback=>{
    calls.push(['nativePrepare']);if(options.nativeDenied)throw new Error('Google Play unavailable');
@@ -39,6 +40,7 @@ async function mount(t,options={}){
  readPendingCreatorRoomSeatAuction:async()=>options.pendingRead?options.pendingRead():null},
  '../../_lib/accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,getAccountNavigationTreeKey:a=>a?`${a.userId}:${a.sessionGeneration}`:'none',sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&a.userId===b.userId&&a.sessionGeneration===b.sessionGeneration,subscribeToAccountSessionAuthority:f=>{subscribers.add(f);return()=>subscribers.delete(f);}},
  '../../_lib/creatorEventAuctions':{listCreatorEventAuctions:async id=>{calls.push(['list',id]);return options.list?options.list(id):rows;},readCreatorEventAuctionBidEligibility:async(...args)=>{calls.push(['eligibility',...args]);return options.eligibility?options.eligibility(...args):true;},placeCreatorEventAuctionBid:async(...args)=>{calls.push(['bid',...args]);return options.bid?options.bid(...args):row;},createCreatorEventAuction:async input=>{calls.push(['create',input]);return row;}},
+ '../../_lib/auctionNavigation':load('_lib/auctionNavigation.ts'),
  '../../_lib/creatorTipAmount':load('_lib/creatorTipAmount.ts'),
  '../../_lib/eventSchedule':load('_lib/eventSchedule.ts'),
  './event-auction-time-input':file.endsWith('auction-editor.tsx')?load('components/monetization/event-auction-time-input.tsx'):null,
@@ -47,7 +49,7 @@ async function mount(t,options={}){
  './event-auction-panel':!file.endsWith('event-auction-panel.tsx')?load('components/monetization/event-auction-panel.tsx'):null,
  };const context={exports,Error,Date,Intl,Promise,Map,Set,crypto:webcrypto,Uint8Array,setInterval:fn=>{const id=++timerId;timers.set(id,fn);return id;},clearInterval:id=>timers.delete(id),require:n=>{const visual=visuals(n);if(visual)return visual;assert.ok(n in mocks,`unexpected import ${n}`);return mocks[n];}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,context);return exports;};
- const Component=options.entry?load('components/monetization/room-seat-auction-entry.tsx').RoomSeatAuctionEntry:options.editor?(options.room?load('components/monetization/room-seat-auction-editor.tsx').RoomSeatAuctionEditor:load('components/monetization/event-auction-editor.tsx').EventAuctionEditor):options.room?load('components/monetization/room-seat-auction-panel.tsx').RoomSeatAuctionPanel:load('components/monetization/event-auction-panel.tsx').EventAuctionPanel;const root=createRoot(container());let eventId='event';
+ const Component=options.entry?load('components/monetization/room-seat-auction-entry.tsx').RoomSeatAuctionEntry:options.editor?(options.room?load('components/monetization/room-seat-auction-editor.tsx').RoomSeatAuctionEditor:load('components/monetization/event-auction-editor.tsx').EventAuctionEditor):options.room?load('components/monetization/room-seat-auction-panel.tsx').RoomSeatAuctionPanel:load('components/monetization/event-auction-panel.tsx').EventAuctionPanel;const root=createRoot(container());let eventId=options.targetId??'event';
  const props=options.entry?{creatorId:'creator',sourceKind:options.sourceKind??'stage_reserved_seat'}:options.editor?{creatorId:'buyer',sourceKind:options.sourceKind??'stage_reserved_seat',event:{id:'event',hostUserId:'buyer',timeZone:'America/New_York',startsAt:options.startsAt??'2099-01-02T00:00:00Z'},offer:{status:'sandbox',termsRevisionId:'revision'}}:{};
  const render=()=>root.render(React.createElement(Component,{eventId,partyId:eventId,...props}));await React.act(async()=>render());t.after(()=>React.act(async()=>root.unmount()));
  const find=label=>[...nodes.values()].find(n=>n.props.accessibilityLabel===label);
@@ -205,4 +207,64 @@ for(const sourceKind of ['stage_reserved_seat','party_admission']) test(`room au
  await h.press('Close room auctions');assert.equal(Boolean(background()),false);
  await h.press(open);assert.ok(background());await h.account();assert.equal(Boolean(background()),false);
  assert.equal(h.calls.filter(c=>['bid','checkout','create'].includes(c[0])).length,0);
+});
+
+const evaluateNavigation = (file, imports = {}) => {
+ const context = { exports: {}, URL, URLSearchParams, require: name => { assert.ok(name in imports, name); return imports[name]; } };
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText, context);
+ return context.exports;
+};
+const auctionLinks = evaluateNavigation('_lib/appLinks.ts');
+const auctionTargets = evaluateNavigation('_lib/notificationMessageTarget.ts', {'./appLinks':auctionLinks});
+const notificationRoom = '11111111-1111-4111-8111-111111111111';
+const notificationAuction = '22222222-2222-4222-8222-222222222222';
+const auctionPayload = {notificationType:'auction_won',targetEntityId:notificationRoom,targetContext:{auctionId:notificationAuction,action_expires_at:'2099-01-01T00:00:00Z'}};
+const notificationParams = route => Object.fromEntries(new URLSearchParams(route.split('?')[1]));
+for (const [root, kind] of [['event','event'],['watch-party','party_admission'],['watch-party/live-stage','stage_reserved_seat']]) {
+ test(`actual ${root} auction notification resolver reaches exact mounted auction without purchase`,async t=>{
+  const roomId = kind === 'event' ? notificationRoom : 'RACE-CAPACITY';
+  const path = `/${root}/${roomId}`;
+  const resolved = auctionTargets.resolveNotificationMessagePath(path,{...auctionPayload,targetEntityId:roomId});
+  assert.notEqual(resolved,path);
+  const h = await mount(t,{entry:kind!=='event',room:kind!=='event',sourceKind:kind,targetId:roomId,routeParams:notificationParams(resolved),rows:[{...row,id:'different'},{...row,id:notificationAuction,sourceKind:kind}]});
+  assert.match(h.text(),/Auction from your notification/);
+  assert.equal(h.calls.filter(c=>c[0]==='setParams').length,1,'consume navigation hint so remount/account/back cannot replay it');
+  assert.equal(h.calls.filter(c=>['bid','checkout','browser','nativeLaunch'].includes(c[0])).length,0);
+  if(kind!=='event') {
+   await h.press('Close room auctions');await h.tick();await h.focus(false);await h.focus(true);
+   assert.equal(h.all().find(n=>n.type==='Modal').props.visible,false);
+   await h.press(kind==='party_admission'?'Party admission auctions':'Reserved guest spot auctions');
+  }
+  await h.account();
+  assert.doesNotMatch(h.text(),/Auction from your notification/);
+ });
+}
+test('auction target refuses stale, wrong entity/kind, malformed and duplicate params',async t=>{
+ const path=`/watch-party/live-stage/${notificationRoom}`;
+ for(const target of [{...auctionPayload,targetEntityId:notificationAuction},{...auctionPayload,targetContext:{...auctionPayload.targetContext,action_expires_at:'2000-01-01T00:00:00Z'}},{...auctionPayload,targetContext:{auctionId:'bad',action_expires_at:'2099-01-01'}}])assert.equal(auctionTargets.resolveNotificationMessagePath(path,target),path);
+ assert.equal(auctionTargets.resolveNotificationMessagePath('/watch-party/RACE-CAPACITY',{...auctionPayload,targetEntityId:'race-capacity'}),'/watch-party/RACE-CAPACITY');
+ const valid=auctionTargets.resolveNotificationMessagePath(path,auctionPayload);
+ assert.equal(auctionLinks.resolveApplicationRoute(valid+'&auctionId='+notificationAuction),null);
+ assert.equal(auctionLinks.resolveApplicationRoute(valid.replace('stage_reserved_seat','party_admission')),null);
+ for(const patch of [{auctionTarget:'party_admission'},{auctionExpiresAt:'2000-01-01'},{auctionId:[notificationAuction]}]){
+  const h=await mount(t,{entry:true,routeParams:{...notificationParams(valid),...patch}});
+  assert.equal(h.all().find(n=>n.type==='Modal').props.visible,false);
+ }
+ const missing=await mount(t,{entry:true,routeParams:notificationParams(valid),rows:[{...row,id:notificationAuction,sourceKind:'party_admission'}]});
+ assert.match(missing.text(),/no longer available here/);
+ assert.doesNotMatch(missing.text(),/Auction from your notification/);
+});
+
+test('notification navigation cannot auto-open without active authority or after account replacement',async t=>{
+ const route=auctionTargets.resolveNotificationMessagePath('/watch-party/live-stage/RACE-CAPACITY',{...auctionPayload,targetEntityId:'RACE-CAPACITY'});
+ for(const flags of [{noAuthority:true},{restoreOnly:true}]){
+  const h=await mount(t,{entry:true,...flags,routeParams:notificationParams(route)});
+  assert.equal(h.all().find(n=>n.type==='Modal').props.visible,false);
+  assert.equal(h.calls.filter(c=>c[0]==='list').length,0);
+ }
+ const options={entry:true,routeParams:notificationParams(route)};
+ const h=await mount(t,options);await h.account();
+ options.routeParams={...options.routeParams,auctionId:'33333333-3333-4333-8333-333333333333'};
+ await h.focus(false);await h.focus(true);
+ assert.equal(h.all().find(n=>n.type==='Modal').props.visible,false);
 });

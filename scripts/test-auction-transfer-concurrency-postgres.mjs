@@ -53,7 +53,8 @@ try {
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
   const claims=(who,role='authenticated')=>`set local role ${role};set local request.jwt.claims=${literal(JSON.stringify({role,sub:actors[who].id,session_id:actors[who].session}))};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const call=(who,sql,role)=>`begin;${claims(who,role)}select ${sql};commit;`;
-  const rpc=(who,sql)=>JSON.parse(query(call(who,sql)).split('\n').at(-1));
+  // PostgreSQL row/composite RPCs (including room join) are not JSON text.
+  const rpc=(who,sql)=>JSON.parse(query(call(who,`to_jsonb(${sql})`)).split('\n').at(-1));
   query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
   const cap=query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,platform,storefront,storefront_country,route_kind,currency,
     environment,payment_method,min_amount_minor,max_amount_minor,provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)
@@ -83,7 +84,9 @@ try {
     const attempt=randomUUID();
     const claim=run(`public.prepare_creator_room_auction_platform_checkout('${quote.id}','${actors.buyer1.id}','${actors.buyer1.session}','${attempt}')`);
     assert.equal(claim.startAuthorized,true);
-    run(`public.bind_creator_room_auction_checkout('${quote.id}','${attempt}','cs_test_${name}','pi_${name}','acct_platform',237,'usd')`);
+    // Binder returns void. query still checks psql's exit status and propagates
+    // every SQL error; there is deliberately no invented JSON result to parse.
+    query(service(`public.bind_creator_room_auction_checkout('${quote.id}','${attempt}','cs_test_${name}','pi_${name}','acct_platform',237,'usd')`));
     const paid={eventId:`evt_${name}`,eventType:'checkout.session.completed',occurredAt:new Date().toISOString(),accountId:'acct_platform',environment:'test',objectId:`cs_test_${name}`,paymentIntentId:`pi_${name}`,checkoutSessionId:`cs_test_${name}`,quoteId:quote.id,buyerId:actors.buyer1.id,creatorId:actors.creator.id,auctionId:auction.id,amountMinor:237,currency:'usd',outcome:'paid',refundedAmountMinor:null,providerProductId:'prod_AuctionFixture',settlementContractId:claim.settlementContractId,settlementPolicy:claim.settlementPolicy};
     assert.equal(run(receiptSql(paid)).status,'fulfilled');
     const contract=claim.settlementContractId;

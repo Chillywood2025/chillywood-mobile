@@ -5,22 +5,23 @@ import test from 'node:test';
 import {webcrypto} from 'node:crypto';
 import ts from 'typescript';
 
-function harness({reply,request}={}) {
+function harness({reply,request,open,timers,rpcReply}={}) {
   let current=true;
   const calls=[],opened=[],subject={accessToken:'synthetic-token',authority:{userId:'buyer'}};
   const assertCurrent=()=>{if(!current)throw Error('account_changed');};
-  const context={exports:{},URL,Uint8Array,crypto:webcrypto,fetch:async(url,options)=>{
+  const context={exports:{},URL,Uint8Array,crypto:webcrypto,AbortController,
+    setTimeout:timers?.setTimeout??setTimeout,clearTimeout:timers?.clearTimeout??clearTimeout,fetch:async(url,options)=>{
     calls.push({url,options});
     if(request)return request(()=>{current=false;});
     return {ok:true,json:async()=>reply??{checkoutCreated:true,orderId:'order',url:'https://checkout.stripe.com/c/pay/test'}};
   },require:name=>{
-    if(name==='react-native')return {Linking:{openURL:async url=>opened.push(url)}};
+    if(name==='react-native')return {Linking:{openURL:async url=>{opened.push(url);return open?.(url);}}};
     if(name==='./supabase')return {SUPABASE_URL:'https://example.invalid'};
     if(name==='./merchProductPhotos')return {resolveMerchProductPhotos:async products=>products};
     if(name==='./accountBoundSupabaseMutation')return {
       captureAccountBoundSupabaseMutationSubject:async()=>subject,
       assertAccountBoundSupabaseMutationSubjectCurrent:assertCurrent,
-      runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{assertCurrent();calls.push({name,args});return {data:{products:[],orders:[],nextCursor:null},error:null};},
+      runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{assertCurrent();calls.push({name,args});return {data:rpcReply??{products:[],orders:[],nextCursor:null},error:null};},
     };
     throw Error(name);
   }};
@@ -60,4 +61,53 @@ test('SKU configuration and checkout retain exact option identity',async()=>{
   assert.equal(h.calls[0].name,'configure_creator_merch_variants');assert.equal(h.calls[0].args.p_variants[0].id,'variant');assert.equal(h.calls[0].args.p_variant_mode,'options');
   await h.api.launchMerchCheckout({...input,variantId:'variant'});
   assert.equal(JSON.parse(h.calls[1].options.body).variant_id,'variant');
+});
+
+function fakeTimers() {
+  const pending = new Map(); let id = 0;
+  return { pending, setTimeout(fn, ms) { assert.equal(ms, 20_000); pending.set(++id, fn); return id; },
+    clearTimeout(key) { pending.delete(key); }, expire() { for (const fn of [...pending.values()]) fn(); } };
+}
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise,resolve}; };
+const tick = async () => { for (let i=0;i<12;i++) await Promise.resolve(); };
+const goodReply = {checkoutCreated:true,orderId:'order',url:'https://checkout.stripe.com/c/pay/test'};
+for (const stage of ['fetch','body','native launch']) test(`checkout deadline releases an uncooperative ${stage} without a replacement attempt`, async () => {
+  const waiting = deferred(), timers = fakeTimers(); let slow = true;
+  const h = harness({timers,
+    request:async()=>stage==='fetch'&&slow ? waiting.promise : {ok:true,json:async()=>stage==='body'&&slow ? waiting.promise : goodReply},
+    open:()=>stage==='native launch'&&slow ? waiting.promise : Promise.resolve(),
+  });
+  const first=h.api.launchMerchCheckout(input); const rejection=assert.rejects(first,/may still be pending.*resume the same order/);
+  await tick(); if(stage==='native launch') { for(let i=0;i<100 && !h.opened.length;i++)await Promise.resolve(); assert.equal(h.opened.length,1); }
+  assert.equal(timers.pending.size,1); timers.expire(); await rejection;
+  assert.equal(timers.pending.size,0);
+  if(stage!=='native launch')assert.equal(h.calls[0].options.signal.aborted,true);
+  assert.equal(h.opened.length,stage==='native launch'?1:0);
+  waiting.resolve(stage==='fetch'?{ok:true,json:async()=>goodReply}:stage==='body'?goodReply:undefined);
+  await tick(); assert.equal(h.opened.length,stage==='native launch'?1:0,'late transport never opens another browser');
+  slow=false;
+  assert.equal((await h.api.launchMerchCheckout(input)).orderId,'order');
+  assert.equal(h.calls.length,2);assert.equal(JSON.parse(h.calls[1].options.body).attempt_id,input.attemptId,'explicit recovery retains attempt');
+  assert.equal(timers.pending.size,0);
+});
+test('checkout success and rejected response clear all deadline timers',async()=>{
+  for(const reply of [goodReply,{checkoutCreated:false}]){
+    const timers=fakeTimers(),h=harness({timers,reply});
+    if(reply.checkoutCreated)await h.api.launchMerchCheckout(input);else await assert.rejects(h.api.launchMerchCheckout(input));
+    assert.equal(timers.pending.size,0);
+  }
+});
+
+test('real order read normalizes dispute observation freshness without granting clearance',async()=>{
+ const now=Date.now();const checked=new Date(now-1000).toISOString(),until=new Date(now+60_000).toISOString();
+ const metadata={providerDisputeState:'open',providerDisputeRefreshStatus:'fresh',providerDisputeCheckedAt:checked,providerDisputeFreshUntil:until};
+ const h=harness({rpcReply:{orders:[{id:'order',...metadata,returnHoldReasons:['merch_dispute_unresolved']}],nextCursor:null}});
+ const page=await h.api.readMerchOrders({role:'buyer'});
+ assert.equal(page.orders[0].providerDisputeState,'open');assert.equal(page.orders[0].providerDisputeRefreshStatus,'fresh');
+ assert.deepEqual(page.orders[0].returnHoldReasons,['merch_dispute_unresolved']);assert.equal(page.orders[0].financialAuthority,undefined);
+ const parse=h.api.parseMerchDisputeMetadata;
+ assert.equal(parse({},now).providerDisputeRefreshStatus,'unknown');
+ for(const patch of [{providerDisputeState:'cleared'},{providerDisputeRefreshStatus:'cleared'},{providerDisputeCheckedAt:'bad'},{providerDisputeFreshUntil:null},{providerDisputeCheckedAt:new Date(now+1000).toISOString()},{providerDisputeFreshUntil:new Date(now+13*60*60*1000).toISOString()}])assert.equal(parse({...metadata,...patch},now).providerDisputeRefreshStatus,'unknown');
+ assert.equal(parse({...metadata,providerDisputeFreshUntil:new Date(now-1).toISOString()},now).providerDisputeRefreshStatus,'stale');
+ assert.equal(parse({providerDisputeState:'unknown',providerDisputeRefreshStatus:'pending',providerDisputeCheckedAt:null,providerDisputeFreshUntil:null},now).providerDisputeRefreshStatus,'pending');
 });
