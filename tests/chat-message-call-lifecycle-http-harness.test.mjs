@@ -35,3 +35,21 @@ test('HTTP source loader still rejects every undeclared runtime dependency', () 
       error => error.message.includes(`unexpected dependency ${name}`));
   }
 });
+
+test('HTTP lifecycle retains completed-call credit and unanswered-budget negative control', () => {
+  const source=fs.readFileSync(script,'utf8');
+  const start=source.indexOf('phase("completed call permits another original-direction invite")');
+  const end=source.indexOf('phase("reverse-direction same-thread replacement');
+  assert.ok(start>=0&&end>start);
+  const boundary=source.slice(start,end);
+  assert.match(boundary,/await begin\("completed-credit"\)/);
+  assert.match(boundary,/await transition\(creditedRetry, caller, "canceled"\)/);
+  assert.match(boundary,/await assertTerminal\(creditedRetry, "canceled"\)/);
+  assert.match(boundary,/await assert\.rejects\(callerApi\.calls\.beginChillyChatCall/);
+  assert.match(boundary,/error\?\.code === "P0001" && error\?\.message === "rate_limited"/);
+  assert.match(boundary,/blockedInvites\.length === 0/);
+  assert.match(source,/inviteRows\.length === 7 && \[\[caller,4\],\[callee,3\]\]/);
+  assert.match(source,/row\.status==='ended'&&row\.accepted_at\)\.length===1/);
+  assert.match(source,/row\.status==='canceled'&&!row\.accepted_at\)\.length===2/);
+  assert.match(source,/row\.status==='declined'&&!row\.accepted_at\)\.length===1/);
+});

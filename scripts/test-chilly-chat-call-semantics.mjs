@@ -1280,10 +1280,23 @@ const updateCallBlock = chillyChatCallsSource.slice(
   chillyChatCallsSource.indexOf("export async function insertChillyChatCallEvent"),
 );
 assert.doesNotMatch(`${beginCallBlock}\n${updateCallBlock}`, /supabase\.auth\.getSession/u, "call begin and transition paths do not discard mounted identity for a redundant auth lookup");
-assert.match(chillyChatCallsSource, /payload\.role === "caller" \|\| payload\.role === "callee"/u, "call begin binds the server-returned role to the mounted actor");
+function assertBeginActorBinding(source) {
+  assert.match(source, /data\.role === "caller" \|\| data\.role === "callee"/u, "call begin validates the server-returned role");
+  assert.match(source, /\(role === "caller" \? invite\.callerUserId : invite\.calleeUserId\) !== actorUserId/u, "call begin binds the server-returned role to the mounted actor");
+}
+assertBeginActorBinding(beginCallBlock);
+for (const [from,to] of [
+  ['data.role === "caller" || data.role === "callee"','true'],
+  ['(role === "caller" ? invite.callerUserId : invite.calleeUserId) !== actorUserId','false'],
+]) {
+  assert.ok(beginCallBlock.includes(from));
+  assert.throws(()=>assertBeginActorBinding(beginCallBlock.replace(from,to)));
+}
+// The bounded function slice, not an arbitrary character count across response
+// validation, defines the exact operation whose recovery is being checked.
 assert.match(
   beginCallBlock,
-  /captureExactMountedCallActor[\s\S]{0,1200}reconcileCommittedChillyChatCallBegin/u,
+  /captureExactMountedCallActor[\s\S]*reconcileCommittedChillyChatCallBegin/u,
   "an ambiguous call-begin result may reconcile only against the exact initiating account/session",
 );
 assert.match(
