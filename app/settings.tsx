@@ -592,6 +592,7 @@ export default function SettingsScreen() {
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [profileAppearanceSheetKind, setProfileAppearanceSheetKind] = useState<ProfileMediaKind | null>(null);
   const [profileAppearanceBusy, setProfileAppearanceBusy] = useState<ProfileMediaKind | null>(null);
+  const profileGalleryPending = useRef(false);
   const [profileImagePreview, setProfileImagePreview] = useState<{
     title: string;
     imageUrl?: string;
@@ -602,6 +603,11 @@ export default function SettingsScreen() {
     file: ProfileMediaImageFile;
     fitMode: ProfileAppearanceFitMode;
   } | null>(null);
+  useEffect(() => {
+    setProfileMediaReview(null);
+    setProfileAppearanceSheetKind(null);
+    setProfileImagePreview(null);
+  }, [authority?.userId, authority?.accountId, authority?.sessionGeneration, authority?.restoreOnly]);
   const notificationOwnerKey = !isLoading && isSignedIn && authorityStatus === "active"
     && authority && !authority.restoreOnly && authority.userId === user?.id
     ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration]) : "unavailable";
@@ -1327,12 +1333,19 @@ export default function SettingsScreen() {
   }, [activeProfileBackgroundUrl, activeProfilePhotoUrl, myProfile]);
 
   const onChooseProfileMedia = useCallback(async (kind: ProfileMediaKind) => {
-    if (profileAppearanceBusy) return;
+    if (profileAppearanceBusy || profileGalleryPending.current) return;
+    const pickerAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    if (!pickerAuthority || pickerAuthority.restoreOnly
+      || !sameAccountSessionAuthority(authority, pickerAuthority)) return;
+    const isCurrent = () => mountedRef.current
+      && sameAccountSessionAuthority(pickerAuthority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
+    profileGalleryPending.current = true;
 
     setProfileAppearanceSheetKind(null);
     try {
       const file = await pickProfileMediaImage(kind);
-      if (!file) return;
+      if (!file || !isCurrent()) return;
       setProfileMediaReview({
         kind,
         file,
@@ -1341,12 +1354,15 @@ export default function SettingsScreen() {
           : myProfile?.profileBackgroundFitMode ?? "fill",
       });
     } catch (error) {
+      if (!isCurrent()) return;
       Alert.alert(
         "Profile Appearance",
         getUserFacingErrorMessage(error, "Unable to choose a Profile image right now."),
       );
+    } finally {
+      profileGalleryPending.current = false;
     }
-  }, [myProfile?.profileAvatarFitMode, myProfile?.profileBackgroundFitMode, profileAppearanceBusy]);
+  }, [authority, myProfile?.profileAvatarFitMode, myProfile?.profileBackgroundFitMode, profileAppearanceBusy]);
 
   const onSaveProfileMediaReview = useCallback(async () => {
     if (!profileMediaReview || profileAppearanceBusy) return;

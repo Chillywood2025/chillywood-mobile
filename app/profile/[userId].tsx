@@ -770,6 +770,12 @@ export default function ProfileScreen() {
     fitMode: ProfileAppearanceFitMode;
   } | null>(null);
   const [profileAppearanceBusy, setProfileAppearanceBusy] = useState<ProfileMediaKind | null>(null);
+  const profileGalleryPending = useRef(false);
+  const profileGalleryMounted = useRef(false);
+  useEffect(() => {
+    profileGalleryMounted.current = true;
+    return () => { profileGalleryMounted.current = false; };
+  }, []);
   const [profileBlockBusy, setProfileBlockBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -1876,23 +1882,33 @@ export default function ProfileScreen() {
       Alert.alert("Profile Appearance", "Only the Profile owner can change this image.");
       return;
     }
-    if (profileAppearanceBusy) return;
+    if (profileAppearanceBusy || profileGalleryPending.current) return;
+    const pickerAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    if (!pickerAuthority || pickerAuthority.restoreOnly || pickerAuthority.userId !== userId
+      || !sameAccountSessionAuthority(authority, pickerAuthority)) return;
+    const isCurrent = () => profileGalleryMounted.current && isSocialIdentityCurrent()
+      && sameAccountSessionAuthority(pickerAuthority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
+    profileGalleryPending.current = true;
 
     if (kind === "avatar") setProfilePhotoSheetVisible(false);
     if (kind === "background") setProfileBackgroundSheetVisible(false);
     try {
       const file = await pickProfileMediaImage(kind);
-      if (!file) return;
+      if (!file || !isCurrent()) return;
       setProfileMediaReview({
         kind,
         file,
         fitMode: kind === "avatar" ? profile.profileAvatarFitMode : profile.profileBackgroundFitMode,
       });
     } catch (error) {
+      if (!isCurrent()) return;
       Alert.alert(
         "Profile Appearance",
         getUserFacingErrorMessage(error, "Unable to choose a Profile image right now."),
       );
+    } finally {
+      profileGalleryPending.current = false;
     }
   };
   const onSaveProfileMediaReview = async () => {

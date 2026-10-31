@@ -13,7 +13,7 @@ async function fixture(t, stage, target = 'draft') {
     if (name === stage && !blocked) { blocked = true; await gate.promise; }
   };
   const h = await mount(t, { videos: [stored], overrides: {
-    getDocumentAsync: async () => ({ canceled: false, assets: [{ uri: 'fixture:cover', name: 'cover.jpg', mimeType: 'image/jpeg', size: 100 }] }),
+    launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'fixture:cover', fileName: 'cover.jpg', mimeType: 'image/jpeg', fileSize: 100 }] }),
     readClipStudioEdit: async () => { await boundary('edit-read'); return savedEdit; },
     updateCreatorVideoMetadata: async (_id, patch) => { await boundary('video-write'); stored = { ...stored, ...patch }; return stored; },
     uploadClipStudioCoverImage: async () => { await boundary('cover-write'); stored = { ...stored, thumbStoragePath: 'new-cover' }; return { storagePath: 'new-cover', mimeType: 'image/jpeg', fileSizeBytes: 100, signedUrl: 'fixture:cover' }; },
@@ -27,7 +27,9 @@ async function fixture(t, stage, target = 'draft') {
   await h.change(h.input('Title text'), 'Initiating session edit');
   if (stage === 'cover-write') {
     await h.press(h.find(n => n.type === 'TouchableOpacity' && n.props.accessibilityLabel?.includes('Cover Image')));
-    await h.press(h.button('Change Cover') ?? h.button('Choose Cover Image'));
+    await h.press(h.find(n => n.props.testID === 'clip-cover-photos-button'));
+    assert.equal(h.calls.filter(([name]) => name === 'launchImageLibraryAsync').length, 1);
+    assert.equal(h.calls.filter(([name]) => name === 'getDocumentAsync').length, 0);
     const saveSection = h.button('Save. Confirm details and save the draft.');
     if (!saveSection.props.accessibilityState.expanded) await h.press(saveSection);
   }

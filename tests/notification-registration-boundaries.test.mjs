@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { notificationHistoricalSource, notificationHistoryProvenance } from './helpers/notification-history-fixtures.mjs';
+import { gallerySettingsContext as galleryContext, priorAccountActionSettings } from './helpers/gallery-settings-context.mjs';
 const source = path => fs.readFileSync(path,'utf8');
 const digest = value => createHash('sha256').update(value).digest('hex');
 const span = (text,start,end) => {const i=text.indexOf(start);assert.ok(i>=0);return text.slice(i,end?text.indexOf(end,i):undefined);};
@@ -54,7 +55,9 @@ test('explicitly reviewed account-action Settings context retains original notif
   const previousSettingsSha256='b7db017b76f1502319ed2523c92efefe1bab6812d57925138baac7d46bc3ae33';
   const reviewedSettingsSha256='b19c26bbb792aab62a034c53a87ae3df3f43cbfbdbf1eefbdb3e81e0a0d5795b';
   const settings=source('app/settings.tsx');
-  assert.equal(digest(settings),reviewedSettingsSha256,'Settings changed after account-action scope review; review a new context witness');
+  assert.equal(galleryContext.accountActionContextSha256,reviewedSettingsSha256);
+  assert.equal(digest(settings),galleryContext.galleryContextSha256,'Settings changed after gallery scope review');
+  assert.equal(digest(priorAccountActionSettings(settings)),reviewedSettingsSha256,'non-gallery Settings changed after account-action scope review');
   for(const [name,originalTarget] of [
     ['original-settings','7dd4b554a8455b0f934883b264ad2530e06f1a1da356d744ea66254d85e5997d'],
     ['first-settings','9fe0dc633b7503db5a731ed94c70b574c04450e92def6b5e94d2ea01953e69a9'],
@@ -78,4 +81,32 @@ test('explicitly reviewed account-action Settings context retains original notif
       ['  const onPressSubmitAccountDeletionRequest =','  // eslint-disable-next-line'],
     ])assert.equal(span(historical,start,end),span(settings,start,end),`${name}: preserve reviewed account-action code`);
   }
+});
+
+test('gallery witness rejects absent, duplicate and unreviewed appearance changes',()=>{
+  const settings=source('app/settings.tsx');
+  const first=galleryContext.changes[0];
+  for(const replacement of ['',first.galleryContext+first.galleryContext,first.accountActionContext]) {
+    assert.throws(()=>priorAccountActionSettings(settings.replace(first.galleryContext,replacement)),/exactly one reviewed gallery hunk/);
+  }
+  assert.throws(()=>priorAccountActionSettings(settings.replace('const profileGalleryPending = useRef(false);','const profileGalleryPending = useRef(true);')),/exactly one reviewed gallery hunk/);
+});
+
+test('gallery projection cannot excuse notification, sign-out or deletion changes',()=>{
+  const settings=source('app/settings.tsx');
+  const assertPrior=value=>assert.equal(digest(priorAccountActionSettings(value)),galleryContext.accountActionContextSha256);
+  assertPrior(settings);
+  for(const [start,end] of [
+    ['  const notificationOwnerKey =','  const notificationScopeRef ='],
+    ['  const finishAccountSignOut =','  const onPressOpenProfile ='],
+    ['  const onPressSubmitAccountDeletionRequest =','  // eslint-disable-next-line'],
+  ]) {
+    const protectedCode=span(settings,start,end);
+    assert.ok(protectedCode.length>start.length);
+    const needle=start.includes('notificationOwnerKey')?'&&':start.includes('SubmitAccountDeletion')?'!currentAccountAction(authority)':'await ';
+    const mutated=protectedCode.replace(needle,needle==='&&'?'||':needle==='await '?'void ':'false');
+    assert.notEqual(mutated,protectedCode,'negative control must alter protected behavior');
+    assert.throws(()=>assertPrior(settings.replace(protectedCode,mutated)),assert.AssertionError);
+  }
+  assert.throws(()=>assertPrior(settings+'\n// unknown unrelated change\n'),assert.AssertionError);
 });

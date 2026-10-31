@@ -121,10 +121,25 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: s
   }
 };
 
-async function prepareCoverUploadUri(file: CreatorVideoFile): Promise<{ uri: string; cleanup: () => Promise<void> }> {
+async function prepareCoverUploadUri(file: CreatorVideoFile): Promise<{ file: CreatorVideoFile; uri: string; cleanup: () => Promise<void> }> {
+  if ((["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(inferCoverMimeType(file)) || /\.hei[cf]$/i.test(toText(file.name) || toText(file.uri)))) {
+    const { normalizeImageUploadFile } = await import("./imageUploadNormalization");
+    const normalized = await normalizeImageUploadFile(file);
+    try {
+      if (!COVER_IMAGE_MIME_TYPES.has(inferCoverMimeType(normalized.file))) throw new Error("Unable to prepare this cover image.");
+      const validation = getClipStudioCoverValidationMessage(normalized.file);
+      if (validation) throw new Error(validation);
+      const prepared = await prepareCoverUploadUri(normalized.file);
+      return { ...prepared, cleanup: async () => { try { await prepared.cleanup(); } finally { await normalized.cleanup(); } } };
+    } catch (error) {
+      await normalized.cleanup();
+      throw error;
+    }
+  }
+
   const normalizedUri = toText(file.uri);
   if (!normalizedUri.startsWith("content://") || !FileSystem.cacheDirectory) {
-    return { uri: normalizedUri, cleanup: async () => undefined };
+    return { file, uri: normalizedUri, cleanup: async () => undefined };
   }
 
   const cacheUri = `${FileSystem.cacheDirectory}clip-cover-${createClientId()}.${getCoverExtension(file)}`;
@@ -135,6 +150,7 @@ async function prepareCoverUploadUri(file: CreatorVideoFile): Promise<{ uri: str
   );
 
   return {
+    file,
     uri: cacheUri,
     cleanup: async () => {
       await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
@@ -180,7 +196,8 @@ export const getClipStudioCoverLimitLabel = () =>
 export const getClipStudioCoverValidationMessage = (file: CreatorVideoFile | null | undefined) => {
   if (!file || !toText(file.uri)) return "Choose a cover image first.";
   const mimeType = inferCoverMimeType(file);
-  if (!COVER_IMAGE_MIME_TYPES.has(mimeType)) {
+  if (!COVER_IMAGE_MIME_TYPES.has(mimeType) && !["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(mimeType)
+    && !(!toText(file.mimeType) && /\.hei[cf]$/i.test(toText(file.name) || toText(file.uri)))) {
     return "Choose a JPG, PNG, or WebP cover image.";
   }
 
@@ -472,9 +489,9 @@ export async function uploadClipStudioCoverImage(input: {
     throw new Error("This account cannot update that creator video cover.");
   }
 
-  const mimeType = inferCoverMimeType(input.file);
-  const storagePath = `${ownerUserId}/${normalizedVideoId}/cover-${createClientId()}.${getCoverExtension(input.file)}`;
   const preparedCover = await prepareCoverUploadUri(input.file);
+  const mimeType = inferCoverMimeType(preparedCover.file);
+  const storagePath = `${ownerUserId}/${normalizedVideoId}/cover-${createClientId()}.${getCoverExtension(preparedCover.file)}`;
   // Newly uploaded covers are malware-pending. Use the already-selected local
   // image for the immediate editor preview; remote delivery remains blocked
   // until the exact cover scan job is clean.
@@ -488,8 +505,8 @@ export async function uploadClipStudioCoverImage(input: {
       objectKey: storagePath,
       uri: preparedCover.uri,
       mimeType,
-      fileName: input.file.name,
-      sizeBytes: input.file.size,
+      fileName: preparedCover.file.name,
+      sizeBytes: preparedCover.file.size,
       maximumSizeBytes: CLIP_STUDIO_COVER_MAX_BYTES,
       tooLargeMessage: `Cover images support up to ${getClipStudioCoverLimitLabel()}.`,
       assertOperationCurrent,

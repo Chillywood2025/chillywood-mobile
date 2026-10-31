@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { priorAccountActionSettings } from './gallery-settings-context.mjs';
 
 const directory = new URL('../fixtures/notification-history/', import.meta.url);
 export const notificationHistoryProvenance = JSON.parse(readFileSync(new URL('provenance.json', directory), 'utf8'));
@@ -12,7 +13,11 @@ const sha256 = value => createHash('sha256').update(value).digest('hex');
 export function notificationHistoricalSource(name) {
   const fixture = notificationHistoryProvenance.find(entry => entry.name === name);
   assert.ok(fixture, `known notification source fixture: ${name}`);
-  const current = readFileSync(new URL(`../../${fixture.path}`, import.meta.url), 'utf8');
+  const source = readFileSync(new URL(`../../${fixture.path}`, import.meta.url), 'utf8');
+  // Only the separately reviewed gallery delta is projected back. Preserve the
+  // original patches and account-action witness hashes, including their exact
+  // context around notification state; never treat projected bytes as raw source.
+  const current = fixture.path === 'app/settings.tsx' ? priorAccountActionSettings(source) : source;
   const lines = readFileSync(new URL(`${name}.patch`, directory), 'utf8').split('\n');
   assert.equal(lines.shift(), `--- ${fixture.path}`);
   assert.equal(lines.shift(), `+++ ${fixture.path}`);
