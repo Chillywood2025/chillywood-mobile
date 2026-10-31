@@ -1,8 +1,7 @@
-import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import type { Tables, TablesInsert } from "../supabase/database.types";
 
 import {
-  createCommunicationRoom,
-  endCommunicationRoom,
+  prepareChatCallRoomCandidate,
   formatCommunicationRoomCode,
   getCommunicationRoom,
   getCommunicationRoomSnapshot,
@@ -43,6 +42,7 @@ import {
 } from "./communicationCallMediaPolicy.mjs";
 import { reportRuntimeError } from "./logger";
 import { UserFacingError } from "./userFacingErrors";
+import { compareChatActivityTimestamps } from "./chatActivity";
 import {
   getNotificationActivityOwnerKey,
   subscribeToNotificationActivity,
@@ -78,8 +78,10 @@ export type ChatThreadMember = {
   tagline?: string;
   joinedAt: string;
   lastReadAt?: string;
+  lastCallReadAt?: string;
   hiddenAt?: string;
   unreadCount: number;
+  unreadCallCount?: number;
 };
 
 export type ChatThreadSummary = {
@@ -90,6 +92,7 @@ export type ChatThreadSummary = {
   updatedAt: string;
   lastMessageAt?: string;
   displayLastActivityAt?: string | null;
+  lastActivityPreview?: string;
   lastMessagePreview?: string;
   activeCommunicationRoomId?: string;
   activeCallType?: ChatCallType;
@@ -117,7 +120,7 @@ export type ChatMessage = {
 type ChatThreadMemberRow = Pick<
   Tables<"chat_thread_members">,
   "thread_id" | "user_id" | "display_name" | "avatar_url" | "tagline" | "joined_at" | "last_read_at" | "hidden_at" | "unread_count"
->;
+> & { unread_call_count?: number; last_call_read_at?: string | null };
 
 type ChatThreadRow = Pick<
   Tables<"chat_threads">,
@@ -132,6 +135,8 @@ type ChatThreadRow = Pick<
   | "active_call_type"
 > & {
   members: ChatThreadMemberRow[] | null;
+  last_activity_at?: string | null;
+  last_activity_preview?: string | null;
 };
 
 type ChatMessageRow = {
@@ -152,17 +157,14 @@ type ChatUserProfileRow = Pick<
   "user_id" | "username" | "display_name" | "avatar_url" | "tagline"
 >;
 
-type ChatThreadMemberUpdate = TablesUpdate<"chat_thread_members">;
 type ChatMessageInsert = TablesInsert<"chat_messages">;
 type ChatCallInviteStatusRow = Pick<
   Tables<"chat_call_invites">,
   "id" | "thread_id" | "communication_room_id" | "status" | "created_at" | "expires_at"
 >;
 
-const CHAT_THREAD_MEMBER_SELECT =
-  "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,hidden_at,unread_count";
 const CHAT_THREAD_SELECT =
-  `id,participant_pair_key,created_by,created_at,updated_at,last_message_at,last_message_preview,active_communication_room_id,active_call_type,members:${CHAT_THREAD_MEMBERS_TABLE}(${CHAT_THREAD_MEMBER_SELECT})`;
+  "id,participant_pair_key,created_by,created_at,updated_at,last_message_at,last_message_preview,last_activity_at,last_activity_preview,active_communication_room_id,active_call_type,members";
 const CHAT_MESSAGE_SELECT =
   "id,thread_id,sender_user_id,body,message_type,created_at,moderation_status,moderation_reason,moderation_report_id,moderation_actioned_at";
 const CHAT_USER_SEARCH_SELECT =
@@ -346,8 +348,10 @@ function parseChatThreadMember(row: ChatThreadMemberRow): ChatThreadMember | nul
     tagline: toText(row.tagline) || undefined,
     joinedAt: toText(row.joined_at) || new Date().toISOString(),
     lastReadAt: toText(row.last_read_at) || undefined,
+    lastCallReadAt: toText(row.last_call_read_at) || undefined,
     hiddenAt: toText(row.hidden_at) || undefined,
-    unreadCount: Math.max(0, Number(row.unread_count ?? 0) || 0),
+    unreadCount: Math.max(0, Number(row.unread_count ?? 0) || 0) + Math.max(0, Number(row.unread_call_count ?? 0) || 0),
+    unreadCallCount: Math.max(0, Number(row.unread_call_count ?? 0) || 0),
   };
 }
 
@@ -357,10 +361,9 @@ function isHiddenFromCurrentInbox(thread: ChatThreadSummary) {
   const hiddenTime = Date.parse(hiddenAt);
   if (!Number.isFinite(hiddenTime)) return false;
 
-  const lastMessageAt = toText(thread.lastMessageAt);
+  const lastMessageAt = toText(thread.displayLastActivityAt);
   if (!lastMessageAt) return true;
-  const lastMessageTime = Date.parse(lastMessageAt);
-  return !Number.isFinite(lastMessageTime) || lastMessageTime <= hiddenTime;
+  return !Number.isFinite(Date.parse(lastMessageAt)) || compareChatActivityTimestamps(lastMessageAt, hiddenAt) <= 0;
 }
 
 function parseChatThread(
@@ -391,10 +394,13 @@ function parseChatThread(
     threadId,
     participantPairKey,
     createdBy,
-    createdAt: toText(row.created_at) || new Date().toISOString(),
-    updatedAt: toText(row.updated_at) || new Date().toISOString(),
+    createdAt: toText(row.created_at),
+    updatedAt: toText(row.updated_at),
     lastMessageAt: toText(row.last_message_at) || undefined,
-    displayLastActivityAt: toText(row.last_message_at) || toText(row.updated_at) || null,
+    displayLastActivityAt: row.last_activity_at === undefined
+      ? toText(row.last_message_at) || toText(row.created_at) || null : toText(row.last_activity_at) || null,
+    lastActivityPreview: row.last_activity_preview === undefined
+      ? toText(row.last_message_preview) || undefined : toText(row.last_activity_preview),
     lastMessagePreview: toText(row.last_message_preview) || undefined,
     activeCommunicationRoomId: toText(row.active_communication_room_id) || undefined,
     activeCallType: normalizeCallType(row.active_call_type),
@@ -446,12 +452,8 @@ const timestampForCollectionOrder = (value?: string) => {
 };
 
 const sortChatThreadsForInbox = (threads: ChatThreadSummary[]) => [...threads].sort((left, right) => {
-  const lastMessageDifference = timestampForCollectionOrder(right.lastMessageAt)
-    - timestampForCollectionOrder(left.lastMessageAt);
-  if (lastMessageDifference) return lastMessageDifference;
-  const updatedDifference = timestampForCollectionOrder(right.updatedAt)
-    - timestampForCollectionOrder(left.updatedAt);
-  return updatedDifference || left.threadId.localeCompare(right.threadId);
+  return compareChatActivityTimestamps(right.displayLastActivityAt, left.displayLastActivityAt)
+    || left.threadId.localeCompare(right.threadId);
 });
 
 const sortChatMessagesForThread = (messages: ChatMessage[]) => [...messages].sort((left, right) => {
@@ -618,7 +620,7 @@ export async function listChatThreads(options: { signal?: AbortSignal } = {}): P
   for (;;) {
     assertChatReadCurrent(binding, signal);
     let query = supabase
-      .from(CHAT_THREADS_TABLE)
+      .from("chat_thread_activity")
       .select(CHAT_THREAD_SELECT)
       .order("id", { ascending: true })
       .limit(CHAT_COLLECTION_PAGE_SIZE);
@@ -660,7 +662,7 @@ export async function getChatThread(
   if (!normalizedThreadId) return null;
 
   const { data, error } = await supabase
-    .from(CHAT_THREADS_TABLE)
+    .from("chat_thread_activity")
     .select(CHAT_THREAD_SELECT)
     .eq("id", normalizedThreadId)
     .returns<ChatThreadRow>()
@@ -686,7 +688,7 @@ export async function getChatThreadByActiveCommunicationRoomId(roomId: string): 
   if (!normalizedRoomId) return null;
 
   const { data, error } = await supabase
-    .from(CHAT_THREADS_TABLE)
+    .from("chat_thread_activity")
     .select(CHAT_THREAD_SELECT)
     .eq("active_communication_room_id", normalizedRoomId)
     .order("updated_at", { ascending: false })
@@ -755,7 +757,17 @@ export async function unhideChatThreadForMe(threadId: string): Promise<void> {
   return unhideChatThreadWithAuthority(threadId, authority);
 }
 
-export async function listChatMessages(threadId: string): Promise<ChatMessage[]> {
+export async function readChatActivityCut(threadId: string): Promise<string> {
+  const authority = await captureChatMutationAuthority();
+  const { data, error } = await invokeBoundChatRpc(authority, "read_chilly_chat_activity_cut", { p_thread_id: threadId });
+  assertChatMutationAuthorityCurrent(authority);
+  if (error || typeof data !== "string" || !Number.isFinite(Date.parse(data))) {
+    throw new UserFacingError("chat_action", "Unable to load the latest conversation safely.");
+  }
+  return data;
+}
+
+export async function listChatMessages(threadId: string, activityCut?: string): Promise<ChatMessage[]> {
   const binding = captureChatReadBinding();
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return [];
@@ -774,6 +786,7 @@ export async function listChatMessages(threadId: string): Promise<ChatMessage[]>
       .order("id", { ascending: true })
       .limit(CHAT_COLLECTION_PAGE_SIZE);
     if (messageIdCursor) query = query.gt("id", messageIdCursor);
+    if (activityCut) query = query.lte("created_at", activityCut);
     const { data, error } = await query.returns<ChatMessageRow[]>();
     assertChatReadBindingCurrent(binding);
     if (error || !data) return [];
@@ -978,21 +991,19 @@ export async function sendDirectInviteMessage(target: ChatTargetIdentity, body: 
   return { thread, message };
 }
 
-export async function markChatThreadRead(threadId: string): Promise<void> {
-  const currentUserId = await getRequiredChatUserId();
+export async function markChatThreadRead(threadId: string, readThrough?: string | null, callReadThrough?: string | null): Promise<void> {
+  const messageThrough = Number.isFinite(Date.parse(readThrough ?? "")) ? readThrough : null;
+  const callThrough = Number.isFinite(Date.parse(callReadThrough ?? "")) ? callReadThrough : null;
+  if (!messageThrough && !callThrough) return;
+  const authority = await captureChatMutationAuthority();
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return;
-
-  const markReadUpdate: ChatThreadMemberUpdate = {
-    unread_count: 0,
-    last_read_at: new Date().toISOString(),
-  };
-
-  await supabase
-    .from(CHAT_THREAD_MEMBERS_TABLE)
-    .update(markReadUpdate)
-    .eq("thread_id", normalizedThreadId)
-    .eq("user_id", currentUserId);
+  assertChatMutationAuthorityCurrent(authority);
+  const { error } = await invokeBoundChatRpc(authority, "mark_chilly_chat_thread_read", {
+    p_thread_id: normalizedThreadId, p_read_through: messageThrough, p_call_read_through: callThrough,
+  });
+  assertChatMutationAuthorityCurrent(authority);
+  if (error) throw new UserFacingError("chat_action", "Unable to save the read status yet.");
 }
 
 export type ChatThreadCallCleanupResult = {
@@ -1147,34 +1158,17 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
     await clearEndedChatThreadCall(thread.threadId, existingRoomId);
   }
 
-  const created = await createCommunicationRoom({
-    hostUserId: currentUserId,
-    // Direct-thread calls retain their existing member-only thread authority;
-    // creator Premium defaults must never become a separate Chat Call gate.
-    contentAccessRule: "open",
-  });
-
-  if ("error" in created) {
-    logChatCall("thread_call_room_create_failed", {
-      currentUserId,
-      threadId: thread.threadId,
-      mode,
-      message: created.error.message,
-    });
-    throw new Error(created.error.message);
-  }
-
-  const roomId = toText(created.roomId);
   if (!toText(thread.otherMember?.userId)) {
-    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
     logChatCall("thread_call_missing_callee", {
       currentUserId,
       threadId: thread.threadId,
-      roomId,
       mode,
     });
     throw new UserFacingError("chat_action", "Unable to start Chi'lly Chat call. The receiver is unavailable.");
   }
+  const candidate = await prepareChatCallRoomCandidate();
+  assertChatReadBindingCurrent(authority);
+  const roomId = toText(candidate.roomId);
 
   let delivery: ChillyChatCallInviteDelivery | null = null;
   let begunCall: BegunChillyChatCall;
@@ -1184,9 +1178,11 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       callType: mode,
       communicationRoomId: roomId,
       threadId: thread.threadId,
+      createRoomCapturePolicy: candidate.capturePolicy,
     });
   } catch (inviteError) {
-    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
+    // A definitive rejection rolls back allocation server-side. A lost or
+    // malformed reply may hide a committed call: never End it speculatively.
     logChatCall("thread_call_invite_failed", {
       currentUserId,
       threadId: thread.threadId,
@@ -1196,7 +1192,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
     });
     if (inviteError && typeof inviteError === "object" && "message" in inviteError
       && String(inviteError.message).trim().toLowerCase() === "rate_limited") {
-      throw new UserFacingError("chat_action", "Too many attempts. Wait a few minutes, then try again.");
+      throw new UserFacingError("chat_call_rate_limited", "Too many attempts. Wait a few minutes, then try again.");
     }
     throw new UserFacingError("chat_action", "Unable to confirm whether this Chi'lly Chat call was started. Refresh the thread before trying again.");
   }
@@ -1217,7 +1213,6 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       status: delivery.status,
     });
   } else if (begunCall.invite.status === "busy") {
-    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
     logChatCall("thread_call_receiver_busy", {
       currentUserId,
       threadId: thread.threadId,
@@ -1225,7 +1220,6 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       mode: begunCall.invite.callType,
     });
   } else {
-    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
     logChatCall("thread_call_collision_reused", {
       currentUserId,
       threadId: thread.threadId,

@@ -18,7 +18,7 @@ import {
 } from "./liveEvents";
 import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 import { normalizeProductNotificationCopy } from "./userFacingProductCopy";
-import { applyNotificationDisplayContext, needsNotificationDisplayContext } from "./notificationDisplayContext";
+import { applyNotificationDisplayContext, needsNotificationDisplayContext, redactUnverifiedLiveAttendance } from "./notificationDisplayContext";
 import {
   CHAT_CALL_INVITES_TABLE,
   normalizeChillyChatRingtoneKey,
@@ -408,7 +408,11 @@ const normalizeIsoTimestamp = (value: unknown): string | null => {
   if (!normalized) return null;
   const parsed = Date.parse(normalized);
   if (!Number.isFinite(parsed)) return null;
-  return new Date(parsed).toISOString();
+  const iso = new Date(parsed).toISOString();
+  // PostgreSQL cursor timestamps retain microseconds. Rounding a page boundary
+  // to milliseconds would skip older rows within that same millisecond.
+  const fraction = normalized.match(/\.(\d{4,6})(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu)?.[1];
+  return fraction ? iso.replace(/\.\d{3}Z$/, `.${fraction.padEnd(6, "0")}Z`) : iso;
 };
 
 const normalizeNotificationCategory = (value: unknown): NotificationCategory => {
@@ -679,6 +683,7 @@ const notificationDisplayTransports = new Set<AbortController>();
 const NOTIFICATION_DISPLAY_DEADLINE_MS = 1_500;
 async function hydrateNotificationDisplayRows(rows: NotificationRow[], operation: NotificationReadOperation): Promise<NotificationRow[]> {
   operation.assertCurrent();
+  rows = redactUnverifiedLiveAttendance(rows);
   const ids = rows.filter(needsNotificationDisplayContext).map(row => row.id);
   if (!ids.length || notificationDisplayTransports.size >= 2) return rows;
   const controller = new AbortController();

@@ -1,7 +1,7 @@
 import React from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   StyleSheet,
-  Text,
   TouchableOpacity,
   type StyleProp,
   type TextStyle,
@@ -22,7 +22,7 @@ type AppBackButtonProps = Pick<
 export function AppBackButton({
   accessibilityLabel,
   disabled,
-  hitSlop,
+  hitSlop = 12,
   label = "Back",
   onPress,
   onPressIn,
@@ -48,7 +48,12 @@ export function AppBackButton({
       style={[styles.button, style]}
       testID={testID}
     >
-      <Text style={[styles.text, textStyle]}>← {label}</Text>
+      <Ionicons
+        name="arrow-back"
+        size={24}
+        color={StyleSheet.flatten(textStyle)?.color ?? "#E7EEFF"}
+        accessible={false}
+      />
     </TouchableOpacity>
   );
 }
@@ -57,14 +62,10 @@ const styles = StyleSheet.create({
   button: {
     minHeight: 44,
     minWidth: 44,
+    alignSelf: "flex-start",
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
     paddingHorizontal: 6,
-  },
-  text: {
-    color: "#E7EEFF",
-    fontSize: 14,
-    fontWeight: "800",
   },
 });

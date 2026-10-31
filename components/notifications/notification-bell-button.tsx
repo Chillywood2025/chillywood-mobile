@@ -125,7 +125,14 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
       if (seen.has(notification.id)) return false;
       seen.add(notification.id);
       return true;
-    }).sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+    }).sort((left, right) => {
+      const milliseconds = (Date.parse(right.createdAt) || 0) - (Date.parse(left.createdAt) || 0);
+      if (milliseconds) return milliseconds;
+      const micros = (value: string) => Number((value.match(/\.(\d+)(?:Z|[+-]\d{2}:?\d{2})$/iu)?.[1] ?? "").padEnd(6, "0").slice(3, 6));
+      // Match the server's created_at DESC, id DESC order after merging pages
+      // and important activity; importance must not pin an older row first.
+      return micros(right.createdAt) - micros(left.createdAt) || right.id.localeCompare(left.id);
+    });
   }, []);
 
   const runRead = useCallback(async (request: NotificationReadRequest) => {

@@ -549,6 +549,19 @@ async function fetchCommunicationRoomRow(roomId: string, signal?: AbortSignal): 
   throw createCommunicationOperationError("room read", query.error);
 }
 
+// Read defaults without committing a room or consuming its abuse budget. The
+// direct-call RPC owns allocation together with invite admission.
+export async function prepareChatCallRoomCandidate() {
+  const [appConfig, profile] = await Promise.all([
+    readAppConfig().catch(() => null), readUserProfile().catch(() => null),
+  ]);
+  return {
+    roomId: createPartyIdentifier(),
+    capturePolicy: normalizeCapturePolicy(profile?.defaultCommunicationCapturePolicy
+      ?? resolveRoomDefaultConfig(appConfig).communication.capturePolicy),
+  };
+}
+
 export async function createCommunicationRoom(hostUserIdOrOptions?: string | CommunicationRoomCreateOptions): Promise<CreateCommunicationRoomResult> {
   const options = typeof hostUserIdOrOptions === "string"
     ? { hostUserId: hostUserIdOrOptions }

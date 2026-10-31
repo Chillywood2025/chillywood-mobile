@@ -172,11 +172,16 @@ test("mismatched acceptance response never completes native Answer or applies me
 test("thread refresh ignores an older message response arriving after a newer read", async () => {
   const older = deferred();
   const newer = deferred();
+  const firstReadStarted = deferred();
   let reads = 0;
-  const h = await mountChatAnswer({ readMode: true, readMessages: () => (++reads === 1 ? older.promise : newer.promise) });
+  const h = await mountChatAnswer({ readMode: true, readMessages: () => {
+    if (++reads === 1) { firstReadStarted.resolve(); return older.promise; }
+    return newer.promise;
+  } });
   let first; let second;
   await h.act(async () => {
     first = h.runtime.snapshot.loadThreadState();
+    await firstReadStarted.promise; // first read obtains its server activity cut
     second = h.runtime.snapshot.loadThreadState();
   });
   await h.act(async () => { newer.resolve([{ id: "new-message" }]); await second; });

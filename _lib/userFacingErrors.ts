@@ -11,6 +11,7 @@ export type UserFacingErrorCode =
   | "attachment_action"
   | "brand_draft"
   | "chat_action"
+  | "chat_call_rate_limited"
   | "circle_action";
 
 export class UserFacingError extends Error {

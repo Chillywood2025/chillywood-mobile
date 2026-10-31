@@ -95,6 +95,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   const invalidation = invalidationContext.exports;
   const row = { ...notification, ...notificationOverride };
   let pageReader = async () => ({ status: 'resolved', items: row.isDismissed ? [] : [{ ...row }], nextCursor: null });
+  let importantReader = async () => [];
   const actionContext = {
     exports: {}, Date, Promise,
     normalizeText: value => String(value ?? '').trim(),
@@ -158,7 +159,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
       if (result.status === 'completed' || result.status === 'noop') { row.isDismissed = true; backendCount = 0; }
       if (markResultGate) await markResultGate; return result; },
     readNotificationSummary: async (id, signal) => { summaryReads++; requestedUsers.push(id); return summaryReader(id, signal); },
-    readImportantNotificationList: async () => [],
+    readImportantNotificationList: (...args) => importantReader(...args),
     readNotificationListPage: (...args) => { pageReads++; return pageReader(...args); },
     resolveNotificationPath: targetContext.exports.resolveNotificationMessagePath,
   };
@@ -204,6 +205,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   const unmount = async () => { if (unmounted) return; unmounted = true; await React.act(async () => root.unmount()); };
   t.after(unmount);
   const snapshot = () => ({ label: captures.get('probe-notification-bell').accessibilityLabel, tray: captures.get('Modal').visible,
+    rowLabels: descend(captures.get('Modal').children, n => n.props?.accessibilityLabel?.startsWith('Open notification:')).map(n => n.props.accessibilityLabel),
     rowText: textOf(descend(captures.get('Modal').children, n => n.props?.testID === 'notification-tray-row-creator_tip_received')[0]),
     trayText: textOf(captures.get('Modal').children), rowDisabled: descend(captures.get('Modal').children, n => n.props?.accessibilityLabel?.startsWith('Open notification:'))[0]?.props.disabled,
     loadMoreDisabled: descend(captures.get('Modal').children, n => n.props?.accessibilityLabel === 'Load more notifications')[0]?.props.disabled,
@@ -234,6 +236,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     setCount(value) { backendCount = value; },
     setSummaryReader(reader) { summaryReader = reader; },
     setPageReader(reader) { pageReader = reader; },
+    setImportantReader(reader) { importantReader = reader; },
     async loadMore() { const node = descend(captures.get('Modal').children, n => n.props?.accessibilityLabel === 'Load more notifications')[0]; assert.ok(node); await React.act(async () => { node.props.onPress(); await settle(); }); },
     async emit(data = { notificationType: 'missed_call', path: '/chat/thread-a' }, content = {}) { await React.act(async () => { for (const callback of received) callback({ request: { content: { ...content, data } } }); await settle(); }); },
     async oldEmit(index, data = {}) { await React.act(async () => { allReceived[index]({ request: { content: { data } } }); await settle(); }); },
@@ -251,6 +254,24 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     async resolve(pending, value) { await React.act(async () => { pending.resolve(value); await settle(); }); },
   };
 }
+test('merged important and paginated activity retains exact newest-first server order', async t => {
+  const h = await mount(t, 'completed');
+  const make = (id, createdAt) => ({ ...notification, id, title: id, createdAt });
+  const older = make('older-important', '2026-10-10T10:00:00.123100Z');
+  const newer = make('newer', '2026-10-10T10:00:00.123900Z');
+  const tieA = make('tie-a', '2026-10-10T11:00:00.123900+01:00');
+  const tieZ = make('tie-z', '2026-10-10T10:00:00.123900Z');
+  h.setImportantReader(async () => [make('invalid', ''), older, tieA]);
+  h.setPageReader(async (_id, _limit, cursor) => ({ status: 'resolved',
+    items: cursor ? [older, make('oldest', '2026-10-09T10:00:00Z')] : [tieZ, newer, tieA],
+    nextCursor: cursor ? null : { id: newer.id, createdAt: newer.createdAt } }));
+  await h.openTray();
+  const titles = () => h.snapshot().rowLabels.map(label => label.split(': ')[1].split('. ')[0]);
+  assert.deepEqual(titles(), ['tie-z', 'tie-a', 'newer', 'older-important', 'invalid']);
+  await h.loadMore();
+  assert.deepEqual(titles(), ['tie-z', 'tie-a', 'newer', 'older-important', 'oldest', 'invalid']);
+});
+
 for (const outcome of ['blocked', 'error', 'throw', 'completed', 'noop']) {
   test(`actual mounted bell retains durable read truth for ${outcome}`, async t => {
     const h = await mount(t, outcome); await h.openTray(); const before = h.snapshot();

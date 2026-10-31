@@ -8,6 +8,7 @@ import {
 } from "./chillyChatCallDispatchSchema";
 
 import { supabase } from "./supabase";
+import { compareChatActivityTimestamps } from "./chatActivity";
 import {
   getCurrentAccountSessionAuthoritySnapshot,
   readCurrentAccountSessionAuthority,
@@ -267,10 +268,12 @@ async function reconcileCommittedChillyChatCallBegin(input: {
   initiatingAuthority: AccountSessionAuthorityBinding;
   mutationError: unknown;
   threadId: string;
+  malformedAtomicResponse?: boolean;
 }): Promise<BegunChillyChatCall | null> {
   if (
     !(input.mutationError instanceof AccountBoundSupabaseMutationError)
     && !isAccountBoundSupabaseMutationOutcomeAmbiguous(input.mutationError)
+    && !input.malformedAtomicResponse
   ) return null;
 
   let currentAuthority = getCurrentAccountSessionAuthoritySnapshot();
@@ -280,6 +283,7 @@ async function reconcileCommittedChillyChatCallBegin(input: {
   if (!sameAccountSessionAuthority(input.initiatingAuthority, currentAuthority)) return null;
 
   const invite = await readLatestChillyChatCallInviteForRoom(input.communicationRoomId).catch(() => null);
+  if (!sameAccountSessionAuthority(input.initiatingAuthority, getCurrentAccountSessionAuthoritySnapshot())) return null;
   if (
     !invite
     || invite.threadId !== input.threadId
@@ -355,6 +359,7 @@ export async function beginChillyChatCall(input: {
   threadId: string;
   communicationRoomId: string;
   callType: ChillyChatCallType;
+  createRoomCapturePolicy?: "best_effort" | "host_managed";
 }): Promise<BegunChillyChatCall> {
   const actorUserId = toText(input.actorUserId);
   const initiatingAuthority = captureExactMountedCallActor(actorUserId);
@@ -362,19 +367,39 @@ export async function beginChillyChatCall(input: {
     throw new AccountBoundSupabaseMutationError();
   }
 
-  let data: Record<string, unknown> | null = null;
+  let responseReceived = false;
   try {
     const result = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(
-      "begin_chilly_chat_call",
+      input.createRoomCapturePolicy ? "start_chilly_chat_call" : "begin_chilly_chat_call",
       {
         p_call_type: input.callType,
         p_communication_room_id: input.communicationRoomId,
         p_thread_id: input.threadId,
+        ...(input.createRoomCapturePolicy ? { p_capture_policy: input.createRoomCapturePolicy } : {}),
       },
       actorUserId,
     );
     if (result.error) throw result.error;
-    data = result.data;
+    responseReceived = true;
+    const data = result.data;
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("Unable to reserve this Chi'lly Chat call.");
+    }
+    const invitePayload = data.invite;
+    if (!invitePayload || typeof invitePayload !== "object" || Array.isArray(invitePayload)) {
+      throw new Error("Unable to read the reserved Chi'lly Chat call.");
+    }
+    const invite = parseInvite(invitePayload as CallInviteRow);
+    if (!invite) throw new Error("Unable to read the reserved Chi'lly Chat call.");
+    const role = data.role === "caller" || data.role === "callee" ? data.role : null;
+    if (!sameAccountSessionAuthority(initiatingAuthority, getCurrentAccountSessionAuthoritySnapshot()) || !role
+      || invite.threadId !== input.threadId
+      || (role === "caller" ? invite.callerUserId : invite.calleeUserId) !== actorUserId
+      || (data.created === true && (role !== "caller" || invite.callType !== input.callType
+        || toText(invite.communicationRoomId).toUpperCase() !== input.communicationRoomId.toUpperCase()))) {
+      throw new Error("The reserved Chi'lly Chat call does not belong to this account.");
+    }
+    return { created: data.created === true, invite, role };
   } catch (mutationError) {
     const reconciled = await reconcileCommittedChillyChatCallBegin({
       actorUserId,
@@ -383,34 +408,11 @@ export async function beginChillyChatCall(input: {
       initiatingAuthority,
       mutationError,
       threadId: input.threadId,
+      malformedAtomicResponse: !!input.createRoomCapturePolicy && responseReceived,
     });
     if (reconciled) return reconciled;
     throw mutationError;
   }
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new Error("Unable to reserve this Chi'lly Chat call.");
-  }
-
-  const payload = data as Record<string, unknown>;
-  const invitePayload = payload.invite;
-  if (!invitePayload || typeof invitePayload !== "object" || Array.isArray(invitePayload)) {
-    throw new Error("Unable to read the reserved Chi'lly Chat call.");
-  }
-  const invite = parseInvite(invitePayload as CallInviteRow);
-  if (!invite) {
-    throw new Error("Unable to read the reserved Chi'lly Chat call.");
-  }
-  const role = payload.role === "caller" || payload.role === "callee" ? payload.role : null;
-  if (!hasExactMountedActor(actorUserId) || !role
-    || (role === "caller" ? invite.callerUserId : invite.calleeUserId) !== actorUserId) {
-    throw new Error("The reserved Chi'lly Chat call does not belong to this account.");
-  }
-
-  return {
-    created: payload.created === true,
-    invite,
-    role,
-  };
 }
 
 export async function createChillyChatCallInvite(input: {
@@ -463,19 +465,22 @@ export async function createChillyChatCallInvite(input: {
   return { delivery, invite };
 }
 
-export async function listChillyChatCallEvents(threadId: string): Promise<ChillyChatCallEvent[]> {
+export async function listChillyChatCallEvents(threadId: string, activityCut?: string): Promise<ChillyChatCallEvent[]> {
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from(CHAT_CALL_EVENTS_TABLE)
     .select(CALL_EVENT_SELECT)
     .eq("thread_id", normalizedThreadId)
-    .order("created_at", { ascending: true })
-    .limit(50)
-    .returns<CallEventRow[]>();
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(50);
+  if (activityCut) query = query.lte("created_at", activityCut);
+  const { data, error } = await query.returns<CallEventRow[]>();
 
   if (error || !data) return [];
-  return data.map(parseEvent).filter((event): event is ChillyChatCallEvent => !!event);
+  return data.map(parseEvent).filter((event): event is ChillyChatCallEvent => !!event)
+    .sort((a, b) => compareChatActivityTimestamps(b.displayCreatedAt, a.displayCreatedAt) || b.id.localeCompare(a.id));
 }
 
 export async function readLatestRingingChillyChatCallInvite(threadId: string): Promise<ChillyChatCallInvite | null> {

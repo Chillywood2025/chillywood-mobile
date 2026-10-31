@@ -777,7 +777,12 @@ const validateProductionGate = async ({code, productionSources}) => {
     report(
       !mediaSource.includes("const nativeApplicationActive = await readIosNativeApplicationActive();")
       || !mediaSource.includes("currentWitness?.inviteId === inviteId")
-      || (mediaSource.match(/await readApplicationActiveForMedia\(\)/gu) ?? []).length !== 3
+      // f1f45140e added startup microphone and initial membership authority
+      // reads. Retain the original three camera/reconciliation boundaries and
+      // require the two new reads at their actual guarded call sites, not just
+      // an increased global count that an unrelated read could satisfy.
+      || (mediaSource.match(/await readApplicationActiveForMedia\(\)/gu) ?? []).length !== 5
+      || !nativeForegroundReadSites.every((site) => mediaSource.includes(site))
       || (mediaSource.match(/await publishCameraForCurrentForeground\(/gu) ?? []).length !== 4
       || (mediaSource.match(/setCameraEnabled\(\s*true,/gu) ?? []).length !== 1
       || [...mediaSource.matchAll(/localParticipant\.setCameraEnabled\(\s*([A-Za-z_$][A-Za-z0-9_$]*)/gu)]
@@ -857,7 +862,26 @@ const control = (code, path, source) => ({code, overrides: {[path]: source}});
 const replaceControl = (code, path, search, replacement, label) => control(
   code, path, replaceRequired(sources[path], search, replacement, label),
 );
+const nativeForegroundReadSites = [
+  "!await readApplicationActiveForMedia()\n      || applicationStateGenerationRef.current !== applicationStateGeneration",
+  "const stillActive = await readApplicationActiveForMedia();\n    const stillAuthorized = applicationStateGenerationRef.current === applicationStateGeneration",
+  "const appActive = await readApplicationActiveForMedia();\n    if (!operationIsCurrent()) return null;",
+  "const appActive = await readApplicationActiveForMedia();\n        return active && isCommittedSessionCurrent(effectBinding)",
+  "const appActive = await readApplicationActiveForMedia();\n          if (!operationCurrent()) return null;",
+];
 const negativeControls = [
+  // Delete each guarded read independently, then relocate it outside its
+  // boundary while preserving the total count. Both variants must be rejected.
+  ...nativeForegroundReadSites.flatMap((site, index) => {
+    const path = "hooks/use-livekit-chat-call-session.ts";
+    const missingRead = replaceRequired(sources[path], site,
+      site.replace("await readApplicationActiveForMedia()", "true"), `foreground read site ${index}`);
+    return [
+      control("IOS_NATIVE_CURRENT_APPLICATION_STATE_MEDIA_BYPASS", path, missingRead),
+      control("IOS_NATIVE_CURRENT_APPLICATION_STATE_MEDIA_BYPASS", path,
+        `${missingRead}\nasync function misplacedForegroundRead() { return await readApplicationActiveForMedia(); }\n`),
+    ];
+  }),
   control("IOS_ROUTE_ONLY_TRANSITION_AUTHORITY", "_lib/communicationCallMediaPolicy.mjs", routeOnlyMutation("answer")),
   replaceControl("IOS_CALL_UUID_WITHOUT_PROVENANCE_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", "if (!claim || claim.consumed !== true) return false;", 'if (!claim || claim.consumed !== true) return String(input?.nativeIdentity ?? "").trim().length > 0;', "UUID without provenance"),
   control("IOS_EXTERNAL_URL_CREATES_NATIVE_CLAIM", "components/UnsafeExternalUrlCreator.mjs", "import {createIosCallKitAnswerRouteHandler as createFromExternalUrl} from '../_lib/nativeCallTransitionProvenance.mjs';\ncreateFromExternalUrl({});\n"),

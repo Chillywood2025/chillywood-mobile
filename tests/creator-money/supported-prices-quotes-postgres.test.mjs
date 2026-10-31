@@ -31,6 +31,10 @@ const successors=[
   '20261031173636_commerce_fee_report_observations.sql',
   '20261031191024_discovery_notification_subject_context.sql',
   '20261031191128_notification_display_context_read.sql',
+  '20261031203703_chilly_chat_completed_call_retry_accounting.sql',
+  '20261031204123_live_room_join_activity.sql',
+  '20261031204321_atomic_chilly_chat_call_candidate.sql',
+  '20261031205522_chat_meaningful_activity_and_call_reads.sql',
 ];
 // Full migrated schema, real application predicates/triggers and provider SQL.
 // Only managed auth/storage infrastructure is the shared fixture; no network.

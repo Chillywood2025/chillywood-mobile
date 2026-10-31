@@ -79,6 +79,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
   const communication = loadCommunicationApiSource(client, mutation.runExactSessionAccountBoundSupabaseMutationRpc);
   const errors = loadSource("_lib/userFacingErrors.ts", {});
   const calls = loadSource("_lib/chillyChatCalls.ts", {
+    "./chatActivity": loadSource("_lib/chatActivity.ts", {}),
     "./supabase": bootstrap, "./accountSessionAuthority": authority,
     "./accountBoundSupabaseMutation": mutation,
     "./chillyChatCallDispatchSchema": loadSource("_lib/chillyChatCallDispatchSchema.ts", {}),
@@ -99,6 +100,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
   });
   const diagnostics = [];
   const chat = loadSource("_lib/chat.ts", {
+    "./chatActivity": loadSource("_lib/chatActivity.ts", {}),
     "./communication": communication, "./chillyChatCalls": calls,
     "./socialAttachments": attachments, "./supabase": bootstrap,
     "./peopleSearchNormalization": loadSource("_lib/peopleSearchNormalization.ts", {}),

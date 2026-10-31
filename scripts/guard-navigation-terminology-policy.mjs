@@ -304,9 +304,9 @@ assertIncludes(liveTab, "secondaryButton", "Live screen secondary actions patter
 assertIncludes(liveTab, "statusPill", "Live screen Status pills pattern");
 assertIncludes(liveTab, "disclosureCard", "Live screen Progressive disclosure pattern");
 assertIncludes(liveTab, "emptyState", "Live screen Empty state pattern");
-assertIncludes(liveTab, "Watch what is live now, see upcoming events, start a people-first room, or enter a Watch-Party code.", "Live hub user copy");
+assertIncludes(liveTab, "Watch what is live now, see upcoming events, start Live, or start a Watch-Party Live.", "Live hub user copy");
 assertIncludes(liveTab, "Start Live opens the people-first Live Watch-Party path.", "Live Watch-Party user copy");
-assertIncludes(liveTab, "Enter Code joins an existing Watch-Party Live room.", "Watch-Party Live user copy");
+assertIncludes(liveTab, "Start Watch Party Live opens the Watch-Party path, where you can also enter a room code.", "Watch-Party Live user copy");
 assertIncludes(liveTab, "Upcoming Events opens the exact Event so viewers can see its access and schedule.", "exact Event user copy");
 assertIncludes(liveTab, "requireLiveFirstPremium", "Live tab Premium/runtime preflight");
 assertIncludes(liveTab, 'params: { mode: "live", source: "bottom-live-tab" }', "Live tab route mapping");

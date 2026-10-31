@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import ts from 'typescript';
 import { createClient as createSdkClient } from '@supabase/supabase-js';
 
-const source = ts.transpileModule(fs.readFileSync('_lib/notifications.ts', 'utf8'), {
+const source = ts.transpileModule(process.env.NOTIFICATION_ORDER_BASELINE === '1'
+  ? execFileSync('git', ['show', 'HEAD:_lib/notifications.ts'], { encoding: 'utf8' })
+  : fs.readFileSync('_lib/notifications.ts', 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 const displayContext = {};
@@ -18,6 +21,50 @@ const row = (extra = {}) => ({ id: '00000000-0000-4000-8000-000000000001', user_
   body: null, deep_link: '/chat/thread-a', status: 'pending', source_id: 'invite-a',
   target_route: '/chat/[threadId]', target_entity_id: 'thread-a', target_context: {},
   read_at: null, dismissed_at: null, created_at: '2026-01-01T00:00:00.000Z', delivered_at: null, ...extra });
+test('notification keyset cursor preserves PostgreSQL microseconds across pages and timezone normalization', async () => {
+  const at = '2026-01-01T01:00:00.123456+01:00';
+  const h = harness({ fetcher: call => call.url.pathname.endsWith('/notifications')
+    ? response([row({ notification_type: 'system_notice', category: 'system', created_at: at })]) : undefined });
+  const first = await h.api.readNotificationListPage('account-a', 1);
+  assert.equal(first.status, 'resolved');
+  assert.equal(first.nextCursor.createdAt, '2026-01-01T00:00:00.123456Z');
+  assert.equal(first.items[0].createdAt, first.nextCursor.createdAt);
+  await h.api.readNotificationListPage('account-a', 1, first.nextCursor);
+  const pageCalls = h.calls.filter(call => call.url.pathname.endsWith('/notifications'));
+  assert.equal(pageCalls[1].url.searchParams.get('or'),
+    `(created_at.lt.${first.nextCursor.createdAt},and(created_at.eq.${first.nextCursor.createdAt},id.lt.${first.nextCursor.id}))`);
+  assert.equal(pageCalls[1].url.searchParams.get('order'), 'created_at.desc,id.desc');
+});
+test('notification cursor traverses adjacent microseconds and equal-timestamp IDs without omissions', async () => {
+  const records = [
+    row({ id: '00000000-0000-4000-8000-000000000003', created_at: '2026-01-01T00:00:00.123456Z' }),
+    row({ id: '00000000-0000-4000-8000-000000000002', created_at: '2026-01-01T00:00:00.123456Z' }),
+    row({ id: '00000000-0000-4000-8000-000000000001', created_at: '2026-01-01T00:00:00.123400Z' }),
+  ].map(record => ({ ...record, notification_type: 'system_notice', category: 'system' }));
+  const h = harness({ fetcher: call => {
+    if (!call.url.pathname.endsWith('/notifications')) return;
+    const filter = call.url.searchParams.get('or');
+    const cursor = filter?.match(/^\(created_at\.lt\.(.+),and\(created_at\.eq\..+,id\.lt\.([0-9a-f-]+)\)\)$/);
+    // Canonical timestamps are fixed-width here, matching PostgreSQL tuple order.
+    const at = cursor?.[1].replace(/\.(\d+)Z$/, (_, digits) => `.${digits.padEnd(6, '0')}Z`);
+    const eligible = cursor ? records.filter(record => record.created_at < at || (record.created_at === at && record.id < cursor[2])) : records;
+    return response(eligible.slice(0, 1));
+  } });
+  const found = []; let cursor = null;
+  for (let i = 0; i < 4; i++) {
+    const page = await h.api.readNotificationListPage('account-a', 1, cursor);
+    assert.equal(page.status, 'resolved'); found.push(...page.items.map(item => item.id));
+    cursor = page.nextCursor; if (!cursor) break;
+  }
+  assert.deepEqual(found, records.map(record => record.id));
+});
+test('malformed notification cursors cannot become a filter or dispatch a list read', async () => {
+  for (const createdAt of ['not-a-date', '2026-01-01T00:00:00.123456Z),id.gt.0', '']) {
+    const h = harness();
+    assert.equal((await h.api.readNotificationListPage('account-a', 1, { createdAt, id: row().id })).status, 'unavailable');
+    assert.equal(h.calls.length, 0);
+  }
+});
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
 const settle = async () => { for (let i = 0; i < 50; i++) await Promise.resolve(); };
 const response = (data, count = 1) => new Response(JSON.stringify(data), {
@@ -109,6 +156,21 @@ test('unavailable optional label RPC preserves existing working notification and
  const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')
   ?new Response(JSON.stringify({message:'function not deployed'}),{status:404,headers:{'Content-Type':'application/json'}}):response([vipRow()])});
  const page=await h.api.readNotificationListPage('account-a',30);assert.equal(page.status,'resolved');assert.equal(page.items[0].title,'VIP Pass active.');assert.equal(page.items[0].target.entityId,'creator-a');
+});
+for (const route of ['/watch-party/live-stage/[partyId]', '/watch-party/[partyId]']) test(`attendance SDK read keeps exact ${route} and redacts unverified stored names`, async()=>{
+ const attendance = row({category:'circle_activity',notification_type:'live_room_member_joined',title:'PRIVATE ACTOR joined',body:'PRIVATE ROOM',target_route:route,target_entity_id:'EXACT-ROOM',target_context:{},source_id:'join-event'});
+ let available = false;
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')
+  ? available ? response({schemaVersion:1,items:[{notificationId:attendance.id,notificationType:'live_room_member_joined',targetRoute:route,targetId:'EXACT-ROOM',creatorName:'Exact Member',targetTitle:'Exact Room',resolution:'resolved'}]})
+   : new Response(JSON.stringify({message:'unavailable'}),{status:503,headers:{'Content-Type':'application/json'}})
+  : response([attendance])});
+ const first=await h.api.readNotificationListPage('account-a',30);
+ assert.equal(first.status,'resolved');assert.doesNotMatch(first.items[0].title+first.items[0].body,/PRIVATE ACTOR|PRIVATE ROOM/);
+ assert.equal(first.items[0].target.entityId,'EXACT-ROOM');assert.equal(first.items[0].target.route,route);
+ available=true;
+ const verified=await h.api.readNotificationListPage('account-a',30);
+ assert.match(verified.items[0].body,/Exact Member joined Exact Room/);
+ assert.equal(verified.items[0].target.route,route);
 });
 test('label RPC response cannot follow an account replacement or a canceled screen',async()=>{
  for(const mode of ['replace','abort']){

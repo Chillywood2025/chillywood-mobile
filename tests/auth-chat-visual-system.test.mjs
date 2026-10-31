@@ -140,7 +140,10 @@ test("Chat call, message, attachment, navigation, and safety authority wiring is
     'sendChatMessage(threadId, trimmedDraft, selectedAttachment)',
     'onSelect={handleSelectAttachment}',
     'testID="chat-message-report-button"',
-    'onPress={() => router.back()}',
+    'import { AppBackButton } from "../../components/navigation/app-back-button"',
+    'onPress={onThreadBack}',
+    'if (router.canGoBack()) router.back();',
+    'else router.replace("/chat");',
   ], "direct Chat behavior");
   assertIncludes(source.inbox, [
     'listChatThreads({ signal })',

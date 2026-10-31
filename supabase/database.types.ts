@@ -2267,6 +2267,7 @@ export type Database = {
           hidden_at: string | null
           joined_at: string
           last_read_at: string | null
+          last_call_read_at: string | null
           tagline: string | null
           thread_id: string
           unread_count: number
@@ -2278,6 +2279,7 @@ export type Database = {
           hidden_at?: string | null
           joined_at?: string
           last_read_at?: string | null
+          last_call_read_at?: string | null
           tagline?: string | null
           thread_id: string
           unread_count?: number
@@ -2289,6 +2291,7 @@ export type Database = {
           hidden_at?: string | null
           joined_at?: string
           last_read_at?: string | null
+          last_call_read_at?: string | null
           tagline?: string | null
           thread_id?: string
           unread_count?: number
@@ -2313,6 +2316,7 @@ export type Database = {
           id: string
           last_message_at: string | null
           last_message_preview: string | null
+          activity_admission_watermark: string | null
           participant_pair_key: string
           thread_kind: string
           updated_at: string
@@ -2325,6 +2329,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          activity_admission_watermark?: string | null
           participant_pair_key: string
           thread_kind?: string
           updated_at?: string
@@ -2337,6 +2342,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          activity_admission_watermark?: string | null
           participant_pair_key?: string
           thread_kind?: string
           updated_at?: string
@@ -20600,7 +20606,16 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      chat_thread_activity: {
+        Row: {
+          id: string; participant_pair_key: string; created_by: string; created_at: string; updated_at: string;
+          active_communication_room_id: string | null; active_call_type: string | null;
+          last_message_at: string | null; last_message_preview: string | null;
+          last_activity_at: string | null; last_activity_source_key: string | null;
+          last_activity_kind: string | null; last_activity_preview: string | null; members: Json;
+        }
+        Relationships: []
+      }
     }
     Functions: {
       wave1_accept_legal_documents: {

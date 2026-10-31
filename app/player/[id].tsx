@@ -1,4 +1,5 @@
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
+import { AppBackButton } from "../../components/navigation/app-back-button";
 import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useIsFocused } from "@react-navigation/native";
@@ -10806,17 +10807,12 @@ export default function PlayerScreen() {
 
           {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !creatorVideoPaidContentLocked && !isStandaloneFullscreen && !creatorVideoCommentKeyboardOpen ? (
             <View style={styles.standaloneBelowMediaActions}>
-              <TouchableOpacity
+              <AppBackButton
+                testID="standalone-player-back-button"
                 style={styles.standaloneBelowBackButton}
-                onPress={() => router.back()}
-                activeOpacity={0.86}
-                accessibilityRole="button"
+                onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
                 accessibilityLabel="Go back"
-                hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
-              >
-                <MaterialIcons name="arrow-back" size={16} color="#EEF1F7" />
-                <Text style={styles.standaloneBelowBackText}>Back</Text>
-              </TouchableOpacity>
+              />
             </View>
           ) : null}
 
@@ -12149,7 +12145,7 @@ const styles = StyleSheet.create({
   },
   standaloneBelowBackButton: {
     minHeight: 44,
-    minWidth: 112,
+    minWidth: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -12160,11 +12156,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15,18,25,0.74)",
     paddingHorizontal: 14,
     paddingVertical: 10,
-  },
-  standaloneBelowBackText: {
-    color: "#EEF1F7",
-    fontSize: 12.5,
-    fontWeight: "800",
   },
 
   progressCard: {
