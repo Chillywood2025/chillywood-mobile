@@ -2554,7 +2554,11 @@ export default function ChillyChatThreadScreen() {
       // Keep the useful wait message, without asking for a needless refresh.
       const rateLimited = callStartError && typeof callStartError === "object"
         && "code" in callStartError && callStartError.code === "chat_call_rate_limited";
-      setCallDeliveryStatus(rateLimited ? message : "Unable to confirm call setup. Refresh the thread before trying again.");
+      if (rateLimited) {
+        setCallDeliveryStatus(message);
+      } else {
+        setCallDeliveryStatus("Unable to confirm call setup. Refresh the thread before trying again.");
+      }
       reportRuntimeError("chat-thread-start-call", callStartError, {
         threadId,
         mode,
