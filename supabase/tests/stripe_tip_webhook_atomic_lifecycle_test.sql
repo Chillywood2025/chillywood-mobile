@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(66);
+select plan(70);
 
 select ok(
   (select count(*) = 3
@@ -398,6 +398,23 @@ select ok(
        where "id" = '20000000-0000-4000-8000-000000000001'),
   'legacy drain finalizes without resurrecting the terminal tip'
 );
+
+-- Project through the same service JWT and database role as the webhook Edge,
+-- rather than relying on the fixture-owner's superuser privileges.
+select throws_ok($$select public.process_stripe_tip_webhook_lifecycle('unauthorized',null,null,'{}','{}','{}')$$,
+  'P0001','service_role_required','missing service JWT is rejected even for the fixture owner');
+set local role anon;
+select throws_ok($$select public.process_stripe_tip_webhook_lifecycle('unauthorized',null,null,'{}','{}','{}')$$,
+  '42501','permission denied for function process_stripe_tip_webhook_lifecycle','anonymous database role cannot project tips');
+reset role;
+set local role authenticated;
+select throws_ok($$select public.process_stripe_tip_webhook_lifecycle('unauthorized',null,null,'{}','{}','{}')$$,
+  '42501','permission denied for function process_stripe_tip_webhook_lifecycle','authenticated database role cannot project tips');
+reset role;
+select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+set local role service_role;
+select ok(current_user='service_role' and auth.role()='service_role','all following webhook assertions execute as actual service role');
 
 select is(
   public.reserve_stripe_tip_webhook_event(

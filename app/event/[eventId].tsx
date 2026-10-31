@@ -1,3 +1,4 @@
+import { CHILLYWOOD_VISUAL } from "../../components/ui/chillywood-visual-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -505,7 +506,7 @@ export default function PaidCreatorEventRoute() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#05070D",
+    backgroundColor: "transparent",
   },
   wrap: {
     flexGrow: 1,
@@ -515,8 +516,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(12,16,25,0.96)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 18,
     gap: 12,
   },

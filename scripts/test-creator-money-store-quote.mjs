@@ -12,7 +12,7 @@ const creator = "22222222-2222-4222-8222-222222222222";
 const offerId = "33333333-3333-4333-8333-333333333333";
 const intentId = "44444444-4444-4444-8444-444444444444";
 const productId = "cw_test_product";
-const realModules = new Set(["creatorMoneyStoreQuote", "creatorMoneyPurchaseAuthority", "creatorMonetization", "iosAppStoreCommerce"]);
+const realModules = new Set(["creatorMoneyStoreQuote", "creatorMoneyPurchaseAuthority", "creatorMonetization", "iosAppStoreCommerce", "iosExternalAdmission", "googlePlayExternalAdmission"]);
 const compiledModules = new Map();
 
 function runtime(options = {}) {
@@ -56,6 +56,7 @@ function runtime(options = {}) {
       ...options.moneyClaim }, error: options.moneyClaimError ?? null };
   };
   const mocks = {
+    "react-native-purchases": { getStorefront: () => { throw new Error("Native store quote tests must not enter external storefront admission"); } },
     "./creatorTipCustomQuote": { normalizeCreatorTipCustomQuote: () => { throw new Error("Native store quote tests must not enter external checkout"); } },
     "./creatorSupportedPrices": { readCreatorSupportedPrices: async () => ({ status: "resolved", subjectUserId: buyer,
       prices: [{ platform: "android", environment: "sandbox", currency: "usd", status: "sandbox",

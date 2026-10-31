@@ -41,6 +41,8 @@ type TipCheckoutPayload = {
   request_id?: unknown;
   requestId?: unknown;
   capability_id?: unknown;
+  google_play_external_transaction_token?: unknown;
+  google_play_external_link_api_version?: unknown;
 };
 
 type StripeCheckoutSession = {
@@ -456,12 +458,17 @@ Deno.serve(async (req): Promise<Response> => {
     });
     if (reserveError || !reserved || typeof reserved !== "object") throw new Error("Tip checkout attempt could not be reserved.");
     const attempt = reserved as Record<string, unknown>;
+    const externalCapability = attempt.externalCapability && typeof attempt.externalCapability === "object"
+      ? attempt.externalCapability as Record<string, unknown> : null;
+    const androidExternal = externalCapability?.routeKind === "android_external_content_link";
     tipId = normalizeUuid(attempt.tipId);
     if (!tipId || attempt.requestId !== requestId || attempt.buyerId !== currentUser.id || attempt.creatorId !== creatorId
       || attempt.amountCents !== amountCents || attempt.currency !== currency || typeof attempt.body !== "object" || !attempt.body
       || typeof attempt.idempotencyKey !== "string") throw new Error("Tip checkout quote could not be verified.");
     attemptResponse = { requestId, buyerId: currentUser.id, creatorId, amountCents, currency, tipId,
       provider: "stripe", providerKey: "stripe_connect", mode: "test", checkoutCreated: false,
+      routeKind: androidExternal ? "android_external_content_link" : "external_browser_checkout",
+      launchStrategy: androidExternal ? "google_play_external_content_link" : "system_browser",
       liveMoneyAction: false, noAccessGranted: true, pureContributionOnly: true, url: null };
     if (!["pending", "checkout_started"].includes(String(attempt.status))) return jsonResponse(200, {
       ...attemptResponse, status: attempt.status, message: "This tip already has a recorded outcome. Refresh Purchases for its receipt.",
@@ -489,6 +496,28 @@ Deno.serve(async (req): Promise<Response> => {
     if (!knownSession && attempt.retryAllowed !== true) return jsonResponse(200, {
       ...attemptResponse, status: "reconciliation_required", message: "The original checkout needs reconciliation. No new checkout was started.",
     });
+    // A known provider session may still be read for reconciliation when the
+    // native observation expires. A payment URL may only be returned after a
+    // fresh native admission is privately bound to this exact frozen quote.
+    let nativeBound = !androidExternal;
+    if (androidExternal && routeCurrent && recipientCurrent) {
+      const nativeToken = parsed.value.google_play_external_transaction_token;
+      if (typeof nativeToken === "string" && nativeToken.length > 0 && nativeToken.length <= 16384
+        && parsed.value.google_play_external_link_api_version === 1) {
+        const { data: bound, error: bindError } = await adminClient.rpc("bind_google_play_external_checkout", {
+          p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration,
+          p_feature: "creator_tip", p_quote_id: tipId,
+          p_external_transaction_token: nativeToken, p_api_version: 1,
+        });
+        nativeBound = !bindError && !!bound && typeof bound === "object"
+          && (bound as Record<string, unknown>).routeKind === "android_external_content_link"
+          && !!normalizeUuid((bound as Record<string, unknown>).bindingId);
+      }
+    }
+    if (!knownSession && !nativeBound) return jsonResponse(200, {
+      ...attemptResponse, status: "pending", error: "google_play_external_launch_required",
+      message: "Reopen this original tip using the Google Play checkout flow. No new payment was started.",
+    });
     if (knownSession && !/^cs_test_[A-Za-z0-9]+$/.test(knownSession)) throw new Error("Tip checkout session identity is invalid.");
     // Retrieve known sessions; retry unknown creation only with frozen terms and key.
     const session = knownSession
@@ -514,7 +543,7 @@ Deno.serve(async (req): Promise<Response> => {
     const { data: finalRoute, error: finalRouteError } = await adminClient.rpc("read_creator_tip_checkout_dispatch_authority", {
       p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
     });
-    if (!routeCurrent || finalRouteError || !finalRoute || typeof finalRoute !== "object" || (finalRoute as Record<string, unknown>).allowed !== true
+    if (!nativeBound || !routeCurrent || finalRouteError || !finalRoute || typeof finalRoute !== "object" || (finalRoute as Record<string, unknown>).allowed !== true
       || !recipientCurrent || !sameBuyerSessionAuthority(buyerAuthority, await readBuyerSessionAuthority(buyerAuthorityClient, currentUser.id))
       || !["pending", "checkout_started"].includes(String(saved.status)) || session.status !== "open") return jsonResponse(200, {
       ...attemptResponse, status: saved.status, message: "Check Purchases for this original tip. No new payment link is available.",

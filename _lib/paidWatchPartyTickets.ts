@@ -74,6 +74,9 @@ export type PaidWatchPartyTicketAccess = {
   reason: string;
   requiresPurchase: boolean;
   ticketId: string | null;
+  reservedSeatClaimId?: string;
+  partyId?: string;
+  roomSessionId?: string;
   priceCents: number | null;
   currency: string | null;
   creatorId: string | null;
@@ -267,6 +270,16 @@ const normalizeAccess = (value: unknown, expectedPartyId: string): PaidWatchPart
   const offer = row.offer == null ? null : parseAuthoritativeTicketOffer(row.offer, expectedPartyId);
   if (row.allowed) {
     if (row.requiresPurchase) return unavailableTicketAccess();
+    if (reason === "verified_reserved_room_admission"
+      && ACCESS_UUID_PATTERN.test(accessText(row.reservedSeatClaimId))
+      && accessText(row.partyId) === expectedPartyId
+      && ACCESS_UUID_PATTERN.test(accessText(row.roomSessionId))
+      && row.admissionIncluded === true && row.grantsPublish === false
+      && row.offer == null && accessText(row.ticketId) === "") {
+      return { ...unavailableTicketAccess(reason), allowed: true,
+        reservedSeatClaimId: accessText(row.reservedSeatClaimId), partyId: accessText(row.partyId),
+        roomSessionId: accessText(row.roomSessionId) };
+    }
     if (reason === "free_room" && row.offer == null && accessText(row.ticketId) === "") {
       return { ...unavailableTicketAccess(reason), allowed: true };
     }

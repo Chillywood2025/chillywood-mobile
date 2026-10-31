@@ -5,6 +5,8 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import { loadStudioFunctions } from "../helpers/studio-source-harness.mjs";
+import { loadPureTypeScriptModule } from "../helpers/pure-typescript-module.mjs";
+const { googlePlayStripeTaxEvidence } = loadPureTypeScriptModule("supabase/functions/_shared/google-play-stripe-tax-evidence.ts");
 
 const file = "supabase/functions/stripe-tip-webhook/index.ts";
 const source = readFileSync(file, "utf8");
@@ -99,7 +101,7 @@ function harness(options = {}) {
     env: { get(key) { envReads.push(key); return env[key]; } },
     serve(value) { handler = value; },
   };
-  const globals = { Response, Request, TextEncoder, Date, Error, crypto: webcrypto, Deno };
+  const globals = { Response, Request, TextEncoder, Date, Error, crypto: webcrypto, Deno, googlePlayStripeTaxEvidence };
   const shared = loadStudioFunctions("supabase/functions/_shared/stripe-connect.ts", [
     "JSON_HEADERS", "DB_PROVIDER", "RESPONSE_PROVIDER", "PROVIDER_ENVIRONMENT",
     "toText", "jsonResponse", "optionsResponse", "sanitizeErrorMessage", "notConfiguredPayload",
@@ -149,6 +151,7 @@ test("actual tip handler verifies the signature and forwards exact raw payment f
   assert.equal(projected.args.p_webhook_event_id, event.id);
   assert.equal(projected.args.p_tip_id, tipId);
   assert.deepEqual(projected.args.p_provider_facts, {
+    google_play_tax: null, provider_occurred_at: null,
     amount_cents: 499, amount_received_cents: undefined, amount_refunded_cents: undefined,
     event_livemode: false, event_account: null, client_reference_id: tipId,
     object_livemode: false, object_type: "checkout.session", object_status: "complete",
@@ -162,6 +165,18 @@ test("actual tip handler verifies the signature and forwards exact raw payment f
   assert.equal(projected.args.p_transition.metadata.access_granted, false);
   assert.equal(h.calls("finalize_stripe_tip_webhook_event").length, 0,
     "the successful atomic SQL projector already finalized its claim");
+});
+
+test("signed event creation time survives parsing and only validated seconds become provider evidence", async () => {
+  for (const created of [1793394000, 253402300799, undefined, null, "1793394000", {}, 1.5, 0, -1, 253402300800]) {
+    const h = harness();
+    const result = await h.run(stripeEvent("checkout.session.completed", checkoutObject({ created: 1 }), { created }));
+    assert.equal(result.status, 200);
+    const facts = h.calls("process_stripe_tip_webhook_lifecycle")[0].args.p_provider_facts;
+    const expected = typeof created === "number" && Number.isSafeInteger(created) && created > 0 && created <= 253402300799
+      ? new Date(created * 1000).toISOString() : null;
+    assert.equal(facts.provider_occurred_at, expected);
+  }
 });
 
 test("malformed Checkout economics never fall back to another amount or Edge diagnostic authority", async () => {

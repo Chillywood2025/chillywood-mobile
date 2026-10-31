@@ -1,0 +1,14 @@
+begin;
+select plan(10);
+select has_table('private','merch_tracking_corrections','Correction requests are private');
+select has_table('private','merch_tracking_correction_declines','Declines preserve history');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_tracking_corrections'::regclass),'Request RLS forced');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_tracking_correction_declines'::regclass),'Decline RLS forced');
+select ok(not has_table_privilege('authenticated','private.merch_tracking_corrections','INSERT'),'No direct authenticated writes');
+select ok(not has_table_privilege('service_role','private.merch_tracking_corrections','INSERT'),'No direct service writes');
+select ok(not has_function_privilege('anon','public.request_merch_tracking_correction(uuid,uuid,text,text,text)','EXECUTE'),'Anonymous requests denied');
+select ok(not has_function_privilege('service_role','public.decline_merch_tracking_correction(uuid,uuid,text)','EXECUTE'),'Service role cannot act as staff');
+select ok(has_function_privilege('authenticated','public.read_merch_tracking_corrections(uuid)','EXECUTE'),'Bound read RPC available');
+select ok(has_function_privilege('authenticated','public.list_merch_tracking_correction_queue(uuid,integer)','EXECUTE'),'Staff-gated queue RPC available');
+select * from finish();
+rollback;

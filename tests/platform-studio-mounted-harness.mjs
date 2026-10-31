@@ -105,6 +105,8 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name.endsWith('/creator-price-picker'))return evaluate('components/monetization/creator-price-picker.tsx');
       if(name.endsWith('/event-sale-editor'))return evaluate('components/monetization/event-sale-editor.tsx');
       if(name.endsWith('/event-auction-editor'))return {EventAuctionEditor:()=>null};
+      if(name.endsWith('/creator-auction-held-earnings'))return {CreatorAuctionHeldEarnings:()=>null};
+      if(name.endsWith('/subscription-price-request-status'))return {SubscriptionPriceRequestStatus:()=>null};
       if(name.endsWith('/liveEvents'))return new Proxy(replayPolicy,{get:(target,key)=>{
         if(key in target)return target[key];
         if(key in mocks)return typeof mocks[key]==='function'?(...args)=>{calls.push([key,...args]);return mocks[key](...args);}:mocks[key];

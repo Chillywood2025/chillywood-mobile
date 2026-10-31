@@ -188,4 +188,21 @@ for (const memberships of [
   assert.equal(resolution.watchPartyAuthority?.expiresAt,paidAuthority.expiresAt,"downgrade retains exact finite proof");
   assert.ok(parser.resolveWatchPartyLiveKitTokenTtlSeconds(resolution.watchPartyAuthority,3600,now)<=25,"downgrade cannot inherit default one-hour TTL");
 }
-console.log(`LiveKit authority passed: ${tests.length} boundary tests, real Edge monitor wiring, and token downgrade TTL branches.`);
+const reservedAuthority = { ...paidAuthority, reason:"verified_reserved_room_seat", grantsPublish:false,
+  reservedSeatClaimId:"77777777-7777-4777-8777-777777777777",partyId:roomName,
+  roomSessionId:"88888888-8888-4888-8888-888888888888" };
+for (const [membership,speakerEligible,expectedRole,expectedPublish] of [
+  [targetMembership,true,"viewer",false],
+  [{...targetMembership,stage_role:"speaker",can_speak:true},true,"speaker",true],
+  [{...targetMembership,stage_role:"speaker",can_speak:true,is_muted:true},true,"speaker",false],
+  [{...targetMembership,stage_role:"speaker",can_speak:true},false,"viewer",false],
+]) {
+  const resolution=await resolveRole(roleClient([membership],{...reservedAuthority,speakerEligible}),room,"live-stage","speaker",identity,generation,{});
+  assert.equal(resolution.ok,true);assert.equal(resolution.participantRole,expectedRole);
+  assert.equal(resolution.canPublish,expectedPublish,"reservation never substitutes for current host approval or mute");
+  assert.equal(resolution.watchPartyAuthority.reservedSeatClaimId,reservedAuthority.reservedSeatClaimId);
+  assert.ok(parser.resolveWatchPartyLiveKitTokenTtlSeconds(resolution.watchPartyAuthority,3600,now)<=25);
+}
+const wrongRoom=await resolveRole(roleClient([targetMembership],{...reservedAuthority,partyId:"OTHER-ROOM"}),room,"live-stage","speaker",identity,generation,{});
+assert.equal(wrongRoom.ok,false,"a different room's reserved claim cannot issue a token");
+console.log(`LiveKit authority passed: ${tests.length} boundary tests, real Edge monitor wiring, token downgrade TTL and reserved-seat host-approval branches.`);

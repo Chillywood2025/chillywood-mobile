@@ -5,11 +5,13 @@ import { restoreRevenueCatPurchases } from "./revenuecat";
 import type { CreatorPriceSourceType } from "./creatorSupportedPrices";
 
 export type CreatorPurchaseStatus = "pending" | "paid_unfulfilled" | "reconciliation_required" | "active" | "upcoming" | "expired" | "refunded" | "revoked" | "failed" | "canceled" | "disputed" | "completed";
+// Auction receipts are purchase history, not fixed-price store catalog offers.
+export type CreatorPurchaseSourceType = CreatorPriceSourceType | "room_seat_auction";
 export type CreatorPurchaseCursor = { createdAt: string; id: string };
 export type CreatorPurchaseDestination = { kind: "creator_video" | "creator_event" | "watch_party" | "live_stage" | "creator_channel" | "vip_pass" | "channel_subscription"; id: string };
 export type CreatorPurchaseRefund = { state: "none" | "partial" | "full"; amountMinor: number };
 export type CreatorPurchase = {
-  id: string; purchaseIntentId: string | null; sourceType: CreatorPriceSourceType; sourceId: string | null; creatorId: string | null;
+  id: string; purchaseIntentId: string | null; sourceType: CreatorPurchaseSourceType; sourceId: string | null; creatorId: string | null;
   productType: string; productKey: string | null; title: string | null; status: CreatorPurchaseStatus;
   amountMinor: number | null; currency: string | null; createdAt: string; purchasedAt: string | null;
   // Absent on older servers/non-Stripe purchases; null means inconsistent
@@ -35,15 +37,17 @@ const nullableTime = (value: unknown) => value === null || timestamp(value);
 const nullableText = (value: unknown) => value === null || text(value);
 const nullableUuid = (value: unknown) => value === null || (text(value) && UUID.test(value));
 const statuses: readonly string[] = ["pending", "paid_unfulfilled", "reconciliation_required", "active", "upcoming", "expired", "refunded", "revoked", "failed", "canceled", "disputed", "completed"];
-const sourceDestination: Record<CreatorPriceSourceType, CreatorPurchaseDestination["kind"]> = {
+const sourceDestination: Record<CreatorPurchaseSourceType, CreatorPurchaseDestination["kind"] | null> = {
   paid_content: "creator_video", event: "creator_event", watch_party_live: "watch_party",
   live_watch_party_access: "live_stage", live_watch_party_seat: "live_stage", creator_tip: "creator_channel",
   channel_subscription: "channel_subscription", vip_pass: "vip_pass",
+  room_seat_auction: null, // Exact room kind is checked against the server claim below.
 };
-const sourceProducts: Record<CreatorPriceSourceType, string> = {
+const sourceProducts: Record<CreatorPurchaseSourceType, string> = {
   paid_content: "paid_content_access", event: "event_pass", watch_party_live: "watch_party_live_ticket",
   live_watch_party_access: "live_watch_party_access_pass", live_watch_party_seat: "live_watch_party_seat_pass",
   creator_tip: "creator_tip", channel_subscription: "channel_subscription", vip_pass: "vip_pass",
+  room_seat_auction: "room_seat_pass",
 };
 
 export function parseCreatorPurchasePage(value: unknown, expectedUserId: string): Omit<CreatorPurchasePage, "status" | "subjectSessionGeneration"> | null {
@@ -63,8 +67,21 @@ export function parseCreatorPurchasePage(value: unknown, expectedUserId: string)
       || typeof entry.termsAvailable !== "boolean" || !record(entry.terms) || entry.grantsAccess !== false) return null;
     if (!(entry.amountMinor === null && entry.currency === null)
       && (!Number.isSafeInteger(entry.amountMinor) || Number(entry.amountMinor) < 0 || !text(entry.currency) || !/^[a-z]{3}$/u.test(entry.currency))) return null;
-    const sourceType = entry.sourceType as CreatorPriceSourceType;
+    const sourceType = entry.sourceType as CreatorPurchaseSourceType;
     if (entry.productType !== sourceProducts[sourceType]) return null;
+    let destinationKind = sourceDestination[sourceType];
+    if (sourceType === "room_seat_auction") {
+      if (!entry.sourceId || !entry.creatorId || !entry.purchaseIntentId || entry.provider !== "stripe_room_auction") return null;
+      // Unlinked review receipts may have no claim yet. They must never invent
+      // a destination. When a claim is present, require its complete typed identity.
+      const hasClaim = entry.terms.sourceKind !== undefined || entry.terms.claimId !== undefined || entry.terms.roomSessionId !== undefined;
+      if (hasClaim) {
+        if (!text(entry.terms.claimId) || !UUID.test(entry.terms.claimId)
+          || !text(entry.terms.roomSessionId) || !UUID.test(entry.terms.roomSessionId)
+          || !["stage_reserved_seat", "party_admission"].includes(String(entry.terms.sourceKind))) return null;
+        destinationKind = entry.terms.sourceKind === "stage_reserved_seat" ? "live_stage" : "watch_party";
+      } else if (entry.destination !== null) return null;
+    }
     if (entry.refund !== undefined) {
       if (sourceType !== "creator_tip" || entry.provider !== "stripe_connect") return null;
       if (entry.refund === null) {
@@ -83,7 +100,7 @@ export function parseCreatorPurchasePage(value: unknown, expectedUserId: string)
     if (entry.destination !== null) {
       if (!entry.sourceId || !entry.creatorId
         || (!entry.productKey && !(sourceType === "creator_tip" && entry.provider === "stripe_connect"))
-        || !record(entry.destination) || entry.destination.kind !== sourceDestination[sourceType]
+        || !record(entry.destination) || entry.destination.kind !== destinationKind
         || !text(entry.destination.id) || entry.destination.id.length > 256) return null;
       const exactDestination = sourceType === "creator_tip" || sourceType === "vip_pass" || sourceType === "channel_subscription"
         ? entry.creatorId : sourceType === "paid_content" || sourceType === "event" ? entry.sourceId : null;
@@ -110,7 +127,7 @@ export function parseCreatorPurchasePage(value: unknown, expectedUserId: string)
 }
 
 export async function readMyCreatorPurchases(cursor: CreatorPurchaseCursor | null = null,
-  filter?: { sourceType: CreatorPriceSourceType; sourceId: string }): Promise<CreatorPurchasePage> {
+  filter?: { sourceType: CreatorPurchaseSourceType; sourceId: string }): Promise<CreatorPurchasePage> {
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   const unavailable: CreatorPurchasePage = { status: "unavailable", subjectUserId: authority?.userId ?? null,
     subjectSessionGeneration: authority?.sessionGeneration ?? null, items: [], nextCursor: null, fetchedAt: null };
@@ -130,7 +147,7 @@ export async function readMyCreatorPurchases(cursor: CreatorPurchaseCursor | nul
   } catch { return unavailable; }
 }
 
-export const creatorPurchaseScope: Record<CreatorPriceSourceType, { title: string; includes: string }> = {
+export const creatorPurchaseScope: Record<CreatorPurchaseSourceType, { title: string; includes: string }> = {
   paid_content: { title: "Paid Video", includes: "This exact video; current content and access rules still apply." },
   event: { title: "Event Pass", includes: "This exact event under the purchase terms. Replay is included only when stated." },
   watch_party_live: { title: "Party Room Pass", includes: "Entry to this exact Party Room. Speaking and host permissions are separate." },
@@ -139,6 +156,7 @@ export const creatorPurchaseScope: Record<CreatorPriceSourceType, { title: strin
   creator_tip: { title: "Tip", includes: "Creator support only. No video, ticket, VIP, membership or other access is included." },
   channel_subscription: { title: "Platform Subscription", includes: "This creator's membership and ordinary Paid Videos while active. VIP, tickets and Premium are separate." },
   vip_pass: { title: "VIP Pass", includes: "30-day VIP for this creator. Ordinary video ownership, memberships, tickets and Premium are separate." },
+  room_seat_auction: { title: "Room Auction Pass", includes: "This exact room session only, including entry and same-account rejoin. Host moderation and media controls remain separate; the pass ends when the creator ends the room." },
 };
 
 export function creatorPurchaseStatusPresentation(status: CreatorPurchaseStatus) {

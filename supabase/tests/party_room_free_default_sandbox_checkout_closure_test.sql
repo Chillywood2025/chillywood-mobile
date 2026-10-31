@@ -7,20 +7,28 @@ select ok(has_function_privilege('authenticated','public.resolve_paid_watch_part
   '2. authenticated customers may resolve exact Party Room entry');
 select ok(not has_function_privilege('anon','public.resolve_paid_watch_party_ticket_access(text)','EXECUTE'),
   '3. anonymous clients cannot invoke room money authority');
-select ok(position('''free_room''' in pg_get_functiondef(
-  'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))>0,
+select ok(position('resolve_paid_watch_party_ticket_pre_reserved_claim' in pg_get_functiondef(
+  'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))>0
+  and position('''free_room''' in pg_get_functiondef(
+  'public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)'::regprocedure))>0
+  and not has_function_privilege('authenticated','public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)','EXECUTE')
+  and not has_function_privilege('service_role','public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)','EXECUTE'),
   '4. no-offer active title rooms resolve through an explicit free-room branch');
 select ok(position('source_type' in pg_get_functiondef(
   'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))=0
   and position('content_access_rule' in pg_get_functiondef(
-  'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))=0,
+  'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))=0
+  and position('source_type' in pg_get_functiondef(
+  'public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)'::regprocedure))=0
+  and position('content_access_rule' in pg_get_functiondef(
+  'public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)'::regprocedure))=0,
   '5. content type and content entitlement do not silently price Party Room entry');
 select ok(position('wave1_current_caller_authority_internal' in pg_get_functiondef(
-  'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))>0
+  'public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)'::regprocedure))>0
   and position('is_account_access_restricted' in pg_get_functiondef(
-  'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))>0
+  'public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)'::regprocedure))>0
   and position('watch_party_room_actor_blocked_by_host' in pg_get_functiondef(
-  'public.resolve_paid_watch_party_ticket_access(text)'::regprocedure))>0,
+  'public.resolve_paid_watch_party_ticket_pre_reserved_claim(text)'::regprocedure))>0,
   '6. restoring free entry preserves current-session, account, and room-block authority');
 
 set local session_replication_role=replica;
