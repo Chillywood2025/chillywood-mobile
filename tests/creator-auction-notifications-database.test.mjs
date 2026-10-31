@@ -13,7 +13,9 @@ test('real auction close tick, outbid/winner outbox, stale suppression and dorma
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
     const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
+    await db.exec(`update public.user_profiles set display_name='Auction Creator',username='auction_creator',profile_access_visibility='public' where user_id='${actors.creator.user_id}';`);
     const event=(await one("select id from event_reservation_fixture.events where name='show1'")).id;
+    await db.exec(`update public.creator_events set event_title='Friday Auction' where id='${event}'`);
     const lit=v=>`'${String(v).replaceAll("'","''")}'`;
     const rpc=async(who,call)=>{
       const a=actors[who];
@@ -31,6 +33,7 @@ test('real auction close tick, outbid/winner outbox, stale suppression and dorma
     const eventAuction=await rpc('creator',`public.create_creator_event_auction('${event}','${offer.termsRevisionId}',100,25,now()+interval '1 hour',now()+interval '2 hours','test')`);
     await db.exec(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)
       values('AUCTION-NOTICE','${actors.creator.user_id}','live','open','open',true,'private')`);
+    await db.exec("update public.watch_party_rooms set discovery_title='Private room title' where party_id='AUCTION-NOTICE'");
     const roomAuction=await rpc('creator',"public.create_creator_room_seat_auction('AUCTION-NOTICE','stage_reserved_seat',100,25,now()+interval '1 hour',now()+interval '2 hours','test',gen_random_uuid(),(public.prepare_creator_room_seat_auction('AUCTION-NOTICE')->>'roomSessionId')::uuid)");
     for(const [family,a] of [['event',eventAuction],['room',roomAuction]]){
       const fn=family==='event'?'place_creator_event_auction_bid':'place_creator_room_seat_auction_bid';
@@ -39,6 +42,14 @@ test('real auction close tick, outbid/winner outbox, stale suppression and dorma
       const outbid=await one(`select *,private.resolve_notification_activity(e) as plan from public.notification_activity_events e where event_kind='auction_outbid' and source_id='${a.id}'`);
       assert.equal(outbid.recipient_user_id,actors.buyer1.user_id);
       assert.equal(outbid.plan.eligible,true);
+      assert.equal(outbid.plan.body,`Auction Creator (@auction_creator) · ${family==='event'?'Friday Auction':'Live Stage'}. Open the auction to review its current price and closing time. No payment was taken for bidding.`);
+      assert.equal(outbid.plan.target_context.auctionId,a.id);
+      assert.equal(outbid.plan.target_context.display_context.creator_id,actors.creator.user_id);
+      await db.exec(`update public.user_profiles set profile_access_visibility='private' where user_id='${actors.creator.user_id}'`);
+      const hidden=(await one(`select private.resolve_notification_activity(e) plan from public.notification_activity_events e where id='${outbid.id}'`)).plan;
+      assert.ok(hidden.body.startsWith('Creator unavailable · '),'hidden creator identity is not disclosed');
+      assert.ok(!hidden.body.includes('Private room title'),'private room title is not disclosed to bidder');
+      await db.exec(`update public.user_profiles set profile_access_visibility='public' where user_id='${actors.creator.user_id}'`);
       assert.equal(JSON.stringify(outbid.plan).includes(actors.buyer2.user_id),false);
       assert.equal(outbid.plan.deep_link,family==='event'?`/event/${event}`:'/watch-party/live-stage/AUCTION-NOTICE');
       const forged=(await one(`select private.resolve_notification_activity(jsonb_populate_record(null::public.notification_activity_events,
@@ -62,6 +73,13 @@ test('real auction close tick, outbid/winner outbox, stale suppression and dorma
       assert.equal(plans.find(p=>p.event_kind==='auction_won').recipient_user_id,actors.buyer2.user_id);
       assert.equal(plans.find(p=>p.event_kind==='auction_won').plan.eligible,true);
       assert.equal(plans.find(p=>p.event_kind==='auction_creator_award').recipient_user_id,actors.creator.user_id);
+      for(const row of plans.filter(p=>p.plan.eligible)){
+        assert.match(row.plan.body,/^Auction Creator \(@auction_creator\) · /);
+        assert.equal(row.plan.target_context.display_context.creator_id,actors.creator.user_id);
+        assert.equal(row.plan.target_context.auctionId,a.id);
+      }
+      for(const kind of ['auction_won','auction_creator_award','auction_checkout_deadline','auction_payment_deadline']) assert.equal(plans.find(p=>p.event_kind===kind).plan.eligible,true,kind);
+
     }
     // Existing delivery pipeline materializes only scheduled notifications and
     // returns no fabricated provider receipt; no actual push transport is used.

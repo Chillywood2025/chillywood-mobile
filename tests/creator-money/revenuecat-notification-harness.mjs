@@ -154,6 +154,22 @@ export function createRevenueCatNotificationHarness(options = {}) {
   const client = {
     from: query,
     async rpc(name, args) {
+      if (name === "read_creator_money_notification_display_context") {
+        recordEvent({ kind: "display_rpc", name, args: copy(args) });
+        if (options.displayFailure) return { data: null, error: { message: "modeled display lookup failure" } };
+        const creatorSide = args.p_recipient_user_id === ids.creator;
+        const targetId = creatorSide || ["channel_subscription", "vip_pass", "creator_tip"].includes(productType)
+          ? ids.creator : ["watch_party_live_ticket", "live_watch_party_access_pass", "live_watch_party_seat_pass"].includes(productType)
+          ? ids.party : ids.source;
+        return { error: null, data: options.displayContext === null ? {} : {
+          version: 1, creator_id: ids.creator, creator_display_name: "Rachi", target_id: targetId,
+          target_route: creatorSide ? '/channel-studio' : ({paid_content_access:'/player/[id]',watch_party_live_ticket:'/watch-party/[partyId]',
+            live_watch_party_access_pass:'/watch-party/live-stage/[partyId]',live_watch_party_seat_pass:'/watch-party/live-stage/[partyId]',
+            channel_subscription:'/channel-subscription/[creatorId]',vip_pass:'/vip-pass/[creatorId]',event_pass:'/event/[eventId]',creator_tip:'/channel/[userId]'})[productType],
+          subject_title: ["channel_subscription", "vip_pass", "creator_tip"].includes(productType) ? "" : "Chicago Stories",
+          ...options.displayContext,
+        } };
+      }
       assert.equal(name, options.writer === "live" ? "process_revenuecat_live_watch_party_event_atomic"
         : platform === "ios" ? "process_revenuecat_app_store_event_atomic" : "process_revenuecat_google_play_event_atomic");
       recordEvent({ kind: "atomic_rpc", name, args: copy(args) });
@@ -211,6 +227,9 @@ export function createRevenueCatNotificationHarness(options = {}) {
   const receiptContext = { ...context, exports: {} };
   vm.runInNewContext(compile(receipts), receiptContext, { filename: "actual-expo-receipt-helper.js" });
   Object.assign(context, readinessContext.exports, receiptContext.exports);
+  const displayContext = { ...context, exports: {} };
+  vm.runInNewContext(compile(fs.readFileSync(path.resolve(root, "supabase/functions/_shared/notification-display-labels.ts"), "utf8")), displayContext);
+  Object.assign(context, displayContext.exports);
   vm.runInNewContext(compiled, context, { filename: "actual-revenuecat-notification-declarations.js" });
   const event = {
     id: "synthetic-event", type: "NON_RENEWING_PURCHASE", app_user_id: ids.buyer,

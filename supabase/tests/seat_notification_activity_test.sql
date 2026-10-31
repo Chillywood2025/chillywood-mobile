@@ -14,6 +14,7 @@ insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values
  ('9e550000-0000-4000-8000-000000000001',false,false,now()),
  ('9e550000-0000-4000-8000-000000000002',false,false,now()),
  ('9e550000-0000-4000-8000-000000000003',false,false,now());
+update public.user_profiles set display_name='Stage Creator',username='seat_'||right(user_id,1),profile_access_visibility='public' where user_id like '9e550000-%';
 insert into auth.sessions(id,user_id,not_after) values
  ('9e550000-0000-4000-8000-000000000101','9e550000-0000-4000-8000-000000000001',now()+interval '1 day'),
  ('9e550000-0000-4000-8000-000000000102','9e550000-0000-4000-8000-000000000002',now()+interval '1 day'),
@@ -24,6 +25,7 @@ insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,doc
  where s.user_id::text like '9e550000-%' and d.active and d.market='UNITED_STATES' and d.capability='account';
 insert into public.watch_party_rooms(party_id,host_user_id,room_type,discovery_visibility,discovery_started_at) values
  ('SEAT-NOTIFICATION','9e550000-0000-4000-8000-000000000001','live','public',now());
+update public.watch_party_rooms set discovery_title='Chicago Stage' where party_id='SEAT-NOTIFICATION';
 insert into public.paid_live_watch_party_offers(id,party_id,creator_id,host_user_id,pass_type,product_id,provider,
  provider_product_id,price_cents,currency,environment,status) values
  ('9e551000-0000-4000-8000-000000000001','SEAT-NOTIFICATION','9e550000-0000-4000-8000-000000000001',
@@ -77,6 +79,8 @@ create function pg_temp.seat_eligible(p_kind text) returns integer language sql 
  and coalesce((private.resolve_notification_activity(e)->>'eligible')::boolean,false)
 $$;
 select is(pg_temp.seat_eligible('live_watch_party_seat_requested'),1,'exact current request resolves through common policy');
+select is((select private.resolve_notification_activity(e)#>>'{target_context,display_context,creator_id}' from public.notification_activity_events e where event_kind='live_watch_party_seat_requested'),'9e550000-0000-4000-8000-000000000001','seat requester is not misidentified as creator');
+select is((select private.resolve_notification_activity(e)->>'body' from public.notification_activity_events e where event_kind='live_watch_party_seat_requested'),'Stage Creator (@seat_1) · Chicago Stage. A viewer requested a speaking seat. Open the Stage to review it.','seat copy identifies exact host and stage while preserving role limitation');
 savepoint pending_request;
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
 set local role service_role;
