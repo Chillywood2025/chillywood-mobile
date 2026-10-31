@@ -46,7 +46,7 @@ const metadata = id => ({ clipFormat: "vertical_9_16", fitMode: "fill", trimStar
 function clipFixture() {
   const requests = new Map();
   const h = fixture({ clipEditor: {}, clipLoading: false, clipLoadError: null, clipSaveState: "idle", clipSavedVideoId: null, clipNotice: null, selectedClipVideoFile: null, selectedClipCoverFile: null, selectedVideoFile: null }, {
-    clipEditorGenerationRef: { current: 0 }, clipSaveInFlightRef: { current: false }, videoEditor: { title: "old paid editor", description: "" }, openStudioTab: noop,
+    clipEditorGenerationRef: { current: 0 }, clipCoverPickerInFlightRef: { current: false }, clipSaveInFlightRef: { current: false }, videoEditor: { title: "old paid editor", description: "" }, openStudioTab: noop,
     readClipStudioEdit: id => { const gate = deferred(); requests.set(id, gate); return gate.promise; }, readCreatorVideoForPlayer: async id => ({ playbackUrl: `loaded:${id}` }),
   });
   return { ...h, requests, api: h.load(["createEmptyClipStudioEditorState", "openClipStudioForVideo", "openClipStudioForNew", "updateClipEditor", "markClipStudioDirty", "saveClipStudio"]) };

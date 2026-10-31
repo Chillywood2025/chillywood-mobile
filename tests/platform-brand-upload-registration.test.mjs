@@ -142,6 +142,11 @@ async function fixture(t, options = {}) {
     } },
   };
   const api = loadStubbed(`${process.env.STUDIO_SOURCE_ROOT || process.cwd()}/_lib/platformBranding.ts`, {
+    './imageUploadNormalization': { normalizeImageUploadFile: async file => {
+      state.normalizations = (state.normalizations ?? 0) + 1;
+      return { file: { ...file, uri: 'file:///converted.jpg', name: 'converted.jpg', mimeType: 'image/jpeg', size: 79 },
+        cleanup: async () => { state.normalizationCleanups = (state.normalizationCleanups ?? 0) + 1; } };
+    } },
     './supabase': { supabase, SUPABASE_URL: 'https://fixture.invalid', SUPABASE_ANON_KEY: 'fixture-only-anon' },
     'expo-file-system': { File: class {} },
     'expo-file-system/legacy': { cacheDirectory: null, FileSystemUploadType: { BINARY_CONTENT: 0 },
@@ -270,5 +275,30 @@ test('Every identity field must match before uncertain registration can be ackno
   }
   assert.equal(h.state.deletes, 0); assert.equal(h.state.inserts, 1);
   assert.equal(h.state.trace.filter(stage => stage === 'upload').length, 1);
+  assert.deepEqual(await h.counts(), { assets: 1, jobs: 1, objects: 1, incarnations: 1 });
+});
+
+
+test('HEIC upload registers JPEG bytes once and retains original source identity across uncertain retry', async t => {
+  const options = { loseInsertReply: true, failReadback: true }, h = await fixture(t, options), attempt = {};
+  const file = { uri: 'file:///original.heic', name: 'original.heic', mimeType: 'image/heic', size: 70 };
+  await assert.rejects(h.run(attempt, { file }));
+  assert.equal(attempt.fileUri, file.uri); assert.equal(attempt.payload.mime_type, 'image/jpeg');
+  assert.ok(h.state.objectKey.endsWith('.jpg')); assert.equal(h.state.normalizationCleanups, 1);
+  options.failReadback = false;
+  const asset = await h.run(attempt, { file });
+  assert.equal(asset.storageObjectKey, h.state.objectKey);
+  assert.equal(h.state.normalizations, 1); assert.equal(h.state.trace.filter(stage => stage === 'upload').length, 1);
+  assert.deepEqual(await h.counts(), { assets: 1, jobs: 1, objects: 1, incarnations: 1 });
+});
+
+test('gallery URI-only WebP metadata remains WebP through registered Brand upload', async t => {
+  const picker = loadStubbed(`${process.env.STUDIO_SOURCE_ROOT || process.cwd()}/_lib/deviceImagePicker.ts`, {
+    'expo-image-picker': { UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
+      launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'file:///photo.webp' }] }) },
+  });
+  const file = await picker.pickDeviceImage('photos'), h = await fixture(t), attempt = {};
+  await h.run(attempt, { file });
+  assert.equal(attempt.payload.mime_type, 'image/webp'); assert.ok(h.state.objectKey.endsWith('.webp'));
   assert.deepEqual(await h.counts(), { assets: 1, jobs: 1, objects: 1, incarnations: 1 });
 });

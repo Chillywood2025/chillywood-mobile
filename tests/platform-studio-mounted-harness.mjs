@@ -93,6 +93,9 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name==='react-native-safe-area-context')return {useSafeAreaInsets:()=>({top:0,bottom:0,left:0,right:0})};
       if(name==='expo-router')return {useLocalSearchParams:()=>params,useRouter:()=>router};
       if(name==='expo-av')return {Video:native.Video,ResizeMode:{CONTAIN:'contain',COVER:'cover'}};
+      if(name==='expo-image-picker')return {UIImagePickerPreferredAssetRepresentationMode:{Compatible:'compatible'},launchImageLibraryAsync:(...args)=>{calls.push(['launchImageLibraryAsync',...args]);return mocks.launchImageLibraryAsync?.(...args)??Promise.resolve({canceled:true});}};
+      if(name.endsWith('/deviceImagePicker'))return evaluate('_lib/deviceImagePicker.ts');
+      if(name==='./userFacingErrors')return evaluate('_lib/userFacingErrors.ts');
       if(name==='expo-document-picker')return {getDocumentAsync:(...args)=>{calls.push(['getDocumentAsync',...args]);return mocks.getDocumentAsync(...args);}};
       if(name.endsWith('.jpg'))return 1;
       if(name.endsWith('/creator-video-card'))return evaluate('components/creator-media/creator-video-card.tsx');

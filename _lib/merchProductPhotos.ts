@@ -5,6 +5,7 @@ import {
 } from "./accountBoundSupabaseMutation";
 import { normalizeImageUploadFile } from "./imageUploadNormalization";
 import { pickSocialAttachmentFile } from "./socialAttachmentPicker";
+import { pickDeviceImage } from "./deviceImagePicker";
 import {
   uploadPlatformBrandAsset,
   type PlatformBrandAssetFile,
@@ -29,8 +30,8 @@ export type MerchPhotoFields = {
   photoScanStatus?: string | null;
 };
 
-export function pickMerchProductPhoto(): Promise<MerchProductPhotoFile | null> {
-  return pickSocialAttachmentFile("images");
+export function pickMerchProductPhoto(source: "photos" | "files" = "photos"): Promise<MerchProductPhotoFile | null> {
+  return source === "files" ? pickDeviceImage("files") : pickSocialAttachmentFile("images");
 }
 
 // Staging never edits a product or its revision. Keep attempt in the initiating

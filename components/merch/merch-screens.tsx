@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSession } from "../../_lib/session";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { MerchTrackingPanel } from "./merch-tracking-panel";
 import { MerchShippingDetails } from "./merch-shipping-details";
 import { MerchReturnQueue } from "./merch-return-queue";
@@ -197,7 +198,7 @@ function VariantsEditor({ product, onSaved, onCancel }: { product: MerchProduct;
 }
 
 function Editor({ product, done }: { product: MerchProduct | null; done: () => void }) {
-  const { user } = useSession();
+  const { user, authority } = useSession();
   const [currentProduct, setCurrentProduct] = useState(product), [managingVariants, setManagingVariants] = useState(false);
   const [title, setTitle] = useState(product?.title ?? ""), [description, setDescription] = useState(product?.description ?? ""), [imageUrl, setImageUrl] = useState(product?.imageUrl ?? "");
   const [photoFile, setPhotoFile] = useState<MerchProductPhotoFile | null>(null), [stagedPhoto, setStagedPhoto] = useState<{ assetId: string; previewUrl: string; status: "pending_review" | "ready" | "blocked" } | null>(null);
@@ -210,19 +211,24 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [productId] = useState(() => product?.id ?? createMerchCheckoutAttemptId()); const latch = useRef(false), alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useFocusEffect(useCallback(() => { alive.current = true; return () => { alive.current = false; photoGeneration.current++; }; }, []));
-  const choosePhoto = async (retry = false) => {
-    if (!alive.current || latch.current || !currentProduct || !user) return;
+  const authorityCurrent = () => !!authority && authority.state === "ACTIVE" && !authority.restoreOnly
+    && authority.userId === user?.id && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+  const choosePhoto = async (retry = false, source: "photos" | "files" = "photos") => {
+    if (!alive.current || latch.current || !user || !authorityCurrent()) return;
     if (!retry && photoFile) return;
     latch.current = true; setBusy(true); setError(null); const generation = photoGeneration.current;
-    const current = () => { if (!alive.current || generation !== photoGeneration.current) throw new Error("Photo operation ended. Reopen the product to continue."); };
+    const current = () => { if (!alive.current || generation !== photoGeneration.current || !authorityCurrent()) throw new Error("Photo operation ended. Reopen the product to continue."); };
     try {
-      const file = retry ? photoFile : await pickMerchProductPhoto(); current();
+      const file = retry ? photoFile : await pickMerchProductPhoto(source); current();
       if (!file) return;
       if (!retry) { photoAttempt.current = {}; setStagedPhoto(null); }
       setPhotoFile(file);
+      // A new product can choose locally before saving, but no bytes or asset
+      // authority are allocated until the owned draft is acknowledged.
+      if (!currentProduct) return;
       const staged = await uploadMerchProductPhoto({ ownerUserId: user.id, productId: currentProduct.id, file, attempt: photoAttempt.current, assertOperationCurrent: current });
       current(); setStagedPhoto(staged);
-    } catch (e) { if (alive.current && generation === photoGeneration.current) setError(errorText(e)); }
+    } catch (e) { if (alive.current && generation === photoGeneration.current && authorityCurrent()) setError(errorText(e)); }
     finally { latch.current = false; if (alive.current) setBusy(false); }
   };
   const refreshPhoto = async () => {
@@ -271,12 +277,22 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
     finally { latch.current = false; if (alive.current) setBusy(false); }
   };
   const save = async (publicationStatus: MerchProductInput["publicationStatus"]) => {
-    if (!alive.current || latch.current) return;
+    if (!alive.current || latch.current || !authorityCurrent()) return;
+    if (photoFile && (currentProduct || publicationStatus !== "draft")) { setError(currentProduct ? "Use or discard your selected photo before saving product changes." : "Save your draft to upload and review the selected photo before publishing."); return; }
     if (!title.trim() || !/^\d+(\.\d{1,2})?$/.test(price) || Number(price) <= 0 || !/^\d+$/.test(stock)) { setError("Enter a title, a positive USD price with at most two decimal places, and a whole-number available stock quantity."); return; }
     if (!trackingMode) { setError("Choose tracked or untracked shipping so buyers can review the return-window terms."); return; }
     latch.current = true; setBusy(true); setError(null); const generation = photoGeneration.current;
-    try { await saveMerchProduct({ id: productId, title: title.trim(), description, imageUrl: imageUrl.trim() || null, priceMinor: Math.round(Number(price) * 100), stockQuantity: currentProduct?.variantMode === "options" ? currentProduct.stockQuantity : Number(stock) + committedQuantity, publicationStatus, trackingMode, expectedUpdatedAt: currentProduct?.updatedAt }); if (alive.current && generation === photoGeneration.current) done(); }
-    catch (e) { if (alive.current && generation === photoGeneration.current) setError(errorText(e)); } finally { latch.current = false; if (alive.current) setBusy(false); }
+    try {
+      const saved = await saveMerchProduct({ id: productId, title: title.trim(), description, imageUrl: imageUrl.trim() || null, priceMinor: Math.round(Number(price) * 100), stockQuantity: currentProduct?.variantMode === "options" ? currentProduct.stockQuantity : Number(stock) + committedQuantity, publicationStatus, trackingMode, expectedUpdatedAt: currentProduct?.updatedAt });
+      const current = () => { if (!alive.current || generation !== photoGeneration.current || !authorityCurrent()) throw new Error("Photo operation ended. Reopen the product to continue."); };
+      current();
+      if (!currentProduct && photoFile && user) {
+        setCurrentProduct(saved);
+        const staged = await uploadMerchProductPhoto({ ownerUserId: user.id, productId: saved.id, file: photoFile, attempt: photoAttempt.current, assertOperationCurrent: current });
+        current(); setStagedPhoto(staged);
+      } else done();
+    }
+    catch (e) { if (alive.current && generation === photoGeneration.current && authorityCurrent()) setError(errorText(e)); } finally { latch.current = false; if (alive.current) setBusy(false); }
   };
   const currentPhotoPreview = currentProduct?.photoStatus !== "blocked" && attachedPreview?.assetId === currentProduct?.photoAssetId ? attachedPreview?.uri : currentProduct?.photoUrl;
   if (managingVariants && currentProduct) return <VariantsEditor product={currentProduct} onSaved={saved => { setCurrentProduct(saved); setStock(String(saved.availableQuantity)); setManagingVariants(false); }} onCancel={() => setManagingVariants(false)} />;
@@ -285,20 +301,25 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   ].map(field => <View key={field.label}><Text style={styles.body}>{field.label}</Text><TextInput accessibilityLabel={field.label} value={field.value} onChangeText={field.change} editable={!busy} style={styles.input} autoCapitalize="none" maxLength={field.label === "Description" ? 2000 : 500} /></View>)}
     <Text style={styles.heading}>Shipping and return window</Text><View style={styles.row}><Button label="Tracked shipping" selected={trackingMode === "tracked"} disabled={busy} onPress={() => setTrackingMode("tracked")} /><Button label="Untracked shipping" selected={trackingMode === "untracked"} disabled={busy} onPress={() => setTrackingMode("untracked")} /></View><Text style={styles.notice}>{shippingTerms(trackingMode)} Changing this setting affects new orders only; existing orders keep their recorded terms.</Text>
     <Text style={styles.heading}>Product photo (optional)</Text>
+    {!currentProduct ? <>
+      {photoFile ? <Image source={{ uri: photoFile.uri }} style={styles.image} accessibilityLabel="Selected product photo preview" /> : null}
+      <Text style={styles.notice}>{photoFile ? "Photo selected on this device. Save draft to upload it for safety checks, then choose Use this photo. Nothing is published automatically." : "Choose a photo now from Photos / Gallery or Files. It stays on your device until you save a draft."}</Text>
+    </> : null}
+    <Button label="Choose product photo from Photos / Gallery" disabled={busy || !!photoFile} onPress={() => void choosePhoto()} />
+    <Button label="Choose product photo from Files" disabled={busy || !!photoFile} onPress={() => void choosePhoto(false, "files")} />
+    {photoFile && !stagedPhoto && !photoAttempt.current.upload?.payload ? <Button label="Cancel photo selection" disabled={busy} onPress={cancelPhotoSelection} /> : null}
     {currentProduct ? <>
       {(stagedPhoto?.previewUrl || currentPhotoPreview) ? <Image source={{ uri: (stagedPhoto?.previewUrl || currentPhotoPreview)! }} style={styles.image} accessibilityLabel="Product photo preview" /> : null}
       <Text style={styles.notice}>{stagedPhoto ? `Selected photo: ${stagedPhoto.status}. Not attached yet.` : currentProduct.photoAssetId ? `Attached photo: ${currentProduct.photoStatus ?? "pending_review"}. Only approved photos appear for buyers.` : "Choose a photo from your device. It is checked before buyers can see it."}</Text>
       {currentProduct.photoAssetId ? <Button label="Refresh photo status" disabled={busy} onPress={() => void refreshPhoto()} /> : null}
       {currentProduct.photoScanStatus ? <Text style={styles.notice}>Safety scan: {currentProduct.photoScanStatus}</Text> : null}
       {currentProduct.photoCanApprove ? <><Text style={styles.notice}>The photo passed its scan and is awaiting your display approval. Approving does not publish this product or enable checkout.</Text><Button label="Approve photo for display" disabled={busy} onPress={() => void approvePhoto()} /></> : currentProduct.photoStatus === "pending_review" ? <Text style={styles.notice}>Photo checks are still pending. Approval is unavailable until the required scan is complete.</Text> : null}
-      <Button label="Choose product photo" disabled={busy || !!photoFile} onPress={() => void choosePhoto()} />
       {photoFile ? <Text style={styles.notice}>Use, discard, or cancel this selection before choosing another photo. If registration is uncertain, retry the same upload first so its retained asset can be confirmed.</Text> : null}
-      {photoFile && !stagedPhoto && !photoAttempt.current.upload?.payload ? <Button label="Cancel photo selection" disabled={busy} onPress={cancelPhotoSelection} /> : null}
       {currentProduct.photoStatus === "blocked" && !currentProduct.photoAssetId ? <Text style={styles.notice}>This photo was removed by safety checks. Choose a new photo for review; the previous image will not be shown.</Text> : null}
       {photoFile && !stagedPhoto ? <Button label="Retry photo upload" disabled={busy} onPress={() => void choosePhoto(true)} /> : null}
       {stagedPhoto ? <><Button label="Use this photo" disabled={busy || stagedPhoto.status === "blocked"} onPress={() => void assignPhoto(stagedPhoto.assetId)} /><Button label="Discard selected photo" disabled={busy} onPress={() => void discardPhoto()} /></> : null}
       {currentProduct.photoAssetId ? <Button label="Remove product photo" disabled={busy} onPress={() => void assignPhoto(null)} /> : null}
-    </> : <Text style={styles.notice}>Save a draft first, then choose a photo. No photo is required to save your product.</Text>}
+    </> : null}
     <Button label={advancedImage ? "Hide advanced image link" : "Advanced image link"} disabled={busy} onPress={() => setAdvancedImage(value => !value)} />
     {advancedImage ? <View><Text style={styles.notice}>Optional advanced fallback, used only when no uploaded photo is attached: use a permanent HTTPS image address you own, not a temporary signed link.</Text><TextInput accessibilityLabel="Image URL (HTTPS, optional)" value={imageUrl} onChangeText={setImageUrl} editable={!busy} style={styles.input} autoCapitalize="none" maxLength={2048} /></View> : null}
     <Text style={styles.notice}>{committedQuantity} units already held or sold. Available stock is the number you can still offer; saved totals also retain those committed units. If an order changes stock while you edit, refresh before saving again.</Text>

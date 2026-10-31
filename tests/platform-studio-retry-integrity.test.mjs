@@ -33,7 +33,7 @@ for (const outcome of ['unavailable', 'write-rejected', 'saved']) {
       user: { id: 'owner' }, brandProfileSaveInFlightRef: { current: false },
       getCurrentBrandDraft: () => h.state.brandDraft,
       normalizePlatformBrandFitMode: value => value, normalizePlatformBrandThemePreset: value => value,
-      DocumentPicker: { getDocumentAsync: async () => ({ canceled: false, assets: [{ uri: 'fixture:image', name: 'fixture.jpg', mimeType: 'image/jpeg', size: 123 }] }) },
+      pickDeviceImage: async () => ({ uri: 'fixture:image', name: 'fixture.jpg', mimeType: 'image/jpeg', size: 123 }),
       getPlatformBrandAssetValidationMessage: () => null,
       uploadPlatformBrandAsset: async () => { uploads++; return { id: 'uploaded-asset' }; },
       savePlatformBrandProfileDraft: async (_owner, draft) => { saves++; if (outcome !== 'saved') throw Error(failure); return draft; },

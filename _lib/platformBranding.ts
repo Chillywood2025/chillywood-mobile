@@ -306,7 +306,9 @@ export const getPlatformBrandAssetValidationMessage = (
   if (!file || !toText(file.uri)) return "Choose a Platform asset first.";
   const mimeType = inferMimeType(file, assetType);
   const videoAsset = assetType === "hero_video";
-  if (videoAsset ? !VIDEO_MIME_TYPES.has(mimeType) : !IMAGE_MIME_TYPES.has(mimeType)) {
+  if (videoAsset ? !VIDEO_MIME_TYPES.has(mimeType) : (!IMAGE_MIME_TYPES.has(mimeType)
+    && !["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(mimeType)
+    && !(!toText(file.mimeType) && /\.hei[cf]$/i.test(toText(file.name) || toText(file.uri))))) {
     return videoAsset ? "Choose an MP4, MOV, or WebM video." : "Choose a JPG, PNG, or WebP image.";
   }
 
@@ -477,12 +479,27 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: s
   }
 };
 
-async function preparePlatformBrandUploadUri(file: PlatformBrandAssetFile, assetType: PlatformBrandAssetType) {
+async function preparePlatformBrandUploadUri(file: PlatformBrandAssetFile, assetType: PlatformBrandAssetType): Promise<{ file: PlatformBrandAssetFile; uri: string; cleanup: () => Promise<void> }> {
+  if (assetType !== "hero_video" && (["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(inferMimeType(file, assetType)) || /\.hei[cf]$/i.test(toText(file.name) || toText(file.uri)))) {
+    const { normalizeImageUploadFile } = await import("./imageUploadNormalization");
+    const normalized = await normalizeImageUploadFile(file);
+    try {
+      if (!IMAGE_MIME_TYPES.has(inferMimeType(normalized.file, assetType))) throw new Error("Unable to prepare this Platform image.");
+      const validation = getPlatformBrandAssetValidationMessage(normalized.file, assetType);
+      if (validation) throw new Error(validation);
+      const prepared = await preparePlatformBrandUploadUri(normalized.file, assetType);
+      return { ...prepared, cleanup: async () => { try { await prepared.cleanup(); } finally { await normalized.cleanup(); } } };
+    } catch (error) {
+      await normalized.cleanup();
+      throw error;
+    }
+  }
+
   const sourceUri = toText(file.uri);
   if (!sourceUri) throw new Error("Choose a Platform asset first.");
 
   if (!sourceUri.startsWith("content://") || !FileSystem.cacheDirectory) {
-    return { uri: sourceUri, cleanup: async () => undefined };
+    return { file, uri: sourceUri, cleanup: async () => undefined };
   }
 
   const cacheUri = `${FileSystem.cacheDirectory}platform-brand-${createClientId()}.${getFileExtension(file, assetType)}`;
@@ -493,6 +510,7 @@ async function preparePlatformBrandUploadUri(file: PlatformBrandAssetFile, asset
   );
 
   return {
+    file,
     uri: cacheUri,
     cleanup: async () => {
       await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
@@ -894,15 +912,18 @@ export async function uploadPlatformBrandAsset(input: {
     throw new Error("The Platform media source changed before this upload could be retried.");
   }
   const id = pending?.id ?? createClientId();
-  const mimeType = inferMimeType(input.file, input.assetType);
-  const extension = getFileExtension(input.file, input.assetType);
-  const storagePath = `${ownerUserId}/${input.assetType}/${id}.${extension}`;
+  let mimeType = pending?.mime_type ?? inferMimeType(input.file, input.assetType);
+  let storagePath = pending?.storage_path ?? `${ownerUserId}/${input.assetType}/${id}.${getFileExtension(input.file, input.assetType)}`;
   let fileSizeBytes = pending?.file_size_bytes ?? Math.max(0, Number(input.file.size ?? 0) || 0);
   if (!pending) {
     const prepared = await preparePlatformBrandUploadUri(input.file, input.assetType);
     try {
       input.assertOperationCurrent?.();
-      fileSizeBytes = await getPreparedPlatformBrandFileSize(prepared.uri, fileSizeBytes);
+      mimeType = inferMimeType(prepared.file, input.assetType);
+      storagePath = `${ownerUserId}/${input.assetType}/${id}.${getFileExtension(prepared.file, input.assetType)}`;
+      fileSizeBytes = await getPreparedPlatformBrandFileSize(prepared.uri, prepared.file.size);
+      const preparedValidation = getPlatformBrandAssetValidationMessage({ ...prepared.file, size: fileSizeBytes }, input.assetType);
+      if (preparedValidation) throw new Error(preparedValidation);
       input.assertOperationCurrent?.();
       await uploadPlatformBrandFileToStorage({ storagePath, uri: prepared.uri, mimeType,
         accessToken, assertOperationCurrent: input.assertOperationCurrent });

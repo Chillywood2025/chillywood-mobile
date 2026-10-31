@@ -60,6 +60,10 @@ function harness({ stage, failureStage, metadataError = false, readbackCommitted
     'expo-file-system/legacy': { cacheDirectory: 'fixture:cache/', copyAsync: async () => boundary('prepare'),
       deleteAsync: async () => { localCleanups++; await boundary('local-cleanup'); } },
     './supabase': { supabase },
+    './imageUploadNormalization': { normalizeImageUploadFile: async file => ({
+      file: { ...file, uri: 'file:///converted.jpg', name: 'converted.jpg', mimeType: 'image/jpeg', size: 120 },
+      cleanup: async () => { localCleanups++; await boundary('normalization-cleanup'); },
+    }) },
     './creatorVideos': { CREATOR_VIDEO_BUCKET: 'private', formatCreatorVideoFileSize: value => String(value) },
     './mediaStorage': {
       normalizeMediaStorageProvider: value => value, getMediaStorageProviderBucket: () => 'private',
@@ -74,7 +78,7 @@ function harness({ stage, failureStage, metadataError = false, readbackCommitted
   return {
     api, calls, requests, forwarded, authTokens, reached: reached.promise, release: gate.resolve,
     save: () => api.saveClipStudioEdit('video', { titleOverlayText: 'Edited' }, options),
-    cover: () => api.uploadClipStudioCoverImage({ videoId: 'video', file: { uri: 'content://fixture-cover', name: 'cover.jpg', mimeType: 'image/jpeg', size: 100 }, ...options }),
+    cover: (file = { uri: 'content://fixture-cover', name: 'cover.jpg', mimeType: 'image/jpeg', size: 100 }) => api.uploadClipStudioCoverImage({ videoId: 'video', file, ...options }),
     replace(value = { ...firstAuthority, sessionGeneration: 'replacement' }) { authority = value; currentToken = 'replacement-token'; },
     refreshToken() { currentToken = 'refreshed-token'; },
     localCleanups: () => localCleanups,
@@ -241,4 +245,27 @@ test('Clip edit freezes the real Supabase SDK token across delayed auth resoluti
   assert.equal(requests.length, 1);
   assert.match(requests[0].url, /\/rest\/v1\/creator_clip_edits/);
   assert.equal(requests[0].authorization, 'Bearer initiating-fixture-token');
+});
+
+
+test('HEIC cover uploads converted JPEG but retains original preview and cleans converted cache', async () => {
+  const h = harness();
+  const file = { uri: 'file:///original.heic', name: 'original.heic', mimeType: 'image/heic', size: 100 };
+  const result = await h.cover(file);
+  assert.equal(result.signedUrl, file.uri); assert.equal(result.mimeType, 'image/jpeg');
+  assert.equal(h.forwarded[0].uri, 'file:///converted.jpg');
+  assert.equal(h.forwarded[0].mimeType, 'image/jpeg'); assert.equal(h.forwarded[0].sizeBytes, 120);
+  assert.ok(h.forwarded[0].objectKey.endsWith('.jpg'));
+  assert.ok(h.calls.includes('normalization-cleanup'));
+});
+
+test('gallery URI-only PNG metadata remains PNG through cover storage upload', async () => {
+  const picker = loadStubbed(`${root}/_lib/deviceImagePicker.ts`, {
+    'expo-image-picker': { UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
+      launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'file:///photo.png' }] }) },
+  });
+  const selected = await picker.pickDeviceImage('photos');
+  const h = harness(), result = await h.cover(selected);
+  assert.equal(result.mimeType, 'image/png'); assert.equal(h.forwarded[0].mimeType, 'image/png');
+  assert.ok(h.forwarded[0].objectKey.endsWith('.png'));
 });
