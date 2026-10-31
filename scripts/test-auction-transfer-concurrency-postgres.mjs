@@ -73,7 +73,16 @@ try {
   const json=x=>`${literal(JSON.stringify(x))}::jsonb`;
   const receiptSql=e=>`public.process_stripe_room_auction_receipt(${json(e)},'${createHash('sha256').update(JSON.stringify(e)).digest('hex')}')`;
   async function fixture(name) {
+    const providerSuffix=name.replace(/[^A-Za-z0-9]/gu,'');
     const party=`TRANSFER-${name}`;
+    // Each schedule has an independent synthetic room, not a room-creation
+    // abuse scenario. Reset only this clone fixture's exact creation bucket;
+    // keep every production trigger and all other actors/actions untouched.
+    const bucket=`actor_user_id='${actors.creator.id}' and action_key='watch_party_room_create' and target_key='live' and metadata->>'source'='watch_party_rooms'`;
+    const otherBuckets=()=>query(`select coalesce(jsonb_agg(to_jsonb(e) order by id),'[]'::jsonb) from public.abuse_rate_limit_events e where not (${bucket})`);
+    const beforeBuckets=otherBuckets();
+    query(`delete from public.abuse_rate_limit_events where ${bucket};`);
+    assert.equal(otherBuckets(),beforeBuckets,'independent fixture setup preserves every unrelated abuse bucket');
     query(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)
       values('${party}','${actors.creator.id}','live','open','open',true,'private');`);
     const setup=rpc('creator',`public.prepare_creator_room_seat_auction('${party}')`);
@@ -86,11 +95,11 @@ try {
     assert.equal(claim.startAuthorized,true);
     // Binder returns void. query still checks psql's exit status and propagates
     // every SQL error; there is deliberately no invented JSON result to parse.
-    query(service(`public.bind_creator_room_auction_checkout('${quote.id}','${attempt}','cs_test_${name}','pi_${name}','acct_platform',237,'usd')`));
-    const paid={eventId:`evt_${name}`,eventType:'checkout.session.completed',occurredAt:new Date().toISOString(),accountId:'acct_platform',environment:'test',objectId:`cs_test_${name}`,paymentIntentId:`pi_${name}`,checkoutSessionId:`cs_test_${name}`,quoteId:quote.id,buyerId:actors.buyer1.id,creatorId:actors.creator.id,auctionId:auction.id,amountMinor:237,currency:'usd',outcome:'paid',refundedAmountMinor:null,providerProductId:'prod_AuctionFixture',settlementContractId:claim.settlementContractId,settlementPolicy:claim.settlementPolicy};
+    query(service(`public.bind_creator_room_auction_checkout('${quote.id}','${attempt}','cs_test_${providerSuffix}','pi_${providerSuffix}','acct_platform',237,'usd')`));
+    const paid={eventId:`evt_${providerSuffix}`,eventType:'checkout.session.completed',occurredAt:new Date().toISOString(),accountId:'acct_platform',environment:'test',objectId:`cs_test_${providerSuffix}`,paymentIntentId:`pi_${providerSuffix}`,checkoutSessionId:`cs_test_${providerSuffix}`,quoteId:quote.id,buyerId:actors.buyer1.id,creatorId:actors.creator.id,auctionId:auction.id,amountMinor:237,currency:'usd',outcome:'paid',refundedAmountMinor:null,providerProductId:'prod_AuctionFixture',settlementContractId:claim.settlementContractId,settlementPolicy:claim.settlementPolicy};
     assert.equal(run(receiptSql(paid)).status,'fulfilled');
     const contract=claim.settlementContractId;
-    const facts={account_id:'acct_platform',environment:'test',currency:'usd',charge_id:`ch_${name}`,payment_intent_id:`pi_${name}`,balance_id:`txn_${name}`,balance_status:'available',disputed:false,financial_authority:false,gross_minor:237,provider_fee_minor:37,tax_minor:0,store_fee_minor:0,refunded_minor:0,refund_net_minor:0,tax_reversal_minor:0,refunds:[]};
+    const facts={account_id:'acct_platform',environment:'test',currency:'usd',charge_id:`ch_${providerSuffix}`,payment_intent_id:`pi_${providerSuffix}`,balance_id:`txn_${providerSuffix}`,balance_status:'available',disputed:false,financial_authority:false,gross_minor:237,provider_fee_minor:37,tax_minor:0,store_fee_minor:0,refunded_minor:0,refund_net_minor:0,tax_reversal_minor:0,refunds:[]};
     run(`public.record_auction_platform_cost_observation('${contract}',${json(facts)})`);
     rpc('buyer1',`public.join_watch_party_room_session('${party}')`);
     query(call('creator',`public.set_creator_room_participant_authority_service('${party}','${actors.creator.id}','${actors.creator.session}','${actors.buyer1.id}','speaker',false,'active')`,'service_role'));
@@ -98,7 +107,7 @@ try {
     query(`update public.watch_party_rooms set is_active=false where party_id='${party}';`);
     const qualified=run(`public.qualify_auction_room_release_from_domain('${contract}')`);
     assert.equal(qualified.status,'qualified_test_only');
-    const refund={...paid,eventId:`evt_Refund${name}`,eventType:'charge.refunded',objectId:`ch_${name}`,checkoutSessionId:null,outcome:'refunded',refundedAmountMinor:237};
+    const refund={...paid,eventId:`evt_Refund${providerSuffix}`,eventType:'charge.refunded',objectId:`ch_${providerSuffix}`,checkoutSessionId:null,outcome:'refunded',refundedAmountMinor:237};
     return {name,contract,facts,refund,qualified,reserve:`public.reserve_auction_test_transfer('${contract}')`};
   }
   let checks=0;

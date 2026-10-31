@@ -66,7 +66,7 @@ test('native transfer fixture executes its void binder without inventing JSON or
   assert.equal(binders.length, 1);
   const statement = binders[0].getText(ast);
   assert.match(statement, /^query\(service\(/u);
-  const execute = query => new Function('query', 'service', 'quote', 'attempt', 'name', statement)(query,
+  const execute = query => new Function('query', 'service', 'quote', 'attempt', 'providerSuffix', statement)(query,
     expression => `select ${expression}`, {id: 'fixture-quote'}, 'fixture-attempt', 'fixture');
   let sql;
   execute(value => { sql = value; return ''; });
