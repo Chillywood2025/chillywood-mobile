@@ -71,6 +71,21 @@ type VersionedState<T> = {
 const serverRevision = (value: unknown): value is string => typeof value === "string" && /^(0|[1-9][0-9]{0,18})$/.test(value);
 const operationUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
+const COLLECTION_REMOTE_DEADLINE_MS = 10000;
+async function withinRemoteDeadline<T>(operation: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("Collection synchronization timed out.")), COLLECTION_REMOTE_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /** Server CAS orders acknowledged state; an unknown request is never rebased. */
 function createVersionedUserCollectionSync<T>(options: Options<T>) {
   const protocol = options.versioned!;
@@ -156,7 +171,10 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
         let receipt: Awaited<ReturnType<typeof protocol.write>>;
         try {
           options.assertCurrent();
-          receipt = await protocol.write(id, request);
+          // A deadline releases the local lane, not the durable request. Its
+          // outcome remains unknown until an explicit, identical-operation retry.
+          // Late provider results cannot acknowledge state after this race ends.
+          receipt = await withinRemoteDeadline(() => protocol.write(id, request));
           options.assertCurrent();
           if (!receipt || !["applied", "conflict"].includes(receipt.status) || !serverRevision(receipt.revision)
             || !(receipt.value === null || options.validValue(receipt.value))) throw new Error("Invalid collection receipt.");
@@ -222,7 +240,7 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
     const revision = await local(async () => (await load()).revision);
     let remote: Awaited<ReturnType<typeof protocol.read>>;
     try {
-      options.assertCurrent(); remote = await protocol.read(); options.assertCurrent();
+      options.assertCurrent(); remote = await withinRemoteDeadline(() => protocol.read()); options.assertCurrent();
       if (!remote || !object(remote.values) || !object(remote.revisions) || !Object.values(remote.values).every(options.validValue)
         || !Object.values(remote.revisions).every(serverRevision)
         || Object.keys(remote.values).some(id => !serverRevision(remote.revisions[id]))) throw new Error("Invalid collection read.");

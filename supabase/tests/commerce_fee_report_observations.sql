@@ -1,0 +1,18 @@
+begin;
+select plan(14);
+select has_table('private','commerce_fee_report_observations','private fee observations exist');
+select ok((select relrowsecurity from pg_class where oid='private.commerce_fee_report_observations'::regclass),'RLS enabled');
+select ok((select relforcerowsecurity from pg_class where oid='private.commerce_fee_report_observations'::regclass),'RLS forced');
+select ok(not has_table_privilege('anon','private.commerce_fee_report_observations','SELECT'),'anon cannot read');
+select ok(not has_table_privilege('authenticated','private.commerce_fee_report_observations','SELECT'),'authenticated cannot read');
+select ok(not has_table_privilege('service_role','private.commerce_fee_report_observations','INSERT'),'service cannot write table directly');
+select ok(not has_function_privilege('anon','public.record_commerce_fee_report_observation(uuid,uuid,jsonb)','EXECUTE'),'anon cannot ingest');
+select ok(not has_function_privilege('authenticated','public.record_commerce_fee_report_observation(uuid,uuid,jsonb)','EXECUTE'),'authenticated cannot ingest');
+select ok(has_function_privilege('service_role','public.record_commerce_fee_report_observation(uuid,uuid,jsonb)','EXECUTE'),'service can call bounded ingest');
+select ok(not has_function_privilege('authenticated','public.get_commerce_fee_report_import_context(uuid)','EXECUTE'),'authenticated cannot obtain private context');
+select ok(has_function_privilege('service_role','public.get_commerce_fee_report_import_context(uuid)','EXECUTE'),'service can derive private context');
+select ok(exists(select 1 from pg_trigger where tgrelid='private.commerce_fee_report_observations'::regclass and tgname='commerce_fee_report_append_only'),'append-only trigger exists');
+select is((select count(*)::integer from private.commerce_fee_report_observations),0,'migration seeds no provider evidence');
+select is(private.commerce_tax_fee_settlement_ready('event_auction',gen_random_uuid()),false,'existing settlement gate stays closed');
+select * from finish();
+rollback;

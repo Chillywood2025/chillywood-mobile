@@ -576,8 +576,14 @@ export async function requestCreatorPayout(input: {
   amountCents: number;
   payoutType: "scheduled" | "instant";
 }) {
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0 || input.amountCents > 2_147_483_647) {
+    throw new Error("Enter a valid positive cashout amount in whole cents.");
+  }
+  if (input.payoutType !== "scheduled" && input.payoutType !== "instant") {
+    throw new Error("Choose standard or instant cashout.");
+  }
   const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("request_creator_payout", {
-    p_amount_cents: Math.max(0, Math.trunc(input.amountCents || 0)),
+    p_amount_cents: input.amountCents,
     p_payout_type: input.payoutType,
   });
   if (error) throw new Error("Creator payout status is active, but payout movement remains unavailable.");

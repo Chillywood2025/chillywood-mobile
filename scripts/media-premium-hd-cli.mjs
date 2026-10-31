@@ -16,6 +16,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { buildHlsOutputInventory } from "./lib/hls-output-inventory.mjs";
 
 const repoRoot = process.cwd();
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -712,6 +713,14 @@ async function executeCandidate(candidate) {
     }
     const sourceHash = sha256File(download.tmpFile);
     const generated = selectedRenditions.map((rendition) => generateRendition(download.tmpFile, outputRoot, rendition));
+    const outputInventory = buildHlsOutputInventory({
+      outputRoot, outputPrefix,
+      roots: generated.map(rendition => `${rendition.label}/master.m3u8`),
+      files: generated.flatMap(rendition => [
+        `${rendition.label}/master.m3u8`, `${rendition.label}/index.m3u8`,
+        ...rendition.segments.map(segment => `${rendition.label}/${segment}`),
+      ]),
+    });
     const uploaded = [];
     for (const rendition of generated) {
       uploaded.push(uploadObject(`${outputPrefix}${rendition.label}/master.m3u8`, path.join(outputRoot, rendition.label, "master.m3u8")));
@@ -743,6 +752,7 @@ async function executeCandidate(candidate) {
       outputPrefix,
       renditionLabels: generated.map((rendition) => rendition.label),
       uploadedObjectCount: uploaded.length,
+      outputInventory,
       workerProofs: workerProofs.map((proof) => ({
         renditionLabel: proof.renditionLabel,
         masterStatus: proof.master.status,

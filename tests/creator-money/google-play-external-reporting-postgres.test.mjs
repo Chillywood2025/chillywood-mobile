@@ -22,7 +22,11 @@ test('private Google obligations lease/reconcile idempotently without financial 
     assert.equal(await one('select private.google_play_external_program_ready($1)',[cap]),false,'no setup seed');
     const program=await one(`insert into private.google_play_external_program_config(package_name,environment,enrollment_evidence,
       license_test_qualification_evidence,tax_configuration_evidence,reporter_configuration_evidence,native_build_qualification_evidence,verified_at,expires_at,enabled)
-      values('com.fixture.app','test','synthetic only','synthetic only','synthetic only','synthetic only','synthetic only',now(),now()+interval '1 hour',true) returning id`);
+      values('com.chillywood.mobile','test','synthetic only','synthetic only','synthetic only','synthetic only','synthetic only',now(),now()+interval '1 hour',true) returning id`);
+    await db.query('insert into private.google_play_external_capability_program_bindings(capability_id,program_id) values($1,$2)',[cap,program]);
+    await db.exec(`insert into private.google_play_external_program_config(package_name,environment,enrollment_evidence,
+      license_test_qualification_evidence,tax_configuration_evidence,reporter_configuration_evidence,native_build_qualification_evidence,verified_at,expires_at,enabled)
+      values('com.unrelated.app','test','synthetic only','synthetic only','synthetic only','synthetic only','synthetic only',clock_timestamp(),clock_timestamp()+interval '1 hour',true)`);
     assert.equal(await one('select private.google_play_external_program_ready($1)',[cap]),true);
     const request=randomUUID(),tip=randomUUID(),nativeToken='synthetic-sdk-'+randomUUID();
     const setBuyer=who=>db.query("select set_config('request.jwt.claims',$1,false)",
@@ -31,6 +35,7 @@ test('private Google obligations lease/reconcile idempotently without financial 
       ['creator_tip',creator.user_id,amount,request,nativeToken]);
     await setBuyer(buyer);
     const admitted=await admit();assert.equal(admitted.verification,'native_sdk_observation_unverified');
+    assert.equal(await one('select program_id from private.google_play_external_admissions where id=$1',[admitted.admissionId]),program,'newer unrelated global proof cannot replace exact bound program');
     assert.equal(admitted.financialAuthority,false);assert.equal((await admit()).admissionId,admitted.admissionId);
     await assert.rejects(()=>admit(238),/token_reused/);
     await setBuyer(other);await assert.rejects(()=>admit(),/token_reused/);await setBuyer(buyer);
@@ -60,6 +65,10 @@ test('private Google obligations lease/reconcile idempotently without financial 
       [buyer.user_id,other.session_id,'creator_tip',randomUUID(),'synthetic-unverified']),/buyer_authority_required/);
     await assert.rejects(()=>one('select public.bind_google_play_external_checkout($1,$2,$3,$4,$5,1)',
       [buyer.user_id,buyer.session_id,'creator_tip',randomUUID(),'synthetic-unverified']),/quote_unavailable/);
+    await db.query('update private.google_play_external_program_config set revoked_at=clock_timestamp() where id=$1',[program]);
+    assert.equal(await one('select private.google_play_external_program_ready($1)',[cap]),false,'program revocation blocks new authority');
+    // The rest of this suite still executes real enqueue/claim/acknowledgement
+    // and refunds against the historical binding after its program is revoked.
     for(const table of ['google_play_external_launch_bindings','google_play_external_report_outbox','google_play_external_transactions']){
       await assert.rejects(async()=>{
         try {await db.exec(`begin;set local role authenticated;select * from private.${table};commit;`);}

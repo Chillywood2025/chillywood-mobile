@@ -1,0 +1,13 @@
+begin;
+select plan(9);
+select has_table('private','google_play_external_capability_program_bindings','exact immutable capability/program association exists');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.google_play_external_capability_program_bindings'::regclass),'association forces RLS');
+select ok(not has_table_privilege('anon','private.google_play_external_capability_program_bindings','INSERT'),'anonymous cannot issue association');
+select ok(not has_table_privilege('authenticated','private.google_play_external_capability_program_bindings','INSERT'),'buyer cannot issue association');
+select ok(not has_table_privilege('service_role','private.google_play_external_capability_program_bindings','INSERT'),'service cannot invent qualification');
+select ok(not has_function_privilege('service_role','private.google_play_external_bound_program_ready(uuid,uuid)','EXECUTE'),'private predicate stays private');
+select ok(position('google_play_external_bound_program_ready(a.capability_id,a.program_id)' in pg_get_functiondef('public.admit_google_play_external_session(text,uuid,integer,uuid,text,integer,uuid)'::regprocedure))>0,'retries retain exact original program');
+select ok(position('google_play_external_bound_program_ready(cap,id)' in pg_get_functiondef('public.bind_google_play_external_checkout(uuid,uuid,text,uuid,text,integer)'::regprocedure))>0,'checkout checks same bound program');
+select ok(position('google_play_external_bound_program_ready' in pg_get_functiondef('public.claim_google_play_external_report(uuid)'::regprocedure))=0,'historical reporting is not erased by new-admission revocation');
+select * from finish();
+rollback;

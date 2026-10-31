@@ -1,5 +1,23 @@
 # Deleted-content retention: disabled source implementation
 
+## Worker result validation (October 31 source repair)
+
+Text-expiry batches validate all IDs before the first expiry call, reject repeated
+IDs (including differently cased UUIDs), and accept only documented SQL outcomes.
+`purged` requires the database's claim ID. Failed, unknown or malformed receipts
+stop the pass before media work or a successful heartbeat. The real Edge handler
+returns its existing generic 503 without exposing private failure details.
+Known hold, busy, not-due, unsupported-coverage and delegated-Brand outcomes remain
+visible; they are not misrepresented as successful deletion.
+
+This repair does not add provider coverage or enable retention. Current source
+includes the legacy R2 provenance adapter, reviewed external-reference metadata
+retention, and the exact Brand lifecycle described below. Secondary/HLS objects
+and non-Brand legacy Supabase/Hetzner originals still need qualified coverage.
+Provider qualification, client drain, scheduling and activation remain separate
+unexecuted prerequisites. Historical inventory counts below are not a new live
+inventory or evidence that any current object may be deleted.
+
 ## Reviewed external references (source-only)
 
 Creator-video rows with no owned object or thumbnail key may use the distinct

@@ -99,18 +99,25 @@ export function useOutgoingIosCallAudioHandoff(input: {
     attempt.native = native;
     // Claims synchronously retire all shared call sounds, including pending preview/alert loads.
     const drained = claimChillyChatCallAudioHandoff(attempt, isCurrent);
+    let preparing = true;
     const deadline = setTimeout(() => {
-      if (!isCurrent()) return;
+      if (!preparing || !isCurrent()) return;
+      preparing = false;
       attempt.retired = true;
       native.retire();
       setSettled({ attempt, ready: false, error: AUDIO_HANDOFF_ERROR });
     }, 15_000);
     void native.prepare(drained).then(() => {
+      // Clearing a timer cannot retract a deadline callback already queued on
+      // the native bridge. A settled prepare must revoke that callback too.
+      preparing = false;
       if (isCurrent()) setSettled({ attempt, ready: true, error: null });
     }).catch(() => {
+      preparing = false;
       if (isCurrent()) setSettled({ attempt, ready: false, error: AUDIO_HANDOFF_ERROR });
     }).finally(() => clearTimeout(deadline));
     return () => {
+      preparing = false;
       clearTimeout(deadline);
       attempt.retired = true;
       native.retire();

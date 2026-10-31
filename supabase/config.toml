@@ -291,3 +291,5 @@ verify_jwt = true
 
 [functions.auction-approved-automation]
 verify_jwt = true
+[functions.stripe-fee-report-import]
+verify_jwt = true

@@ -55,7 +55,8 @@ try{
       'synthetic only','synthetic only',now(),now()+interval '1 hour',true) returning id;`);
   const program=query(`insert into private.google_play_external_program_config(package_name,environment,enrollment_evidence,
     license_test_qualification_evidence,tax_configuration_evidence,reporter_configuration_evidence,native_build_qualification_evidence,verified_at,expires_at,enabled)
-    values('com.fixture.app','test','synthetic only','synthetic only','synthetic only','synthetic only','synthetic only',now(),now()+interval '1 hour',true) returning id;`);
+    values('com.chillywood.mobile','test','synthetic only','synthetic only','synthetic only','synthetic only','synthetic only',now(),now()+interval '1 hour',true) returning id;`);
+  query(`insert into private.google_play_external_capability_program_bindings(capability_id,program_id) values('${cap}','${program}');`);
   const quote=randomUUID();
   query(`insert into private.google_play_external_launch_bindings(feature,quote_id,buyer_id,session_id,capability_id,program_id,amount_minor,currency,
     external_transaction_token,token_hash) values('creator_tip','${quote}','${randomUUID()}','${randomUUID()}','${cap}','${program}',237,'usd',
@@ -77,7 +78,7 @@ try{
   const row=JSON.parse(query(`select jsonb_build_object('id',o.id,'transaction',t.id) from private.google_play_external_report_outbox o
     join private.google_play_external_transactions t on t.id=o.transaction_id where t.quote_id='${quote}'`));
   assert.equal(query(`select count(*) from private.google_play_external_report_outbox where state='leased' and transaction_id='${row.transaction}'`),'1');
-  const receipt={externalTransactionId:row.transaction,packageName:'com.fixture.app',testPurchase:{},transactionTime:evidence.occurredAt,
+  const receipt={externalTransactionId:row.transaction,packageName:'com.chillywood.mobile',testPurchase:{},transactionTime:evidence.occurredAt,
     transactionState:'TRANSACTION_REPORTED',userTaxAddress:{regionCode:'US'},externalContentLinkDetails:{linkType:'LINK_TO_DIGITAL_CONTENT_OFFER'},
     originalPreTaxAmount:{currency:'USD',priceMicros:'2370000'},originalTaxAmount:{currency:'USD',priceMicros:'0'},
     currentPreTaxAmount:{currency:'USD',priceMicros:'2370000'},currentTaxAmount:{currency:'USD',priceMicros:'0'}};
