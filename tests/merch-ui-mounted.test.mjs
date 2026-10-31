@@ -1,3 +1,4 @@
+import {createSharedVisualLoader} from "./helpers/shared-visual-host.mjs";
 // Real production screens, hooks, and helper; native hosts and authenticated RPC
 // transport are modeled. These tests do not claim live payment or device proof.
 import assert from 'node:assert/strict';
@@ -21,7 +22,8 @@ async function mount(t,{screen='MerchShopScreen',props={creatorId:'creator'},rpc
   const nodes=new Map(),calls=[],routes=[],opens=[];let current=session('buyer'),focused=true;
   const host=name=>function Host(p){const id=React.useId();nodes.set(id,{type:name,props:p});React.useLayoutEffect(()=>()=>nodes.delete(id),[id]);return React.createElement(React.Fragment,null,...React.Children.toArray(p.children).filter(v=>typeof v==='object'));};
   const native={StyleSheet:{create:x=>x},Linking:{openURL:async u=>opens.push(u)}};for(const n of ['View','Text','TextInput','Pressable','ScrollView','ActivityIndicator','Image'])native[n]=host(n);
-  function compile(file,imports,extras={}) {const exports={};let source=fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8');if(file==='components/merch/merch-screens.tsx'&&mutateScreen)source=mutateScreen(source);vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{exports,require:imports,console,Intl,Date,Map,Promise,URL,Error,Uint8Array,crypto:webcrypto,fetch:fetcher??(async()=>{throw Error('Unexpected fetch');}),...extras});return exports;}
+  const visuals=createSharedVisualLoader(React,native,host);
+  function compile(file,imports,extras={}) {const exports={};let source=fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8');if(file==='components/merch/merch-screens.tsx'&&mutateScreen)source=mutateScreen(source);vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{exports,require:name=>visuals(name)??imports(name),console,Intl,Date,Map,Promise,URL,Error,Uint8Array,crypto:webcrypto,fetch:fetcher??(async()=>{throw Error('Unexpected fetch');}),...extras});return exports;}
   const helper=compile('_lib/creatorMerch.ts',name=>name==='react-native'?native:name.endsWith('/merchProductPhotos')?{resolveMerchProductPhotos:products=>photos.resolveMerchProductPhotos(products)}:name.endsWith('/supabase')?{SUPABASE_URL:'https://example.test'}:{
     runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{calls.push({name,args,actor:current.user.id});return {data:await rpc(name,args,current.user.id),error:null};},
     captureAccountBoundSupabaseMutationSubject:async()=>({accessToken:'fixture',authority:current.authority}),assertAccountBoundSupabaseMutationSubjectCurrent:s=>{assert.equal(s.authority,current.authority,'exact account unchanged');},
@@ -78,6 +80,16 @@ async function mount(t,{screen='MerchShopScreen',props={creatorId:'creator'},rpc
     account:async id=>{current=session(id);await render();},resolve:async(d,v)=>React.act(async()=>d.resolve(v)),focus:async v=>{focused=v;await render();},
   };
 }
+test('shop, orders and creator studio render shared skyline through actual Shell without an opaque scroll cover',async t=>{
+ for(const screen of ['MerchShopScreen','MerchOrdersScreen','MerchStudioScreen']) {
+  const h=await mount(t,{screen,rpc:async()=>({products:[],orders:[],nextCursor:null})});
+  const background=h.all().filter(n=>n.type==='ImageBackground'&&n.props.testID==='merch-branded-surface');
+  assert.ok(background.length>0,screen);
+  assert.equal(background[0].props.source,'bundled-chicago-skyline');
+  for(const scroll of h.all().filter(n=>n.type==='ScrollView'))assert.equal(scroll.props.style.backgroundColor,'transparent');
+ }
+});
+
 test('shop product detail shows price, shipping and disabled checkout reason through real helper RPC',async t=>{
  const h=await mount(t,{rpc:async()=>({products:[product()],nextCursor:null})});
  assert.equal(h.calls[0].name,'list_creator_merch_products');assert.equal(h.calls[0].args.p_creator_id,'creator');

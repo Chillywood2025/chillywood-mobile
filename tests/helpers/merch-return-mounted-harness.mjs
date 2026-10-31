@@ -1,3 +1,4 @@
+import {createSharedVisualLoader} from "./shared-visual-host.mjs";
 // Real component/helper, synthetic native hosts and exact-account RPC transport.
 import fs from 'node:fs';
 import ts from 'typescript';
@@ -12,7 +13,8 @@ export async function mountReturns({orderId='order-1',actor='buyer',rpc,rpcEnvel
  const nodes=new Map(),pending=new Set();let focused=true,account=actor,id=orderId,closed=false;
  const host=name=>function Host(props){const key=React.useId();nodes.set(key,{name,props});React.useLayoutEffect(()=>()=>nodes.delete(key),[key]);return React.createElement(React.Fragment,null,...React.Children.toArray(props.children).filter(x=>typeof x==='object'));};
  const native=Object.fromEntries(['View','Text','Pressable','TextInput'].map(n=>[n,host(n)]));
- const compile=(file,imports)=>{const module={exports:{}};new Function('require','exports','module','crypto',ts.transpileModule(fs.readFileSync(new URL('../../'+file,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText)(imports,module.exports,module,webcrypto);return module.exports;};
+ const visuals=createSharedVisualLoader(React,native,host);
+ const compile=(file,imports)=>{const module={exports:{}};new Function('require','exports','module','crypto',ts.transpileModule(fs.readFileSync(new URL('../../'+file,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText)(name=>visuals(name)??imports(name),module.exports,module,webcrypto);return module.exports;};
  const transport={runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{const subject=account,promise=rpc(name,args,subject);pending.add(promise);try{const data=await promise;if(subject!==account)throw Error('account changed');return rpcEnvelope?data:{data,error:null};}finally{pending.delete(promise);}}};
  const helper=compile('_lib/merchReturnCases.ts',()=>transport);
  const commerce=compile('_lib/creatorMerch.ts',()=>transport);

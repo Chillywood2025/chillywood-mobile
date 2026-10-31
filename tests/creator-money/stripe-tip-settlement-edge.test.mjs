@@ -5,7 +5,8 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import { loadStudioFunctions } from "../helpers/studio-source-harness.mjs";
-import { googlePlayStripeTaxEvidence } from "../../supabase/functions/_shared/google-play-stripe-tax-evidence.ts";
+import { loadPureTypeScriptModule } from "../helpers/pure-typescript-module.mjs";
+const { googlePlayStripeTaxEvidence } = loadPureTypeScriptModule("supabase/functions/_shared/google-play-stripe-tax-evidence.ts");
 
 const file = "supabase/functions/stripe-tip-webhook/index.ts";
 const source = readFileSync(file, "utf8");

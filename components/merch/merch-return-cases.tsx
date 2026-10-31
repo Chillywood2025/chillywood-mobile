@@ -1,3 +1,4 @@
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import React, { useCallback, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -7,7 +8,7 @@ import { MERCH_CASE_ERROR, MERCH_CASE_REJECTED, MerchCaseRejectedError, readMerc
 type Props = { orderId: string; manage: boolean; paymentStatus: string; deadline?: string | null; onChanged: () => void };
 type Operation = { id: string; kind?: MerchCaseKind; caseId?: string; action?: MerchCaseAction; note: string; uncertain?: boolean };
 function Button({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}><Text style={{ color: "#fff", paddingVertical: 8 }}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}><Text style={{ color: CHILLYWOOD_VISUAL.textPrimary, paddingVertical: 8 }}>{label}</Text></Pressable>;
 }
 // The order screen is keyed to exact session authority. Changing order/role also
 // retires draft text and completion handlers rather than reusing a buyer claim.
@@ -60,22 +61,22 @@ function Cases({ orderId, manage, deadline, onChanged }: Props) {
   const returnOpen = Number.isFinite(deadlineTime) && Date.now() < deadlineTime;
   const disabled = busy || pending || !note.trim();
   return <View style={{ gap: 8 }}>
-    <Text accessibilityRole="header" style={{ color: "#fff", fontWeight: "600" }}>Returns and delivery help</Text>
-    <Text style={{ color: "#bbb" }}>Opening a case does not issue a refund. Creators handle routine requests; Chi&apos;llywood staff review disputes. Unresolved cases keep affected earnings held.</Text>
-    {Number.isFinite(deadlineTime) ? <Text style={{ color: "#eee" }}>Recorded return deadline: {new Date(deadlineTime).toLocaleString()} ({new Date(deadlineTime).toISOString()})</Text> : <Text style={{ color: "#bbb" }}>A verified return deadline is not available yet. You can still report non-delivery.</Text>}
+    <Text accessibilityRole="header" style={{ color: CHILLYWOOD_VISUAL.textPrimary, fontWeight: "600" }}>Returns and delivery help</Text>
+    <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>Opening a case does not issue a refund. Creators handle routine requests; Chi&apos;llywood staff review disputes. Unresolved cases keep affected earnings held.</Text>
+    {Number.isFinite(deadlineTime) ? <Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Recorded return deadline: {new Date(deadlineTime).toLocaleString()} ({new Date(deadlineTime).toISOString()})</Text> : <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>A verified return deadline is not available yet. You can still report non-delivery.</Text>}
     <Button label={cases ? "Refresh return cases" : "View return cases"} disabled={busy} onPress={() => void load()} />
     {cases ? <>
-      {!cases.length ? <Text style={{ color: "#bbb" }}>No return or delivery cases for this order.</Text> : null}
-      <Text style={{ color: "#bbb" }}>Describe the issue or response. Do not include payment details or a shipping address here; use the private order shipping details.</Text>
-      <TextInput accessibilityLabel="Return case details" value={note} onChangeText={setNote} editable={!busy && !pending} maxLength={2000} multiline style={{ color: "#fff", borderColor: "#888", borderWidth: 1, padding: 8 }} />
+      {!cases.length ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>No return or delivery cases for this order.</Text> : null}
+      <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>Describe the issue or response. Do not include payment details or a shipping address here; use the private order shipping details.</Text>
+      <TextInput accessibilityLabel="Return case details" value={note} onChangeText={setNote} editable={!busy && !pending} maxLength={2000} multiline style={{ color: CHILLYWOOD_VISUAL.textPrimary, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderWidth: 1, padding: 8 }} />
       {!manage ? <>
         <Button label="Request return" disabled={disabled || !returnOpen} onPress={() => void submit({ kind: "return" })} />
-        {!returnOpen ? <Text style={{ color: "#bbb" }}>The verified 30-day return window is not currently open. Delivery problems can still be reported for review.</Text> : null}
+        {!returnOpen ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>The verified 30-day return window is not currently open. Delivery problems can still be reported for review.</Text> : null}
         <Button label="Report non-delivery" disabled={disabled} onPress={() => void submit({ kind: "non_delivery" })} />
       </> : null}
       {cases.map(item => <View key={item.id} style={{ gap: 4 }}>
-        <Text selectable style={{ color: "#eee" }}>Case {item.id} · {item.kind === "return" ? "Return" : "Non-delivery"} · {item.status}</Text>
-        {item.events.map(event => <Text key={event.id} style={{ color: "#bbb" }}>{event.actorRole} · {event.action} · {event.note}</Text>)}
+        <Text selectable style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Case {item.id} · {item.kind === "return" ? "Return" : "Non-delivery"} · {item.status}</Text>
+        {item.events.map(event => <Text key={event.id} style={{ color: CHILLYWOOD_VISUAL.textMuted }}>{event.actorRole} · {event.action} · {event.note}</Text>)}
         {item.status !== "closed" ? <>
           {manage ? <Button label={`Respond to case ${item.id}`} disabled={disabled} onPress={() => void submit({ caseId: item.id, action: "creator_response" })} /> : null}
           <Button label={`Ask staff to review case ${item.id}`} disabled={disabled || item.status === "escalated"} onPress={() => void submit({ caseId: item.id, action: "escalate" })} />

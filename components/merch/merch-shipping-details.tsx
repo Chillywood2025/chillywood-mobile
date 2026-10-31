@@ -1,3 +1,4 @@
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -31,15 +32,15 @@ function ShippingDetails({ orderId }: { orderId: string }) {
   };
   const hide = () => { generation.current++; latch.current = false; setDetails(null); setError(false); setBusy(false); };
   return <View style={{ gap: 8 }}>
-    <Text accessibilityRole="header" style={{ color: "#fff", fontWeight: "600" }}>Shipping details</Text>
-    <Text style={{ color: "#bbb" }}>Private checkout shipping details for this order only. Sandbox preview; no shipment is created.</Text>
+    <Text accessibilityRole="header" style={{ color: CHILLYWOOD_VISUAL.textPrimary, fontWeight: "600" }}>Shipping details</Text>
+    <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>Private checkout shipping details for this order only. Sandbox preview; no shipment is created.</Text>
     {details?.status === "available" ? <>
-      {details.lines.map((line, index) => <Text key={index} selectable style={{ color: "#eee" }}>{line}</Text>)}
-      <Pressable accessibilityRole="button" accessibilityLabel="Hide shipping details" onPress={hide}><Text style={{ color: "#fff" }}>Hide shipping details</Text></Pressable>
-    </> : <Pressable accessibilityRole="button" accessibilityLabel="View shipping details" disabled={busy} onPress={() => void show()}><Text style={{ color: "#fff" }}>View shipping details</Text></Pressable>}
+      {details.lines.map((line, index) => <Text key={index} selectable style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>{line}</Text>)}
+      <Pressable accessibilityRole="button" accessibilityLabel="Hide shipping details" onPress={hide}><Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Hide shipping details</Text></Pressable>
+    </> : <Pressable accessibilityRole="button" accessibilityLabel="View shipping details" disabled={busy} onPress={() => void show()}><Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>View shipping details</Text></Pressable>}
     {busy ? <ActivityIndicator accessibilityLabel="Loading shipping details" /> : null}
-    {details?.status === "unavailable" ? <Text style={{ color: "#bbb" }}>No verified shipping address is available. Do not guess a destination; contact support.</Text> : null}
-    {details?.status === "review_required" ? <Text style={{ color: "#bbb" }}>Shipping details need review. Do not ship until support resolves the conflicting evidence.</Text> : null}
+    {details?.status === "unavailable" ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>No verified shipping address is available. Do not guess a destination; contact support.</Text> : null}
+    {details?.status === "review_required" ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>Shipping details need review. Do not ship until support resolves the conflicting evidence.</Text> : null}
     {error ? <Text accessibilityLiveRegion="polite" style={{ color: "#ffaaaa" }}>{MERCH_SHIPPING_ERROR}</Text> : null}
   </View>;
 }

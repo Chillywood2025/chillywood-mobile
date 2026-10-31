@@ -1,3 +1,4 @@
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -75,7 +76,7 @@ function TrackingPanel({ orderId, manage, paymentStatus, onChanged }: MerchTrack
       </> : manage && paymentStatus === "paid" ? <>
         <Text style={styles.notice}>Add the carrier and tracking number for this order only. Check carefully: the assignment cannot be edited or deleted here.</Text>
         <View style={styles.row}>{(["usps", "ups", "fedex"] as const).map(value => <Button key={value} label={value === "fedex" ? "FedEx" : value.toUpperCase()} selected={carrier === value} disabled={busy} onPress={() => setCarrier(value)} />)}</View>
-        <TextInput accessibilityLabel="Order tracking number" value={number} onChangeText={setNumber} editable={!busy} maxLength={64} autoCapitalize="characters" autoCorrect={false} placeholder="Tracking number" placeholderTextColor="#aaa" style={styles.input} />
+        <TextInput accessibilityLabel="Order tracking number" value={number} onChangeText={setNumber} editable={!busy} maxLength={64} autoCapitalize="characters" autoCorrect={false} placeholder="Tracking number" placeholderTextColor={CHILLYWOOD_VISUAL.textMuted} style={styles.input} />
         <Button label="Assign tracking to this order" disabled={busy || !!error || !/^[A-Za-z0-9]{6,64}$/.test(number.trim())} onPress={() => void save()} />
       </> : <Text style={styles.body}>{manage ? "Tracking assignment is available after payment is confirmed." : "The seller has not assigned tracking yet."}</Text>}
     </> : null}
@@ -85,12 +86,12 @@ function TrackingPanel({ orderId, manage, paymentStatus, onChanged }: MerchTrack
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#444" },
-  heading: { color: "#fff", fontSize: 17, fontWeight: "600" },
-  body: { color: "#eee", fontSize: 14 }, notice: { color: "#bbb", fontSize: 13, lineHeight: 19 },
+  panel: { gap: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: CHILLYWOOD_VISUAL.controlBorder },
+  heading: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 17, fontWeight: "600" },
+  body: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 14 }, notice: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 13, lineHeight: 19 },
   error: { color: "#ffaaaa", fontSize: 14 }, row: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  button: { backgroundColor: "#30303b", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
-  selected: { backgroundColor: "#59418a" }, disabled: { opacity: 0.45 },
-  buttonText: { color: "#fff", fontWeight: "600" },
-  input: { color: "#fff", borderWidth: 1, borderColor: "#666", padding: 12, borderRadius: 8 },
+  button: { backgroundColor: CHILLYWOOD_VISUAL.controlBackground, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
+  selected: { backgroundColor: CHILLYWOOD_VISUAL.accentPurple }, disabled: { opacity: 0.45 },
+  buttonText: { color: CHILLYWOOD_VISUAL.textPrimary, fontWeight: "600" },
+  input: { color: CHILLYWOOD_VISUAL.textPrimary, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, padding: 12, borderRadius: 8 },
 });

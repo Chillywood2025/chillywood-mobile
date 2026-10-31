@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {googlePrice,externalReportRequest,submitExternalReport} from '../../supabase/functions/_shared/google-play-external-reporting.ts';
-import {googlePlayStripeTaxEvidence} from '../../supabase/functions/_shared/google-play-stripe-tax-evidence.ts';
+import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
+const {googlePrice,externalReportRequest,submitExternalReport}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-external-reporting.ts');
+const {googlePlayStripeTaxEvidence}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-stripe-tax-evidence.ts');
 
 const report=()=>({externalTransactionId:'fixture-transaction',packageName:'com.fixture.app',operation:'create',
   externalTransactionToken:'synthetic-native-input-not-attestation',environment:'test',licenseTestQualified:true,

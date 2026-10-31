@@ -1,3 +1,4 @@
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import { openCreatorExternalCheckout } from "../../_lib/openCreatorExternalCheckout";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -150,8 +151,8 @@ export function Action({ label, disabled, onPress }: { label: string; disabled: 
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy: disabled }} disabled={disabled} onPress={onPress} style={[styles.button, disabled && { opacity: 0.45 }]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
 }
 export const styles = StyleSheet.create({
-  panel: { padding: 16, gap: 12, backgroundColor: "#0C1019", borderRadius: 16 }, card: { padding: 12, gap: 10, borderWidth: 1, borderColor: "#596174", borderRadius: 12 },
-  title: { color: "#fff", fontSize: 18, fontWeight: "800" }, body: { color: "#C6CDDB", fontSize: 14, lineHeight: 20 },
-  input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: "#596174", borderRadius: 10, color: "#fff" },
-  button: { minHeight: 48, padding: 12, backgroundColor: "#84132D", borderRadius: 10, justifyContent: "center" }, buttonText: { color: "#fff", fontWeight: "800" },
+  panel: { padding: 16, gap: 12, backgroundColor: CHILLYWOOD_VISUAL.glassBackground, borderColor: CHILLYWOOD_VISUAL.glassBorder, borderWidth: 1, borderRadius: 16 }, card: { padding: 12, gap: 10, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderRadius: 12 },
+  title: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 18, fontWeight: "800" }, body: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 14, lineHeight: 20 },
+  input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderRadius: 10, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, color: CHILLYWOOD_VISUAL.textPrimary },
+  button: { minHeight: 48, padding: 12, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderWidth: 1, borderRadius: 10, justifyContent: "center" }, buttonText: { color: CHILLYWOOD_VISUAL.textPrimary, fontWeight: "800" },
 });

@@ -1,3 +1,4 @@
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import React, { useCallback, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -41,18 +42,18 @@ export function MerchReturnReview() {
     finally { if (active.current && ticket === generation.current) { latch.current = false; setBusy(false); } }
   };
   return <View style={{ gap: 8, padding: 16 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Open staff merch case review" disabled={busy || pending} onPress={() => void run()}><Text style={{ color: "#fff" }}>Open staff merch case review</Text></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Open staff merch case review" disabled={busy || pending} onPress={() => void run()}><Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Open staff merch case review</Text></Pressable>
     {cases ? <>
-      <Text style={{ color: "#bbb" }}>Authorized staff only. Resolving a case records a support decision, not a refund. Provider disputes and other cases remain independent; other financial holds may still apply.</Text>
-      <TextInput accessibilityLabel="Staff merch case resolution notes" value={note} onChangeText={setNote} editable={!busy && !pending} maxLength={2000} multiline style={{ color: "#fff", borderColor: "#888", borderWidth: 1 }} />
-      {!cases.length ? <Text style={{ color: "#bbb" }}>No escalated merch cases in this review queue.</Text> : null}
+      <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>Authorized staff only. Resolving a case records a support decision, not a refund. Provider disputes and other cases remain independent; other financial holds may still apply.</Text>
+      <TextInput accessibilityLabel="Staff merch case resolution notes" value={note} onChangeText={setNote} editable={!busy && !pending} maxLength={2000} multiline style={{ color: CHILLYWOOD_VISUAL.textPrimary, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderWidth: 1 }} />
+      {!cases.length ? <Text style={{ color: CHILLYWOOD_VISUAL.textMuted }}>No escalated merch cases in this review queue.</Text> : null}
       {cases.map(item => <View key={item.id}>
-        <Text selectable style={{ color: "#fff" }}>Order {item.orderId} · Case {item.id} · {item.kind} · {item.status}</Text>
-        {item.events.map(event => <Text key={event.id} style={{ color: "#bbb" }}>{event.actorRole} · {event.action} · {event.note}</Text>)}
-        {item.status === "escalated" ? <Pressable accessibilityRole="button" accessibilityLabel={`Resolve support case ${item.id}`} disabled={busy || pending || !note.trim()} onPress={() => void run(item.id)}><Text style={{ color: "#fff", paddingVertical: 8 }}>Resolve support case {item.id} (no refund issued)</Text></Pressable> : null}
+        <Text selectable style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Order {item.orderId} · Case {item.id} · {item.kind} · {item.status}</Text>
+        {item.events.map(event => <Text key={event.id} style={{ color: CHILLYWOOD_VISUAL.textMuted }}>{event.actorRole} · {event.action} · {event.note}</Text>)}
+        {item.status === "escalated" ? <Pressable accessibilityRole="button" accessibilityLabel={`Resolve support case ${item.id}`} disabled={busy || pending || !note.trim()} onPress={() => void run(item.id)}><Text style={{ color: CHILLYWOOD_VISUAL.textPrimary, paddingVertical: 8 }}>Resolve support case {item.id} (no refund issued)</Text></Pressable> : null}
       </View>)}
     </> : null}
-    {pending ? <Pressable accessibilityRole="button" accessibilityLabel="Retry same staff resolution" disabled={busy} onPress={() => void run()}><Text style={{ color: "#fff" }}>Retry same staff resolution</Text></Pressable> : null}
+    {pending ? <Pressable accessibilityRole="button" accessibilityLabel="Retry same staff resolution" disabled={busy} onPress={() => void run()}><Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>Retry same staff resolution</Text></Pressable> : null}
     {error ? <Text accessibilityLiveRegion="polite" style={{ color: "#ffaaaa" }}>{rejected ? MERCH_CASE_REJECTED : "Staff merch review is unavailable or the update could not be confirmed. Check your permissions or retry the same request; no refund is issued here."}</Text> : null}
   </View>;
 }

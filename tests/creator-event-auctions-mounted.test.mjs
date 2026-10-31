@@ -1,3 +1,4 @@
+import {createSharedVisualLoader} from "./helpers/shared-visual-host.mjs";
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -17,9 +18,10 @@ const textOf=n=>Array.isArray(n)?n.map(textOf).join(' '):n==null||typeof n==='bo
 const row={id:'auction',creatorEventId:'event',offerId:'offer',termsRevisionId:'revision',creatorId:'creator',startingAmountMinor:100,minIncrementMinor:25,highestAmountMinor:null,nextBidAmountMinor:100,myBidAmountMinor:null,awardAmountMinor:null,currency:'usd',environment:'test',state:'open',closesAt:'2099-01-01T11:00:00Z',paymentDeadline:'2099-01-01T12:00:00Z',serverNow:'2099-01-01T10:00:00Z',isHighestBidder:false,isWinner:false};
 row.latestCheckoutStartAt='2099-01-01T11:29:00Z';row.terms={title:'Virtual show',description:'This exact event',startsAt:'2099-01-02T00:00:00Z',endsAt:null,timeZone:'America/New_York',attendance:'virtual',replayPolicy:'none',replayAvailableAt:null,replayExpiresAt:null};
 async function mount(t,options={}){
- const nodes=new Map(),calls=[],timers=new Map();let timerId=0,appListener,focused=true;let authority={userId:'buyer',sessionGeneration:'one'},subscriber,rows=options.rows??[row];
+ const nodes=new Map(),calls=[],timers=new Map();let timerId=0,appListener,focused=true;let authority={userId:'buyer',sessionGeneration:'one'},subscribers=new Set(),rows=options.rows??[row];
  const host=name=>function Native(props){const id=React.useId();nodes.set(id,{type:name,props});React.useEffect(()=>()=>nodes.delete(id),[id]);return React.createElement(React.Fragment,null,...React.Children.toArray(props.children).filter(c=>typeof c==='object'));};
- const native={Platform:{OS:options.platform??'ios'},Linking:{openURL:async url=>calls.push(['browser',url])},StyleSheet:{create:x=>x},AppState:{currentState:'active',addEventListener:(_,fn)=>{appListener=fn;return {remove:()=>{appListener=null;}};}}};for(const n of ['View','Text','TextInput','Pressable','ActivityIndicator'])native[n]=host(n);
+ const native={Platform:{OS:options.platform??'ios'},Linking:{openURL:async url=>calls.push(['browser',url])},StyleSheet:{create:x=>x},AppState:{currentState:'active',addEventListener:(_,fn)=>{appListener=fn;return {remove:()=>{appListener=null;}};}}};for(const n of ['View','Text','TextInput','Pressable','ActivityIndicator','Modal','ScrollView','ImageBackground'])native[n]=host(n);
+ const visuals=createSharedVisualLoader(React,native,host);
  const cache=new Map();const load=file=>{if(cache.has(file))return cache.get(file);const exports={};cache.set(file,exports);const mocks={react:React,'react-native':native,'expo-router':{useFocusEffect:cb=>React.useEffect(()=>focused?cb():undefined,[cb,focused])},'react-native-get-random-values':{},
  '../../_lib/openCreatorExternalCheckout':{openCreatorExternalCheckout:async(url,current)=>{if(current())await native.Linking.openURL(url);}},
  '../../_lib/google-play-external-content-links':{withGooglePlayExternalContentLink:async callback=>{
@@ -35,20 +37,21 @@ async function mount(t,options={}){
  '../../_lib/creatorRoomSeatAuctions':{listCreatorRoomSeatAuctions:async id=>{calls.push(['list',id]);return options.list?options.list(id):rows;},readCreatorRoomSeatAuctionBidEligibility:async(...args)=>{calls.push(['eligibility',...args]);return options.eligibility?options.eligibility(...args):true;},placeCreatorRoomSeatAuctionBid:async(...args)=>{calls.push(['bid',...args]);return options.bid?options.bid(...args):rows[0];},createCreatorRoomSeatAuction:async input=>{calls.push(['create',input]);return options.create?options.create(input):rows[0];},
  prepareCreatorRoomSeatAuction:async(...args)=>{calls.push(['prepareRoom',...args]);return options.prepareRoom?options.prepareRoom(...args):{roomSessionId:'44444444-4444-4444-8444-444444444444',serverNow:'2099-01-01T00:00:00Z'};},
  readPendingCreatorRoomSeatAuction:async()=>options.pendingRead?options.pendingRead():null},
- '../../_lib/accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,getAccountNavigationTreeKey:a=>a?`${a.userId}:${a.sessionGeneration}`:'none',sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&a.userId===b.userId&&a.sessionGeneration===b.sessionGeneration,subscribeToAccountSessionAuthority:f=>{subscriber=f;return noop;}},
+ '../../_lib/accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,getAccountNavigationTreeKey:a=>a?`${a.userId}:${a.sessionGeneration}`:'none',sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&a.userId===b.userId&&a.sessionGeneration===b.sessionGeneration,subscribeToAccountSessionAuthority:f=>{subscribers.add(f);return()=>subscribers.delete(f);}},
  '../../_lib/creatorEventAuctions':{listCreatorEventAuctions:async id=>{calls.push(['list',id]);return options.list?options.list(id):rows;},readCreatorEventAuctionBidEligibility:async(...args)=>{calls.push(['eligibility',...args]);return options.eligibility?options.eligibility(...args):true;},placeCreatorEventAuctionBid:async(...args)=>{calls.push(['bid',...args]);return options.bid?options.bid(...args):row;},createCreatorEventAuction:async input=>{calls.push(['create',input]);return row;}},
  '../../_lib/creatorTipAmount':load('_lib/creatorTipAmount.ts'),
  '../../_lib/eventSchedule':load('_lib/eventSchedule.ts'),
  './event-auction-time-input':file.endsWith('auction-editor.tsx')?load('components/monetization/event-auction-time-input.tsx'):null,
- './room-seat-auction-panel':file.endsWith('room-seat-auction-editor.tsx')?load('components/monetization/room-seat-auction-panel.tsx'):null,
+ './room-seat-auction-panel':(file.endsWith('room-seat-auction-editor.tsx')||file.endsWith('room-seat-auction-entry.tsx'))?load('components/monetization/room-seat-auction-panel.tsx'):null,
+ './room-seat-auction-editor':file.endsWith('room-seat-auction-entry.tsx')?load('components/monetization/room-seat-auction-editor.tsx'):null,
  './event-auction-panel':!file.endsWith('event-auction-panel.tsx')?load('components/monetization/event-auction-panel.tsx'):null,
- };const context={exports,Error,Date,Intl,Promise,Map,Set,crypto:webcrypto,Uint8Array,setInterval:fn=>{const id=++timerId;timers.set(id,fn);return id;},clearInterval:id=>timers.delete(id),require:n=>{assert.ok(n in mocks,`unexpected import ${n}`);return mocks[n];}};
+ };const context={exports,Error,Date,Intl,Promise,Map,Set,crypto:webcrypto,Uint8Array,setInterval:fn=>{const id=++timerId;timers.set(id,fn);return id;},clearInterval:id=>timers.delete(id),require:n=>{const visual=visuals(n);if(visual)return visual;assert.ok(n in mocks,`unexpected import ${n}`);return mocks[n];}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,context);return exports;};
- const Component=options.editor?(options.room?load('components/monetization/room-seat-auction-editor.tsx').RoomSeatAuctionEditor:load('components/monetization/event-auction-editor.tsx').EventAuctionEditor):options.room?load('components/monetization/room-seat-auction-panel.tsx').RoomSeatAuctionPanel:load('components/monetization/event-auction-panel.tsx').EventAuctionPanel;const root=createRoot(container());let eventId='event';
- const props=options.editor?{creatorId:'buyer',sourceKind:options.sourceKind??'stage_reserved_seat',event:{id:'event',hostUserId:'buyer',timeZone:'America/New_York',startsAt:options.startsAt??'2099-01-02T00:00:00Z'},offer:{status:'sandbox',termsRevisionId:'revision'}}:{};
+ const Component=options.entry?load('components/monetization/room-seat-auction-entry.tsx').RoomSeatAuctionEntry:options.editor?(options.room?load('components/monetization/room-seat-auction-editor.tsx').RoomSeatAuctionEditor:load('components/monetization/event-auction-editor.tsx').EventAuctionEditor):options.room?load('components/monetization/room-seat-auction-panel.tsx').RoomSeatAuctionPanel:load('components/monetization/event-auction-panel.tsx').EventAuctionPanel;const root=createRoot(container());let eventId='event';
+ const props=options.entry?{creatorId:'creator',sourceKind:options.sourceKind??'stage_reserved_seat'}:options.editor?{creatorId:'buyer',sourceKind:options.sourceKind??'stage_reserved_seat',event:{id:'event',hostUserId:'buyer',timeZone:'America/New_York',startsAt:options.startsAt??'2099-01-02T00:00:00Z'},offer:{status:'sandbox',termsRevisionId:'revision'}}:{};
  const render=()=>root.render(React.createElement(Component,{eventId,partyId:eventId,...props}));await React.act(async()=>render());t.after(()=>React.act(async()=>root.unmount()));
  const find=label=>[...nodes.values()].find(n=>n.props.accessibilityLabel===label);
- return {calls,find,timers,setRows:next=>{rows=next;},async tick(){await React.act(async()=>{for(const fn of timers.values())fn();});},async background(state){await React.act(async()=>{native.AppState.currentState=state;appListener?.(state);});},async focus(value){await React.act(async()=>{focused=value;render();});},text:()=>[...nodes.values()].filter(n=>n.type==='Text').map(textOf).join(' '),async press(label,twice=false){const n=find(label);assert.ok(n,label);await React.act(async()=>{void n.props.onPress();if(twice)void n.props.onPress();});},async input(v,label='Your auction bid in USD'){await React.act(async()=>find(label).props.onChangeText(v));},async resolve(d,v){await React.act(async()=>d.resolve(v));},async account(){await React.act(async()=>{authority={userId:'other',sessionGeneration:'two'};rows=[];subscriber?.(authority);});},async navigate(){await React.act(async()=>{eventId='other-event';rows=[];render();});}};
+ return {all:()=>[...nodes.values()],calls,find,timers,setRows:next=>{rows=next;},async tick(){await React.act(async()=>{for(const fn of timers.values())fn();});},async background(state){await React.act(async()=>{native.AppState.currentState=state;appListener?.(state);});},async focus(value){await React.act(async()=>{focused=value;render();});},text:()=>[...nodes.values()].filter(n=>n.type==='Text').map(textOf).join(' '),async press(label,twice=false){const n=find(label);assert.ok(n,label);await React.act(async()=>{void n.props.onPress();if(twice)void n.props.onPress();});},async input(v,label='Your auction bid in USD'){await React.act(async()=>find(label).props.onChangeText(v));},async resolve(d,v){await React.act(async()=>d.resolve(v));},async account(){await React.act(async()=>{authority={userId:'other',sessionGeneration:'two'};rows=[];for(const listener of [...subscribers])listener(authority);});},async navigate(){await React.act(async()=>{eventId='other-event';rows=[];render();});}};
 }
 test('mounted bid review validates strict cents, exact next minimum, and suppresses rapid duplicate taps',async t=>{
  const d=deferred();const h=await mount(t,{bid:()=>d.promise});await h.input('1.001');await h.press('Review bid');assert.equal(h.calls.filter(c=>c[0]==='eligibility').length,0);
@@ -190,4 +193,16 @@ test('after refresh to payment_pending the winner can resume the same checkout b
  unknown=true;await h.press('Resume existing checkout');
  assert.equal(h.calls.filter(c=>c[0]==='browser').length,2);
  assert.match(h.text(),/could not be verified/);
+});
+
+for(const sourceKind of ['stage_reserved_seat','party_admission']) test(`room auction ${sourceKind} sheet mounts canonical skyline and dismisses without leaking content`,async t=>{
+ const h=await mount(t,{entry:true,sourceKind,rows:[]});
+ const background=()=>h.all().find(n=>n.type==='ImageBackground'&&n.props.testID==='room-auction-branded-surface');
+ assert.equal(Boolean(background()),false);
+ const open=sourceKind==='stage_reserved_seat'?'Reserved guest spot auctions':'Party admission auctions';
+ await h.press(open);assert.equal(background().props.source,'bundled-chicago-skyline');
+ const scroll=h.all().find(n=>n.type==='ScrollView');assert.equal(scroll.props.style.backgroundColor,'transparent');
+ await h.press('Close room auctions');assert.equal(Boolean(background()),false);
+ await h.press(open);assert.ok(background());await h.account();assert.equal(Boolean(background()),false);
+ assert.equal(h.calls.filter(c=>['bid','checkout','create'].includes(c[0])).length,0);
 });

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
-import {googlePrice} from '../../supabase/functions/_shared/google-play-external-reporting.ts';
+import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
+const {googlePrice}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-external-reporting.ts');
 
 test('private Google obligations lease/reconcile idempotently without financial authority or fabricated tax', {timeout:240000}, async()=>{
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});

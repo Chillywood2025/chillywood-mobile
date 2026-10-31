@@ -1,3 +1,5 @@
+import { ChillywoodBrandedSurface } from "../ui/chillywood-branded-surface";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -22,7 +24,7 @@ function Button({ label, onPress, disabled = false, selected }: { label: string;
 }
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   const router = useRouter();
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"><Button label="Back" onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/profile")} /><Text accessibilityRole="header" style={styles.title}>{title}</Text><Text style={styles.notice}>{NOTICE}</Text>{children}</ScrollView>;
+  return <ChillywoodBrandedSurface variant="app" testID="merch-branded-surface"><ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"><Button label="Back" onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/profile")} /><Text accessibilityRole="header" style={styles.title}>{title}</Text><Text style={styles.notice}>{NOTICE}</Text>{children}</ScrollView></ChillywoodBrandedSurface>;
 }
 
 // Exact-session remount removes private order/editor state synchronously on account
@@ -314,21 +316,21 @@ function Studio() {
   </Shell>;
 }
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#101116" },
+  screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: 20, paddingTop: 54, paddingBottom: 48, gap: 16 },
-  title: { color: "#FFFFFF", fontSize: 28, fontWeight: "800" },
-  heading: { color: "#FFFFFF", fontSize: 20, fontWeight: "700" },
-  body: { color: "#E1E5EE", fontSize: 16, lineHeight: 24 },
-  notice: { color: "#CDD5E7", fontSize: 14, lineHeight: 21 },
+  title: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 28, fontWeight: "800" },
+  heading: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 20, fontWeight: "700" },
+  body: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 16, lineHeight: 24 },
+  notice: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 14, lineHeight: 21 },
   error: { color: "#FFB8C1", fontSize: 16, lineHeight: 24 },
-  price: { color: "#FFFFFF", fontSize: 22, fontWeight: "700" },
-  card: { backgroundColor: "#1D202A", borderRadius: 16, padding: 16, gap: 12 },
-  optionGroup: { borderWidth: 1, borderColor: "#687590", borderRadius: 12, padding: 12, gap: 10 },
+  price: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 22, fontWeight: "700" },
+  card: { backgroundColor: CHILLYWOOD_VISUAL.glassBackground, borderColor: CHILLYWOOD_VISUAL.glassBorder, borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 },
+  optionGroup: { borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderRadius: 12, padding: 12, gap: 10 },
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 },
-  button: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, backgroundColor: "#344367", alignItems: "center", justifyContent: "center" },
-  selectedButton: { backgroundColor: "#5069A0", borderColor: "#CFDDFF", borderWidth: 2 },
-  buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  button: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, alignItems: "center", justifyContent: "center" },
+  selectedButton: { backgroundColor: CHILLYWOOD_VISUAL.accentPurple, borderColor: CHILLYWOOD_VISUAL.primaryBorder, borderWidth: 2 },
+  buttonText: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 16, fontWeight: "700" },
   disabled: { opacity: 0.5 },
-  input: { minHeight: 48, color: "#FFFFFF", backgroundColor: "#11141D", borderColor: "#687590", borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 16 },
+  input: { minHeight: 48, color: CHILLYWOOD_VISUAL.textPrimary, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 16 },
   image: { width: "100%", height: 220, borderRadius: 10, resizeMode: "contain" },
 });

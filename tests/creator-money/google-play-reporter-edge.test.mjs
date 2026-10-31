@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
-import {googlePlayReporterAccessToken} from '../../supabase/functions/_shared/google-play-reporter-oauth.ts';
+import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
+const {googlePlayReporterAccessToken}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-reporter-oauth.ts');
 const source=readFileSync('supabase/functions/google-play-external-reporter/index.ts','utf8');
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 function harness({enabled=true,result={status:'unknown',reason:'synthetic_lost_response'},commit=true}={}){

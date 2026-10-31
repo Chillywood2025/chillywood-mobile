@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(14);
+select plan(15);
 select has_table('private','merch_provider_cost_observations','immutable provider observations exist');
 select ok((select bool_and(relrowsecurity and relforcerowsecurity) from pg_class where oid in
  ('private.merch_provider_cost_observations'::regclass,'private.merch_held_net_allocations'::regclass)),'private tables FORCE RLS');
@@ -10,10 +10,18 @@ select ok(not has_function_privilege('authenticated','public.record_merch_provid
 select ok(has_function_privilege('service_role','public.record_merch_provider_cost_observation(uuid,jsonb)','execute'),'service adapter has bounded RPC access');
 select ok(not has_table_privilege('service_role','private.merch_provider_cost_observations','INSERT,UPDATE,DELETE'),'no direct service table writes');
 create temporary table merch_cost_baseline as select count(*) n from public.creator_earnings_ledger;
+-- Deliberately historical pre-policy order, not a new checkout. Keep accepted
+-- terms absent so this negative case still proves unknown policy cannot release.
+set local session_replication_role=replica;
 insert into public.merch_orders(id,buyer_id,provider,environment,order_status,fulfillment_status,payment_status,
- amount_subtotal_minor,amount_total_minor,currency,stripe_checkout_session_id,stripe_payment_intent_id)
+ amount_subtotal_minor,amount_total_minor,currency,stripe_checkout_session_id,stripe_payment_intent_id,
+ net_share_policy_version,platform_net_share_bps,creator_net_share_bps)
 values('e7200000-0000-4000-8000-000000000001','e7200000-0000-4000-8000-000000000002',
- 'stripe_physical_goods','sandbox','paid','not_started','paid',1000,1000,'usd','cs_test_native_cost_fixture','pi_native_cost_fixture');
+ 'stripe_physical_goods','sandbox','paid','not_started','paid',1000,1000,'usd','cs_test_native_cost_fixture','pi_native_cost_fixture',
+ 'physical_merch_net_90_10_v1',1000,9000);
+set local session_replication_role=origin;
+select ok((select return_policy_version is null and return_window_days is null and shipping_tracking_mode is null
+ from public.merch_orders where id='e7200000-0000-4000-8000-000000000001'),'historical unknown-policy fixture has no invented accepted terms');
 create temporary table merch_cost_fixture as select '{
  "account_id":"acct_native_synthetic","environment":"sandbox","order_id":"e7200000-0000-4000-8000-000000000001",
  "checkout_id":"cs_test_native_cost_fixture","payment_intent_id":"pi_native_cost_fixture",
