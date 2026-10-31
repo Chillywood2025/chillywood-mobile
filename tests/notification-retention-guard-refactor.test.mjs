@@ -13,8 +13,6 @@ const files = ['package.json', '_lib/notifications.ts', 'app/settings.tsx',
   'supabase/functions/revenuecat-webhook/index.ts', 'app/chat/index.tsx', '_lib/moneyFeatureFlags.ts'];
 const source = Object.fromEntries(files.map(file => [file, fs.readFileSync(path.join(root, file), 'utf8')]));
 const guard = path.join(root, 'scripts/guard-notification-action-retention-policy.mjs');
-const legacySettingsFailure = '- Device push Refresh must show a busy state: missing setNotificationSavingKey("push-refresh")';
-const expectedExistingFailures = source['app/settings.tsx'].includes('setNotificationSavingKey("push-refresh")') ? [] : [legacySettingsFailure];
 
 function run(t, change) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'notification-retention-guard-'));
@@ -30,14 +28,23 @@ function run(t, change) {
   return { ...result, failures: result.stderr.split('\n').filter(line => line.startsWith('- ')) };
 }
 
-test('new signal-owned retention calls satisfy the guard without relaxing the unrelated Settings expectation', t => {
+test('signal-owned retention and scoped Settings refresh both satisfy the guard', t => {
   const result = run(t);
-  assert.deepEqual(result.failures, expectedExistingFailures);
-  assert.equal(result.status, expectedExistingFailures.length ? 1 : 0);
-  assert.ok(fs.readFileSync(guard, 'utf8').includes('setNotificationSavingKey(\\"push-refresh\\")'), 'unrelated legacy assertion remains unchanged');
+  assert.deepEqual(result.failures, []);
+  assert.equal(result.status, 0);
 });
 
 for (const control of [
+  { file: 'app/settings.tsx', before: 'await refreshNotifications(true);', after: 'await refreshNotifications(false);', label: 'Refresh must request a manual operation' },
+  { file: 'app/settings.tsx', before: 'beginNotificationOperation(manual ? "push-refresh" : null)', after: 'beginNotificationOperation(null)', label: 'Refresh must acquire its scoped busy operation' },
+  { file: 'app/settings.tsx', before: 'notificationScope.action ||', after: 'false ||', label: 'Refresh must reject an already pending action' },
+  { file: 'app/settings.tsx', before: 'notificationScope.action = savingKey;', after: 'notificationScope.action = null;', label: 'Refresh must synchronously latch its action' },
+  { file: 'app/settings.tsx', before: 'patchNotificationSettings({ loading: !savingKey, savingKey });', after: 'patchNotificationSettings({ loading: !savingKey, savingKey: null });', label: 'Refresh must publish its busy key' },
+  { file: 'app/settings.tsx', before: '...patch, scope: notificationScope', after: 'scope: notificationScope', label: 'Refresh state must apply the scoped patch' },
+  { file: 'app/settings.tsx', before: 'const notificationSavingKey = notificationActionKey', after: 'const notificationSavingKey = null', label: 'Refresh view must consume the action key' },
+  { file: 'app/settings.tsx', before: 'disabled={!!notificationSavingKey || notificationLoading}', after: 'disabled={false}', label: 'Refresh button must disable during its operation' },
+  { file: 'app/settings.tsx', before: 'notificationSavingKey === "push-refresh"\n                ? <ActivityIndicator', after: 'false\n                ? <ActivityIndicator', label: 'Refresh button must show its operation spinner' },
+  { file: 'app/settings.tsx', before: 'finally {\n      operation.finish();', after: 'finally {\n      void 0;', label: 'Refresh must finish its operation on every settlement' },
   { file: '_lib/notifications.ts', before: 'readImportantNotificationList(userId, importantLimit, signal)', after: 'Promise.resolve([])', label: 'important rows must be read separately' },
   { file: '_lib/notifications.ts', before: 'readNotificationList(userId, recentLimit, signal)', after: 'Promise.resolve([])', label: 'recent rows must remain separate' },
   { file: 'components/notifications/notification-bell-button.tsx', before: 'readImportantNotificationList(user!.id, 30, signal)', after: 'Promise.resolve([])', label: 'bell tray retention UI: missing readImportantNotificationList' },
@@ -48,6 +55,5 @@ for (const control of [
     const result = run(t, control);
     assert.equal(result.status, 1);
     assert.ok(result.failures.some(message => message.includes(control.label)), result.stderr);
-    for (const failure of expectedExistingFailures) assert.ok(result.failures.includes(failure));
   });
 }

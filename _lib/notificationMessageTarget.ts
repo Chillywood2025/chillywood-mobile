@@ -15,7 +15,28 @@ export type NotificationMessageTarget = {
 /** Message IDs select presentation within a thread; they never grant access. */
 export function resolveNotificationMessagePath(value: unknown, target?: NotificationMessageTarget) {
   const route = resolveApplicationRoute(value);
-  if (!route || target?.notificationType !== "chat_message") return route;
+  if (!route) return route;
+  if (typeof target?.notificationType === "string" && ["auction_outbid", "auction_won", "auction_creator_award", "auction_checkout_deadline", "auction_payment_deadline"].includes(target.notificationType)) {
+    const [path, query = ""] = route.split("?");
+    const match = path.match(/^\/(event|watch-party(?:\/live-stage)?)\/([^/]+)$/);
+    const context = target.targetContext;
+    if (!match || !context || typeof context !== "object" || Array.isArray(context)) return route;
+    // Event IDs are UUIDs, but public room IDs are case-sensitive text.
+    const exactEntity = match[1] === "event"
+      ? !!normalizeChatMessageId(match[2]) && normalizeChatMessageId(match[2]) === normalizeChatMessageId(target.targetEntityId)
+      : typeof target.targetEntityId === "string" && match[2] === target.targetEntityId;
+    if (!exactEntity) return route;
+    const { auctionId, action_expires_at: expires } = context as Record<string, unknown>;
+    const id = normalizeChatMessageId(auctionId);
+    if (!id || typeof expires !== "string" || !Number.isFinite(Date.parse(expires)) || Date.parse(expires) <= Date.now()) return route;
+    const params = new URLSearchParams(query);
+    if ([...params.keys()].some(key => !["from", "source"].includes(key))) return route;
+    params.set("auctionId", id);
+    params.set("auctionTarget", match[1] === "event" ? "event" : match[1].endsWith("live-stage") ? "stage_reserved_seat" : "party_admission");
+    params.set("auctionExpiresAt", expires);
+    return resolveApplicationRoute(`${path}?${params.toString()}`);
+  }
+  if (target?.notificationType !== "chat_message") return route;
   const [pathname, query = ""] = route.split("?");
   const threadId = normalizeChatMessageId(pathname.startsWith("/chat/") ? pathname.slice(6) : null);
   const context = target.targetContext;

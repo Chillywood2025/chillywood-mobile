@@ -1,3 +1,4 @@
+import { RoomSeatAuctionEntry } from "../../components/monetization/room-seat-auction-entry";
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -2891,6 +2892,7 @@ export default function WatchPartyRoomScreen() {
               </Text>
             </TouchableOpacity>
           ) : null}
+          <RoomSeatAuctionEntry partyId={room.partyId} creatorId={room.hostUserId} sourceKind="party_admission" />
           {paidTicketNotice ? <Text style={styles.errorBody} testID="watch-party-ticket-success-receipt">{paidTicketNotice}</Text> : null}
           <TouchableOpacity style={styles.secondaryBtn} onPress={returnToWatchPartyEntry} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
@@ -3557,6 +3559,7 @@ export default function WatchPartyRoomScreen() {
 
         {renderWatchPartyLiveDeck()}
         {renderPartyRoomActionDock()}
+        {!isLiveRoom ? <RoomSeatAuctionEntry partyId={room.partyId} creatorId={room.hostUserId} sourceKind="party_admission" /> : null}
 
         {!isLiveRoom && (
           <View style={styles.syncStatusCard}>

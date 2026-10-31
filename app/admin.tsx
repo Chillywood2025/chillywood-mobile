@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAdminReadLifecycle } from "../hooks/use-admin-read-lifecycle";
 import { useAdminScopedRead } from "../hooks/use-admin-scoped-read";
 import { useAdminHistoryRead } from "../hooks/use-admin-history-read";
+import { OwnerCommerceReadinessPanel } from "../components/admin/owner-commerce-readiness";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { buildAdminNavigation, getAdminContentInsets } from "../_lib/adminNavigation";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
@@ -1297,6 +1298,7 @@ const MONEY_SWITCH_STATE_OPTIONS: readonly MoneyFeatureFlagState[] = [
 const HIGH_RISK_MONEY_SWITCHES = new Set<MoneyFeatureFlagKey>([
   "live_money_enabled",
   "payouts_enabled",
+  "cashout_enabled",
   "digital_sales_enabled",
   "tips_enabled",
   "watch_party_seats_enabled",
@@ -1334,7 +1336,7 @@ const MONEY_SWITCH_GROUPS: readonly {
     id: "payouts",
     title: "Payouts / Stripe Connect",
     summary: "Creator balance visibility, Stripe Connect setup, payouts, and tax/KYC.",
-    keys: ["creator_balance_visible", "stripe_connect_enabled", "payouts_enabled", "tax_kyc_collection_enabled"],
+    keys: ["creator_balance_visible", "stripe_connect_enabled", "payouts_enabled", "cashout_enabled", "tax_kyc_collection_enabled"],
   },
   {
     id: "sponsors_ads",
@@ -12432,6 +12434,7 @@ export default function AdminStudioScreen() {
           <OwnerMetricTile label="Providers" value={providerReadinessLoading ? "Loading" : `${readyProviderRows.length}/${providerReadinessRows.length}`} tone={readyProviderRows.length ? "manual" : "locked"} />
           <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneyOff ? "success" : "danger"} />
         </View>
+        {isOwnerStaff && adminReadAuthorityKey ? <OwnerCommerceReadinessPanel isOwner={isOwnerStaff} ownerSessionKey={JSON.stringify(authority)} /> : null}
         <OwnerDisabledReason reason="Live money remains fail-closed unless live_money_enabled is on, the specific capability switch allows it, provider readiness proves it, and future backend action guards pass." />
         {moneySwitchNotice ? <Text style={styles.noticeText}>{moneySwitchNotice}</Text> : null}
         {providerReadinessNotice ? <Text style={styles.noticeText}>{providerReadinessNotice}</Text> : null}
@@ -15684,10 +15687,10 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  Scheduled payouts are free later. Optional instant cash-out is planned at 1.5% with no default cap, but cash-out and payout execution remain disabled.
+                  Standard cashouts have no app fee. Optional instant cash-out has a 2% app fee with no default cap. Provider fees are separate and currently unknown; final net is not confirmed. Cash-out and payout execution remain disabled.
                 </Text>
                 <Text style={styles.configListBody}>
-                  Preproduction testing can preview scheduled payout fee $0 and instant cash-out fee examples of $1.50 on $100 or $15.00 on $1,000. These previews do not create payable balances.
+                  Preproduction testing can preview scheduled payout fee $0 and instant cash-out app fee examples of $2.00 on $100 or $20.00 on $1,000. Provider fees are separate and unconfirmed. These previews do not create payable balances.
                 </Text>
               </View>
             </View>

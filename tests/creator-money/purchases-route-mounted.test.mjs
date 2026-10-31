@@ -6,6 +6,32 @@ import { createRoot } from "react-dom/client";
 import * as singleFlight from "../../_lib/actionSingleFlight.mjs";
 import { noop, container, deferred, textOf, load, wallet, purchase, page, mount } from "./purchases-mounted-fixture.mjs";
 
+test("mounted auction receipts stay in ticket filters and open only their intended room kind", async t => {
+  const items = [purchase("stage", "active", {sourceType:"room_seat_auction",productType:"room_seat_pass",title:null,
+    destination:{kind:"live_stage",id:"EXACT-STAGE"},terms:{sourceKind:"stage_reserved_seat"}}),
+  purchase("party", "active", {sourceType:"room_seat_auction",productType:"room_seat_pass",title:null,
+    destination:{kind:"watch_party",id:"EXACT-PARTY"},terms:{sourceKind:"party_admission"}}),purchase("event")];
+  const h=await mount(t,{items});
+  await h.press("purchases-filter-Tickets & passes");
+  for(const item of items) assert.ok(h.node(`purchase-${item.id}`));
+  assert.match(h.text(),/Room Auction Pass/);assert.match(h.text(),/Host moderation and media controls remain separate/);
+  await h.press("purchase-open-stage"); await h.press("purchase-open-party");
+  assert.equal(h.routes[0].pathname,"/watch-party/live-stage/[partyId]");assert.equal(h.routes[0].params.partyId,"EXACT-STAGE");
+  assert.equal(h.routes[1].pathname,"/watch-party/[partyId]");assert.equal(h.routes[1].params.partyId,"EXACT-PARTY");
+  await h.press("purchases-filter-Videos");assert.equal(h.node("purchase-stage"),undefined);
+});
+
+test("purchase help preserves its receipt reference but cannot send an old account's reference", async t => {
+  const receipt="aa100000-0000-4000-8000-000000000001";
+  const h=await mount(t,{items:[purchase("history","pending",{purchaseIntentId:receipt})]});
+  const oldHelp=h.node("purchase-support-history").props.onPress;
+  await h.press("purchase-support-history");
+  assert.equal(h.routes[0].pathname,"/support");assert.equal(h.routes[0].params.purchaseId,receipt);
+  assert.deepEqual(Object.keys(h.routes[0].params),["purchaseId"],"no price, provider payload or private note in route");
+  await h.account(async()=>page([],{subjectUserId:"other",subjectSessionGeneration:"two"}),"two","other");
+  await React.act(async()=>oldHelp());assert.equal(h.routes.length,1);
+});
+
 test("mounted wallet shows immutable price/terms and exact event destination, with cold-link recovery", async t => {
   const h = await mount(t);
   assert.match(h.text(), /\$2\.99/); assert.match(h.text(), /America\/New_York/); assert.match(h.text(), /Premium is separate/);
@@ -79,7 +105,7 @@ test("mounted pending, unfulfilled and review purchases cannot navigate into ano
   const h = await mount(t, { items: [purchase("pending", "pending"), purchase("paid", "paid_unfulfilled"), purchase("review", "reconciliation_required"), purchase("dispute", "disputed")] });
   for (const id of ["pending", "paid", "review", "dispute"]) { assert.equal(h.node(`purchase-open-${id}`), undefined); assert.ok(h.node(`purchase-support-${id}`)); }
   assert.match(h.text(), /Do not purchase this item again/);
-  await h.press("purchase-support-paid"); assert.equal(h.routes[0], "/support");
+  await h.press("purchase-support-paid"); assert.equal(h.routes[0].pathname, "/support");assert.equal(h.routes[0].params.purchaseId,"paid");
 });
 
 test("mounted filters and pagination preserve exact historical rows and show empty/retry states", async t => {
@@ -110,7 +136,7 @@ test("negative control proves pending-navigation protection is exercised", async
 });
 
 async function mountTip(t, options = {}) {
-  const nodes = new Map(), purchases = [], routes = [], external = [], listeners = new Set(), receiptReads = [];
+  const nodes = new Map(), purchases = [], routes = [], external = [], listeners = new Set(), receiptReads = [], selections = [];
   let catalogReads = 0;
   let session = { user: { id: "buyer" }, authority: { sessionGeneration: "one" } };
   const host = name => function NativeHost(props) {
@@ -128,12 +154,28 @@ async function mountTip(t, options = {}) {
     "./paymentRailPolicy": {}, "./runtimeConfig": {}, "./entitlementAuthority": {},
     "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {}, "./creatorTipCheckoutAttempt": {},
     "./creatorTipCustomQuote": {},
+    "./iosExternalAdmission": {admitIosExternalCheckout:async()=>"11111111-1111-4111-8111-111111111111"},
+ "./googlePlayExternalAdmission": {},
   });
   for (const name of ["ActivityIndicator", "KeyboardAvoidingView", "Modal", "Pressable", "ScrollView", "Text", "TextInput", "TouchableOpacity", "View"]) native[name] = host(name);
   const Screen = load("components/monetization/tip-sheet.tsx", {
     react: React, "react-native": native, "expo-router": { useRouter: () => ({ push: route => routes.push(route) }) },
     "../../_lib/session": { useSession: () => session }, "../../_lib/analytics": { trackEvent: noop },
     "../../_lib/actionSingleFlight.mjs": singleFlight,
+    "../../_lib/iosExternalAdmission": {isIosExternalCheckoutSupported:()=>options.iosSupported===true},
+    "../../_lib/openCreatorExternalCheckout": {openCreatorExternalCheckout:async(url,current)=>{if(current())await native.Linking.openURL(url);}},
+    "../../_lib/google-play-external-content-links": {
+      isGooglePlayExternalContentLinkSupported: () => options.nativeSupported === true,
+      withGooglePlayExternalContentLink: async callback => {
+        external.push({nativePrepare:true});
+        try {
+          if (options.nativePrepare) await options.nativePrepare();
+          if (options.nativeDenied) throw new Error("Play denied");
+          const checkout = await callback({google_play_external_transaction_token:"native-token",google_play_external_link_api_version:1});
+          external.push({nativeLaunch:checkout.url});
+        } finally { external.push({nativeCancel:true}); }
+      },
+    },
     "../../_lib/boundedVisibleReadGate": load("_lib/boundedVisibleReadGate.ts", {}),
     "../../_lib/iosAppStoreCommerce": iosCatalog,
     "../../_lib/revenuecat": { readRevenueCatNonSubscriptionProducts: async () => [] },
@@ -142,14 +184,18 @@ async function mountTip(t, options = {}) {
       return options.reader ? options.reader() : options.unavailable
         ? { status: "unavailable", prices: [] } : { status: "resolved", subjectUserId: options.catalogBuyer ?? "buyer", prices: options.prices ?? [tipPrice()] };
     } },
-    "../../_lib/creatorTips": { ...tipApi, readMyTipTransactionStatus: async id => {receiptReads.push(id);return {status:options.receiptStatus ?? 'pending'};}, createCreatorTipCheckout: async input => { external.push(input); return {checkoutCreated:true,tipId:'tip-synthetic',url:'https://checkout.stripe.com/c/pay/test'}; }, purchaseCreatorTipWithStore: async input => { purchases.push(input); return options.purchase ? options.purchase(input) : { ok: false, message: "Payment pending" }; } },
+    "../../_lib/creatorTips": { ...tipApi, readMyTipTransactionStatus: async id => {receiptReads.push(id);return {status:options.receiptStatus ?? 'pending'};}, createCreatorTipCheckout: async input => { external.push(input); return options.externalCheckout?options.externalCheckout(input):{checkoutCreated:true,tipId:'tip-synthetic',url:'https://checkout.stripe.com/c/pay/test'}; }, purchaseCreatorTipWithStore: async input => { purchases.push(input); return options.purchase ? options.purchase(input) : { ok: false, message: "Payment pending" }; } },
     "../../_lib/creatorMonetization": { formatMonetizationCurrency: amount => `$${(amount / 100).toFixed(2)}` },
     "../../_lib/creatorTipAmount": load("_lib/creatorTipAmount.ts", {}),
     "../../_lib/creatorTipCustomQuote": {
-      readCreatorTipCustomQuote: async (creatorId,amountCents) => options.customQuote ? options.customQuote(creatorId,amountCents) : null,
+      readCreatorTipCustomQuote: async (creatorId,amountCents,capabilityId) => options.customQuote ? options.customQuote(creatorId,amountCents,capabilityId) : null,
       readCreatorTipCustomAvailability: async (creatorId,amountCents) => options.customAvailability ? options.customAvailability(creatorId,amountCents)
         : { quote: options.customQuote ? await options.customQuote(creatorId,amountCents) : null, message: "" },
     },
+    "../../_lib/readCreatorTipRouteCosts": { readCreatorTipRouteCosts: async (...args) => options.routeCosts ? options.routeCosts(...args) : ({ status: "unavailable", message: "Provider fee comparison is not available yet." }) },
+    "../../_lib/creatorTipPaymentAction": { selectLowestCostCreatorTipAction: async input => {
+      selections.push(input); return options.selectLowest ? options.selectLowest(input) : { actionId: "selected-action", provider: "google_play", purchaseBindingId: "native-binding" };
+    } },
     "./MoneyScopeInfoButton": { MoneyScopeInfoButton: host("MoneyScopeInfoButton") },
     "./money-ui": Object.fromEntries(["CreatorMoneyHeader", "MoneyScopeStrip", "MoneyStatusChip", "MoneySuccessReceipt"].map(name => [name, host(name)])),
     "../ui/chillywood-visual-system": { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: host("Fill") },
@@ -157,7 +203,7 @@ async function mountTip(t, options = {}) {
   const props = { visible: true, creatorId: "creator", creatorName: "Artist", sourceSurface: "test", onClose: noop, tipStatus: { creatorId: "creator", canTip: true, currency: "usd", minAmountCents: 99, maxAmountCents: 999, suggestedAmountsCents: [100, 300], ...options.tipStatus } };
   const root = createRoot(container()); await React.act(async () => root.render(React.createElement(Screen, props)));
   t.after(() => React.act(async () => root.unmount()));
-  return { purchases, routes, external, receiptReads, nodes, node: id => [...nodes.values()].find(node => node.props.testID === id),
+  return { purchases, routes, external, receiptReads, selections, nodes, node: id => [...nodes.values()].find(node => node.props.testID === id),
     async foreground() { await React.act(async()=>{for(const listener of listeners)listener('active');}); },
     catalogReads: () => catalogReads,
     async render(changes = {}) { Object.assign(props, changes); await React.act(async () => root.render(React.createElement(Screen, { ...props }))); },
@@ -173,6 +219,90 @@ function tipPrice(overrides = {}) {
   return { amountMinor: 99, providerProductId: "cw_creator_tip_sandbox_099", productKey: "creator_tip_sandbox_099",
     provider: "revenuecat_google_play", platform: "android", environment: "sandbox", currency: "usd", status: "sandbox", ...overrides };
 }
+
+test("tip cost comparison is read-only and discards stale amount/session responses", async t => {
+  const old=deferred(), calls=[];
+  const h=await mountTip(t,{routeCosts:async(...args)=>{calls.push(args);return calls.length===1?old.promise:{message:'Current comparison unavailable'};}});
+  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
+  await h.typeAmount('2.37');
+  await h.resolve(old,{status:'compared',message:'STALE lowest fee'});
+  assert.doesNotMatch(textOf(h.node('tip-route-cost-status')),/STALE/);
+  assert.equal(calls.at(-1)[1],237);assert.deepEqual(calls.at(-1)[2],[]);
+  await h.switchSession();
+  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
+});
+
+test("tip fee comparison expires without dispatching or switching rails", async t => {
+  const h=await mountTip(t,{routeCosts:async()=>({status:'compared',message:'Verified synthetic comparison',expiresAt:new Date(Date.now()+30).toISOString()})});
+  await React.act(async()=>new Promise(resolve=>setTimeout(resolve,60)));
+  assert.match(textOf(h.node('tip-route-cost-status')),/expired/);
+  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
+});
+
+const qualifiedCosts=async()=>({status:'compared',message:'Synthetic qualified comparison',expiresAt:new Date(Date.now()+30000).toISOString()});
+test("explicit lowest-fee action dispatches only the selected exact native route and never falls back",async t=>{
+  const h=await mountTip(t,{prices:[tipPrice({priceKey:'native-binding'})],routeCosts:qualifiedCosts});
+  await h.press('tip-lowest-cost-checkout');
+  assert.equal(h.selections.length,1);assert.equal(h.selections[0].amountCents,99);
+  assert.equal(h.purchases.length,1);assert.equal(h.purchases[0].selectedActionId,'selected-action');assert.equal(h.purchases[0].amountCents,99);
+  assert.equal(h.external.length,0);
+});
+test("selected Stripe route preserves exact amount and action binding with no native retry",async t=>{
+  const h=await mountTip(t,{nativeSupported:true,routeCosts:qualifiedCosts,
+    selectLowest:async()=>({actionId:'selected-action',provider:'stripe_connect',purchaseBindingId:'capability'})});
+  await h.typeAmount('2.37');await h.press('tip-lowest-cost-checkout');
+  const checkout=h.external.find(x=>x?.amountCents);
+  assert.equal(checkout.amountCents,237);assert.equal(checkout.selectedActionId,'selected-action');assert.equal(checkout.capabilityId,'capability');
+  assert.equal(h.purchases.length,0);
+});
+test('web lowest-cost action quotes the older selected capability rather than reselecting newest',async t=>{
+ const reads=[];
+ const h=await mountTip(t,{platform:'web',routeCosts:qualifiedCosts,
+  customQuote:async(creatorId,amountCents,capabilityId)=>{reads.push(capabilityId);return {creatorId,amountCents,capabilityId:capabilityId??'newer-expensive'};},
+  selectLowest:async()=>({actionId:'selected-action',provider:'stripe_connect',purchaseBindingId:'older-cheaper'})});
+ await h.typeAmount('2.37');await h.press('tip-lowest-cost-checkout');
+ const checkout=h.external.find(x=>x?.amountCents);
+ assert.equal(checkout.capabilityId,'older-cheaper');assert.equal(checkout.selectedActionId,'selected-action');
+ assert.equal(reads.at(-1),'older-cheaper');assert.equal(h.purchases.length,0);
+});
+test("selection uncertainty and close/reopen suppress dispatch; repeated taps remain single flight",async t=>{
+  const pending=deferred();
+  const h=await mountTip(t,{prices:[tipPrice({priceKey:'native-binding'})],routeCosts:qualifiedCosts,selectLowest:()=>pending.promise});
+  const button=h.node('tip-lowest-cost-checkout');
+  await React.act(async()=>{void button.props.onPress();void button.props.onPress();});
+  assert.equal(h.selections.length,1);
+  await h.render({visible:false});await h.render({visible:true});
+  await h.resolve(pending,{actionId:'selected-action',provider:'google_play',purchaseBindingId:'native-binding'});
+  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
+  const denied=await mountTip(t,{routeCosts:qualifiedCosts,selectLowest:async()=>{throw new Error('unknown transport');}});
+  await denied.press('tip-lowest-cost-checkout');assert.equal(denied.purchases.length,0);assert.equal(denied.external.length,0);
+});
+
+test("Android custom tip preserves buyer cents and uses native eligibility/disclosure with no browser fallback", async t => {
+  const h=await mountTip(t,{nativeSupported:true});
+  await h.typeAmount("2.37");await h.press("tip-custom-stripe-checkout");
+  const input=h.external.find(x=>x?.amountCents);
+  assert.equal(input.amountCents,237);assert.equal(input.googlePlay.google_play_external_transaction_token,"native-token");
+  assert.equal(h.external.filter(x=>x?.nativeLaunch).length,1);
+  assert.equal(h.external.filter(x=>typeof x==="string").length,0);
+  assert.equal(h.purchases.length,0);
+  const denied=await mountTip(t,{nativeSupported:true,nativeDenied:true});
+  await denied.typeAmount("0.51");await denied.press("tip-custom-stripe-checkout");
+  assert.equal(denied.external.filter(x=>x?.amountCents||x?.nativeLaunch||typeof x==="string").length,0);
+  const old=await mountTip(t);await old.typeAmount("2.37");
+  assert.equal(old.node("tip-custom-stripe-checkout"),undefined);
+});
+
+test("closing and reopening tip sheet or switching account suppresses late native checkout launch",async t=>{
+ for(const action of ["close","switch"]) {
+  const d=deferred(),h=await mountTip(t,{nativeSupported:true,externalCheckout:()=>d.promise});
+  await h.typeAmount("2.37");await h.press("tip-custom-stripe-checkout");
+  if(action==="close"){await h.render({visible:false});await h.render({visible:true});}else await h.switchSession();
+  await h.resolve(d,{checkoutCreated:true,tipId:"tip-synthetic",url:"https://checkout.stripe.com/c/pay/test"});
+  assert.equal(h.external.filter(x=>x?.nativeLaunch||typeof x==="string").length,0,action);
+  assert.equal(h.external.filter(x=>x?.nativeCancel).length,1,action);
+ }
+});
 
 test("mounted tip catalog reads are bounded across rerenders and reopen, with explicit retry and stale-result cleanup", async t => {
   const h = await mountTip(t);
@@ -251,7 +381,7 @@ test("typed iOS exact amount selects its own SKU and does not retain the preset 
 
 test("eligible custom amount requires explicit Stripe action and fresh exact capability; never substitutes a SKU", async t => {
   let available=true;
-  const h=await mountTip(t,{platform:'ios',tipStatus:{minAmountCents:100},customQuote:async(creatorId,amountCents)=>available?{
+  const h=await mountTip(t,{platform:'ios',iosSupported:true,externalCheckout:async()=>{if(!available)throw Error('route retired');return {checkoutCreated:true,tipId:'tip-synthetic',url:'https://checkout.stripe.com/c/pay/test'};},tipStatus:{minAmountCents:100},customQuote:async(creatorId,amountCents)=>available?{
     creatorId,amountCents,capabilityId:'ef000000-0000-4000-8000-000000000001',platform:'ios',currency:'usd',environment:'test',minAmountMinor:50,maxAmountMinor:100000,
   }:null});
   await h.typeAmount('0.51');
@@ -259,12 +389,12 @@ test("eligible custom amount requires explicit Stripe action and fresh exact cap
   assert.ok(h.node('tip-custom-stripe-checkout'));assert.equal(h.external.length,0);
   await h.press('tip-custom-stripe-checkout');
   assert.equal(h.purchases.length,0);assert.equal(h.external[0].amountCents,51);
-  assert.equal(h.external[0].capabilityId,'ef000000-0000-4000-8000-000000000001');
+  assert.equal(h.external[0].iosExternal,true,'client helper must freshly admit the storefront before quoting');
   assert.equal(h.external[1],'https://checkout.stripe.com/c/pay/test');
   await h.foreground();assert.deepEqual(h.receiptReads,['tip-synthetic']);
   assert.match(h.node('tip-success-receipt').props.body,/not confirmed yet/,'browser return is not payment confirmation');
   available=false;await h.press('tip-custom-stripe-checkout');
-  assert.equal(h.external.length,2,'retired route blocks before checkout');
+  assert.equal(h.external.filter(value=>typeof value==='string').length,1,'retired route cannot open another checkout');
   await h.switchSession();await h.foreground();assert.equal(h.receiptReads.length,1,'old-session receipt is not refreshed in a replacement session');
 });
 
@@ -279,7 +409,7 @@ test("verified provider minimum is visible without changing the buyer-entered am
 });
 
 test("mounted tip chooser does not advertise unmapped amounts or another buyer's catalog", async t => {
-  for (const prices of [[tipPrice({ amountMinor: 299 })], [tipPrice({ providerProductId: "wrong" })], [tipPrice({ environment: "production" })]]) {
+  for (const prices of [[tipPrice({ amountMinor: 0 })], [tipPrice({ providerProductId: "" })], [tipPrice({ environment: "production" })]]) {
     const h = await mountTip(t, { prices });
     assert.equal(h.node("tip-amount-option"), undefined);
     assert.equal(h.node("tip-confirm-button").props.disabled, true);
@@ -291,6 +421,11 @@ test("mounted tip chooser does not advertise unmapped amounts or another buyer's
   assert.equal(bounds.node("tip-confirm-button").props.disabled, true);
   const staleCreator = await mountTip(t, { tipStatus: { creatorId: "old-creator" } });
   assert.equal(staleCreator.node("tip-confirm-button").props.disabled, true);
+});
+
+test("mounted native tip chooser exposes a fresh qualified additional Android amount without forcing99",async t=>{
+ const h=await mountTip(t,{prices:[tipPrice({amountMinor:237,providerProductId:'qualified_tip_237',productKey:'qualified_tip_237'})]});
+ assert.equal(h.node('tip-confirm-button').props.disabled,false);await h.press('tip-confirm-button');assert.equal(h.purchases[0].amountCents,237);assert.equal(h.external.length,0);
 });
 
 test("mounted tip result cannot display on a replaced account session", async t => {

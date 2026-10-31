@@ -18,6 +18,7 @@ import {
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
 import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
+import { creatorMoneyNotificationCopy, notificationDisplayText } from "../_shared/notification-display-labels.ts";
 import {
   isSafeStoreMapping,
   isVerifiedRevenueCatTransferPolicy,
@@ -1154,6 +1155,25 @@ const createCreatorMoneyNotification = async (
     target: CreatorMoneyNotificationTarget;
   },
 ) => {
+  // Resolve display context from the immutable ledger and recipient on the
+  // server, including push-only recipients. Provider metadata is not a name.
+  const displayResult = await withCreatorMoneyPushDeadline(async () => await adminClient.rpc("read_creator_money_notification_display_context", {
+    p_ledger_event_id: input.ledgerEventId,
+    p_recipient_user_id: input.plan.recipientUserId,
+    p_notification_type: input.plan.notificationType,
+  }));
+  if (displayResult.error) throw new Error("creator_money_notification_display_unavailable");
+  const rawDisplay = safeObject(displayResult.data);
+  const display = rawDisplay.version === 1 && rawDisplay.target_id === input.target.entityId
+    && rawDisplay.target_route === input.target.route
+    ? { version: 1, creator_id: toText(rawDisplay.creator_id),
+      creator_display_name: notificationDisplayText(rawDisplay.creator_display_name, 160),
+      target_id: input.target.entityId, target_route: input.target.route,
+      subject_title: notificationDisplayText(rawDisplay.subject_title) }
+    : null;
+  const copy = creatorMoneyNotificationCopy(input.plan.notificationType,
+    display?.creator_display_name ?? "", display?.subject_title ?? "", input.plan.category);
+  if (copy) input = { ...input, plan: { ...input.plan, ...copy } };
   const preference = await readMoneyNotificationPreference(adminClient, input.plan.recipientUserId);
   const prefEnabled = input.plan.category === "creator_money_sale"
     ? preference?.creator_money_sales_enabled !== false
@@ -1218,6 +1238,7 @@ const createCreatorMoneyNotification = async (
           no_payout_from_notification: true,
           premium_unlock: false,
           livekit_authority: false,
+          display_context: display,
         },
         target_entity_id: input.target.entityId,
         target_route: input.target.route,

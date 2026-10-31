@@ -20658,6 +20658,14 @@ export type Database = {
         Args: { p_expected_account_id: string; p_expected_user_id: string; p_install_id: string; p_platform: string; p_provider: string; p_revocation_credential_hash: string; p_session_generation: string }
         Returns: Json
       }
+      read_my_notification_display_context: {
+        Args: { p_notification_ids: string[] }
+        Returns: Json
+      }
+      read_creator_money_notification_display_context: {
+        Args: { p_ledger_event_id: string; p_recipient_user_id: string; p_notification_type: string }
+        Returns: Json
+      }
       register_my_push_token: {
         Args: { p_app_version: string | null; p_build_version: string | null; p_expected_account_id: string; p_expected_user_id: string; p_install_id: string; p_metadata: Json; p_operation_key: string; p_permission_status: string; p_platform: string; p_provider: string; p_revocation_credential_hash: string; p_session_generation: string; p_token: string; p_operation_id: string; p_expected_incarnation: string; p_expected_revision: string }
         Returns: Json

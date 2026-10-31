@@ -152,7 +152,7 @@ for (const table of ["user_entitlements", "access_grants", "money_access_ledger_
 }
 
 assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_BPS = 0", "scheduled payout fee");
-assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 150", "instant cash-out fee");
+assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 200", "instant cash-out fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null", "no instant cap");
 assertNotIncludes(creatorMonetization, "499", "no $4.99 cash-out cap");
 

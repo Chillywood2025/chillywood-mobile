@@ -14,6 +14,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 const textOf = node => Array.isArray(node) ? node.map(textOf).join(" ") : node == null || typeof node === "boolean" ? "" : typeof node !== "object" ? String(node) : textOf(node.props?.children);
 const load = (file, imports, source = fs.readFileSync(file, "utf8")) => {
   const context = { exports: {}, Date, Intl, Promise, require: name => { assert.ok(name in imports, `unexpected import ${name}`); return imports[name]; } };
+  Object.assign(context, { setTimeout, clearTimeout });
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, context);
   return context.exports;
 };

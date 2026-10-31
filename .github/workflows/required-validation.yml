@@ -69,7 +69,10 @@ jobs:
     needs: plan
     # The paired call gate uses Playwright's pinned Chromium with OS libraries.
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    # The complete 4,777-test run took 35m15s before mounted/real-peer gates;
+    # a measured 40m job timeout cut off those required gates, not a test failure.
+    # Retain every stage and individual test deadline; budget the full pipeline.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # Native compatibility tests verify the recorded v3 cohort at its
@@ -82,6 +85,9 @@ jobs:
       - name: Install pinned browser for real paired call negotiation
         run: node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
       - name: Run product and navigation regression tests
+        # Each SQL file owns a full disposable WASM database; serialize files
+        # rather than let CPU-count defaults multiply memory unexpectedly.
+        # Every file and assertion still runs; failures are never retried away.
         run: |
           node --test --test-concurrency=1 tests/*.test.mjs
           node --test tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs
@@ -122,7 +128,11 @@ jobs:
       - run: npm ci
       - name: Run auth, entitlement, money, moderation and call authority regressions
         run: |
+          deno --version
+          node --test tests/local-security-probe-graph.test.mjs
           node --test --test-concurrency=1 tests/wave1/*.test.mjs tests/creator-money/*.test.mjs
+          node --test --test-concurrency=1 tests/creator-room-seat-auction-engine-database.test.mjs tests/creator-room-auction-payment-database.test.mjs tests/creator-room-seat-lifecycle-database.test.mjs
+          node --test --test-concurrency=1 tests/creator-auction-platform-settlement-database.test.mjs tests/creator-room-platform-settlement-database.test.mjs tests/creator-event-auction-release-database.test.mjs
           npm run guard:admin-auth-safety
           npm run guard:first-owner-authority-policy
           npm run guard:creator-monetization-policy
@@ -144,6 +154,8 @@ jobs:
           deno check --node-modules-dir=none --no-lock supabase/functions/livekit-token/index.ts supabase/functions/livekit-heartbeat-monitor/index.ts
       - name: Typecheck the versioned notification registration Edge endpoint
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/notification-device-tokens/index.ts
+      - name: Typecheck creator commerce and reporting Edge boundaries
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/create-creator-tip-checkout/index.ts supabase/functions/stripe-tip-webhook/index.ts supabase/functions/stripe-event-auction-checkout/index.ts supabase/functions/stripe-event-auction-webhook/index.ts supabase/functions/stripe-room-auction-checkout/index.ts supabase/functions/stripe-room-auction-webhook/index.ts supabase/functions/google-play-external-reporter/index.ts supabase/functions/stripe-merch-checkout/index.ts supabase/functions/stripe-merch-webhook/index.ts supabase/functions/stripe-merch-cost-reconcile/index.ts supabase/functions/merch-tracking-webhook/index.ts supabase/functions/merch-tracking-reconcile/index.ts supabase/functions/creator-event-broadcast/index.ts supabase/functions/stripe-auction-cost-reconcile/index.ts supabase/functions/stripe-auction-test-transfer/index.ts supabase/functions/merch-reconciliation-driver/index.ts supabase/functions/auction-observation-driver/index.ts supabase/functions/auction-approved-automation/index.ts supabase/functions/stripe-fee-report-import/index.ts
       - name: Run exact role and explicit permission checks
         run: deno test --node-modules-dir=none --no-lock supabase/functions/_shared/exact-subject-authority_test.ts supabase/functions/_shared/platform-role-authority_test.ts
 
@@ -152,7 +164,9 @@ jobs:
     if: needs.plan.outputs.database == 'true'
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Core already took 32m27s before the added transfer/tracking/case races.
+    # This is only the job budget, not a relaxed database or lock deadline.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -168,8 +182,15 @@ jobs:
           supabase start
           supabase db reset
           supabase test db
+          node --test tests/auction-transfer-native-runner-source.test.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-subscription-bindings-native-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-event-auction-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-google-external-reporting-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-room-seat-auction-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-auction-transfer-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-tip-cross-rail-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-tracking-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-return-cases-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs
           node scripts/test-content-inspection-postgres.mjs
           node scripts/test-deleted-content-retention-postgres.mjs
@@ -281,6 +302,10 @@ jobs:
         run: node scripts/test-webrtc-native-sender-contract.mjs
       - name: Compile owned Android audio routing and stale-owner counterexamples
         run: node scripts/test-owned-android-audio-session.mjs
+      - name: Compile pinned Google Billing adapter and exercise native link state machine
+        run: |
+          node scripts/test-google-play-external-content-links.mjs
+          node scripts/compile-google-play-external-content-links.mjs
       - name: Execute actual Swift audio routing, observers, and JS call ownership
         run: node scripts/test-ios-native-call-audio.mjs
       - name: Verify outgoing camera lifecycle and controls

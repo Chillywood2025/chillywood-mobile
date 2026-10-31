@@ -1,3 +1,4 @@
+import { RoomSeatAuctionEntry } from "../../../components/monetization/room-seat-auction-entry";
 import { ConversationTimestamp } from "../../../components/social/conversation-timestamp";
 import { conversationCreatedAt } from "../../../_lib/conversationTimestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -1658,6 +1659,9 @@ export default function WatchPartyLiveStageScreen({
         setLiveMoneyAccess(exactLiveMoneyAccess);
         setLiveMoneyNotice((current) => {
           if (!current.includes("still being verified")) return current;
+          if (exactLiveMoneyAccess.reason === "verified_reserved_room_seat" && exactLiveMoneyAccess.seatEligible) {
+            return "Your reserved guest spot includes admission for this room session. Request camera and microphone approval from the host.";
+          }
           if (exactLiveMoneyAccess.seatOfferId && exactLiveMoneyAccess.seatEligible) {
             return "Live Stage Seat Pass active. You're eligible for a speaking seat. Host approval is still required.";
           }
@@ -2734,9 +2738,13 @@ export default function WatchPartyLiveStageScreen({
       : currentStageSeatRequestPending
         ? "Camera request pending. The host can seat you when they review requests."
         : liveMoneyAccess?.seatReviewState === "rejected"
-          ? "The host did not approve your last speaking-seat request. Your Live Stage Seat Pass remains eligibility only and never guarantees speaking."
+          ? liveMoneyAccess?.reservedSeatClaimId
+            ? "The host did not approve your last request. Your reserved guest spot does not override moderation. Check Purchases for support if it cannot be delivered."
+            : "The host did not approve your last speaking-seat request. Your Live Stage Seat Pass remains eligibility only and never guarantees speaking."
         : currentUserHasLiveSeatRequestEligibility && canRequestSeat(currentStageParticipantState)
-          ? "Watching is allowed here when the room is free or your account has the required access. Request camera and microphone when you want to join the visible feeds."
+          ? liveMoneyAccess?.reservedSeatClaimId
+            ? "Your reserved guest spot includes admission and same-account rejoining for this room session. Request host approval to use your camera and microphone."
+            : "Watching is allowed here when the room is free or your account has the required access. Request camera and microphone when you want to join the visible feeds."
           : liveMoneyAccess?.allowed && !currentUserHasLiveSeatRequestEligibility
             ? "Your Live Stage Pass is viewer/listener access only. A separate Live Stage Seat Pass is required before you can ask the host for camera or microphone approval."
             : "Watching is allowed here when the room is free or your account has the required access. Camera requests are unavailable for your current role.";
@@ -3127,7 +3135,8 @@ export default function WatchPartyLiveStageScreen({
         pending: false,
         requestVersion: approvedRequestVersion,
       });
-      setLiveSeatPassStateByUserId((previous) => ({ ...previous, [nextParticipantId]: "approved" }));
+      setLiveSeatPassStateByUserId((previous) => Object.prototype.hasOwnProperty.call(previous, nextParticipantId)
+        ? { ...previous, [nextParticipantId]: "approved" } : previous);
       setSeatRequestSheetParticipantId("");
       collapseHostParticipantControls(nextParticipantId);
     });
@@ -5384,6 +5393,7 @@ export default function WatchPartyLiveStageScreen({
                 : "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. Purchase is not available on this device yet, and nothing will be charged. It does not include a speaking seat, camera, microphone, host, moderator, or broadcast permission."
               : blockedRoomAccess ? getLiveStageAccessBody(blockedRoomAccess) : roomEntryError}
           </Text>
+          {exactLivePassRequired && room ? <RoomSeatAuctionEntry partyId={room.partyId} creatorId={room.hostUserId} sourceKind="stage_reserved_seat" /> : null}
           {exactLivePassRequired ? (
             <MoneyScopeInfoButton
               scope="live_watch_party_access_pass"
@@ -5771,6 +5781,7 @@ export default function WatchPartyLiveStageScreen({
           renderToHardwareTextureAndroid
         >
         {renderStageTopChrome()}
+        {room?.roomType === "live" ? <RoomSeatAuctionEntry partyId={room.partyId} creatorId={room.hostUserId} sourceKind="stage_reserved_seat" /> : null}
         {sourceAttribution ? (
           <View style={styles.stageSourceCard} pointerEvents="none">
             <Text style={styles.stageSourceKicker}>SOURCE</Text>

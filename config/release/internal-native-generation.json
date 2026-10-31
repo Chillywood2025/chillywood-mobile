@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v17",
+  "generation": "internal-native-v18",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v17",
-    "ios": "1.0.0-ios-production-v17"
+    "android": "1.0.0-android-production-v18",
+    "ios": "1.0.0-ios-production-v18"
   },
   "supersedes": {
-    "generation": "internal-native-v16",
-    "androidRuntimeVersion": "1.0.0-android-production-v16",
-    "iosRuntimeVersion": "1.0.0-ios-production-v16",
-    "androidCompatibilityDigest": "37c6b96c66ce64121a9c134fdca58d919a757868f70feebd02928c4d694259d3",
-    "iosCompatibilityDigest": "3609267e9486d0eddcd426f974b24b773b32c24977dbbad69a4a6eec07a72932"
+    "generation": "internal-native-v17",
+    "androidRuntimeVersion": "1.0.0-android-production-v17",
+    "iosRuntimeVersion": "1.0.0-ios-production-v17",
+    "androidCompatibilityDigest": "28e24d43df2d6c787874d3e7e4854017f74bab5a0311504f548cedebf982b623",
+    "iosCompatibilityDigest": "bc52288a220e86ed22d7ce0b4f30a99e68969b1f8545450fab6968c7fe8658cf"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "28e24d43df2d6c787874d3e7e4854017f74bab5a0311504f548cedebf982b623",
-    "iosDigest": "bc52288a220e86ed22d7ce0b4f30a99e68969b1f8545450fab6968c7fe8658cf"
+    "androidDigest": "aa0a83a683ae83cea39d964ea43688faf0d20a725dd5f18fb7b94ded1eea4243",
+    "iosDigest": "7b709e9e43fc8bface36ae2009e5b2e635bf7d522cbc1e909fffbe2153ef05c6"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V17 is a prospective source cohort for the reviewed root Undici 6.28.1 to 6.29.1 advisory repair used by Expo CLI tooling. The unchanged conservative native-input contract binds the root manifest and lockfile even though this repair does not change mobile runtime code. V16 runtime identities and native input digests remain immutable; no assumption is made about whether V16 binaries were built or distributed. V17 retains V16's standalone application-only LiteRT models, compiled-out unused Expo Camera and Expo Dev Launcher scanners, all five camera effects, notification repairs, and unchanged iOS Apple Vision and Core Image implementation. ML Kit diagnostic transmission remains refused. Any future V17 native delivery requires fresh matching signed binaries, applicable qualification and separate authorization; this tooling repair does not itself require mobile delivery or block the independent alert-service rollout. Held Android106 belongs to V14 and remains barred from distribution and execution. Prior generations, signed artifacts and historical physical evidence remain immutable. Source checks do not establish signed binaries, installed or remotely received effect quality, or physical qualification. Future delivery stays limited to the existing Google Play internal track and TestFlight Chillywood Internal group. Native automatic activation remains disabled; the app owns update activation. This source generation grants no build, submission, server activation, OTA or public-release authority."
+    "reason": "V18 is a prospective source cohort for the Android Google Play external-content-link Expo module and shared Billing 8.2.1 dependency. V17 runtimes, signed artifacts and compatibility digests remain immutable; an OTA cannot add the Android bridge. Both platform identities advance because the unchanged conservative native-input contract includes shared module metadata. No new iOS external-payment native capability is asserted. Existing camera, notification, diagnostics, privacy and app-owned update safeguards remain intact. Android requires actual Debug/Release Kotlin and Java compilation, resolved RevenueCat/Billing compatibility and physical license-tester qualification before native delivery. Google enrollment, reporting and financial readiness remain separate fail-closed gates. Source checks are not signed-build, installation, provider or physical-device proof. Held Android106 remains barred. Future delivery requires separate authorization and fresh matching signed binaries, limited to Google Play internal and TestFlight Chillywood Internal. No build, submission, deployment, payment activation, OTA or public-release authority is granted."
   }
 }
