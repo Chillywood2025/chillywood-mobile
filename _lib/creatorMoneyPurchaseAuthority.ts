@@ -50,15 +50,16 @@ export const CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY = "This checkout could not 
 
 /** A server-persisted, one-use claim must precede every non-event native Store call. */
 export async function beginCreatorMoneyCheckout(subject: CreatorMoneyPurchaseSubject, intentId: string,
-  expected: CreatorMoneyPurchaseIntentExpectation): Promise<boolean> {
+  expected: CreatorMoneyPurchaseIntentExpectation, selectedActionId?: string): Promise<boolean> {
   if (!UUID_PATTERN.test(intentId) || subject.userId !== expected.userId || expected.status !== "pending"
     || !["creator_tip", "paid_content", "watch_party_live", "vip_pass", "channel_subscription", "live_watch_party_access", "live_watch_party_seat"].includes(expected.sourceType)
     || !isCreatorMoneyPurchaseAuthorityCurrent(subject.authority)) return false;
+  if (selectedActionId !== undefined && (!UUID_PATTERN.test(selectedActionId) || expected.sourceType !== "creator_tip")) return false;
   try {
     const bytes = new Uint8Array(16); globalThis.crypto.getRandomValues(bytes);
     bytes[6] = (bytes[6] & 0x0f) | 0x40; bytes[8] = (bytes[8] & 0x3f) | 0x80;
     const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
-    const attemptId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    const attemptId = selectedActionId ?? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     const response = await invokeCreatorMoneyPurchaseSubjectRpc<unknown>(subject, "begin_creator_money_checkout", {
       p_purchase_intent_id: intentId, p_checkout_attempt_id: attemptId,
     });

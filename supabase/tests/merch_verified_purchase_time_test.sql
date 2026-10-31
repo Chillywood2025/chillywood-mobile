@@ -1,0 +1,11 @@
+begin;
+select plan(7);
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_purchase_time_evidence'::regclass),'purchase evidence forces RLS');
+select ok(not has_table_privilege('authenticated','private.merch_purchase_time_evidence','INSERT'),'buyers cannot attest purchase time');
+select ok(not has_table_privilege('service_role','private.merch_purchase_time_evidence','INSERT'),'service role cannot directly create time evidence');
+select ok(not has_function_privilege('authenticated','private.merch_verified_purchase_at(uuid)','EXECUTE'),'private helper is not a buyer order API');
+select ok(not has_function_privilege('service_role','public.process_stripe_merch_webhook_before_purchase_time(text,text,text,jsonb)','EXECUTE'),'previous receipt wrapper cannot bypass time boundary');
+select ok(has_function_privilege('service_role','public.process_stripe_merch_webhook_lifecycle(text,text,text,jsonb)','EXECUTE'),'verified callback boundary remains available');
+select is(private.merch_verified_purchase_at('00000000-0000-4000-8000-000000000099'::uuid),null::timestamptz,'unknown proof never substitutes current time');
+select * from finish();
+rollback;

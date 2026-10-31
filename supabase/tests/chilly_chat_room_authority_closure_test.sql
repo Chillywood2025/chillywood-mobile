@@ -1,5 +1,5 @@
 begin;
-select plan(146);
+select plan(147);
 
 -- Contract and ACL surface (1-15).
 select has_function('public', 'can_access_chat_thread', array['uuid'], '1. exact chat membership helper exists');
@@ -1218,6 +1218,10 @@ select throws_ok(
 );
 reset role;
 
+-- Historical consumed ordinary Party ticket in a Live room: this fixture
+-- proves that old ticket evidence never becomes Live Stage authority. It is
+-- not a new native Party checkout and must not reserve current title inventory.
+set local session_replication_role=replica;
 insert into public.money_purchase_intents (
   id, user_id, product_id, product_key, product_type, provider,
   provider_product_id, source_type, source_id, creator_id, environment,
@@ -1244,6 +1248,10 @@ insert into public.money_purchase_intents (
   jsonb_build_object('party_id', 'CLOSURESEAT')
 from public.monetization_products product
 where product.product_key = 'watch_party_live_ticket_sandbox_099';
+set local session_replication_role=origin;
+select ok(not exists(select 1 from private.creator_party_ticket_reservations
+ where purchase_intent_id='ab333333-3333-4333-8333-333333333333'),
+ '85b. historical consumed ordinary ticket has no native reserved inventory');
 
 insert into public.provider_events (
   id, provider_event_id, provider, product_id, product_key, user_id,

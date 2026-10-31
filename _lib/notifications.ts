@@ -539,7 +539,10 @@ export function classifyNotificationAction(input: {
   let actionGroup: NotificationActionGroup = "general_activity";
   let actionLabel = "Open";
 
-  if (input.category === "creator_money_purchase") {
+  if (["auction_outbid", "auction_won", "auction_checkout_deadline", "auction_payment_deadline", "auction_creator_award"].includes(notificationType)) {
+    actionGroup = notificationType === "auction_creator_award" ? "general_activity" : "action_required";
+    actionLabel = "Review auction";
+  } else if (input.category === "creator_money_purchase") {
     actionGroup = "access_ready";
     actionLabel = CREATOR_MONEY_BUYER_ACTION_LABELS[notificationType] ?? "View";
   } else if (input.category === "creator_money_sale") {

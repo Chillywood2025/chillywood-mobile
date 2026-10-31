@@ -546,6 +546,13 @@ export const paidWatchPartyTicketAllowsExactRoomViewerAccess = (
   partyId: string,
 ) => {
   const expectedPartyId = String(partyId ?? "").trim().toUpperCase();
+  if (access?.reason === "verified_reserved_room_admission") {
+    return !!expectedPartyId && access.allowed === true && access.requiresPurchase === false
+      && String(access.partyId ?? "").trim().toUpperCase() === expectedPartyId
+      && UUID_REGEX.test(String(access.reservedSeatClaimId ?? ""))
+      && UUID_REGEX.test(String(access.roomSessionId ?? ""))
+      && access.ticketId === null && access.offer === null;
+  }
   const boundPartyId = String(access?.offer?.partyId ?? "").trim().toUpperCase();
   const now = Date.now();
   const startsAt = access?.offer?.startsAt ? Date.parse(access.offer.startsAt) : null;

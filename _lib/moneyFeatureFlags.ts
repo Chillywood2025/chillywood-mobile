@@ -15,6 +15,7 @@ export type MoneyFeatureFlagKey =
   | "merch_enabled"
   | "creator_balance_visible"
   | "payouts_enabled"
+  | "cashout_enabled"
   | "stripe_connect_enabled"
   | "revenuecat_google_play_enabled"
   | "revenuecat_app_store_enabled"
@@ -118,6 +119,7 @@ export const MONEY_FEATURE_FLAG_KEYS: readonly MoneyFeatureFlagKey[] = [
   "merch_enabled",
   "creator_balance_visible",
   "payouts_enabled",
+  "cashout_enabled",
   "stripe_connect_enabled",
   "revenuecat_google_play_enabled",
   "revenuecat_app_store_enabled",
@@ -142,6 +144,7 @@ export const MONEY_FEATURE_FLAG_DEFAULT_STATES: Record<MoneyFeatureFlagKey, Mone
   merch_enabled: "off",
   creator_balance_visible: "on",
   payouts_enabled: "off",
+  cashout_enabled: "off",
   stripe_connect_enabled: "sandbox_only",
   revenuecat_google_play_enabled: "sandbox_only",
   revenuecat_app_store_enabled: "off",
@@ -166,6 +169,7 @@ const MONEY_FEATURE_FLAG_LABELS: Record<MoneyFeatureFlagKey, string> = {
   merch_enabled: "Merch",
   creator_balance_visible: "Creator balance visible",
   payouts_enabled: "Payouts",
+  cashout_enabled: "Instant cashout",
   stripe_connect_enabled: "Stripe Connect",
   revenuecat_google_play_enabled: "RevenueCat / Google Play",
   revenuecat_app_store_enabled: "RevenueCat / App Store",
@@ -190,6 +194,7 @@ const MONEY_FEATURE_FLAG_DESCRIPTIONS: Record<MoneyFeatureFlagKey, string> = {
   merch_enabled: "Controls physical merch checkout and merch-order claims.",
   creator_balance_visible: "Controls the read-only creator balance section.",
   payouts_enabled: "Controls payout and cash-out availability claims.",
+  cashout_enabled: "Controls instant cashout only; payout, live-money, provider and eligibility checks remain required.",
   stripe_connect_enabled: "Controls Stripe Connect setup/readiness surfaces.",
   revenuecat_google_play_enabled: "Controls store readiness surfaces for Android digital purchases.",
   revenuecat_app_store_enabled: "Controls bounded App Store sandbox purchases independently from Android.",

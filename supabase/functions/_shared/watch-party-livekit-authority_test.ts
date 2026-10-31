@@ -96,6 +96,24 @@ Deno.test("missing paid seat eligibility preserves viewer entry but cannot publi
   assertEquals(viewer?.hostAuthority, false, "missing Seat Pass cannot become host");
 });
 
+Deno.test("reserved room claims preserve bounded admission and eligibility without granting publish or host", () => {
+  const raw = { allowed: true, expiresAt: "2026-08-25T12:00:25.000Z", hostAuthority: false,
+    paidSeatRequired: true, speakerEligible: true, grantsPublish: false, reason: "verified_reserved_room_seat",
+    reservedSeatClaimId: "11111111-1111-4111-8111-111111111111", partyId: "RESERVED",
+    roomSessionId: "22222222-2222-4222-8222-222222222222" };
+  const stage = parseWatchPartyLiveKitAuthority(raw, NOW);
+  assertEquals(stage?.speakerEligible, true, "reserved Stage spot allows host review");
+  assertEquals(stage?.hostAuthority, false, "payment cannot become host");
+  assertEquals(resolveWatchPartyLiveKitTokenTtlSeconds(stage!, 3600, NOW), 25, "reserved TTL bounded");
+  assertEquals(parseWatchPartyLiveKitAuthority({ ...raw, speakerEligible: false }, NOW)?.speakerEligible,
+    false, "Party admission remains viewer only");
+  for (const patch of [{ reservedSeatClaimId: null }, { roomSessionId: null }, { partyId: "" },
+    { speakerEligible: undefined }, { grantsPublish: true }, { grantsPublish: undefined }, { hostAuthority: true },
+    { paidSeatRequired: false }, { expiresAt: "2026-08-25T12:01:00.000Z" }]) {
+    assertEquals(parseWatchPartyLiveKitAuthority({ ...raw, ...patch }, NOW), null, JSON.stringify(patch));
+  }
+});
+
 Deno.test("canonical title recovery accepts host or viewer and preserves finite token TTL", () => {
   for (const hostAuthority of [false, true]) {
     const proof = parseWatchPartyLiveKitAuthority({

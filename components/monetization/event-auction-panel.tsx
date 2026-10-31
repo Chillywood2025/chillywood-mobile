@@ -1,11 +1,16 @@
+import { readAuctionNavigation } from "../../_lib/auctionNavigation";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
+import { openCreatorExternalCheckout } from "../../_lib/openCreatorExternalCheckout";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { ActivityIndicator, AppState, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import "react-native-get-random-values";
 import { getAccountNavigationTreeKey, getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { listCreatorEventAuctions, placeCreatorEventAuctionBid, readCreatorEventAuctionBidEligibility, type CreatorEventAuction } from "../../_lib/creatorEventAuctions";
 import { formatCreatorTipAmountInput, parseCreatorTipAmount } from "../../_lib/creatorTipAmount";
 import { createCreatorEventAuctionCheckout } from "../../_lib/creatorEventAuctionCheckout";
+import { withGooglePlayExternalContentLink } from "../../_lib/google-play-external-content-links";
+import { withGooglePlayAuctionBidEligibility } from "../../_lib/googlePlayAuctionBidEligibility";
 
 const money = (n: number) => `$${formatCreatorTipAmountInput(n)} USD`;
 // Retain the same idempotency identity across refresh/remount after an unknown
@@ -18,11 +23,26 @@ const requestId = () => {
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 };
 export function EventAuctionPanel({ eventId }: { eventId: string }) {
+  const params = useLocalSearchParams();
+  const router = useRouter();
+  const hint = readAuctionNavigation(params, "event");
+  const [selectedHint, setSelectedHint] = useState<string | null>(null);
+  const consumed = useRef(new Set<string>());
+  const initialAccount = useRef(getAccountNavigationTreeKey(getCurrentAccountSessionAuthoritySnapshot()));
   const [accountKey, setAccountKey] = useState(() => getAccountNavigationTreeKey(getCurrentAccountSessionAuthoritySnapshot()));
   useEffect(() => subscribeToAccountSessionAuthority(value => setAccountKey(getAccountNavigationTreeKey(value))), []);
-  return <AuctionList key={`${eventId}:${accountKey}`} eventId={eventId} />;
+  useEffect(() => { setSelectedHint(null); }, [eventId]);
+  useEffect(() => {
+    if (!hint || consumed.current.has(hint)) return;
+    consumed.current.add(hint);
+    router.setParams({ auctionId: undefined, auctionTarget: undefined, auctionExpiresAt: undefined });
+    const current = getCurrentAccountSessionAuthoritySnapshot();
+    if (current && !current.restoreOnly && getAccountNavigationTreeKey(current) === initialAccount.current) setSelectedHint(hint);
+  }, [hint, router, eventId]);
+  const targetAuctionId = accountKey === initialAccount.current ? selectedHint : null;
+  return <AuctionList key={`${eventId}:${accountKey}`} eventId={eventId} targetAuctionId={targetAuctionId} />;
 }
-function AuctionList({ eventId }: { eventId: string }) {
+function AuctionList({ eventId, targetAuctionId }: { eventId: string; targetAuctionId: string | null }) {
   const [rows, setRows] = useState<CreatorEventAuction[]>([]);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
@@ -46,13 +66,19 @@ function AuctionList({ eventId }: { eventId: string }) {
     const subscription = AppState.addEventListener("change", state => { foreground = state === "active"; setVisible(foreground); check(); });
     return () => { focused = false; setVisible(false); clearInterval(timer); subscription.remove(); };
   }, [refresh]));
+  const selected = rows.find(row => row.id === targetAuctionId);
+  const ordered = selected ? [selected, ...rows.filter(row => row !== selected)] : rows;
   return <View style={styles.panel} testID="event-auction-panel">
     <Text style={styles.title}>Event ticket auctions</Text>
     <Text style={styles.body}>One virtual ticket per auction. No bidding fee. Only the winner pays, in a separate eligible checkout. A bid or award is not a ticket.</Text>
     {error ? <Text accessibilityLiveRegion="polite" style={styles.body}>{error}</Text> : null}
     {!busy && !error && !rows.length ? <Text style={styles.body}>No auctions are currently listed for this event.</Text> : null}
     {busy ? <ActivityIndicator accessibilityLabel="Refreshing auctions" /> : null}
-    {rows.map(row => <AuctionCard key={row.id} auction={row} refresh={refresh} verified={!error} visible={visible} />)}
+    {targetAuctionId && !busy && !error && !selected ? <Text accessibilityLiveRegion="polite" style={styles.body}>This notification’s auction is no longer available here. Other auctions are listed below.</Text> : null}
+    {ordered.map(row => <View key={row.id}>
+      {row === selected ? <Text accessibilityRole="header" style={styles.title}>Auction from your notification</Text> : null}
+      <AuctionCard auction={row} refresh={refresh} verified={!error} visible={visible} />
+    </View>)}
     <Action label="Refresh auctions" disabled={busy} onPress={() => void refresh()} />
     <Text style={styles.body}>Bids and payment status update automatically while this screen is open. You can also refresh anytime.</Text>
   </View>;
@@ -72,10 +98,20 @@ function AuctionCard({ auction: a, refresh, verified, visible }: { auction: Crea
     const current = () => alive.current && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
     flight.current = true; setBusy(true); setNotice("");
     try {
-      const checkout = await createCreatorEventAuctionCheckout(a);
-      if (!current() || !isVisible.current) return;
-      if (checkout.launchStrategy !== "system_browser" || checkout.platform !== Platform.OS || (Platform.OS !== "ios" && Platform.OS !== "web")) throw new Error("Checkout launch is unavailable.");
-      await Linking.openURL(checkout.url);
+      if (Platform.OS === "android") {
+        await withGooglePlayExternalContentLink(async native => {
+          if (!current() || !isVisible.current) throw new Error("Checkout was closed.");
+          const checkout = await createCreatorEventAuctionCheckout(a, native);
+          if (!current() || !isVisible.current) throw new Error("Checkout was closed.");
+          if (checkout.platform !== "android" || checkout.launchStrategy !== "google_play_external_content_link") throw new Error("Checkout launch is unavailable.");
+          return checkout;
+        });
+      } else {
+        const checkout = await createCreatorEventAuctionCheckout(a);
+        if (!current() || !isVisible.current) return;
+        if (checkout.launchStrategy !== "system_browser" || checkout.platform !== Platform.OS || (Platform.OS !== "ios" && Platform.OS !== "web")) throw new Error("Checkout launch is unavailable.");
+        await openCreatorExternalCheckout(checkout.url, () => current() && isVisible.current);
+      }
       if (current()) { setNotice("Checkout opened in your browser. Return here to check payment status; opening checkout does not confirm a ticket."); await refresh(); }
     } catch { if (current()) setNotice("Payment checkout is unavailable, pending, or could not be verified. Refresh auction and purchase status before another attempt. No admission is granted here."); }
     finally { flight.current = false; if (current()) setBusy(false); }
@@ -89,12 +125,18 @@ function AuctionCard({ auction: a, refresh, verified, visible }: { auction: Crea
     flight.current = true; setBusy(true); setNotice("");
     try {
       if (!confirm) {
-        const available = await readCreatorEventAuctionBidEligibility(a.id, cents);
-        if (current() && latestSignature.current === signature) { setReview(available ? cents : null); if (!available) setNotice("Bidding isn’t available for this account and amount right now. No charge was started."); }
+        const available = await withGooglePlayAuctionBidEligibility({ feature: "event_auction", creatorId: a.creatorId, sourceId: a.id, amountMinor: cents }, async () => {
+          if (!current() || !isVisible.current || latestSignature.current !== signature) throw new Error("Bid review was closed.");
+          return readCreatorEventAuctionBidEligibility(a.id, cents);
+        });
+        if (current() && isVisible.current && latestSignature.current === signature) { setReview(available ? cents : null); if (!available) setNotice("Bidding isn’t available for this account and amount right now. No charge was started."); }
       } else {
         const key = `${getAccountNavigationTreeKey(authority)}:${a.id}:${cents}`;
         const id = bidRequests.get(key) ?? requestId(); bidRequests.set(key, id);
-        await placeCreatorEventAuctionBid(a.id, cents, id, null);
+        await withGooglePlayAuctionBidEligibility({ feature: "event_auction", creatorId: a.creatorId, sourceId: a.id, amountMinor: cents }, async capabilityId => {
+          if (!current() || !isVisible.current || latestSignature.current !== signature) throw new Error("Bid confirmation was closed.");
+          return placeCreatorEventAuctionBid(a.id, cents, id, capabilityId);
+        });
         if (current()) { setReview(null); setNotice("Bid confirmed. Refresh to check whether you remain the highest bidder."); await refresh(); }
       }
     } catch { if (current()) { setReview(null); setNotice("This action could not be confirmed. Refresh to check your current bid before trying again. No payment is taken by bidding."); } }
@@ -130,8 +172,8 @@ export function Action({ label, disabled, onPress }: { label: string; disabled: 
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, busy: disabled }} disabled={disabled} onPress={onPress} style={[styles.button, disabled && { opacity: 0.45 }]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
 }
 export const styles = StyleSheet.create({
-  panel: { padding: 16, gap: 12, backgroundColor: "#0C1019", borderRadius: 16 }, card: { padding: 12, gap: 10, borderWidth: 1, borderColor: "#596174", borderRadius: 12 },
-  title: { color: "#fff", fontSize: 18, fontWeight: "800" }, body: { color: "#C6CDDB", fontSize: 14, lineHeight: 20 },
-  input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: "#596174", borderRadius: 10, color: "#fff" },
-  button: { minHeight: 48, padding: 12, backgroundColor: "#84132D", borderRadius: 10, justifyContent: "center" }, buttonText: { color: "#fff", fontWeight: "800" },
+  panel: { padding: 16, gap: 12, backgroundColor: CHILLYWOOD_VISUAL.glassBackground, borderColor: CHILLYWOOD_VISUAL.glassBorder, borderWidth: 1, borderRadius: 16 }, card: { padding: 12, gap: 10, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderRadius: 12 },
+  title: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 18, fontWeight: "800" }, body: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 14, lineHeight: 20 },
+  input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderRadius: 10, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, color: CHILLYWOOD_VISUAL.textPrimary },
+  button: { minHeight: 48, padding: 12, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderWidth: 1, borderRadius: 10, justifyContent: "center" }, buttonText: { color: CHILLYWOOD_VISUAL.textPrimary, fontWeight: "800" },
 });

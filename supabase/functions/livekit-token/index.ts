@@ -508,30 +508,16 @@ async function enforceParticipantState(
     }
 
     const hostMuted = metadataBoolean(metadata.isMuted, currentMembership.hostMuted);
-    const isMuted = hostMuted || currentMembership.selfMuted;
     const membershipState = metadataFlagEnabled(metadata.isRemoved) ? "removed" : "active";
-    const canPublishMedia = membershipState === "active"
-      && !isMuted
-      && (nextStageRole === "host" || nextStageRole === "speaker");
-    const now = new Date().toISOString();
-    const update = await adminClient
-      .from("watch_party_room_memberships")
-      .update({
-        camera_enabled: canPublishMedia,
-        can_speak: nextStageRole === "host" || nextStageRole === "speaker",
-        host_muted: hostMuted,
-        is_muted: isMuted,
-        last_seen_at: now,
-        left_at: membershipState === "removed" ? now : null,
-        membership_state: membershipState,
-        mic_enabled: canPublishMedia,
-        stage_role: nextStageRole,
-        updated_at: now,
-      })
-      .eq("party_id", room.roomName)
-      .eq("user_id", targetUserId)
-      .select("user_id")
-      .maybeSingle();
+    const update = await adminClient.rpc("set_creator_room_participant_authority_service", {
+      p_party_id: room.roomName,
+      p_actor_id: actorUserId,
+      p_actor_session_id: actorSessionGeneration,
+      p_target_id: targetUserId,
+      p_stage_role: nextStageRole,
+      p_host_muted: hostMuted,
+      p_membership_state: membershipState,
+    });
 
     if (update.error || !update.data) {
       return json(503, {
@@ -837,7 +823,9 @@ async function resolveCurrentWatchPartyLiveKitAuthority(
     },
   );
   if (result.error) return null;
-  return parseWatchPartyLiveKitAuthorityDecision(result.data);
+  const authority = parseWatchPartyLiveKitAuthorityDecision(result.data);
+  if (authority?.allowed && authority.reason === "verified_reserved_room_seat" && authority.partyId !== room.roomName) return null;
+  return authority;
 }
 
 async function resolveEffectiveParticipantRole(

@@ -11,10 +11,12 @@ not an embedded Stripe SDK or in-app Safari controller. Legacy iOS calls without
 that exact quote remain blocked. Foreground return refreshes the exact receipt;
 returning from a browser is never payment confirmation.
 
-Android external checkout remains unavailable: plain browser navigation cannot
-substitute for the required native external-content-link disclosure/token flow
-and backend reporting. The `android_external_content_link` kind is reserved but
-cannot resolve until that integration is implemented and verified.
+Android external checkout remains unavailable for activation. The successor
+source includes the native external-content-link disclosure/token flow and
+backend reporting, described in `google-play-external-reporting.md`. Plain
+browser navigation cannot substitute for that flow. Google enrollment, native
+build/device qualification, reporting configuration and financial qualification
+remain outstanding; the migration seeds no approvals.
 
 The owner's source-design approval was the response “Yes I do” to a separate
 eligible Stripe checkout for custom tips and winning bids (2026-10-30 15:55 UTC).
@@ -51,7 +53,9 @@ That authorizes this implementation, not provider enrollment or native paid proo
 **The migration inserts no capabilities or eligibility records.** A table row's
 evidence reference is a trusted-service attestation pointer, not proof that a
 provider or store approved anything. The repository currently has no verified
-automatic buyer storefront/native-distribution eligibility issuer. Therefore
+automatic iOS/web buyer storefront eligibility issuer. The Android issuer has
+the explicit unverified native-token observation boundary documented in
+`google-play-external-reporting.md`. Therefore
 this work does **not** establish a production-ready, scalable external checkout
 activation or installed-device payment proof.
 

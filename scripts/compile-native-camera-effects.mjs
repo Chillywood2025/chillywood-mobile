@@ -11,6 +11,26 @@ import { assertLocalCameraProviderClosure } from "./camera-provider-closure.mjs"
 const ANDROID_VARIANTS = Object.freeze(["debug", "release"]);
 const variantTitle = variant => variant[0].toUpperCase() + variant.slice(1);
 
+export function googleExternalLinkCompileTasks() {
+  return ANDROID_VARIANTS.flatMap(variant => [
+    `:chillywood-external-content-links:compile${variantTitle(variant)}Kotlin`,
+    `:chillywood-external-content-links:compile${variantTitle(variant)}JavaWithJavac`,
+  ]);
+}
+
+export function verifyGoogleBillingRuntimeGraph(graph) {
+  const billing = graph.components.filter(component => component.kind === "module"
+    && component.group === "com.android.billingclient" && component.name === "billing");
+  assert.equal(billing.length, 1, "Exactly one shared Google Billing runtime is required");
+  assert.equal(billing[0].version, "8.2.1", "RevenueCat and external links must share reviewed Billing 8.2.1");
+  assert(graph.components.some(component => component.kind === "module"
+    && component.group === "com.revenuecat.purchases" && component.name === "purchases"),
+  "Native purchase integration must remain in the resolved runtime graph");
+  assert(graph.components.some(component => component.kind === "project"
+    && component.projectPath === ":chillywood-external-content-links"),
+  "External link module must be part of the actual app runtime graph");
+}
+
 export function resolveAndroidProfileEnvironment(eas) {
   const profile = eas?.build?.["android-internal-v2"];
   assert(profile && !profile.extends, "Reviewed Android profile must be explicit; inherited environment requires review");
@@ -359,6 +379,13 @@ try {
     const resolution = JSON.parse(run(process.execPath, ["node_modules/expo-modules-autolinking/bin/expo-modules-autolinking.js",
       "resolve", "--platform", platform === "ios" ? "apple" : "android", "--json"], project, platformEnv));
     assert(resolution.modules.some(module => module.packageName === "chillywood-camera-effects"), `${platform}: real module must autolink`);
+    if (platform === "android") {
+      const links = resolution.modules.filter(module => module.packageName === "chillywood-external-content-links");
+      assert.equal(links.length, 1, "Exactly one external link module must autolink");
+      assert(links[0].projects?.some(source => source.name === "chillywood-external-content-links"
+        && source.modules?.includes("expo.modules.chillywoodexternalcontentlinks.ChillywoodExternalContentLinksModule")),
+      "Compile the actual Expo external link bridge, not a fake SDK adapter");
+    }
     const cameraProjects = platform === "android" ? resolveAndroidCameraProjects(resolution, project) : undefined;
     const devLauncherProject = platform === "android" ? resolveAndroidDevLauncherProject(resolution, project) : undefined;
     run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformEnv);
@@ -496,7 +523,7 @@ allprojects { p ->
     }
   }
 }`);
-      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), "--init-script", initScript,
+      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), ...googleExternalLinkCompileTasks(), "--init-script", initScript,
         "--no-daemon", "--console=plain"], generated,
       { ...platformEnv, CHILLYWOOD_CAMERA_SOURCE_PROJECTS: JSON.stringify(cameraProjects),
         CHILLYWOOD_CAMERA_DEV_LAUNCHER_PROJECT: JSON.stringify(devLauncherProject),
@@ -518,6 +545,7 @@ allprojects { p ->
         const { graph, artifacts } = records[variant];
         const runtimePins = verifyRuntimeAars(artifacts);
         verifyRuntimeGraph(graph, runtimePins, manifests[variant].sources, variant);
+        verifyGoogleBillingRuntimeGraph(graph);
         receipts.android.runtimeClosures[variant] = { scope: `app-${variant}-runtime-and-merged-manifest`,
           profile: records[variant].profile, runtimePins, graph,
           pinnedAarArtifacts: artifacts.map(({ coordinate, type }) => ({ coordinate, type })), manifests: manifests[variant].receipts };

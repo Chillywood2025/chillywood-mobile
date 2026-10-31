@@ -25,8 +25,11 @@ select ok(position('original_transaction_id' in pg_get_functiondef('public.proce
 select ok(position('''payment_role_authority'',false' in pg_get_functiondef('public.process_revenuecat_live_watch_party_event_atomic(text,text,text,uuid,text,text,timestamptz,integer,text,text,text)'::regprocedure))>0
   and position('''authority_granted'',false' in pg_get_functiondef('public.process_revenuecat_live_watch_party_event_atomic(text,text,text,uuid,text,text,timestamptz,integer,text,text,text)'::regprocedure))>0,
   '13. provider payment cannot grant media authority');
-select ok(position('exact_live_access_viewer_authority' in pg_get_functiondef('public.resolve_live_watch_party_money_access_as_service_internal(text,uuid)'::regprocedure))>0
-  and position('exact_live_seat_eligibility_authority' in pg_get_functiondef('public.resolve_live_watch_party_money_access_as_service_internal(text,uuid)'::regprocedure))>0,
+select ok(position('resolve_live_watch_party_money_access_pre_reserved_claim' in pg_get_functiondef('public.resolve_live_watch_party_money_access_as_service_internal(text,uuid)'::regprocedure))>0
+  and position('exact_live_access_viewer_authority' in pg_get_functiondef('public.resolve_live_watch_party_money_access_pre_reserved_claim(text,uuid)'::regprocedure))>0
+  and position('exact_live_seat_eligibility_authority' in pg_get_functiondef('public.resolve_live_watch_party_money_access_pre_reserved_claim(text,uuid)'::regprocedure))>0
+  and not has_function_privilege('authenticated','public.resolve_live_watch_party_money_access_pre_reserved_claim(text,uuid)','EXECUTE')
+  and not has_function_privilege('service_role','public.resolve_live_watch_party_money_access_pre_reserved_claim(text,uuid)','EXECUTE'),
   '14. LiveKit access and seat authority remain distinct');
 select ok(position('stage_role"=''speaker''' in pg_get_functiondef('public.record_watch_party_money_pass_use_internal()'::regprocedure))>0,
   '15. host-approved persisted speaker state records approval separately');

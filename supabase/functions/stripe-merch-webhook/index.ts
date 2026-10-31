@@ -3,7 +3,7 @@ import { checkoutSettlementOutcome, paymentIntentSettlementOutcome } from "../_s
 import {
   createAdminClient, jsonResponse, notConfiguredPayload, optionsResponse,
   parseStripeEvent, readOptionalEnv, readStripeWebhookSecret, safeWriteAuditLog,
-  sanitizeErrorMessage, toText, verifyStripeWebhookSignature, type SupabaseClientLike,
+  toText, verifyStripeWebhookSignature, type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
 
 const FUNCTION_NAME = "stripe-merch-webhook";
@@ -50,10 +50,26 @@ const providerEventStateSupported = (type: string, object: StripeObject | null) 
 };
 const providerFacts = (event: StripeMerchEvent, object: StripeObject) => {
   const type = toText(event.type);
+  // Pinned Clover Checkout shape. Never substitute billing details or metadata.
+  const collected = object.collected_information as Record<string, unknown> | undefined;
+  const shipping = collected?.shipping_details as Record<string, unknown> | undefined;
+  const destination = shipping?.address as Record<string, unknown> | undefined;
   const metadata = object.metadata && typeof object.metadata === "object" && !Array.isArray(object.metadata)
     ? object.metadata as Record<string, unknown> : {};
   return {
+    // Only the canonical pinned Checkout shipping fields, never billing/metadata.
+    // The private SQL wrapper consumes these before invoking payment reconciliation.
+    shipping_fulfillment: type.startsWith("checkout.session.") ? {
+      name: shipping?.name, line1: destination?.line1, line2: destination?.line2,
+      city: destination?.city, state: destination?.state,
+      country: destination?.country, postal_code: destination?.postal_code,
+    } : null,
+    shipping_country: type.startsWith("checkout.session.") ? toText(destination?.country) || null : null,
+    shipping_postal_code: type.startsWith("checkout.session.") ? toText(destination?.postal_code) || null : null,
     event_livemode: event.livemode,
+    // Event creation on the canonical succeeded event is the provider-confirmed
+    // purchase boundary, not the PaymentIntent's creation or webhook arrival.
+    event_created_seconds: minorAmount((event as unknown as Record<string, unknown>).created),
     object_livemode: object.livemode,
     event_account_id: toText((event as unknown as Record<string, unknown>).account) || null,
     object_id: toText(object.id) || null,
@@ -155,11 +171,11 @@ Deno.serve(async (req) => {
         ? "The exact stored payment identity is not available yet. Retry this same delivery."
         : "The verified physical-merch payment state was reconciled.",
     });
-  } catch (error) {
+  } catch {
     await safeWriteAuditLog(adminClient, { action: "stripe_merch_webhook_failed", targetType: "stripe_merch_webhook",
       severity: "warning", reason: "Stripe sandbox physical merch webhook failed.",
-      metadata: { error: sanitizeErrorMessage(error), function_name: FUNCTION_NAME } });
+      metadata: { error: "merch_reconciliation_failed", function_name: FUNCTION_NAME } });
     return jsonResponse(500, { ...responseFacts, error: "stripe_merch_webhook_failed",
-      eventStored: false, webhookProcessed: false, message: sanitizeErrorMessage(error) });
+      eventStored: false, webhookProcessed: false, message: "The merch payment update could not be reconciled. Retry this delivery." });
   }
 });

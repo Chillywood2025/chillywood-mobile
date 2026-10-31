@@ -1,0 +1,12 @@
+begin;
+select plan(8);
+select has_table('private','merch_tracking_supersessions','Supersession history remains private');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_tracking_supersessions'::regclass),'Supersession RLS forced');
+select ok(not has_table_privilege('authenticated','private.merch_tracking_supersessions','INSERT'),'No direct authenticated supersession');
+select ok(not has_table_privilege('service_role','private.merch_tracking_supersessions','INSERT'),'No direct service supersession');
+select ok(not has_function_privilege('anon','public.approve_merch_tracking_correction(uuid,uuid,text)','EXECUTE'),'No anonymous approval');
+select ok(not has_function_privilege('service_role','public.approve_merch_tracking_correction(uuid,uuid,text)','EXECUTE'),'No service impersonation of staff');
+select ok(has_function_privilege('authenticated','public.approve_merch_tracking_correction(uuid,uuid,text)','EXECUTE'),'Bound staff approval RPC exposed');
+select ok(not has_function_privilege('authenticated','private.merch_active_tracking_assignment(uuid)','EXECUTE'),'Internal active identity not public authority');
+select * from finish();
+rollback;

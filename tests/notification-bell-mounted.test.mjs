@@ -609,3 +609,19 @@ for (const action of ['mark-read', 'dismiss']) {
     assert.equal(h.snapshot().result, action === 'mark-read' ? 'noop' : 'completed');
   });
 }
+
+for (const [root,kind] of [['event','event'],['watch-party','party_admission'],['watch-party/live-stage','stage_reserved_seat']]) {
+ test(`actual mounted bell preserves ${kind} auction target in router push`, async t => {
+  const roomId=kind==='event'?'11111111-1111-4111-8111-111111111111':'RACE-CAPACITY';
+  const auctionId='22222222-2222-4222-8222-222222222222';
+  const expires='2099-01-01T00:00:00Z';
+  const h=await mount(t,'completed',{notificationOverride:{notificationType:'auction_won',deepLink:`/${root}/${roomId}`,target:{entityId:roomId,context:{auctionId,action_expires_at:expires}}}});
+  await h.openTray();await h.openRow();
+  const routes=h.snapshot().routePaths;assert.equal(routes.length,1);
+  const url=new URL(routes[0],'https://example.invalid');
+  assert.equal(url.pathname,`/${root}/${roomId}`);
+  assert.equal(url.searchParams.get('auctionId'),auctionId);
+  assert.equal(url.searchParams.get('auctionTarget'),kind);
+  assert.equal(url.searchParams.get('auctionExpiresAt'),expires);
+ });
+}

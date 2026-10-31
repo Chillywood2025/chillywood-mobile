@@ -13,6 +13,30 @@ function load(text = source) {
 }
 const { parseCreatorTipAmount: parse, formatCreatorTipAmountInput: format } = load();
 
+test('production web quote reader requests exact selected capability and refuses substituted route',async()=>{
+ const creatorId='11111111-1111-4111-8111-111111111111',old='22222222-2222-4222-8222-222222222222',newest='33333333-3333-4333-8333-333333333333';
+ const authority={userId:'buyer',sessionGeneration:'session'},calls=[];let substitute=false;
+ const module={exports:{}};
+ const dependencies={
+  'react-native':{Platform:{OS:'web'}},
+  './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>a===b},
+  './entitlementAuthority':{withAuthorityReadDeadline:async p=>p},
+  './supabase':{supabase:{rpc:async(name,args)=>{calls.push({name,args});return {error:null,data:{
+   available:true,feature:'creator_tip',provider:'stripe_connect',creatorId,buyerId:'buyer',sessionId:'session',amountCents:237,
+   currency:'usd',platform:'web',routeKind:'external_browser_checkout',storefrontCountry:'US',environment:'test',paymentMethod:'card',
+   capabilityId:substitute?newest:args.p_capability_id??newest,minAmountMinor:50,maxAmountMinor:100000,
+   expiresAt:'2099-01-01T00:00:00Z',eligibilityExpiresAt:'2099-01-01T00:00:00Z',noAccessGranted:true,liveMoneyAction:false,
+  }};}}},
+ };
+ new Function('module','exports','require',ts.transpileModule(readFileSync('_lib/creatorTipCustomQuote.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(module,module.exports,name=>dependencies[name]);
+ assert.equal((await module.exports.readCreatorTipCustomQuote(creatorId,237)).capabilityId,newest);
+ assert.equal('p_capability_id' in calls[0].args,false,'manual default preserved');
+ assert.equal((await module.exports.readCreatorTipCustomQuote(creatorId,237,old)).capabilityId,old);
+ assert.equal(calls[1].args.p_capability_id,old);
+ substitute=true;assert.equal(await module.exports.readCreatorTipCustomQuote(creatorId,237,old),null);
+ assert.equal(await module.exports.readCreatorTipCustomQuote(creatorId,237,'bad'),null);assert.equal(calls.length,3);
+});
+
 test("buyer USD decimal input preserves exact cents, including non-tier amounts", () => {
   for (const [text, cents] of [["0.01", 1], ["0.50", 50], ["0.99", 99], ["1", 100],
     ["1.1", 110], ["2.37", 237], ["10.29", 1029], ["500.01", 50001], ["90071992547409.91", Number.MAX_SAFE_INTEGER]]) {
