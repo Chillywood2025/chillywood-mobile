@@ -84,6 +84,7 @@ async function harness(backend = createPreferenceBackend()) {
       getDevicePushTokenAsync: async () => ({ data: null }) },
     'react-native': { Platform: { OS: 'android' }, NativeModules: {} }, './liveEvents': {},
     './supabase': { supabase, SUPABASE_URL: 'https://notification-sdk.invalid', SUPABASE_ANON_KEY: 'fixture-anon-key' }, './userFacingProductCopy': {},
+    './notificationDisplayContext': {}, // Settings does not read Activity rows.
     './chillyChatCalls': { normalizeChillyChatRingtoneKey: value => value || 'chilly_ring' }, './chillyChatCallSoundAssets': {},
     './appLinks': {}, './notificationMessageTarget': {}, './entitlementAuthority': { withAuthorityReadDeadline: async promise => promise },
   };

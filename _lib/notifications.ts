@@ -18,6 +18,7 @@ import {
 } from "./liveEvents";
 import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 import { normalizeProductNotificationCopy } from "./userFacingProductCopy";
+import { applyNotificationDisplayContext, needsNotificationDisplayContext } from "./notificationDisplayContext";
 import {
   CHAT_CALL_INVITES_TABLE,
   normalizeChillyChatRingtoneKey,
@@ -670,6 +671,46 @@ async function settleNotificationReads<T extends readonly unknown[]>(reads: { [K
   return results.map(result => (result as PromiseFulfilledResult<unknown>).value) as unknown as T;
 }
 
+// Optional display reads own their transport independently from the inbox read.
+// Two slots allow Important + Recent together. A timed-out abort-ignoring request
+// keeps its slot until actual settlement, including across account replacement.
+// No queue, retry, result cache or unbounded per-account map is created.
+const notificationDisplayTransports = new Set<AbortController>();
+const NOTIFICATION_DISPLAY_DEADLINE_MS = 1_500;
+async function hydrateNotificationDisplayRows(rows: NotificationRow[], operation: NotificationReadOperation): Promise<NotificationRow[]> {
+  operation.assertCurrent();
+  const ids = rows.filter(needsNotificationDisplayContext).map(row => row.id);
+  if (!ids.length || notificationDisplayTransports.size >= 2) return rows;
+  const controller = new AbortController();
+  notificationDisplayTransports.add(controller);
+  let finishObserver: (() => void) | undefined;
+  const fallback = new Promise<null>(resolve => { finishObserver = () => resolve(null); });
+  const retire = () => { controller.abort(); finishObserver?.(); };
+  operation.signal.addEventListener("abort", retire, { once: true });
+  const timer = setTimeout(retire, NOTIFICATION_DISPLAY_DEADLINE_MS);
+  // Convert rejection to a settled optional result, but release ownership only
+  // here, never on the observer deadline or a canceled/replaced screen.
+  const source = (async () => {
+    try {
+      operation.assertCurrent();
+      return await supabase.rpc("read_my_notification_display_context", { p_notification_ids: ids })
+        .abortSignal(controller.signal);
+    } catch {
+      return null;
+    } finally {
+      notificationDisplayTransports.delete(controller);
+    }
+  })();
+  try {
+    const response = await Promise.race([source, fallback]);
+    operation.assertCurrent();
+    return !response || response.error || controller.signal.aborted ? rows : applyNotificationDisplayContext(rows, response.data);
+  } finally {
+    clearTimeout(timer);
+    operation.signal.removeEventListener("abort", retire);
+  }
+}
+
 const readCallInviteIdFromNotificationRow = (row: NotificationRow) => {
   const context = normalizeJsonRecord(row.target_context);
   return (
@@ -1095,7 +1136,9 @@ async function readNotificationPageForOperation(
   const data = response.data;
   const reconciledRows = await reconcileChillyChatCallNotificationRows(data, viewerUserId, operation);
   operation.assertCurrent();
-  const items = reconciledRows
+  const displayRows = await hydrateNotificationDisplayRows(reconciledRows, operation);
+  operation.assertCurrent();
+  const items = displayRows
     .map((row) => parseNotificationRow(row))
     .filter(isDefined);
   const lastRow = data[data.length - 1];
@@ -1138,7 +1181,9 @@ export async function readImportantNotificationList(
     }
     const reconciledRows = await reconcileChillyChatCallNotificationRows(response.data, viewerUserId, operation);
     operation.assertCurrent();
-    return reconciledRows
+    const displayRows = await hydrateNotificationDisplayRows(reconciledRows, operation);
+    operation.assertCurrent();
+    return displayRows
       .map((row) => parseNotificationRow(row))
       .filter(isDefined)
       .filter((notification) => notification.isImportant);
@@ -3237,7 +3282,7 @@ export function subscribeToForegroundActivityNotifications(
       category,
       notificationType,
       path,
-      title: category === "creator_money_sale" ? "New creator activity" : normalizeText(content.title) || "Activity",
+      title: normalizeText(content.title) || (category === "creator_money_sale" ? "New creator activity" : "Activity"),
     });
   });
 }
