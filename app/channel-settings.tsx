@@ -1,3 +1,5 @@
+import { CreatorAuctionHeldEarnings } from "../components/monetization/creator-auction-held-earnings";
+import { SubscriptionPriceRequestStatus } from "../components/monetization/subscription-price-request-status";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -2585,7 +2587,7 @@ export function ChannelStudioScreen() {
     const blockers = preview.blockedReasons.slice(0, 4).join(" ");
     const nextSteps = preview.approvalSteps.slice(0, 2).join(" ");
     setPayoutSetupNotice(
-      `Cashout readiness reviewed. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
+      `Cashout readiness reviewed. Standard cashout app fee: $0. Instant cashout app fee: 2%, rounded up to the next cent. Tips have no app fee. Provider fees are separate and unconfirmed, so final net is unknown. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
     );
     setExpandedMonetizationSections((current) => {
       const next = new Set<MonetizationSectionId>([...current, "payouts", "providers", "tax_legal"]);
@@ -8927,6 +8929,7 @@ export function ChannelStudioScreen() {
                 style={styles.eventSecondaryButton}>
                 <Text style={styles.eventSecondaryButtonText}>Request price · not yet purchasable</Text>
               </TouchableOpacity>
+              <SubscriptionPriceRequestStatus key={JSON.stringify(getCurrentAccountSessionAuthoritySnapshot())} />
               <View style={styles.eventActionRow}>
                 <TouchableOpacity
                   style={[styles.eventPrimaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
@@ -9334,6 +9337,7 @@ export function ChannelStudioScreen() {
             </View>
           ))}
         </View>
+        <CreatorAuctionHeldEarnings key={JSON.stringify(getCurrentAccountSessionAuthoritySnapshot())} />
         <Text style={styles.accessSummaryKicker}>EVENT ENTRY</Text>
         <Text style={styles.eventCardBody}>
           Choose Free or Paid entry for this exact Event. Paid entry creates the contextual Event Pass offer; it never grants Party Room, Live Stage, seat, host, moderator, or LiveKit authority.

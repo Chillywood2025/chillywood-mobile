@@ -1,3 +1,5 @@
+import { openCreatorExternalCheckout } from "../../_lib/openCreatorExternalCheckout";
+import { isIosExternalCheckoutSupported } from "../../_lib/iosExternalAdmission";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import {
@@ -5,7 +7,6 @@ import {
   AppState,
   Alert,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -18,6 +19,7 @@ import {
 } from "react-native";
 
 import { trackEvent } from "../../_lib/analytics";
+import { isGooglePlayExternalContentLinkSupported, withGooglePlayExternalContentLink } from "../../_lib/google-play-external-content-links";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { createBoundedVisibleReadGate } from "../../_lib/boundedVisibleReadGate";
 import {
@@ -34,6 +36,8 @@ import {
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { parseCreatorTipAmount, formatCreatorTipAmountInput } from "../../_lib/creatorTipAmount";
 import { readCreatorTipCustomAvailability, readCreatorTipCustomQuote, type CreatorTipCustomQuote } from "../../_lib/creatorTipCustomQuote";
+import { readCreatorTipRouteCosts } from "../../_lib/readCreatorTipRouteCosts";
+import { selectLowestCostCreatorTipAction, type CreatorTipPaymentSelection } from "../../_lib/creatorTipPaymentAction";
 import { useSession } from "../../_lib/session";
 import { readCreatorSupportedPrices, type CreatorSupportedPrice } from "../../_lib/creatorSupportedPrices";
 import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
@@ -74,6 +78,13 @@ export function TipSheet({
   const { user, authority } = useSession();
   const contextKey = `${user?.id ?? ""}:${authority?.sessionGeneration ?? ""}:${creatorId}`;
   const contextRef = useRef(contextKey); contextRef.current = contextKey;
+  const visibleRef = useRef(visible); visibleRef.current = visible;
+  const presentationRef = useRef({ visible, key: contextKey, generation: 0 });
+  if (presentationRef.current.visible !== visible || presentationRef.current.key !== contextKey) {
+    presentationRef.current = { visible, key: contextKey, generation: presentationRef.current.generation + 1 };
+  }
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const [selectedAmount, setSelectedAmount] = useState(300);
   const [customAmount, setCustomAmount] = useState<{ key: string; value: string } | null>(null);
   const customAmountText = customAmount?.key === contextKey ? customAmount.value : null;
@@ -189,11 +200,32 @@ export function TipSheet({
   const amountCents = customAmountText !== null ? parseCreatorTipAmount(customAmountText) ?? 0 : Platform.OS === "ios"
     ? (selectedIosProduct?.referencePriceMinor ?? selectedAmount)
     : selectedAmount;
+  const [routeCostState, setRouteCostState] = useState({ key: "", amount: 0, message: "", expiresAt: "", comparable: false });
+  const [routeCostRetry, setRouteCostRetry] = useState(0);
+  useEffect(() => {
+    if (!visible || amountCents <= 0 || catalogLoading) return;
+    let active = true;
+    let expiry: ReturnType<typeof setTimeout> | undefined;
+    const key = contextKey;
+    setRouteCostState({ key, amount: amountCents, message: "Checking exact-tip payment fees…", expiresAt: "", comparable: false });
+    void readCreatorTipRouteCosts(creatorId, amountCents, supportedPrices.filter(price => price.amountMinor === amountCents)).then(result => {
+      if (!active || contextRef.current !== key) return;
+      setRouteCostState({ key, amount: amountCents, message: result.message, expiresAt: result.expiresAt ?? "", comparable: result.status === "compared" });
+      if (result.expiresAt) expiry = setTimeout(() => {
+        if (active && contextRef.current === key) setRouteCostState({ key, amount: amountCents,
+          message: "Fee comparison expired. Refresh the comparison before choosing a route.", expiresAt: "", comparable: false });
+      }, Math.max(0, Date.parse(result.expiresAt) - Date.now()));
+    });
+    return () => { active = false; if (expiry) clearTimeout(expiry); };
+  }, [visible, contextKey, creatorId, amountCents, catalogLoading, supportedPrices, routeCostRetry]);
   const [customQuoteState, setCustomQuoteState] = useState<{ key: string; amount: number; quote: CreatorTipCustomQuote | null; message: string }>({ key: "", amount: 0, quote: null, message: "" });
   const customQuote = customQuoteState.key === contextKey && customQuoteState.amount === amountCents
     ? customQuoteState.quote : null;
   const customBoundsMessage = customQuoteState.key === contextKey && customQuoteState.amount === amountCents
     ? customQuoteState.message : "";
+  const androidCustomCheckout = ((Platform.OS === "android" && isGooglePlayExternalContentLinkSupported())
+    || (Platform.OS === "ios" && isIosExternalCheckoutSupported()))
+    && Number.isSafeInteger(amountCents) && amountCents > 0 && amountCents <= 2147483647;
   useEffect(() => {
     if (!visible || customAmountText === null || amountCents <= 0) return;
     let active = true;
@@ -218,33 +250,51 @@ export function TipSheet({
   // remains mandatory before any store purchase can be attempted.
   const canTipInSandbox = tipStatus?.canTip === true && tipStatus.creatorId === creatorId;
 
-  const startCustomCheckout = async () => {
-    if (contextRef.current !== contextKey || !user?.id || !customQuote || !canTipInSandbox || !checkoutLatchRef.current.tryAcquire()) return;
+  const startCustomCheckout = async (selection?: CreatorTipPaymentSelection) => {
+    if (!visibleRef.current || contextRef.current !== contextKey || !user?.id || (!customQuote && !androidCustomCheckout && !selection) || !canTipInSandbox || !checkoutLatchRef.current.tryAcquire()) return;
     const key = contextKey;
+    const generation = presentationRef.current.generation;
+    const current = () => mountedRef.current && visibleRef.current && contextRef.current === key
+      && presentationRef.current.generation === generation && AppState.currentState !== "background" && AppState.currentState !== "inactive";
     setBusy(true); setNotice("");
     try {
+      if (Platform.OS === "android") {
+        await withGooglePlayExternalContentLink(async googlePlay => {
+          if (!current()) throw new Error("Tip checkout was closed.");
+          const result = await createCreatorTipCheckout({ creatorId, amountCents, currency: "usd", googlePlay,
+            selectedActionId: selection?.actionId, capabilityId: selection?.purchaseBindingId,
+            returnUrl: "chillywoodmobile://tip-status", cancelUrl: "chillywoodmobile://tip-status" });
+          if (!current()) throw new Error("Tip checkout was closed.");
+          if (!result.checkoutCreated || !result.url || !result.tipId) throw new Error("Tip checkout is not ready.");
+          pendingExternalTipRef.current = { key, tipId: result.tipId };
+          return { url: result.url };
+        });
+        if (current()) setNotice("Google Play opened test checkout. Return to check Purchases & My Tickets; opening checkout is not payment confirmation.");
+        return;
+      }
       // Explicit Stripe action, never an automatic substitute for a store SKU.
-      const fresh = await readCreatorTipCustomQuote(creatorId, amountCents);
-      if (contextRef.current !== key) return;
-      if (!fresh || fresh.capabilityId !== customQuote.capabilityId || fresh.amountCents !== amountCents) {
+      const fresh = Platform.OS === "ios" ? null : await readCreatorTipCustomQuote(creatorId, amountCents, selection?.purchaseBindingId);
+      if (!current()) return;
+      if (Platform.OS !== "ios" && (!fresh || fresh.capabilityId !== (selection?.purchaseBindingId ?? customQuote?.capabilityId) || fresh.amountCents !== amountCents)) {
         setNotice("This exact amount's approved checkout route is no longer available. Nothing was charged."); return;
       }
-      const result = await createCreatorTipCheckout({ creatorId, amountCents, currency: "usd", capabilityId: fresh.capabilityId,
+      const result = await createCreatorTipCheckout({ creatorId, amountCents, currency: "usd", capabilityId: selection?.purchaseBindingId ?? fresh?.capabilityId, iosExternal: Platform.OS === "ios",
+        selectedActionId: selection?.actionId,
         returnUrl: "chillywoodmobile://tip-status", cancelUrl: "chillywoodmobile://tip-status" });
-      if (contextRef.current !== key) return;
+      if (!current()) return;
       if (result.checkoutCreated && result.url && result.tipId) {
         pendingExternalTipRef.current = { key, tipId: result.tipId };
         // Approved iOS US links leave for the full system browser, not an
         // embedded Stripe SDK or an in-app Safari browser controller.
-        await Linking.openURL(result.url);
+        await openCreatorExternalCheckout(result.url, current);
       }
-      if (contextRef.current === key) setNotice(result.message || "Check Purchases & My Tickets for verified tip status. Opening checkout is not payment confirmation.");
+      if (current()) setNotice(result.message || "Check Purchases & My Tickets for verified tip status. Opening checkout is not payment confirmation.");
     } catch {
-      if (contextRef.current === key) setNotice("Tip checkout could not be confirmed. Refresh Purchases & My Tickets before another attempt.");
-    } finally { checkoutLatchRef.current.release(); setBusy(false); }
+      if (current()) setNotice("Tip checkout could not be confirmed. Refresh Purchases & My Tickets before another attempt.");
+    } finally { checkoutLatchRef.current.release(); if (mountedRef.current) setBusy(false); }
   };
 
-  const startCheckout = async () => {
+  const startCheckout = async (selectedActionId?: string) => {
     if (contextRef.current !== contextKey) return;
     if (!user?.id) {
       Alert.alert("Sign in to tip", "Sign in before sending a creator tip.");
@@ -276,6 +326,7 @@ export function TipSheet({
 
     try {
       const result = await purchaseCreatorTipWithStore({
+        selectedActionId,
         amountCents,
         creatorId,
         currency: tipStatus?.currency ?? "usd",
@@ -297,6 +348,30 @@ export function TipSheet({
     } finally {
       checkoutLatchRef.current.release();
       setBusy(false);
+    }
+  };
+
+  const startLowestCostCheckout = async () => {
+    if (!visibleRef.current || !canTipInSandbox || contextRef.current !== contextKey
+      || routeCostState.key !== contextKey || routeCostState.amount !== amountCents || !routeCostState.comparable
+      || !(Date.parse(routeCostState.expiresAt) > Date.now()) || !checkoutLatchRef.current.tryAcquire()) return;
+    const generation = presentationRef.current.generation;
+    const current = () => mountedRef.current && visibleRef.current && contextRef.current === contextKey
+      && presentationRef.current.generation === generation && AppState.currentState !== "background" && AppState.currentState !== "inactive";
+    let selected: CreatorTipPaymentSelection | null = null;
+    setBusy(true); setNotice("");
+    try {
+      selected = await selectLowestCostCreatorTipAction({ creatorId, amountCents });
+    } catch {
+      if (current()) setNotice("The lowest-cost route could not be confirmed. No fallback was started. Refresh Purchases & My Tickets before retrying.");
+    } finally { checkoutLatchRef.current.release(); if (mountedRef.current) setBusy(false); }
+    if (!selected || !current()) return;
+    if (selected.provider === "stripe_connect") await startCustomCheckout(selected);
+    else if ((selected.provider === "app_store" && Platform.OS === "ios") || (selected.provider === "google_play" && Platform.OS === "android")) {
+      if (!supportedPrices.some(price => price.priceKey === selected.purchaseBindingId && price.amountMinor === amountCents)) {
+        setNotice("The selected exact store price is unavailable. No different route was started."); return;
+      }
+      await startCheckout(selected.actionId);
     }
   };
 
@@ -332,6 +407,18 @@ export function TipSheet({
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh supported tip amounts" style={styles.secondaryButton} onPress={() => setCatalogRetry(value => value + 1)}><Text style={styles.secondaryButtonText}>Refresh amounts</Text></TouchableOpacity>
           </> : null}
           <Text style={styles.secondaryButtonText}>Amounts are in USD. Store checkout needs an exact price match. Custom amounts need a separately approved payment route.</Text>
+          {routeCostState.key === contextKey && routeCostState.amount === amountCents ? <Text
+            testID="tip-route-cost-status" accessibilityLiveRegion="polite" style={styles.secondaryButtonText}>{routeCostState.message}</Text> : null}
+          {amountCents > 0 ? <TouchableOpacity testID="tip-route-cost-refresh" accessibilityRole="button"
+            accessibilityLabel="Refresh payment fee comparison" disabled={busy || catalogLoading}
+            style={styles.secondaryButton} onPress={() => setRouteCostRetry(value => value + 1)}>
+            <Text style={styles.secondaryButtonText}>Refresh fees</Text>
+          </TouchableOpacity> : null}
+          {routeCostState.key === contextKey && routeCostState.amount === amountCents && routeCostState.comparable ? <TouchableOpacity
+            testID="tip-lowest-cost-checkout" accessibilityRole="button" accessibilityLabel="Continue with the lowest verified fees for this exact tip"
+            disabled={busy || !canTipInSandbox} style={styles.secondaryButton} onPress={startLowestCostCheckout}>
+            <Text style={styles.secondaryButtonText}>Continue with lowest verified fees</Text>
+          </TouchableOpacity> : null}
 
           <TextInput
             testID="tip-custom-amount"
@@ -343,20 +430,22 @@ export function TipSheet({
             placeholder="Enter an amount, e.g. 2.50"
             style={styles.input}
           />
-          {customAmountText !== null && !amountValid && !customQuote ? (
+          {customAmountText !== null && !amountValid && !customQuote && !androidCustomCheckout ? (
             <Text testID="tip-custom-amount-unavailable" accessibilityRole="alert" style={styles.secondaryButtonText}>
               {parseCreatorTipAmount(customAmountText) === null
                 ? "Enter a positive USD amount with no more than two decimal places."
                 : customBoundsMessage || "This exact amount is not available through an approved payment route on this build. It will not be rounded, replaced with a store amount, or sent through another provider."}
             </Text>
           ) : null}
-          {customAmountText !== null && customQuote ? (
+          {customAmountText !== null && (customQuote || androidCustomCheckout) ? (
             <View>
-            <Text style={styles.secondaryButtonText}>Verified Stripe limits: {formatMonetizationCurrency(customQuote.minAmountMinor, "usd")}–{formatMonetizationCurrency(customQuote.maxAmountMinor, "usd")} USD. Your tip: {formatMonetizationCurrency(amountCents, "usd")} USD.</Text>
+            {customQuote
+              ? <Text style={styles.secondaryButtonText}>Verified Stripe limits: {formatMonetizationCurrency(customQuote.minAmountMinor, "usd")}–{formatMonetizationCurrency(customQuote.maxAmountMinor, "usd")} USD. Your tip: {formatMonetizationCurrency(amountCents, "usd")} USD.</Text>
+              : <Text style={styles.secondaryButtonText}>Your tip: {formatMonetizationCurrency(amountCents, "usd")} USD. Your app store and the server must verify eligibility and payment limits before checkout opens. Your amount will not be changed.</Text>}
             <TouchableOpacity testID="tip-custom-stripe-checkout" accessibilityRole="button"
               accessibilityLabel={`Continue with Stripe test checkout for ${formatMonetizationCurrency(amountCents, "usd")}`}
               disabled={busy || !canTipInSandbox} accessibilityState={{ disabled: busy || !canTipInSandbox, busy }}
-              style={styles.secondaryButton} onPress={startCustomCheckout}>
+              style={styles.secondaryButton} onPress={() => { void startCustomCheckout(); }}>
               <Text style={styles.secondaryButtonText}>Continue with Stripe test checkout · {formatMonetizationCurrency(amountCents, "usd")}</Text>
             </TouchableOpacity>
             </View>
@@ -425,7 +514,7 @@ export function TipSheet({
             activeOpacity={0.88}
             disabled={busy || !amountValid || !canTipInSandbox}
             style={[styles.primaryButton, (busy || !amountValid || !canTipInSandbox) && styles.primaryButtonDisabled]}
-            onPress={startCheckout}
+            onPress={() => { void startCheckout(); }}
             testID="tip-confirm-button"
             accessibilityRole="button"
             accessibilityLabel={`Tip ${creatorName || "creator"} ${formatMonetizationCurrency(amountCents, tipStatus?.currency ?? "usd")}. This supports the creator and does not unlock access.`}

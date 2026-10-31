@@ -102,6 +102,10 @@ const recordedV16Source = {
   sha: "35d85e893ebb1c35a065248ee6820716b8cdcfd2",
   tree: "dbe21f55a0afe68635efe6ee4cef9706bb3a23fd",
 };
+const recordedV17Source = {
+  sha: "12623b336cab9e47f84c79012cab35dfa3058699",
+  tree: "b3095ee5a212ab265b7f0f28d8440863450ce841",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -290,7 +294,7 @@ test("recorded Expo asset patch v16 preserves the v15 source cohort", () => {
 });
 
 test("Undici tooling repair uses prospective v17 without rewriting the v16 source cohort", () => {
-  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const generation = JSON.parse(git(repo, "show", `${recordedV17Source.sha}:config/release/internal-native-generation.json`));
   const recorded = JSON.parse(git(repo, "show", `${recordedV16Source.sha}:config/release/internal-native-generation.json`));
   assert.equal(generation.generation, "internal-native-v17");
   assert.equal(generation.supersedes.generation, recorded.generation);
@@ -308,6 +312,28 @@ test("Undici tooling repair uses prospective v17 without rewriting the v16 sourc
   const { reason: currentReason, ...currentPolicy } = generation.policy;
   const { reason: recordedReason, ...recordedPolicy } = recorded.policy;
   assert.deepEqual(currentPolicy, recordedPolicy, "new source identity must not expand release authority");
+  assert.notEqual(currentReason, recordedReason);
+});
+
+test("external-link native inputs use prospective v18 and preserve the v17 source cohort", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV17Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v18");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV17Source.sha, sourceTree: recordedV17Source.tree,
+    }).digest);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v18`);
+    assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
+    assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.equal(generation.channels[platform], recorded.channels[platform]);
+  }
+  const { reason: currentReason, ...currentPolicy } = generation.policy;
+  const { reason: recordedReason, ...recordedPolicy } = recorded.policy;
+  assert.deepEqual(currentPolicy, recordedPolicy, "source cohort must not expand release authority");
   assert.notEqual(currentReason, recordedReason);
 });
 

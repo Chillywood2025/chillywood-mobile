@@ -1,3 +1,4 @@
+import { admitIosExternalCheckout } from "./iosExternalAdmission";
 import { Platform } from "react-native";
 import { readCreatorSupportedPrices, type CreatorSupportedPrice } from "./creatorSupportedPrices";
 import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
@@ -27,8 +28,10 @@ import { getRuntimeConfig } from "./runtimeConfig";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "./accountSessionAuthority";
-import { rememberCreatorTipCheckoutReceipt, retireConfirmedCreatorTipCheckoutAttempt, withCreatorTipCheckoutAttempt } from "./creatorTipCheckoutAttempt";
+import { rememberCreatorTipCheckoutReceipt, retireConfirmedCreatorTipCheckoutAttempt, withCreatorTipCheckoutAttempt, type CreatorTipCheckoutAttempt } from "./creatorTipCheckoutAttempt";
 import { normalizeCreatorTipCustomQuote } from "./creatorTipCustomQuote";
+import { admitGooglePlayExternalCheckout } from "./googlePlayExternalAdmission";
+import type { GooglePlayExternalCheckoutInput } from "./google-play-external-content-link-flow";
 
 export type CreatorTipStatus = "setup_incomplete" | "active" | "paused" | "blocked";
 
@@ -115,9 +118,6 @@ export type CreatorTipStorePurchaseResult = {
 /** @deprecated Use CreatorTipStorePurchaseResult for platform-neutral code. */
 export type CreatorTipGooglePlayPurchaseResult = CreatorTipStorePurchaseResult;
 
-const CREATOR_TIP_SANDBOX_PRODUCT_KEY = "creator_tip_sandbox_099";
-const CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID = "cw_creator_tip_sandbox_099";
-const CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR = 99;
 const CREATOR_TIP_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Catalog rows are selectable only when this build has an exact purchase route. */
@@ -126,9 +126,9 @@ export function isCreatorTipStorePriceSupported(price: CreatorSupportedPrice): b
     || price.status !== "sandbox") return false;
   if (Platform.OS === "android") {
     return price.provider === "revenuecat_google_play"
-      && price.productKey === CREATOR_TIP_SANDBOX_PRODUCT_KEY
-      && price.providerProductId === CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID
-      && price.amountMinor === CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR;
+      && !!price.productKey && price.productKey === price.productKey.trim()
+      && !!price.providerProductId && price.providerProductId === price.providerProductId.trim()
+      && Number.isSafeInteger(price.amountMinor) && price.amountMinor > 0;
   }
   if (Platform.OS !== "ios" || price.provider !== "revenuecat_app_store") return false;
   const tier = resolveIosFiniteAppStoreTier("creator_tip", price.amountMinor);
@@ -364,6 +364,7 @@ export async function readMyTipTransactionStatus(tipId: string): Promise<Record<
 }
 
 export async function createCreatorTipCheckout(input: {
+  selectedActionId?: string;
   creatorId: string;
   amountCents: number;
   currency?: string;
@@ -371,8 +372,13 @@ export async function createCreatorTipCheckout(input: {
   returnUrl: string;
   cancelUrl: string;
   capabilityId?: string;
+  googlePlay?: GooglePlayExternalCheckoutInput;
+  iosExternal?: boolean;
 }): Promise<CreatorTipCheckoutResult> {
-  if (Platform.OS === "ios" && !CREATOR_TIP_UUID_PATTERN.test(input.capabilityId ?? "")) {
+  if (input.selectedActionId && !CREATOR_TIP_UUID_PATTERN.test(input.capabilityId ?? "")) {
+    throw new Error("The selected payment route is missing. No fallback checkout was started.");
+  }
+  if (Platform.OS === "ios" && !input.iosExternal && !CREATOR_TIP_UUID_PATTERN.test(input.capabilityId ?? "")) {
     return {
       status: "ios_app_store_required",
       provider: "revenuecat",
@@ -388,16 +394,17 @@ export async function createCreatorTipCheckout(input: {
     };
   }
 
-  if (Platform.OS === "android" && input.capabilityId) {
+  if (Platform.OS === "android" && !input.googlePlay) {
     throw new Error("Android external checkout needs the approved native external-link integration. No checkout was started.");
   }
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   if (!authority || authority.restoreOnly || (input.currency ?? "usd") !== "usd") throw new Error("Verify the exact account and USD tip amount before checkout.");
   const subject = await captureAccountBoundSupabaseMutationSubject(authority.userId);
   if (!sameAccountSessionAuthority(authority, subject.authority)) throw new Error("Account changed before tip checkout.");
-  if (Platform.OS === "ios") {
+  if (Platform.OS === "ios" && !input.iosExternal) {
     const { data, error } = await invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "get_creator_tip_amount_quote", {
       p_creator_id: input.creatorId, p_amount_cents: input.amountCents,
+      p_capability_id: input.capabilityId,
     });
     const quote = error ? null : normalizeCreatorTipCustomQuote(data, {
       creatorId: input.creatorId, amountCents: input.amountCents, buyerId: authority.userId,
@@ -408,7 +415,27 @@ export async function createCreatorTipCheckout(input: {
       throw new Error("An approved US external-browser tip quote could not be verified. No checkout was started.");
     }
   }
-  return withCreatorTipCheckoutAttempt<CreatorTipCheckoutResult>({ buyerId: authority.userId, creatorId: input.creatorId, amountCents: input.amountCents, currency: "usd" }, async attempt => {
+  let capabilityId = input.capabilityId;
+  const prepareEligibility = async (attempt: CreatorTipCheckoutAttempt) => {
+    if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before tip checkout.");
+    if ((Platform.OS === "android" && input.googlePlay) || (Platform.OS === "ios" && input.iosExternal)) {
+      const admission = { feature: "creator_tip" as const, creatorId: input.creatorId, amountMinor: attempt.amountCents, sourceId: attempt.requestId,
+        ...(input.selectedActionId ? { capabilityId: input.capabilityId } : {}) };
+      capabilityId = Platform.OS === "ios" ? await admitIosExternalCheckout(subject, admission)
+        : await admitGooglePlayExternalCheckout(subject, admission, input.googlePlay!);
+      if (input.selectedActionId && capabilityId !== input.capabilityId) throw new Error("The selected payment route changed during eligibility verification. No fallback checkout was started.");
+      const { data, error } = await invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "get_creator_tip_amount_quote", {
+        p_creator_id: input.creatorId, p_amount_cents: attempt.amountCents,
+        p_capability_id: capabilityId,
+      });
+      const quote = error ? null : normalizeCreatorTipCustomQuote(data, { creatorId: input.creatorId, amountCents: attempt.amountCents,
+        buyerId: authority.userId, sessionId: authority.sessionGeneration, platform: Platform.OS as "ios" | "android" });
+      if (!quote || quote.capabilityId !== capabilityId || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) {
+        throw new Error("This exact tip amount is unavailable through the approved external checkout. Your amount has not been changed.");
+      }
+    }
+  };
+  return withCreatorTipCheckoutAttempt<CreatorTipCheckoutResult>({ buyerId: authority.userId, creatorId: input.creatorId, amountCents: input.amountCents, currency: "usd", selectedActionId: input.selectedActionId }, async attempt => {
     if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new Error("Account changed before tip checkout.");
     const controller = new AbortController();
     // Cancel transport waiting only; the durable attempt remains unresolved.
@@ -421,7 +448,7 @@ export async function createCreatorTipCheckout(input: {
         body: {
           request_id: attempt.requestId, amount_cents: attempt.amountCents, currency: attempt.currency,
           cancel_url: input.cancelUrl, creator_id: attempt.creatorId, private_note: input.privateNote ?? null, return_url: input.returnUrl,
-          capability_id: input.capabilityId ?? null,
+          capability_id: capabilityId ?? null, ...(input.googlePlay ?? {}),
         },
       });
     } catch { throw new Error("Tip checkout outcome is unknown. Refresh Purchases & My Tickets before another attempt."); }
@@ -437,6 +464,10 @@ export async function createCreatorTipCheckout(input: {
       || row.liveMoneyAction !== false || row.noAccessGranted !== true || row.pureContributionOnly !== true) {
       throw new Error("Tip checkout identity could not be verified. Keep this attempt and refresh purchase status.");
     }
+    if (Platform.OS === "android" && (row.routeKind !== "android_external_content_link"
+      || row.launchStrategy !== "google_play_external_content_link" || row.platform !== "android" || row.storefrontCountry !== "US")) {
+      throw new Error("Google Play checkout route could not be verified. Keep this attempt and refresh purchase status.");
+    }
     let url: string | null = null;
     if (row.checkoutCreated) {
       try {
@@ -450,10 +481,11 @@ export async function createCreatorTipCheckout(input: {
     return { status: toText(row.status), provider: "stripe", providerKey: "stripe_connect", mode: "test", checkoutCreated: row.checkoutCreated,
       liveMoneyAction: false, noAccessGranted: true, pureContributionOnly: true, tipId: String(row.tipId), url,
       message: toText(row.message) || undefined, error: toText(row.error) || undefined };
-  });
+  }, prepareEligibility);
 }
 
 export async function purchaseCreatorTipWithStore(input: {
+  selectedActionId?: string;
   creatorId: string;
   userId: string;
   amountCents: number;
@@ -481,7 +513,7 @@ export async function purchaseCreatorTipWithStore(input: {
         ? findIosStoreProductByProductId(amountMatchedIosTier.productId)
         : null
     : null;
-  const productId = iosTipProduct?.productId ?? CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID;
+  let productId = iosTipProduct?.productId ?? "";
   if (
     !CREATOR_TIP_UUID_PATTERN.test(creatorId)
     || !CREATOR_TIP_UUID_PATTERN.test(requestedUserId)
@@ -531,7 +563,7 @@ export async function purchaseCreatorTipWithStore(input: {
         message: "Tips are unavailable on this build right now. Nothing was charged.",
       };
     }
-  } else if (amountCents !== CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR) {
+  } else if (Platform.OS !== "android") {
     return {
       ok: false,
       intentId: null,
@@ -556,13 +588,18 @@ export async function purchaseCreatorTipWithStore(input: {
   // Re-read recipient-specific availability rather than trusting a sheet's old
   // amount or another account's catalog. The server claim remains authoritative.
   const catalog = await readCreatorSupportedPrices("creator_tip", creatorId);
+  const exactPrices = catalog.prices.filter(price => isCreatorTipStorePriceSupported(price)
+    && price.amountMinor === amountCents && (Platform.OS !== "ios" || price.providerProductId === productId));
   if (catalog.status !== "resolved" || catalog.subjectUserId !== purchaseSubject.userId
-    || !catalog.prices.some(price => isCreatorTipStorePriceSupported(price)
-      && price.providerProductId === productId && price.amountMinor === amountCents)) {
+    || exactPrices.length !== 1) {
     return { ok: false, intentId: null, productId,
       message: "This tip amount is no longer available for this creator and store. Refresh supported amounts. No new charge was started." };
   }
 
+  // Select identity only from the fresh recipient-scoped server catalog. The
+  // intent independently verifies kind, price, provider and buyer session.
+  const selectedPrice = exactPrices[0];
+  productId = selectedPrice.providerProductId;
   const intentRpc = Platform.OS === "ios"
     ? "create_ios_app_store_purchase_intent"
     : "create_money_purchase_intent";
@@ -595,7 +632,7 @@ export async function purchaseCreatorTipWithStore(input: {
           sandbox_only: true,
           source_surface: toText(input.sourceSurface) || "creator_tip_sheet",
         },
-        p_product_key: CREATOR_TIP_SANDBOX_PRODUCT_KEY,
+        p_product_key: selectedPrice.productKey,
         p_source_id: creatorId,
         p_source_type: "creator_tip",
       };
@@ -662,7 +699,7 @@ export async function purchaseCreatorTipWithStore(input: {
     };
   }
 
-  if (!await beginCreatorMoneyCheckout(purchaseSubject, intentId, expectedIntent)) {
+  if (!await beginCreatorMoneyCheckout(purchaseSubject, intentId, expectedIntent, input.selectedActionId)) {
     return { ok: false, intentId, productId, message: CREATOR_MONEY_CHECKOUT_UNCONFIRMED_COPY };
   }
   let purchase;

@@ -22,6 +22,17 @@ export async function decideDeletedContentMediaDeletion(
 
 // Bounded, manually invoked SQL-only text worker. Orphan stage cleanup has its
 // own queue and irreversible object claims; this worker must not lease that work.
+const retentionUuid=(value:unknown):value is string=>typeof value==="string"
+  && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
+// These are the current SQL text-expiry outcomes, including delegated Brand
+// and reviewed external-reference paths. A future/unknown status requires an
+// explicit contract update; it must not refresh a successful worker heartbeat.
+const textExpiryStatuses=new Set([
+  "disabled","already_absent","not_due","held","provider_exact_delete_unproven",
+  "soft_source_cleanup_required","source_busy","source_cleanup_required",
+  "external_reference_archive_proof_required","brand_delegation_unavailable",
+  "delegated_brand_lifecycle","purged",
+]);
 export async function runDeletedContentExpiryBatch(
   rpc: (name: string,args: Record<string,unknown>) => Promise<{data: unknown;error: unknown}>,
 ): Promise<{enabled: boolean; results: {kind: string;status: string}[]}> {
@@ -35,15 +46,21 @@ export async function runDeletedContentExpiryBatch(
     ["deletionIds","expire_deleted_content_text","p_deletion_id","deletion"],
   ]) {
     const ids=data[field];
-    if(!Array.isArray(ids) || ids.length>20 || ids.some(id=>typeof id!=="string" || !/^[0-9a-f-]{36}$/i.test(id))) {
+    if(!Array.isArray(ids) || ids.length>20 || ids.some(id=>!retentionUuid(id))
+      || new Set(ids.map(id=>(id as string).toLowerCase())).size!==ids.length) {
       throw new Error("retention_work_invalid");
     }
     for(const id of ids) {
       const reply=await rpc(name,{[param]:id});
-      if(reply.error || !reply.data || typeof reply.data!=="object" || typeof (reply.data as Record<string,unknown>).status!=="string") {
+      if(reply.error || !reply.data || typeof reply.data!=="object" || Array.isArray(reply.data)) {
         throw new Error("retention_work_failed");
       }
-      results.push({kind,status:(reply.data as {status:string}).status});
+      const receipt=reply.data as Record<string,unknown>;
+      if(typeof receipt.status!=="string" || !textExpiryStatuses.has(receipt.status)
+        || (receipt.status==="purged" && !retentionUuid(receipt.claimId))) {
+        throw new Error("retention_work_failed");
+      }
+      results.push({kind,status:receipt.status});
     }
   }
   return {enabled:true,results};

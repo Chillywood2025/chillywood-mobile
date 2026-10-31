@@ -1,12 +1,33 @@
 # Remaining retention lifecycle: scoped implementation design
 
-Status: source design, not implemented coverage or production qualification.
+Status: secondary-object coverage remains a source design, not production
+qualification. The separate Brand adapter described historically below is now
+implemented in the October 21 and October 25 migrations; preserve that adapter.
 The October 21 snapshot contains 31 secondary records (six video renditions,
 15 media renditions, ten jobs), 63 brand assets, and 23 Supabase originals.
 Counts are not object inventories. None may be removed from readiness merely
 because another adapter is implemented.
 
 ## Secondary objects
+
+The October 31 producer increment adds `scripts/lib/hls-output-inventory.mjs`
+to both public and Premium HLS producer paths before any output upload. It
+validates the explicit upload file list against every reachable playlist
+dependency, hashes exact local bytes, rejects external/traversing paths, cycles,
+missing or unreferenced objects and symlink aliases, and includes initialization
+maps. Bounds are 32,768 objects, 32 roots, 16 dependency levels, 4 MiB per playlist,
+128 MiB per media object and 64 GiB total. Current generated unencrypted MPEG-TS
+outputs and fMP4 initialization maps are supported; encrypted keys require a
+separately designed custody protocol and fail closed.
+
+The producer result includes `outputInventory`, explicitly labeled local-byte
+evidence with `retentionQualified: false` and `providerBytesVerified: false`.
+It is not a durable immutable database ledger, a provider readback, a preserved
+source-incarnation receipt or proof that a producer has drained. It does not
+qualify existing objects, change playback authority or remove readiness holds.
+The existing exact upload list remains authoritative for which local paths are
+attempted; arbitrary directory contents or remote prefix listings cannot grant
+ownership. No producer or upload was run against a provider for this repair.
 
 Keep the existing source-binding authority in
 `20260827223000_creator_video_rendition_source_binding_closure.sql`.
@@ -54,6 +75,22 @@ must be fenced, while independently proven unattached failed-upload cleanup stay
 possible. Cleanup-candidate RPC classifications are not deletion intent.
 
 ## Delivery, expiry and verification
+
+Non-Brand legacy Supabase originals already have a separate non-destructive copy
+and cutover implementation (`20261021134033_supabase_original_copy_receipts` and
+`20261025111024_supabase_original_copy_cutover`). It binds the exact old Storage
+object/version, performs full source/target byte readback, preserves originals,
+and requires a fresh exact scan plus provenance enrollment before R2 retirement
+eligibility. That source should be qualified and used through separately approved
+operations rather than replaced by an unproven direct Supabase deletion adapter.
+Rows with secondary references, shared objects, mismatching size or absent scan
+receipts remain blocked. No such copy, cutover or enrollment is performed here.
+
+For Hetzner originals the application still lacks a persisted, verified immutable
+origin generation and complete writer/reference drain evidence. A caller-supplied
+version, current HEAD/ETag, or the HLS local inventory does not fill that gap.
+The offline legacy admission tests explicitly keep `s3`, `hetzner_s3` and direct
+Supabase variants blocked even when such descriptors are supplied.
 
 Extend existing claim/read/DELETE/HEAD/receipt machinery per exact object; retain
 conservative unknown-reference detection. Serialize holds and claims using the

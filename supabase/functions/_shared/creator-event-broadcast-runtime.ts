@@ -27,13 +27,15 @@ export function createEventBroadcastRuntime(admin:Admin,env:(name:string)=>strin
       return rpc('claim_creator_event_broadcast_start',{p_creator_event_id:source.eventId,p_user_id:userId,p_session_id:sessionId});
     },
     receipt:async(source,receipt)=>{
-      const saved=await rpc('record_creator_event_broadcast_provider',{
+      const saved=await rpc('record_creator_event_broadcast_provider_coverage',{
         p_creator_event_id:source.eventId,p_user_id:source.hostId,p_session_id:source.creatorSessionId,
         p_attempt_id:source.attemptId,p_egress_id:receipt.egressId,
-        p_provider_status:({starting:'STARTING',active:'ACTIVE',stopped:'COMPLETE',failed:'FAILED',uncertain:'UNKNOWN'} as const)[receipt.status],
+        p_provider_status:({starting:'STARTING',active:'ACTIVE',ending:'ENDING',stopped:'COMPLETE',failed:'FAILED',uncertain:'UNKNOWN'} as const)[receipt.status],
         p_source_url:receipt.sourceUrl??null,p_playlist_path:receipt.playlistPath??null,
         p_private_origin_verified:receipt.privateOriginVerified===true,
         p_provider_binding_verified:receipt.status!=='uncertain'&&!!receipt.egressId,
+        p_provider_timing:receipt.timing?{...receipt.timing,interrupted:receipt.timing.interrupted||receipt.coverageInterrupted===true}:null,
+        p_server_id:source.serverId??null,p_room_name:source.roomId,p_output_prefix:source.outputPrefix,
       });
       if(receipt.status==='active'&&saved.state!=='active')throw new Error('event_broadcast_activation_not_confirmed');
     },

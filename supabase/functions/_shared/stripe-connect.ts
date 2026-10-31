@@ -117,6 +117,8 @@ export type CreatorPayoutAccountRow = {
 
 export type StripeProviderEvent = {
   account?: string | null;
+  // Untrusted event time: consumers must validate before using it as evidence.
+  created?: unknown;
   data?: {
     object?: unknown;
   };

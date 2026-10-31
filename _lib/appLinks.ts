@@ -320,7 +320,16 @@ const navigationParams = (pathname: string, params: URLSearchParams) => {
   const safe = new URLSearchParams();
   let valid = true;
   if (hasDuplicateParams(params) || hasAuthorityQueryParam(params)) return null;
+  const auctionKind = /^\/event\/[^/]+$/.test(pathname) ? "event"
+    : /^\/watch-party\/live-stage\/[^/]+$/.test(pathname) ? "stage_reserved_seat"
+    : /^\/watch-party\/[^/]+$/.test(pathname) ? "party_admission" : null;
+  const auctionNames = ["auctionId", "auctionTarget", "auctionExpiresAt"];
+  if (auctionNames.some(name => params.has(name)) && (!auctionKind
+    || !UUID_PATTERN.test(params.get("auctionId") ?? "")
+    || params.get("auctionTarget") !== auctionKind
+    || !Number.isFinite(Date.parse(params.get("auctionExpiresAt") ?? "")))) return null;
   params.forEach((value, name) => {
+    if (auctionKind && auctionNames.includes(name)) { safe.set(name, value); return; }
     if (COMMON_NAVIGATION_QUERY_PARAM_NAMES.has(name) && NAVIGATION_VALUE_PATTERN.test(value)) {
       safe.set(name, value); return;
     }

@@ -23,15 +23,19 @@ const observedPayout=(id='acct_fixture',changes={})=>({
 });
 function harness(compiled=code){
   let handler,attempt=null,authorityReads=0,payoutReads=0,profile='First name',account='acct_fixture',payout={},payoutSequence=null,retryAllowed=true,failAfterAccept=false,recordFailure=false,retiredAt=Infinity,terminal=false;
-  const calls=[],sessions=new Map(); let routeAllowed=true,expiryOffset=0;
+  const calls=[],bindings=[],sessions=new Map(); let routeAllowed=true,expiryOffset=0,androidExternal=false,bindAllowed=true;
   const settings={creator_id:creator,tips_enabled:true,status:'active',currency:'usd',min_amount_cents:100,max_amount_cents:50000,provider_charges_enabled:true,provider_payouts_enabled:true};
   const admin={from(table){const q={};for(const method of ['select','eq','in','gte','or','limit','update','insert'])q[method]=()=>q;
     q.update=value=>{if(table==='creator_tip_settings')Object.assign(settings,copy(value));return q;};
     const result=()=>({error:null,count:attempt?1:0,data:table==='platform_money_kill_switches'?{state:q.key==='live_money_enabled'?'off':'sandbox_only'}:table==='creator_tip_settings'?settings:table==='user_profiles'?{display_name:profile}:[]});
     q.eq=(key,value)=>{if(key==='key')q.key=value;return q;};q.maybeSingle=q.single=async()=>result();q.then=(ok,fail)=>Promise.resolve(result()).then(ok,fail);return q;},
     async rpc(name,args){if(name==='read_creator_tip_checkout_dispatch_authority') return {data:{allowed:routeAllowed},error:null}; if(name==='reserve_creator_tip_checkout_attempt'){
-      if(!attempt)attempt={tipId:args.p_quote.tipId,requestId:args.p_request_id,buyerId:args.p_buyer_id,creatorId:creator,amountCents:300,currency:'usd',status:'pending',body:copy(args.p_quote.body),providerSessionId:null,idempotencyKey:'stable-'+args.p_request_id};
+      if(!attempt)attempt={tipId:args.p_quote.tipId,requestId:args.p_request_id,buyerId:args.p_buyer_id,creatorId:creator,amountCents:300,currency:'usd',status:'pending',body:copy(args.p_quote.body),providerSessionId:null,idempotencyKey:'stable-'+args.p_request_id,
+        externalCapability:{routeKind:androidExternal?'android_external_content_link':'external_browser_checkout'}};
       return {data:{...copy(attempt),retryAllowed},error:null};
+    }if(name==='bind_google_play_external_checkout'){
+      bindings.push(copy(args));
+      return bindAllowed?{data:{bindingId:request,routeKind:'android_external_content_link'},error:null}:{data:null,error:{message:'synthetic admission denied'}};
     }if(name==='record_creator_tip_checkout_session'){
       if(recordFailure)return {data:null,error:{message:'synthetic DB unavailable'}};
       attempt.providerSessionId=args.p_checkout_session_id;attempt.status=terminal?'paid':'checkout_started';
@@ -51,9 +55,24 @@ function harness(compiled=code){
       return new Response(JSON.stringify(value));},
   };
   vm.runInNewContext(compiled,context,{filename:file});
-  return {calls,run:async(changes={})=>{const r=await handler(new Request('https://local.invalid',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify({creator_id:creator,amount_cents:300,currency:'usd',request_id:request,...changes})}));return {status:r.status,body:await r.json()};},
-    set:changes=>{if('expiryOffset'in changes)expiryOffset=changes.expiryOffset;if('routeAllowed'in changes)routeAllowed=changes.routeAllowed;if('profile'in changes)profile=changes.profile;if('account'in changes)account=changes.account;if('payout'in changes)payout=changes.payout;if('payoutSequence'in changes){payoutSequence=changes.payoutSequence;payoutReads=0;}if('retryAllowed'in changes)retryAllowed=changes.retryAllowed;if('failAfterAccept'in changes)failAfterAccept=changes.failAfterAccept;if('recordFailure'in changes)recordFailure=changes.recordFailure;if('retiredAt'in changes)retiredAt=changes.retiredAt;if('terminal'in changes)terminal=changes.terminal;},attempt:()=>attempt,settings:()=>copy(settings)};
+  return {calls,bindings,run:async(changes={})=>{const r=await handler(new Request('https://local.invalid',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify({creator_id:creator,amount_cents:300,currency:'usd',request_id:request,...changes})}));return {status:r.status,body:await r.json()};},
+    set:changes=>{if('androidExternal'in changes)androidExternal=changes.androidExternal;if('bindAllowed'in changes)bindAllowed=changes.bindAllowed;if('expiryOffset'in changes)expiryOffset=changes.expiryOffset;if('routeAllowed'in changes)routeAllowed=changes.routeAllowed;if('profile'in changes)profile=changes.profile;if('account'in changes)account=changes.account;if('payout'in changes)payout=changes.payout;if('payoutSequence'in changes){payoutSequence=changes.payoutSequence;payoutReads=0;}if('retryAllowed'in changes)retryAllowed=changes.retryAllowed;if('failAfterAccept'in changes)failAfterAccept=changes.failAfterAccept;if('recordFailure'in changes)recordFailure=changes.recordFailure;if('retiredAt'in changes)retiredAt=changes.retiredAt;if('terminal'in changes)terminal=changes.terminal;},attempt:()=>attempt,settings:()=>copy(settings)};
 }
+
+test('Android tip route requires the exact private native binding before provider dispatch',async()=>{
+  const h=harness();h.set({androidExternal:true});
+  const missing=await h.run();assert.equal(missing.body.checkoutCreated,false);assert.equal(h.calls.length,0);
+  h.set({bindAllowed:false});const fields={google_play_external_transaction_token:'synthetic-native-token',google_play_external_link_api_version:1};
+  const denied=await h.run(fields);assert.equal(denied.body.checkoutCreated,false);assert.equal(h.calls.length,0);
+  assert.equal(h.bindings[0].p_quote_id,h.attempt().tipId);assert.equal(h.bindings[0].p_buyer_id,buyer);assert.equal(h.bindings[0].p_session_id,session);
+  h.set({bindAllowed:true});const allowed=await h.run(fields);
+  assert.equal(allowed.body.checkoutCreated,true);assert.equal(allowed.body.routeKind,'android_external_content_link');
+  assert.equal(allowed.body.launchStrategy,'google_play_external_content_link');
+  assert.equal(JSON.stringify(h.calls).includes(fields.google_play_external_transaction_token),false,'opaque token never goes to Stripe');
+  assert.equal(JSON.stringify(allowed.body).includes(fields.google_play_external_transaction_token),false,'opaque token never returned');
+  const retry=await h.run();assert.equal(h.calls.at(-1).method,'GET','known session remains reconcilable');
+  assert.equal(retry.body.url,null);assert.equal(retry.body.checkoutCreated,false,'missing fresh native binding never becomes browser fallback');
+});
 
 test('actual endpoint freezes first request/key after lost provider reply and retrieves known sessions',async()=>{
   const h=harness();h.set({failAfterAccept:true});const first=await h.run();assert.equal(first.body.status,'pending');assert.equal(first.body.url,null);

@@ -27,7 +27,7 @@ If payouts become active, eligibility may require:
 
 [PAYOUT SCHEDULE PLACEHOLDER]
 
-Standard scheduled creator payouts remain the preferred free payout direction in repo doctrine. Instant Payout / Instant Cash Out is a later optional monetized lane. The preferred creator-facing instant cash-out fee direction is `1.5%` of the cash-out amount with no default cap, subject to Stripe/provider/legal/accounting review before live payouts. Any instant cash-out fee must be separate from creator earnings, must not be taken from the creator's tip amount, and must be clearly disclosed before confirmation.
+Standard scheduled creator payouts remain the preferred free payout direction in repo doctrine. Instant Payout / Instant Cash Out is a later optional monetized lane. The owner-approved app fee for new instant cash-outs is `2%` of the cash-out amount, rounded up to the next whole cent, with no default cap. Provider fees are separate and must be verified and disclosed before live payouts; unknown fees must not be shown as zero. Existing accepted payout requests retain their recorded fees. Any instant cash-out fee must be separate from creator earnings, must not be taken from the creator's tip amount, and must be clearly disclosed before confirmation.
 
 ## Platform Share / Fees
 
@@ -50,7 +50,7 @@ Stripe Connect or an equivalent marketplace payout provider is the preferred dir
 
 Current Stripe Connect status is test-mode/sandbox readiness only. A creator may be able to start backend-created Stripe setup from Platform Studio Money Center when `stripe_connect_enabled` allows readiness review, but Chi'llywood must not call money available until provider readiness, KYC, tax/1099 readiness, hold clearance, minimum payout, legal/accounting review, Owner-approved workflow, `payouts_enabled`, and `live_money_enabled` all pass. Owner/Admin Money Center readouts and switches are review/status/control-plane only and cannot release money.
 
-Preproduction test mode can prove blocked states and fee math only. Scheduled payout fee remains `$0`; optional instant cash-out remains `1.5%` with no default cap, shown separately before confirmation if a future live lane is approved. A `$100` instant cash-out preview is `$1.50`, and a `$1,000` instant cash-out preview is `$15.00`. These previews do not create a payable balance, payout request, transfer, bank payout, tax form, or 1099 readiness.
+Preproduction test mode can prove blocked states and fee math only. Scheduled payout fee remains `$0`; optional instant cash-out has a `2%` app fee with no default cap, shown separately before confirmation if a future live lane is approved. A `$100` instant cash-out preview is `$2.00`, and a `$1,000` instant cash-out preview is `$20.00`. These previews do not create a payable balance, payout request, transfer, bank payout, tax form, or 1099 readiness.
 
 Future Owner/Admin money permissions must be role-controlled and server-side. Owners may configure payout/monetization settings later through backed workflows. Admins may view payout/readiness/status panels and flag payout issues where backed, but must not directly edit creator balances or release money without a backed Owner-approved server-side flow. Money switch changes require a backend RPC, reason, and immutable audit. Moderators have no money access.
 
@@ -85,3 +85,5 @@ Chi'llywood does not guarantee earnings, payout availability, audience size, spo
 Creators may contact support for payout questions where payouts are active. Fraud, copyright, chargeback, tax, or provider holds may require manual review and supporting documentation.
 
 Support: support@chillywoodstream.com
+
+Source policy updated October 30, 2026. This change does not publish new legal terms, activate payouts, or establish provider-fee qualification. Final net after all fees remains unknown until provider costs are verified.

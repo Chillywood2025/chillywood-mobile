@@ -610,13 +610,13 @@ export function buildCreatorMoneyAuditEvents({
   });
 
   moneyFlags
-    .filter((row) => ["live_money_enabled", "payouts_enabled", "digital_sales_enabled", "provider_webhooks_enabled"].includes(row.key))
+    .filter((row) => ["live_money_enabled", "payouts_enabled", "cashout_enabled", "digital_sales_enabled", "provider_webhooks_enabled"].includes(row.key))
     .forEach((row) => {
       events.push({
         id: `creator-switch:${row.key}`,
         title: row.key === "live_money_enabled" ? "Live money lock" : row.displayLabel,
         summary: `${getMoneyFeatureStateLabel(row.state)}. Not payable.`,
-        category: row.key === "payouts_enabled" ? "payouts" : row.key === "provider_webhooks_enabled" ? "webhooks" : "kill_switches",
+        category: ["payouts_enabled", "cashout_enabled"].includes(row.key) ? "payouts" : row.key === "provider_webhooks_enabled" ? "webhooks" : "kill_switches",
         sourceTable: "get_money_feature_flag_summary",
         sourceLabel: "Money feature flag",
         statusLabel: row.state === "sandbox_only" ? "Sandbox only" : getMoneyFeatureStateLabel(row.state),

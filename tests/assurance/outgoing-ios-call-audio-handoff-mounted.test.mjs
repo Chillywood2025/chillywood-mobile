@@ -142,6 +142,19 @@ test("actual hook stays blocked until sound drain and deferred native prepare bo
   assert.equal(h.soundOwner, h.claims[0].owner, "ready media retains the sound fence");
 });
 
+test("already queued preparation deadline cannot retire successfully prepared call audio", async (t) => {
+  const h = await mount(t);
+  const queuedDeadline = [...h.timers.values()][0].callback;
+  await h.run(() => h.natives[0].gate.resolve());
+  assert.equal(h.snapshot.ready, true);
+  assert.equal(h.timers.size, 0);
+  await h.run(queuedDeadline);
+  assert.equal(h.snapshot.ready, true, "native preparation completion retires the deadline's authority");
+  assert.equal(h.snapshot.error, null);
+  assert.equal(h.natives[0].retireCount, 0);
+  assert.equal(h.soundOwner, h.claims[0].owner);
+});
+
 test("explicit End retires the captured owner and late prepare never enables media", async (t) => {
   const h = await mount(t);
   await h.run(() => h.snapshot.retire());

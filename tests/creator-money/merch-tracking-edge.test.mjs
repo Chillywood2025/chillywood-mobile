@@ -1,0 +1,65 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHmac} from 'node:crypto';
+import ts from 'typescript';
+
+export function loadTracking(file,{Deno={},modules={},fetch=globalThis.fetch}={}) {
+ const module={exports:{}};
+ const require=name=>{if(name in modules)return modules[name];if(name.startsWith('jsr:'))return {};throw Error(name);};
+ new Function('require','module','exports','Deno','fetch',ts.transpileModule(readFileSync('supabase/functions/'+file,'utf8'),
+  {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(require,module,module.exports,Deno,fetch);
+ return module.exports;
+}
+const tracking=loadTracking('_shared/merch-tracking.ts');
+test('carrier dates, identity and HMAC are explicit; no unsigned or replayed evidence',async()=>{
+ await assert.rejects(tracking.readBoundedTrackingBody(new Response('a'.repeat(256001)).body),/payload_too_large/);
+ const raw=JSON.stringify({carrier:'usps',tracking_number:'ABC12345',test:true,address_to:{zip:'12345',country:'US'},
+  tracking_status:{status:'DELIVERED',status_date:'2026-10-29T12:00:00-05:00'},
+  tracking_history:[{status_date:'2026-10-27T13:00:00Z'}]});
+ const f=await tracking.normalizeTracking(raw);assert.equal(f.status_date,'2026-10-29T17:00:00.000Z');assert.equal(f.review_reason,null);
+ assert.equal((await tracking.normalizeTracking(raw.replace('-05:00',''))).review_reason,'ambiguous_carrier_timestamp');
+ const now=Math.floor(Date.now()/1000),secret='synthetic-signing-secret';
+ const sign=(t,body)=>`t=${t},v1=${createHmac('sha256',secret).update(`${t}.${body}`).digest('hex')}`;
+ assert.equal(await tracking.verifyTrackingSignature(raw,sign(now,raw),secret),true);
+ assert.equal(await tracking.verifyTrackingSignature(raw+' ',sign(now,raw),secret),false);
+ assert.equal(await tracking.verifyTrackingSignature(raw,sign(now-301,raw),secret),false);
+ assert.equal(await tracking.verifyTrackingSignature(raw,'',secret),false);
+ assert.throws(()=>tracking.trackingNotification(JSON.stringify({event:'track_updated',data:{carrier:'usps',tracking_number:'ABC12345',test:false}})));
+});
+test('transport is fixed-host test-only merchant-scoped, bounded and never follows redirects',async()=>{
+ const job={id:'fixture',carrier:'usps',tracking_number:'ABC12345',provider_account:'managed_fixture'}, calls=[];
+ const fetch=async(url,options)=>{calls.push({url,options});return new Response('{}');};
+ await assert.rejects(tracking.shippoRequest(job,'shippo_live_example',false,fetch));assert.equal(calls.length,0);
+ await tracking.shippoRequest(job,'shippo_test_fixture',false,fetch);
+ assert.equal(calls[0].url,'https://api.goshippo.com/tracks/usps/ABC12345');
+ assert.equal(calls[0].options.headers['SHIPPO-ACCOUNT-ID'],'managed_fixture');assert.equal(calls[0].options.redirect,'error');
+ await tracking.shippoRequest(job,'shippo_test_fixture',true,fetch);assert.equal(calls[1].options.method,'POST');
+ assert.match(calls[1].options.body,/metadata=fixture/);
+ await assert.rejects(tracking.shippoRequest(job,'shippo_test_fixture',false,async()=>new Response('',{status:429})),/rate_limited/);
+});
+test('durable signed callback only enqueues hint, while authenticated worker GET supplies facts',async()=>{
+ let webhook,worker;const calls=[],requests=[];
+ const env={MERCH_SHIPPO_WEBHOOK_SECRET:'fixture-hmac',MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_TEST_TOKEN:'shippo_test_fixture'};
+ const job={id:'assignment',order_id:'order',lease:'lease',carrier:'usps',tracking_number:'ABC12345',provider_account:'managed_fixture',registration_state:'pending'};
+ const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?[job]:{},error:null};}};
+ const shared={createAdminClient:()=>({configured:true,client:admin}),jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),readOptionalEnv:k=>env[k]};
+ const provider=loadTracking('_shared/merch-tracking.ts',{fetch:async(url,options)=>{
+  requests.push({url,options});return new Response(JSON.stringify({carrier:'usps',tracking_number:'ABC12345',test:true,
+   tracking_status:{status:'DELIVERED',status_date:'2026-10-29T12:00:00Z'},tracking_history:[{status_date:'2026-10-28T12:00:00Z'}]}));}});
+ const modules={'../_shared/stripe-connect.ts':shared,'../_shared/merch-tracking.ts':provider};
+ loadTracking('merch-tracking-webhook/index.ts',{Deno:{serve:h=>{webhook=h;}},modules});
+ loadTracking('merch-tracking-reconcile/index.ts',{Deno:{serve:h=>{worker=h;}},modules});
+ const raw=JSON.stringify({event:'track_updated',data:{carrier:'usps',tracking_number:'ABC12345',test:true}}),now=Math.floor(Date.now()/1000);
+ const sig=`t=${now},v1=${createHmac('sha256',env.MERCH_SHIPPO_WEBHOOK_SECRET).update(`${now}.${raw}`).digest('hex')}`;
+ assert.equal((await webhook(new Request('https://fixture.test',{method:'POST',body:raw}))).status,400);assert.equal(calls.length,0);
+ assert.equal((await webhook(new Request('https://fixture.test',{method:'POST',body:raw,headers:{'shippo-auth-signature':sig}}))).status,200);
+ assert.equal(calls[0].name,'receive_merch_tracking_hint');assert.equal(requests.length,0);
+ assert.equal((await worker(new Request('https://fixture.test',{method:'POST'}))).status,401);
+ assert.equal((await worker(new Request('https://fixture.test',{method:'POST',headers:{authorization:'Bearer fixture-worker'}}))).status,200);
+ assert.deepEqual(requests.map(r=>r.options.method),['POST','GET']);
+ assert.equal(calls.at(-1).args.p_facts.status,'DELIVERED');assert.equal(calls.at(-1).name,'complete_merch_tracking_job');
+ job.registration_state='unknown';requests.length=0;
+ await worker(new Request('https://fixture.test',{method:'POST',headers:{authorization:'Bearer fixture-worker'}}));
+ assert.deepEqual(requests.map(r=>r.options.method),['GET'],'unknown POST is not retried');
+});
