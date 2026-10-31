@@ -150,7 +150,9 @@ select throws_ok($$insert into public.chat_messages(thread_id,sender_user_id,bod
 reset role;
 select is(pg_temp.social_plan('chat_message')->>'eligible','true','actual unread message resolves to the other member');
 select is((select unread_count from public.chat_thread_members where thread_id='9b334000-0000-4000-8000-000000000001' and user_id='9b330000-0000-4000-8000-000000000002'),1,'existing chat unread counter still advances');
-select is(pg_temp.social_plan('chat_message')->>'body','You have a new message.','message content stays off ordinary push');
+select is(pg_temp.social_plan('chat_message')->>'body','Social Creator (@social_1) sent you a Chi''lly Chat message.','message alert identifies the authorized sender without previewing message content');
+select ok(position('private message fixture' in pg_temp.social_plan('chat_message')::text)=0,'private chat body is absent from the entire delivery plan, including target context');
+select is(pg_temp.social_plan('chat_message')->>'target_entity_id','9b334000-0000-4000-8000-000000000001','identified sender still opens the exact authorized chat thread');
 update public.chat_thread_members set last_read_at=now() where thread_id='9b334000-0000-4000-8000-000000000001' and user_id='9b330000-0000-4000-8000-000000000002';
 select is(pg_temp.social_plan('chat_message')->>'eligible','false','read before delivery suppresses message alert');
 update public.chat_thread_members set last_read_at=null where thread_id='9b334000-0000-4000-8000-000000000001' and user_id='9b330000-0000-4000-8000-000000000002';

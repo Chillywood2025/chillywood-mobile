@@ -115,6 +115,9 @@ test('discovery notification copy resolves exact public creator and subject afte
     values('ed115000-0000-4000-8000-000000000001','ed114000-0000-4000-8000-000000000001','${a}','PRIVATE PREVIEW MUST NOT LEAK');`);
   await db.exec("select set_config('request.jwt.claims','{}',false)");
   const chat=await social('chat_message');
+  const oldChat=await one(`select private.resolve_social_notification_before_subject_context(e) plan
+    from public.notification_activity_events e where event_kind='chat_message' and actor_user_id=$1`,[a]);
+  assert.equal(oldChat.plan.body,'You have a new message.','negative control reproduces the obsolete pgTAP copy expectation');
   assert.equal(chat.body,"Rachi (@creator_a) sent you a Chi'lly Chat message.");
   assert.equal(chat.target_entity_id,'ed114000-0000-4000-8000-000000000001');
   assert.equal(chat.target_context.messageId,'ed115000-0000-4000-8000-000000000001');
