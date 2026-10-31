@@ -249,3 +249,36 @@ verify_jwt = true
 # Stripe cannot supply a Supabase JWT. The dedicated handler verifies the raw
 # body with its dedicated signing secret before the service-only projection.
 verify_jwt = false
+
+[functions.google-play-external-reporter]
+# Dedicated server-only worker credential is verified before any claim or API
+# call. No scheduler, credential, enrollment or provider write is activated here.
+verify_jwt = false
+
+[functions.stripe-room-auction-checkout]
+verify_jwt = true
+
+[functions.stripe-room-auction-webhook]
+# Stripe callbacks carry a dedicated raw-body signing-secret signature, not a
+# Supabase user JWT. The handler rejects missing or invalid signatures.
+verify_jwt = false
+
+[functions.stripe-merch-cost-reconcile]
+# Service-only cost observation, additionally exact server-key authenticated.
+verify_jwt = true
+
+[functions.stripe-auction-cost-reconcile]
+# GET-only provider observation with the existing server credential as well.
+verify_jwt = true
+
+[functions.merch-tracking-webhook]
+# Raw-body Shippo HMAC verification; no unsigned notification is accepted.
+verify_jwt = false
+
+[functions.merch-tracking-reconcile]
+# Dedicated server-only worker secret checked by handler. Never a client token.
+verify_jwt = false
+
+[functions.stripe-auction-test-transfer]
+# Disabled unless explicitly configured; exact existing server authority too.
+verify_jwt = true

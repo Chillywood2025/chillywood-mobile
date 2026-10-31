@@ -14,6 +14,7 @@ export type MerchVariant = {
 };
 export type MerchVariantInput = Pick<MerchVariant, "id" | "sku" | "size" | "color" | "stockQuantity" | "status">;
 export type MerchProduct = MerchPhotoFields & {
+  shippingTrackingMode?: "tracked" | "untracked" | null;
   id: string; creatorId: string; title: string; description: string | null;
   imageUrl: string | null; priceMinor: number; currency: string;
   publicationStatus: "draft" | "published" | "paused" | "archived";
@@ -22,6 +23,16 @@ export type MerchProduct = MerchPhotoFields & {
   variantMode?: "simple" | "options"; variants?: MerchVariant[];
 };
 export type MerchOrder = {
+  shippingTrackingMode?: "tracked" | "untracked" | null; verifiedPurchaseAt?: string | null; unitPriceMinor?: number | null;
+  returnPolicyVersion?: string | null; returnWindowDays?: number | null;
+  verifiedDeliveryAt?: string | null; returnWindowEndsAt?: string | null;
+  returnWindowStatus?: "historical_unqualified" | "awaiting_verified_delivery" | "awaiting_verified_purchase" | "open" | "elapsed" | "review_required";
+  returnHoldReasons?: string[];
+  netSharePolicyVersion?: string | null; platformNetShareBps?: number | null; creatorNetShareBps?: number | null;
+  providerFeeMinor?: number | null; netBaseMinor?: number | null; platformShareMinor?: number | null; creatorShareMinor?: number | null;
+  netSettlementStatus?: "unverified" | "held_unqualified";
+  netSettlementHoldReasons?: string[];
+  financialAuthority?: false;
   id: string; creatorId: string; productId: string; title: string; quantity: number;
   totalMinor: number; currency: string; paymentStatus: string; fulfillmentStatus: string;
   refundedAmountMinor: number; createdAt: string; updatedAt: string; environment: string;
@@ -29,6 +40,7 @@ export type MerchOrder = {
   variantId?: string | null; sku?: string | null; size?: string | null; color?: string | null;
 };
 export type MerchProductInput = {
+  trackingMode?: "tracked" | "untracked" | null;
   id?: string; title: string; description: string | null; imageUrl: string | null;
   priceMinor: number; stockQuantity: number; publicationStatus: MerchProduct["publicationStatus"];
   expectedUpdatedAt?: string;
@@ -102,10 +114,10 @@ export function readMerchOrders(input: { role: "buyer" | "creator"; cursor?: str
 }
 
 export function saveMerchProduct(input: MerchProductInput) {
-  return merchRpc<MerchProduct>("save_creator_merch_product", {
+  return merchRpc<MerchProduct>("save_creator_merch_product_with_tracking", {
     p_product_id: input.id ?? null, p_title: input.title, p_description: input.description ?? "",
     p_image_url: input.imageUrl, p_price_minor: input.priceMinor, p_stock_quantity: input.stockQuantity,
-    p_publication_status: input.publicationStatus, p_expected_updated_at: input.expectedUpdatedAt ?? null,
+    p_publication_status: input.publicationStatus, p_expected_updated_at: input.expectedUpdatedAt ?? null, p_tracking_mode: input.trackingMode ?? null,
   });
 }
 
@@ -124,7 +136,7 @@ export function configureMerchVariants(input: {
   });
 }
 
-export async function launchMerchCheckout(input: { productId: string; quantity: number; attemptId: string; variantId?: string | null; isPresentationCurrent?: () => boolean }) {
+export async function launchMerchCheckout(input: { productId: string; quantity: number; attemptId: string; variantId?: string | null; trackingMode?: "tracked" | "untracked" | null; expectedUnitPriceMinor?: number; expectedCurrency?: string; isPresentationCurrent?: () => boolean }) {
   if (!input.productId || !input.attemptId || !Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 10) {
     throw new Error("Choose a product and a quantity from 1 to 10.");
   }
@@ -133,7 +145,7 @@ export async function launchMerchCheckout(input: { productId: string; quantity: 
   const response = await fetch(`${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`, {
     method: "POST",
     headers: { Authorization: `Bearer ${subject.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ product_id: input.productId, quantity: input.quantity, attempt_id: input.attemptId, variant_id: input.variantId ?? null }),
+    body: JSON.stringify({ product_id: input.productId, quantity: input.quantity, attempt_id: input.attemptId, variant_id: input.variantId ?? null, tracking_mode: input.trackingMode ?? null, expected_unit_price_minor: input.expectedUnitPriceMinor ?? null, expected_currency: input.expectedCurrency ?? null }),
   });
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   const payload = await response.json().catch(() => null) as { checkoutCreated?: boolean; orderId?: string; url?: string; message?: string } | null;

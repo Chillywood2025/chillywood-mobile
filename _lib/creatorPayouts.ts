@@ -95,7 +95,12 @@ export type CreatorPayoutPreproductionWorkflowPreview = {
   payoutType: CreatorPayoutRequestKind;
   scheduledFeeCents: number;
   instantFeeCents: number;
-  totalFeeCents: number;
+  appFeeCents: number;
+  providerFeeCents: null;
+  providerFeeStatus: "unknown";
+  netAfterAppFeeCents: number;
+  netAfterAllFeesCents: null;
+  totalFeeCents: null;
   testMode: true;
   dryRunEnabled: boolean;
   testWorkflowEnabled: boolean;
@@ -679,7 +684,10 @@ export function previewCreatorPayoutPreproductionWorkflow(
     payoutType,
     scheduledFeeCents,
     instantFeeCents,
-    totalFeeCents: payoutType === "instant" ? instantFeeCents : scheduledFeeCents,
+    appFeeCents: payoutType === "instant" ? instantFeeCents : scheduledFeeCents,
+    providerFeeCents: null, providerFeeStatus: "unknown",
+    netAfterAppFeeCents: amountCents - (payoutType === "instant" ? instantFeeCents : scheduledFeeCents),
+    netAfterAllFeesCents: null, totalFeeCents: null,
     testMode: true,
     dryRunEnabled: PAYOUT_DRY_RUN_ENABLED,
     testWorkflowEnabled: TEST_PAYOUT_WORKFLOW_ENABLED,

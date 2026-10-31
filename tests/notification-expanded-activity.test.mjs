@@ -56,6 +56,19 @@ const parseService = (extra = {}) => run(serviceSource, {
   ...extra,
 }).service;
 const service = parseService();
+test("auction award notifications request review rather than claiming access or a completed sale", () => {
+  for (const kind of ["auction_outbid", "auction_won", "auction_checkout_deadline", "auction_payment_deadline", "auction_creator_award"]) {
+    const row = { id: `notice-${kind}`, user_id: identity, category: kind === "auction_creator_award" ? "creator_money_sale" : "creator_money_purchase",
+      notification_type: kind, title: "Auction update", body: "Review auction status", target_route: "/event/[eventId]",
+      target_entity_id: identity, status: "sent", target_context: { action_expires_at: new Date(Date.now()+60000).toISOString() } };
+    const current = service.parseNotificationRow(row);
+    assert.equal(current.actionLabel, "Review auction");
+    assert.equal(current.actionGroup, kind === "auction_creator_award" ? "general_activity" : "action_required");
+    const expired = service.parseNotificationRow({ ...row, target_context: { action_expires_at: "2000-01-01T00:00:00Z" } });
+    assert.equal(expired.actionGroup, "history");
+    assert.equal(expired.isActionable, false);
+  }
+});
 test("actual bell-row parser updates legacy Follow copy without changing its target or other messages", () => {
   const stored = { id: "follow-notification", user_id: identity, category: "social_activity",
     notification_type: "social_follow", title: "New follower", body: "Someone followed your channel.",

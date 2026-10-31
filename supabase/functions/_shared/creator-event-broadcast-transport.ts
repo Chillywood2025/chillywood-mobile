@@ -20,20 +20,40 @@ export function eventBroadcastOutputConfig(env:(name:string)=>string|undefined):
 export function parseEventEgressInfo(value:unknown): EventBroadcastProviderInfo | null {
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
   const raw=value as Row, request=raw.egress, outputs=request?.outputs;
+  const field=(row:Row|undefined,snake:string,camel:string):unknown=>
+    row?.[snake]!==undefined&&row?.[camel]!==undefined&&row[snake]!==row[camel]?null:row?.[snake]??row?.[camel];
   // Normal StartEgress only. Never accept a D7D/legacy composite receipt as
   // evidence for this producer, even if a caller supplied a matching room.
   const segments=Array.isArray(outputs)&&outputs.length===1?outputs[0]?.segments:null;
-  const filename=text(segments?.filename_prefix??segments?.filenamePrefix);
+  const filename=text(field(segments,'filename_prefix','filenamePrefix'));
   const prefix=filename.endsWith('/segment')?filename.slice(0,-8):'';
   const status=({0:'starting',1:'active',2:'ending',3:'complete',4:'failed',5:'failed',6:'failed',
     EGRESS_STARTING:'starting',EGRESS_ACTIVE:'active',EGRESS_ENDING:'ending',EGRESS_COMPLETE:'complete',
     EGRESS_FAILED:'failed',EGRESS_ABORTED:'failed',EGRESS_LIMIT_REACHED:'failed'} as Record<string,EventBroadcastProviderInfo['status']>)[String(raw.status??0)];
-  const egressId=text(raw.egress_id??raw.egressId),roomId=text(raw.room_name??raw.roomName);
+  const egressId=text(field(raw,'egress_id','egressId')),roomId=text(field(raw,'room_name','roomName'));
   if(!status||!/^EG_[A-Za-z0-9_-]+$/.test(egressId)||!/^EVENT[A-F0-9]{32}$/.test(roomId)
     || !/^creator-events\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/.test(prefix)
-    || text(request?.room_name??request?.roomName)!==roomId
-    || text(segments?.live_playlist_name??segments?.livePlaylistName)!==`${prefix}/live.m3u8`)return null;
-  return {egressId,roomId,outputPrefix:prefix,status};
+    || text(field(request,'room_name','roomName'))!==roomId
+    || text(field(segments,'live_playlist_name','livePlaylistName'))!==`${prefix}/live.m3u8`)return null;
+  // ProtoJSON int64 values must stay decimal strings: JS numbers lose nanos.
+  // Conflicting aliases, absent/zero/unsafe values cannot become coverage.
+  const integer=(value:unknown):string|null=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)
+    &&BigInt(value)<=9223372036854775807n?value:null;
+  const results=field(raw,'segment_results','segmentResults');
+  const segment=Array.isArray(results)&&results.length===1?results[0]:null;
+  const bound=segment&&field(segment,'playlist_name','playlistName')===`${prefix}/index.m3u8`
+    &&field(segment,'live_playlist_name','livePlaylistName')===`${prefix}/live.m3u8`;
+  const zero=(value:unknown)=>value===undefined||value===0||value==='0';
+  const empty=(value:unknown)=>value===undefined||(typeof value==='string'&&!value.trim());
+  const backup=field(raw,'backup_storage_used','backupStorageUsed');
+  return {egressId,roomId,outputPrefix:prefix,status,timing:{
+    startedAtNs:integer(field(raw,'started_at','startedAt')),endedAtNs:integer(field(raw,'ended_at','endedAt')),
+    segmentsStartedAtNs:bound?integer(field(segment,'started_at','startedAt')):null,
+    segmentsEndedAtNs:bound?integer(field(segment,'ended_at','endedAt')):null,
+    durationNs:bound?integer(segment.duration):null,segmentCount:bound?integer(field(segment,'segment_count','segmentCount')):null,
+    interrupted:!empty(raw.error)||!empty(raw.details)||!zero(field(raw,'error_code','errorCode'))
+      ||!zero(field(raw,'retry_count','retryCount'))||!(backup===undefined||backup===false),
+  }};
 }
 
 export function createEventBroadcastTransport(admin:Admin,env:(name:string)=>string|undefined,request:typeof fetch=fetch) {
@@ -118,7 +138,9 @@ export function createEventBroadcastTransport(admin:Admin,env:(name:string)=>str
         const url=new URL(reference,sourceUrl);if(url.origin!==new URL(sourceUrl).origin||!url.pathname.startsWith(`/${prefix}/`))return null;
       }
       const segment=await read(new URL(references[0],sourceUrl).pathname.slice(1));if(!segment)return null;await segment.body?.cancel();
-      return {sourceUrl,playlistPath};
+      // Playable discontinuous output is not uninterrupted interval evidence.
+      return {sourceUrl,playlistPath,coverageInterrupted:/#EXT-X-(?:GAP|DISCONTINUITY)(?::|\s|$)/m.test(content)
+        ||/#EXT-X-DISCONTINUITY-SEQUENCE:(?!0\s*$)/m.test(content)};
     },
   };
 }

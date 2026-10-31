@@ -35,7 +35,7 @@ function harness({beta=true,authority=true,reservationError=false,providerError=
 }
 test('checkout adapter binds verified original session and atomic frozen catalog snapshot',async()=>{
  const h=harness();const r=await h.send();assert.equal(r.status,200);assert.equal(r.body.orderId,order);
- const reserve=h.calls.find(c=>c[0]==='reserve_merch_checkout_for_actor');assert.equal(reserve[1].p_buyer_id,buyer);assert.equal(reserve[1].p_session_id,session);assert.equal(reserve[1].p_attempt_id,attempt);
+ const reserve=h.calls.find(c=>c[0]==='reserve_merch_checkout_for_actor_with_tracking');assert.equal(reserve[1].p_buyer_id,buyer);assert.equal(reserve[1].p_session_id,session);assert.equal(reserve[1].p_attempt_id,attempt);
  assert.equal(h.calls.find(c=>c[0]==='authority')[1].headers.Authorization,'Bearer frozen-original-token');
  const body=new URLSearchParams(h.provider[0].options.body);assert.equal(body.get('line_items[0][price_data][unit_amount]'),'1000');assert.equal(body.get('line_items[0][price_data][product_data][name]'),'Frozen title');
  assert.equal(body.get('shipping_address_collection[allowed_countries][0]'),'US');assert.equal(body.get('expires_at'),String(Date.parse('2026-10-29T20:00:00Z')/1000));
@@ -58,7 +58,7 @@ test('selected SKU is reserved exactly and only immutable SQL snapshots reach ch
  const h=harness({snapshot:{variantId:variant,sku:'TEE-S-RED',size:'S',color:'Red'}});
  const payload={product_id:product,quantity:2,attempt_id:attempt,variant_id:variant,sku:'CLIENT-LIE',size:'XL',color:'Blue',price_minor:1};
  assert.equal((await h.send(payload)).status,200);
- assert.equal(h.calls.find(c=>c[0]==='reserve_merch_checkout_for_actor')[1].p_variant_id,variant);
+ assert.equal(h.calls.find(c=>c[0]==='reserve_merch_checkout_for_actor_with_tracking')[1].p_variant_id,variant);
  const body=new URLSearchParams(h.provider[0].options.body);
  assert.equal(body.get('line_items[0][price_data][product_data][name]'),'Frozen title — S / Red');
  assert.equal(body.get('line_items[0][price_data][product_data][metadata][sku]'),'TEE-S-RED');
@@ -69,5 +69,12 @@ test('selected SKU is reserved exactly and only immutable SQL snapshots reach ch
  assert.equal(h.provider[1].options.headers['Idempotency-Key'],h.provider[0].options.headers['Idempotency-Key']);
  const invalid=harness();assert.equal((await invalid.send({...payload,variant_id:'not-a-uuid'})).status,400);assert.equal(invalid.provider.length,0);
  const unavailable=harness({reservationError:true});assert.equal((await unavailable.send(payload)).status,409);assert.equal(unavailable.provider.length,0);
- const simple=harness();await simple.send();assert.equal(simple.calls.find(c=>c[0]==='reserve_merch_checkout_for_actor')[1].p_variant_id,null);
+ const simple=harness();await simple.send();assert.equal(simple.calls.find(c=>c[0]==='reserve_merch_checkout_for_actor_with_tracking')[1].p_variant_id,null);
+});
+
+test('physical merch freezes10%NET metadata without surcharge and rejects changed split before dispatch',async()=>{
+ const snapshot={netSharePolicyVersion:'physical_merch_net_90_10_v1',platformNetShareBps:1000,creatorNetShareBps:9000};const h=harness({snapshot});assert.equal((await h.send()).status,200);
+ const body=new URLSearchParams(h.provider[0].options.body);assert.equal(body.get('metadata[platform_net_share_bps]'),'1000');assert.equal(body.get('line_items[0][price_data][unit_amount]'),'1000');assert.equal(body.get('payment_intent_data[application_fee_amount]'),null);
+ for(const patch of [{platformNetShareBps:2000},{creatorNetShareBps:8000},{netSharePolicyVersion:'unknown'}]){const bad=harness({snapshot:{...snapshot,...patch}});assert.equal((await bad.send()).status,409);assert.equal(bad.provider.length,0);}
+ const legacy=harness();await legacy.send();assert.equal(new URLSearchParams(legacy.provider[0].options.body).has('metadata[platform_net_share_bps]'),false,'old checkout body is not rewritten');
 });

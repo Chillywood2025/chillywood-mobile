@@ -7,12 +7,28 @@ const migration='20261026164507_creator_supported_prices_and_purchase_quotes.sql
 const referenceGuardsMigration='20261027021608_creator_monetization_reference_guard_integration.sql';
 const subscriptionBindingsMigration='20261030155923_creator_subscription_catalog_bindings.sql';
 const auctionPaymentMigration='20261030155939_creator_event_auction_payment_projection.sql';
+// These successors depend on the quote/auction projection or wrap its functions.
+// Defer and replay the explicit dependency chain; none are skipped in the final schema.
+const successors=[
+  '20261030165642_google_external_transaction_reporting.sql',
+  '20261030165918_creator_room_auction_payment_projection.sql',
+  '20261030182620_ios_external_checkout_admission.sql',
+  '20261030182836_creator_auction_lifecycle_notifications.sql',
+  '20261030185719_creator_tip_route_fee_comparison.sql',
+  '20261030190449_creator_tip_cross_rail_action_claim.sql',
+  '20261030193217_creator_tip_exact_selected_capability_quote.sql',
+  '20261030200311_creator_auction_platform_settlement.sql',
+  '20261030202414_auction_transfer_execution_boundary.sql',
+  '20261030204119_event_auction_release_policy.sql',
+  '20261030204252_auction_release_qualification_serialization.sql',
+  '20261030204513_auction_verified_net_recovery_issuer.sql',
+];
 // Full migrated schema, real application predicates/triggers and provider SQL.
 // Only managed auth/storage infrastructure is the shared fixture; no network.
 test('catalog selection and immutable quote survive source edits, duplicates, terminal order and account changes', {timeout:240_000}, async t=>{
   // The guard integration requires the quote table created by this migration.
-  // Keep the original pre-price negative control, then install both in order.
-  const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,excludeMigrations:[migration,referenceGuardsMigration,subscriptionBindingsMigration,auctionPaymentMigration]});
+  // Keep the original pre-price negative control, then install dependencies in order.
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:[migration,referenceGuardsMigration,subscriptionBindingsMigration,auctionPaymentMigration,...successors]});
   let step='setup'; let checks=0;
   const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
@@ -50,6 +66,7 @@ test('catalog selection and immutable quote survive source edits, duplicates, te
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${referenceGuardsMigration}`,import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${subscriptionBindingsMigration}`,import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${auctionPaymentMigration}`,import.meta.url),'utf8'));
+    for(const successor of successors)await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${successor}`,import.meta.url),'utf8'));
     step='catalog and creator';
     await claim(host,hostSession);
     const ios=await scalar("select public.list_creator_supported_prices('watch_party_live','ios','sandbox')");

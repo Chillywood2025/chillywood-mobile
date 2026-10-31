@@ -14,13 +14,17 @@ function load(source, imports) {
   return module.exports;
 }
 const ios = load(readFileSync("_lib/iosAppStoreCommerce.ts", "utf8"), {});
+const authority = load(readFileSync("_lib/creatorMoneyPurchaseAuthority.ts", "utf8"), {
+ "./accountSessionAuthority":{},"./accountBoundSupabaseMutation":{},"./featureFlags":{},"./revenuecat":{},
+ "./revenuecatPurchaseClosure":{},"./runtimeConfig":{},"react-native":{},"react-native-get-random-values":{},
+});
 const quote = load(readFileSync("_lib/creatorMoneyStoreQuote.ts", "utf8"), {});
 function runtime(options = {}) {
   const platform = options.platform ?? "android", amount = options.amount ?? 99;
-  const productId = platform === "ios" ? ios.resolveIosFiniteAppStoreTier("creator_tip", amount)?.productId : "cw_creator_tip_sandbox_099";
+  const productId = platform === "ios" ? ios.resolveIosFiniteAppStoreTier("creator_tip", amount)?.productId : options.productId ?? "cw_creator_tip_sandbox_099";
   const price = { platform, environment: "sandbox", currency: "usd", status: "sandbox",
     provider: platform === "ios" ? "revenuecat_app_store" : "revenuecat_google_play",
-    productKey: "creator_tip_sandbox_099", providerProductId: productId, amountMinor: amount, ...options.price };
+    productKey: options.productKey ?? "creator_tip_sandbox_099", providerProductId: productId, amountMinor: amount, ...options.price };
   const calls = { intents: 0, native: 0, claims: 0, reads: 0 };
   const api = load(options.source ?? source, {
     "react-native": { Platform: { OS: platform } }, "./supabase": {},
@@ -31,8 +35,8 @@ function runtime(options = {}) {
     "./creatorMoneyStoreQuote": quote, "./iosAppStoreCommerce": ios,
     "./creatorMoneyPurchaseAuthority": {
       prepareCreatorMoneyPurchaseSubject: async () => ({ userId: buyer, authority: {} }),
-      invokeCreatorMoneyPurchaseSubjectRpc: async () => { calls.intents++; return { data: { id: "intent" } }; },
-      validateCreatorMoneyPurchaseIntent: value => value,
+      invokeCreatorMoneyPurchaseSubjectRpc: async (_subject,_rpc,args) => { calls.intents++; calls.intentArgs=args; return { data: { id: "33333333-3333-4333-8333-333333333333", userId:buyer,sourceType:"creator_tip",sourceId:creator,creatorId:creator,provider:price.provider,providerProductId:productId,environment:"sandbox",status:"pending",amountMinor:amount,currency:"usd",...options.intent } }; },
+      validateCreatorMoneyPurchaseIntent: (value,expected) => { calls.expected=expected; return options.invalidIntent ? null : authority.validateCreatorMoneyPurchaseIntent(value,expected); },
       revalidateCreatorMoneyPurchaseSubject: async () => options.current !== false,
       beginCreatorMoneyCheckout: async () => { calls.claims++; return true; },
     },
@@ -46,6 +50,8 @@ function runtime(options = {}) {
     "./entitlementAuthority": {}, "./accountBoundSupabaseMutation": {},
     "./accountSessionAuthority": {}, "./creatorTipCheckoutAttempt": {},
     "./creatorTipCustomQuote": {},
+    "./iosExternalAdmission": {admitIosExternalCheckout:async()=>"11111111-1111-4111-8111-111111111111"},
+ "./googlePlayExternalAdmission": {},
   });
   return { api, calls, price, purchase: () => api.purchaseCreatorTipWithStore({ creatorId: creator, userId: buyer, amountCents: amount }) };
 }
@@ -53,7 +59,7 @@ function runtime(options = {}) {
 test("tip purchase re-reads exact buyer/creator catalog before any intent or checkout", async () => {
   for (const options of [
     { catalog: { status: "unavailable" } }, { catalog: { prices: [] } }, { catalog: { subjectUserId: creator } },
-    ...[{ providerProductId: "wrong" }, { amountMinor: 100 }, { currency: "eur" }, { productKey: "wrong" },
+    ...[{ providerProductId: "" }, { amountMinor: 100 }, { currency: "eur" }, { productKey: "" },
       { platform: "ios" }, { environment: "production" }, { status: "inactive" }, { provider: "stripe" }].map(price => ({ price })),
   ]) {
     const h = runtime(options); assert.equal((await h.purchase()).ok, false);
@@ -61,11 +67,11 @@ test("tip purchase re-reads exact buyer/creator catalog before any intent or che
   }
 });
 
-test("only mapped Android99 and finite iOS tips reach store; quote/session still fail closed", async () => {
-  for (const options of [{}, ...[99, 299, 499, 999].map(amount => ({ platform: "ios", amount }))]) {
+test("fresh exact Android catalog amounts and finite iOS tips reach store; quote/session still fail closed", async () => {
+  for (const options of [{}, {amount:237,productId:"qualified_tip_237",productKey:"qualified_tip_237"}, ...[99, 299, 499, 999].map(amount => ({ platform: "ios", amount }))]) {
     const h = runtime(options); assert.equal((await h.purchase()).ok, true); assert.equal(h.calls.native, 1);
   }
-  for (const options of [{ amount: 299 }, { amount: 99.9 }, { platform: "web" },
+  for (const options of [{ invalidIntent:true }, { amount: 99.9 }, { platform: "web" },
     { platform: "ios", amount: 300 }, { current: false }, { store: { price: 1.99 } }]) {
     const h = runtime(options); assert.equal((await h.purchase()).ok, false); assert.equal(h.calls.native, 0);
   }
@@ -76,4 +82,17 @@ test("negative control detects removed catalog binding", async () => {
   assert.notEqual(mutant, source);
   const h = runtime({ source: mutant, catalog: { subjectUserId: creator } });
   assert.equal((await h.purchase()).ok, true); assert.equal(h.calls.native, 1);
+});
+
+test('new qualified native price keeps exact server-selected product and amount; ambiguous prices and bad intent cannot launch',async()=>{
+ const h=runtime({amount:237,productId:'tip_store_237',productKey:'tip_catalog_237'});assert.equal((await h.purchase()).ok,true);
+ assert.equal(h.calls.intentArgs.p_product_key,'tip_catalog_237');assert.equal(h.calls.expected.providerProductId,'tip_store_237');assert.equal(h.calls.expected.amountMinor,237);assert.equal(h.calls.expected.sourceType,'creator_tip');
+ const ambiguous=runtime({catalog:{prices:[h.price,h.price]}});assert.equal((await ambiguous.purchase()).ok,false);assert.equal(ambiguous.calls.intents,0);
+ const wrong=runtime({invalidIntent:true});assert.equal((await wrong.purchase()).ok,false);assert.equal(wrong.calls.native,0);
+});
+
+test('actual tip intent parser rejects wrong source kind, provider, amount, recipient, currency and environment before native purchase',async()=>{
+ for(const intent of [{sourceType:'vip_pass'},{provider:'stripe_connect'},{providerProductId:'different'},{amountMinor:238},{creatorId:buyer},{userId:creator},{currency:'eur'},{environment:'production'}]){
+  const h=runtime({amount:237,productId:'qualified_tip_237',productKey:'qualified_tip_237',intent});assert.equal((await h.purchase()).ok,false);assert.equal(h.calls.native,0);assert.equal(h.calls.claims,0);
+ }
 });

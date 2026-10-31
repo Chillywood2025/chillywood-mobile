@@ -2585,7 +2585,7 @@ export function ChannelStudioScreen() {
     const blockers = preview.blockedReasons.slice(0, 4).join(" ");
     const nextSteps = preview.approvalSteps.slice(0, 2).join(" ");
     setPayoutSetupNotice(
-      `Cashout readiness reviewed. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
+      `Cashout readiness reviewed. Standard cashout app fee: $0. Instant cashout app fee: 2%, rounded up to the next cent. Tips have no app fee. Provider fees are separate and unconfirmed, so final net is unknown. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
     );
     setExpandedMonetizationSections((current) => {
       const next = new Set<MonetizationSectionId>([...current, "payouts", "providers", "tax_legal"]);

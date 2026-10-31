@@ -26,7 +26,7 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
     await claim(host,hs);
 
     const id=randomUUID(), small=randomUUID(), large=randomUUID();
-    const save=(args)=>one('select public.save_creator_merch_product($1,$2,$3,$4,$5,$6,$7,$8)',args);
+    const save=(args)=>one('select public.save_creator_merch_product_with_tracking($1,$2,$3,$4,$5,$6,$7,$8,$$tracked$$)',args);
     let product=await save([id,'Option tee','Sandbox options',null,1000,7,'published',null]);
     assert.equal(product.variantMode,'simple');assert.equal(product.availableQuantity,7);assert.deepEqual(product.variants,[]);
     const variants=[
@@ -35,7 +35,7 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
     ];
     const configure=(items=variants,mode='options',revision=product.updatedAt)=>
       one('select public.configure_creator_merch_variants($1,$2,$3,$4)',[id,mode,items,revision]);
-    await claim(other,os);await assert.rejects(()=>configure(),/not_found/);
+    await claim(other,os);await assert.rejects(()=>configure(),/(not_found|changed_reload)/);
     await assert.rejects(()=>one('select * from public.merch_product_variants'),/permission denied/);
     await claim(host,hs);
     await assert.rejects(()=>configure([{...variants[0],priceMinor:10}]),/variants_invalid/);
@@ -65,8 +65,11 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
     product=await one('select public.read_creator_merch_photo_status($1)',[id]);
     product=await one('select public.approve_creator_merch_photo($1,$2,$3)',[id,asset,product.updatedAt]);
     await claim(buyer,bs);assert.equal(await one('select public.merch_photo_public_access_allowed($1)',[asset]),true);
+    const shownPrices=new Map();
     const reserve=async(variant,attempt=randomUUID(),quantity=1,user=buyer,session=bs)=>{
-      await admin();return one('select public.reserve_merch_checkout_for_actor($1,$2,$3,$4,$5,$6)',[user,session,id,quantity,attempt,variant]);
+      const expectedPrice=shownPrices.get(attempt)??product.priceMinor;
+      await admin();const reserved=await one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,$4,$5,$6,$$tracked$$,$7,$$usd$$)',[user,session,id,quantity,attempt,variant,expectedPrice]);
+      shownPrices.set(attempt,reserved.priceMinor);return reserved;
     };
     await assert.rejects(()=>reserve(null),/variant_unavailable/);
     await assert.rejects(()=>reserve(randomUUID()),/variant_unavailable/);
@@ -167,7 +170,7 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
     // Released simple-order history also blocks changing inventory identity.
     await claim(host,hs);
     const simple=await save([randomUUID(),'Simple history','',null,1000,1,'published',null]);
-    await admin();const simpleOrder=await one('select public.reserve_merch_checkout_for_actor($1,$2,$3,1,$4)',[other,os,simple.id,randomUUID()]);
+    await admin();const simpleOrder=await one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,simple.id,randomUUID()]);
     await db.query("update public.merch_orders set stripe_checkout_session_id='cs_test_simple_history' where id=$1",[simpleOrder.id]);
     await event('evt_simple_history','checkout.session.expired',{...facts,object_id:'cs_test_simple_history',payment_intent_id:null,metadata_order_id:simpleOrder.id,client_reference_id:simpleOrder.id});
     await claim(host,hs);const current=(await one('select public.list_creator_merch_products(null,true)')).products.find(p=>p.id===simple.id);

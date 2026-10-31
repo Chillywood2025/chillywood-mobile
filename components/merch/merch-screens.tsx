@@ -2,15 +2,20 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSession } from "../../_lib/session";
+import { MerchTrackingPanel } from "./merch-tracking-panel";
+import { MerchShippingDetails } from "./merch-shipping-details";
+import { MerchReturnCases } from "./merch-return-cases";
 import { configureMerchVariants, createMerchCheckoutAttemptId, launchMerchCheckout, readMerchOrders, readMerchProducts, saveMerchProduct, updateMerchFulfillment, type MerchOrder, type MerchProduct, type MerchProductInput, type MerchVariantInput } from "../../_lib/creatorMerch";
 
 import { approveMerchProductPhoto, assignMerchProductPhoto, discardMerchProductPhoto, pickMerchProductPhoto, readMerchProductPhotoStatus, resolveMerchProductPhotos, uploadMerchProductPhoto, type MerchProductPhotoFile, type MerchProductPhotoUploadAttempt } from "../../_lib/merchProductPhotos";
 
 const money = (amount: number, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
 const errorText = (error: unknown) => error instanceof Error ? error.message : "We couldn't complete that request. Please try again.";
-const NOTICE = "Sandbox preview · US physical goods only. No live payments, creator earnings, or physical shipments. Merch never unlocks VIP or Premium.";
+const NOTICE = "New physical-merch orders: creator 90% / app 10% of net after verified fees, taxes, refunds and adjustments. This is not an extra buyer surcharge. Final net remains unverified. Sandbox preview · US physical goods only. No live payments, creator earnings, or physical shipments. Merch never unlocks VIP or Premium.";
 const productPhoto = (product: MerchProduct) => product.photoStatus === "blocked" ? null : product.photoAssetId ? product.photoUrl : product.imageUrl;
 const variantLabel = (variant: { sku: string; size?: string | null; color?: string | null }) => [variant.size, variant.color].filter(Boolean).join(" / ") || variant.sku;
+const shippingTerms = (mode: MerchProduct["shippingTrackingMode"]) => mode === "tracked" ? "Tracked shipping: 30-day return window starting at verified delivery." : mode === "untracked" ? "Untracked shipping: 30-day return window starting at verified successful purchase." : "The creator must choose tracked or untracked shipping before checkout.";
+const knownReturnTerms = (order: MerchOrder) => order.returnWindowDays === 30 && ["physical_merch_verified_delivery_30d_v1", "physical_merch_declared_tracked_30d_v2", "physical_merch_declared_untracked_30d_v2"].includes(order.returnPolicyVersion ?? "");
 
 function Button({ label, onPress, disabled = false, selected }: { label: string; onPress: () => void; disabled?: boolean; selected?: boolean }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, selected }} disabled={disabled} onPress={onPress} style={[styles.button, selected && styles.selectedButton, disabled && styles.disabled]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
@@ -66,10 +71,10 @@ function Shop({ creatorId }: { creatorId: string }) {
   useFocusEffect(useCallback(() => { alive.current = true; const generation = ++focusGeneration.current; return () => { if (generation === focusGeneration.current) { focusGeneration.current++; alive.current = false; } }; }, []));
   useEffect(() => { setSelected(current => current ? page.items.find(product => product.id === current.id) ?? null : null); }, [page.items]);
   const buy = async () => {
-    if (!alive.current || !selected || latch.current || page.loading || page.error || !selected.checkoutAvailable || quantity > availableQuantity || (optionRequired && !selectedVariant)) return;
+    if (!alive.current || !selected || !selected.shippingTrackingMode || latch.current || page.loading || page.error || !selected.checkoutAvailable || quantity > availableQuantity || (optionRequired && !selectedVariant)) return;
     const generation = focusGeneration.current;
     latch.current = true; setBusy(true); setNotice(null); attempt.current ??= createMerchCheckoutAttemptId();
-    try { const result = await launchMerchCheckout({ productId: selected.id, variantId: selectedVariant?.id ?? null, quantity, attemptId: attempt.current, isPresentationCurrent: () => alive.current && generation === focusGeneration.current }); if (alive.current && generation === focusGeneration.current) { setNotice("Checkout opened. Returning or canceling does not confirm payment. Check your order status."); router.push({ pathname: "/merch/orders", params: { orderId: result.orderId } }); } }
+    try { const result = await launchMerchCheckout({ productId: selected.id, variantId: selectedVariant?.id ?? null, quantity, attemptId: attempt.current, trackingMode: selected.shippingTrackingMode, expectedUnitPriceMinor: selected.priceMinor, expectedCurrency: selected.currency, isPresentationCurrent: () => alive.current && generation === focusGeneration.current }); if (alive.current && generation === focusGeneration.current) { setNotice("Checkout opened. Returning or canceling does not confirm payment. Check your order status."); router.push({ pathname: "/merch/orders", params: { orderId: result.orderId } }); } }
     catch (e) { if (alive.current && generation === focusGeneration.current) setNotice(`${errorText(e)} Check your orders before trying again; payment may still be pending.`); }
     finally { latch.current = false; if (alive.current) setBusy(false); }
   };
@@ -77,13 +82,14 @@ function Shop({ creatorId }: { creatorId: string }) {
     <View style={styles.row}><Button label="My orders" onPress={() => router.push("/merch/orders")} />{user?.id === creatorId ? <Button label="Manage shop" onPress={() => router.push("/merch/studio")} /> : null}</View>
     {user?.id === creatorId ? <Text style={styles.notice}>Buyer preview · Only published listings appear here.</Text> : null}
     {selected ? <View style={styles.card}>
+      <Text style={styles.notice}>{shippingTerms(selected.shippingTrackingMode)} This declaration is frozen for your order. Unresolved returns, disputes or nondelivery claims keep affected creator earnings on hold. Sandbox fulfillment status is not verified delivery.</Text>
       <Button label="All products" disabled={busy} onPress={() => { setSelected(null); setNotice(null); }} />
       {productPhoto(selected) ? <Image source={{ uri: productPhoto(selected)! }} style={styles.image} accessibilityLabel={selected.title} /> : null}
       <Text style={styles.price}>{money(selected.priceMinor, selected.currency)}</Text><Text style={styles.body}>{selected.description || "No description provided."}</Text>
       {optionRequired ? <View style={styles.optionGroup}><Text style={styles.heading}>Choose size / color</Text><Text style={styles.notice}>Every option has the same price. Stock is separate for each option.</Text><View style={styles.row}>{(selected.variants ?? []).filter(variant => variant.status !== "archived").map(variant => <Button key={variant.id} label={`${variantLabel(variant)}${variant.status !== "active" ? " · Unavailable" : variant.availableQuantity < 1 ? " · Sold out" : ""}`} selected={selectedVariant?.id === variant.id} disabled={busy || variant.status !== "active" || variant.availableQuantity < 1} onPress={() => { setVariantId(variant.id); setQuantity(1); attempt.current = null; setNotice(null); }} />)}</View>{selectedVariant ? <Text style={styles.body}>Selected: {variantLabel(selectedVariant)} · SKU {selectedVariant.sku}</Text> : <Text style={styles.notice}>Select an available size / color before checkout.</Text>}</View> : null}
       <Text style={styles.body}>{optionRequired && !selectedVariant ? "Choose an option to see its stock." : availableQuantity > 0 ? `${availableQuantity} available` : "Sold out"}</Text><Text style={styles.notice}>{selected.shippingSummary}</Text>
       <View style={styles.row}><Button label="Decrease quantity" disabled={busy || quantity <= 1} onPress={() => { setQuantity(q => q - 1); attempt.current = null; }} /><Text style={styles.body}>Quantity: {quantity}</Text><Button label="Increase quantity" disabled={busy || quantity >= Math.min(10, availableQuantity)} onPress={() => { setQuantity(q => q + 1); attempt.current = null; }} /></View>
-      {selected.checkoutAvailable && availableQuantity > 0 && (!optionRequired || selectedVariant) ? <Button label={busy ? "Opening checkout…" : `Sandbox checkout · ${money(selected.priceMinor * quantity, selected.currency)}`} disabled={busy || quantity > availableQuantity} onPress={() => void buy()} /> : <Text style={styles.notice}>Checkout unavailable: {optionRequired && !selectedVariant ? "Select an available size / color." : selected.checkoutReason || "This product is not ready for checkout."}</Text>}
+      {selected.checkoutAvailable && selected.shippingTrackingMode && availableQuantity > 0 && (!optionRequired || selectedVariant) ? <Button label={busy ? "Opening checkout…" : `Sandbox checkout · ${money(selected.priceMinor * quantity, selected.currency)}`} disabled={busy || quantity > availableQuantity} onPress={() => void buy()} /> : <Text style={styles.notice}>Checkout unavailable: {optionRequired && !selectedVariant ? "Select an available size / color." : selected.checkoutReason || "This product is not ready for checkout."}</Text>}
       {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
     </View> : <>{page.items.map(product => <View key={product.id} style={styles.card}>{productPhoto(product) ? <Image source={{ uri: productPhoto(product)! }} style={styles.image} accessibilityLabel={product.title} /> : null}<Text style={styles.heading}>{product.title}</Text><Text style={styles.price}>{money(product.priceMinor, product.currency)}</Text><Text style={styles.body}>{product.variantMode === "options" ? "Sizes / colors available" : product.availableQuantity > 0 ? `${product.availableQuantity} available` : "Sold out"}</Text><Button label={`View ${product.title}`} onPress={() => { setSelected(product); setVariantId(null); setQuantity(1); attempt.current = null; }} /></View>)}<PageStatus page={page} empty="No products are published yet. Check back later." /></>}
   </Shell>;
@@ -98,7 +104,7 @@ function OrderCard({ order, manage, onChanged }: { order: MerchOrder; manage: bo
     if (!alive.current || latch.current || !order.checkoutAttemptId || !order.checkoutResumeAvailable) return;
     latch.current = true; setBusy(true); setError(null); const generation = focusGeneration.current;
     try {
-      await launchMerchCheckout({ productId: order.productId, variantId: order.variantId ?? null, quantity: order.quantity, attemptId: order.checkoutAttemptId,
+      await launchMerchCheckout({ productId: order.productId, variantId: order.variantId ?? null, quantity: order.quantity, attemptId: order.checkoutAttemptId, trackingMode: order.shippingTrackingMode, expectedUnitPriceMinor: order.unitPriceMinor ?? undefined, expectedCurrency: order.currency,
         isPresentationCurrent: () => alive.current && focusGeneration.current === generation });
       if (alive.current && focusGeneration.current === generation) setError("Checkout reopened for this same order. Refresh orders after returning; opening checkout does not confirm payment.");
     } catch (e) { if (alive.current && focusGeneration.current === generation) setError(errorText(e)); }
@@ -116,8 +122,14 @@ function OrderCard({ order, manage, onChanged }: { order: MerchOrder; manage: bo
     <Text style={styles.body}>Quantity {order.quantity} · {money(order.totalMinor, order.currency)}</Text>
     {order.variantId ? <Text style={styles.body}>Option: {variantLabel({ sku: order.sku ?? "", size: order.size, color: order.color })} · SKU {order.sku}</Text> : null}
     <Text style={styles.body}>Payment: {order.paymentStatus} · Fulfillment: {order.fulfillmentStatus}</Text>
+    <MerchShippingDetails orderId={order.id} paymentStatus={order.paymentStatus} refundedAmountMinor={order.refundedAmountMinor} fulfillmentStatus={order.fulfillmentStatus} />
+    <MerchTrackingPanel orderId={order.id} trackingMode={order.shippingTrackingMode ?? null} manage={manage} paymentStatus={order.paymentStatus} onChanged={onChanged} />
+    <MerchReturnCases orderId={order.id} manage={manage} paymentStatus={order.paymentStatus} deadline={order.returnWindowEndsAt} onChanged={onChanged} />
     <Text style={styles.body}>{new Date(order.createdAt).toLocaleString()}</Text>
     {order.refundedAmountMinor > 0 ? <Text style={styles.notice}>Refunded: {money(order.refundedAmountMinor, order.currency)}</Text> : null}
+    <Text style={styles.notice}>{order.netSharePolicyVersion === "physical_merch_net_90_10_v1" && order.platformNetShareBps === 1000 && order.creatorNetShareBps === 9000 ? order.netSettlementStatus === "held_unqualified" ? "Recorded merch terms: creator 90% / app 10% of net. Provider costs were observed; settlement remains held for fulfillment, returns and financial review. Not available for cash-out." : "Recorded merch terms: creator 90% / app 10% of net. Provider fees and final net are not yet verified." : "Historical order: no new revenue-share terms applied. Original settlement terms require verification."}</Text>
+    <Text style={styles.notice}>{knownReturnTerms(order) ? `Recorded return terms: ${order.shippingTrackingMode === "untracked" ? "30 days from verified successful purchase" : "30 days from verified delivery"}. Unresolved returns, disputes or nondelivery claims keep affected creator earnings on hold.` : "Historical order: the new 30-day return terms have not been applied."}</Text>
+    {knownReturnTerms(order) ? <Text style={styles.notice}>{order.shippingTrackingMode === "untracked" && !order.verifiedPurchaseAt ? "Return window has not started: verified successful purchase is required." : order.shippingTrackingMode !== "untracked" && !order.verifiedDeliveryAt ? "Return window has not started: verified delivery is required." : order.returnWindowStatus === "open" ? "The return window is open. Affected earnings remain held." : order.returnWindowStatus === "elapsed" ? "The return window has elapsed. This does not make earnings available for cash-out; other holds still apply." : "Return or dispute review is required. Affected earnings remain held."}</Text> : null}
     <Text style={styles.notice}>Sandbox order — no physical shipment. Fulfillment updates record test status only; they do not dispatch or deliver goods.</Text>
     {!manage && order.paymentStatus === "pending" ? <>
       <Text style={styles.notice}>{order.checkoutResumeReason || "Payment is not confirmed. Refresh this order before trying another purchase."}</Text>
@@ -190,6 +202,7 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   const [advancedImage, setAdvancedImage] = useState(false);
   const committedQuantity = currentProduct?.variantMode === "options" ? (currentProduct.variants ?? []).reduce((total, variant) => total + Math.max(0, variant.stockQuantity - variant.availableQuantity), 0) : currentProduct ? Math.max(0, currentProduct.stockQuantity - currentProduct.availableQuantity) : 0;
   const [price, setPrice] = useState(product ? (product.priceMinor / 100).toFixed(2) : ""), [stock, setStock] = useState(String(product?.availableQuantity ?? 0));
+  const [trackingMode, setTrackingMode] = useState<"tracked" | "untracked" | null>(product?.shippingTrackingMode ?? null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [productId] = useState(() => product?.id ?? createMerchCheckoutAttemptId()); const latch = useRef(false), alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useFocusEffect(useCallback(() => { alive.current = true; return () => { alive.current = false; photoGeneration.current++; }; }, []));
@@ -256,8 +269,9 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   const save = async (publicationStatus: MerchProductInput["publicationStatus"]) => {
     if (!alive.current || latch.current) return;
     if (!title.trim() || !/^\d+(\.\d{1,2})?$/.test(price) || Number(price) <= 0 || !/^\d+$/.test(stock)) { setError("Enter a title, a positive USD price with at most two decimal places, and a whole-number available stock quantity."); return; }
+    if (!trackingMode) { setError("Choose tracked or untracked shipping so buyers can review the return-window terms."); return; }
     latch.current = true; setBusy(true); setError(null); const generation = photoGeneration.current;
-    try { await saveMerchProduct({ id: productId, title: title.trim(), description, imageUrl: imageUrl.trim() || null, priceMinor: Math.round(Number(price) * 100), stockQuantity: currentProduct?.variantMode === "options" ? currentProduct.stockQuantity : Number(stock) + committedQuantity, publicationStatus, expectedUpdatedAt: currentProduct?.updatedAt }); if (alive.current && generation === photoGeneration.current) done(); }
+    try { await saveMerchProduct({ id: productId, title: title.trim(), description, imageUrl: imageUrl.trim() || null, priceMinor: Math.round(Number(price) * 100), stockQuantity: currentProduct?.variantMode === "options" ? currentProduct.stockQuantity : Number(stock) + committedQuantity, publicationStatus, trackingMode, expectedUpdatedAt: currentProduct?.updatedAt }); if (alive.current && generation === photoGeneration.current) done(); }
     catch (e) { if (alive.current && generation === photoGeneration.current) setError(errorText(e)); } finally { latch.current = false; if (alive.current) setBusy(false); }
   };
   const currentPhotoPreview = currentProduct?.photoStatus !== "blocked" && attachedPreview?.assetId === currentProduct?.photoAssetId ? attachedPreview?.uri : currentProduct?.photoUrl;
@@ -265,6 +279,7 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   return <View style={styles.card}><Text style={styles.heading}>{product ? "Edit product" : "Add product"}</Text><Text style={styles.notice}>Publishing makes a sandbox listing visible on your Platform. It does not enable live checkout or shipping.</Text>{[
     { label: "Product title", value: title, change: setTitle }, { label: "Description", value: description, change: setDescription }, { label: "Price (USD)", value: price, change: setPrice }, ...(currentProduct?.variantMode === "options" ? [] : [{ label: "Available stock", value: stock, change: setStock }]),
   ].map(field => <View key={field.label}><Text style={styles.body}>{field.label}</Text><TextInput accessibilityLabel={field.label} value={field.value} onChangeText={field.change} editable={!busy} style={styles.input} autoCapitalize="none" maxLength={field.label === "Description" ? 2000 : 500} /></View>)}
+    <Text style={styles.heading}>Shipping and return window</Text><View style={styles.row}><Button label="Tracked shipping" selected={trackingMode === "tracked"} disabled={busy} onPress={() => setTrackingMode("tracked")} /><Button label="Untracked shipping" selected={trackingMode === "untracked"} disabled={busy} onPress={() => setTrackingMode("untracked")} /></View><Text style={styles.notice}>{shippingTerms(trackingMode)} Changing this setting affects new orders only; existing orders keep their recorded terms.</Text>
     <Text style={styles.heading}>Product photo (optional)</Text>
     {currentProduct ? <>
       {(stagedPhoto?.previewUrl || currentPhotoPreview) ? <Image source={{ uri: (stagedPhoto?.previewUrl || currentPhotoPreview)! }} style={styles.image} accessibilityLabel="Product photo preview" /> : null}

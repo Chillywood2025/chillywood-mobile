@@ -1,0 +1,10 @@
+begin;
+select plan(6);
+select ok(not has_function_privilege('anon','private.tick_creator_auctions(integer)','execute'),'anonymous cannot advance arbitrary auction batches');
+select ok(not has_function_privilege('authenticated','private.tick_creator_auctions(integer)','execute'),'buyer cannot operate background scheduler');
+select ok(not has_function_privilege('service_role','private.configure_creator_auction_lifecycle()','execute'),'API service role cannot activate cron');
+select ok(not has_function_privilege('authenticated','private.enqueue_creator_auction_activity()','execute'),'notification producer is trigger-only');
+select is((select count(*)::integer from pg_trigger where tgname in('creator_event_auction_activity','creator_room_auction_activity') and not tgisinternal),2,'both auction families enqueue atomically');
+select is((select count(*)::integer from cron.job where jobname='creator-auction-lifecycle'),0,'migration does not activate scheduler');
+select * from finish();
+rollback;

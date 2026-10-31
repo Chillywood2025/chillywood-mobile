@@ -6,9 +6,13 @@ export type EventBroadcastSource = {
   state: string; attemptId: string | null; egressId: string | null; outputPrefix: string | null;
   stopAt: string | null; serverId?: string; assignmentId?: string; claimed?: boolean; privateOrigin?: string; creatorSessionId?: string;
 };
-export type EventBroadcastProviderInfo = { egressId: string; roomId: string; outputPrefix: string; status: 'starting' | 'active' | 'ending' | 'complete' | 'failed' };
-export type EventBroadcastReceipt = { status: 'starting' | 'active' | 'stopped' | 'failed' | 'uncertain'; egressId: string | null;
-  sourceUrl?: string; playlistPath?: string; privateOriginVerified?: boolean };
+// Provider facts, not observation times or a guarantee of individual playback.
+export type EventBroadcastTiming = { startedAtNs: string | null; endedAtNs: string | null;
+  segmentsStartedAtNs: string | null; segmentsEndedAtNs: string | null; durationNs: string | null;
+  segmentCount: string | null; interrupted: boolean };
+export type EventBroadcastProviderInfo = { egressId: string; roomId: string; outputPrefix: string; status: 'starting' | 'active' | 'ending' | 'complete' | 'failed'; timing?: EventBroadcastTiming };
+export type EventBroadcastReceipt = { status: 'starting' | 'active' | 'ending' | 'stopped' | 'failed' | 'uncertain'; egressId: string | null;
+  sourceUrl?: string; playlistPath?: string; privateOriginVerified?: boolean; timing?: EventBroadcastTiming; coverageInterrupted?: boolean };
 export type EventBroadcastProducerDependencies = {
   read: (eventId: string, userId: string, sessionId: string, action: string) => Promise<EventBroadcastSource>;
   claim: (source: EventBroadcastSource, userId: string, sessionId: string) => Promise<EventBroadcastSource>;
@@ -18,7 +22,7 @@ export type EventBroadcastProducerDependencies = {
   list: (source: EventBroadcastSource) => Promise<EventBroadcastProviderInfo[]>;
   start: (source: EventBroadcastSource) => Promise<EventBroadcastProviderInfo>;
   stop: (source: EventBroadcastSource, egressId: string) => Promise<EventBroadcastProviderInfo>;
-  verifyPrivateOrigin: (source: EventBroadcastSource, replay?: boolean) => Promise<{sourceUrl: string; playlistPath: string} | null>;
+  verifyPrivateOrigin: (source: EventBroadcastSource, replay?: boolean) => Promise<{sourceUrl: string; playlistPath: string; coverageInterrupted?: boolean} | null>;
   now?: () => number;
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -44,12 +48,12 @@ export async function stopCreatorEventBroadcast(source: EventBroadcastSource, de
   const stopped = terminal??await deps.stop(source, source.egressId || candidates[0].egressId);
   if (!exactInfo(source, stopped)) throw new Error('event_broadcast_provider_identity_mismatch');
   if (stopped.status !== 'complete' && stopped.status !== 'failed') {
-    await deps.receipt(source, {status:'uncertain',egressId:stopped.egressId});
+    await deps.receipt(source, {status:stopped.status==='ending'?'ending':'uncertain',egressId:stopped.egressId,timing:stopped.timing});
     return safe(source, 'uncertain', 'provider_stop_pending');
   }
   const replay=stopped.status==='complete'?await deps.verifyPrivateOrigin(source,true).catch(()=>null):null;
   const state=stopped.status==='failed'?'failed':'stopped';
-  await deps.receipt(source, {status:state,egressId:stopped.egressId,...(replay?{...replay,privateOriginVerified:true}:{})});
+  await deps.receipt(source, {status:state,egressId:stopped.egressId,timing:stopped.timing,...(replay?{...replay,privateOriginVerified:true}:{})});
   return safe(source, state, 'provider_stop_confirmed');
 }
 
@@ -95,12 +99,12 @@ export async function runCreatorEventBroadcast(action: 'start' | 'refresh' | 'st
     // worker does. Use the same terminal/private-index verifier in both paths.
     if (info.status === 'complete') return stopCreatorEventBroadcast(source,deps);
     if (info.status !== 'active') {
-      await deps.receipt(source,{status:info.status==='failed'?'failed':'starting',egressId:info.egressId});
+      await deps.receipt(source,{status:info.status==='failed'?'failed':info.status==='ending'?'ending':'starting',egressId:info.egressId,timing:info.timing});
       return safe(source,info.status==='failed'?'failed':'starting','provider_broadcast_not_active');
     }
     const origin = await deps.verifyPrivateOrigin(source);
     if (!origin) {
-      await deps.receipt(source,{status:'starting',egressId:info.egressId});
+      await deps.receipt(source,{status:'starting',egressId:info.egressId,timing:info.timing});
       return safe(source,'starting','private_playback_verification_required');
     }
     // Repeat actor and room authority after provider IO; receipt SQL also
@@ -110,7 +114,7 @@ export async function runCreatorEventBroadcast(action: 'start' | 'refresh' | 'st
       || !(await deps.hostPresent(current,actor.sessionId)) || !(await deps.costAllowed())) {
       return stopCreatorEventBroadcast({...source,egressId:info.egressId},deps);
     }
-    await deps.receipt(source,{status:'active',egressId:info.egressId,...origin,privateOriginVerified:true});
+    await deps.receipt(source,{status:'active',egressId:info.egressId,timing:info.timing,...origin,privateOriginVerified:true});
     return safe(source,'active','verified_event_broadcast_ready');
   } catch {
     if(source.egressId){
