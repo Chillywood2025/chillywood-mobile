@@ -51,6 +51,8 @@ const flexibleCommerceFiles = [
   "20261031033820_commerce_tax_readiness.sql",
   "20261031033911_merch_tracking_correction_intake.sql",
   "20261031034904_merch_tracking_reviewed_supersession.sql",
+  "20261031173602_google_external_program_capability_binding.sql",
+  "20261031173636_commerce_fee_report_observations.sql",
 ];
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this

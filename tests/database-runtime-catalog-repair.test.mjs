@@ -52,8 +52,13 @@ const flexibleCommerceFiles = [
   "20261031033820_commerce_tax_readiness.sql",
   "20261031033911_merch_tracking_correction_intake.sql",
   "20261031034904_merch_tracking_reviewed_supersession.sql",
+  "20261031173602_google_external_program_capability_binding.sql",
+  "20261031173636_commerce_fee_report_observations.sql",
 ];
 const flexibleCommerceAddedFunctionIdentities = new Map([
+  ["private.google_play_external_bound_program_ready/2", "private.google_play_external_bound_program_ready(uuid,uuid)"],
+  ["public.get_commerce_fee_report_import_context/1", "get_commerce_fee_report_import_context(uuid)"],
+  ["public.record_commerce_fee_report_observation/3", "record_commerce_fee_report_observation(uuid,uuid,jsonb)"],
   ["private.auction_automation_approval_valid/1","private.auction_automation_approval_valid(private.auction_automation_approvals)"],
   ["private.auction_automation_current_approval/1","private.auction_automation_current_approval(uuid)"],
   ["private.hold_auction_automation_on_approval_change/0","private.hold_auction_automation_on_approval_change()"],
