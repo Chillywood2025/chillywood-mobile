@@ -67,7 +67,7 @@ try {
     values('auction_race_fixture','room_seat_pass','Synthetic concurrency fixture','stripe_room_auction','prod_AuctionFixture','sandbox','sandbox',false,false) returning id;`);
   query(`insert into private.creator_room_auction_product_bindings values('${cap}','${product}','synthetic fixture only',now());
     insert into private.auction_platform_qualifications(capability_id,platform_account_id,recipient_account_id,product_id,platform_product_id,evidence_reference,recipient_transfer_capability,enabled,verified_at,expires_at)
-    values('${cap}','acct_platform','acct_fixture','${product}','prod_AuctionFixture','synthetic fixture only','active',true,now(),now()+interval '1 hour');`);
+    values('${cap}','acct_platform','acct_fixture','${product}','prod_AuctionFixture','synthetic fixture only','active',true,now(),now()+interval '10 minutes');`);
   const service=sql=>call('buyer1',sql,'service_role');
   const run=sql=>JSON.parse(query(service(sql)).split('\n').at(-1));
   const json=x=>`${literal(JSON.stringify(x))}::jsonb`;
