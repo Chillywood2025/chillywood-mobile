@@ -240,6 +240,8 @@ test('full fresh-schema replay works without implicit table/sequence grants', {t
       'private.creator_external_payment_capabilities',
       'private.creator_external_payment_eligibility',
       'private.creator_event_auction_product_bindings',
+      'private.google_play_external_program_config',
+      'private.creator_room_auction_product_bindings',
     ]) {
       const column = (await db.query(`select attname from pg_attribute
         where attrelid=$1::regclass and attnum>0 and not attisdropped order by attnum limit 1`, [relation])).rows[0].attname;

@@ -7,6 +7,10 @@ import { createClient as createSdkClient } from '@supabase/supabase-js';
 const source = ts.transpileModule(fs.readFileSync('_lib/notifications.ts', 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
+const displayContext = {};
+new Function('exports', ts.transpileModule(fs.readFileSync('_lib/notificationDisplayContext.ts', 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText)(displayContext);
 const binding = (generation = 'session-a') => ({ userId: 'account-a', accountId: 'account-a',
   sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false });
 const row = (extra = {}) => ({ id: '00000000-0000-4000-8000-000000000001', user_id: 'account-a',
@@ -19,6 +23,10 @@ const settle = async () => { for (let i = 0; i < 50; i++) await Promise.resolve(
 const response = (data, count = 1) => new Response(JSON.stringify(data), {
   status: 200, headers: { 'Content-Type': 'application/json', 'Content-Range': `0-0/${count}` },
 });
+const vipRow = () => row({category:'creator_money_purchase',notification_type:'vip_access_active',title:'VIP Pass active.',
+  body:'Your creator VIP access is active.',target_route:'/vip-pass/[creatorId]',target_entity_id:'creator-a',source_id:'purchase-a'});
+const displayPayload = () => ({schemaVersion:1,items:[{notificationId:vipRow().id,notificationType:'vip_access_active',
+  targetRoute:'/vip-pass/[creatorId]',targetId:'creator-a',creatorId:'creator-a',creatorName:'Rachi (@rachi)',targetTitle:null,resolution:'resolved'}]});
 function harness({ fetcher, capture, afterScopedToken, omitDispatchFence = false } = {}) {
   let authority = binding();
   const calls = [], timers = new Map(), subscribers = new Set();
@@ -61,6 +69,7 @@ function harness({ fetcher, capture, afterScopedToken, omitDispatchFence = false
     'react-native': { NativeModules: {}, Platform: { OS: 'ios' } },
     './supabase': { supabase, SUPABASE_URL: 'https://notifications.invalid', SUPABASE_ANON_KEY: 'test-anon-key' },
     './userFacingProductCopy': { normalizeProductNotificationCopy: value => String(value ?? '') },
+    './notificationDisplayContext': displayContext,
     './chillyChatCalls': { CHAT_CALL_INVITES_TABLE: 'chat_call_invites' },
     './accountSessionAuthority': {
       getCurrentAccountSessionAuthoritySnapshot: () => ({ ...authority }),
@@ -81,10 +90,70 @@ function harness({ fetcher, capture, afterScopedToken, omitDispatchFence = false
     id => timers.delete(id), fetchImpl);
   return { api: exports, calls, timers, subscribers, get captures() { return captures; },
     get dispatchGapVisits() { return dispatchGapVisits; },
-    expire() { for (const { callback, delay } of [...timers.values()]) { assert.equal(delay, 8000); callback(); } },
+    expire(wantedDelay = 8000) { for (const { callback, delay } of [...timers.values()]) { assert.ok([1500,8000].includes(delay)); if (delay === wantedDelay) callback(); } },
     replace() { authority = binding('session-b'); subscribers.forEach(callback => callback(authority)); },
   };
 }
+
+test('actual notification page and important reads hydrate exact creator without changing history or delivery state',async()=>{
+ const h=harness({fetcher:call=>response(call.url.pathname.endsWith('/rpc/read_my_notification_display_context')?displayPayload():[vipRow()])});
+ const page=await h.api.readNotificationListPage('account-a',30);
+ assert.equal(page.status,'resolved');assert.match(page.items[0].title,/Rachi/);assert.doesNotMatch(page.items[0].body,/access is active/);
+ assert.equal(page.items[0].createdAt,'2026-01-01T00:00:00.000Z');assert.equal(page.items[0].isRead,false);assert.equal(page.items[0].target.entityId,'creator-a');
+ const important=await h.api.readImportantNotificationList('account-a',20);assert.match(important[0].title,/Rachi/);
+ const requests=h.calls.filter(c=>c.url.pathname.endsWith('/rpc/read_my_notification_display_context'));
+ assert.equal(requests.length,2);assert.ok(requests.every(c=>JSON.parse(c.body).p_notification_ids[0]===vipRow().id));
+ assert.ok(h.calls.every(c=>c.method==='GET'||c.url.pathname.endsWith('/rpc/read_my_notification_display_context')));
+});
+test('unavailable optional label RPC preserves existing working notification and target',async()=>{
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')
+  ?new Response(JSON.stringify({message:'function not deployed'}),{status:404,headers:{'Content-Type':'application/json'}}):response([vipRow()])});
+ const page=await h.api.readNotificationListPage('account-a',30);assert.equal(page.status,'resolved');assert.equal(page.items[0].title,'VIP Pass active.');assert.equal(page.items[0].target.entityId,'creator-a');
+});
+test('label RPC response cannot follow an account replacement or a canceled screen',async()=>{
+ for(const mode of ['replace','abort']){
+  const held=deferred(),controller=new AbortController();
+  const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')?held.promise:response([vipRow()])});
+  const pending=h.api.readNotificationListPage('account-a',30,null,controller.signal);await settle();
+  assert.equal(h.calls.length,2);if(mode==='replace')h.replace();else controller.abort();
+  held.resolve(response(displayPayload()));const page=await pending;assert.equal(page.status,'unavailable');assert.deepEqual(page.items,[]);
+ }
+});
+
+test('hung optional labels return first-page history promptly while retaining bounded transport ownership',async()=>{
+ const held=[deferred(),deferred()];let labelReads=0;
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')
+  ? (++labelReads<=2?held[labelReads-1].promise:response(displayPayload())) : response([vipRow()])});
+ for(let i=0;i<2;i++){
+  const pending=h.api.readNotificationListPage('account-a',30,null,new AbortController().signal);await settle();
+  h.expire(1500);const page=await pending;
+  assert.equal(page.status,'resolved');assert.equal(page.items[0].title,'VIP Pass active.');
+  assert.equal(page.items[0].target.entityId,'creator-a');assert.equal(h.timers.size,0);
+ }
+ assert.equal(labelReads,2);
+ assert.ok(h.calls.filter(c=>c.url.pathname.includes('display_context')).every(c=>c.signal.aborted));
+ for(let i=0;i<5;i++)assert.equal((await h.api.readNotificationListPage('account-a',30)).status,'resolved');
+ assert.equal(labelReads,2,'hung abort-ignoring transports retain both slots; refreshes cannot accumulate more');
+ held[0].resolve(response(displayPayload()));await settle();
+ const next=await h.api.readNotificationListPage('account-a',30);assert.match(next.items[0].title,/Rachi/);
+ assert.equal(labelReads,3,'actual source settlement releases a slot');
+ held[1].resolve(response(displayPayload()));await settle();
+ assert.equal(h.subscribers.size,0);assert.equal(h.timers.size,0);
+});
+
+test('canceled optional observer releases promptly but replacement cannot reuse hung transport slots or stale labels',async()=>{
+ const held=[deferred(),deferred()];let reads=0;
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')
+  ?held[reads++].promise:response([vipRow()])});
+ const controllers=[new AbortController(),new AbortController()];
+ const pending=controllers.map(c=>h.api.readNotificationListPage('account-a',30,null,c.signal));await settle();
+ h.replace();for(const result of await Promise.all(pending)){assert.equal(result.status,'unavailable');assert.deepEqual(result.items,[]);}
+ const replacement=await h.api.readNotificationListPage('account-a',30);
+ assert.equal(replacement.status,'resolved');assert.doesNotMatch(replacement.items[0].title,/Rachi/);assert.equal(reads,2);
+ for(const source of held)source.resolve(response(displayPayload()));await settle();
+ assert.doesNotMatch(replacement.items[0].title,/Rachi/,'late original-session labels cannot mutate returned replacement rows');
+ assert.equal(h.subscribers.size,0);assert.equal(h.timers.size,0);
+});
 
 test('notification reads abort SDK transport at the deadline and retain abort-ignoring ownership', async () => {
   const held = deferred(), controller = new AbortController();

@@ -72,7 +72,7 @@ assertIncludes(creatorMonetization, "CREATOR_PAID_CONTENT_PLATFORM_SHARE_BPS = 2
 assertIncludes(creatorMonetization, "CREATOR_TIP_CREATOR_SHARE_BPS = 10000", "tip creator share");
 assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_BPS = 0", "scheduled payout bps");
 assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_CENTS = 0", "scheduled payout zero fee");
-assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 150", "instant cash-out fee");
+assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 200", "instant cash-out fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null", "no instant cash-out cap");
 assertIncludes(creatorMonetization, "calculateScheduledPayoutFeeCents", "scheduled payout fee helper");
 assertIncludes(creatorMonetization, "readCreatorMiniPlatformCommerceSurface", "public platform commerce readout");
@@ -104,7 +104,7 @@ assertIncludes(paymentRailPolicy, "tips_cannot_unlock_digital_access", "tips can
 
 assertIncludes(migration, 'create table if not exists public."monetization_system_settings"', "settings table");
 assertIncludes(migration, '"live_money_enabled" boolean not null default false', "live money default off");
-assertIncludes(migration, '"instant_cashout_fee_bps" integer not null default 150', "instant cash-out SQL fee");
+assertIncludes(migration, '"instant_cashout_fee_bps" integer not null default 150', "historical foundation fee (superseded forward, never rewrite applied migration)");
 assertIncludes(migration, '"scheduled_payout_fee_bps" integer not null default 0', "scheduled payout SQL fee");
 assertIncludes(migration, '"scheduled_payout_fee_bps" = 0', "scheduled payout zero SQL guard");
 assertIncludes(migration, '"instant_cashout_fee_cap_cents" integer', "cash-out cap column");
@@ -182,8 +182,8 @@ assertIncludes(wave1AuthorityMigration, "'grantsProtectedAccess', v_state in ('A
 
 assertIncludes(creatorTips, "purchaseCreatorTipWithStore", "platform-neutral creator tip helper");
 assertIncludes(creatorTips, "purchaseCreatorTipWithGooglePlay = purchaseCreatorTipWithStore", "legacy Android creator tip alias");
-assertIncludes(creatorTips, "creator_tip_sandbox_099", "creator tip sandbox product key");
-assertIncludes(creatorTips, "cw_creator_tip_sandbox_099", "creator tip RevenueCat product");
+assertIncludes(creatorTips, "p_product_key: selectedPrice.productKey", "tip identity from fresh exact server catalog");
+assertIncludes(creatorTips, "exactPrices.length !== 1", "ambiguous native tip catalog fails closed");
 assertIncludes(channelSettings, "Sandbox Tester Experience", "Money Center sandbox tester setup section");
 assertIncludes(channelSettings, "money-sandbox-setup-button", "Money Center sandbox setup selector");
 assertIncludes(channelSettings, "money-sandbox-refresh-button", "Money Center sandbox refresh selector");
@@ -243,9 +243,11 @@ assertIncludes(watchPartyRoom, "watch-party-ticket-purchase-button", "Watch-Part
 assertIncludes(eventRoute, "event-pass-purchase-button", "event pass purchase selector");
 assertIncludes(vipRoute, "vip-area-get-vip-button", "VIP route purchase selector");
 assertIncludes(admin, "No checkout success, payout release, simulated purchase, simulated order, simulated tip, or live money action", "Admin money safety copy");
-assertIncludes(admin, "1.5% with no default cap", "Admin cash-out fee copy");
+assertIncludes(admin, "2% app fee with no default cap", "Admin cash-out fee copy");
 
 assertNotIncludes(read("ROADMAP.md"), "$7.99", "ROADMAP stale Premium price");
+
+assertIncludes(read("supabase/migrations/20261030184536_creator_instant_cashout_fee.sql"), "instant_cashout_fee_bps=200", "forward instant fee 2 percent");
 
 if (process.exitCode) {
   process.exit();

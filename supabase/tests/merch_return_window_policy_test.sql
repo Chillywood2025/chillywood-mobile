@@ -1,0 +1,13 @@
+begin;
+select plan(9);
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_return_evidence'::regclass),'return evidence forces RLS');
+select ok(not has_table_privilege('authenticated','private.merch_return_evidence','INSERT'),'buyers cannot attest delivery');
+select ok(not has_table_privilege('service_role','private.merch_return_evidence','INSERT'),'unqualified service role cannot attest delivery');
+select ok(not has_function_privilege('authenticated','private.merch_return_hold_state(public.merch_orders,timestamptz)','EXECUTE'),'private hold projection is not a caller-supplied order API');
+select ok(has_function_privilege('service_role','public.record_merch_provider_cost_observation(uuid,jsonb)','EXECUTE'),'trusted cost adapter remains callable');
+select is(private.merch_return_hold_state(jsonb_populate_record(null::public.merch_orders,'{"id":"00000000-0000-4000-8000-000000000099"}'::jsonb),statement_timestamp())->>'returnWindowStatus','historical_unqualified','historical terms are not backfilled');
+select is(private.merch_return_hold_state(jsonb_populate_record(null::public.merch_orders,'{"id":"00000000-0000-4000-8000-000000000099","return_policy_version":"physical_merch_verified_delivery_30d_v1","return_window_days":30,"fulfillment_status":"delivered"}'::jsonb),statement_timestamp())->>'returnWindowStatus','awaiting_verified_delivery','creator delivery status cannot start the return clock');
+select is(private.merch_return_hold_state(jsonb_populate_record(null::public.merch_orders,'{"id":"00000000-0000-4000-8000-000000000099","return_policy_version":"physical_merch_verified_delivery_30d_v1","return_window_days":30}'::jsonb),statement_timestamp())->>'financialAuthority','false','return terms confer no financial authority');
+select ok((private.merch_return_hold_state(jsonb_populate_record(null::public.merch_orders,'{"id":"00000000-0000-4000-8000-000000000099","return_policy_version":"physical_merch_verified_delivery_30d_v1","return_window_days":30}'::jsonb),statement_timestamp())->'returnHoldReasons') ? 'merch_return_clearance_unknown','unknown returns remain held');
+select * from finish();
+rollback;

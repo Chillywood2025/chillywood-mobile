@@ -38,7 +38,11 @@ export type LiveWatchPartyMoneyAccess = {
     | "exact_live_access_pass"
     | "exact_live_seat_pass"
     | "exact_live_access_pass_required"
-    | "exact_live_seat_pass_optional";
+    | "exact_live_seat_pass_optional"
+    | "verified_reserved_room_seat";
+  reservedSeatClaimId?: string;
+  partyId?: string;
+  roomSessionId?: string;
   viewerOnly: boolean;
   seatEligible: boolean;
   seatApproved: boolean;
@@ -98,6 +102,7 @@ const LIVE_MONEY_ACCESS_REASONS = new Set<LiveWatchPartyMoneyAccess["reason"]>([
   "exact_live_seat_pass",
   "exact_live_access_pass_required",
   "exact_live_seat_pass_optional",
+  "verified_reserved_room_seat",
 ]);
 
 const exactText = (value: unknown) => typeof value === "string" ? value.trim() : "";
@@ -133,12 +138,23 @@ export const parseLiveWatchPartyMoneyAccess = (value: unknown): LiveWatchPartyMo
   ) return null;
   const accessOfferId = exactText(row.accessOfferId);
   const seatOfferId = exactText(row.seatOfferId);
+  const reservedSeatClaimId = exactText(row.reservedSeatClaimId);
+  const partyId = exactText(row.partyId);
+  const roomSessionId = exactText(row.roomSessionId);
+  if (reason === "verified_reserved_room_seat" && (
+    !UUID_PATTERN.test(reservedSeatClaimId) || row.allowed !== true || row.seatEligible !== true
+    || !partyId || !UUID_PATTERN.test(roomSessionId)
+    || row.hostAuthority !== false || row.grantsPublish !== false || row.requiresHostApproval !== true
+    || row.admissionIncluded !== true || row.viewerOnly !== !row.seatApproved
+    || accessOfferId !== "" || seatOfferId !== ""
+  )) return null;
   if ((accessOfferId && !UUID_PATTERN.test(accessOfferId)) || (seatOfferId && !UUID_PATTERN.test(seatOfferId))) return null;
   if (row.seatApproved && !row.seatEligible && row.hostAuthority !== true) return null;
   if (row.allowed && reason === "exact_live_access_pass_required") return null;
   return {
     allowed: row.allowed,
     reason,
+    ...(reason === "verified_reserved_room_seat" ? { reservedSeatClaimId, partyId, roomSessionId } : {}),
     viewerOnly: row.viewerOnly,
     seatEligible: row.seatEligible,
     seatApproved: row.seatApproved,
@@ -152,7 +168,7 @@ export const parseLiveWatchPartyMoneyAccess = (value: unknown): LiveWatchPartyMo
     requiresHostApproval: row.requiresHostApproval === true,
     seatReviewState: row.seatApproved
       ? "approved"
-      : row.seatEligible && seatOfferId
+      : row.seatEligible && (seatOfferId || reason === "verified_reserved_room_seat")
         ? "eligible"
         : seatOfferId
           ? "not_owned"
@@ -169,6 +185,7 @@ export async function readLiveWatchPartyMoneyAccess(partyId: string) {
   );
   if (!response || response.error) throw new Error(response?.error?.message || "Live Stage Pass access could not be verified.");
   const access = parseLiveWatchPartyMoneyAccess(response.data);
+  if (access?.reason === "verified_reserved_room_seat" && access.partyId !== exactPartyId) return null;
   if (!access?.seatOfferId || !access.seatEligible || access.hostAuthority) return access;
   const passQuery = (supabase as any)
     .from("paid_live_watch_party_passes")

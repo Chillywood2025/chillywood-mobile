@@ -71,6 +71,20 @@ function transport(options={}){
   const request=async(url,init)=>{calls.push(['request',url,init]);if(String(url).includes('/twirp/'))return new Response(JSON.stringify(options.providerReply??rawInfo()));return new Response(null,{status:options.anonymousStatus??403});};
   return {api,runtime:api.createEventBroadcastTransport(admin,key=>env[key],request),calls};
 }
+test('known HLS GAP and DISCONTINUITY remain playable but never become clean coverage',async()=>{
+  for(const marker of ['#EXT-X-GAP','#EXT-X-DISCONTINUITY','#EXT-X-DISCONTINUITY:1','#EXT-X-DISCONTINUITY-SEQUENCE:1']) {
+    const h=transport({playlist:`#EXTM3U\n${marker}\n#EXTINF:2,\nsegment_00001.ts\n#EXT-X-ENDLIST\n`});
+    const verified=await h.runtime.verifyPrivateOrigin(claimed,true);
+    assert.equal(verified.coverageInterrupted,true);
+  }
+});
+test('authenticated ENDING is retained as pending, never manufactured into completion or unknown provider identity',async()=>{
+  const h=fixture();h.set({...claimed,egressId:'EG_test'});
+  h.deps.stop=async()=>({...info,status:'ending',timing:{startedAtNs:'1800000000000000000',interrupted:false}});
+  assert.equal((await h.run('stop')).state,'uncertain');
+  assert.equal(h.receipts.at(-1).status,'ending');
+  assert.equal(h.receipts.at(-1).timing.startedAtNs,'1800000000000000000');
+});
 test('normal transport matches current StartEgress protocol and rejects D7D or mismatched output receipts',async()=>{
   const h=transport();assert.equal(h.api.parseEventEgressInfo(rawInfo()).outputPrefix,claimed.outputPrefix);
   assert.equal(h.api.parseEventEgressInfo(rawInfo({egress:undefined,room_composite:{room_name:room}})),null);

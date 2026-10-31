@@ -209,7 +209,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     loadMoreDisabled: descend(captures.get('Modal').children, n => n.props?.accessibilityLabel === 'Load more notifications')[0]?.props.disabled,
     peerLabel: captures.get('peer-notification-bell')?.accessibilityLabel,
     markCalls, summaryReads, pageReads, writes, durableRead, durableDismissed, routes: routes.length, routePaths: [...routes], requestedUsers: [...requestedUsers],
-    toast: captures.has('room-safe-notification-toast'), result: results.at(-1)?.status ?? null });
+    toast: captures.has('room-safe-notification-toast'), toastTitle: captures.get('room-safe-notification-toast')?.accessibilityLabel, result: results.at(-1)?.status ?? null });
   return {
     snapshot,
     unmount,
@@ -235,7 +235,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     setSummaryReader(reader) { summaryReader = reader; },
     setPageReader(reader) { pageReader = reader; },
     async loadMore() { const node = descend(captures.get('Modal').children, n => n.props?.accessibilityLabel === 'Load more notifications')[0]; assert.ok(node); await React.act(async () => { node.props.onPress(); await settle(); }); },
-    async emit(data = { notificationType: 'missed_call', path: '/chat/thread-a' }) { await React.act(async () => { for (const callback of received) callback({ request: { content: { data } } }); await settle(); }); },
+    async emit(data = { notificationType: 'missed_call', path: '/chat/thread-a' }, content = {}) { await React.act(async () => { for (const callback of received) callback({ request: { content: { ...content, data } } }); await settle(); }); },
     async oldEmit(index, data = {}) { await React.act(async () => { allReceived[index]({ request: { content: { data } } }); await settle(); }); },
     async appState(state) { await React.act(async () => { appState.currentState = state; for (const callback of [...activations]) callback(state); await settle(); }); },
     async focus(value) { await React.act(async () => { focused = value; for (const entry of focusEffects) {
@@ -317,6 +317,15 @@ test('live badge rejects foreign-recipient receipts and preserves creator room t
   assert.equal(h.snapshot().label, '2 unread notifications');
   assert.equal(h.snapshot().toast, true, 'eligible creator activity retains its quiet room toast');
   assert.equal(h.snapshot().routes, 0, 'a receipt does not navigate or mutate room media');
+});
+
+test('mounted foreground toast retains the exact creator purchase title instead of generic activity', async t => {
+  const h = await mount(t, 'completed', { withRoot: true, pathname: '/room' });
+  await h.emit({ category: 'creator_money_sale', path: '/channel-settings', recipientUserId: 'account-a' },
+    { title: 'Event Pass sold · Chicago Night · Rachi (@rachi)', body: 'Your sale was recorded.' });
+  assert.match(h.snapshot().toastTitle, /Chicago Night.*Rachi/);
+  assert.doesNotMatch(h.snapshot().toastTitle, /New creator activity/);
+  assert.equal(h.snapshot().routes, 0); assert.equal(h.snapshot().writes, 0);
 });
 
 test('manual refresh retires the older source without overlap and rereads after actual settlement', async t => {
@@ -608,4 +617,20 @@ for (const action of ['mark-read', 'dismiss']) {
     assert.equal(h.snapshot().routes, action === 'mark-read' ? 1 : 0, 'successful routing does not wait for the failed reread');
     assert.equal(h.snapshot().result, action === 'mark-read' ? 'noop' : 'completed');
   });
+}
+
+for (const [root,kind] of [['event','event'],['watch-party','party_admission'],['watch-party/live-stage','stage_reserved_seat']]) {
+ test(`actual mounted bell preserves ${kind} auction target in router push`, async t => {
+  const roomId=kind==='event'?'11111111-1111-4111-8111-111111111111':'RACE-CAPACITY';
+  const auctionId='22222222-2222-4222-8222-222222222222';
+  const expires='2099-01-01T00:00:00Z';
+  const h=await mount(t,'completed',{notificationOverride:{notificationType:'auction_won',deepLink:`/${root}/${roomId}`,target:{entityId:roomId,context:{auctionId,action_expires_at:expires}}}});
+  await h.openTray();await h.openRow();
+  const routes=h.snapshot().routePaths;assert.equal(routes.length,1);
+  const url=new URL(routes[0],'https://example.invalid');
+  assert.equal(url.pathname,`/${root}/${roomId}`);
+  assert.equal(url.searchParams.get('auctionId'),auctionId);
+  assert.equal(url.searchParams.get('auctionTarget'),kind);
+  assert.equal(url.searchParams.get('auctionExpiresAt'),expires);
+ });
 }

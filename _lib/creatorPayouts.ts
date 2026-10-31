@@ -95,7 +95,12 @@ export type CreatorPayoutPreproductionWorkflowPreview = {
   payoutType: CreatorPayoutRequestKind;
   scheduledFeeCents: number;
   instantFeeCents: number;
-  totalFeeCents: number;
+  appFeeCents: number;
+  providerFeeCents: null;
+  providerFeeStatus: "unknown";
+  netAfterAppFeeCents: number;
+  netAfterAllFeesCents: null;
+  totalFeeCents: null;
   testMode: true;
   dryRunEnabled: boolean;
   testWorkflowEnabled: boolean;
@@ -645,8 +650,16 @@ export function previewCreatorPayoutPreproductionWorkflow(
     "cashoutEnabled" | "liveMoneyEnabled" | "payoutsEnabled" | "stripeConnectProductionEnabled"
   > | null,
 ): CreatorPayoutPreproductionWorkflowPreview {
-  const amountCents = Math.max(0, Math.trunc(Number.isFinite(input.amountCents) ? input.amountCents : 0));
-  const payoutType = input.payoutType === "instant" ? "instant" : "scheduled";
+  // Match the server's positive int32-cent contract without silently changing
+  // what the creator entered. A malformed method is not consent to standard.
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0 || input.amountCents > 2_147_483_647) {
+    throw new Error("Enter a valid positive cashout amount in whole cents.");
+  }
+  if (input.payoutType !== "instant" && input.payoutType !== "scheduled") {
+    throw new Error("Choose standard or instant cashout.");
+  }
+  const amountCents = input.amountCents;
+  const payoutType = input.payoutType;
   const readiness = resolveCreatorPayoutReadiness(summary, flags);
   const scheduledFeeCents = calculateScheduledPayoutFeeCents();
   const instantFeeCents = payoutType === "instant" ? Math.ceil((amountCents * CREATOR_INSTANT_CASHOUT_FEE_BPS) / 10_000) : 0;
@@ -679,7 +692,10 @@ export function previewCreatorPayoutPreproductionWorkflow(
     payoutType,
     scheduledFeeCents,
     instantFeeCents,
-    totalFeeCents: payoutType === "instant" ? instantFeeCents : scheduledFeeCents,
+    appFeeCents: payoutType === "instant" ? instantFeeCents : scheduledFeeCents,
+    providerFeeCents: null, providerFeeStatus: "unknown",
+    netAfterAppFeeCents: amountCents - (payoutType === "instant" ? instantFeeCents : scheduledFeeCents),
+    netAfterAllFeesCents: null, totalFeeCents: null,
     testMode: true,
     dryRunEnabled: PAYOUT_DRY_RUN_ENABLED,
     testWorkflowEnabled: TEST_PAYOUT_WORKFLOW_ENABLED,

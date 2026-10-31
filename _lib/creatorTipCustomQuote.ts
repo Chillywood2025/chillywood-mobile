@@ -5,8 +5,8 @@ import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export type CreatorTipCustomQuote = {
   capabilityId: string; creatorId: string; buyerId: string; sessionId: string;
-  amountCents: number; currency: "usd"; platform: "web" | "ios";
-  routeKind: "external_browser_checkout"; storefrontCountry: string;
+  amountCents: number; currency: "usd"; platform: "web" | "ios" | "android";
+  routeKind: "external_browser_checkout" | "android_external_content_link"; storefrontCountry: string;
   environment: "test"; minAmountMinor: number; maxAmountMinor: number; expiresAt: string; eligibilityExpiresAt: string;
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -20,8 +20,8 @@ function normalizeTipCapability(payload: unknown, expected: {
     || row.creatorId !== expected.creatorId || row.buyerId !== expected.buyerId || row.sessionId !== expected.sessionId
     || row.amountCents !== expected.amountCents || !Number.isSafeInteger(expected.amountCents) || expected.amountCents <= 0
     || row.currency !== "usd" || row.environment !== "test" || row.paymentMethod !== "card"
-    || row.platform !== expected.platform || !["web", "ios"].includes(expected.platform)
-    || row.routeKind !== "external_browser_checkout"
+    || row.platform !== expected.platform || !["web", "ios", "android"].includes(expected.platform)
+    || row.routeKind !== (expected.platform === "android" ? "android_external_content_link" : "external_browser_checkout")
     || typeof row.storefrontCountry !== "string" || !/^[A-Z]{2}$/.test(row.storefrontCountry)
     || row.storefrontCountry !== "US"
     || typeof row.capabilityId !== "string" || !uuid.test(row.capabilityId)
@@ -33,8 +33,8 @@ function normalizeTipCapability(payload: unknown, expected: {
     || typeof row.eligibilityExpiresAt !== "string" || !(Date.parse(row.eligibilityExpiresAt) > now)
     || row.noAccessGranted !== true || row.liveMoneyAction !== false) return null;
   return { capabilityId: row.capabilityId, creatorId: expected.creatorId, buyerId: expected.buyerId,
-    sessionId: expected.sessionId, amountCents: expected.amountCents, currency: "usd", platform: row.platform as "web" | "ios",
-    routeKind: "external_browser_checkout", storefrontCountry: row.storefrontCountry,
+    sessionId: expected.sessionId, amountCents: expected.amountCents, currency: "usd", platform: row.platform as CreatorTipCustomQuote["platform"],
+    routeKind: row.routeKind as CreatorTipCustomQuote["routeKind"], storefrontCountry: row.storefrontCountry,
     environment: "test", minAmountMinor: row.minAmountMinor, maxAmountMinor: row.maxAmountMinor, expiresAt: row.expiresAt,
     eligibilityExpiresAt: row.eligibilityExpiresAt };
 }
@@ -59,23 +59,26 @@ export function normalizeCreatorTipCustomAvailability(payload: unknown, expected
   return { quote: null, message: "" };
 }
 
-export async function readCreatorTipCustomAvailability(creatorId: string, amountCents: number): Promise<CreatorTipCustomAvailability> {
+export async function readCreatorTipCustomAvailability(creatorId: string, amountCents: number, capabilityId?: string): Promise<CreatorTipCustomAvailability> {
   const unavailable = { quote: null, message: "" };
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   // Native platform/storefront eligibility comes from the server's trusted
   // capability binding, never Platform.OS or a client header alone.
   if (!authority || authority.restoreOnly || Platform.OS === "android" || !uuid.test(creatorId)
+    || (capabilityId !== undefined && !uuid.test(capabilityId))
     || !Number.isSafeInteger(amountCents) || amountCents <= 0 || amountCents > 2147483647) return unavailable;
   try {
     const response = await withAuthorityReadDeadline(client.rpc("get_creator_tip_amount_quote", {
       p_creator_id: creatorId, p_amount_cents: amountCents,
+      ...(capabilityId !== undefined ? { p_capability_id: capabilityId } : {}),
     }), null);
     if (!response || response.error || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return unavailable;
-    return normalizeCreatorTipCustomAvailability(response.data, { creatorId, amountCents, buyerId: authority.userId,
+    const result = normalizeCreatorTipCustomAvailability(response.data, { creatorId, amountCents, buyerId: authority.userId,
       sessionId: authority.sessionGeneration, platform: Platform.OS });
+    return capabilityId !== undefined && result.quote?.capabilityId !== capabilityId ? unavailable : result;
   } catch { return unavailable; }
 }
 
-export async function readCreatorTipCustomQuote(creatorId: string, amountCents: number): Promise<CreatorTipCustomQuote | null> {
-  return (await readCreatorTipCustomAvailability(creatorId, amountCents)).quote;
+export async function readCreatorTipCustomQuote(creatorId: string, amountCents: number, capabilityId?: string): Promise<CreatorTipCustomQuote | null> {
+  return (await readCreatorTipCustomAvailability(creatorId, amountCents, capabilityId)).quote;
 }

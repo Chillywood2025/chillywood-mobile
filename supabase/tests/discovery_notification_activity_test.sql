@@ -26,6 +26,7 @@ insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values
  ('9d440000-0000-4000-8000-000000000002',false,false,now()),
  ('9d440000-0000-4000-8000-000000000003',false,false,now()),
  ('9d440000-0000-4000-8000-000000000004',false,false,now());
+update public.user_profiles set display_name='Discovery Creator',username='discovery_'||right(user_id,1),profile_access_visibility='public' where user_id like '9d440000-%';
 insert into public.channel_followers(channel_user_id,follower_user_id) values
  ('9d440000-0000-4000-8000-000000000001','9d440000-0000-4000-8000-000000000002'),
  ('9d440000-0000-4000-8000-000000000001','9d440000-0000-4000-8000-000000000003');
@@ -219,6 +220,8 @@ insert into public.creator_replay_library_items(id,owner_user_id,source_type,bro
 select is(pg_temp.discovery_count('replay_later','9d445000-0000-4000-8000-000000000001'),0,'processing is not replay ready');
 update public.creator_replay_library_items set save_status='ready' where id='9d445000-0000-4000-8000-000000000001';
 select is(pg_temp.discovery_count('replay_later','9d445000-0000-4000-8000-000000000001',true),2,'actual free ready replay reaches followers');
+select is((select private.resolve_notification_activity(e)->>'title' from public.notification_activity_events e where event_kind='replay_later' and recipient_user_id='9d440000-0000-4000-8000-000000000002'),'Discovery Creator (@discovery_1) · Replay ready','replay push names exact trusted creator');
+select is((select private.resolve_notification_activity(e)->>'body' from public.notification_activity_events e where event_kind='replay_later' and recipient_user_id='9d440000-0000-4000-8000-000000000002'),'Synthetic replay. Open to check playback availability.','replay body names exact current replay without claiming permanent access');
 select is((select private.resolve_notification_activity(e)->>'deep_link' from public.notification_activity_events e
  where event_kind='replay_later' and recipient_user_id='9d440000-0000-4000-8000-000000000002'),
  '/player/replay/9d445000-0000-4000-8000-000000000001','replay resolves real guarded screen');

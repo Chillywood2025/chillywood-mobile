@@ -1,5 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { admitIosExternalCheckout } from "./iosExternalAdmission";
+import { admitGooglePlayExternalCheckout } from "./googlePlayExternalAdmission";
+import type { GooglePlayExternalCheckoutInput } from "./google-play-external-content-link-flow";
 import "react-native-get-random-values";
 import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "./accountSessionAuthority";
@@ -15,12 +18,12 @@ const newId = () => {
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 };
 type Attempt = { quoteId: string; attemptId: string; buyerId: string; auctionId: string; amountMinor: number; currency: string; environment: string };
-export type CreatorEventAuctionCheckoutLaunch = { url: string; launchStrategy: "system_browser"; platform: "ios" | "web" };
+export type CreatorEventAuctionCheckoutLaunch = { url: string; launchStrategy: "system_browser" | "google_play_external_content_link"; platform: "ios" | "web" | "android" };
 
 /** No provider operation on render, bid, award, or browser return. This explicit
  * winner action retains its exact attempt before invoking the checkout edge. */
-export async function createCreatorEventAuctionCheckout(auction: CreatorEventAuction): Promise<CreatorEventAuctionCheckoutLaunch> {
-  if (Platform.OS !== "ios" && Platform.OS !== "web") throw new Error("Auction checkout is not available on this device yet.");
+export async function createCreatorEventAuctionCheckout(auction: CreatorEventAuction, native?: GooglePlayExternalCheckoutInput): Promise<CreatorEventAuctionCheckoutLaunch> {
+  if (Platform.OS !== "ios" && Platform.OS !== "web" && !(Platform.OS === "android" && native)) throw new Error("Auction checkout requires the approved native Google Play flow on Android.");
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   if (!authority || authority.restoreOnly || !auction.isWinner || !["awarded", "payment_pending"].includes(auction.state) || !auction.awardAmountMinor
     || auction.environment !== "test") throw new Error("Eligible winner checkout is unavailable. Refresh auction status.");
@@ -35,6 +38,11 @@ export async function createCreatorEventAuctionCheckout(auction: CreatorEventAuc
     const subject = await captureAccountBoundSupabaseMutationSubject(authority.userId);
     const current = () => sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
     if (!current() || !sameAccountSessionAuthority(authority, subject.authority)) throw new Error("Account changed before checkout.");
+    const capabilityId = Platform.OS === "android" && native ? await admitGooglePlayExternalCheckout(subject, {
+      feature: "event_auction", creatorId: auction.creatorId, amountMinor: auction.awardAmountMinor, sourceId: auction.id,
+    }, native) : Platform.OS === "ios" ? await admitIosExternalCheckout(subject, {
+      feature: "event_auction", creatorId: auction.creatorId, amountMinor: auction.awardAmountMinor, sourceId: auction.id,
+    }) : null;
     const raw = await AsyncStorage.getItem(storageKey);
     if (auction.state === "payment_pending" && raw === null) throw new Error("The existing checkout is not saved for this account session. Check purchase status; do not start another payment.");
     let attempt: Attempt;
@@ -44,7 +52,7 @@ export async function createCreatorEventAuctionCheckout(auction: CreatorEventAuc
         || attempt.buyerId !== authority.userId || attempt.amountMinor !== auction.awardAmountMinor || attempt.currency !== auction.currency
         || attempt.environment !== auction.environment) throw new Error("Saved checkout cannot be verified. Refresh purchase status; do not start another payment.");
     } else {
-      const result = await invokeAccountBoundSupabaseMutationRpc<Record<string, unknown>>(subject, "create_creator_event_auction_award_quote", { p_auction_id: auction.id, p_capability_id: null });
+      const result = await invokeAccountBoundSupabaseMutationRpc<Record<string, unknown>>(subject, "create_creator_event_auction_award_quote", { p_auction_id: auction.id, p_capability_id: capabilityId });
       const quote = result.data;
       if (result.error || !quote || !UUID.test(String(quote.id)) || quote.auctionId !== auction.id || quote.state !== "awarded"
         || quote.checkoutStarted !== false || typeof quote.expiresAt !== "string" || !Number.isFinite(Date.parse(quote.expiresAt))
@@ -60,17 +68,18 @@ export async function createCreatorEventAuctionCheckout(auction: CreatorEventAuc
     try {
       response = await supabase.functions.invoke("stripe-event-auction-checkout", {
         signal: controller.signal, headers: { Authorization: `Bearer ${subject.accessToken}`, "x-chillywood-platform": Platform.OS },
-        body: { quote_id: attempt.quoteId, attempt_id: attempt.attemptId },
+        body: { quote_id: attempt.quoteId, attempt_id: attempt.attemptId, ...(native ?? {}) },
       });
     } finally { clearTimeout(timeout); }
     if (!current() || response.error) throw new Error("Checkout outcome is unknown. Refresh auction and purchase status before continuing.");
     const data = response.data;
     if (!data || data.status !== "checkout_ready" || data.checkoutCreated !== true || data.liveMoneyAction !== false
-      || data.routeKind !== "external_browser_checkout" || data.launchStrategy !== "system_browser"
+      || data.routeKind !== (Platform.OS === "android" ? "android_external_content_link" : "external_browser_checkout")
+      || data.launchStrategy !== (Platform.OS === "android" ? "google_play_external_content_link" : "system_browser")
       || data.platform !== Platform.OS || data.storefrontCountry !== "US"
       || Object.entries(attempt).some(([field, value]) => data[field] !== value)) throw new Error("Checkout is pending or unavailable. Refresh auction and purchase status; do not start another payment.");
     const url = new URL(String(data.checkoutUrl));
     if (url.origin !== "https://checkout.stripe.com" || url.username || url.password || !/^\/(?:c\/)?pay\//u.test(url.pathname)) throw new Error("Checkout link could not be verified. Refresh purchase status.");
-    return { url: url.toString(), launchStrategy: "system_browser", platform: Platform.OS };
+    return { url: url.toString(), launchStrategy: Platform.OS === "android" ? "google_play_external_content_link" : "system_browser", platform: Platform.OS };
   } finally { attempts.delete(key); }
 }

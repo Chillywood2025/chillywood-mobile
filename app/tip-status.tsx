@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -29,27 +29,43 @@ function TipStatusSession({ tipId }: { tipId: string }) {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(true);
+  const [exhausted, setExhausted] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const running = useRef(true);
+  const mounted = useRef(false);
 
   useEffect(() => {
     let active = true;
     let attempts = 0;
     let timeout: ReturnType<typeof setTimeout> | null = null;
+    let deadline: ReturnType<typeof setTimeout> | null = null;
+    mounted.current = true;
+    running.current = true;
+    setChecking(true); setLoading(true); setError(""); setExhausted(false); setStatus(null);
+    const stop = () => { running.current = false; setChecking(false); setLoading(false); };
 
     const poll = async () => {
       if (!tipId) {
         setError("Tip status could not be loaded.");
-        setLoading(false);
+        stop();
         return;
       }
 
       attempts += 1;
       try {
-        const nextStatus = await readMyTipTransactionStatus(tipId);
+        const nextStatus = await Promise.race([
+          readMyTipTransactionStatus(tipId),
+          new Promise<never>((_, reject) => { deadline = setTimeout(() => reject(new Error("tip_status_timeout")), 15_000); }),
+        ]);
+        if (deadline) clearTimeout(deadline);
+        deadline = null;
         if (!active) return;
         setStatus(nextStatus);
         setLoading(false);
         const currentStatus = String(nextStatus.status ?? "").trim();
         if (currentStatus === "paid") {
+          stop();
           trackEvent("tip_payment_succeeded", {
             creator_id: String(nextStatus.creatorId ?? ""),
             feature_key: "tips",
@@ -59,12 +75,16 @@ function TipStatusSession({ tipId }: { tipId: string }) {
           });
           return;
         }
-        if (["failed", "canceled", "refunded", "disputed"].includes(currentStatus)) return;
+        if (["failed", "canceled", "refunded", "disputed"].includes(currentStatus)) { stop(); return; }
+        if (!["pending", "checkout_started"].includes(currentStatus)) { setError("Tip status could not be verified."); stop(); return; }
         if (attempts < 8) timeout = setTimeout(poll, 1800);
+        else { setExhausted(true); stop(); }
       } catch {
+        if (deadline) clearTimeout(deadline);
+        deadline = null;
         if (!active) return;
         setError("Unable to confirm this tip right now.");
-        setLoading(false);
+        stop();
       }
     };
 
@@ -72,13 +92,21 @@ function TipStatusSession({ tipId }: { tipId: string }) {
 
     return () => {
       active = false;
+      mounted.current = false;
+      running.current = false;
       if (timeout) clearTimeout(timeout);
+      if (deadline) clearTimeout(deadline);
     };
-  }, [tipId]);
+  }, [tipId, retry]);
 
   const presentation = useMemo(() => {
     const currentStatus = String(status?.status ?? "").trim();
-    if (loading || currentStatus === "pending" || currentStatus === "checkout_started") {
+    if (exhausted || error) return {
+      title: "Tip not yet confirmed",
+      body: "Automatic checking has stopped. Check status again or open Purchases & My Tickets. Do not send another tip while this payment is unconfirmed.",
+      tone: "pending" as const,
+    };
+    if (loading || (checking && (currentStatus === "pending" || currentStatus === "checkout_started"))) {
       return {
         title: "Confirming tip...",
         body: "Stripe is confirming the test payment. This can take a moment.",
@@ -117,7 +145,7 @@ function TipStatusSession({ tipId }: { tipId: string }) {
       body: "No content, badge, VIP, room access, or perk was unlocked.",
       tone: "error" as const,
     };
-  }, [error, loading, status?.status]);
+  }, [checking, error, exhausted, loading, status?.status]);
 
   const amountCents = Number(status?.amountCents ?? 0);
   const currency = String(status?.currency ?? "usd");
@@ -125,15 +153,26 @@ function TipStatusSession({ tipId }: { tipId: string }) {
   return (
     <View style={styles.screen} testID="screen-tip-status">
       <View style={styles.card}>
-        {presentation.tone === "pending" ? <ActivityIndicator color="#DC143C" /> : null}
+        {checking ? <ActivityIndicator testID="tip-status-checking" color="#DC143C" /> : null}
         <Text style={[styles.title, presentation.tone === "success" && styles.titleSuccess]}>{presentation.title}</Text>
         {amountCents > 0 ? (
           <Text style={styles.amount}>{formatMonetizationCurrency(amountCents, currency)}</Text>
         ) : null}
         <Text style={styles.body}>{presentation.body}</Text>
+        {(exhausted || error) && tipId ? <TouchableOpacity testID="tip-status-retry" style={styles.button}
+          accessibilityRole="button" accessibilityLabel="Check this tip status again" disabled={checking}
+          accessibilityState={{ disabled: checking, busy: checking }} onPress={() => {
+            if (!mounted.current || running.current) return;
+            running.current = true; setChecking(true); setRetry(value => value + 1);
+          }}><Text style={styles.buttonText}>Check status again</Text></TouchableOpacity> : null}
         <TouchableOpacity style={styles.button} accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" onPress={() => router.push("/purchases")}>
           <Text style={styles.buttonText}>Purchases &amp; My Tickets</Text>
         </TouchableOpacity>
+        {/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tipId) ? <TouchableOpacity
+          testID="tip-status-help" style={styles.button} accessibilityRole="button" accessibilityLabel="Get help with this tip"
+          onPress={() => { if (mounted.current) router.push({ pathname: "/support", params: { purchaseId: tipId } }); }}>
+          <Text style={styles.buttonText}>Get help with this tip</Text>
+        </TouchableOpacity> : null}
         <TouchableOpacity
           style={styles.button}
           activeOpacity={0.86}

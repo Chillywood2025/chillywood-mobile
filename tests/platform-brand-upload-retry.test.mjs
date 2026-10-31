@@ -17,10 +17,11 @@ function fixture(options = {}) {
     replayActionsMountedRef: mountedRef,
     getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
     setBrandBusyAssetType: value => { state.busy = value; }, setBrandNotice: value => { state.notice = value; },
-    DocumentPicker: { async getDocumentAsync() {
+    getUserFacingErrorMessage: (_error, fallback) => fallback,
+    async pickDeviceImage() {
       state.picks++; await options.picker?.();
-      return options.cancel ? { canceled: true } : { canceled: false, assets: [file] };
-    } },
+      return options.cancel ? null : file;
+    },
     getPlatformBrandAssetValidationMessage: () => options.invalid ? 'Invalid fixture file' : null,
     async uploadPlatformBrandAsset(input) {
       state.uploads.push(input);

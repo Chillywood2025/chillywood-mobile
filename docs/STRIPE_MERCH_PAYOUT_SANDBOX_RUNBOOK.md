@@ -12,6 +12,14 @@ Creator setup flow update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md
 
 Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the tester-facing physical merch Stripe sandbox/readiness screen and remote readback now shows sandbox merch products `1`, orders `4`, order items `4`, processed Stripe merch events `1`, merch digital-access products `0`, and Stripe/merch access grants `0`. Owner/Admin merch drilldown screenshots remain blocked until an active Owner/Admin app session is used.
 
+## Source policy update — October 30, 2026
+
+New physical-merch orders freeze creator 90% / platform 10% of NET after verified provider fees, taxes, refunds and adjustments. Platform cents round down; the creator receives the remainder. This is not a buyer surcharge. Old orders keep their original terms; absent historical terms are unknown, not retroactively 10%.
+
+`20261030190222_physical_merch_net_share_terms.sql` stores immutable order terms and provides non-authoritative split calculations. Its successor `20261030191106_physical_merch_verified_cost_observations.sql` records qualified read-only provider cost observations and append-only HELD net allocations. Unknown provider costs leave final shares unknown. Neither creates payable earnings or executes transfers/payouts; operational settlement remains unfinished. Digital sales 20%, tips 0% app fee, and instant cashout 2% are separate and unchanged.
+
+`20261030200156_physical_merch_return_window.sql` freezes a 30-day window from verified delivery for new orders only. Creator-entered delivery status does not start it. Unresolved or unknown returns/disputes keep affected earnings held, and an elapsed window never clears sandbox or financial-review holds. The private append-only evidence contract has no API-role provisioning grants; operational delivery verification and return/dispute reconciliation remain activation prerequisites. See `MERCH_PHYSICAL_GOODS_POLICY.md` for the prospective terms and proof boundaries.
+
 ## Current Status
 
 - Stripe secret names are configured in Supabase Edge Functions by digest only: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and dedicated merch webhook secret `STRIPE_MERCH_WEBHOOK_SECRET`.

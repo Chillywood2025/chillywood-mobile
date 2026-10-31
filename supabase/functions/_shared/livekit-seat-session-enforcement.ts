@@ -273,7 +273,8 @@ export const countLiveKitStateWithPaidSeatEnforcement = async (
                 sessionGeneration,
               );
               const authority = parseWatchPartyLiveKitAuthorityDecision(rawAuthority);
-              if (!authority) {
+              if (!authority || (authority.allowed && authority.reason === "verified_reserved_room_seat"
+                && authority.partyId !== roomName)) {
                 enforcementCause = "authority_malformed";
               } else if (!authority.allowed) {
                 enforcementCause = "authority_denied";

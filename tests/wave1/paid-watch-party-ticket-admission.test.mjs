@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
+import {reservedRoomClient} from '../helpers/reserved-room-client-runtime.mjs';
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_USER_ID = "22222222-2222-4222-8222-222222222222";
@@ -299,6 +300,21 @@ const createRuntime = (options = {}) => {
     setRoomAccessDecision: (value) => { roomAccessDecision = value; },
   };
 };
+
+test("reserved auction admission crosses the real client normalizer and join/touch boundary as viewer only", async()=>{
+  const raw={allowed:true,reason:'verified_reserved_room_admission',requiresPurchase:false,
+    reservedSeatClaimId:TICKET_ID,partyId:PARTY_ID,roomSessionId:OFFER_ID,admissionIncluded:true,grantsPublish:false};
+  const ticketAccess=await reservedRoomClient('_lib/paidWatchPartyTickets.ts',raw).resolvePaidWatchPartyTicketAccess(PARTY_ID);
+  const runtime=createRuntime({ticketAccess});
+  assert.equal(runtime.api.paidWatchPartyTicketAllowsExactRoomViewerAccess(ticketAccess,PARTY_ID),true);
+  assert.equal(runtime.api.paidWatchPartyTicketAllowsExactRoomViewerAccess(ticketAccess,'OTHER'),false);
+  for(const operation of ['joinPartyRoomSession','touchPartyRoomSession']){
+    const result=await runtime.api[operation]({partyId:PARTY_ID,userId:USER_ID,role:'host',stageRole:'speaker',canSpeak:true,cameraEnabled:true,micEnabled:true});
+    assert.equal(result.role,'viewer');assert.equal(result.stageRole,'listener');assert.equal(result.canSpeak,false);
+    assert.equal(result.cameraEnabled,false);assert.equal(result.micEnabled,false);
+  }
+  assert.equal(runtime.getPremiumReads(),0);assert.equal(runtime.membershipWrites.length,2);
+});
 
 test("exact paid Seat Pass joins and touches only its room as viewer-only authority", async () => {
   const runtime = createRuntime();

@@ -19,6 +19,20 @@ test('missing evidence fails closed without leaking input fields', () => {
   assert.doesNotMatch(JSON.stringify(result), /private-secret-key|do-not-print/);
   assert.equal(plan(null).status, 'blocked');
 });
+test('provider versions or local output inventories cannot qualify an unsupported original provider', () => {
+  for(const provider of ['supabase','supabase_storage','s3','hetzner_s3','unknown']) {
+    const input=fixture();
+    for(const binding of [input.source,input.evidence.before,input.evidence.after,input.evidence.origin]) {
+      binding.provider=provider;binding.versionId='asserted-not-verified-version';
+    }
+    input.evidence.outputInventory={retentionQualified:false,providerBytesVerified:false,objectCount:1,inventorySha256:hash};
+    const result=plan(input);
+    assert.equal(result.status,'blocked');
+    assert.ok(result.blockers.includes('provider_adapter_or_approved_migration_required'));
+    assert.equal(result.admissionAllowed,false);assert.equal(result.physicalDeletionAllowed,false);
+    assert.equal(result.productionMutationAllowed,false);
+  }
+});
 for (const [label, change, expected] of [
   ['owner changed', x => { x.evidence.after.ownerId = '33333333-3333-4333-8333-333333333333'; }, 'source_changed_or_unobserved'],
   ['source reincarnated', x => { x.evidence.after.createdAt = '2026-10-21T00:00:00Z'; }, 'source_changed_or_unobserved'],

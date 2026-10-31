@@ -12,7 +12,11 @@ export type WatchPartyLiveKitAuthority = {
     | "non_seat_room_authority"
     | "non_seat_room_host_authority"
     | "canonical_party_room_target_premium_authority"
-    | "paid_room_host_authority";
+    | "paid_room_host_authority"
+    | "verified_reserved_room_seat";
+  reservedSeatClaimId?: string;
+  partyId?: string;
+  roomSessionId?: string;
 };
 
 export type WatchPartyLiveKitAuthorityDecision = WatchPartyLiveKitAuthority | {
@@ -40,6 +44,7 @@ const ALLOWED_REASONS = new Set<WatchPartyLiveKitAuthority["reason"]>([
   "non_seat_room_host_authority",
   "canonical_party_room_target_premium_authority",
   "paid_room_host_authority",
+  "verified_reserved_room_seat",
 ]);
 const DENIED_REASONS = new Set<Extract<WatchPartyLiveKitAuthorityDecision, { allowed: false }>["reason"]>([
   "exact_paid_seat_authority_required",
@@ -90,6 +95,22 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
   if (!ALLOWED_REASONS.has(row.reason as WatchPartyLiveKitAuthority["reason"])) return null;
 
   const reason = row.reason as WatchPartyLiveKitAuthority["reason"];
+  if (reason === "verified_reserved_room_seat") {
+    if (row.paidSeatRequired !== true || row.hostAuthority !== false
+      || !isExactBoolean(row.speakerEligible) || row.grantsPublish !== false
+      || typeof row.reservedSeatClaimId !== "string"
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.reservedSeatClaimId)
+      || typeof row.roomSessionId !== "string"
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.roomSessionId)
+      || typeof row.partyId !== "string" || !row.partyId.trim()
+      || typeof row.expiresAt !== "string" || !isCurrentBoundedExpiry(row.expiresAt, nowMillis)) return null;
+    // Reserved Stage seats are eligibility, not permission to publish. Party
+    // admission returns speakerEligible=false. Both still need the token
+    // handler's fresh membership and persisted host-approved speaker checks.
+    return { allowed: true, paidSeatRequired: true, speakerEligible: row.speakerEligible,
+      hostAuthority: false, expiresAt: row.expiresAt, reason, reservedSeatClaimId: row.reservedSeatClaimId,
+      partyId: row.partyId, roomSessionId: row.roomSessionId };
+  }
   // The canonical title-room recovery RPC proves exact current Premium and
   // membership authority for either host or viewer. Its proof is intentionally
   // finite even though no paid Seat Pass is required. Do not generalize this

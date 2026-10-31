@@ -11,6 +11,7 @@ import {
   isIosOrdinaryPushDeliveryAllowed,
 } from "../_shared/ios-ordinary-push-internal-proof-policy.mjs";
 import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
+import { notificationDisplayText, readNotificationCreatorLabel } from "../_shared/notification-display-labels.ts";
 import {
   readExactCurrentSessionAuthority,
   readExactPlatformRole,
@@ -435,7 +436,9 @@ async function sendExpoPush(message: JsonObject) {
   return { body, ok: response.ok, status: response.status };
 }
 
-const buildNotificationCopy = (triggerType: TriggerType, title: string) => {
+const buildNotificationCopy = (triggerType: TriggerType, rawTitle: string, rawCreator = "") => {
+  const title = notificationDisplayText(rawTitle);
+  const creator = notificationDisplayText(rawCreator, 160);
   if (triggerType === "internal_ios_delivery_proof") {
     return {
       body: "Open Chi'llywood to review your notification settings.",
@@ -444,31 +447,31 @@ const buildNotificationCopy = (triggerType: TriggerType, title: string) => {
   }
   if (triggerType === "followed_creator_live") {
     return {
-      body: title ? `${title} is live now.` : "A creator you follow is live now.",
-      title: "A creator you follow is live",
+      body: title ? `“${title}” · ${creator || "Creator details unavailable"}. Open to check the live session.` : `${creator || "Creator details unavailable"} started a live session.`,
+      title: creator ? `${creator} went live` : "Live session update",
     };
   }
   if (triggerType === "circle_friend_live") {
     return {
-      body: title ? `${title} is live now.` : "Someone in your Chi'lly Circle is live now.",
-      title: "Chi'lly Circle live now",
+      body: title ? `“${title}” · ${creator || "Creator details unavailable"}. Open to check the live session.` : `${creator || "Creator details unavailable"} started a live session.`,
+      title: creator ? `${creator} went live · Chi'lly Circle` : "Chi'lly Circle live update",
     };
   }
   if (triggerType === "event_starts_soon") {
     return {
-      body: title ? `${title} starts soon.` : "A saved event starts soon.",
-      title: "Event starts soon",
+      body: `${title ? `“${title}”` : "Event details unavailable"} · ${creator || "Creator details unavailable"}. Open for the current schedule.`,
+      title: title ? `Event reminder · ${title}` : "Event reminder",
     };
   }
   if (triggerType === "public_upload") {
     return {
-      body: title ? `${title} is available to watch.` : "A creator you follow posted a public upload.",
-      title: "New public upload",
+      body: title ? `“${title}” by ${creator || "a creator whose details are unavailable"}.` : "Video details unavailable. Open to check this upload.",
+      title: creator ? `New video from ${creator}` : "New public upload · creator unavailable",
     };
   }
   return {
-    body: title ? `${title} is ready to watch.` : "A saved replay is ready.",
-    title: "Replay is ready",
+    body: `${title ? `“${title}”` : "Replay details unavailable"} · ${creator || "Creator details unavailable"}. Open to check playback.`,
+    title: creator ? `Replay from ${creator}` : "Replay update",
   };
 };
 
@@ -548,6 +551,7 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   target: { deepLink: string; entityId: string; route: string };
   timingKey: string;
   title: string;
+  creatorDisplayName?: string;
   triggerType: TriggerType;
   preferences: NotificationPreference | undefined;
   deliveryMode?: "ordinary" | "internal_ios_proof";
@@ -557,7 +561,10 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   const categoryAllowed = !prefField || preference?.[prefField] !== false;
   const pushAllowed = preference?.push_enabled !== false && categoryAllowed;
   const inAppAllowed = preference?.in_app_enabled !== false && categoryAllowed;
-  const copy = buildNotificationCopy(input.triggerType, input.title);
+  const creatorDisplayName = input.triggerType === "internal_ios_delivery_proof" ? ""
+    : await readNotificationCreatorLabel(adminClient, input.actorUserId, input.recipient.id);
+  input = { ...input, creatorDisplayName };
+  const copy = buildNotificationCopy(input.triggerType, input.title, creatorDisplayName);
   const dedupeKey = [
     input.triggerType,
     input.recipient.id,
@@ -599,7 +606,10 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
         source_id: input.sourceId,
         source_type: input.sourceType,
         status: "pending",
-        target_context: { triggerType: input.triggerType, timingKey: input.timingKey },
+        target_context: { triggerType: input.triggerType, timingKey: input.timingKey,
+          display_context: { version: 1, creator_id: input.actorUserId,
+            creator_display_name: creatorDisplayName, subject_title: notificationDisplayText(input.title),
+            target_id: input.target.entityId } },
         target_entity_id: input.target.entityId,
         target_route: input.target.route,
         title: copy.title,
@@ -725,7 +735,7 @@ async function sendToDeliverableTokens(
   notificationId: string | null,
   deliverableTokens: PushToken[],
 ) {
-  const copy = buildNotificationCopy(input.triggerType, input.title);
+  const copy = buildNotificationCopy(input.triggerType, input.title, input.creatorDisplayName);
   let sentCount = 0;
   for (const token of deliverableTokens) {
     const pushResult = await sendExpoPush(buildPlatformExpoPushMessage({

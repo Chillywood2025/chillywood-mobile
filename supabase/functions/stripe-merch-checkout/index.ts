@@ -9,6 +9,7 @@ import {
   optionsResponse,
   parseJsonPayload,
   readStripeTestSecret,
+  readOptionalEnv,
   safeWriteAuditLog,
   sanitizeErrorMessage,
   toText,
@@ -17,6 +18,7 @@ import {
   type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
 import { parseExactCurrentSessionAuthority, readExactBetaAccess } from "../_shared/exact-subject-authority.ts";
+import { readCommerceTaxReadiness, commerceTaxParameters } from "../_shared/commerce-tax-readiness.ts";
 
 const FUNCTION_NAME = "stripe-merch-checkout";
 const STRIPE_API_BASE_URL = "https://api.stripe.com/v1";
@@ -25,6 +27,9 @@ const DEFAULT_SUCCESS_URL = "chillywoodmobile://merch/orders";
 const DEFAULT_CANCEL_URL = "chillywoodmobile://merch/orders";
 
 type MerchCheckoutPayload = {
+  tracking_mode?: unknown;
+  expected_unit_price_minor?: unknown;
+  expected_currency?: unknown;
   attempt_id?: unknown;
   variant_id?: unknown;
   cancel_url?: unknown;
@@ -62,6 +67,9 @@ type StripeCheckoutSession = {
   id?: string;
   livemode?: boolean;
   object?: string;
+  client_reference_id?: string;
+  automatic_tax?: { enabled?: boolean };
+  metadata?: Record<string, string>;
   payment_intent?: string | null;
   url?: string | null;
 };
@@ -224,18 +232,26 @@ Deno.serve(async (req) => {
     const authority = authorityResponse.ok
       ? parseExactCurrentSessionAuthority(await authorityResponse.json().catch(() => null), currentUser.id) : null;
     if (!authority) return jsonResponse(401, { error: "invalid_session", checkoutCreated: false });
-    const reservationResult = await adminClient.rpc("reserve_merch_checkout_for_actor", {
+    const reservationResult = await adminClient.rpc("reserve_merch_checkout_for_actor_with_tracking", {
       p_buyer_id: authority.userId, p_session_id: authority.sessionGeneration,
       p_product_id: product.id, p_quantity: quantity, p_attempt_id: attemptId,
       p_variant_id: variantId || null,
+      p_expected_tracking_mode: parsed.value.tracking_mode === "tracked" || parsed.value.tracking_mode === "untracked" ? parsed.value.tracking_mode : null,
+      p_expected_unit_price: Number.isSafeInteger(parsed.value.expected_unit_price_minor) ? parsed.value.expected_unit_price_minor : null,
+      p_expected_currency: typeof parsed.value.expected_currency === "string" ? parsed.value.expected_currency : null,
     });
     const reservation = reservationResult.data as {
       id?: string; title?: string; priceMinor?: number; currency?: string; createdAt?: string;
+      netSharePolicyVersion?: string | null; platformNetShareBps?: number | null; creatorNetShareBps?: number | null;
+      shippingTrackingMode?: "tracked" | "untracked" | null; returnPolicyVersion?: string | null; returnWindowDays?: number | null;
       variantId?: string | null; sku?: string | null; size?: string | null; color?: string | null;
     } | null;
     if (reservationResult.error || !reservation?.id || !Number.isFinite(Date.parse(reservation.createdAt ?? "")) || !Number.isInteger(reservation.priceMinor)
       || (reservation.priceMinor ?? 0) <= 0 || reservation.currency !== "usd") {
       const safeReasons: Record<string, string> = {
+        merch_tracking_declaration_required: "The creator must declare tracked or untracked shipping before a new purchase.",
+        merch_tracking_declaration_changed: "The shipping and return terms changed. Refresh the shop and review them before checkout.",
+        merch_displayed_price_changed: "The price changed. Refresh the shop and review the current price before checkout.",
         merch_existing_pending_order_check_orders: "You already have a pending order for this product. Resume it from My orders instead of starting another.",
         merch_pending_order_limit_check_orders: "You have three unresolved sandbox orders. Check My orders before starting another.",
         merch_attempt_closed_check_orders: "This checkout window has ended. Check My orders for provider confirmation; do not start a replacement payment.",
@@ -249,7 +265,28 @@ Deno.serve(async (req) => {
       return jsonResponse(409, { error: "merch_reservation_unavailable", checkoutCreated: false,
         message: reason ? safeReasons[reason] : "This product or checkout attempt is unavailable. Refresh the shop and check My orders before retrying." });
     }
+    const hasNetTerms = reservation.netSharePolicyVersion != null;
+    if ((hasNetTerms && (reservation.netSharePolicyVersion !== "physical_merch_net_90_10_v1"
+      || reservation.platformNetShareBps !== 1000 || reservation.creatorNetShareBps !== 9000))
+      || (!hasNetTerms && (reservation.platformNetShareBps != null || reservation.creatorNetShareBps != null))) {
+      return jsonResponse(409, { error: "merch_net_share_terms_invalid", checkoutCreated: false });
+    }
     const orderId = reservation.id;
+    const taxAccount = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
+    if (!taxAccount || !/^acct_[A-Za-z0-9]+$/.test(taxAccount)) return jsonResponse(409, {
+      error: "provider_tax_settings_unverified", checkoutCreated: false,
+      message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available.",
+    });
+    const taxPolicy = await readCommerceTaxReadiness(adminClient, { feature: "physical_merch", identityId: orderId,
+      productId: product.id, accountId: taxAccount, environment: "sandbox", permittedScope: "US_all_destinations" });
+    if (!taxPolicy.ready) return jsonResponse(409, { error: taxPolicy.reason, checkoutCreated: false,
+      message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available." });
+    const accountResponse = await fetch(`${STRIPE_API_BASE_URL}/account`, { method: "GET", redirect: "error",
+      headers: { Authorization: `Bearer ${stripeSecret.secret}`, "Stripe-Version": STRIPE_API_VERSION },
+      signal: AbortSignal.timeout(15000) });
+    if (!accountResponse.ok) throw new Error("provider_tax_settings_unverified");
+    const providerAccount = await accountResponse.json();
+    if (providerAccount.object !== "account" || providerAccount.id !== taxAccount) throw new Error("provider_tax_account_mismatch");
     // Only immutable reservation snapshots contribute to provider parameters.
     // Renaming an option after checkout cannot alter an idempotent retry.
     const optionName = [reservation.size, reservation.color].filter(Boolean).join(" / ");
@@ -260,6 +297,8 @@ Deno.serve(async (req) => {
     const cancelUrl = `${DEFAULT_CANCEL_URL}?orderId=${encodeURIComponent(orderId)}`;
     const session = await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {
       body: {
+        ...commerceTaxParameters(taxPolicy),
+        "line_items[0][price_data][product_data][tax_code]": taxPolicy.taxCode,
         cancel_url: cancelUrl,
         expires_at: Math.floor(Date.parse(reservation.createdAt ?? "") / 1000) + 3600,
         client_reference_id: orderId,
@@ -279,7 +318,19 @@ Deno.serve(async (req) => {
         "metadata[creates_digital_access]": "false",
         "metadata[environment]": "sandbox",
         "metadata[not_payable]": "true",
+        ...(reservation.shippingTrackingMode ? {
+          "metadata[shipping_tracking_mode]": reservation.shippingTrackingMode,
+          "metadata[return_policy_version]": reservation.returnPolicyVersion,
+        } : {}),
         "metadata[rail]": "physical_merch",
+        ...(hasNetTerms ? {
+          "metadata[net_share_policy_version]": reservation.netSharePolicyVersion,
+          "metadata[platform_net_share_bps]": reservation.platformNetShareBps,
+          "metadata[creator_net_share_bps]": reservation.creatorNetShareBps,
+          "payment_intent_data[metadata][net_share_policy_version]": reservation.netSharePolicyVersion,
+          "payment_intent_data[metadata][platform_net_share_bps]": reservation.platformNetShareBps,
+          "payment_intent_data[metadata][creator_net_share_bps]": reservation.creatorNetShareBps,
+        } : {}),
         mode: "payment",
         "payment_intent_data[metadata][chillywood_order_id]": orderId,
         "payment_intent_data[metadata][creates_digital_access]": "false",
@@ -295,6 +346,11 @@ Deno.serve(async (req) => {
     const sessionUrl = toText(session.url);
     if (!sessionId || !sessionUrl) throw new Error("Stripe checkout session did not include an id and URL.");
     if (session.livemode !== false) throw new Error("Stripe checkout session did not confirm test mode; refusing checkout.");
+    if (session.object !== "checkout.session" || session.client_reference_id !== orderId
+      || session.currency !== reservation.currency || session.amount_total !== reservation.priceMinor! * quantity
+      || session.amount_subtotal !== session.amount_total
+      || session.automatic_tax?.enabled !== (taxPolicy.collectionMode === "automatic")
+      || session.metadata?.commerce_tax_policy_id !== taxPolicy.policyId) throw new Error("provider_tax_checkout_mismatch");
 
     const { error: updateError } = await adminClient
       .from("merch_orders")

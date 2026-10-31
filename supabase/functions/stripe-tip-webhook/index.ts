@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { checkoutSettlementOutcome, paymentIntentSettlementOutcome } from "../_shared/stripe-payment-settlement.ts";
+import { googlePlayStripeTaxEvidence } from "../_shared/google-play-stripe-tax-evidence.ts";
 
 import {
   createAdminClient,
@@ -467,6 +468,9 @@ const updateTipForEvent = async (
   const { data, error } = await adminClient.rpc("process_stripe_tip_webhook_lifecycle", {
     p_processing_attempt_id: processingAttemptId,
     p_provider_facts: {
+      google_play_tax: googlePlayStripeTaxEvidence(object),
+      provider_occurred_at: typeof event.created === "number" && Number.isSafeInteger(event.created)
+        && event.created > 0 && event.created <= 253402300799 ? new Date(event.created * 1000).toISOString() : null,
       amount_cents: amount,
       amount_received_cents: object?.amount_received,
       amount_refunded_cents: amountRefunded,

@@ -17,10 +17,12 @@ export const MONETIZATION_AUDIT_LOG_TABLE = "monetization_audit_log";
 
 export const CREATOR_PAID_CONTENT_CREATOR_SHARE_BPS = 8000;
 export const CREATOR_PAID_CONTENT_PLATFORM_SHARE_BPS = 2000;
+export const PHYSICAL_MERCH_CREATOR_NET_SHARE_BPS = 9000;
+export const PHYSICAL_MERCH_PLATFORM_NET_SHARE_BPS = 1000;
 export const CREATOR_TIP_CREATOR_SHARE_BPS = 10000;
 export const CREATOR_SCHEDULED_PAYOUT_FEE_BPS = 0;
 export const CREATOR_SCHEDULED_PAYOUT_FEE_CENTS = 0;
-export const CREATOR_INSTANT_CASHOUT_FEE_BPS = 150;
+export const CREATOR_INSTANT_CASHOUT_FEE_BPS = 200;
 export const CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null;
 export const CREATOR_PAYOUT_HOLD_DAYS_MIN = 7;
 export const CREATOR_PAYOUT_HOLD_DAYS_MAX = 30;
@@ -574,8 +576,14 @@ export async function requestCreatorPayout(input: {
   amountCents: number;
   payoutType: "scheduled" | "instant";
 }) {
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0 || input.amountCents > 2_147_483_647) {
+    throw new Error("Enter a valid positive cashout amount in whole cents.");
+  }
+  if (input.payoutType !== "scheduled" && input.payoutType !== "instant") {
+    throw new Error("Choose standard or instant cashout.");
+  }
   const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("request_creator_payout", {
-    p_amount_cents: Math.max(0, Math.trunc(input.amountCents || 0)),
+    p_amount_cents: input.amountCents,
     p_payout_type: input.payoutType,
   });
   if (error) throw new Error("Creator payout status is active, but payout movement remains unavailable.");

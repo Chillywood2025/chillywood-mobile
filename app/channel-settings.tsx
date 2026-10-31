@@ -1,6 +1,9 @@
+import { CreatorAuctionHeldEarnings } from "../components/monetization/creator-auction-held-earnings";
+import { SubscriptionPriceRequestStatus } from "../components/monetization/subscription-price-request-status";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import { pickDeviceImage, type DeviceImageSource } from "../_lib/deviceImagePicker";
 import { ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1500,6 +1503,7 @@ export function ChannelStudioScreen() {
   const [clipLoading, setClipLoading] = useState(false);
   const [clipLoadError, setClipLoadError] = useState<string | null>(null);
   const clipEditorGenerationRef = useRef(0);
+  const clipCoverPickerInFlightRef = useRef(false);
   const clipUploadAttemptRef = useRef<{
     generation: number;
     authority: ReturnType<typeof getCurrentAccountSessionAuthoritySnapshot>;
@@ -2585,7 +2589,7 @@ export function ChannelStudioScreen() {
     const blockers = preview.blockedReasons.slice(0, 4).join(" ");
     const nextSteps = preview.approvalSteps.slice(0, 2).join(" ");
     setPayoutSetupNotice(
-      `Cashout readiness reviewed. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
+      `Cashout readiness reviewed. Standard cashout app fee: $0. Instant cashout app fee: 2%, rounded up to the next cent. Tips have no app fee. Provider fees are separate and unconfirmed, so final net is unknown. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
     );
     setExpandedMonetizationSections((current) => {
       const next = new Set<MonetizationSectionId>([...current, "payouts", "providers", "tax_legal"]);
@@ -3526,34 +3530,29 @@ export function ChannelStudioScreen() {
     openUploadSourceChooser("clip_video");
   };
 
-  const onPickClipCoverFile = async () => {
-    if (clipSaveInFlightRef.current || clipLoading || clipLoadError) return;
+  const onPickClipCoverFile = async (source: DeviceImageSource = "photos") => {
+    if (clipCoverPickerInFlightRef.current || clipSaveInFlightRef.current || clipLoading || clipLoadError) return;
     const generation = clipEditorGenerationRef.current;
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current
+      && generation === clipEditorGenerationRef.current && !clipSaveInFlightRef.current
+      && authority?.state === "ACTIVE" && !authority.restoreOnly && authority.userId === user?.id
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
+    clipCoverPickerInFlightRef.current = true;
     try {
       setClipSaveState("selecting_cover");
       setClipNotice(null);
       logClipStudioUi("clip_cover_select_started");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["image/jpeg", "image/png", "image/webp"],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (generation !== clipEditorGenerationRef.current) return;
-      if (result.canceled) {
+      const pickedFile = await pickDeviceImage(source);
+      if (!isCurrent()) return;
+      if (!pickedFile) {
         setClipSaveState((current) => (current === "selecting_cover" ? "ready_to_save" : current));
         setClipNotice("No cover image selected.");
         logClipStudioUi("clip_cover_select_canceled");
         return;
       }
 
-      const asset = result.assets[0];
-      const pickedFile: CreatorVideoFile = {
-        uri: asset?.uri ?? "",
-        name: asset?.name,
-        mimeType: asset?.mimeType,
-        size: asset?.size,
-      };
       const validationMessage = getClipStudioCoverValidationMessage(pickedFile);
       if (validationMessage) {
         setSelectedClipCoverFile(null);
@@ -3571,16 +3570,18 @@ export function ChannelStudioScreen() {
         mimeType: pickedFile.mimeType ?? null,
         size: pickedFile.size ?? null,
       });
-    } catch {
-      if (generation !== clipEditorGenerationRef.current) return;
+    } catch (error) {
+      if (!isCurrent()) return;
       setClipSaveState("save_failed");
-      setClipNotice("Unable to open the cover picker right now.");
+      setClipNotice(getUserFacingErrorMessage(error, "Unable to open the cover picker right now."));
       logClipStudioUi("clip_cover_select_failed", { reason: "picker_unavailable" });
+    } finally {
+      clipCoverPickerInFlightRef.current = false;
     }
   };
 
   const onRemoveClipCoverFile = () => {
-    if (clipLoading || clipLoadError || clipSaveInFlightRef.current) return;
+    if (clipCoverPickerInFlightRef.current || clipLoading || clipLoadError || clipSaveInFlightRef.current) return;
     setSelectedClipCoverFile(null);
     updateClipEditor({
       coverStoragePath: null,
@@ -3926,7 +3927,7 @@ export function ChannelStudioScreen() {
     });
   }, [creatorVideos, publishSpotlightVideo, routeParams.spotlightVideoId, router, videosLoading]);
 
-  const pickPlatformBrandAsset = async (assetType: PlatformBrandAssetType) => {
+  const pickPlatformBrandAsset = async (assetType: PlatformBrandAssetType, source: DeviceImageSource = "photos") => {
     if (brandUploadInFlightRef.current) return;
     const ownerUserId = String(user?.id ?? "").trim();
     if (!ownerUserId) {
@@ -3960,25 +3961,19 @@ export function ChannelStudioScreen() {
       setBrandNotice(null);
       let pickedFile = brandUploadAttemptRef.current?.file;
       if (!pickedFile) {
-        const result = await DocumentPicker.getDocumentAsync({
-          type: documentTypes,
-          copyToCacheDirectory: true,
-          multiple: false,
-        });
-        assertOperationCurrent();
-
-        if (result.canceled) {
+        if (assetType === "hero_video") {
+          const result = await DocumentPicker.getDocumentAsync({ type: documentTypes, copyToCacheDirectory: true, multiple: false });
+          assertOperationCurrent();
+          const asset = result.canceled ? null : result.assets[0];
+          if (asset) pickedFile = { uri: asset.uri, name: asset.name, mimeType: asset.mimeType, size: asset.size };
+        } else {
+          pickedFile = await pickDeviceImage(source) ?? undefined;
+          assertOperationCurrent();
+        }
+        if (!pickedFile) {
           setBrandNotice("No Platform media selected.");
           return;
         }
-
-        const asset = result.assets[0];
-        pickedFile = {
-          uri: asset?.uri ?? "",
-          name: asset?.name,
-          mimeType: asset?.mimeType,
-          size: asset?.size,
-        };
       }
       const validationMessage = getPlatformBrandAssetValidationMessage(pickedFile, assetType);
       if (validationMessage) {
@@ -4009,10 +4004,10 @@ export function ChannelStudioScreen() {
       assertOperationCurrent();
       if (!savedProfile) return;
       setBrandNotice("Platform media saved as draft. Use Preview Brand Draft now; Publish Changes applies eligible safe media publicly.");
-    } catch {
+    } catch (error) {
       if (isCurrent()) setBrandNotice(brandUploadAttemptRef.current?.attempt.payload
         ? "This upload could not be confirmed yet. Choose the same media option again to retry the existing upload."
-        : "Unable to choose or save that Platform media right now.");
+        : getUserFacingErrorMessage(error, "Unable to choose or save that Platform media right now."));
     } finally {
       if (!brandUploadAttemptRef.current?.attempt.payload) brandUploadAttemptRef.current = null;
       brandUploadInFlightRef.current = false;
@@ -4273,6 +4268,10 @@ export function ChannelStudioScreen() {
       && generation === clipEditorGenerationRef.current
       && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
     if (!isCurrent()) return;
+    if (clipCoverPickerInFlightRef.current) {
+      setClipNotice("Finish choosing your cover image before saving.");
+      return;
+    }
     if (clipSaveInFlightRef.current) return;
     if (clipLoading || clipLoadError) {
       setClipNotice(clipLoadError ?? "Wait for this video's settings to load before saving.");
@@ -6178,12 +6177,13 @@ export function ChannelStudioScreen() {
                       <TouchableOpacity
                         style={[styles.studioActionButton, styles.studioActionButtonPrimary, clipSaving && styles.studioActionButtonDisabled]}
                         activeOpacity={0.86}
-                        onPress={onPickClipCoverFile}
+                        onPress={() => onPickClipCoverFile("photos")}
+                        testID="clip-cover-photos-button"
                         disabled={clipSaving}
                       >
                         <ChillywoodPrimaryActionFill radius={12} />
-                        <Text style={styles.studioActionButtonText}>Change Cover</Text>
-                        <Text style={styles.studioActionButtonCopy}>Open image picker</Text>
+                        <Text style={styles.studioActionButtonText}>Change Cover · Photos / Gallery</Text>
+                        <Text style={styles.studioActionButtonCopy}>Choose from your photos</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.studioActionButton, styles.studioActionButtonDanger, clipSaving && styles.studioActionButtonDisabled]}
@@ -6201,18 +6201,24 @@ export function ChannelStudioScreen() {
                   <View style={styles.eventEmptyCard}>
                     <Text style={styles.eventEmptyTitle}>No cover selected</Text>
                     <Text style={styles.eventEmptyBody}>
-                      Upload a JPG, PNG, or WebP image. Frame picking from video is deferred until real extraction support exists.
+                      Upload a JPG, PNG, WebP, HEIC, or HEIF image. Frame picking from video is deferred until real extraction support exists.
                     </Text>
                     <TouchableOpacity
                       style={styles.eventSecondaryButton}
                       activeOpacity={0.86}
-                      onPress={onPickClipCoverFile}
+                      onPress={() => onPickClipCoverFile("photos")}
+                        testID="clip-cover-photos-button"
                       disabled={clipSaving}
                     >
-                      <Text style={styles.eventSecondaryButtonText}>Choose Cover Image</Text>
+                      <Text style={styles.eventSecondaryButtonText}>Choose Cover Image · Photos / Gallery</Text>
                     </TouchableOpacity>
                   </View>
                 )}
+                <TouchableOpacity style={styles.eventSecondaryButton} activeOpacity={0.86}
+                  onPress={() => onPickClipCoverFile("files")} disabled={clipSaving}
+                  accessibilityLabel="Choose cover image from Files" testID="clip-cover-files-button">
+                  <Text style={styles.eventSecondaryButtonText}>Choose Cover from Files</Text>
+                </TouchableOpacity>
               </>
             ),
           })}
@@ -7491,6 +7497,12 @@ export function ChannelStudioScreen() {
                     {brandBusyAssetType === "hero_image"
                       ? <ActivityIndicator color="#fff" />
                       : <Text style={styles.eventPrimaryButtonText}>{platformBranding?.heroImage ? "Change Image" : "Choose Image"}</Text>}
+                    <Text style={styles.permissionCopy}>Photos / Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.eventSecondaryButton} activeOpacity={0.88}
+                    disabled={heroBusy || brandSaving} onPress={() => pickPlatformBrandAsset("hero_image", "files")}
+                    testID="brand-hero-files-button" accessibilityLabel="Choose hero image from Files">
+                    <Text style={styles.eventSecondaryButtonText}>Files · Hero</Text>
                   </TouchableOpacity>
                   <Text style={styles.permissionCopy}>
                     Hero Reel not available yet. Use Hero Image or a public Spotlight upload for now.
@@ -7588,6 +7600,12 @@ export function ChannelStudioScreen() {
                     {brandBusyAssetType === "background_image"
                       ? <ActivityIndicator color="#fff" />
                       : <Text style={styles.eventPrimaryButtonText}>{platformBranding?.backgroundImage ? "Change Background" : "Choose Background"}</Text>}
+                    <Text style={styles.permissionCopy}>Photos / Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.eventSecondaryButton} activeOpacity={0.88}
+                    disabled={backgroundBusy || brandSaving} onPress={() => pickPlatformBrandAsset("background_image", "files")}
+                    testID="brand-background-files-button" accessibilityLabel="Choose background image from Files">
+                    <Text style={styles.eventSecondaryButtonText}>Files · Background</Text>
                   </TouchableOpacity>
                 </View>
                 {platformBranding?.backgroundImage ? (
@@ -7694,6 +7712,12 @@ export function ChannelStudioScreen() {
                   >
                     <ChillywoodPrimaryActionFill radius={14} />
                     <Text style={styles.eventPrimaryButtonText}>{platformBranding?.avatar ? "Change Avatar" : "Choose Avatar"}</Text>
+                    <Text style={styles.permissionCopy}>Photos / Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.eventSecondaryButton} activeOpacity={0.88}
+                    disabled={kitBusy || brandSaving} onPress={() => pickPlatformBrandAsset("avatar", "files")}
+                    testID="brand-avatar-files-button" accessibilityLabel="Choose avatar image from Files">
+                    <Text style={styles.eventSecondaryButtonText}>Files · Avatar</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.eventSecondaryButton}
@@ -7704,6 +7728,12 @@ export function ChannelStudioScreen() {
                     accessibilityLabel="Choose Brand Studio Logo Image"
                   >
                     <Text style={styles.eventSecondaryButtonText}>{platformBranding?.logo ? "Change Logo" : "Choose Logo"}</Text>
+                    <Text style={styles.permissionCopy}>Photos / Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.eventSecondaryButton} activeOpacity={0.88}
+                    disabled={kitBusy || brandSaving} onPress={() => pickPlatformBrandAsset("logo", "files")}
+                    testID="brand-logo-files-button" accessibilityLabel="Choose logo image from Files">
+                    <Text style={styles.eventSecondaryButtonText}>Files · Logo</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.permissionCopy}>
@@ -8927,6 +8957,7 @@ export function ChannelStudioScreen() {
                 style={styles.eventSecondaryButton}>
                 <Text style={styles.eventSecondaryButtonText}>Request price · not yet purchasable</Text>
               </TouchableOpacity>
+              <SubscriptionPriceRequestStatus key={JSON.stringify(getCurrentAccountSessionAuthoritySnapshot())} />
               <View style={styles.eventActionRow}>
                 <TouchableOpacity
                   style={[styles.eventPrimaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
@@ -9334,6 +9365,7 @@ export function ChannelStudioScreen() {
             </View>
           ))}
         </View>
+        <CreatorAuctionHeldEarnings key={JSON.stringify(getCurrentAccountSessionAuthoritySnapshot())} />
         <Text style={styles.accessSummaryKicker}>EVENT ENTRY</Text>
         <Text style={styles.eventCardBody}>
           Choose Free or Paid entry for this exact Event. Paid entry creates the contextual Event Pass offer; it never grants Party Room, Live Stage, seat, host, moderator, or LiveKit authority.

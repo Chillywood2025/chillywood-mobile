@@ -39,7 +39,11 @@ function fixture(options={}) {
       if(options.rpcError)throw Error('synthetic-private-rpc-error');
       if(name===options.brandRpcErrorAt)throw Error('synthetic-private-brand-rpc-error');
       let data;
-      if(name==='list_platform_brand_retention_expiry_work') {
+      if(name==='list_deleted_content_expiry_work'&&options.textWork) {
+        assert.deepEqual(args,{});data=options.textWork;
+      } else if(name==='expire_deleted_content_text') {
+        assert.deepEqual(args,{p_deletion_id:options.textWork.deletionIds[0]});data=options.textReply;
+      } else if(name==='list_platform_brand_retention_expiry_work') {
         assert.deepEqual(args,{});
         data=options.brandWork??{enabled:false,qualified:false,assetIds:[],limit:25};
       } else if(name==='record_platform_brand_retention_worker_heartbeat') {
@@ -184,6 +188,18 @@ test('disabled authenticated pass runs the real worker and heartbeat without pro
     'list_platform_brand_retention_expiry_work','record_platform_brand_retention_worker_heartbeat',
     'record_deleted_content_worker_heartbeat']);
   assert.deepEqual(f.logs,[]);
+});
+
+test('invalid text expiry outcomes cannot refresh successful heartbeat or continue provider work',async()=>{
+  const id='11111111-1111-4111-8111-111111111111';
+  for(const textReply of [{status:'failed'},{status:'future_status'},{status:'purged'},[],null]) {
+    const f=fixture({textWork:{enabled:true,deletionIds:[id]},textReply});
+    const response=await f.handler(request());
+    assert.equal(response.status,503);
+    assert.deepEqual(await response.json(),{error:'retention_work_failed',permanentPhysicalAbsenceGuaranteed:false});
+    assert.deepEqual(f.calls,['createClient','list_deleted_content_expiry_work','expire_deleted_content_text']);
+    assert.deepEqual(f.brandRequests,[]);
+  }
 });
 
 test('actual worker entrypoint lazily uses a separate exact Brand origin with the verified project and key',async()=>{

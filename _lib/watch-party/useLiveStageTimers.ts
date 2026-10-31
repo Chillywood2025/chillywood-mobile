@@ -12,8 +12,16 @@ export function useLiveStageTokenRenewal(options: {
     if (!enabled || !token) return;
     const timing = getLiveKitParticipantTokenExpiryState(token);
     if (timing.isExpired) return;
-    const timeout = setTimeout(onDue, getLiveStageRefreshDelay(timing.expiresInMillis, timing.skewMillis));
-    return () => clearTimeout(timeout);
+    let current = true;
+    const timeout = setTimeout(() => {
+      if (current) onDue();
+    }, getLiveStageRefreshDelay(timing.expiresInMillis, timing.skewMillis));
+    return () => {
+      // Native timers may already have queued their callback when cleared.
+      // Retire its authority before cancelling the scheduled work.
+      current = false;
+      clearTimeout(timeout);
+    };
   }, [enabled, token, onDue]);
 }
 
@@ -31,7 +39,13 @@ export function useLiveStageOverlayTimer(options: {
   useEffect(() => {
     clear();
     if (!enabled || blocked) return;
-    timeoutRef.current = setTimeout(hide, delayMillis);
-    return clear;
+    let current = true;
+    timeoutRef.current = setTimeout(() => {
+      if (current) hide();
+    }, delayMillis);
+    return () => {
+      current = false;
+      clear();
+    };
   }, [enabled, blocked, activityVersion, mode, delayMillis, timeoutRef, clear, hide]);
 }

@@ -1,3 +1,4 @@
+import {createSharedVisualLoader} from "./helpers/shared-visual-host.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -46,6 +47,7 @@ async function mount(t, options = {}) {
     "./entitlementAuthority": {withAuthorityReadDeadline: async p=>p}, "./accountBoundSupabaseMutation": {}, "./liveEvents": {},
   });
   const Screen = load("app/event/[eventId].tsx", {
+    "../../components/ui/chillywood-visual-system": createSharedVisualLoader(React,native,host)("chillywood-visual-system"),
     react: React, "react-native": native, "react-native-safe-area-context": { SafeAreaView: host("SafeAreaView") },
     "expo-router": { useLocalSearchParams: () => ({ eventId }), useRouter: () => ({ canGoBack: () => false, back: () => routes.push("back"), replace: x => routes.push(x), push: x => routes.push(x) }) },
     "../../_lib/paidCreatorEvents": { resolvePaidCreatorEventPassAccess: async () => access, purchasePaidCreatorEventPass: input => purchase(input), formatPaidCreatorEventPrice: () => "$0.99" },

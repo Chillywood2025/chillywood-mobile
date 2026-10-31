@@ -3,6 +3,7 @@ import React from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +13,49 @@ import {
 
 import type { ProfileAppearanceFitMode } from "../../_lib/userData";
 import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
+
+// iOS cannot present the native library over a Modal that is still dismissing.
+// Keep the action with the sheet until native dismissal, not a guessed timeout.
+function useDismissBeforeGallery(visible: boolean, choose: () => void) {
+  const [dismissing, setDismissing] = React.useState<number | null>(null);
+  const nextId = React.useRef(0);
+  const pending = React.useRef<{ id: number; action: () => void } | null>(null);
+  const visibleRef = React.useRef(visible);
+  visibleRef.current = visible;
+  const mounted = React.useRef(false);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; pending.current = null; };
+  }, []);
+  React.useEffect(() => {
+    if (!visible) { pending.current = null; setDismissing(null); }
+  }, [visible]);
+  const finish = React.useCallback(() => {
+    if (!mounted.current || !visibleRef.current) return;
+    const request = pending.current;
+    if (!request || request.id !== dismissing) return;
+    pending.current = null;
+    request.action();
+  }, [dismissing]);
+  React.useEffect(() => {
+    if (!dismissing || !visible || Platform.OS === "ios") return;
+    // Android has no Modal.onDismiss. With no dismissal animation, wait until
+    // the hidden Modal has committed before presenting the native activity.
+    const frame = requestAnimationFrame(finish);
+    return () => cancelAnimationFrame(frame);
+  }, [dismissing, visible, finish]);
+  return {
+    visible: visible && !dismissing,
+    animationType: Platform.OS === "ios" ? "fade" as const : "none" as const,
+    onDismiss: finish,
+    choose: () => {
+      if (!visible || pending.current || dismissing) return;
+      const id = ++nextId.current;
+      pending.current = { id, action: choose };
+      setDismissing(id);
+    },
+  };
+}
 
 type ProfileSheetOptionProps = {
   icon: keyof typeof MaterialIcons.glyphMap;
@@ -161,6 +205,7 @@ export function ProfileAppearanceSheet({
   onSelectFitMode,
   onClose,
 }: ProfileAppearanceSheetProps) {
+  const gallery = useDismissBeforeGallery(visible, onChoose);
   const isAvatar = kind === "avatar";
   const hasImage = Boolean(imageUrl);
   const title = isAvatar ? "Profile Photo" : "Profile Background";
@@ -169,9 +214,10 @@ export function ProfileAppearanceSheet({
   if (isAvatar) {
     return (
       <Modal
-        visible={visible}
+        visible={gallery.visible}
         transparent
-        animationType="fade"
+        animationType={gallery.animationType}
+        onDismiss={gallery.onDismiss}
         onRequestClose={onClose}
       >
         <View style={styles.overlay}>
@@ -194,7 +240,7 @@ export function ProfileAppearanceSheet({
                 busy={busy}
                 compact
                 showChevron={false}
-                onPress={onChoose}
+                onPress={gallery.choose}
               />
               {hasImage ? (
                 <ProfileSheetOption
@@ -226,9 +272,10 @@ export function ProfileAppearanceSheet({
 
   return (
     <Modal
-      visible={visible}
+      visible={gallery.visible}
       transparent
-      animationType="fade"
+      animationType={gallery.animationType}
+      onDismiss={gallery.onDismiss}
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
@@ -254,7 +301,7 @@ export function ProfileAppearanceSheet({
               busy={busy}
               compact
               showChevron={false}
-              onPress={onChoose}
+              onPress={gallery.choose}
             />
             {hasImage ? (
               <>
@@ -528,6 +575,7 @@ export function ProfileMediaReviewSheet({
   onSave,
   onCancel,
 }: ProfileMediaReviewSheetProps) {
+  const gallery = useDismissBeforeGallery(visible, onChooseAnother);
   const isAvatar = kind === "avatar";
   const title = isAvatar ? "Review Profile Photo" : "Review Profile Background";
   const body = isAvatar
@@ -537,9 +585,10 @@ export function ProfileMediaReviewSheet({
 
   return (
     <Modal
-      visible={visible}
+      visible={gallery.visible}
       transparent
-      animationType="fade"
+      animationType={gallery.animationType}
+      onDismiss={gallery.onDismiss}
       onRequestClose={onCancel}
     >
       <View style={styles.previewOverlay}>
@@ -610,7 +659,8 @@ export function ProfileMediaReviewSheet({
               style={[styles.secondaryButton, busy && styles.optionDisabled]}
               activeOpacity={0.84}
               disabled={busy}
-              onPress={onChooseAnother}
+              onPress={gallery.choose}
+              testID="profile-media-choose-another-action"
             >
               <MaterialIcons name="photo-library" size={18} color="#E6ECFA" />
               <Text style={styles.secondaryButtonText}>Choose Different</Text>

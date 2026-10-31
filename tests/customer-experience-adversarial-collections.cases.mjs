@@ -485,6 +485,7 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
     "./liveEvents": {},
     "./supabase": { supabase },
     "./userFacingProductCopy": { normalizeProductNotificationCopy: (value) => String(value ?? "") },
+    "./notificationDisplayContext": loadStubbed("_lib/notificationDisplayContext.ts"),
     "./chillyChatCalls": {},
     "./chillyChatCallSoundAssets": {},
     "./appLinks": {},

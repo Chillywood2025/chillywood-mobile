@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -83,7 +84,37 @@ assertIncludes(settings, "readCurrentPushRegistration()", "Settings refresh must
 assertIncludes(settings, "Device push registration controls phone push alerts. In-app Activity lives in the bell tray and still works in the app.", "Settings must separate push registration from in-app Activity");
 assertIncludes(settings, "nextRegistration = await readCurrentPushRegistration()", "Register Device must verify persisted backend status");
 assertIncludes(settings, "onPressRefreshPushRegistration", "Device push Refresh must have a dedicated backend readback handler");
-assertIncludes(settings, "setNotificationSavingKey(\"push-refresh\")", "Device push Refresh must show a busy state");
+// Check the actual scoped operation chain, not the removed standalone setter.
+// AST-scoped checks prevent an unrelated control from satisfying
+// the busy-state contract for the dedicated Refresh button.
+const settingsAst = ts.createSourceFile("settings.tsx", settings, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const declarations = new Map();
+const refreshButtons = [];
+const visitSettings = node => {
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) declarations.set(node.name.text, node);
+  if (ts.isJsxElement(node) && node.openingElement.tagName.getText(settingsAst) === "TouchableOpacity"
+    && node.openingElement.attributes.properties.some(attribute => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(settingsAst) === "onPress"
+      && attribute.initializer?.getText(settingsAst).includes("void onPressRefreshPushRegistration();"))) refreshButtons.push(node);
+  ts.forEachChild(node, visitSettings);
+};
+visitSettings(settingsAst);
+const declarationText = name => declarations.get(name)?.initializer?.getText(settingsAst) ?? "";
+const beginOperation = declarationText("beginNotificationOperation");
+assertIncludes(declarationText("onPressRefreshPushRegistration"), "await refreshNotifications(true);", "Refresh must request a manual operation");
+assertIncludes(declarationText("refreshNotifications"), 'beginNotificationOperation(manual ? "push-refresh" : null)', "Refresh must acquire its scoped busy operation");
+assertIncludes(beginOperation, "notificationScope.action ||", "Refresh must reject an already pending action");
+assertIncludes(beginOperation, "notificationScope.action = savingKey;", "Refresh must synchronously latch its action");
+assertIncludes(beginOperation, "patchNotificationSettings({ loading: !savingKey, savingKey });", "Refresh must publish its busy key");
+assertIncludes(declarationText("patchNotificationSettings"), "setNotificationState(current => ({", "Refresh busy state must reach React state");
+assertIncludes(declarationText("patchNotificationSettings"), "...patch, scope: notificationScope", "Refresh state must apply the scoped patch");
+assertIncludes(settings, "savingKey: notificationActionKey", "Refresh view must read the saved action key");
+assertIncludes(declarationText("notificationSavingKey"), "notificationActionKey", "Refresh view must consume the action key");
+assert(refreshButtons.length === 1, "Refresh must have exactly one dedicated button");
+const refreshButton = refreshButtons[0]?.getText(settingsAst) ?? "";
+assertIncludes(refreshButton, "disabled={!!notificationSavingKey || notificationLoading}", "Refresh button must disable during its operation");
+assertIncludes(refreshButton, 'notificationSavingKey === "push-refresh"\n                ? <ActivityIndicator', "Refresh button must show its operation spinner");
+assertIncludes(declarationText("refreshNotifications"), "finally {\n      operation.finish();", "Refresh must finish its operation on every settlement");
 assertIncludes(settings, "void onPressRefreshPushRegistration();", "Device push Refresh button must call the dedicated readback handler");
 assertIncludes(deviceTokens, 'userClient.rpc("wave1_push_ownership_readback"', "device token status must use authoritative current-session readback");
 assertIncludes(deviceTokens, "p_install_id: installId", "device token status must bind the exact current install");

@@ -147,12 +147,14 @@ test('real merchandise RPC reconciles exact payments and cumulative refunds atom
     });
     await t.test('sales disabled and viewer account changes do not rewrite the original callback authority',async()=>{
       const product='e7220000-0000-4000-8000-000000000001';
-      await db.query(`insert into public.merch_products(id,display_name,product_key,provider,status,environment,price_minor,currency,inventory_status)
-        values($1,'Synthetic merch','merch_reconciliation_fixture','stripe_physical_goods','sandbox','sandbox',1000,'usd','in_stock')`,[product]);
+      await db.query(`insert into public.merch_products(id,display_name,product_key,provider,status,environment,price_minor,currency,inventory_status,shipping_tracking_mode)
+        values($1,'Synthetic merch','merch_reconciliation_fixture','stripe_physical_goods','sandbox','sandbox',1000,'usd','in_stock','tracked')`,[product]);
       const o=await make({product_id:product});
+      eq((await row(o.id)).shipping_tracking_mode,'tracked');
       await db.query("update public.merch_products set status='disabled',inventory_status='disabled' where id=$1",[product]);
       await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'service_role',sub:other})]);
       await send('payment_intent.succeeded',pi(o));eq((await row(o.id)).payment_status,'paid');eq((await row(o.id)).buyer_id,buyer);
+      eq((await row(o.id)).shipping_tracking_mode,'tracked');
       eq(await one('select status from public.merch_products where id=$1',[product]),'disabled');
       eq(await one('select count(*)::integer from public.merch_orders where id=$1',[o.id]),1);
     });

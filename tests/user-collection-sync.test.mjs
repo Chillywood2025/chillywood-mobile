@@ -16,6 +16,8 @@ function harness(shared) {
   const storage = new Map();
   const remote = shared?.remote ?? { user_list: new Map(), watch_history: new Map() };
   const writes = [];
+  const deadlines = new Map();
+  let nextDeadline = 0;
   const controls = { failWrite: false, failStorage: false, failRead: false, loseResponse: false, resolvedUnknown: false,
     errorCode: '42501', readGate: null, writeGate: null, authGate: null };
   const tokens = [];
@@ -129,7 +131,9 @@ function harness(shared) {
     const code = ts.transpileModule(source, {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
     }).outputText;
-    vm.runInNewContext(code, { exports, console, Date, Map, Set, Promise, crypto: webcrypto, require(path) {
+    vm.runInNewContext(code, { exports, console, Date, Map, Set, Promise, crypto: webcrypto,
+      setTimeout: (callback, delay) => { const id = ++nextDeadline; deadlines.set(id, { callback, delay }); return id; },
+      clearTimeout: id => deadlines.delete(id), require(path) {
       if (path === '@react-native-async-storage/async-storage') return { default: {
         async getItem(key) { return storage.get(key) ?? null; },
         async setItem(key, value) { if (controls.failStorage) throw new Error('disk full'); storage.set(key, value); },
@@ -158,7 +162,9 @@ function harness(shared) {
   }
   const api = load('userData');
   const key = base => `${base}:account-v1:${account?.userId ?? 'anonymous'}`;
-  return { api, remote, writes, controls, storage, tokens, key, shared: { remote, versions, receipts }, setAccount: value => { account = value; },
+  return { api, remote, writes, controls, storage, tokens, key, deadlines,
+    expireDeadlines() { for (const [id, timer] of [...deadlines]) { deadlines.delete(id); timer.callback(); } },
+    shared: { remote, versions, receipts }, setAccount: value => { account = value; },
     restart() { for (const key of Object.keys(modules)) delete modules[key]; return load('userData'); },
     gate() { return { reached: deferred(), release: deferred() }; } };
 }
@@ -560,4 +566,65 @@ test('Saved and Continue Watching read all pages', async () => {
   assert.equal((await h.api.readMyListIds()).length, 405);
   assert.equal(Object.keys(await h.api.readMergedWatchProgress()).length, 405);
   assert.equal(h.writes.length, 0);
+});
+
+test('hung collection write releases the UI as unknown without resending or accepting a late receipt', async () => {
+  const h = harness();
+  const gate = h.gate(); h.controls.writeGate = gate;
+  const writing = h.api.setMyListTitleSaved('film', true);
+  await gate.reached.promise;
+  assert.equal(h.deadlines.size, 1, 'remote writes must have a finite deadline');
+  h.expireDeadlines();
+  assert.equal((await writing).syncStatus, 'unknown');
+  const before = h.storage.get(h.key(h.api.MY_LIST_KEY));
+  gate.release.resolve();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.storage.get(h.key(h.api.MY_LIST_KEY)), before, 'late success cannot silently acknowledge unknown state');
+  assert.equal((await h.api.readMyListState()).syncStatus, 'unknown');
+  assert.equal(h.writes.length, 1, 'ordinary refresh must not retry the timed-out mutation');
+  assert.equal((await h.api.readMyListState({ retryUnknown: true })).syncStatus, 'synced');
+  assert.deepEqual(h.writes[1].request, h.writes[0].request);
+  assert.equal(h.deadlines.size, 0);
+});
+
+test('hung collection read preserves local progress and cannot replace a newer snapshot when it arrives late', async () => {
+  const h = harness();
+  await h.api.writeProgressForTitle('film', 2000, 10000);
+  const gate = h.gate(); h.controls.readGate = gate;
+  const reading = h.api.readWatchProgressState();
+  await gate.reached.promise;
+  assert.equal(h.deadlines.size, 1, 'remote reads must have a finite deadline');
+  h.expireDeadlines();
+  const result = await reading;
+  assert.equal(result.readStatus, 'offline');
+  assert.equal(result.progress.film.positionMillis, 2000);
+  await h.api.writeProgressForTitle('film', 5000, 10000);
+  gate.release.resolve();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal((await h.api.readLocalWatchProgress()).film.positionMillis, 5000);
+  assert.equal(h.deadlines.size, 0);
+});
+
+test('explicit timeout recovery can overlap the original request without overwriting a newer opposite intent', async () => {
+  const h = harness();
+  const gate = h.gate(); h.controls.writeGate = gate;
+  const writing = h.api.setMyListTitleSaved('film', true);
+  await gate.reached.promise;
+  h.expireDeadlines();
+  assert.equal((await writing).syncStatus, 'unknown');
+  assert.equal((await h.api.setMyListTitleSaved('film', false)).syncStatus, 'unknown');
+  assert.equal(h.writes.length, 1, 'new intent remains behind the unknown predecessor');
+  const recovered = await h.api.readMyListState({ retryUnknown: true });
+  assert.equal(recovered.syncStatus, 'synced');
+  assert.deepEqual(Array.from(recovered.ids), []);
+  assert.deepEqual(h.writes[1].request, h.writes[0].request, 'overlapping recovery uses the immutable operation identity');
+  assert.equal(h.writes[2].action, 'delete');
+  assert.equal(h.writes[2].request.p_expected_revision, '1');
+  const snapshot = h.storage.get(h.key(h.api.MY_LIST_KEY));
+  gate.release.resolve();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.storage.get(h.key(h.api.MY_LIST_KEY)), snapshot, 'late original response cannot replace the successor');
+  assert.equal(h.remote.user_list.has('film'), false);
+  assert.equal(h.writes.length, 3);
+  assert.equal(h.deadlines.size, 0);
 });
