@@ -169,8 +169,10 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
       insert into private.creator_room_auction_product_bindings values('${androidCap}','${product}','synthetic only',now());
       insert into private.google_play_external_program_config(package_name,environment,enrollment_evidence,
         license_test_qualification_evidence,tax_configuration_evidence,reporter_configuration_evidence,native_build_qualification_evidence,
-        verified_at,expires_at,enabled) values('com.fixture.app','test','synthetic only','synthetic only','synthetic only',
-        'synthetic only','synthetic only',now(),now()+interval '1 hour',true)`);
+        verified_at,expires_at,enabled) values('com.chillywood.mobile','test','synthetic only','synthetic only','synthetic only',
+        'synthetic only','synthetic only',now(),now()+interval '1 hour',true);
+      insert into private.google_play_external_capability_program_bindings(capability_id,program_id)
+        select '${androidCap}',id from private.google_play_external_program_config where package_name='com.chillywood.mobile'`);
     const android=await prepare('ANDROID','buyer1','android');
     assert.equal(android.claim.routeKind,'android_external_content_link');
     const bind=`public.bind_google_play_external_checkout('${actors.buyer1.user_id}','${actors.buyer1.session_id}',

@@ -15690,7 +15690,7 @@ export default function AdminStudioScreen() {
                   Standard cashouts have no app fee. Optional instant cash-out has a 2% app fee with no default cap. Provider fees are separate and currently unknown; final net is not confirmed. Cash-out and payout execution remain disabled.
                 </Text>
                 <Text style={styles.configListBody}>
-                  Preproduction testing can preview scheduled payout fee $0 and instant cash-out fee examples of $1.50 on $100 or $15.00 on $1,000. These previews do not create payable balances.
+                  Preproduction testing can preview scheduled payout fee $0 and instant cash-out app fee examples of $2.00 on $100 or $20.00 on $1,000. Provider fees are separate and unconfirmed. These previews do not create payable balances.
                 </Text>
               </View>
             </View>

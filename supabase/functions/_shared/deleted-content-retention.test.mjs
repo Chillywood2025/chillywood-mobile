@@ -62,3 +62,34 @@ test('disabled expiry worker performs no mutations',async()=>{
   assert.deepEqual(await runDeletedContentExpiryBatch(async(name)=>{calls.push(name);return{data:{enabled:false},error:null};}),{enabled:false,results:[]});
   assert.deepEqual(calls,['list_deleted_content_expiry_work']);
 });
+test('text expiry validates the complete bounded queue before attempting any mutation',async()=>{
+  const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  for(const ids of [[id,id],[id,id.toUpperCase()],['-'.repeat(36)],
+    ['a'.repeat(36)],[id,null],Array(21).fill(id),null]) {
+    const calls=[];
+    await assert.rejects(runDeletedContentExpiryBatch(async(name)=>{
+      calls.push(name);return {data:{enabled:true,deletionIds:ids},error:null};
+    }),/retention_work_invalid/);
+    assert.deepEqual(calls,['list_deleted_content_expiry_work']);
+  }
+});
+test('text expiry rejects unknown, failed and malformed receipts instead of reporting success',async()=>{
+  const id='11111111-1111-4111-8111-111111111111';
+  for(const receipt of [{status:'failed'},{status:'success'},{status:''},{status:'future_status'},
+    [],null,{status:'purged'},{status:'purged',claimId:'-'.repeat(36)}]) {
+    await assert.rejects(runDeletedContentExpiryBatch(async(name)=>({
+      data:name==='list_deleted_content_expiry_work'?{enabled:true,deletionIds:[id]}:receipt,error:null,
+    })),/retention_work_failed/);
+  }
+});
+test('text expiry preserves every current SQL blocker and accepts only claimed purge completion',async()=>{
+  const id='11111111-1111-4111-8111-111111111111';
+  for(const status of ['disabled','already_absent','not_due','held','provider_exact_delete_unproven',
+    'soft_source_cleanup_required','source_busy','source_cleanup_required',
+    'external_reference_archive_proof_required','brand_delegation_unavailable','delegated_brand_lifecycle','purged']) {
+    const result=await runDeletedContentExpiryBatch(async(name)=>({
+      data:name==='list_deleted_content_expiry_work'?{enabled:true,deletionIds:[id]}:{status,claimId:id},error:null,
+    }));
+    assert.deepEqual(result,{enabled:true,results:[{kind:'deletion',status}]});
+  }
+});

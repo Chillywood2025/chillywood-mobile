@@ -492,7 +492,8 @@ document.documentElement = container(); globalThis.document = document; globalTh
 function fakeClock() {
   let now = 0, id = 0; const timers = new Map();
   return { setTimeout(fn, delay) { const key = ++id; timers.set(key, { at: now + delay, fn }); return key; },
-    clearTimeout(key) { timers.delete(key); }, advance(ms) { now += ms; for (const [key, timer] of timers) if (timer.at <= now) { timers.delete(key); timer.fn(); } }, count: () => timers.size };
+    clearTimeout(key) { timers.delete(key); }, queuedCallbacks: () => [...timers.values()].map(timer => timer.fn),
+    advance(ms) { now += ms; for (const [key, timer] of timers) if (timer.at <= now) { timers.delete(key); timer.fn(); } }, count: () => timers.size };
 }
 async function timerHarness(t) {
   const clock = fakeClock(); let hidden = 0, renewals = 0;
@@ -558,3 +559,30 @@ test('mounted renewal timer handles short and long tokens, replacement, backgrou
   await h.token({ token: '30000' }); await h.token({ enabled: false }); h.clock.advance(30000); assert.equal(h.renewals, 2);
   await h.token({ enabled: true }); await h.unmount(); assert.equal(h.clock.count(), 0);
 });
+
+for (const boundary of ['replacement', 'disabled', 'unmount']) {
+  test(`queued token renewal is inert after ${boundary}`, async t => {
+    const h = await timerHarness(t); await h.options({ enabled: false });
+    await h.token({ enabled: true, token: '30000' });
+    const [queued] = h.clock.queuedCallbacks();
+    if (boundary === 'replacement') await h.token({ token: '3600000' });
+    else if (boundary === 'disabled') await h.token({ enabled: false });
+    else await h.unmount();
+    queued();
+    assert.equal(h.renewals, 0, 'clearing a timer cannot revoke a callback already queued by the runtime');
+    if (boundary === 'replacement') { h.clock.advance(3540000); assert.equal(h.renewals, 1); }
+  });
+}
+
+for (const boundary of ['activity', 'blocked', 'disabled', 'unmount']) {
+  test(`queued overlay hide is inert after ${boundary}`, async t => {
+    const h = await timerHarness(t), [queued] = h.clock.queuedCallbacks();
+    if (boundary === 'activity') await h.options({ activityVersion: 1 });
+    else if (boundary === 'blocked') await h.options({ blocked: true });
+    else if (boundary === 'disabled') await h.options({ enabled: false });
+    else await h.unmount();
+    queued();
+    assert.equal(h.hidden, 0, 'an old hide cannot dismiss controls owned by a newer interaction');
+    if (boundary === 'activity') { h.clock.advance(10000); assert.equal(h.hidden, 1); }
+  });
+}

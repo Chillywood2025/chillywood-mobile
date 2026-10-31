@@ -20,7 +20,10 @@ test('older cheaper external selection survives exact iOS/Android admission, quo
    await clone(foreign,{creator_id:other.user_id});
    await clone(expired,{verified_at:new Date(Date.now()-120000).toISOString(),expires_at:new Date(Date.now()-60000).toISOString()});
    await clone(revoked,{revoked_at:new Date().toISOString()});
-   if(platform==='android')await db.exec(`insert into private.google_play_external_program_config(package_name,environment,enrollment_evidence,license_test_qualification_evidence,tax_configuration_evidence,reporter_configuration_evidence,native_build_qualification_evidence,verified_at,expires_at,enabled) values('com.fixture.app','test','synthetic','synthetic','synthetic','synthetic','synthetic',now(),now()+interval '1 hour',true)`);
+   if(platform==='android') {
+    const program=await one(`insert into private.google_play_external_program_config(package_name,environment,enrollment_evidence,license_test_qualification_evidence,tax_configuration_evidence,reporter_configuration_evidence,native_build_qualification_evidence,verified_at,expires_at,enabled) values('com.chillywood.mobile','test','synthetic','synthetic','synthetic','synthetic','synthetic',now(),now()+interval '1 hour',true) returning id`);
+    await db.query('insert into private.google_play_external_capability_program_bindings(capability_id,program_id) select id,$1 from private.creator_external_payment_capabilities where id=any($2::uuid[])',[program,[old,newer,foreign,expired,revoked]]);
+   }
    await db.query(`insert into private.creator_external_payment_eligibility(capability_id,buyer_id,session_id,eligibility_evidence,verified_at,expires_at) select id,$1,$2,'synthetic trusted eligibility',now()-interval '1 minute',now()+interval '10 minutes' from private.creator_external_payment_capabilities where id=any($3::uuid[])`,[buyer.user_id,buyer.session_id,[old,newer]]);
    const admit=cap=>platform==='ios'?one("select public.admit_ios_external_session('creator_tip',$1,299,$2,'USA',1,$3)",[creator.user_id,action,cap]):one("select public.admit_google_play_external_session('creator_tip',$1,299,$2,$3,1,$4)",[creator.user_id,action,'synthetic-'+randomUUID(),cap]);
    await as();if(platform==='android'){await admit(old);await admit(newer);}

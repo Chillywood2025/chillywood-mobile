@@ -16,6 +16,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { buildHlsOutputInventory } from "./lib/hls-output-inventory.mjs";
 
 const cityLightsSourceId = "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1";
 const autoDetectConfirmation = "I_UNDERSTAND_AUTO_DETECT_BATCH";
@@ -841,6 +842,12 @@ async function executeCandidate(candidate) {
     const generated = selectedRenditions.map((rendition) => generateRendition(download.tmpFile, outputRoot, rendition));
     const masterPath = writeMasterManifest(outputRoot, generated);
     assertManifestSafe(outputRoot, generated);
+    const outputInventory = buildHlsOutputInventory({
+      outputRoot, outputPrefix, roots: ["master.m3u8"],
+      files: ["master.m3u8", ...generated.flatMap(rendition => [
+        `${rendition.label}/index.m3u8`, ...rendition.segments.map(segment => `${rendition.label}/${segment}`),
+      ])],
+    });
     runFfmpegDecode(masterPath);
     updateJobStatus(jobId, "uploading");
     const uploaded = uploadHlsTree(outputRoot, outputPrefix, generated);
@@ -879,6 +886,7 @@ async function executeCandidate(candidate) {
       outputPrefix,
       renditionLabels: generated.map((rendition) => rendition.label),
       uploadedObjectCount: uploaded.length,
+      outputInventory,
       publicProof,
       rollbackScope: {
         source_id: candidate.sourceId,
