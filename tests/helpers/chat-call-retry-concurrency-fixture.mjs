@@ -1,5 +1,16 @@
 // Synthetic fixture only; all call admission/transition functions remain real.
 export const callRetryMigration = '20261031203703';
+// Disposable native clone only: realtime is intentionally excluded from the
+// template export. Keep production invalidation triggers active, but record
+// their transport locally instead of dispatching to a Realtime service.
+export const callRetryRealtimeSink = `
+  create schema realtime;
+  create table realtime.fixture_outbox(payload jsonb not null,event text not null,topic text not null,private boolean not null);
+  create function realtime.send(jsonb,text,text,boolean) returns void language sql
+    as $$insert into realtime.fixture_outbox values($1,$2,$3,$4)$$;
+  revoke all on schema realtime from public,anon,authenticated,service_role;
+  revoke all on function realtime.send(jsonb,text,text,boolean) from public,anon,authenticated,service_role;
+`;
 export const literal = value => `'${String(value).replaceAll("'", "''")}'`;
 export function callRetryFixture(n) {
   const id = suffix => `cb${String(n).padStart(2, '0')}0000-0000-4000-8000-${String(suffix).padStart(12, '0')}`;

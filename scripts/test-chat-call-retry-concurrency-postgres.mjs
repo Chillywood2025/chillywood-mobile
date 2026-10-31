@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
-import {callRetryFixture, chatActivityConcurrencyFixture, callRetryMigration, literal} from '../tests/helpers/chat-call-retry-concurrency-fixture.mjs';
+import {callRetryFixture, chatActivityConcurrencyFixture, callRetryMigration, callRetryRealtimeSink, literal} from '../tests/helpers/chat-call-retry-concurrency-fixture.mjs';
 
 if (process.argv.includes('--help')) {
   console.log('After local Supabase reset, runs real lock schedules in a generated disposable clone. --fixture-preflight validates SQL with PGlite only. No remote URL accepted.');
@@ -129,6 +129,7 @@ try {
     '--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
   success(dump,'read-only template export');
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore isolated clone');
+  query(callRetryRealtimeSink);
   const run=sql=>jsonRows(query(`begin;${sql}commit;`)).at(-1);
   async function fixture(n,{candidates=true}={}) {
     const f=callRetryFixture(n);query(f.setup);
@@ -207,6 +208,8 @@ try {
   busy.child.stdin.end('commit;\n\\q\n');const released=await busy.done;sessions.delete(busy);assert.equal(released.code,0,released.stderr);
   run(skipped.expire);assert.equal(query(`select status from public.chat_call_invites where id='${skipped.expiredInvite}'`),'missed');
   assert.equal(checks,10);
+  assert.ok(Number(query('select count(*) from realtime.fixture_outbox'))>0,'production invalidation triggers exercised the clone-local transport sink');
+  assert.equal(query("select count(*) from realtime.fixture_outbox where payload<>'{}'::jsonb or event<>'state:update' or topic not like 'comm-room-%' or private is distinct from true"),'0','invalidation hints remain private and contain no row payload');
   console.log('Call retry/activity native concurrency PASS: 10 observed PostgreSQL lock schedules plus expired-call SKIP LOCKED; no calls or notifications dispatched.');
 } finally {
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
