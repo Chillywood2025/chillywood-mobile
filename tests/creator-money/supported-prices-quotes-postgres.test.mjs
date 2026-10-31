@@ -27,6 +27,8 @@ const successors=[
   '20261031033820_commerce_tax_readiness.sql',
   '20261031033911_merch_tracking_correction_intake.sql',
   '20261031034904_merch_tracking_reviewed_supersession.sql',
+  '20261031173602_google_external_program_capability_binding.sql',
+  '20261031173636_commerce_fee_report_observations.sql',
 ];
 // Full migrated schema, real application predicates/triggers and provider SQL.
 // Only managed auth/storage infrastructure is the shared fixture; no network.
@@ -72,6 +74,8 @@ test('catalog selection and immutable quote survive source edits, duplicates, te
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${subscriptionBindingsMigration}`,import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${auctionPaymentMigration}`,import.meta.url),'utf8'));
     for(const successor of successors)await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${successor}`,import.meta.url),'utf8'));
+    eq(await scalar("select to_regclass('private.google_play_external_capability_program_bindings') is not null"),true,'exact program-binding successor is replayed after its prerequisites');
+    eq(await scalar("select to_regclass('private.commerce_fee_report_observations') is not null"),true,'fee-report successor is replayed after its settlement prerequisite');
     step='catalog and creator';
     await claim(host,hostSession);
     const ios=await scalar("select public.list_creator_supported_prices('watch_party_live','ios','sandbox')");
