@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {observe,order,fixture} from './merch-cost-observation-edge.test.mjs';
 
@@ -23,6 +25,10 @@ test('actual full-chain SQL records verified adapter costs, immutable 90/10 held
   assert.equal(await one('select count(*)::int from private.merch_held_net_allocations'),0);
   await service();const result=await save(evidence);assert.equal(result.netBaseMinor,870);assert.equal(result.platformShareMinor,87);assert.equal(result.creatorShareMinor,783);assert.equal(result.financialAuthority,false);
   assert.ok(result.holdReasons.includes('fulfillment_unqualified'));assert.ok(result.holdReasons.includes('verified_delivery_required'));
+  assert.ok(result.holdReasons.includes('tax_service_fee_unverified'));
+  assert.equal(result.taxServiceFeeMinor,null);assert.equal(result.finalNetBaseMinor,null);assert.equal(result.finalCreatorShareMinor,null);
+  assert.equal(result.taxServiceFeeStatus,'unverified');
+  for(const fake of [0,5,50])await assert.rejects(save({...evidence,tax_service_fee_minor:fake}),/tax_service_fee_evidence_unqualified/);
   assert.equal((await save(evidence)).status,'duplicate');
   for(const patch of [{provider_fee_minor:null},{provider_fee_minor:0},{charge_id:'ch_wrong'},{account_id:'acct_wrong'},{gross_minor:999},{currency:'eur'},{financial_authority:true},{tax_minor:-1}])await assert.rejects(save({...evidence,...patch}));
   await root();assert.equal(await one('select count(*)::int from private.merch_held_net_allocations'),1);
@@ -30,6 +36,13 @@ test('actual full-chain SQL records verified adapter costs, immutable 90/10 held
   await assert.rejects(db.exec('update private.merch_held_net_allocations set creator_minor=999'),/append_only/);
   const projection=await one('select public.merch_order_projection_internal(o) from public.merch_orders o where id=$1',[order.id]);
   assert.equal(projection.netSettlementStatus,'held_unqualified');assert.equal(projection.creatorShareMinor,783);assert.equal(projection.financialAuthority,false);
+  assert.ok(projection.netSettlementHoldReasons.includes('tax_service_fee_unverified'));
+  assert.equal(projection.finalCreatorShareMinor,null,'observed provisional arithmetic is not a final payable amount');
+  const parserModule={exports:{}};
+  new Function('require','module','exports',ts.transpileModule(fs.readFileSync('_lib/creatorMerch.ts','utf8'),
+    {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(()=>({}),parserModule,parserModule.exports);
+  const safe=parserModule.exports.parseMerchTaxFeeMetadata(projection);
+  assert.equal(safe.taxServiceFeeStatus,'unverified');assert.equal(safe.finalCreatorShareMinor,null);assert.equal(safe.financialAuthority,false);
   await service();
   const partial={...evidence,refunded_minor:500,tax_reversal_minor:null,refunds:[{id:'re_first',balance_id:'txn_first',amount:500,fee:0,net:-500,status:'available'}]};
   const held=await save(partial);assert.equal(held.netBaseMinor,null);assert.equal(held.creatorShareMinor,null);assert.ok(held.holdReasons.includes('refund_tax_reversal_unverified'));

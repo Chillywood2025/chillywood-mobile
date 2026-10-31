@@ -3,28 +3,38 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
+
+const taxModule=loadPureTypeScriptModule('supabase/functions/_shared/commerce-tax-readiness.ts');
+const reviewedTaxPolicy={ready:true,policyId:'70000000-0000-4000-8000-000000000007',taxBehavior:'inclusive',
+  taxCode:'txcd_99999999',collectionMode:'automatic',liabilityType:'self',liabilityAccountId:null};
 
 const buyer='70000000-0000-4000-8000-000000000001',session='70000000-0000-4000-8000-000000000002';
 const product='70000000-0000-4000-8000-000000000003',attempt='70000000-0000-4000-8000-000000000004';
 const order='70000000-0000-4000-8000-000000000005';
-function harness({beta=true,authority=true,reservationError=false,providerError=false,livemode=false,snapshot={}}={}) {
+function harness({beta=true,authority=true,reservationError=false,providerError=false,livemode=false,snapshot={},taxPolicy=reviewedTaxPolicy}={}) {
   const calls=[],provider=[],updates=[];let handler;
   const productRow={id:product,creator_id:'creator',provider:'stripe_physical_goods',environment:'sandbox',status:'sandbox',is_physical_good:true,creates_digital_access:false,price_minor:9999,currency:'usd'};
   const admin={from:table=>{
     const q={select:()=>q,limit:()=>q,eq:async()=>({error:null}),maybeSingle:async()=>({data:productRow,error:null}),update:body=>{updates.push({table,body});return q;}};
     q.eq=(...args)=>{calls.push(['eq',table,...args]);return table==='merch_products'?q:Promise.resolve({error:null});};return q;
-  },rpc:async(name,args)=>{calls.push([name,args]);return reservationError?{data:null,error:{message:'blocked'}}:{data:{id:order,title:'Frozen title',priceMinor:1000,currency:'usd',createdAt:'2026-10-29T19:00:00Z',...snapshot},error:null};}};
-  const ctx={exports:{},Date,Number,URLSearchParams,Request,Response,Deno:{serve:fn=>{handler=fn;}},fetch:async(url,options)=>{
+  },rpc:async(name,args)=>{calls.push([name,args]);if(name==='bind_commerce_tax_checkout_policy')return {data:taxPolicy,error:null};return reservationError?{data:null,error:{message:'blocked'}}:{data:{id:order,title:'Frozen title',priceMinor:1000,currency:'usd',createdAt:'2026-10-29T19:00:00Z',...snapshot},error:null};}};
+  const ctx={exports:{},Date,Number,URLSearchParams,Request,Response,AbortSignal,Deno:{serve:fn=>{handler=fn;}},fetch:async(url,options)=>{
     if(url.includes('/rest/v1/rpc/')) {calls.push(['authority',options]);return new Response(JSON.stringify(authority?{authoritative:true,userId:buyer,sessionGeneration:session}:null),{status:200});}
+    if(url==='https://api.stripe.com/v1/account'){assert.equal(options.method,'GET');calls.push(['provider-account']);return Response.json({object:'account',id:'acct_fixture'});}
     provider.push({url,options});if(providerError)throw Error('transport outcome unknown');
-    return new Response(JSON.stringify({id:'cs_test_order',url:'https://checkout.stripe.com/c/pay/test',livemode,payment_intent:null}),{status:200});
+    const body=new URLSearchParams(options.body),amount=Number(body.get('line_items[0][price_data][unit_amount]'))*Number(body.get('line_items[0][quantity]'));
+    return new Response(JSON.stringify({id:'cs_test_order',object:'checkout.session',client_reference_id:order,currency:'usd',amount_total:amount,amount_subtotal:amount,
+      automatic_tax:{enabled:true},metadata:{commerce_tax_policy_id:reviewedTaxPolicy.policyId},url:'https://checkout.stripe.com/c/pay/test',livemode,payment_intent:null}),{status:200});
   },require:name=>{
     if(name.startsWith('jsr:'))return {};
+    if(name.endsWith('/commerce-tax-readiness.ts'))return taxModule;
     if(name.endsWith('/exact-subject-authority.ts'))return {readExactBetaAccess:async()=>beta,parseExactCurrentSessionAuthority:x=>x};
     if(name.endsWith('/stripe-connect.ts'))return {
       authenticateRequest:async()=>({user:{id:buyer,email:null}}),createAuthClient:()=>({supabaseUrl:'https://db.invalid',supabaseAnonKey:'public'}),
       createAdminClient:()=>({configured:true,client:admin}),userHasPlatformRole:async()=>false,
       readStripeTestSecret:()=>({configured:true,secret:'synthetic_test_only'}),
+      readOptionalEnv:name=>name==='STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID'?'acct_fixture':null,
       parseJsonPayload:async req=>({value:await req.json()}),toText:x=>String(x??'').trim(),
       jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status}),optionsResponse:()=>new Response(null,{status:204}),
       notConfiguredPayload:()=>({}),safeWriteAuditLog:async()=>{},sanitizeErrorMessage:e=>String(e?.message??e),
@@ -41,6 +51,17 @@ test('checkout adapter binds verified original session and atomic frozen catalog
  assert.equal(body.get('shipping_address_collection[allowed_countries][0]'),'US');assert.equal(body.get('expires_at'),String(Date.parse('2026-10-29T20:00:00Z')/1000));
  assert.equal(body.get('success_url'),`chillywoodmobile://merch/orders?orderId=${order}`);assert.equal(body.get('cancel_url'),body.get('success_url'));assert.equal(h.provider[0].options.headers['Idempotency-Key'],`chillywood-merch-checkout-${order}`);
  assert.equal(r.body.liveMoneyAction,false);assert.equal(r.body.payoutCreated,false);
+ assert.equal(body.get('automatic_tax[enabled]'),'true');assert.equal(body.get('line_items[0][price_data][tax_behavior]'),'inclusive');
+ assert.equal(body.get('metadata[commerce_tax_policy_id]'),reviewedTaxPolicy.policyId);
+ const tax=h.calls.find(c=>c[0]==='bind_commerce_tax_checkout_policy');
+ assert.equal(tax[1].p_identity_id,order);assert.equal(tax[1].p_product_id,product);assert.equal(tax[1].p_account_id,'acct_fixture');
+ assert.ok(h.calls.indexOf(tax)<h.calls.findIndex(c=>c[0]==='provider-account'));
+});
+test('missing or unsupported reviewed tax policy blocks account reads and checkout dispatch',async()=>{
+ for(const taxPolicy of [null,{ready:false,reason:'tax_qualification_required'},{...reviewedTaxPolicy,taxBehavior:'exclusive'}]){
+  const h=harness({taxPolicy}),r=await h.send();assert.equal(r.status,409);
+  assert.equal(h.provider.length,0);assert.equal(h.updates.length,0);assert.ok(!h.calls.some(c=>c[0]==='provider-account'));
+ }
 });
 test('ineligible, stale session and rejected reservation never reach provider',async()=>{
  for(const options of [{beta:false},{authority:false},{reservationError:true}]){const h=harness(options);assert.ok((await h.send()).status>=400);assert.equal(h.provider.length,0);assert.equal(h.updates.length,0);}

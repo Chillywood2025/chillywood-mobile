@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { authenticateRequest, createAdminClient, createAuthClient, jsonResponse, optionsResponse,
   readOptionalEnv } from "../_shared/stripe-connect.ts";
 import { readExactCurrentSessionAuthority } from "../_shared/exact-subject-authority.ts";
+import { readCommerceTaxReadiness, commerceTaxParameters } from "../_shared/commerce-tax-readiness.ts";
 
 // Separate direct-account room checkout. No merch, tip, IAP, transfer or payout.
 const uuid = (value: unknown): value is string => typeof value === "string"
@@ -39,7 +40,10 @@ Deno.serve(async req => {
       p_quote_id: payload.quote_id, p_buyer_id: auth.user.id,
       p_session_id: authority.sessionGeneration, p_attempt_id: payload.attempt_id,
     });
-    if (claim.error || !claim.data) return unavailable("approved_checkout_unavailable");
+    if (claim.error || !claim.data) {
+      const taxReason = /\b(tax_qualification_required|tax_qualification_expired|tax_pricing_behavior_required|tax_pricing_behavior_unsupported|tax_scope_coverage_required|provider_tax_settings_unverified|tax_policy_changed)\b/.exec(claim.error?.message ?? "")?.[1];
+      return unavailable(taxReason ?? "approved_checkout_unavailable");
+    }
     let q = claim.data;
     const recovering = q.startAuthorized !== true;
     if (recovering) {
@@ -69,6 +73,9 @@ Deno.serve(async req => {
       || q.financialAuthority !== false || !/^acct_[A-Za-z0-9]+$/.test(q.recipientAccountId)
       || q.recipientAccountId === platformAccount
       || !/^prod_[A-Za-z0-9]+$/.test(q.providerProductId)) throw new Error("invalid_claim");
+    const taxPolicy = recovering ? null : await readCommerceTaxReadiness(admin.client, { feature: "room_auction", identityId: q.quoteId,
+      productId: q.providerProductId, accountId: platformAccount!, environment: "test", permittedScope: "worldwide" });
+    if (taxPolicy && !taxPolicy.ready) return unavailable(taxPolicy.reason);
     if (android) {
       // Bind the same fresh native observation that admitted this buyer/quote.
       // The opaque token stays private and is never sent as Stripe metadata.
@@ -93,13 +100,8 @@ Deno.serve(async req => {
       "adaptive_pricing[enabled]": "false", allow_promotion_codes: "false",
       integration_identifier: `chillywood_room_auction_${payload.attempt_id.replaceAll("-", "").slice(0, 8).replace(/[0-9a-f]/g, (v: string) => String.fromCharCode(97 + parseInt(v, 16)))}`,
     });
-    if (android) {
-      // The winning bid is the full buyer price, including tax. Program setup
-      // must qualify the product tax category and account registration first.
-      body.set("automatic_tax[enabled]", "true");
-      body.set("billing_address_collection", "required");
-      body.set("line_items[0][price_data][tax_behavior]", "inclusive");
-    }
+    if (taxPolicy?.ready) for (const [name, value] of Object.entries(commerceTaxParameters(taxPolicy))) body.set(name, value);
+    body.set("billing_address_collection", "required");
     const metadata = { auction_quote_id: q.quoteId, auction_id: q.auctionId, buyer_user_id: q.buyerId,
       creator_user_id: q.creatorId, provider_product_id: q.providerProductId, environment: "test", rail: "stripe_room_auction",
       settlement_contract_id: q.settlementContractId, settlement_policy: q.settlementPolicy };
@@ -114,6 +116,15 @@ Deno.serve(async req => {
     if (!accountResponse.ok) throw new Error("platform_account_unverified");
     const providerAccount = await accountResponse.json();
     if (providerAccount.object !== "account" || providerAccount.id !== platformAccount) throw new Error("platform_account_mismatch");
+    if (taxPolicy?.ready) {
+      const productResponse = await fetch(`https://api.stripe.com/v1/products/${encodeURIComponent(q.providerProductId)}`, {
+        method: "GET", redirect: "error", headers: { Authorization: `Bearer ${key}`, "Stripe-Version": "2026-10-28.endive" },
+        signal: AbortSignal.timeout(15000) });
+      if (!productResponse.ok) throw new Error("tax_product_unverified");
+      const taxProduct = await productResponse.json();
+      if (taxProduct.id !== q.providerProductId || taxProduct.object !== "product" || taxProduct.livemode !== false
+        || taxProduct.tax_code !== taxPolicy.taxCode) throw new Error("tax_product_unverified");
+    }
     const response = await fetch(providerUrl, { method: recovering ? "GET" : "POST",
       headers: { Authorization: `Bearer ${key}`, "Stripe-Version": "2026-10-28.endive",
         "Idempotency-Key": `room-auction-platform-v1-${q.quoteId}`,
@@ -126,7 +137,8 @@ Deno.serve(async req => {
       || !/^cs_test_[A-Za-z0-9]+$/.test(session.id) || session.client_reference_id !== q.quoteId
       || (recovering && session.id !== q.providerCheckoutSessionId)
       || session.amount_total !== q.amountMinor || session.amount_subtotal !== q.amountMinor || session.currency !== q.currency
-      || (android && session.automatic_tax?.enabled !== true)
+      || (taxPolicy?.ready && (session.automatic_tax?.enabled !== (taxPolicy.collectionMode === "automatic")
+        || session.metadata?.commerce_tax_policy_id !== taxPolicy.policyId))
       || session.expires_at !== expires
       || Object.entries(metadata).some(([name, value]) => session.metadata?.[name] !== value)
       || !Array.isArray(session.payment_method_types) || session.payment_method_types.length !== 1 || session.payment_method_types[0] !== "card"

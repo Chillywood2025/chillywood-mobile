@@ -4,9 +4,11 @@ import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
-test('platform room-auction receipt preserves reserved seat and rejects direct-account payment', {timeout:180000}, async()=>{
+test('historical room-auction receipts and delivery controls replay forward into current tax holds', {timeout:180000}, async()=>{
   const realDateNow=Date.now;
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
+  const migrationDir=new URL('../supabase/migrations/',import.meta.url);
+  const successors=fs.readdirSync(migrationDir).filter(name=>name.endsWith('.sql')&&name>='20261031033642_').sort();
+  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:successors});
   try {
     await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
@@ -177,5 +179,11 @@ test('platform room-auction receipt preserves reserved seat and rejects direct-a
       'objective_fulfillment_unproved','observed removal remains an issue after nominal closure');
     assert.equal((await rows(`select private.creator_room_seat_payment_verified('${s.claim.claimId}') ok`))[0].ok,false);
     assert.equal(await count('private.auction_transfer_plans'),0);
+    const priorOperations=await count('private.auction_transfer_operations');
+    for(const file of successors)await db.exec(fs.readFileSync(new URL(file,migrationDir),'utf8'));
+    const current=await rpc('buyer1',`public.reserve_auction_test_transfer('${contract}')`,'service_role');
+    assert.equal(current.status,'held');assert.equal(current.reason,'tax_service_fee_unverified');
+    assert.equal(await count('private.auction_transfer_operations'),priorOperations,'current hold never dispatches legacy estimates');
+    assert.equal(await count('private.commerce_tax_qualifications'),0);
   }finally{Date.now=realDateNow;await db.close();}
 });

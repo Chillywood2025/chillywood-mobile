@@ -40,11 +40,19 @@ async function mount(t,{screen='MerchShopScreen',props={creatorId:'creator'},rpc
       return {data,error:null};
     },
   }));
+  const correctionHelper=compile('_lib/merchTrackingCorrections.ts',()=>({runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{
+    const authority=current.authority;calls.push({name,args,actor:current.user.id});const data=await rpc(name,args,current.user.id);
+    assert.equal(authority,current.authority,'correction exact account unchanged');return {data,error:null};
+  }}));
+  const correctionPanel=compile('components/merch/merch-tracking-corrections.tsx',name=>name==='react'?React:name==='react-native'?native:name==='expo-router'?{
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useFocusEffect:fn=>React.useEffect(()=>focused?fn():undefined,[fn,focused]),
+  }:name.endsWith('/creatorMerch')?helper:correctionHelper);
   const trackingPanel=compile('components/merch/merch-tracking-panel.tsx',name=>name==='react'?React:name==='react-native'?native:name==='expo-router'?{
     // Harness focus changes explicitly rerender the root, unlike a normal outer variable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useFocusEffect:fn=>React.useEffect(()=>focused?fn():undefined,[fn,focused]),
-  }:trackingHelper);
+  }:name==='./merch-tracking-corrections'?correctionPanel:trackingHelper);
   const shippingHelper=compile('_lib/merchFulfillmentAddress.ts',()=>({
     runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{
       const authority=current.authority;calls.push({name,args,actor:current.user.id});

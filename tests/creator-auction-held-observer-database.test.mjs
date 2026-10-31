@@ -4,9 +4,13 @@ import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
-test('exact-session creator held estimates and dormant auction observation preserve all financial boundaries', {timeout:180000}, async()=>{
+test('historical observer protocol replays forward into current tax-held financial boundaries', {timeout:180000}, async()=>{
   const realDateNow=Date.now;
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
+  // Positive legacy protocol assertions below are explicitly historical, not
+  // current payout eligibility. Replay every successor before current controls.
+  const migrationDir=new URL('../supabase/migrations/',import.meta.url);
+  const successors=fs.readdirSync(migrationDir).filter(name=>name.endsWith('.sql')&&name>='20261031033642_').sort();
+  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:successors});
   try {
     await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
@@ -129,5 +133,11 @@ test('exact-session creator held estimates and dormant auction observation prese
     }
     for(const table of ['auction_transfer_operations','auction_transfer_plans','auction_transfer_result_observations'])assert.equal((await rows(`select count(*)::int n from private.${table}`))[0].n,0);
     assert.equal((await rows('select count(*)::int n from public.creator_earnings_ledger'))[0].n,0);
+    for(const file of successors)await db.exec(fs.readFileSync(new URL(file,migrationDir),'utf8'));
+    const current=await worker(`public.reserve_auction_test_transfer('${claim.settlementContractId}')`);
+    assert.equal(current.status,'held');assert.equal(current.reason,'tax_service_fee_unverified');
+    assert.ok((await read()).entries[0].holdReasons.includes('tax_service_fee_unverified'));
+    assert.equal((await rows('select count(*)::int n from private.commerce_tax_qualifications'))[0].n,0);
+    assert.equal((await rows('select count(*)::int n from private.auction_transfer_operations'))[0].n,0);
   }finally{Date.now=realDateNow;await db.close();}
 });

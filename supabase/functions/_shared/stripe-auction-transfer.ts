@@ -44,9 +44,8 @@ function client(key: string, transport: Transport) {
 }
 // The database consumes the sole dispatch permit BEFORE invoking this method.
 // All errors are unknown, including HTTP 4xx; no blind retry/new key is exposed.
-export async function dispatchAuctionTestTransfer(o: AuctionTransferOperation, key: string, account: string, transport: Transport = fetch) {
+export async function preflightAuctionTestTransfer(o: AuctionTransferOperation, key: string, account: string, transport: Transport = fetch) {
   validateOperation(o, key, account);
-  if (o.dispatchAuthorized !== true) throw Error("transfer_dispatch_not_authorized");
   const get = client(key, transport), actual = await get("/account");
   if (actual.object !== "account" || actual.id !== account) throw Error("platform_account_mismatch");
   const recipient = await get(`/accounts/${o.destination}`);
@@ -62,10 +61,27 @@ export async function dispatchAuctionTestTransfer(o: AuctionTransferOperation, k
   if (balance.id !== charge.balance_transaction || balance.object !== "balance_transaction" || balance.type !== "charge"
     || reference(balance.source) !== o.source_charge_id || balance.currency !== o.currency || balance.status !== "available"
     || !Number.isSafeInteger(balance.net) || Number(balance.net) < o.amount_minor) throw Error("source_balance_not_available");
+  return {platform_account_id:o.platform_account_id,destination:o.destination,source_charge_id:o.source_charge_id,
+    amount_minor:o.amount_minor,currency:o.currency,environment:"test",provider_ready:true,financial_authority:false};
+}
+// Automatic orchestration runs preflight BEFORE the durable sole-permit claim.
+// This post-only helper accepts only the DB-issued dispatchAuthorized operation.
+export async function dispatchPreflightedAuctionTestTransfer(o: AuctionTransferOperation, key: string, account: string, transport: Transport = fetch) {
+  validateOperation(o,key,account);
+  if(o.dispatchAuthorized!==true)throw Error("transfer_dispatch_not_authorized");
+  const get=client(key,transport);
   const body = new URLSearchParams({ amount: String(o.amount_minor), currency: o.currency, destination: o.destination,
     source_transaction: o.source_charge_id, transfer_group: o.transfer_group,
     "metadata[auction_operation_id]": o.id, "metadata[auction_contract_id]": o.contract_id });
   return transferEvidence(await get("/transfers", body, o.idempotency_key), o);
+}
+
+// Compatibility: manually addressed test executor retains its stricter
+// preflight reads. It remains separately disabled; it is not an auto fallback.
+export async function dispatchAuctionTestTransfer(o: AuctionTransferOperation,key:string,account:string,transport:Transport=fetch){
+  if(o.dispatchAuthorized!==true)throw Error("transfer_dispatch_not_authorized");
+  await preflightAuctionTestTransfer(o,key,account,transport);
+  return dispatchPreflightedAuctionTestTransfer(o,key,account,transport);
 }
 
 // GET-only recovery, even years after dispatch. An empty list is NOT proof that

@@ -9,7 +9,52 @@ was already frozen at purchase. A failed provider never changes it to untracked.
 1. `assign_merch_tracking` checks the current exact session, seller ownership,
    paid sandbox order and tracked mode. Assignment is immutable. A number cannot
    be assigned to another order, including apparent recycled numbers. Corrections
-   require a future reviewed supersession flow; deleting tracking is not a bypass.
+   use the reviewed pre-delivery supersession flow below; deleting tracking is not a bypass.
+   Creators can now submit a proposed correction with a reason from the order.
+   Intake never replaces the assignment, reserves the proposed identity, or
+   changes payment, destination, delivery evidence or the accepted return clock.
+
+### Reviewed pre-delivery corrections
+
+The creator's current exact session and paid, tracked sandbox order are checked
+before an append-only request is accepted. One pending proposal per order, bounded
+notes, at most 100 historical proposals per order, normalized identity validation,
+global already-assigned identity exclusion and frozen UUID replay checks prevent
+silent edits or duplicated submissions. Buyers can read their own order status.
+Submitting a request immediately adds a separate shipment verification/earnings
+review hold. Existing carrier, return, dispute and financial holds remain intact.
+
+Support has a keyset-paginated queue including declined-but-held requests. Both
+existing `admin.support.manage` and `admin.refund_status.record` permissions are
+required on every staff read/action. A staff reviewer cannot approve or decline
+their own buyer or creator order. Declines are append-only and idempotent, and **do not clear the
+verification hold**: rejecting a proposed number is not evidence that the old
+number was correct. The UI distinguishes a request, approval, and carrier verification.
+
+Owner-approved rule: staff may approve only before any delivery has EVER been
+verified and only without immutable checkout/postal/full-address conflicts.
+Revoking old delivery evidence does not reopen approval. Post-delivery and
+address-conflict cases stay held; this flow cannot reset their return clock.
+
+Approval locks the order, rechecks eligibility and global identity uniqueness,
+appends a new assignment and immutable old-to-new supersession, retires the old
+lease, and creates an unverified job for the new identity. Earlier assignments,
+observations and registration state remain unchanged. The active leaf of the
+supersession chain drives tracking reads, assignment retries, job claims,
+completion, callback wake-ups and holds. Old callbacks cannot issue delivery
+evidence for the replacement. Both serialized orders of approval versus carrier
+delivery completion are covered by native contention schedules.
+
+Approval resolves correction reports for the superseded identity, not delivery,
+return/dispute clearance or payouts. The replacement stays held until fresh
+authenticated merchant-scoped carrier reconciliation satisfies all existing
+checks. Proposed identities are not reserved: if another order binds the number
+first, approval fails without altering the order. Superseded numbers can never
+be recycled across orders. Country/postcode corroboration is not exact-street
+delivery proof. No provider qualification, credential, deployment or activation
+is performed by this source change.
+
+### Existing reconciliation path (continued)
 2. Signed Shippo `track_updated` callbacks commit a bounded, hash-deduplicated
    private inbox receipt, then acknowledge. They do not directly issue delivery
    evidence. No unsigned notification is accepted.

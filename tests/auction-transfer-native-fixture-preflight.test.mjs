@@ -39,7 +39,7 @@ function asyncTransport(fragment) {
 }
 const wireQuery=db=>async sql=>{
   try{return (await db.exec(sql)).flatMap(result=>result.rows.map(row=>Object.values(row).map(value=>
-    value===null?'':typeof value==='object'?JSON.stringify(value):String(value)).join('|'))).join('\n').trim();}
+    value===null?'':typeof value==='boolean'?(value?'t':'f'):typeof value==='object'?JSON.stringify(value):String(value)).join('|'))).join('\n').trim();}
   catch(error){
     // Each native query owns a psql process: failed transactions roll back
     // when that connection exits. Preserve that transport property in WASM.
@@ -54,7 +54,7 @@ for(const control of ['current','expired','malformed'])test(`native transfer fix
   const end=source.indexOf('  let checks=0;',start);
   assert.ok(start>0&&end>start);
   const calls=[...source.matchAll(/await fixture\('([A-Z_]+)'\)/gu)].map(match=>match[1]);
-  assert.deepEqual(calls,['DUPLICATE','REFUND_FIRST','DISPATCH_FIRST','REVOKE_FIRST','DISPATCH_REVOKE','COST_FIRST','ELIGIBILITY','DISPATCH_ELIGIBILITY','QUALIFICATION_REVOKE']);
+  assert.deepEqual(calls,['DUPLICATE','CURRENT_REFUND','CURRENT_HISTORICAL','CURRENT_REVOKE','REFUND_FIRST','DISPATCH_FIRST','REVOKE_FIRST','DISPATCH_REVOKE','COST_FIRST','ELIGIBILITY','DISPATCH_ELIGIBILITY','QUALIFICATION_REVOKE']);
   assert.equal(new Set(calls.map(name=>name.replace(/[^A-Za-z0-9]/gu,''))).size,calls.length,'provider identities remain distinct');
   let fragment=source.slice(start,end);
   if(control==='expired'){
@@ -97,7 +97,7 @@ for(const control of ['current','expired','malformed'])test(`native transfer fix
   } finally {await db.close();}
 });
 
-test('all native transfer schedule bodies pass serial SQL preflight, not concurrency proof',{timeout:180000},async()=>{
+for(const checkpoint of ['current','historical'])test(`${checkpoint} native transfer schedule bodies pass serial SQL preflight, not concurrency proof`,{timeout:180000},async()=>{
   const source=readFileSync('scripts/test-auction-transfer-concurrency-postgres.mjs','utf8');
   const start=source.indexOf("  query(readFileSync('tests/fixtures/event-reservation-authority.sql'");
   const end=source.indexOf("  console.log('Auction transfer native concurrency:",start);
@@ -111,10 +111,27 @@ test('all native transfer schedule bodies pass serial SQL preflight, not concurr
     const waiter=await query('begin;'+waiterSql+'commit;');checks++;
     return [values(holder).at(-1),values(waiter).at(-1)];
   }\n`+fragment.slice(raceEnd);
-  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+  // The positive transfer protocol is explicitly historical; current full
+  // schema executes only hard-block schedules and never overrides fee readiness.
+  const historicalSuccessors=['20261031033642_auction_approved_automation.sql',
+    '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
+    '20261031034904_merch_tracking_reviewed_supersession.sql'];
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
+    excludeMigrations:checkpoint==='historical'?historicalSuccessors:[]});
   try {
     const execute=new AsyncFunction('query','readFileSync','assert','randomUUID','createHash','delay','literal',asyncTransport(fragment+'\nreturn checks;'));
-    assert.equal(await execute(wireQuery(db),readFileSync,assert,randomUUID,createHash,delay,literal),14);
+    assert.equal(await execute(wireQuery(db),readFileSync,assert,randomUUID,createHash,delay,literal),checkpoint==='current'?6:14);
+    if(checkpoint==='historical'){
+      for(const migration of historicalSuccessors)await db.exec(readFileSync('supabase/migrations/'+migration,'utf8'));
+      assert.equal((await db.query("select private.commerce_tax_fee_settlement_ready('room_auction',gen_random_uuid()) ready")).rows[0].ready,false);
+      const before=(await db.query('select count(*)::integer n from private.auction_transfer_operations')).rows[0].n;
+      const contract=(await db.query('select id from private.auction_platform_settlement_contracts order by id limit 1')).rows[0].id;
+      await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false);set role service_role`);
+      const held=(await db.query('select public.reserve_auction_test_transfer($1) result',[contract])).rows[0].result;
+      assert.equal(held.dispatchAuthorized,false);assert.equal(held.reason,'tax_service_fee_unverified');
+      await db.exec('reset role');
+      assert.equal((await db.query('select count(*)::integer n from private.auction_transfer_operations')).rows[0].n,before);
+    }
   } finally {await db.close();}
 });
 

@@ -4,9 +4,11 @@ import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
-test('platform auction contracts keep exact receipts and 80/20 earnings held without transfers', {timeout:180000}, async()=>{
+test('historical platform auction receipts replay forward into current unknown-tax-fee holds', {timeout:180000}, async()=>{
   const realDateNow=Date.now;
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
+  const migrationDir=new URL('../supabase/migrations/',import.meta.url);
+  const successors=fs.readdirSync(migrationDir).filter(name=>name.endsWith('.sql')&&name>='20261031033642_').sort();
+  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:successors});
   try {
     await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
@@ -130,5 +132,11 @@ test('platform auction contracts keep exact receipts and 80/20 earnings held wit
     const legacy=await configure('show2','buyer2');
     await rpc('buyer2',legacy.call.replace('prepare_creator_event_auction_platform_checkout','prepare_creator_event_auction_checkout'),'service_role');
     await assert.rejects(()=>rpc('buyer2',legacy.call,'service_role'),/legacy_auction_reconciliation_only/);
+    // No fee-gate override: the legacy amounts above are historical estimates.
+    for(const file of successors)await db.exec(fs.readFileSync(new URL(file,migrationDir),'utf8'));
+    const current=await rpc('buyer1',`public.reserve_auction_test_transfer('${claim.settlementContractId}')`,'service_role');
+    assert.equal(current.status,'held');assert.equal(current.reason,'tax_service_fee_unverified');
+    assert.equal((await rows('select count(*)::int n from private.commerce_tax_qualifications'))[0].n,0);
+    assert.equal((await rows('select count(*)::int n from private.auction_transfer_operations'))[0].n,0);
   } finally {Date.now=realDateNow;await db.close();}
 });

@@ -15,7 +15,9 @@ function load(file,{Deno={},modules={}}={}){
 test('signed exact Checkout → private SQL address under actual API roles → mounted shipping details; no financial authority',{timeout:240000},async()=>{
  const migration='20261030210200_merch_private_fulfillment_address.sql';
  const successors=['20261030212744_merch_return_cases.sql','20261031011531_merch_provider_dispute_observations.sql',
-  '20261031011906_merch_return_buyer_replies.sql','20261031012501_merch_return_case_queues.sql','20261031012502_merch_reconciliation_driver.sql'];
+  '20261031011906_merch_return_buyer_replies.sql','20261031012501_merch_return_case_queues.sql','20261031012502_merch_reconciliation_driver.sql',
+  '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
+  '20261031034904_merch_tracking_reviewed_supersession.sql'];
  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const creator=await one("select md5('shipping-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('shipping-host:'||n::text)::uuid::text,20260814),100)=0 limit 1");

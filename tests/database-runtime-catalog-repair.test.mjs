@@ -47,9 +47,44 @@ const flexibleCommerceFiles = [
   "20261031011906_merch_return_buyer_replies.sql",
   "20261031012501_merch_return_case_queues.sql",
   "20261031012502_merch_reconciliation_driver.sql",
-  "20261031013158_auction_held_visibility_observer.sql"
+  "20261031013158_auction_held_visibility_observer.sql",
+  "20261031033642_auction_approved_automation.sql",
+  "20261031033820_commerce_tax_readiness.sql",
+  "20261031033911_merch_tracking_correction_intake.sql",
+  "20261031034904_merch_tracking_reviewed_supersession.sql",
 ];
 const flexibleCommerceAddedFunctionIdentities = new Map([
+  ["private.auction_automation_approval_valid/1","private.auction_automation_approval_valid(private.auction_automation_approvals)"],
+  ["private.auction_automation_current_approval/1","private.auction_automation_current_approval(uuid)"],
+  ["private.hold_auction_automation_on_approval_change/0","private.hold_auction_automation_on_approval_change()"],
+  ["private.serialize_auction_automation_approval/0","private.serialize_auction_automation_approval()"],
+  ["public.claim_auction_automation_batch/0","claim_auction_automation_batch()"],
+  ["public.record_auction_automation_qualification/2","record_auction_automation_qualification(uuid,jsonb)"],
+  ["public.get_auction_automation_preflight/1","get_auction_automation_preflight(uuid)"],
+  ["public.claim_auction_automation_dispatch/2","claim_auction_automation_dispatch(uuid,jsonb)"],
+  ["public.complete_auction_automation_job/2","complete_auction_automation_job(uuid,boolean)"],
+  ["public.reserve_auction_test_transfer_before_fee_gate/1","reserve_auction_test_transfer_before_fee_gate(uuid)"],
+  ["public.claim_auction_test_transfer_dispatch_before_fee_gate/1","claim_auction_test_transfer_dispatch_before_fee_gate(uuid)"],
+  ["public.bind_commerce_tax_checkout_policy/6","bind_commerce_tax_checkout_policy(text,uuid,text,text,text,text)"],
+  ["public.get_owner_commerce_tax_readiness/0","get_owner_commerce_tax_readiness()"],
+  ["private.commerce_tax_fee_settlement_ready/2","private.commerce_tax_fee_settlement_ready(text,uuid)"],
+  ["private.hold_unverified_commerce_tax_fee/0","private.hold_unverified_commerce_tax_fee()"],
+  ["public.merch_order_projection_before_tax_readiness/1","merch_order_projection_before_tax_readiness(merch_orders)"],
+  ["public.prepare_creator_event_auction_platform_before_tax/4","prepare_creator_event_auction_platform_before_tax(uuid,uuid,uuid,uuid)"],
+  ["public.prepare_creator_room_auction_platform_before_tax/4","prepare_creator_room_auction_platform_before_tax(uuid,uuid,uuid,uuid)"],
+  ["private.commerce_tax_fee_held_result/2","private.commerce_tax_fee_held_result(jsonb,jsonb)"],
+  ["public.record_merch_provider_cost_before_tax_readiness/2","record_merch_provider_cost_before_tax_readiness(uuid,jsonb)"],
+  ["public.record_auction_platform_cost_before_tax_readiness/2","record_auction_platform_cost_before_tax_readiness(uuid,jsonb)"],
+  ["private.creator_auction_held_projection_before_tax_readiness/1","private.creator_auction_held_projection_before_tax_readiness(private.auction_platform_settlement_contracts)"],
+  ["private.merch_tracking_correction_projection/1","private.merch_tracking_correction_projection(private.merch_tracking_corrections)"],
+  ["private.merch_active_tracking_assignment/1","private.merch_active_tracking_assignment(uuid)"],
+  ["private.merch_return_hold_before_tracking_corrections/2","private.merch_return_hold_before_tracking_corrections(merch_orders,timestamp with time zone)"],
+  ["public.merch_order_projection_before_tracking_corrections/1","merch_order_projection_before_tracking_corrections(merch_orders)"],
+  ["public.read_merch_tracking_corrections/1","read_merch_tracking_corrections(uuid)"],
+  ["public.request_merch_tracking_correction/5","request_merch_tracking_correction(uuid,uuid,text,text,text)"],
+  ["public.decline_merch_tracking_correction/3","decline_merch_tracking_correction(uuid,uuid,text)"],
+  ["public.list_merch_tracking_correction_queue/2","list_merch_tracking_correction_queue(uuid,integer)"],
+  ["public.approve_merch_tracking_correction/3","approve_merch_tracking_correction(uuid,uuid,text)"],
   ["public.list_merch_return_case_queue/3", "list_merch_return_case_queue(text,uuid,integer)"],
   ["public.claim_merch_reconciliation_batch/0", "claim_merch_reconciliation_batch()"],
   ["public.complete_merch_cost_refresh/3", "complete_merch_cost_refresh(uuid,uuid,boolean)"],
@@ -772,11 +807,15 @@ test('physical merch successors have the exact declared catalog delta', {timeout
   } finally {await db.close();}
 });
 
-test('merch dispute and case successors retain explicit API boundaries', {timeout:120_000}, async()=>{
+test('commerce tax, automation, tracking and case successors retain explicit API boundaries', {timeout:120_000}, async()=>{
   const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false});
   try {
     const tables=['merch_dispute_observation_attempts','merch_dispute_observations','merch_return_cases','merch_return_case_events',
-      'merch_reconciliation_driver','merch_cost_refresh_jobs','auction_observer_control','auction_observer_jobs'];
+      'merch_reconciliation_driver','merch_cost_refresh_jobs','auction_observer_control','auction_observer_jobs',
+      'commerce_tax_qualifications','commerce_tax_checkout_bindings','merch_tracking_corrections',
+      'merch_tracking_correction_declines','merch_tracking_supersessions','auction_automation_approvals',
+      'auction_automation_controls','auction_automation_jobs','auction_automation_attempts',
+      'auction_automation_qualification_reads','auction_automation_transfer_bindings'];
     const rows=(await db.query(`select c.relname,c.relrowsecurity,c.relforcerowsecurity,
       exists(select 1 from unnest(array['anon','authenticated','service_role']) r(role)
         cross join unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p(privilege)
@@ -786,12 +825,52 @@ test('merch dispute and case successors retain explicit API boundaries', {timeou
     assert.deepEqual(rows,tables.sort().map(relname=>({relname,relrowsecurity:true,relforcerowsecurity:true,api_access:false})),
       'every private evidence/history table exists with forced RLS and no direct API grants');
     const sequenceGrants=(await db.query(`select r.role,p.privilege,
-      has_sequence_privilege(r.role,'private.merch_dispute_observation_attempts_attempt_no_seq',p.privilege) as allowed
-      from unnest(array['anon','authenticated','service_role']) r(role)
+      has_sequence_privilege(r.role,s.identity,p.privilege) as allowed
+      from unnest(array['private.merch_dispute_observation_attempts_attempt_no_seq',
+        'private.auction_automation_attempts_attempt_no_seq']) s(identity)
+      cross join unnest(array['anon','authenticated','service_role']) r(role)
       cross join unnest(array['USAGE','SELECT','UPDATE']) p(privilege)`)).rows;
-    assert.equal(sequenceGrants.length,9);
-    assert.ok(sequenceGrants.every(row=>!row.allowed),'private dispute ordering sequence has no API access');
+    assert.equal(sequenceGrants.length,18);
+    assert.ok(sequenceGrants.every(row=>!row.allowed),'private dispute and automation ordering sequences have no API access');
     for(const [identity,allowed] of [
+      ['public.prepare_creator_event_auction_platform_checkout(uuid,uuid,uuid,uuid)','service_role'],
+      ['public.prepare_creator_room_auction_platform_checkout(uuid,uuid,uuid,uuid)','service_role'],
+      ['public.record_merch_provider_cost_observation(uuid,jsonb)','service_role'],
+      ['public.record_auction_platform_cost_observation(uuid,jsonb)','service_role'],
+      ['public.reserve_auction_test_transfer(uuid)','service_role'],
+      ['public.claim_auction_test_transfer_dispatch(uuid)','service_role'],
+      ['public.merch_order_projection_internal(public.merch_orders)',null],
+      ["private.auction_automation_approval_valid(private.auction_automation_approvals)",null],
+      ["private.auction_automation_current_approval(uuid)",null],
+      ["private.hold_auction_automation_on_approval_change()",null],
+      ["private.serialize_auction_automation_approval()",null],
+      ["public.claim_auction_automation_batch()","service_role"],
+      ["public.record_auction_automation_qualification(uuid,jsonb)","service_role"],
+      ["public.get_auction_automation_preflight(uuid)","service_role"],
+      ["public.claim_auction_automation_dispatch(uuid,jsonb)","service_role"],
+      ["public.complete_auction_automation_job(uuid,boolean)","service_role"],
+      ["public.reserve_auction_test_transfer_before_fee_gate(uuid)",null],
+      ["public.claim_auction_test_transfer_dispatch_before_fee_gate(uuid)",null],
+      ["public.bind_commerce_tax_checkout_policy(text,uuid,text,text,text,text)","service_role"],
+      ["public.get_owner_commerce_tax_readiness()","authenticated"],
+      ["private.commerce_tax_fee_settlement_ready(text,uuid)",null],
+      ["private.hold_unverified_commerce_tax_fee()",null],
+      ["public.merch_order_projection_before_tax_readiness(merch_orders)",null],
+      ["public.prepare_creator_event_auction_platform_before_tax(uuid,uuid,uuid,uuid)",null],
+      ["public.prepare_creator_room_auction_platform_before_tax(uuid,uuid,uuid,uuid)",null],
+      ["private.commerce_tax_fee_held_result(jsonb,jsonb)",null],
+      ["public.record_merch_provider_cost_before_tax_readiness(uuid,jsonb)",null],
+      ["public.record_auction_platform_cost_before_tax_readiness(uuid,jsonb)",null],
+      ["private.creator_auction_held_projection_before_tax_readiness(private.auction_platform_settlement_contracts)",null],
+      ["private.merch_tracking_correction_projection(private.merch_tracking_corrections)",null],
+      ["private.merch_active_tracking_assignment(uuid)",null],
+      ["private.merch_return_hold_before_tracking_corrections(merch_orders,timestamp with time zone)",null],
+      ["public.merch_order_projection_before_tracking_corrections(merch_orders)",null],
+      ["public.read_merch_tracking_corrections(uuid)","authenticated"],
+      ["public.request_merch_tracking_correction(uuid,uuid,text,text,text)","authenticated"],
+      ["public.decline_merch_tracking_correction(uuid,uuid,text)","authenticated"],
+      ["public.list_merch_tracking_correction_queue(uuid,integer)","authenticated"],
+      ["public.approve_merch_tracking_correction(uuid,uuid,text)","authenticated"],
       ['public.list_merch_return_case_queue(text,uuid,integer)','authenticated'],
       ['public.claim_merch_reconciliation_batch()','service_role'],
       ['public.complete_merch_cost_refresh(uuid,uuid,boolean)','service_role'],

@@ -7,7 +7,7 @@ import {createRoot} from 'react-dom/client';
 import {createSharedVisualLoader} from './helpers/shared-visual-host.mjs';
 const compile=(file,imports)=>{const module={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText)(imports,module,module.exports);return module.exports;};
 const id='ab333333-3333-4333-8333-333333333333',id2='ab333333-3333-4333-8333-333333333334';
-const entry={id,lane:'event',createdAt:'2026-10-31T00:00:00Z',currency:'usd',grossMinor:1000,netMinor:null,creatorMinor:null,platformMinor:null,recoveryObligationMinor:null,observedAt:null,holdReasons:['tax_unverified','not_payable_source_only'],providerRefreshStatus:'unknown',lastCheckedAt:null,financialAuthority:false,notPayable:true};
+const entry={id,lane:'event',createdAt:'2026-10-31T00:00:00Z',currency:'usd',grossMinor:1000,netMinor:null,creatorMinor:null,platformMinor:null,recoveryObligationMinor:null,observedAt:null,holdReasons:['tax_unverified','tax_service_fee_unverified','not_payable_source_only'],providerRefreshStatus:'unknown',lastCheckedAt:null,financialAuthority:false,notPayable:true};
 const page=(entries=[entry],nextCursor=null)=>({entries,nextCursor,financialAuthority:false,notPayable:true});
 test('held read freezes scoped RPC, preserves unknown money, and rejects payable/malformed authority',async()=>{
  let data=page();const calls=[];
@@ -35,7 +35,7 @@ test('actual held card/helper handles null estimates, pages, failures, refresh a
  const visible=()=>[...nodes.values()].filter(n=>n.name==='Text').map(n=>text(n.p.children)).join(' ');
  const press=label=>React.act(async()=>{const n=[...nodes.values()].find(n=>n.p.accessibilityLabel===label);assert.ok(n,label);assert.notEqual(n.p.disabled,true);n.p.onPress();});
  try{await render();await press('View held auction details');assert.match(visible(),/could not be refreshed/);assert.doesNotMatch(visible(),/raw private failure/);
- fail=false;await press('View held auction details');assert.match(visible(),/Creator held estimate:\s+Not yet verified/);assert.match(visible(),/Tax amount needs verification/);assert.match(visible(),/not added to the balances above/);
+ fail=false;await press('View held auction details');assert.match(visible(),/Creator held estimate:\s+Not yet verified/);assert.match(visible(),/Tax amount needs verification/);assert.match(visible(),/Tax service fees still need verification/);assert.match(visible(),/not added to the balances above/);
  await press('Next held auction page');assert.equal(calls.at(-1).args.p_after,id);assert.match(visible(),/Room seat auction/);assert.match(visible(),/\$7.20 USD/);assert.match(visible(),/not payout authorization/);
  await press('Refresh held auction details');assert.equal(calls.at(-1).args.p_after,null);assert.match(visible(),/Event auction/);
  let resolve;delayed=new Promise(r=>resolve=r);await press('Next held auction page');account='B';await render();await React.act(async()=>resolve(page([{...entry,creatorMinor:999999}])));assert.doesNotMatch(visible(),/9999.99/);assert.match(visible(),/No bank payout or cash-out/);

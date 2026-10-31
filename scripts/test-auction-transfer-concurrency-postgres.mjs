@@ -68,6 +68,12 @@ try {
   query(`insert into private.creator_room_auction_product_bindings values('${cap}','${product}','synthetic fixture only',now());
     insert into private.auction_platform_qualifications(capability_id,platform_account_id,recipient_account_id,product_id,platform_product_id,evidence_reference,recipient_transfer_capability,enabled,verified_at,expires_at)
     values('${cap}','acct_platform','acct_fixture','${product}','prod_AuctionFixture','synthetic fixture only','active',true,now(),now()+interval '10 minutes');`);
+  if(query("select to_regclass('private.commerce_tax_qualifications') is not null")==='t')query(`
+    insert into private.commerce_tax_qualifications(feature,product_id,account_id,environment,permitted_scope,platform_scope,
+      professional_basis_reference,coverage_evidence_reference,full_permitted_scope_reviewed,collection_mode,liability_type,tax_code,tax_behavior,
+      registration_evidence_reference,provider_settings_evidence_reference,provider_product_evidence_reference,provider_verified_at,provider_expires_at,expires_at,enabled)
+    values('room_auction','prod_AuctionFixture','acct_platform','test','worldwide','all_supported_platforms','SYNTHETIC CHECKOUT ONLY','SYNTHETIC ONLY',true,
+      'automatic','self','txcd_99999999','inclusive','SYNTHETIC ONLY','SYNTHETIC ONLY','SYNTHETIC ONLY',clock_timestamp(),clock_timestamp()+interval '1 hour',clock_timestamp()+interval '1 hour',true);`);
   const service=sql=>call('buyer1',sql,'service_role');
   const run=sql=>JSON.parse(query(service(sql)).split('\n').at(-1));
   const json=x=>`${literal(JSON.stringify(x))}::jsonb`;
@@ -132,6 +138,46 @@ try {
   const operation=op=>JSON.parse(query(`select to_jsonb(o) from private.auction_transfer_operations o where id='${op}';`));
   const allocationSnapshot=()=>query('select coalesce(jsonb_agg(to_jsonb(a) order by id),\'[]\'::jsonb) from private.auction_held_net_allocations a;');
   const a=await fixture('DUPLICATE');
+  const currentFeeGate=query("select to_regprocedure('private.commerce_tax_fee_settlement_ready(text,uuid)') is not null")==='t';
+  if(currentFeeGate){
+    assert.equal(query("select private.commerce_tax_fee_settlement_ready('room_auction','"+a.contract+"')"),'f','no fee-authority override allowed');
+    const [blocked1,blocked2]=await race('current fee gate: concurrent reservations create no operation',svc(a.reserve),svc(a.reserve));
+    for(const result of [blocked1,blocked2]){assert.equal(result.dispatchAuthorized,false);assert.equal(result.reason,'tax_service_fee_unverified');}
+    assert.equal(query('select count(*) from private.auction_transfer_operations'),'0');
+    query('update private.auction_automation_controls set observe_enabled=true,renew_enabled=true,dispatch_enabled=true');
+    const [,disabled]=await race('automatic dispatch kill switch wins before sole permit',
+      'update private.auction_automation_controls set dispatch_enabled=false;',svc(`public.claim_auction_automation_dispatch('${randomUUID()}','{}'::jsonb)`));
+    assert.equal(disabled.dispatchAuthorized,false);assert.equal(disabled.status,'disabled');
+    query('update private.auction_automation_controls set observe_enabled=false,renew_enabled=false,dispatch_enabled=false');
+    const [,approval]=await race('successor approval INSERT serializes with capability dispatch lock',
+      `select pg_advisory_xact_lock(hashtextextended('auction-auto-capability:'||'${cap}',0));select true;`,
+      `insert into private.auction_automation_approvals(qualification_id,capability_id,creator_id,platform_account_id,recipient_account_id,product_id,platform_product_id,max_transfer_minor,daily_limit_minor,owner_approval_reference,approved_by,expires_at)
+       select id,'${cap}','${actors.creator.id}','acct_platform','acct_fixture','${product}','prod_AuctionFixture',1000,10000,'SYNTHETIC DISABLED POLICY','${actors.creator.id}',clock_timestamp()+interval '1 hour'
+       from private.auction_platform_qualifications where capability_id='${cap}' order by verified_at desc,id desc limit 1 returning jsonb_build_object('id',id);`);
+    assert.ok(approval.id);assert.equal(query('select count(*) from private.auction_automation_approvals where enabled'),'0');
+    const refunded=await fixture('CURRENT_REFUND');
+    const [,refundHeld]=await race('current fee gate remains closed after refund commits',svc(receiptSql(refunded.refund)),svc(refunded.reserve));
+    assert.equal(refundHeld.dispatchAuthorized,false);assert.equal(refundHeld.reason,'tax_service_fee_unverified');
+    // A synthetic HISTORICAL reserved row models an operation from an older
+    // checkpoint. No current reserve API is bypassed or treated as successful.
+    const historical=await fixture('CURRENT_HISTORICAL');
+    const oldId=query(`insert into private.auction_transfer_operations(contract_id,allocation_id,release_evidence_id,kind,platform_account_id,destination,source_charge_id,amount_minor,currency,transfer_group,idempotency_key)
+      select c.id,a.id,'${historical.qualified.releaseEvidenceId}','transfer',c.platform_account_id,c.recipient_account_id,'ch_CURRENTHISTORICAL',a.creator_minor,c.currency,'auction-contract-'||c.id,'auction-transfer-v1-'||c.id
+      from private.auction_platform_settlement_contracts c join private.auction_held_net_allocations a on a.contract_id=c.id where c.id='${historical.contract}' order by a.id desc limit 1 returning id;`);
+    const [old1,old2]=await race('current fee gate blocks duplicate dispatch of historical reservation',svc(dispatch(oldId)),svc(dispatch(oldId)));
+    for(const result of [old1,old2]){assert.equal(result.dispatchAuthorized,false);assert.equal(result.reason,'tax_service_fee_unverified');}
+    assert.equal(operation(oldId).dispatch_token,null);assert.equal(operation(oldId).state,'reserved');
+    const revoked=await fixture('CURRENT_REVOKE');
+    const [,revokeHeld]=await race('current fee gate stays closed after qualification revocation',
+      `update private.auction_platform_qualifications set revoked_at=clock_timestamp() where capability_id='${cap}';`,svc(revoked.reserve));
+    assert.equal(revokeHeld.dispatchAuthorized,false);
+    assert.equal(query('select count(*) from private.auction_transfer_operations'),'1','only preloaded historical fixture exists');
+    assert.equal(query('select count(*) from private.auction_transfer_operations where dispatch_token is not null'),'0');
+    assert.equal(query('select count(*) from private.auction_automation_transfer_bindings'),'0');
+    assert.equal(checks,6);
+  }else{
+  // HISTORICAL pre-fee-authority checkpoint only. Preserve every positive
+  // protocol schedule; never present these as current full-net readiness.
   const before=allocationSnapshot();
   const [r1,r2]=await race('duplicate release reservation binds one immutable allocation',svc(a.reserve),svc(a.reserve));
   assert.equal(r1.operationId,r2.operationId);assert.equal(r1.dispatchAuthorized,false);assert.equal(r2.dispatchAuthorized,false);
@@ -210,7 +256,8 @@ try {
   assert.equal(query(`select amount_minor from private.auction_transfer_operations where id='${op}'`),'160');
   assert.equal(query(`select creator_minor from private.auction_held_net_allocations where id='${r1.allocationId??operation(op).allocation_id}'`),'160');
   assert.equal(checks,14);
-  console.log('Auction transfer native concurrency: 14 observed production lock schedules passed; synthetic provider evidence only.');
+  }
+  console.log('Auction transfer native concurrency: '+checks+' observed lock schedules; '+(currentFeeGate?'current-schema hard-block proof, no permits':'historical pre-fee checkpoint protocol only')+'; synthetic provider evidence only.');
 } finally {
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try {if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');}

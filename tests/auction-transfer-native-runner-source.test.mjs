@@ -20,6 +20,6 @@ test('canonical Database job preserves existing runner and adds transfer races',
 test('native runner asserts real backend barriers, both refund orderings, bounded reversals and clone cleanup',()=>{
   for(const marker of ['pg_blocking_pids','wait_event_type',"refund commits first",'dispatch commits first','eligibility loss commits first',
     'release evidence revocation wins','new verified cost allocation','concurrent reversals cannot over-reserve',
-    'double reversal confirmation','restore.assertSourceUnchanged()',"'--force',database",'assert.equal(checks,14)']) assert.ok(source.includes(marker),marker);
+    'double reversal confirmation','restore.assertSourceUnchanged()',"'--force',database",'automatic dispatch kill switch wins before sole permit','assert.equal(checks,6)','assert.equal(checks,14)','successor approval INSERT serializes','current fee gate blocks duplicate dispatch']) assert.ok(source.includes(marker),marker);
   assert.doesNotMatch(source,/disable trigger|session_replication_role|create or replace function|fetch\(/iu);
 });

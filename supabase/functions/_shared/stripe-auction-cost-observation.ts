@@ -110,7 +110,8 @@ export async function observeStripeAuctionCosts(
     checkout_id: order.stripe_checkout_session_id, payment_intent_id: order.stripe_payment_intent_id,
     charge_id: chargeId, balance_id: balanceId, currency: order.currency,
     gross_minor: order.amount_total_minor, provider_fee_minor: fee, charge_net_minor: net,
-    tax_minor: tax, store_fee_minor: null, refunded_minor: refunded, disputed: charge.disputed,
+    tax_minor: tax, tax_service_fee_minor: null, tax_service_fee_status: "unverified",
+    store_fee_minor: null, refunded_minor: refunded, disputed: charge.disputed,
     refund_net_minor: refunds.reduce((sum, refund) => sum + refund.net, 0),
     balance_status: balance.status, refunds,
     // Partial refunds need actual tax-reversal evidence. Full refunds return the

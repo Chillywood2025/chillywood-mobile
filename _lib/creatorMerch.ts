@@ -35,6 +35,8 @@ export type MerchOrder = {
   providerFeeMinor?: number | null; netBaseMinor?: number | null; platformShareMinor?: number | null; creatorShareMinor?: number | null;
   netSettlementStatus?: "unverified" | "held_unqualified";
   netSettlementHoldReasons?: string[];
+  taxServiceFeeMinor?: number | null; taxServiceFeeStatus?: "unverified";
+  finalNetBaseMinor?: null; finalCreatorShareMinor?: null;
   financialAuthority?: false;
   id: string; creatorId: string; productId: string; title: string; quantity: number;
   totalMinor: number; currency: string; paymentStatus: string; fulfillmentStatus: string;
@@ -129,12 +131,22 @@ export function parseMerchDisputeMetadata(row: Record<string, unknown>, now = Da
     providerDisputeCheckedAt: checked, providerDisputeFreshUntil: until };
 }
 
+/** Phase one has no qualified fee importer. Preserve observed arithmetic and
+ * historical receipts, but never present an absent or forged fee as final net. */
+export function parseMerchTaxFeeMetadata(row: Record<string, unknown>) {
+  // Deliberately ignore claimed fee/final amounts until an independently reviewed
+  // provider-evidence contract exists. This is not a zero-fee default.
+  void row;
+  return { taxServiceFeeMinor: null, taxServiceFeeStatus: "unverified" as const,
+    finalNetBaseMinor: null, finalCreatorShareMinor: null, financialAuthority: false as const };
+}
+
 export async function readMerchOrders(input: { role: "buyer" | "creator"; cursor?: string | null; orderId?: string }) {
   const page = await merchRpc<{ orders: MerchOrder[]; nextCursor: string | null }>("list_my_merch_orders", {
     p_role: input.role, p_before_id: input.cursor ?? null, p_limit: 20, p_order_id: input.orderId ?? null,
   });
   if (!page || !Array.isArray(page.orders)) throw new Error("Order status could not be loaded.");
-  return { ...page, orders: page.orders.map(order => ({ ...order, ...parseMerchDisputeMetadata(order) })) };
+  return { ...page, orders: page.orders.map(order => ({ ...order, ...parseMerchDisputeMetadata(order), ...parseMerchTaxFeeMetadata(order) })) };
 }
 
 export function saveMerchProduct(input: MerchProductInput) {

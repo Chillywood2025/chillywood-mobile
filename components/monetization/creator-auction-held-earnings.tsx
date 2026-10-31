@@ -4,6 +4,7 @@ import { useFocusEffect } from "expo-router";
 import { readCreatorAuctionHeldEarnings, type CreatorAuctionHeldPage } from "../../_lib/creatorAuctionHeldEarnings";
 import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 const reasons: Record<string, string> = {
+  tax_service_fee_unverified: "Tax service fees still need verification",
   not_payable_source_only: "Payout release is not enabled", tax_unverified: "Tax amount needs verification", store_obligation_unverified: "Store obligations need verification",
   refund_adjustment_unverified: "Refund adjustments need verification", provider_balance_pending: "Provider funds are pending", payment_or_dispute_reconciliation: "Payment or dispute review is required",
   provider_costs_unverified: "Provider costs need verification", recipient_qualification_required: "Creator payout eligibility needs verification", fulfillment_or_qualification_review: "Fulfillment or eligibility review is required", provider_refresh_required: "Provider review needs refreshed verification", sandbox_not_payable: "Sandbox records are not payable", fulfillment_clearance_unqualified: "Fulfillment has not been cleared", adjustments_unqualified: "Adjustments need verification",

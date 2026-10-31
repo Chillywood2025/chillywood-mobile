@@ -29,6 +29,7 @@ export function fixture(patch={}){
 test('actual GET adapter verifies account, exact stored order chain and known fees/tax without granting money',async()=>{
  const f=fixture(),e=await observe(order,'sk_test_synthetic','acct_fixture',f.transport);
  assert.equal(e.provider_fee_minor,30);assert.equal(e.charge_net_minor,970);assert.equal(e.tax_minor,100);
+ assert.equal(e.tax_service_fee_minor,null);assert.equal(e.tax_service_fee_status,'unverified');
  assert.equal(e.financial_authority,false);assert.equal(e.adjustments_qualified,false);
  assert.equal(f.calls.filter(x=>x==='/charges/ch_merch').length,2);
 });

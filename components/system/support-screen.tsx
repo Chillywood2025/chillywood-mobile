@@ -19,6 +19,7 @@ import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { submitUserReport } from "../../_lib/userReports";
 import { BetaFeedbackSheet } from "../beta/beta-feedback-sheet";
 import { MerchReturnReviewGate } from "../merch/merch-return-review";
+import { MerchTrackingCorrectionReviewGate } from "../merch/merch-tracking-corrections";
 import { merchOrderHelpDestination } from "../../_lib/merchOrderHelp";
 
 const SKYLINE_SOURCE = require("../../assets/images/chicago-skyline.jpg");
@@ -351,6 +352,7 @@ export function SupportScreen() {
         {purchaseId ? <View><Text selectable style={{ color: "#fff", padding: 16 }}>Purchase reference: {purchaseId}. Include this reference when asking for purchase help. This link does not confirm payment or access.</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel="Return to my purchases" onPress={() => router.push("/purchases")}><Text style={{ color: "#fff", padding: 16 }}>Return to my purchases</Text></TouchableOpacity></View> : null}
         {orderHelp ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open this merch order for return or delivery help" onPress={() => router.push(orderHelp)}><Text style={{ color: "#fff", padding: 16 }}>Open this merch order for return or delivery help</Text></TouchableOpacity> : null}
         {authorityStatus === "active" && authority && !authority.restoreOnly ? <MerchReturnReviewGate key={JSON.stringify(authority)} /> : null}
+        {authorityStatus === "active" && authority && !authority.restoreOnly ? <MerchTrackingCorrectionReviewGate key={`tracking:${JSON.stringify(authority)}`} /> : null}
         <View style={styles.heroCard}>
           <Text style={styles.heroKicker}>{closedBeta ? "BETA SUPPORT" : "SUPPORT & FEEDBACK"}</Text>
           <Text style={styles.heroTitle}>

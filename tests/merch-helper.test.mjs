@@ -104,10 +104,31 @@ test('real order read normalizes dispute observation freshness without granting 
  const h=harness({rpcReply:{orders:[{id:'order',...metadata,returnHoldReasons:['merch_dispute_unresolved']}],nextCursor:null}});
  const page=await h.api.readMerchOrders({role:'buyer'});
  assert.equal(page.orders[0].providerDisputeState,'open');assert.equal(page.orders[0].providerDisputeRefreshStatus,'fresh');
- assert.deepEqual(page.orders[0].returnHoldReasons,['merch_dispute_unresolved']);assert.equal(page.orders[0].financialAuthority,undefined);
+ assert.deepEqual(page.orders[0].returnHoldReasons,['merch_dispute_unresolved']);assert.equal(page.orders[0].financialAuthority,false);
  const parse=h.api.parseMerchDisputeMetadata;
  assert.equal(parse({},now).providerDisputeRefreshStatus,'unknown');
  for(const patch of [{providerDisputeState:'cleared'},{providerDisputeRefreshStatus:'cleared'},{providerDisputeCheckedAt:'bad'},{providerDisputeFreshUntil:null},{providerDisputeCheckedAt:new Date(now+1000).toISOString()},{providerDisputeFreshUntil:new Date(now+13*60*60*1000).toISOString()}])assert.equal(parse({...metadata,...patch},now).providerDisputeRefreshStatus,'unknown');
  assert.equal(parse({...metadata,providerDisputeFreshUntil:new Date(now-1).toISOString()},now).providerDisputeRefreshStatus,'stale');
  assert.equal(parse({providerDisputeState:'unknown',providerDisputeRefreshStatus:'pending',providerDisputeCheckedAt:null,providerDisputeFreshUntil:null},now).providerDisputeRefreshStatus,'pending');
+});
+
+test('real order read preserves historical observed amounts while tax service fees and final net stay unknown',async()=>{
+ const history={id:'old-order',providerFeeMinor:30,netBaseMinor:870,creatorShareMinor:783,platformShareMinor:87,
+  netSettlementHoldReasons:['tax_service_fee_unverified'],createdAt:'2026-10-01T00:00:00Z'};
+ const forged={...history,id:'forged-order',taxServiceFeeMinor:0,taxServiceFeeStatus:'verified',
+  finalNetBaseMinor:870,finalCreatorShareMinor:783,financialAuthority:true};
+ const h=harness({rpcReply:{orders:[history,forged],nextCursor:'older'}});
+ const page=await h.api.readMerchOrders({role:'creator'});
+ assert.equal(page.nextCursor,'older');assert.equal(page.orders.length,2);
+ for(const order of page.orders){
+  assert.equal(order.taxServiceFeeMinor,null);assert.equal(order.taxServiceFeeStatus,'unverified');
+  assert.equal(order.finalNetBaseMinor,null);assert.equal(order.finalCreatorShareMinor,null);assert.equal(order.financialAuthority,false);
+  assert.equal(order.providerFeeMinor,30);assert.equal(order.netBaseMinor,870);assert.equal(order.creatorShareMinor,783);assert.equal(order.platformShareMinor,87);
+  assert.deepEqual(order.netSettlementHoldReasons,['tax_service_fee_unverified']);assert.equal(order.createdAt,history.createdAt);
+ }
+ for(const row of [{},forged,{taxServiceFeeMinor:55,taxServiceFeeStatus:'complete',finalNetBaseMinor:815,finalCreatorShareMinor:733}]){
+  const parsed=h.api.parseMerchTaxFeeMetadata(row);
+  assert.equal(parsed.taxServiceFeeMinor,null);assert.equal(parsed.taxServiceFeeStatus,'unverified');
+  assert.equal(parsed.finalNetBaseMinor,null);assert.equal(parsed.finalCreatorShareMinor,null);assert.equal(parsed.financialAuthority,false);
+ }
 });

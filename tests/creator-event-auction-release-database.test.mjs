@@ -4,9 +4,11 @@ import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
-test('event release binds actual provider interval, original replay expiry and late unknown evidence',{timeout:180000},async()=>{
+test('historical event release protocol replays forward into current tax-fee reserve and dispatch holds',{timeout:180000},async()=>{
  const realNow=Date.now;let offset=0;Date.now=()=>realNow()+offset;
- const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
+ const migrationDir=new URL('../supabase/migrations/',import.meta.url);
+ const successors=fs.readdirSync(migrationDir).filter(name=>name.endsWith('.sql')&&name>='20261031033642_').sort();
+ const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:successors});
  try{
   for(const file of ['event-reservation-authority','creator-external-payment-authority','event-broadcast-producer-authority'])
    await db.exec(fs.readFileSync(new URL(`./fixtures/${file}.sql`,import.meta.url),'utf8'));
@@ -99,5 +101,15 @@ test('event release binds actual provider interval, original replay expiry and l
   assert.equal(operation.state,'canceled');assert.equal(operation.recovery_required,true);
   assert.equal((await rpc('buyer1',`public.claim_auction_test_transfer_dispatch('${reserved.operationId}')`,'service_role')).dispatchAuthorized,false);
   assert.equal((await rows(`select count(*) n from public.creator_event_purchase_remedies where purchase_intent_id='${claim.purchaseIntentId}'`))[0].n,0);
+  // Original positive reservation is historical only; current source requires
+  // actual service-fee qualification even for a previously recorded operation.
+  const priorOperations=(await rows('select count(*)::int n from private.auction_transfer_operations'))[0].n;
+  for(const file of successors)await db.exec(fs.readFileSync(new URL(file,migrationDir),'utf8'));
+  const current=await rpc('buyer1',`public.reserve_auction_test_transfer('${contract}')`,'service_role');
+  assert.equal(current.status,'held');assert.equal(current.reason,'tax_service_fee_unverified');
+  const dispatch=await rpc('buyer1',`public.claim_auction_test_transfer_dispatch('${reserved.operationId}')`,'service_role');
+  assert.equal(dispatch.dispatchAuthorized,false);assert.equal(dispatch.reason,'tax_service_fee_unverified');
+  assert.equal((await rows('select count(*)::int n from private.auction_transfer_operations'))[0].n,priorOperations);
+  assert.equal((await rows('select count(*)::int n from private.commerce_tax_qualifications'))[0].n,0);
  }finally{Date.now=realNow;await db.close();}
 });

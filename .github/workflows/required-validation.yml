@@ -69,9 +69,10 @@ jobs:
     needs: plan
     # The paired call gate uses Playwright's pinned Chromium with OS libraries.
     runs-on: ubuntu-24.04
-    # Core already took 23m30s; retain serial full-schema tests and allow the
-    # expanded commerce suites to finish. Individual test deadlines stay intact.
-    timeout-minutes: 40
+    # The complete 4,777-test run took 35m15s before mounted/real-peer gates;
+    # a measured 40m job timeout cut off those required gates, not a test failure.
+    # Retain every stage and individual test deadline; budget the full pipeline.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # Native compatibility tests verify the recorded v3 cohort at its
@@ -154,7 +155,7 @@ jobs:
       - name: Typecheck the versioned notification registration Edge endpoint
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/notification-device-tokens/index.ts
       - name: Typecheck creator commerce and reporting Edge boundaries
-        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/create-creator-tip-checkout/index.ts supabase/functions/stripe-tip-webhook/index.ts supabase/functions/stripe-event-auction-checkout/index.ts supabase/functions/stripe-event-auction-webhook/index.ts supabase/functions/stripe-room-auction-checkout/index.ts supabase/functions/stripe-room-auction-webhook/index.ts supabase/functions/google-play-external-reporter/index.ts supabase/functions/stripe-merch-checkout/index.ts supabase/functions/stripe-merch-webhook/index.ts supabase/functions/stripe-merch-cost-reconcile/index.ts supabase/functions/merch-tracking-webhook/index.ts supabase/functions/merch-tracking-reconcile/index.ts supabase/functions/creator-event-broadcast/index.ts supabase/functions/stripe-auction-cost-reconcile/index.ts supabase/functions/stripe-auction-test-transfer/index.ts supabase/functions/merch-reconciliation-driver/index.ts supabase/functions/auction-observation-driver/index.ts
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/create-creator-tip-checkout/index.ts supabase/functions/stripe-tip-webhook/index.ts supabase/functions/stripe-event-auction-checkout/index.ts supabase/functions/stripe-event-auction-webhook/index.ts supabase/functions/stripe-room-auction-checkout/index.ts supabase/functions/stripe-room-auction-webhook/index.ts supabase/functions/google-play-external-reporter/index.ts supabase/functions/stripe-merch-checkout/index.ts supabase/functions/stripe-merch-webhook/index.ts supabase/functions/stripe-merch-cost-reconcile/index.ts supabase/functions/merch-tracking-webhook/index.ts supabase/functions/merch-tracking-reconcile/index.ts supabase/functions/creator-event-broadcast/index.ts supabase/functions/stripe-auction-cost-reconcile/index.ts supabase/functions/stripe-auction-test-transfer/index.ts supabase/functions/merch-reconciliation-driver/index.ts supabase/functions/auction-observation-driver/index.ts supabase/functions/auction-approved-automation/index.ts
       - name: Run exact role and explicit permission checks
         run: deno test --node-modules-dir=none --no-lock supabase/functions/_shared/exact-subject-authority_test.ts supabase/functions/_shared/platform-role-authority_test.ts
 

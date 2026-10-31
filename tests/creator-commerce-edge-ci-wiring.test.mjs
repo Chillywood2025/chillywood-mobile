@@ -20,7 +20,7 @@ function assertCommerceEdgeChecks(workflow) {
     'google-play-external-reporter', 'stripe-merch-checkout', 'stripe-merch-webhook',
     'stripe-merch-cost-reconcile', 'merch-tracking-webhook', 'merch-tracking-reconcile',
     'creator-event-broadcast', 'stripe-auction-cost-reconcile', 'stripe-auction-test-transfer',
-    'merch-reconciliation-driver', 'auction-observation-driver',
+    'merch-reconciliation-driver', 'auction-observation-driver', 'auction-approved-automation',
   ]) {
     const path = `supabase/functions/${endpoint}/index.ts`;
     assert.ok(tokens.includes(path), `missing executable Edge check: ${endpoint}`);
@@ -35,7 +35,7 @@ test('canonical Sensitive validation typechecks every changed commerce Edge boun
 
 test('commerce Edge wiring rejects missing checks and skipped or suppressed execution', () => {
   const workflow = fs.readFileSync('.github/workflows/required-validation.yml', 'utf8');
-  for (const endpoint of ['stripe-merch-checkout', 'stripe-merch-webhook', 'merch-tracking-webhook', 'merch-tracking-reconcile', 'creator-event-broadcast', 'merch-reconciliation-driver', 'auction-observation-driver']) {
+  for (const endpoint of ['stripe-merch-checkout', 'stripe-merch-webhook', 'merch-tracking-webhook', 'merch-tracking-reconcile', 'creator-event-broadcast', 'merch-reconciliation-driver', 'auction-observation-driver', 'auction-approved-automation']) {
     assert.throws(() => assertCommerceEdgeChecks(workflow.replace(` supabase/functions/${endpoint}/index.ts`, '')));
   }
   const name = '      - name: Typecheck creator commerce and reporting Edge boundaries';

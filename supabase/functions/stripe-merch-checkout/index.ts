@@ -9,6 +9,7 @@ import {
   optionsResponse,
   parseJsonPayload,
   readStripeTestSecret,
+  readOptionalEnv,
   safeWriteAuditLog,
   sanitizeErrorMessage,
   toText,
@@ -17,6 +18,7 @@ import {
   type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
 import { parseExactCurrentSessionAuthority, readExactBetaAccess } from "../_shared/exact-subject-authority.ts";
+import { readCommerceTaxReadiness, commerceTaxParameters } from "../_shared/commerce-tax-readiness.ts";
 
 const FUNCTION_NAME = "stripe-merch-checkout";
 const STRIPE_API_BASE_URL = "https://api.stripe.com/v1";
@@ -65,6 +67,9 @@ type StripeCheckoutSession = {
   id?: string;
   livemode?: boolean;
   object?: string;
+  client_reference_id?: string;
+  automatic_tax?: { enabled?: boolean };
+  metadata?: Record<string, string>;
   payment_intent?: string | null;
   url?: string | null;
 };
@@ -267,6 +272,21 @@ Deno.serve(async (req) => {
       return jsonResponse(409, { error: "merch_net_share_terms_invalid", checkoutCreated: false });
     }
     const orderId = reservation.id;
+    const taxAccount = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
+    if (!taxAccount || !/^acct_[A-Za-z0-9]+$/.test(taxAccount)) return jsonResponse(409, {
+      error: "provider_tax_settings_unverified", checkoutCreated: false,
+      message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available.",
+    });
+    const taxPolicy = await readCommerceTaxReadiness(adminClient, { feature: "physical_merch", identityId: orderId,
+      productId: product.id, accountId: taxAccount, environment: "sandbox", permittedScope: "US_all_destinations" });
+    if (!taxPolicy.ready) return jsonResponse(409, { error: taxPolicy.reason, checkoutCreated: false,
+      message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available." });
+    const accountResponse = await fetch(`${STRIPE_API_BASE_URL}/account`, { method: "GET", redirect: "error",
+      headers: { Authorization: `Bearer ${stripeSecret.secret}`, "Stripe-Version": STRIPE_API_VERSION },
+      signal: AbortSignal.timeout(15000) });
+    if (!accountResponse.ok) throw new Error("provider_tax_settings_unverified");
+    const providerAccount = await accountResponse.json();
+    if (providerAccount.object !== "account" || providerAccount.id !== taxAccount) throw new Error("provider_tax_account_mismatch");
     // Only immutable reservation snapshots contribute to provider parameters.
     // Renaming an option after checkout cannot alter an idempotent retry.
     const optionName = [reservation.size, reservation.color].filter(Boolean).join(" / ");
@@ -277,6 +297,8 @@ Deno.serve(async (req) => {
     const cancelUrl = `${DEFAULT_CANCEL_URL}?orderId=${encodeURIComponent(orderId)}`;
     const session = await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {
       body: {
+        ...commerceTaxParameters(taxPolicy),
+        "line_items[0][price_data][product_data][tax_code]": taxPolicy.taxCode,
         cancel_url: cancelUrl,
         expires_at: Math.floor(Date.parse(reservation.createdAt ?? "") / 1000) + 3600,
         client_reference_id: orderId,
@@ -324,6 +346,11 @@ Deno.serve(async (req) => {
     const sessionUrl = toText(session.url);
     if (!sessionId || !sessionUrl) throw new Error("Stripe checkout session did not include an id and URL.");
     if (session.livemode !== false) throw new Error("Stripe checkout session did not confirm test mode; refusing checkout.");
+    if (session.object !== "checkout.session" || session.client_reference_id !== orderId
+      || session.currency !== reservation.currency || session.amount_total !== reservation.priceMinor! * quantity
+      || session.amount_subtotal !== session.amount_total
+      || session.automatic_tax?.enabled !== (taxPolicy.collectionMode === "automatic")
+      || session.metadata?.commerce_tax_policy_id !== taxPolicy.policyId) throw new Error("provider_tax_checkout_mismatch");
 
     const { error: updateError } = await adminClient
       .from("merch_orders")

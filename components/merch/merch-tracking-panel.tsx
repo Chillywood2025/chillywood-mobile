@@ -1,4 +1,5 @@
 import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
+import { MerchTrackingCorrections } from "./merch-tracking-corrections";
 import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -70,9 +71,10 @@ function TrackingPanel({ orderId, manage, paymentStatus, onChanged }: MerchTrack
         <Text selectable style={styles.body}>{(tracking.carrier || "Carrier").toUpperCase()} · {tracking.trackingNumber || "Tracking assigned"}</Text>
         <Text style={styles.body}>{statuses[tracking.status || ""] || "Awaiting a verified tracking update"}</Text>
         {tracking.deliveryAt ? <Text style={styles.body}>Carrier delivery time: {new Date(tracking.deliveryAt).toLocaleString()}</Text> : null}
-        <Text style={styles.notice}>{corroborated ? "Carrier delivery is corroborated against this order's shipping details. This is not proof of package contents; return, dispute and other earnings holds still apply." : "Delivery verification is pending or needs review. The tracked return window does not switch to purchase-date timing."}</Text>
+        <Text style={styles.notice}>{corroborated ? "Carrier delivery is corroborated against this order's country and postal code, not its exact street address. This is not proof of package contents; return, dispute and other earnings holds still apply." : "Delivery verification is pending or needs review. The tracked return window does not switch to purchase-date timing."}</Text>
         {tracking.reviewReason ? <Text style={styles.notice}>Shipping evidence needs review. Contact support if tracking details are incorrect.</Text> : null}
-        {manage ? <Text style={styles.notice}>Tracking is bound to this order and cannot be replaced or removed here. Contact support for a correction.</Text> : null}
+        {manage ? <Text style={styles.notice}>Tracking is bound to this order and cannot be replaced or removed here. Request a correction review below; a request does not replace tracking or release earnings.</Text> : null}
+        <MerchTrackingCorrections key={orderId} orderId={orderId} manage={manage && paymentStatus === "paid"} onChanged={() => { void load(); onChanged?.(); }} />
       </> : manage && paymentStatus === "paid" ? <>
         <Text style={styles.notice}>Add the carrier and tracking number for this order only. Check carefully: the assignment cannot be edited or deleted here.</Text>
         <View style={styles.row}>{(["usps", "ups", "fedex"] as const).map(value => <Button key={value} label={value === "fedex" ? "FedEx" : value.toUpperCase()} selected={carrier === value} disabled={busy} onPress={() => setCarrier(value)} />)}</View>

@@ -142,8 +142,54 @@ try{
   assert.equal(rpc(finish(expired.lease)).stale,true,'expired lease cannot restore verified evidence');
   assert.equal(query(`select count(*) from private.merch_tracking_observations where assignment_id='${assignment}'`),'2');
   assert.equal(query('select count(*) from public.creator_earnings_ledger'),'0','tracking never creates earnings');
-  assert.equal(checks,5);
-  console.log('PASS native: 4 observed PostgreSQL lock races + simultaneous SKIP LOCKED exclusion; null/stale/expired lease and actor negatives. Synthetic providers only.');
+  const correctionId=randomUUID();
+  const correction=id=>`public.request_merch_tracking_correction('${firstOrder}','${id}','ups','CORRECTION123456','Synthetic typo correction')`;
+  const correctionRace=await race('same correction UUID serializes and replays once',`${auth()}select ${correction(correctionId)};`,`${auth()}select ${correction(correctionId)};`);
+  assert.equal(parsed(correctionRace.stdout).requests.length,1);
+  assert.equal(query(`select count(*) from private.merch_tracking_corrections where order_id='${firstOrder}'`),'1');
+  await race('second concurrent proposal cannot bypass pending correction',`${auth()}select ${correction(correctionId)};`,`${auth()}select ${correction(randomUUID())};`,{error:/merch_correction_pending/u});
+  assert.equal(query(`select tracking_number from private.merch_tracking_assignments where order_id='${firstOrder}'`),number);
+  assert.equal(query(`select (private.merch_return_hold_state(o,statement_timestamp())->'returnHoldReasons') ? 'merch_tracking_correction_review_required' from public.merch_orders o where id='${firstOrder}'`),'t');
+  assert.equal(query(`select count(*) from private.merch_tracking_observations where assignment_id='${assignment}'`),'2','correction intake creates no carrier evidence');
+  const staff=actors.buyer2.id;
+  query(`insert into public.platform_role_memberships(role,user_id,email,status,notes,granted_by)
+    values('moderator','${staff}','buyer2@event-reservation.example','active','Synthetic correction staff','test');
+    insert into public.platform_staff_permission_grants(target_user_id,target_email,permission_key,status,reason)
+    select '${staff}','buyer2@event-reservation.example',p,'active','Synthetic correction scope'
+    from unnest(array['admin.support.manage','admin.refund_status.record'])p;`);
+  rpc(`public.assign_merch_tracking('${secondOrder}','usps','SECONDOLD123')`,'authenticated');
+  const secondRequest=randomUUID(),approveId=randomUUID();
+  rpc(`public.request_merch_tracking_correction('${secondOrder}','${secondRequest}','ups','SECONDNEW123','Synthetic typo')`,'authenticated');
+  const secondAssignment=query(`select private.merch_active_tracking_assignment('${secondOrder}')`);
+  const secondLease=rpc('public.claim_merch_tracking_jobs(20)').find(j=>j.id===secondAssignment).lease;
+  const approve=(request,id)=>`public.approve_merch_tracking_correction('${request}','${id}','Reviewed pre-delivery typo')`;
+  const secondFinish=`public.complete_merch_tracking_job('${secondAssignment}','${secondLease}',${json({...facts,tracking_number:'SECONDOLD123'})},true)`;
+  const retired=await race('approved correction retires blocked old completion',`${auth('buyer2')}select ${approve(secondRequest,approveId)};`,`${auth('creator','service_role')}select ${secondFinish};`);
+  assert.equal(parsed(retired.stdout).superseded,true);
+  assert.equal(query(`select count(*) from private.merch_return_evidence where order_id='${secondOrder}'`),'0');
+  const approvalReplay=await race('duplicate approval UUID cannot append a second assignment',`${auth('buyer2')}select ${approve(secondRequest,approveId)};`,`${auth('buyer2')}select ${approve(secondRequest,approveId)};`);
+  assert.equal(parsed(approvalReplay.stdout).requests[0].status,'approved');
+  assert.equal(query(`select count(*) from private.merch_tracking_assignments where order_id='${secondOrder}'`),'2');
+  const thirdOrder=make(),thirdRequest=randomUUID();
+  rpc(`public.assign_merch_tracking('${thirdOrder}','usps','THIRDOLD123')`,'authenticated');
+  rpc(`public.request_merch_tracking_correction('${thirdOrder}','${thirdRequest}','ups','THIRDNEW123','Synthetic typo')`,'authenticated');
+  const thirdAssignment=query(`select private.merch_active_tracking_assignment('${thirdOrder}')`);
+  const thirdLease=rpc('public.claim_merch_tracking_jobs(20)').find(j=>j.id===thirdAssignment).lease;
+  const thirdFinish=`public.complete_merch_tracking_job('${thirdAssignment}','${thirdLease}',${json({...facts,tracking_number:'THIRDOLD123'})},true)`;
+  await race('verified delivery wins before blocked correction approval',`${auth('creator','service_role')}select ${thirdFinish};`,`${auth('buyer2')}select ${approve(thirdRequest,randomUUID())};`,{error:/merch_correction_manual_review_required/u});
+  assert.equal(query(`select delivery_state from private.merch_return_evidence where order_id='${thirdOrder}' order by id desc limit 1`),'verified');
+  assert.equal(query(`select count(*) from private.merch_tracking_assignments where order_id='${thirdOrder}'`),'1');
+  const fourthOrder=make(),fourthRequest=randomUUID();
+  rpc(`public.assign_merch_tracking('${fourthOrder}','usps','FOURTHOLD123')`,'authenticated');
+  rpc(`public.request_merch_tracking_correction('${fourthOrder}','${fourthRequest}','ups','FOURTHNEW123','Synthetic typo')`,'authenticated');
+  await race('two first-time approvals cannot fork assignment history',`${auth('buyer2')}select ${approve(fourthRequest,randomUUID())};`,`${auth('buyer2')}select ${approve(fourthRequest,randomUUID())};`,{error:/merch_correction_already_reviewed/u});
+  assert.equal(query(`select count(*) from private.merch_tracking_assignments where order_id='${fourthOrder}'`),'2');
+  assert.equal(query(`select count(*) from private.merch_tracking_supersessions where order_id='${fourthOrder}'`),'1');
+  await race('staff permission revoked while approval waits on order lock',
+    `select id from public.merch_orders where id='${thirdOrder}' for update;update public.platform_staff_permission_grants set status='revoked' where target_user_id='${staff}' and permission_key='admin.refund_status.record';`,
+    `${auth('buyer2')}select ${approve(thirdRequest,randomUUID())};`,{error:/merch_correction_unavailable/u});
+  assert.equal(checks,12);
+  console.log('PASS native: 11 observed PostgreSQL lock races + simultaneous SKIP LOCKED exclusion; correction UUID/pending/first-approval/replay/delivery/revoked-staff races, null/stale/expired lease and actor negatives. Synthetic providers only.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop owned clone');}

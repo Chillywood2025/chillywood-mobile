@@ -22,6 +22,24 @@
   },
   "components": [
     {
+      "id": "auction_approved_automation",
+      "owningSystem": "creator_commerce",
+      "componentType": "foundation_only_off",
+      "supportedPlatforms": ["shared"],
+      "paths": ["supabase/functions/auction-approved-automation/index.ts", "supabase/migrations/20261031033642_auction_approved_automation.sql", "ops/auction-approved-automation/README.md"],
+      "schedulerCadence": "absent; source admission at most once per minute after separate authorization",
+      "allowedReads": ["exact approved test account/product scope", "held costs/domain facts", "GET-only transfer recovery"],
+      "allowedWrites": ["bounded leases", "immutable qualifications", "once-only test transfer permit and result within approved policy"],
+      "forbiddenScope": ["approval creation", "schedule activation", "new credentials", "live money", "bank payouts", "canceled restart", "automatic reversals"],
+      "approvalLevel": 3,
+      "proof": "node --test tests/creator-auction-approved-automation-database.test.mjs tests/creator-money/auction-approved-automation-edge.test.mjs",
+      "guard": "guard:autonomous-component-inventory",
+      "killSwitch": "all private.auction_automation_controls flags false; approval table empty",
+      "rollback": "stop admission; preserve immutable attempts and GET-reconcile uncertain transfers",
+      "deploymentState": "foundation_only_off",
+      "physicalProofRequired": false
+    },
+    {
       "id": "auction_observation_driver",
       "owningSystem": "creator_commerce",
       "componentType": "foundation_only_off",

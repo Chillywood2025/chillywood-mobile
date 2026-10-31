@@ -288,3 +288,6 @@ verify_jwt = true
 
 [functions.auction-observation-driver]
 verify_jwt = true
+
+[functions.auction-approved-automation]
+verify_jwt = true
