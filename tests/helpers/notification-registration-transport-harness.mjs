@@ -274,6 +274,7 @@ export function createNotificationRegistrationTransportHarness({
       './appLinks': {}, './notificationMessageTarget': {},
     };
     const actual = new Map([['./accountSessionAuthority', '_lib/accountSessionAuthority.ts'],
+      ['./notificationDisplayContext', '_lib/notificationDisplayContext.ts'],
       ['./entitlementAuthority', '_lib/entitlementAuthority.ts'],
       ['./accountBoundSupabaseMutation', '_lib/accountBoundSupabaseMutation.ts'], ['./accountBoundSupabaseRpc.mjs', '_lib/accountBoundSupabaseRpc.mjs']]);
     const cache = new Map();
