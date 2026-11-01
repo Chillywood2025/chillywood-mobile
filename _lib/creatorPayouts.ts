@@ -733,8 +733,8 @@ const assertSafePayoutFunctionPayload = (payload: CreatorPayoutFunctionPayload |
   if (payload.payoutCreated || payload.transferCreated || payload.checkoutCreated) {
     throw new Error("Unexpected live money action response.");
   }
-  if (payload.mode && payload.mode !== "test") {
-    throw new Error("Only payout provider setup preview mode is supported.");
+  if (payload.mode && !["test", "live"].includes(payload.mode)) {
+    throw new Error("Unknown payout provider setup mode.");
   }
 };
 
@@ -750,10 +750,11 @@ async function invokeCreatorPayoutFunction(
   return data ?? { liveMoneyAction: false, mode: "test", status: "unknown" };
 }
 
-export async function createOrReuseCreatorPayoutProviderAccount(creatorUserId: string) {
+export async function createOrReuseCreatorPayoutProviderAccount(creatorUserId: string, confirmDistinctLiveSetup = false) {
   return invokeCreatorPayoutFunction("stripe-connect-account", {
     creator_user_id: creatorUserId,
     requested_account_type: "express",
+    ...(confirmDistinctLiveSetup ? { live_setup_disclosure: "distinct-live-account-v1" } : {}),
   });
 }
 

@@ -43,23 +43,35 @@ export function createStripeHistoryCheckpoint(saved:unknown,transport:typeof fet
  }else if(saved!==null&&saved!==undefined&&(!object(saved)||Object.keys(saved).length))throw Error('history_checkpoint_invalid');
  const reset=():never=>{state=empty();position=0;throw Error('history_snapshot_changed');};
  const fresh=async(input:string,init:RequestInit|undefined)=>{
-  const signal=AbortSignal.any([AbortSignal.timeout(15000),...(init?.signal?[init.signal]:[])]);
-  const bounded=async<T>(work:Promise<T>):Promise<T>=>{
+  const controller=new AbortController();
+  const signal=AbortSignal.any([controller.signal,...(init?.signal?[init.signal]:[])]);
+  if(signal.aborted)throw Error('history_body_deadline');
+  // Own a referenced deadline until the entire GET/body operation settles.
+  // AbortSignal.timeout alone can disappear with an otherwise idle event loop.
+  const timer=setTimeout(()=>controller.abort(),15000);
+  const bounded=async<T>(work:()=>Promise<T>):Promise<T>=>{
    if(signal.aborted)throw Error('history_body_deadline');let abort:()=>void=()=>{};
-   try{return await Promise.race([work,new Promise<never>((_,reject)=>{abort=()=>reject(Error('history_body_deadline'));signal.addEventListener('abort',abort,{once:true});})]);}
+   const aborted=new Promise<never>((_,reject)=>{abort=()=>reject(Error('history_body_deadline'));signal.addEventListener('abort',abort,{once:true});});
+   try{return await Promise.race([Promise.resolve().then(work),aborted]);}
    finally{signal.removeEventListener('abort',abort);}
   };
-  const response=await bounded(transport(input,{...init,signal}));
-  if(response.status===404&&new URL(input).pathname==='/v1/tax/associations/find'){
-   void response.body?.cancel().catch(()=>{});return {response:Response.json({object:'history.missing'},{status:404}),facts:{object:'history.missing'},status:404};
-  }
-  if(!response.ok)return {response,facts:null,status:response.status};
-  if(!response.body)throw Error('history_shape_invalid');
-  const reader=response.body.getReader(),decoder=new TextDecoder();let size=0,body='';
-  try{for(;;){const part=await bounded(reader.read());if(part.done)break;size+=part.value.length;if(size>2*1024*1024)throw Error('history_body_limit');body+=decoder.decode(part.value,{stream:true});}body+=decoder.decode();}
-  finally{void reader.cancel().catch(()=>{});reader.releaseLock();}
-  const facts=projectStripeHistoryFacts(new URL(input).pathname+new URL(input).search,JSON.parse(body));
-  return {response:Response.json(facts,{status:response.status}),facts,status:response.status};
+  try{
+   const response=await bounded(async()=>{
+    const value=await transport(input,{...init,signal});
+    if(signal.aborted){void value.body?.cancel().catch(()=>{});throw Error('history_body_deadline');}
+    return value;
+   });
+   if(response.status===404&&new URL(input).pathname==='/v1/tax/associations/find'){
+    void response.body?.cancel().catch(()=>{});return {response:Response.json({object:'history.missing'},{status:404}),facts:{object:'history.missing'},status:404};
+   }
+   if(!response.ok){void response.body?.cancel().catch(()=>{});return {response,facts:null,status:response.status};}
+   if(!response.body)throw Error('history_shape_invalid');
+   const reader=response.body.getReader(),decoder=new TextDecoder();let size=0,body='';
+   try{for(;;){const part=await bounded(()=>reader.read());if(part.done)break;size+=part.value.length;if(size>2*1024*1024)throw Error('history_body_limit');body+=decoder.decode(part.value,{stream:true});}body+=decoder.decode();}
+   finally{void reader.cancel().catch(()=>{});reader.releaseLock();}
+   const facts=projectStripeHistoryFacts(new URL(input).pathname+new URL(input).search,JSON.parse(body));
+   return {response:Response.json(facts,{status:response.status}),facts,status:response.status};
+  }finally{clearTimeout(timer);}
  };
  const wrapped:typeof fetch=async(input,init)=>{
   if(typeof input!=='string'||init?.method!=='GET')throw Error('history_get_only');

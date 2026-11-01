@@ -1,6 +1,7 @@
-// Reviewed November 1 completion bundle. Explicit identities, not a runtime
-// whitelist generated from the schema under test. Missing/unexpected functions
-// or migrations must continue to fail the exact catalog assertions.
+// Reviewed November 1 completion stack plus the returning-fee policy correction.
+// 48 migrations; 192 added, 94 replaced, zero removed function signatures.
+// Explicit identities, not a runtime whitelist generated from the schema under
+// test. Missing/unexpected functions and migrations must fail exact assertions.
 export const appCompletionFiles = Object.freeze([
   "20261101141441_secondary_media_producer_registry.sql",
   "20261101141605_merch_reconciliation_observability.sql",
@@ -23,10 +24,33 @@ export const appCompletionFiles = Object.freeze([
   "20261101151130_auction_fee_source_freshness.sql",
   "20261101151300_commerce_fee_policy_visibility.sql",
   "20261101151506_merch_live_checkout_binding.sql",
+  "20261101151559_auction_explicit_live_checkout_contract.sql",
   "20261101151722_revenuecat_pending_snapshot_worker.sql",
   "20261101151945_merch_fee_report_provider_mode.sql",
   "20261101152024_creator_cashout_known_inline_costs.sql",
-  "20261101152800_commerce_fee_accounting_queue.sql"
+  "20261101152800_commerce_fee_accounting_queue.sql",
+  "20261101154121_creator_connect_live_observation.sql",
+  "20261101154530_commerce_fee_qualification_revocation.sql",
+  "20261101154608_stripe_cost_history_checkpoints.sql",
+  "20261101155330_commerce_merch_fulfillment_release_guard.sql",
+  "20261101155800_merch_fulfillment_release_receipts.sql",
+  "20261101160200_commerce_current_cashout_domain.sql",
+  "20261101161046_revenuecat_effective_renewal_product_transition.sql",
+  "20261101161411_creator_cashout_funded_cancellation.sql",
+  "20261101161826_auction_live_party_admission_source.sql",
+  "20261101162000_commerce_full_refund_accounting_clearance.sql",
+  "20261101162112_creator_connect_live_onboarding.sql",
+  "20261101162340_creator_connect_unobserved_readiness.sql",
+  "20261101163012_stripe_history_conservative_freshness.sql",
+  "20261101163130_creator_earnings_recording_clock.sql",
+  "20261101170000_creator_connect_distinct_mode_bindings.sql",
+  "20261101170307_merch_explicit_qualified_publish.sql",
+  "20261101171143_merch_tax_category_templates.sql",
+  "20261101171600_creator_connect_atomic_mode_projection.sql",
+  "20261101171959_merch_draft_copy_retry_identity.sql",
+  "20261101172200_creator_connect_all_mode_setup_admission.sql",
+  "20261101172219_merch_publication_current_legal_fence.sql",
+  "20261101180001_creator_cashout_returning_fee_adjustments.sql"
 ]);
 
 export const appCompletionAddedFunctionIdentities = new Map([
@@ -47,6 +71,18 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "private.attach_secondary_media_output(uuid,text,text,uuid,jsonb)"
   ],
   [
+    "private.auction_checkout_mode_allowed/1",
+    "private.auction_checkout_mode_allowed(text)"
+  ],
+  [
+    "private.auction_creator_mode/2",
+    "private.auction_creator_mode(text,uuid)"
+  ],
+  [
+    "private.auction_current_financial_account_ready/1",
+    "private.auction_current_financial_account_ready(uuid)"
+  ],
+  [
     "private.bind_cashout_origin_session/0",
     "private.bind_cashout_origin_session()"
   ],
@@ -57,6 +93,10 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "private.capture_commerce_fee_components/0",
     "private.capture_commerce_fee_components()"
+  ],
+  [
+    "private.cashout_bank_never_dispatched/1",
+    "private.cashout_bank_never_dispatched(uuid)"
   ],
   [
     "private.check_deleted_media_retirement_before_secondary/4",
@@ -83,8 +123,20 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "private.commerce_cashout_earning_account_exact(uuid,text,text)"
   ],
   [
+    "private.commerce_current_earning_domain_ready/1",
+    "private.commerce_current_earning_domain_ready(uuid)"
+  ],
+  [
     "private.commerce_fee_manifest/2",
     "private.commerce_fee_manifest(text,uuid)"
+  ],
+  [
+    "private.commerce_full_refund_correction_ready/1",
+    "private.commerce_full_refund_correction_ready(private.commerce_known_cost_snapshots)"
+  ],
+  [
+    "private.commerce_funding_earning_ready/1",
+    "private.commerce_funding_earning_ready(uuid)"
   ],
   [
     "private.commerce_known_cost_projection/2",
@@ -119,6 +171,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "private.creator_cashout_inline_zero_qualified(uuid)"
   ],
   [
+    "private.creator_connect_live_proof_matches/2",
+    "private.creator_connect_live_proof_matches(jsonb,text)"
+  ],
+  [
+    "private.creator_connect_onboarding_subject/2",
+    "private.creator_connect_onboarding_subject(uuid,uuid)"
+  ],
+  [
     "private.creator_earning_fee_offset/1",
     "private.creator_earning_fee_offset(uuid)"
   ],
@@ -137,6 +197,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "private.finalize_creator_cashout_known_zero/1",
     "private.finalize_creator_cashout_known_zero(uuid)"
+  ],
+  [
+    "private.finalize_funding_return_costs/1",
+    "private.finalize_funding_return_costs(uuid)"
+  ],
+  [
+    "private.freeze_funded_cashout/2",
+    "private.freeze_funded_cashout(uuid,text)"
   ],
   [
     "private.get_creator_cashout_execution_context/1",
@@ -159,12 +227,24 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "private.guard_auction_transfer_provider_mode()"
   ],
   [
+    "private.guard_commerce_fee_qualification_revocation/0",
+    "private.guard_commerce_fee_qualification_revocation()"
+  ],
+  [
     "private.guard_merch_checkout_quote/0",
     "private.guard_merch_checkout_quote()"
   ],
   [
     "private.ingest_refund_tax_facts/1",
     "private.ingest_refund_tax_facts(jsonb)"
+  ],
+  [
+    "private.latest_cost_verification_at/2",
+    "private.latest_cost_verification_at(text,uuid)"
+  ],
+  [
+    "private.lock_commerce_cashout_domains/1",
+    "private.lock_commerce_cashout_domains(uuid)"
   ],
   [
     "private.merch_checkout_quote/1",
@@ -175,8 +255,44 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "private.merch_live_checkout_ready(text)"
   ],
   [
+    "private.merch_live_publication_authority/1",
+    "private.merch_live_publication_authority(merch_products)"
+  ],
+  [
+    "private.merch_publication_revision/0",
+    "private.merch_publication_revision()"
+  ],
+  [
+    "private.merch_publish_authority_changed/0",
+    "private.merch_publish_authority_changed()"
+  ],
+  [
     "private.merch_reconciliation_health_snapshot/0",
     "private.merch_reconciliation_health_snapshot()"
+  ],
+  [
+    "private.merch_tax_category_current/1",
+    "private.merch_tax_category_current(uuid)"
+  ],
+  [
+    "private.merch_tax_category_policy_current/1",
+    "private.merch_tax_category_policy_current(uuid)"
+  ],
+  [
+    "private.merch_tax_context_current/1",
+    "private.merch_tax_context_current(uuid)"
+  ],
+  [
+    "private.merch_tax_evidence_policy_current/1",
+    "private.merch_tax_evidence_policy_current(uuid)"
+  ],
+  [
+    "private.merch_tax_owner/0",
+    "private.merch_tax_owner()"
+  ],
+  [
+    "private.merch_tax_product_snapshot/1",
+    "private.merch_tax_product_snapshot(merch_products)"
   ],
   [
     "private.merch_tracking_configured/2",
@@ -193,6 +309,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "private.preserve_cashout_origin_session/0",
     "private.preserve_cashout_origin_session()"
+  ],
+  [
+    "private.prevent_connect_binding_history_mutation/0",
+    "private.prevent_connect_binding_history_mutation()"
+  ],
+  [
+    "private.promote_live_party_auction_source/2",
+    "private.promote_live_party_auction_source(text,uuid)"
   ],
   [
     "private.queue_commerce_fee_accounting/0",
@@ -225,6 +349,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "private.resolve_account_notification_before_reconciliation/1",
     "private.resolve_account_notification_before_reconciliation(notification_activity_events)"
+  ],
+  [
+    "private.retain_creator_connect_mode_binding/0",
+    "private.retain_creator_connect_mode_binding()"
+  ],
+  [
+    "private.revenuecat_effective_renewal_scope/4",
+    "private.revenuecat_effective_renewal_scope(text,text,uuid,text)"
   ],
   [
     "private.revenuecat_snapshot_mode_allowed/2",
@@ -291,6 +423,30 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "private.secondary_media_statement_fence()"
   ],
   [
+    "private.stamp_merch_fulfillment_revision/0",
+    "private.stamp_merch_fulfillment_revision()"
+  ],
+  [
+    "private.stripe_cost_history_context/2",
+    "private.stripe_cost_history_context(text,uuid)"
+  ],
+  [
+    "private.stripe_cost_history_receipt_immutable/0",
+    "private.stripe_cost_history_receipt_immutable()"
+  ],
+  [
+    "private.stripe_history_receipt_time/0",
+    "private.stripe_history_receipt_time()"
+  ],
+  [
+    "private.stripe_history_verified_at/3",
+    "private.stripe_history_verified_at(text,uuid,jsonb)"
+  ],
+  [
+    "private.track_cashout_dispatch_provenance/0",
+    "private.track_cashout_dispatch_provenance()"
+  ],
+  [
     "public.accept_creator_fee_policy/2",
     "accept_creator_fee_policy(text,text)"
   ],
@@ -303,6 +459,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "begin_secondary_media_producer(text,uuid,uuid,jsonb,text,text,text)"
   ],
   [
+    "public.begin_stripe_cost_history/3",
+    "begin_stripe_cost_history(text,uuid,text)"
+  ],
+  [
+    "public.bind_commerce_tax_checkout_policy_pre_categories/6",
+    "bind_commerce_tax_checkout_policy_pre_categories(text,uuid,text,text,text,text)"
+  ],
+  [
     "public.bind_merch_checkout_provider/3",
     "bind_merch_checkout_provider(uuid,text,text)"
   ],
@@ -311,12 +475,24 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "cancel_creator_clip_export(uuid)"
   ],
   [
+    "public.cancel_prepared_creator_cashout/1",
+    "cancel_prepared_creator_cashout(uuid)"
+  ],
+  [
     "public.cancel_undispatched_creator_cashout/1",
     "cancel_undispatched_creator_cashout(uuid)"
   ],
   [
+    "public.checkpoint_creator_connect_account_recovery/5",
+    "checkpoint_creator_connect_account_recovery(uuid,text,text,text,boolean)"
+  ],
+  [
     "public.claim_creator_cashout_dispatch/2",
     "claim_creator_cashout_dispatch(uuid,text)"
+  ],
+  [
+    "public.claim_creator_cashout_dispatch_before_funding_return/2",
+    "claim_creator_cashout_dispatch_before_funding_return(uuid,text)"
   ],
   [
     "public.claim_creator_cashout_work/0",
@@ -325,6 +501,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "public.claim_creator_clip_export/0",
     "claim_creator_clip_export()"
+  ],
+  [
+    "public.claim_creator_connect_account_creation/3",
+    "claim_creator_connect_account_creation(uuid,uuid,uuid)"
+  ],
+  [
+    "public.claim_creator_connect_hosted_link/2",
+    "claim_creator_connect_hosted_link(uuid,uuid)"
   ],
   [
     "public.claim_google_refund_tax_context/0",
@@ -347,8 +531,32 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "complete_creator_cashout_work(uuid,uuid,boolean)"
   ],
   [
+    "public.complete_creator_connect_hosted_link/4",
+    "complete_creator_connect_hosted_link(uuid,uuid,uuid,timestamp with time zone)"
+  ],
+  [
     "public.complete_revenuecat_nonpurchase_snapshot/4",
     "complete_revenuecat_nonpurchase_snapshot(text,uuid,jsonb,text)"
+  ],
+  [
+    "public.confirm_creator_connect_live_setup/3",
+    "confirm_creator_connect_live_setup(uuid,uuid,text)"
+  ],
+  [
+    "public.confirm_creator_merch_live_publication/1",
+    "confirm_creator_merch_live_publication(uuid)"
+  ],
+  [
+    "public.continue_auction_cost_history_refresh/2",
+    "continue_auction_cost_history_refresh(uuid,uuid)"
+  ],
+  [
+    "public.continue_merch_cost_history_refresh/2",
+    "continue_merch_cost_history_refresh(uuid,uuid)"
+  ],
+  [
+    "public.copy_creator_merch_live_draft/2",
+    "copy_creator_merch_live_draft(uuid,timestamp with time zone)"
   ],
   [
     "public.create_creator_payout_request_before_fee_policy/2",
@@ -371,6 +579,10 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "finish_creator_clip_export(uuid,uuid,text,jsonb)"
   ],
   [
+    "public.get_auction_checkout_provider_context/4",
+    "get_auction_checkout_provider_context(text,uuid,uuid,uuid)"
+  ],
+  [
     "public.get_commerce_fee_component_summary/2",
     "get_commerce_fee_component_summary(uuid,uuid)"
   ],
@@ -381,6 +593,18 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "public.get_creator_cashout_fee_import_context/1",
     "get_creator_cashout_fee_import_context(uuid)"
+  ],
+  [
+    "public.get_creator_cashout_payout_fee_import_context/1",
+    "get_creator_cashout_payout_fee_import_context(uuid)"
+  ],
+  [
+    "public.get_creator_connect_live_observation_context/1",
+    "get_creator_connect_live_observation_context(uuid)"
+  ],
+  [
+    "public.get_creator_connect_onboarding_route/2",
+    "get_creator_connect_onboarding_route(uuid,uuid)"
   ],
   [
     "public.get_creator_fee_policy_status/0",
@@ -399,12 +623,24 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "get_owner_commerce_fee_accounting_health()"
   ],
   [
+    "public.get_owner_commerce_fee_accounting_health_before_funding_returns/0",
+    "get_owner_commerce_fee_accounting_health_before_funding_returns()"
+  ],
+  [
     "public.get_owner_merch_reconciliation_health/0",
     "get_owner_merch_reconciliation_health()"
   ],
   [
+    "public.get_owner_merch_tax_review_queue/3",
+    "get_owner_merch_tax_review_queue(integer,timestamp with time zone,uuid)"
+  ],
+  [
     "public.heartbeat_creator_clip_export/2",
     "heartbeat_creator_clip_export(uuid,uuid)"
+  ],
+  [
+    "public.list_creator_merch_tax_categories/1",
+    "list_creator_merch_tax_categories(uuid)"
   ],
   [
     "public.list_my_creator_cashout_executions/0",
@@ -413,6 +649,10 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "public.merch_order_projection_before_known_fee_policy/1",
     "merch_order_projection_before_known_fee_policy(merch_orders)"
+  ],
+  [
+    "public.prepare_creator_room_seat_auction_pre_explicit_mode/1",
+    "prepare_creator_room_seat_auction_pre_explicit_mode(text)"
   ],
   [
     "public.preview_qualified_creator_cashout/2",
@@ -425,6 +665,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "public.process_revenuecat_nonpurchase_lifecycle_atomic/12",
     "process_revenuecat_nonpurchase_lifecycle_atomic(text,text,text,uuid,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,text)"
+  ],
+  [
+    "public.quarantine_creator_connect_account_creation/3",
+    "quarantine_creator_connect_account_creation(uuid,text,text)"
+  ],
+  [
+    "public.read_creator_auction_creation_mode/1",
+    "read_creator_auction_creation_mode(text)"
   ],
   [
     "public.read_creator_clip_export/1",
@@ -467,6 +715,10 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "record_creator_cashout_fee_report_adjusted(uuid,jsonb)"
   ],
   [
+    "public.record_creator_cashout_fee_report_before_funding_return/2",
+    "record_creator_cashout_fee_report_before_funding_return(uuid,jsonb)"
+  ],
+  [
     "public.record_creator_cashout_fee_report_components/2",
     "record_creator_cashout_fee_report_components(uuid,jsonb)"
   ],
@@ -475,8 +727,20 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "record_creator_cashout_observation(uuid,uuid,jsonb)"
   ],
   [
+    "public.record_creator_cashout_observation_before_funding_return/3",
+    "record_creator_cashout_observation_before_funding_return(uuid,uuid,jsonb)"
+  ],
+  [
     "public.record_creator_cashout_observation_bound/3",
     "record_creator_cashout_observation_bound(uuid,uuid,jsonb)"
+  ],
+  [
+    "public.record_creator_connect_created_account/5",
+    "record_creator_connect_created_account(uuid,uuid,uuid,text,jsonb)"
+  ],
+  [
+    "public.record_creator_connect_live_observation/2",
+    "record_creator_connect_live_observation(jsonb,jsonb)"
   ],
   [
     "public.record_google_refund_tax_evidence/2",
@@ -489,6 +753,14 @@ export const appCompletionAddedFunctionIdentities = new Map([
   [
     "public.record_merch_fee_report_observation/3",
     "record_merch_fee_report_observation(uuid,uuid,jsonb)"
+  ],
+  [
+    "public.record_merch_tax_category_context/5",
+    "record_merch_tax_category_context(uuid,uuid,uuid,text,timestamp with time zone)"
+  ],
+  [
+    "public.record_merch_tax_code_catalog/1",
+    "record_merch_tax_code_catalog(jsonb)"
   ],
   [
     "public.record_secondary_media_expiry_result/2",
@@ -511,12 +783,44 @@ export const appCompletionAddedFunctionIdentities = new Map([
     "request_qualified_creator_cashout(integer,text,uuid,uuid,integer,integer,integer)"
   ],
   [
+    "public.reserve_creator_connect_account_creation/2",
+    "reserve_creator_connect_account_creation(uuid,uuid)"
+  ],
+  [
     "public.reserve_secondary_media_objects/3",
     "reserve_secondary_media_objects(uuid,uuid,jsonb)"
   ],
   [
+    "public.resolve_owner_merch_tax_request/3",
+    "resolve_owner_merch_tax_request(uuid,uuid,text)"
+  ],
+  [
+    "public.review_creator_merch_live_publication/2",
+    "review_creator_merch_live_publication(uuid,timestamp with time zone)"
+  ],
+  [
+    "public.review_owner_merch_tax_category/9",
+    "review_owner_merch_tax_category(text,text,text,text,text,text,text,timestamp with time zone,integer)"
+  ],
+  [
+    "public.revoke_owner_merch_tax_category/1",
+    "revoke_owner_merch_tax_category(uuid)"
+  ],
+  [
+    "public.save_stripe_cost_history/6",
+    "save_stripe_cost_history(text,uuid,uuid,uuid,jsonb,jsonb)"
+  ],
+  [
     "public.seal_secondary_media_producer/2",
     "seal_secondary_media_producer(uuid,uuid)"
+  ],
+  [
+    "public.select_creator_merch_tax_category/4",
+    "select_creator_merch_tax_category(uuid,uuid,timestamp with time zone,text)"
+  ],
+  [
+    "public.update_creator_merch_fulfillment_before_release_receipt/3",
+    "update_creator_merch_fulfillment_before_release_receipt(uuid,text,text)"
   ]
 ]);
 
@@ -586,12 +890,24 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "private.merch_verified_purchase_at(uuid)"
   ],
   [
+    "private.project_creator_connect_observed_eligibility/0",
+    "private.project_creator_connect_observed_eligibility()"
+  ],
+  [
     "private.resolve_account_notification_activity/1",
     "private.resolve_account_notification_activity(notification_activity_events)"
   ],
   [
+    "private.resolve_creator_external_payment_capability/8",
+    "private.resolve_creator_external_payment_capability(uuid,uuid,text,uuid,integer,text,text,uuid)"
+  ],
+  [
     "private.resolve_notification_activity/1",
     "private.resolve_notification_activity(notification_activity_events)"
+  ],
+  [
+    "public.admit_ios_external_session/7",
+    "admit_ios_external_session(text,uuid,integer,uuid,text,integer,uuid)"
   ],
   [
     "public.approve_merch_tracking_correction/3",
@@ -610,6 +926,18 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "bind_commerce_tax_checkout_policy(text,uuid,text,text,text,text)"
   ],
   [
+    "public.bind_creator_event_auction_checkout/7",
+    "bind_creator_event_auction_checkout(uuid,uuid,text,text,text,integer,text)"
+  ],
+  [
+    "public.bind_creator_room_auction_checkout/7",
+    "bind_creator_room_auction_checkout(uuid,uuid,text,text,text,integer,text)"
+  ],
+  [
+    "public.bind_creator_source_catalog_price_internal/0",
+    "bind_creator_source_catalog_price_internal()"
+  ],
+  [
     "public.check_creator_merch_photo_target/1",
     "check_creator_merch_photo_target(uuid)"
   ],
@@ -626,6 +954,14 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "claim_merch_tracking_jobs(integer)"
   ],
   [
+    "public.complete_auction_observation/4",
+    "complete_auction_observation(uuid,uuid,boolean,text)"
+  ],
+  [
+    "public.complete_merch_cost_refresh/3",
+    "complete_merch_cost_refresh(uuid,uuid,boolean)"
+  ],
+  [
     "public.complete_merch_dispute_observation/2",
     "complete_merch_dispute_observation(uuid,jsonb)"
   ],
@@ -638,8 +974,16 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "configure_creator_merch_variants_before_photo_lock(uuid,text,jsonb,timestamp with time zone)"
   ],
   [
+    "public.create_creator_event_auction/7",
+    "create_creator_event_auction(uuid,uuid,integer,integer,timestamp with time zone,timestamp with time zone,text)"
+  ],
+  [
     "public.create_creator_payout_request_safe/2",
     "create_creator_payout_request_safe(integer,text)"
+  ],
+  [
+    "public.create_creator_room_seat_auction/9",
+    "create_creator_room_seat_auction(text,text,integer,integer,timestamp with time zone,timestamp with time zone,text,uuid,uuid)"
   ],
   [
     "public.creator_earnings_withdrawable_cents_internal/2",
@@ -690,6 +1034,26 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "merch_product_projection_before_variants(merch_products)"
   ],
   [
+    "public.prepare_creator_event_auction_checkout/4",
+    "prepare_creator_event_auction_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
+    "public.prepare_creator_event_auction_platform_checkout/4",
+    "prepare_creator_event_auction_platform_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
+    "public.prepare_creator_room_auction_checkout/4",
+    "prepare_creator_room_auction_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
+    "public.prepare_creator_room_auction_platform_checkout/4",
+    "prepare_creator_room_auction_platform_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
+    "public.prepare_creator_room_seat_auction/1",
+    "prepare_creator_room_seat_auction(text)"
+  ],
+  [
     "public.process_revenuecat_app_store_event_atomic/12",
     "process_revenuecat_app_store_event_atomic(text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,integer,text,text,text,text)"
   ],
@@ -718,8 +1082,20 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer,text,text,text,text,text,uuid,uuid,text)"
   ],
   [
+    "public.process_revenuecat_premium_event_atomic_pre_repurchase/20",
+    "process_revenuecat_premium_event_atomic_pre_repurchase(text,text,text,uuid,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer,text,text,text,text,text,uuid,uuid,text)"
+  ],
+  [
+    "public.process_revenuecat_premium_event_pre_owner_serialization/20",
+    "process_revenuecat_premium_event_pre_owner_serialization(text,text,text,uuid,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,integer,text,text,text,text,text,uuid,uuid,text)"
+  ],
+  [
     "public.process_revenuecat_terminal_event_atomic/16",
     "process_revenuecat_terminal_event_atomic(text,text,text,uuid,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,text,text,text,text,text)"
+  ],
+  [
+    "public.process_stripe_event_auction_receipt/2",
+    "process_stripe_event_auction_receipt(jsonb,text)"
   ],
   [
     "public.process_stripe_merch_webhook_before_photo_lock/4",
@@ -728,6 +1104,10 @@ export const appCompletionReplacedFunctionIdentities = new Map([
   [
     "public.process_stripe_merch_webhook_lifecycle_before_storefront/4",
     "process_stripe_merch_webhook_lifecycle_before_storefront(text,text,text,jsonb)"
+  ],
+  [
+    "public.process_stripe_room_auction_receipt/2",
+    "process_stripe_room_auction_receipt(jsonb,text)"
   ],
   [
     "public.qualify_auction_event_release_from_domain/1",
@@ -770,6 +1150,14 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "record_merch_provider_cost_observation(uuid,jsonb)"
   ],
   [
+    "public.recover_creator_event_auction_checkout/4",
+    "recover_creator_event_auction_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
+    "public.recover_creator_room_auction_checkout/4",
+    "recover_creator_room_auction_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
     "public.request_merch_tracking_correction/5",
     "request_merch_tracking_correction(uuid,uuid,text,text,text)"
   ],
@@ -786,8 +1174,20 @@ export const appCompletionReplacedFunctionIdentities = new Map([
     "reserve_merch_checkout_dispatch(uuid,uuid,uuid,integer,uuid,uuid,text,integer,text)"
   ],
   [
+    "public.revalidate_creator_event_auction_checkout/4",
+    "revalidate_creator_event_auction_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
+    "public.revalidate_creator_room_auction_checkout/4",
+    "revalidate_creator_room_auction_checkout(uuid,uuid,uuid,uuid)"
+  ],
+  [
     "public.save_creator_merch_product_before_variants/8",
     "save_creator_merch_product_before_variants(uuid,text,text,text,integer,integer,text,timestamp with time zone)"
+  ],
+  [
+    "public.set_paid_creator_event_offer_pre_integrity_closeout/5",
+    "set_paid_creator_event_offer_pre_integrity_closeout(uuid,text,integer,integer,text)"
   ],
   [
     "public.submit_merch_return_case/4",

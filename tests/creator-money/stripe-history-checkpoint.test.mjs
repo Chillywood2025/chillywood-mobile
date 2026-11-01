@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
 import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {observe,order,fixture} from './merch-cost-observation-edge.test.mjs';
@@ -118,15 +120,74 @@ test('full schema checkpoints bind source/account/mode/lease and atomically pres
  }finally{await db.close();}
 });
 
-test('stalled provider bodies cannot escape the explicit history deadline',async()=>{
- const originalTimeout=AbortSignal.timeout;
- AbortSignal.timeout=()=>originalTimeout(20);
- try{
-  const transport=async()=>new Response(new ReadableStream({pull:()=>new Promise(()=>{}),cancel:()=>new Promise(()=>{})}));
-  const history=createStripeHistoryCheckpoint({},transport,()=>64);
+// Inject only this module's timer functions, never mutate AbortSignal or global
+// timers used by other tests. The real deadline branch runs with a short clock.
+function deadlineHistory(){
+ const active=new Set();let fired=0,cleared=0;
+ const schedule=(callback,milliseconds)=>{
+  assert.equal(milliseconds,15000);
+  const timer=setTimeout(()=>{active.delete(timer);fired++;callback();},20);active.add(timer);return timer;
+ };
+ const cancel=timer=>{clearTimeout(timer);active.delete(timer);cleared++;};
+ const module={exports:{}};
+ const compiled=ts.transpileModule(readFileSync('supabase/functions/_shared/stripe-history-checkpoint.ts','utf8'),{
+  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+ }).outputText;
+ new Function('module','exports','setTimeout','clearTimeout',compiled)(module,module.exports,schedule,cancel);
+ return {create:module.exports.createStripeHistoryCheckpoint,active,counts:()=>({fired,cleared})};
+}
+test('stalled provider headers and bodies cannot escape the owned history deadline',async()=>{
+ for(const stall of ['headers','body']){
+  const clock=deadlineHistory();let signal,response,canceled=0;
+  const transport=async(_url,options)=>{
+   signal=options.signal;
+   if(stall==='headers')return new Promise(()=>{});
+   response=new Response(new ReadableStream({pull:()=>new Promise(()=>{}),cancel:()=>{canceled++;return new Promise(()=>{});}}));
+   return response;
+  };
+  const history=clock.create({},transport,()=>64);
   await assert.rejects(history.transport('https://api.stripe.com/v1/account',init),/history_body_deadline/);
-  assert.equal(history.checkpoint().entries.length,0);
- }finally{AbortSignal.timeout=originalTimeout;}
+  assert.equal(signal.aborted,true);assert.equal(history.checkpoint().entries.length,0);
+  assert.deepEqual(clock.counts(),{fired:1,cleared:1});assert.equal(clock.active.size,0);
+  if(stall==='body'){assert.equal(canceled,1);assert.equal(response.body.locked,false,'unsettled cancel cannot retain the reader lock');}
+ }
+});
+test('late transport response after the deadline is canceled and cannot advance history',async()=>{
+ const clock=deadlineHistory();let resolve,canceled=0;
+ const history=clock.create({},()=>new Promise(r=>{resolve=r;}),()=>64);
+ await assert.rejects(history.transport('https://api.stripe.com/v1/account',init),/history_body_deadline/);
+ resolve(new Response(new ReadableStream({cancel(){canceled++;return new Promise(()=>{});}})));
+ await new Promise(r=>setImmediate(r));
+ assert.equal(canceled,1);assert.equal(history.checkpoint().entries.length,0);assert.equal(clock.active.size,0);
+});
+test('history deadline respects external abort without dispatching already-aborted work',async()=>{
+ const clock=deadlineHistory(),controller=new AbortController();controller.abort();let calls=0;
+ const stopped=clock.create({},async()=>{calls++;return Response.json({id:'acct_never',object:'account'});},()=>64);
+ await assert.rejects(stopped.transport('https://api.stripe.com/v1/account',{...init,signal:controller.signal}),/history_body_deadline/);
+ assert.equal(calls,0);assert.deepEqual(clock.counts(),{fired:0,cleared:0});assert.equal(clock.active.size,0);
+ const during=new AbortController();let response;
+ const active=clock.create({},async()=>{
+  response=new Response(new ReadableStream({pull(){during.abort();return new Promise(()=>{});},cancel(){return Promise.reject(Error('cancel_failed'));}},{highWaterMark:0}));
+  return response;
+ },()=>64);
+ await assert.rejects(active.transport('https://api.stripe.com/v1/account',{...init,signal:during.signal}),/history_body_deadline/);
+ assert.equal(active.checkpoint().entries.length,0);assert.equal(response.body.locked,false);assert.equal(clock.active.size,0);assert.equal(clock.counts().cleared,1);
+});
+test('history deadline timers are cleared on success, provider failure, missing association, and malformed bodies',async()=>{
+ for(const kind of ['success','provider_error','missing','malformed','oversized']){
+  const clock=deadlineHistory();let canceled=0;
+  const response=kind==='success'?Response.json({id:'acct_ok',object:'account'}):kind==='provider_error'?new Response(new ReadableStream({cancel(){canceled++;return new Promise(()=>{});}}),{status:503})
+   :kind==='missing'?new Response(new ReadableStream({cancel(){canceled++;return new Promise(()=>{});}}),{status:404})
+   :new Response(kind==='malformed'?'{':new Uint8Array(2*1024*1024+1));
+  const history=clock.create({},async()=>response,()=>64);
+  const path=kind==='missing'?'/v1/tax/associations/find?payment_intent=pi_test':'/v1/account';
+  const read=()=>history.transport(`https://api.stripe.com${path}`,init);
+  if(kind==='malformed'||kind==='oversized')await assert.rejects(read());
+  else assert.equal((await read()).status,kind==='provider_error'?503:kind==='missing'?404:200);
+  assert.equal(clock.active.size,0);assert.deepEqual(clock.counts(),{fired:0,cleared:1});
+  if(kind==='missing'||kind==='provider_error')assert.equal(canceled,1);
+  if(kind==='malformed'||kind==='oversized')assert.equal(response.body.locked,false);
+ }
 });
 
 test('checkpoint tax projection preserves exact authoritative rounded reversals without immutability assumptions',async()=>{

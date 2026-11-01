@@ -84,7 +84,7 @@ test('service endpoint requires exact service credential before provider reads a
 });
 
 test('actual auction worker expands2,000 refunds and resumes within64 GETs without partial recording',async()=>{
- for(const refundCount of [0,60,2000]){
+ for(const [refundCount,accountingMode] of [[0,'checked'],[60,'checked'],[2000,'checked'],[0,'error'],[0,'timeout']]){
   let handler,checkpoint={},observations=0;const f=fixture(),sql=[],context={...order};
   if(refundCount>1000){
    context.amount_total_minor=3000;f.data['/checkout/sessions/cs_test_merch'].amount_total=3000;
@@ -100,7 +100,11 @@ test('actual auction worker expands2,000 refunds and resumes within64 GETs witho
   }
   const runtime={exports:{},Error,fetch:f.transport,AbortSignal,setTimeout,clearTimeout,Deno:{serve:fn=>handler=fn},require:name=>{
    if(name.startsWith('jsr:'))return{};
-   if(name.endsWith('merch-observation-budget.ts'))return{createMerchObservationBudget:()=>loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts').createMerchObservationBudget(f.transport)};
+   if(name.endsWith('commerce-fee-accounting-drain.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/commerce-fee-accounting-drain.ts');
+   if(name.endsWith('merch-observation-budget.ts'))return{createMerchObservationBudget:(transport,milliseconds)=>{
+    assert.equal(transport,f.transport);assert.equal(milliseconds,65000);
+    return loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts').createMerchObservationBudget(transport,milliseconds);
+   }};
    if(name.endsWith('stripe-history-checkpoint.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/stripe-history-checkpoint.ts');
    if(name.endsWith('stripe-auction-cost-observation.ts'))return{observeStripeAuctionCosts:observe};
    if(name.endsWith('merch-dispute-observation.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-dispute-observation.ts');
@@ -108,6 +112,13 @@ test('actual auction worker expands2,000 refunds and resumes within64 GETs witho
     readOptionalEnv:key=>key==='SUPABASE_SERVICE_ROLE_KEY'?'synthetic_service':key.endsWith('_KEY')?'sk_test_synthetic':'acct_fixture',readStripeTestSecret:()=>({configured:true,secret:'sk_test_synthetic'}),
     jsonResponse:(status,body)=>Response.json(body,{status}),createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
      sql.push(name);
+     if(name==='process_commerce_fee_accounting_jobs'){
+      assert.equal(observations,1,'accounting only follows a complete persisted observation');
+      assert.equal(args.p_source_id,order.id);assert.equal(args.p_limit,1);
+      if(accountingMode==='timeout')return await new Promise(()=>{});
+      if(accountingMode==='error')return{error:{message:'synthetic unavailable'}};
+      return{data:{outcomes:[{status:'held',financialAuthority:false}]}};
+     }
      if(name==='get_auction_cost_reconciliation_context')return{data:{...context,platform_account_id:'acct_fixture'}};
      if(name==='begin_stripe_cost_history')return{data:{generation:'synthetic-generation',lease:'synthetic-lease',checkpoint,context}};
      if(name==='save_stripe_cost_history'){
@@ -122,16 +133,21 @@ test('actual auction worker expands2,000 refunds and resumes within64 GETs witho
   }};
   vm.runInNewContext(compile('supabase/functions/stripe-auction-cost-reconcile/index.ts'),runtime);
   const r=await handler(new Request('https://synthetic.test',{method:'POST',headers:{Authorization:'Bearer synthetic_service'},body:JSON.stringify({contract_id:order.id})}));
-  assert.equal(r.status,refundCount>1000?202:200);assert.equal((await r.json()).financialAuthority,false);
+  let responseBody=await r.json();
+  assert.equal(r.status,refundCount>1000?202:200);assert.equal(responseBody.financialAuthority,false);
+  if(r.status===202){assert.equal(responseBody.accounting,undefined);assert.equal(sql.includes('process_commerce_fee_accounting_jobs'),false,'partial histories do not drain accounting');}
   if(refundCount){assert.ok(f.calls.length<=64);assert.ok(!sql.includes('record_auction_platform_cost_observation'));}
   else assert.ok(sql.includes('save_stripe_cost_history'));
   let status=r.status,attempts=1;
   while(status===202){
    const before=f.calls.length;
    const next=await handler(new Request('https://synthetic.test',{method:'POST',headers:{Authorization:'Bearer synthetic_service'},body:JSON.stringify({contract_id:order.id})}));
-   status=next.status;assert.ok(f.calls.length-before<=64);assert.ok(++attempts<8);
+   status=next.status;responseBody=await next.json();assert.ok(f.calls.length-before<=64);assert.ok(++attempts<8);
   }
   assert.equal(status,200,'saved history eventually completes instead of restarting at64');
   assert.equal(observations,1,'no partial history reaches the final recorder');
+  assert.equal(sql.filter(name=>name==='process_commerce_fee_accounting_jobs').length,1);
+  assert.equal(responseBody.accounting.status,accountingMode==='checked'?'checked':'deferred');
+  if(accountingMode!=='checked')assert.equal(responseBody.accounting.ownerHealthRpc,'get_owner_commerce_fee_accounting_health');
  }
 });

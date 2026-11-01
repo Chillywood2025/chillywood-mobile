@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 const migration='20261030190222_physical_merch_net_share_terms.sql';
 test('physical merch freezes new90/10 NET terms without repricing history or granting settlement', {timeout:240000},async()=>{
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:[migration]});
+ // Observe the historical boundary before replaying its successors. Applying
+ // only this old wrapper after current wrappers is not a valid migration order.
+ const successors=fs.readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')&&name>=migration).sort();
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:successors});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const make=()=>one(`insert into public.merch_orders(buyer_id,provider,environment,order_status,fulfillment_status,payment_status,amount_subtotal_minor,amount_total_minor,currency)
  values('e7000000-0000-4000-8000-000000000001','stripe_physical_goods','sandbox','pending','not_started','pending',1000,1000,'usd') returning id`);
@@ -25,5 +28,9 @@ test('physical merch freezes new90/10 NET terms without repricing history or gra
   assert.equal((await split([1000,null,0,0,0])).creatorShareMinor,null);
   await assert.rejects(split([1000,1001,0,0,0]),/exceed_gross/);await assert.rejects(split([1000,-1,0,0,0]),/cost_invalid/);
   assert.equal(await one('select count(*)::int from public.creator_earnings_ledger'),0,'no unqualified payable earnings');
+  for(const file of successors.filter(name=>name!==migration))await db.exec(fs.readFileSync(`supabase/migrations/${file}`,'utf8'));
+  assert.equal((await one('select to_jsonb(o) from public.merch_orders o where id=$1',[old])).net_share_policy_version,null);
+  assert.equal((await read()).creatorNetShareBps,9000);
+  assert.equal(await one('select count(*)::int from public.creator_earnings_ledger'),0,'successors never reprice or release historical orders');
  }finally{await db.close();}
 });

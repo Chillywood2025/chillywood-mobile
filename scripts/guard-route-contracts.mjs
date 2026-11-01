@@ -2,6 +2,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { inspectPaidPartyRouteContract } from "./lib/paid-party-route-contract.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -22,19 +23,6 @@ const assertIncludes = (source, needle, label) => {
 
 const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
-};
-
-const assertScopedIncludes = (source, startNeedle, endNeedle, needle, label) => {
-  const start = source.indexOf(startNeedle);
-  const end = source.indexOf(endNeedle, start + startNeedle.length);
-  if (start < 0 || end < 0) {
-    fail(`${label} scope could not be found`);
-    return "";
-  }
-
-  const scoped = source.slice(start, end);
-  assertIncludes(scoped, needle, label);
-  return scoped;
 };
 
 [
@@ -99,15 +87,7 @@ assertNotIncludes(partyRoom, 'pathname: "/watch-party/live-stage/[partyId]"', "P
 assertIncludes(routeDoc, "Watch-Party Live must not be routed into Live Stage.", "Watch-Party Live route separation doc");
 assertIncludes(routeDoc, "Party Room must not be renamed to Live Stage.", "Party Room route separation doc");
 
-const paidTicketPurchaseScope = assertScopedIncludes(
-  watchPartyIndex,
-  "const onBuyPaidTicketAndJoin = useCallback(async () => {",
-  "}, [isSignedIn, navigateToPreviewRoom, paidWatchPartyCheckoutAvailable, preparedRoom, preview, router]);",
-  "navigateToPreviewRoom(targetPreview);",
-  "Paid Watch-Party Seat Pass buyer post-purchase path",
-);
-assertNotIncludes(paidTicketPurchaseScope, "/watch-party/live-stage", "Paid Watch-Party Seat Pass buyer path");
-assertNotIncludes(paidTicketPurchaseScope, "setEmbeddedLiveStageEntry", "Paid Watch-Party Seat Pass buyer path");
+for (const error of inspectPaidPartyRouteContract(watchPartyIndex)) fail(error);
 
 assertIncludes(player, "usePlayerWatchPartyActions({", "Player uses its owned Watch-Party actions");
 assertIncludes(playerActions, "PLAYER_WATCH_PARTY_SOURCE", "Player content-first Watch-Party handoff source");

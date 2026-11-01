@@ -326,7 +326,7 @@
     "guard:player-overlay-policy": "node ./scripts/guard-player-overlay-policy.mjs",
     "guard:critical-ux-polish-policy": "node ./scripts/guard-critical-ux-polish-policy.mjs",
     "guard:navigation-terminology-policy": "node ./scripts/guard-navigation-terminology-policy.mjs",
-    "guard:route-contracts": "node ./scripts/guard-route-contracts.mjs && npm run test:watch-party-navigation-single-flight",
+    "guard:route-contracts": "node ./scripts/guard-route-contracts.mjs && node --test ./tests/paid-party-route-contract-guard.test.mjs && npm run test:watch-party-navigation-single-flight",
     "guard:role-terminology-policy": "node ./scripts/guard-role-terminology-policy.mjs",
     "guard:malware-scanning-policy": "node ./scripts/guard-malware-scanning-policy.mjs",
     "guard:content-rights-policy": "node ./scripts/guard-content-rights-policy.mjs",

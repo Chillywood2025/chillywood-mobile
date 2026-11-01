@@ -6,17 +6,18 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, Text
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSession } from "../../_lib/session";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
+import { MerchTaxCategoryPicker } from "./merch-tax-category";
 import { MerchTrackingPanel } from "./merch-tracking-panel";
 import { MerchShippingDetails } from "./merch-shipping-details";
 import { MerchReturnQueue } from "./merch-return-queue";
 import { MerchReturnCases } from "./merch-return-cases";
-import { configureMerchVariants, createMerchCheckoutAttemptId, launchMerchCheckout, MerchCheckoutAbortedError, readMerchOrders, readMerchProducts, saveMerchProduct, updateMerchFulfillment, type MerchOrder, type MerchProduct, type MerchProductInput, type MerchVariantInput } from "../../_lib/creatorMerch";
+import { confirmMerchLivePublication, copyMerchLiveDraft, reviewMerchLivePublication, type MerchLivePublicationReview, configureMerchVariants, createMerchCheckoutAttemptId, launchMerchCheckout, MerchCheckoutAbortedError, readMerchOrders, readMerchProducts, saveMerchProduct, updateMerchFulfillment, type MerchOrder, type MerchProduct, type MerchProductInput, type MerchVariantInput } from "../../_lib/creatorMerch";
 
 import { approveMerchProductPhoto, assignMerchProductPhoto, discardMerchProductPhoto, pickMerchProductPhoto, readMerchProductPhotoStatus, resolveMerchProductPhotos, uploadMerchProductPhoto, type MerchProductPhotoFile, type MerchProductPhotoUploadAttempt } from "../../_lib/merchProductPhotos";
 
 const money = (amount: number, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount / 100);
 const errorText = (error: unknown) => error instanceof Error ? error.message : "We couldn't complete that request. Please try again.";
-const NOTICE = "New physical-merch orders: creator 90% / app 10% of net after verified fees, taxes, refunds and adjustments. This is not an extra buyer surcharge. Final net remains unverified. Sandbox preview · US physical goods only. No live payments, creator earnings, or physical shipments. Merch never unlocks VIP or Premium.";
+const NOTICE = "New physical-merch orders: creator 90% / app 10% of net after verified fees, taxes, refunds and adjustments. This is not an extra buyer surcharge. Final net remains unverified. US physical goods only. Test listings: No live payments, creator earnings, or physical shipments. Merch never unlocks VIP or Premium.";
 const productPhoto = (product: MerchProduct) => product.photoStatus === "blocked" ? null : product.photoAssetId ? product.photoUrl : product.imageUrl;
 const variantLabel = (variant: { sku: string; size?: string | null; color?: string | null }) => [variant.size, variant.color].filter(Boolean).join(" / ") || variant.sku;
 const shippingTerms = (mode: MerchProduct["shippingTrackingMode"]) => mode === "tracked" ? "Tracked shipping: 30-day return window starting at verified delivery." : mode === "untracked" ? "Untracked shipping: 30-day return window starting at verified successful purchase." : "The creator must choose tracked or untracked shipping before checkout.";
@@ -101,7 +102,7 @@ function Shop({ creatorId }: { creatorId: string }) {
       <View style={styles.row}><Button label="Decrease quantity" disabled={busy || quantity <= 1} onPress={() => { setQuantity(q => q - 1); attempt.current = null; }} /><Text style={styles.body}>Quantity: {quantity}</Text><Button label="Increase quantity" disabled={busy || quantity >= Math.min(10, availableQuantity)} onPress={() => { setQuantity(q => q + 1); attempt.current = null; }} /></View>
       {selected.checkoutAvailable && selected.shippingTrackingMode && availableQuantity > 0 && (!optionRequired || selectedVariant) ? <Button label={busy ? "Opening checkout…" : `Sandbox checkout · ${money(selected.priceMinor * quantity, selected.currency)}`} disabled={busy || quantity > availableQuantity} onPress={() => void buy()} /> : <Text style={styles.notice}>Checkout unavailable: {optionRequired && !selectedVariant ? "Select an available size / color." : selected.checkoutReason || "This product is not ready for checkout."}</Text>}
       {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
-    </View> : <>{page.items.map(product => <View key={product.id} style={styles.card}>{productPhoto(product) ? <Image source={{ uri: productPhoto(product)! }} style={styles.image} accessibilityLabel={product.title} /> : null}<Text style={styles.heading}>{product.title}</Text><Text style={styles.price}>{money(product.priceMinor, product.currency)}</Text><Text style={styles.body}>{product.variantMode === "options" ? "Sizes / colors available" : product.availableQuantity > 0 ? `${product.availableQuantity} available` : "Sold out"}</Text><Button label={`View ${product.title}`} onPress={() => { setSelected(product); setVariantId(null); setQuantity(1); attempt.current = null; }} /></View>)}<PageStatus page={page} empty="No products are published yet. Check back later." /></>}
+    </View> : <>{page.items.map(product => <View key={product.id} style={styles.card}>{productPhoto(product) ? <Image source={{ uri: productPhoto(product)! }} style={styles.image} accessibilityLabel={product.title} /> : null}<Text style={styles.heading}>{product.environment === "sandbox" ? "Test · " : ""}{product.title}</Text><Text style={styles.price}>{money(product.priceMinor, product.currency)}</Text><Text style={styles.body}>{product.variantMode === "options" ? "Sizes / colors available" : product.availableQuantity > 0 ? `${product.availableQuantity} available` : "Sold out"}</Text><Button label={`View ${product.title}`} onPress={() => { setSelected(product); setVariantId(null); setQuantity(1); attempt.current = null; }} /></View>)}<PageStatus page={page} empty="No products are published yet. Check back later." /></>}
   </Shell>;
 }
 
@@ -212,10 +213,11 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   const [attachedPreview, setAttachedPreview] = useState<{ assetId: string; uri: string } | null>(null);
   const photoAttempt = useRef<MerchProductPhotoUploadAttempt>({}), photoGeneration = useRef(0);
   const [advancedImage, setAdvancedImage] = useState(false);
+  const [publishReview, setPublishReview] = useState<MerchLivePublicationReview | null>(null);
   const committedQuantity = currentProduct?.variantMode === "options" ? (currentProduct.variants ?? []).reduce((total, variant) => total + Math.max(0, variant.stockQuantity - variant.availableQuantity), 0) : currentProduct ? Math.max(0, currentProduct.stockQuantity - currentProduct.availableQuantity) : 0;
   const [price, setPrice] = useState(product ? (product.priceMinor / 100).toFixed(2) : ""), [stock, setStock] = useState(String(product?.availableQuantity ?? 0));
   const [trackingMode, setTrackingMode] = useState<"tracked" | "untracked" | null>(product?.shippingTrackingMode ?? null);
-  const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [productId] = useState(() => product?.id ?? createMerchCheckoutAttemptId()); const latch = useRef(false), alive = useRef(true);
+  const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [productId, setProductId] = useState(() => product?.id ?? createMerchCheckoutAttemptId()); const latch = useRef(false), alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useFocusEffect(useCallback(() => { alive.current = true; return () => { alive.current = false; photoGeneration.current++; }; }, []));
   const authorityCurrent = () => !!authority && authority.state === "ACTIVE" && !authority.restoreOnly
@@ -301,9 +303,31 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
     }
     catch (e) { if (alive.current && generation === photoGeneration.current && authorityCurrent()) setError(errorText(e)); } finally { latch.current = false; if (alive.current) setBusy(false); }
   };
+  useEffect(() => { setPublishReview(null); }, [title, description, price, stock, trackingMode, photoFile, stagedPhoto, managingVariants]);
+  const livePublication = async (action: "review" | "confirm" | "copy") => {
+    if (!alive.current || latch.current || !authorityCurrent()) return;
+    if (!currentProduct || photoFile || stagedPhoto) { setError("Save the draft and finish reviewing its photo first."); return; }
+    if (title.trim() !== currentProduct.title || description !== (currentProduct.description ?? "") || imageUrl.trim() !== (currentProduct.imageUrl ?? "") || Math.round(Number(price) * 100) !== currentProduct.priceMinor || Number(stock) !== currentProduct.availableQuantity || trackingMode !== currentProduct.shippingTrackingMode) {
+      setError("Save your changes first, then reopen this product to review the exact saved price, stock and shipping terms."); return;
+    }
+    latch.current = true; setBusy(true); setError(null);
+    try {
+      if (action === "review") {
+        const review = await reviewMerchLivePublication(currentProduct);
+        if (alive.current && authorityCurrent()) setPublishReview(review);
+      } else if (action === "confirm" && publishReview?.ready && publishReview.reviewId) {
+        await confirmMerchLivePublication(publishReview.reviewId);
+        if (alive.current && authorityCurrent()) done();
+      } else if (action === "copy") {
+        const copied = await copyMerchLiveDraft(currentProduct);
+        if (alive.current && authorityCurrent()) { setCurrentProduct(copied); setProductId(copied.id); setImageUrl(""); setAttachedPreview(null); setStock(String(copied.availableQuantity)); setPublishReview(null); setError("New separate draft created. Review its stock, add and approve a photo, and complete this product's tax verification before live publishing. The original test listing is unchanged."); }
+      }
+    } catch (e) { if (alive.current && authorityCurrent()) { setPublishReview(null); setError(errorText(e)); } }
+    finally { latch.current = false; if (alive.current) setBusy(false); }
+  };
   const currentPhotoPreview = currentProduct?.photoStatus !== "blocked" && attachedPreview?.assetId === currentProduct?.photoAssetId ? attachedPreview?.uri : currentProduct?.photoUrl;
   if (managingVariants && currentProduct) return <VariantsEditor product={currentProduct} onSaved={saved => { setCurrentProduct(saved); setStock(String(saved.availableQuantity)); setManagingVariants(false); }} onCancel={() => setManagingVariants(false)} />;
-  return <View style={styles.card}><Text style={styles.heading}>{product ? "Edit product" : "Add product"}</Text><Text style={styles.notice}>Publishing makes a sandbox listing visible on your Platform. It does not enable live checkout or shipping.</Text>{[
+  return <View style={styles.card}><Text style={styles.heading}>{product ? "Edit product" : "Add product"}</Text><Text style={styles.notice}>New drafts start in Test mode. Publish a test listing for approved testers, or review live publishing for real purchases after verification. Live publishing never happens automatically.</Text>{[
     { label: "Product title", value: title, change: setTitle }, { label: "Description", value: description, change: setDescription }, { label: "Price (USD)", value: price, change: setPrice }, ...(currentProduct?.variantMode === "options" ? [] : [{ label: "Available stock", value: stock, change: setStock }]),
   ].map(field => <View key={field.label}><Text style={styles.body}>{field.label}</Text><TextInput accessibilityLabel={field.label} value={field.value} onChangeText={field.change} editable={!busy} style={styles.input} autoCapitalize="none" maxLength={field.label === "Description" ? 2000 : 500} /></View>)}
     <Text style={styles.heading}>Shipping and return window</Text><View style={styles.row}><Button label="Tracked shipping" selected={trackingMode === "tracked"} disabled={busy} onPress={() => setTrackingMode("tracked")} /><Button label="Untracked shipping" selected={trackingMode === "untracked"} disabled={busy} onPress={() => setTrackingMode("untracked")} /></View><Text style={styles.notice}>{shippingTerms(trackingMode)} Changing this setting affects new orders only; existing orders keep their recorded terms.</Text>
@@ -332,7 +356,11 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
     <Text style={styles.notice}>{committedQuantity} units already held or sold. Available stock is the number you can still offer; saved totals also retain those committed units. If an order changes stock while you edit, refresh before saving again.</Text>
     {currentProduct ? <><Button label="Manage sizes / colors" disabled={busy} onPress={() => setManagingVariants(true)} /><Text style={styles.notice}>{currentProduct.variantMode === "options" ? "Options are enabled. Manage stock separately for each size / color." : "Optional: keep one simple product, or add sizes / colors after saving your product details."}</Text></> : <Text style={styles.notice}>Save a draft first to add optional sizes / colors.</Text>}
     {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-    <Button label="Save draft" disabled={busy} onPress={() => void save("draft")} /><Button label="Publish listing" disabled={busy} onPress={() => void save("published")} />{product ? <><Button label="Pause listing" disabled={busy} onPress={() => void save("paused")} /><Button label="Archive listing" disabled={busy} onPress={() => void save("archived")} /></> : null}<Button label="Cancel editing" disabled={busy} onPress={done} />
+    {currentProduct ? <MerchTaxCategoryPicker productId={currentProduct.id} updatedAt={currentProduct.updatedAt} disabled={busy} onSelected={updatedAt => { if (alive.current && authorityCurrent()) { setCurrentProduct(value => value ? { ...value, updatedAt } : value); setPublishReview(null); } }} /> : null}
+    <Button label="Save draft" disabled={busy} onPress={() => void save("draft")} />{currentProduct?.environment !== "production" ? <Button label="Publish test listing" disabled={busy} onPress={() => void save("published")} /> : null}
+    {currentProduct ? <Button label="Review live publishing" disabled={busy} onPress={() => void livePublication("review")} /> : null}
+    {publishReview ? <View><Text style={styles.notice}>{publishReview.ready ? `${publishReview.title} · ${money(publishReview.priceMinor!, publishReview.currency!)} · ${publishReview.availableQuantity} available. ${shippingTerms(publishReview.trackingMode)} ${publishReview.summary}` : publishReview.reason}</Text>
+      {publishReview.ready ? <><Button label="Confirm publish for real purchases" disabled={busy} onPress={() => void livePublication("confirm")} /><Button label="Cancel live publication" disabled={busy} onPress={() => setPublishReview(null)} /></> : publishReview.copyRequired ? <Button label="Create separate live-ready draft copy" disabled={busy} onPress={() => void livePublication("copy")} /> : null}</View> : null}{product ? <><Button label="Pause listing" disabled={busy} onPress={() => void save("paused")} /><Button label="Archive listing" disabled={busy} onPress={() => void save("archived")} /></> : null}<Button label="Cancel editing" disabled={busy} onPress={done} />
   </View>;
 }
 export function MerchStudioScreen({ orderId, caseId }: { orderId?: string; caseId?: string } = {}) { return <SessionGate><Studio key={`${orderId ?? "all"}:${caseId ?? "all"}`} orderId={orderId} caseId={caseId} /></SessionGate>; }
@@ -343,7 +371,7 @@ function Studio({ orderId, caseId }: { orderId?: string; caseId?: string }) {
   const page = usePage(read);
   return <Shell title="Manage shop"><View style={styles.row}><Button label="Products" onPress={() => { setTab("products"); setEditing(undefined); }} /><Button label="Customer orders" onPress={() => { setTab("orders"); setEditing(undefined); }} /><Button label="Preview storefront" onPress={() => router.push({ pathname: "/merch/[creatorId]", params: { creatorId: user?.id ?? "" } })} /></View>
     <MerchReturnQueue role="creator" />
-    {tab === "orders" ? <>{orderId ? <Button label="All customer orders" onPress={() => router.replace("/merch/studio")} /> : null}<Orders manage orderId={orderId} caseId={caseId} /></> : editing !== undefined ? <Editor key={editing?.id ?? "new"} product={editing} done={() => { setEditing(undefined); void page.refresh(); }} /> : <><Button label="Add product" onPress={() => setEditing(null)} />{page.items.map(product => <View key={product.id} style={styles.card}><Text style={styles.heading}>{product.title}</Text><Text style={styles.body}>{product.publicationStatus} · {money(product.priceMinor, product.currency)} · {product.availableQuantity} available of {product.stockQuantity}</Text><Button label={`Edit ${product.title}`} onPress={() => setEditing(product)} /></View>)}<PageStatus page={page} empty="Add your first product. Save a draft, then publish it to your Platform shop." /></>}
+    {tab === "orders" ? <>{orderId ? <Button label="All customer orders" onPress={() => router.replace("/merch/studio")} /> : null}<Orders manage orderId={orderId} caseId={caseId} /></> : editing !== undefined ? <Editor key={editing?.id ?? "new"} product={editing} done={() => { setEditing(undefined); void page.refresh(); }} /> : <><Button label="Add product" onPress={() => setEditing(null)} />{page.items.map(product => <View key={product.id} style={styles.card}><Text style={styles.heading}>{product.title}</Text><Text style={styles.body}>{product.environment === "sandbox" ? "Test · " : "Live · "}{product.publicationStatus} · {money(product.priceMinor, product.currency)} · {product.availableQuantity} available of {product.stockQuantity}</Text><Button label={`Edit ${product.title}`} onPress={() => setEditing(product)} /></View>)}<PageStatus page={page} empty="Add your first product. Save a draft, then publish it to your Platform shop." /></>}
   </Shell>;
 }
 const styles = StyleSheet.create({

@@ -2503,9 +2503,24 @@ export function ChannelStudioScreen() {
     });
 
     try {
-      const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
+      let accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
       if (!isCurrent()) return;
-      if (["creation_pending", "creator_onboarding_eligibility_required", "account_migration_review_required", "onboarding_authority_changed"].includes(String(accountPayload.status))) {
+      if (accountPayload.status === "live_setup_confirmation_required") {
+        const disclosure = "This creates a separate live Stripe account. Your test account and history stay unchanged. You will complete Stripe’s identity, bank and agreement steps yourself. Payments and payouts stay off until separately qualified.";
+        const confirmed = Platform.OS === "web"
+          ? typeof window !== "undefined" && window.confirm(disclosure)
+          : await new Promise<boolean>((resolve) => Alert.alert(
+          "Set up live payouts?",
+          disclosure,
+          [{ text: "Not now", style: "cancel", onPress: () => resolve(false) },
+            { text: "Set up live payouts", onPress: () => resolve(true) }],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        ));
+        if (!confirmed || !isCurrent()) return;
+        accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId, true);
+      }
+      if (!isCurrent()) return;
+      if (["creation_pending", "live_setup_confirmation_required", "creator_onboarding_eligibility_required", "account_migration_review_required", "onboarding_authority_changed"].includes(String(accountPayload.status))) {
         setPayoutSetupNotice(accountPayload.message || "Payout setup needs a verified current account before continuing. No existing account was replaced.");
         await refreshCreatorPayouts();
         return;
@@ -8138,9 +8153,10 @@ export function ChannelStudioScreen() {
       : providerReadinessSummary.some((row) => row.status === "sandbox_ready")
         ? "Sandbox ready"
         : "Setup needed";
-    const canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)
-      && payoutsFlag.state !== "on"
-      && liveMoneyFeatureFlag.state !== "on";
+    // Setup/status are not money execution. Exact creator/session/legal and
+    // qualified onboarding policy are checked server-side, independently of
+    // whether transaction rails are off, sandbox-only, or active.
+    const canStartStripeSetup = Boolean(user?.id);
     const canReviewCashoutReadiness = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)
       || moneyFlag("creator_balance_visible").state === "on";
     const paidTipTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "paid");
@@ -9519,9 +9535,9 @@ export function ChannelStudioScreen() {
             <Text style={styles.eventPrimaryButtonText}>Review cashout readiness</Text>
           </TouchableOpacity>
         </View>
-        {canStartStripeSetup && (creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus) ? (
+        {canStartStripeSetup ? (
           <View style={styles.eventActionRow}>
-            {creatorPayoutSummary.setupActionLabel ? (
+            {(
               <TouchableOpacity
                 style={[styles.eventPrimaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
                 activeOpacity={0.88}
@@ -9535,10 +9551,10 @@ export function ChannelStudioScreen() {
                     <Text style={styles.eventPrimaryButtonText}>Opening setup</Text>
                   </View>
                 ) : (
-                  <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel}</Text>
+                  <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel || "Review payout setup"}</Text>
                 )}
               </TouchableOpacity>
-            ) : null}
+            )}
             {creatorPayoutSummary.canRefreshProviderStatus ? (
               <TouchableOpacity
                 style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}

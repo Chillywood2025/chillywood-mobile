@@ -313,3 +313,6 @@ verify_jwt = true
 [functions.creator-cashout-webhook]
 # Dedicated raw-body signature plus authenticated current-provider readback.
 verify_jwt = false
+
+[functions.stripe-tax-category-catalog]
+verify_jwt = true

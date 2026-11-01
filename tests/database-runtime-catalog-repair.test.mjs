@@ -784,6 +784,9 @@ const queries={
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
 
 test('November completion bundle has the exact reviewed added/replaced catalog signatures', {timeout:180_000}, async()=>{
+  const completionOnDisk=fs.readdirSync(new URL('../supabase/migrations/',import.meta.url))
+    .filter(file=>file.endsWith('.sql')&&file>='20261101141441_secondary_media_producer_registry.sql').sort();
+  assert.deepEqual(completionOnDisk,[...appCompletionFiles],'every completion successor, including data-only migrations, requires explicit inventory review');
   const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:appCompletionFiles});
   try{
     assert.deepEqual(replayReport.excludedMigrations,[...appCompletionFiles]);

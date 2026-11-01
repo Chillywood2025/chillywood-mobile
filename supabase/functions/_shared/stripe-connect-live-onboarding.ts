@@ -11,6 +11,8 @@ const rpc = async (client: SupabaseClientLike, name: string, args: Json): Promis
 const subject = (user: AuthenticatedUser) => ({ p_creator: user.id, p_session: user.sessionGeneration ?? null });
 export const selectConnectOnboardingRoute = (client: SupabaseClientLike, user: AuthenticatedUser) =>
   rpc(client, "get_creator_connect_onboarding_route", subject(user));
+export const confirmDistinctLiveConnectSetup = (client: SupabaseClientLike, user: AuthenticatedUser, disclosure: unknown) =>
+  rpc(client, "confirm_creator_connect_live_setup", { ...subject(user), p_disclosure: disclosure });
 const result = (status: string, extra: Json = {}) => ({ status, mode: "live", provider: "stripe", providerKey: "stripe_connect",
   liveMoneyAction: false, payoutCreated: false, transferCreated: false, checkoutCreated: false,
   message: status === "account_migration_review_required"

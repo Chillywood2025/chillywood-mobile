@@ -1,13 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {load,connect} from './stripe-connect-observed-fixture.mjs';
+import {load,connect,payoutsFor,clientFor} from './stripe-connect-observed-fixture.mjs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 const cashout=load('supabase/functions/_shared/creator-cashout-execution.ts');
 const onboarding=load('supabase/functions/_shared/stripe-connect-live-onboarding.ts',{'./stripe-connect.ts':connect,'./creator-cashout-execution.ts':cashout});
+test('app accepts live setup-only responses, sends explicit consent only when reviewed, and still rejects money actions',async()=>{
+ let response={mode:'live',liveMoneyAction:false,status:'live_setup_confirmation_required'},body;
+ const payouts=payoutsFor({functions:{invoke:async(_name,options)=>{body=options.body;return {data:response,error:null};}}});
+ await payouts.createOrReuseCreatorPayoutProviderAccount('synthetic');assert.equal(body.live_setup_disclosure,undefined);
+ response={...response,status:'account_created'};
+ await payouts.createOrReuseCreatorPayoutProviderAccount('synthetic',true);assert.equal(body.live_setup_disclosure,'distinct-live-account-v1');
+ for(const extra of [{liveMoneyAction:true},{transferCreated:true},{payoutCreated:true},{checkoutCreated:true},{mode:'unknown'}]){
+  const previous=response;response={...response,...extra};await assert.rejects(()=>payouts.createOrReuseCreatorPayoutProviderAccount('synthetic'));response=previous;
+ }
+});
 test('actual account and hosted-link endpoints use server mode and reject cross-creator/client-account requests',async()=>{
  for(const endpoint of ['stripe-connect-account','stripe-connect-onboarding-link']){
-  const user={id:randomUUID(),sessionGeneration:randomUUID(),email:null};let handler,liveCalls=0,testCalls=0;
+  const user={id:randomUUID(),sessionGeneration:randomUUID(),email:null};let handler,liveCalls=0,testCalls=0,routeStatus='available',routeMode='live',confirmCalls=0;
   const live=async()=>{liveCalls++;return {status:endpoint==='stripe-connect-account'?'account_created':'link_created',mode:'live',liveMoneyAction:false};};
   load(`supabase/functions/${endpoint}/index.ts`,{
    'jsr:@supabase/functions-js/edge-runtime.d.ts':{},
@@ -16,7 +26,8 @@ test('actual account and hosted-link endpoints use server mode and reject cross-
     createAdminClient:()=>({configured:true,client:{}}),safeWriteAuditLog:async()=>null,
     resolveRedirectUrls:()=>({value:{returnUrl:'chillywoodmobile://ignored',refreshUrl:'chillywoodmobile://ignored'}}),
     readStripeTestSecret:()=>{testCalls++;throw Error('live request cannot use test key');}},
-   '../_shared/stripe-connect-live-onboarding.ts':{selectConnectOnboardingRoute:async()=>({mode:'live',status:'available'}),
+   '../_shared/stripe-connect-live-onboarding.ts':{selectConnectOnboardingRoute:async()=>({mode:routeMode,status:routeStatus}),
+    confirmDistinctLiveConnectSetup:async(_client,actualUser,disclosure)=>{assert.equal(actualUser,user);assert.equal(disclosure,'distinct-live-account-v1');confirmCalls++;return {mode:'live',status:'available'};},
     createOrRecoverLiveConnectAccount:live,createLiveConnectHostedLink:live},
   },{Deno:{serve:fn=>handler=fn,env:{get:()=> 'rk_live_synthetic'}}});
   const request=body=>handler(new Request('https://synthetic.test/function',{method:'POST',body:JSON.stringify(body)}));
@@ -24,6 +35,17 @@ test('actual account and hosted-link endpoints use server mode and reject cross-
   assert.equal((await request({providerAccountId:'acct_attacker'})).status,400);assert.equal(liveCalls,0);
   const response=await request({creatorUserId:user.id,environment:'test',mode:'test',returnUrl:'https://attacker.invalid'});
   assert.equal(response.status,200);assert.equal((await response.json()).mode,'live');assert.equal(liveCalls,1);assert.equal(testCalls,0);
+  if(endpoint==='stripe-connect-account'){
+   routeStatus='live_setup_confirmation_required';
+   assert.equal((await (await request({creatorUserId:user.id})).json()).status,routeStatus);assert.equal(liveCalls,1);assert.equal(confirmCalls,0);
+   await request({creatorUserId:user.id,live_setup_disclosure:'distinct-live-account-v1'});assert.equal(liveCalls,2);assert.equal(confirmCalls,1);
+  }
+  routeMode='test';routeStatus='creator_onboarding_eligibility_required';
+  assert.equal((await (await request({creatorUserId:user.id})).json()).status,routeStatus);
+  assert.equal(testCalls,0,'ineligible test fallback must not read a provider key or write');
+  routeStatus='not_configured';
+  assert.equal((await (await request({creatorUserId:user.id})).json()).status,'not_configured');
+  assert.equal(testCalls,0,'ordinary creator cannot fall through to test provider setup');
  }
 });
 test('live onboarding is dormant, exact-session gated, idempotent and recovers uncertain creation without another POST',{timeout:240000},async()=>{
@@ -70,7 +92,20 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
    await db.query(`insert into public.wave1_creator_eligibility(creator_user_id,state,account_status,age_18_plus,legal_accepted,creator_role,moderation_state,market,rollout_eligible,platform_capability,provider_eligible,kyc_complete,tax_complete,sanctions_clear,payout_eligible,authority_source,last_operation_key)
     values($1,'PENDING_VERIFICATION','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,false,false,false,false,false,'synthetic_fixture','onboarding')`,[user.id]);
   }
-  assert.equal((await route(users[0])).mode,'test','no live policy defaults to unchanged test flow');
+  assert.equal((await route(users[0])).reason,'live_setup_required','ordinary creator never defaults to a test account');
+  await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[users[1].id]);
+  assert.equal((await route(users[0])).status,'not_configured','another exact subject tester membership grants nothing');
+  await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[users[0].id]);
+  assert.deepEqual(await route(users[0]),{mode:'test'},'qualified exact-subject tester retains sandbox setup');
+  assert.equal((await route({...users[0],sessionGeneration:users[1].sessionGeneration})).status,'creator_onboarding_eligibility_required','legacy test setup also requires exact current authority');
+  await db.query('update public.wave1_creator_eligibility set age_18_plus=false where creator_user_id=$1',[users[0].id]);
+  assert.equal((await route(users[0])).status,'creator_onboarding_eligibility_required','test account writes are not an adult/creator bypass');
+  await db.query('update public.wave1_creator_eligibility set age_18_plus=true where creator_user_id=$1',[users[0].id]);
+  await db.query('update public.wave1_creator_eligibility set creator_role=false where creator_user_id=$1',[users[0].id]);
+  assert.equal((await route(users[0])).status,'creator_onboarding_eligibility_required');
+  await db.query('update public.wave1_creator_eligibility set creator_role=true where creator_user_id=$1',[users[0].id]);
+  await db.query('delete from public.wave1_creator_eligibility where creator_user_id=$1',[users[6].id]);
+  assert.equal((await route(users[6])).status,'creator_onboarding_eligibility_required','unknown adult/creator authority fails closed');
   await db.exec(`insert into private.creator_connect_onboarding_policy(environment,platform_account_id,configuration_key,country,currency,return_url,refresh_url,controller_pricing_evidence_hash,hosted_onboarding_evidence_hash,verified_at,expires_at)
    values('live','acct_platformSynthetic','stripe_connect_live_express_recipient_controller_v1','US','usd','https://app.example.test/channel-studio?payout_setup=return','https://app.example.test/channel-studio?payout_setup=refresh',repeat('a',64),repeat('b',64),clock_timestamp(),clock_timestamp()+interval '1 day')`);
   assert.equal((await route(users[0])).status,'not_configured');assert.equal(posts,0);
@@ -103,15 +138,42 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
   assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[2],'rk_live_synthetic',transport)).status,'account_migration_review_required');
   assert.equal(await one('select state from private.creator_connect_account_creation where creator_id=$1',[users[2].id]),'review_required');assert.equal(posts,3);
   await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id) values($1,'stripe_connect','test','acct_existingTest')",[users[3].id]);
-  assert.equal((await route(users[3])).status,'account_migration_review_required');
-  assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[3],'rk_live_synthetic',transport)).status,'account_migration_review_required');assert.equal(posts,3);
+  assert.equal((await route(users[3])).status,'live_setup_confirmation_required');
+  assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[3],'rk_live_synthetic',transport)).status,'live_setup_confirmation_required');assert.equal(posts,3);
+  const consentArgs={p_creator:users[3].id,p_session:users[3].sessionGeneration,p_disclosure:'distinct-live-account-v1'};
+  assert.ok((await call('confirm_creator_connect_live_setup',{...consentArgs,p_disclosure:'unreviewed'})).error);
+  assert.equal((await call('confirm_creator_connect_live_setup',{...consentArgs,p_session:users[4].sessionGeneration})).data.status,'creator_onboarding_eligibility_required');
+  assert.equal((await call('confirm_creator_connect_live_setup',consentArgs)).data.status,'available');
+  await db.exec("update private.creator_connect_onboarding_policy set hosted_onboarding_evidence_hash=repeat('c',64)");
+  assert.equal((await route(users[3])).status,'live_setup_confirmation_required','policy edits invalidate prior setup consent');
+  assert.equal((await call('confirm_creator_connect_live_setup',consentArgs)).data.status,'available');
+  assert.equal(await one('select count(*)::int from private.creator_connect_live_setup_consents where creator_id=$1',[users[3].id]),2,'both immutable review receipts remain');
+  await assert.rejects(()=>db.query('delete from private.creator_connect_live_setup_consents where creator_id=$1',[users[3].id]),/connect_binding_history_immutable/);
+  const originalTest=await one("select id from public.creator_payout_accounts where creator_user_id=$1 and provider_environment='test'",[users[3].id]);
+  await db.query("update public.creator_payout_eligibility_records set tax_ready=true,hold_period_cleared=true,minimum_payout_met=true,admin_review_status='approved_later',fraud_hold_active=true,metadata=metadata||'{\"test_tax_proof\":true}'::jsonb where creator_user_id=$1",[users[3].id]);
+  assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[3],'rk_live_synthetic',transport)).status,'account_created');assert.equal(posts,4);
+  const liveId=await one("select id from public.creator_payout_accounts where creator_user_id=$1 and provider_environment='live'",[users[3].id]);
+  assert.notEqual(liveId,originalTest);
+  assert.deepEqual(await one("select jsonb_build_array(tax_ready,hold_period_cleared,minimum_payout_met,admin_review_status,metadata?'test_tax_proof') from public.creator_payout_eligibility_records where creator_user_id=$1",[users[3].id]),[false,false,false,'not_started',false]);
+  assert.equal(await one('select fraud_hold_active from public.creator_payout_eligibility_records where creator_user_id=$1',[users[3].id]),true,'negative creator hold survives the account switch');
+  assert.equal((await connect.readCreatorPayoutAccount(clientFor(db),users[3].id)).id,liveId);
+  assert.equal((await connect.readCreatorPayoutAccountByProviderId(clientFor(db),'acct_existingTest')).id,originalTest);
+  assert.deepEqual(await one("select jsonb_build_array(id,provider_account_id) from public.creator_payout_accounts where creator_user_id=$1 and provider_environment='test'",[users[3].id]),[originalTest,'acct_existingTest']);
+  assert.equal(await one('select count(*)::int from private.creator_connect_mode_bindings where creator_id=$1',[users[3].id]),2);
+  await assert.rejects(()=>db.query("update private.creator_connect_mode_bindings set provider_account_id='acct_other' where creator_id=$1",[users[3].id]),/connect_binding_history_immutable/);
+  // Delayed old-mode callbacks can refresh their own row, never current live readiness.
+  await db.query("update public.creator_payout_accounts set details_submitted=true,payouts_enabled=true,last_provider_sync_at=clock_timestamp() where id=$1",[originalTest]);
+  assert.equal(await one('select payout_account_id from public.creator_payout_eligibility_records where creator_user_id=$1',[users[3].id]),liveId);
+  assert.deepEqual(await one('select jsonb_build_array(provider_ready,kyc_ready,eligible_for_payouts) from public.creator_payout_eligibility_records where creator_user_id=$1',[users[3].id]),[false,false,false]);
+  await assert.rejects(()=>db.query("update public.creator_payout_accounts set provider_account_id='acct_replacedTest' where id=$1",[originalTest]),/connect_account_binding_immutable/);
+  assert.equal((await onboarding.createLiveConnectHostedLink(client,users[3],'rk_live_synthetic',transport)).status,'link_created');
   loseResponse=true;await onboarding.createOrRecoverLiveConnectAccount(client,users[4],'rk_live_synthetic',transport);loseResponse=false;
   list=Array.from({length:5},(_,i)=>({object:'list',data:[{id:`acct_history${i}`,metadata:{}}],has_more:true}));
   const previousReads=listCalls;
   assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[4],'rk_live_synthetic',transport)).status,'creation_pending');
-  assert.equal(listCalls-previousReads,5);assert.equal(posts,4);
+  assert.equal(listCalls-previousReads,5);assert.equal(posts,5);
   assert.equal(await one('select recovery_cursor from private.creator_connect_account_creation where creator_id=$1',[users[4].id]),'acct_history4');
-  assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[4],'rk_live_synthetic',transport)).status,'account_created');assert.equal(posts,4);
+  assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[4],'rk_live_synthetic',transport)).status,'account_created');assert.equal(posts,5);
   // SQL dispatch is single-owner; this is serial PGlite CAS evidence, not a
   // substitute for hosted PostgreSQL concurrent-session verification.
   const reserve=await call('reserve_creator_connect_account_creation',{p_creator:users[5].id,p_session:users[5].sessionGeneration});
@@ -124,6 +186,6 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
   assert.equal((await route(users[5])).status,'not_configured');
   assert.equal(await one('select count(*)::int from private.creator_cashout_provider_qualifications'),0);
   assert.equal(await one("select state from public.platform_money_kill_switches where key='live_money_enabled'"),'off');
-  for(const role of ['anon','authenticated']){await db.exec(`set role ${role}`);await assert.rejects(()=>one('select public.reserve_creator_connect_account_creation($1,$2)',[users[4].id,users[4].sessionGeneration]),/permission denied/);await db.exec('reset role');}
+  for(const role of ['anon','authenticated']){await db.exec(`set role ${role}`);await assert.rejects(()=>one('select public.reserve_creator_connect_account_creation($1,$2)',[users[4].id,users[4].sessionGeneration]),/permission denied/);await assert.rejects(()=>one('select public.confirm_creator_connect_live_setup($1,$2,$3)',[users[3].id,users[3].sessionGeneration,'distinct-live-account-v1']),/permission denied/);await db.exec('reset role');}
  }finally{await db.close();}
 });

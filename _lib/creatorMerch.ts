@@ -63,6 +63,10 @@ export function createMerchCheckoutAttemptId() {
 }
 
 const MERCH_ERRORS: Record<string, string> = {
+  merch_publish_review_required: "Review this listing and explicitly confirm real purchases before publishing.",
+  merch_publish_review_changed: "Your publication review expired or the product changed. Review the current listing again.",
+  merch_publish_eligibility_changed: "Live publishing eligibility changed. Refresh the listing and review the current verification requirements.",
+  merch_publish_history_requires_copy: "This test listing has checkout history. Create a separate live-ready draft to preserve those orders.",
   merch_current_session_required: "Sign in again to continue with your shop or orders.",
   merch_creator_required: "Only the creator can manage this shop.",
   merch_platform_unavailable: "This creator's Platform is not available to your account.",
@@ -244,4 +248,19 @@ export async function launchMerchCheckout(input: { productId: string; quantity: 
   });
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   return { orderId: payload.orderId };
+}
+
+export type MerchLivePublicationReview = {
+  ready: boolean; reason?: string; copyRequired?: boolean; reviewId?: string;
+  title?: string; priceMinor?: number; currency?: string; availableQuantity?: number;
+  trackingMode?: "tracked" | "untracked"; expiresAt?: string; summary?: string;
+};
+export function reviewMerchLivePublication(product: MerchProduct) {
+  return merchRpc<MerchLivePublicationReview>("review_creator_merch_live_publication", { p_product_id: product.id, p_expected_updated_at: product.updatedAt });
+}
+export function confirmMerchLivePublication(reviewId: string) {
+  return merchRpc<MerchProduct>("confirm_creator_merch_live_publication", { p_review_id: reviewId });
+}
+export function copyMerchLiveDraft(product: MerchProduct) {
+  return merchRpc<MerchProduct>("copy_creator_merch_live_draft", { p_product_id: product.id, p_expected_updated_at: product.updatedAt });
 }

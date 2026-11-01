@@ -13,7 +13,8 @@ export function OwnerFeeAccountingHealthPanel({sessionKey}:{sessionKey:string}) 
   try{const health=await readOwnerFeeAccountingHealth();if(ticket===generation.current)setState({key:sessionKey,health,error:false,busy:false});}
   catch{if(ticket===generation.current)setState({key:sessionKey,health:null,error:true,busy:false});}
  },[sessionKey]);
- useEffect(()=>{void load();return()=>{generation.current++;};},[load]);
+ const retire=useCallback(()=>{generation.current++;},[]);
+ useEffect(()=>{void load();return retire;},[load,retire]);
  const current=state.key===sessionKey?state:null;
  const body={color:CHILLYWOOD_VISUAL.textMuted};
  return <View style={{gap:6}} testID="owner-fee-accounting-health">

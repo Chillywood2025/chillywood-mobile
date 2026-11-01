@@ -76,6 +76,13 @@ Deno.serve(async (req) => {
     adminClient = adminConfig.client;
 
     const route = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (route.mode === "test" && route.status && route.status !== "available") return jsonResponse(200, {
+      mode: "test", status: route.status, liveMoneyAction: false, onboardingUrlCreated: false,
+      reason: route.reason,
+      message: route.reason === "live_setup_required"
+        ? "Live payout setup is not configured yet. Sandbox setup is limited to approved testers."
+        : "Complete eligible adult creator status and the current payout terms before starting provider setup.",
+    });
     if (route.mode === "live") {
       selectedMode = "live";
       if (route.status !== "available") return jsonResponse(200, { ...route, liveMoneyAction: false, onboardingUrlCreated: false,
@@ -125,12 +132,20 @@ Deno.serve(async (req) => {
       );
     }
 
+    const dispatchRoute = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (dispatchRoute.mode !== "test" || (dispatchRoute.status && dispatchRoute.status !== "available")) {
+      return jsonResponse(200, { status: "onboarding_authority_changed", mode: "test", liveMoneyAction: false, onboardingUrlCreated: false });
+    }
     const link = await createStripeConnectOnboardingLink(
       stripeSecret.secret,
       payoutAccount.provider_account_id,
       redirectUrls.value.returnUrl,
       redirectUrls.value.refreshUrl,
     );
+    const completedRoute = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (completedRoute.mode !== "test" || (completedRoute.status && completedRoute.status !== "available")) {
+      return jsonResponse(200, { status: "onboarding_authority_changed", mode: "test", liveMoneyAction: false, onboardingUrlCreated: false });
+    }
     const onboardingUrl = toText(link.url);
     if (!onboardingUrl) throw new Error("Stripe onboarding link response did not include a URL.");
 

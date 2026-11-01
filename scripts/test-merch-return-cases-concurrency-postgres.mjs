@@ -8,6 +8,8 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {runMerchCheckoutDispatchRaces} from './lib/merch-checkout-dispatch-races.mjs';
+import {runMerchPublicationRaces} from './lib/merch-publication-races.mjs';
+import {runMerchTaxCategoryRaces} from './lib/merch-tax-category-races.mjs';
 import {runMerchLiveCheckoutRaces} from './lib/merch-live-checkout-races.mjs';
 import {runMerchAdmissionCutoverRace} from './lib/merch-admission-cutover-race.mjs';
 
@@ -79,7 +81,11 @@ try{
     console.log(JSON.stringify({schedule:label,...evidence}));
     holder.child.stdin.end(afterBlocked+'commit;\n');const a=await holder.done;assert.equal(a.code,0,a.stderr);
     const b=await waiter.done;if(error){assert.notEqual(b.code,0);assert.match(b.stderr,error);}else assert.equal(b.code,0,b.stderr);
-    console.log(`ok ${++checks} - ${label}`);return {first:parsed(a.stdout),second:parsed(b.stdout)};
+    // A verified SQL rejection has no result row. Never manufacture JSON for
+    // it or relax the exit/error assertions above; successful sessions still
+    // must return parseable JSON before the schedule is counted as passed.
+    const result={first:parsed(a.stdout),second:error?null:parsed(b.stdout)};
+    console.log(`ok ${++checks} - ${label}`);return result;
   }
   const product=randomUUID(),creator=actors.creator.id,buyer=actors.buyer1.id;
   query(`insert into public.merch_products(id,creator_id,display_name,title,provider,status,fulfillment_model,price_minor,currency,
@@ -153,8 +159,10 @@ try{
   assert.equal(checks,10);
   await runMerchAdmissionCutoverRace({query,rpc,session,until,auth,actors,lit});
   await runMerchLiveCheckoutRaces({query,race,auth,actors,lit,json});
-  assert.equal(checks,14);
-  console.log('PASS native: fourteen PostgreSQL blocking-edge schedules; cases, carrier/dispute orderings, duplicate checkout allocation, dispatch/abort races, once-only stock release and retained global-latch interoperation. Synthetic source fixture only.');
+  await runMerchPublicationRaces({query,race,auth,actors,lit});
+  await runMerchTaxCategoryRaces({query,race,auth,actors,lit});
+  assert.equal(checks,22);
+  console.log('PASS native: twenty-two PostgreSQL blocking-edge schedules; cases, carrier/dispute orderings, duplicate checkout allocation, dispatch/abort races, once-only stock release, current legal/publication/category review and retained global-latch interoperation. Synthetic source fixture only.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop owned clone');}
