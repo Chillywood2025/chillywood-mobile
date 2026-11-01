@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { RealtimeClient } from '@supabase/realtime-js';
 import { loadStubbed } from "./customer-experience-adversarial-helpers.mjs";
 
 const deferred = () => {
@@ -38,7 +39,7 @@ function harness({ read = () => ({ data: [], error: null }), capture, room, comm
     },
     removeChannel: async channel => { state.removed.push(channel); },
   };
-  const api = loadStubbed("_lib/chat.ts", {
+  const api = loadStubbed(process.env.CHILLY_CHAT_DATA_TEST_SOURCE ?? "_lib/chat.ts", {
     "./supabase": { supabase }, "./userFacingErrors": { UserFacingError },
     "./socialAttachments": {readSocialAttachmentsForSurfaces:async()=>new Map()},
     "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => state.authority, sameAccountSessionAuthority: same },
@@ -85,6 +86,79 @@ test("read acknowledgement preserves observed microseconds and uses exact frozen
   assert.equal(h.state.writes[0][1],'mark_chilly_chat_thread_read');
   assert.equal(h.state.writes[0][2].p_read_through,'2026-10-31T20:15:00.123456Z');
   assert.equal(h.state.writes[0][0].accessToken,'frozen-token');
+});
+
+test('thread subscription refreshes initial/reconnected gaps only for its live owner and lifetime', () => {
+  const h = harness(); let refreshes = 0;
+  const stop = h.api.subscribeToThread('thread', () => { refreshes++; });
+  const channel = h.state.channels[0];
+  channel.status('SUBSCRIBED'); channel.status('CHANNEL_ERROR'); channel.status('SUBSCRIBED');
+  assert.equal(refreshes, 2);
+  channel.bindings[0].callback(); assert.equal(refreshes, 3);
+  h.state.authority = { ...authority, sessionGeneration: 'replacement' };
+  channel.status('SUBSCRIBED'); channel.bindings[0].callback();
+  assert.equal(refreshes, 3, 'stale session callbacks cannot refresh');
+  h.state.authority = { ...authority };
+  stop(); channel.status('SUBSCRIBED'); channel.bindings[0].callback();
+  assert.equal(refreshes, 3, 'detached callbacks cannot refresh');
+  assert.equal(h.state.removed.length, 1);
+});
+
+test('actual RealtimeClient delayed teardown cannot reuse or retire a replacement thread subscription', async () => {
+  const client = new RealtimeClient('ws://127.0.0.1:1', { params: { apikey: 'offline-fixture' }, timeout: 10 });
+  client.connect = () => { throw Error('network is forbidden in subscription lifecycle fixture'); };
+  const channels = [], removals = [], hold = deferred();
+  const binding = { ...authority };
+  const api = loadStubbed(process.env.CHILLY_CHAT_DATA_TEST_SOURCE ?? '_lib/chat.ts', {
+    './accountSessionAuthority': { getCurrentAccountSessionAuthoritySnapshot: () => binding, sameAccountSessionAuthority: same },
+    './supabase': { supabase: {
+      channel(name) {
+        const channel = client.channel(name);
+        // Exercise the actual SDK topic cache/removal; model only transport
+        // subscription delivery so this test never opens a network connection.
+        channel.subscribe = callback => { channel.fixtureStatus = callback; return channel; };
+        if (!channels.length) {
+          const unsubscribe = channel.unsubscribe.bind(channel);
+          channel.unsubscribe = async () => { await hold.promise; return unsubscribe(); };
+        }
+        channels.push(channel);
+        return channel;
+      },
+      removeChannel(channel) { const pending = client.removeChannel(channel); removals.push(pending); return pending; },
+    } },
+  });
+  let oldRefreshes = 0, newRefreshes = 0;
+  const stopOld = api.subscribeToThread('same-thread', () => oldRefreshes++);
+  const oldStatus = channels[0].fixtureStatus;
+  oldStatus('SUBSCRIBED'); stopOld();
+  const stopNew = api.subscribeToThread('same-thread', () => newRefreshes++);
+  try {
+    assert.notStrictEqual(channels[0], channels[1], 'old topic retirement must not reuse the old SDK channel');
+    assert.notEqual(channels[0].topic, channels[1].topic);
+    oldStatus('SUBSCRIBED'); channels[1].fixtureStatus('SUBSCRIBED');
+    assert.equal(oldRefreshes, 1); assert.equal(newRefreshes, 1);
+    hold.resolve(); await removals[0];
+    assert.deepEqual(client.getChannels(), [channels[1]], 'actual old SDK removal preserves the replacement topic');
+    channels[1].fixtureStatus('SUBSCRIBED'); assert.equal(newRefreshes, 2);
+  } finally {
+    hold.resolve(); stopNew(); await Promise.all(removals); client.disconnect();
+  }
+});
+
+test('actual message reader orders microseconds ascending, with IDs only breaking exact timestamp ties', async () => {
+  const rows = [
+    ['a-later', '2026-10-31T20:00:00.123401Z'],
+    ['z-earlier', '2026-10-31T20:00:00.123400Z'],
+    ['b-tie', '2026-10-31T21:00:00.1234+01:00'],
+    ['a-tie', '2026-10-31T20:00:00.123400Z'],
+    ['older', '2026-10-31T19:59:59.999999Z'],
+    ['newer', '2026-10-31T20:00:00.124000Z'],
+  ].map(([id, created_at]) => ({ id, thread_id: 'thread', sender_user_id: 'other', body: id, created_at }));
+  const h = harness({ read: q => ({ error: null, data: q.table === 'chat_thread_activity' ? [row('thread')]
+    : q.table === 'chat_messages' ? rows : [] }) });
+  const result = await h.api.listChatMessages('thread', '2026-10-31T23:59:59Z');
+  assert.deepEqual(result.map(m => m.id), ['older', 'a-tie', 'b-tie', 'z-earlier', 'a-later', 'newer']);
+  assert.equal(h.state.writes.length, 0);
 });
 
 test("authoritative empty preview never falls back to deleted legacy text",async()=>{

@@ -182,9 +182,26 @@ test('background retires reads and foreground refresh respects focus', async t =
   await m.focus(true); assert.equal(m.state.reads.length, reads + 1);
 });
 
+test('mounted authority oracle rejects an extra transport listener and tracks replacement effects', async t => {
+  const m = await mount(t);
+  m.assertMountedAuthorityListeners();
+  const release = m.authority.subscribeToAccountSessionAuthority(() => {});
+  assert.throws(() => m.assertMountedAuthorityListeners(), /only the current mounted screen subscriptions/);
+  release();
+  m.assertMountedAuthorityListeners();
+  await m.replace(owner('session-b'));
+  m.assertMountedAuthorityListeners();
+  await m.replace(owner('session-c', 'replacement-user'));
+  m.assertMountedAuthorityListeners();
+  await m.unmount();
+  assert.equal(m.state.authoritySubscriptions, 0);
+});
+
 test('unmount removes authority and foreground listeners and stale callbacks cannot dispatch', async t => {
   const m = await mount(t), messages = m.toggle('Messages'), register = m.button('Register Device');
-  assert.equal(m.state.authoritySubscriptions, 1);
+  // Notification ownership and retained Profile-removal intent each own an
+  // authority subscription; both must be released on unmount.
+  assert.equal(m.state.authoritySubscriptions, 2);
   await m.unmount();
   assert.equal(m.state.authoritySubscriptions, 0);
   assert.equal(m.appListeners.size, 0);

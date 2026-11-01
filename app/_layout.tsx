@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { restoreScheduledAccountDeletion } from "../_lib/accountDeletionRequests";
-import { getAccountNavigationTreeKey } from "../_lib/accountSessionAuthority";
+import { signOutExactAccountSession } from "../_lib/accountSessionActions";
+import { getAccountNavigationTreeKey, getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, sameAccountSessionIdentity, subscribeToAccountSessionAuthority } from "../_lib/accountSessionAuthority";
 import {
   accountLegalCheckIsPending,
   accountLegalVerificationKey,
@@ -1743,18 +1744,66 @@ function AuthBootScreen({ message = "Checking your session…", onRetry }: { mes
 }
 
 function AccountRestoreOnlyScreen() {
-  const [busy, setBusy] = useState(false);
+  const { authority, authorityStatus } = useSession();
+  const [busyAction, setBusyAction] = useState<"restore" | "sign_out" | null>(null);
+  const busy = busyAction !== null;
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const identity = getAccountNavigationTreeKey(authority);
+  const scopeRef = useRef({ identity, pending: false, revision: 0 });
+  if (scopeRef.current.identity !== identity) scopeRef.current = { identity, pending: false, revision: 0 };
+  const scope = scopeRef.current;
+  const revision = scope.revision;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  useEffect(() => {
+    setBusyAction(null); setError(null);
+  }, [scope]);
+  useEffect(() => {
+    return subscribeToAccountSessionAuthority(next => {
+      // Same-session restoration may remove restoreOnly. Account replacement,
+      // sign-out, or an intervening unknown authority permanently retires intent.
+      if (sameAccountSessionIdentity(authority, next)) return;
+      scope.revision += 1;
+      if (scope.pending && scopeRef.current === scope && mountedRef.current) setBusyAction(null);
+    });
+  }, [authority, scope]);
+  const isCurrent = () => mountedRef.current && scopeRef.current === scope && scope.revision === revision
+    && sameAccountSessionIdentity(authority, getCurrentAccountSessionAuthoritySnapshot());
   const restore = async () => {
-    if (busy) return;
-    setBusy(true); setError(null);
+    if (!authority || authorityStatus !== "restore_only" || !authority.restoreOnly
+      || scope.pending || !isCurrent()
+      || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return;
+    scope.pending = true;
+    setBusyAction("restore"); setError(null);
     try {
-      const result = await restoreScheduledAccountDeletion();
+      const result = await restoreScheduledAccountDeletion(authority, isCurrent);
+      if (!isCurrent()) return;
       if (!result.restored) throw new Error("account_restore_not_confirmed");
       await supabase.auth.refreshSession();
     } catch {
-      setError("The server did not confirm restoration. This account remains limited; try again.");
-    } finally { setBusy(false); }
+      if (isCurrent()) setError("The server did not confirm restoration. This account remains limited; try again.");
+    } finally {
+      scope.pending = false;
+      if (isCurrent()) setBusyAction(null);
+    }
+  };
+  const signOut = async () => {
+    if (!authority || scope.pending || !isCurrent()
+      || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return;
+    scope.pending = true;
+    setBusyAction("sign_out"); setError(null);
+    try {
+      const signedOut = await signOutExactAccountSession(authority, isCurrent);
+      if (!signedOut && isCurrent()) setError("Sign out was not confirmed. Try again.");
+    } catch {
+      if (isCurrent()) setError("Sign out was not confirmed. Try again.");
+    } finally {
+      scope.pending = false;
+      if (isCurrent()) setBusyAction(null);
+    }
   };
   return (
     <ChillywoodBrandedSurface style={[styles.legalBrandedGateScreen, styles.legalGateScroll]} testID="account-restore-branded-surface" variant="legal">
@@ -1765,10 +1814,10 @@ function AccountRestoreOnlyScreen() {
         {error ? <Text style={styles.legalGateError}>{error}</Text> : null}
         <TouchableOpacity style={styles.legalGateButton} onPress={() => { void restore(); }} disabled={busy}>
           <ChillywoodPrimaryActionFill />
-          <Text style={styles.legalGateButtonText}>{busy ? "Restoring…" : "Restore account"}</Text>
+          <Text style={styles.legalGateButtonText}>{busyAction === "restore" ? "Restoring…" : "Restore account"}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }}>
-          <Text style={styles.legalGateSecondaryText}>Sign out</Text>
+        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void signOut(); }} disabled={busy}>
+          <Text style={styles.legalGateSecondaryText}>{busyAction === "sign_out" ? "Signing out…" : "Sign out"}</Text>
         </TouchableOpacity>
       </ChillywoodGlassPanel>
     </ChillywoodBrandedSurface>

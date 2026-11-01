@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import { assertChatThreadReadSourceContract } from "./lib/chat-thread-read-source-contract.mjs";
 
 import {
   buildBlockedChillyChatCallDispatch,
@@ -2227,11 +2228,7 @@ assert.match(
   /if \(resumableAcceptedInvite && !cleanupPending\) \{\s*applyAcceptedIncomingInviteState\(resumableAcceptedInvite, true\)/u,
   "thread-state loading opens accepted receiver media without another Answer or Join tap",
 );
-assert.match(
-  chatThreadSource,
-  /const loadThreadState = useCallback\(async \(\) => \{[\s\S]{0,200}const read = beginThreadRead\(\)[\s\S]{0,140}isThreadReadCurrent\(read\)[\s\S]{0,1250}if \(!isCurrent\(\)\) return;[\s\S]{0,180}reconcileEndedCallState\(loadedThread, isCurrent\)/u,
-  "thread-state loading rejects obsolete session/read generations before call reconciliation",
-);
+assertChatThreadReadSourceContract(chatThreadSource);
 const nativeAudioGateStart = chatThreadSource.indexOf("const acceptedNativeAudioDescriptor =");
 const nativeAudioGateEnd = chatThreadSource.indexOf("  const {\n    room: callRoom", nativeAudioGateStart);
 assert.ok(nativeAudioGateStart >= 0 && nativeAudioGateEnd > nativeAudioGateStart,

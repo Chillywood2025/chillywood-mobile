@@ -41,6 +41,7 @@ async function mount(t, { active = false, holdInitial = false } = {}) {
   const appState = { currentState: 'active', addEventListener(_, listener) { appListeners.add(listener); return { remove: () => appListeners.delete(listener) }; } };
   const mocks = {
     react: React,
+    '@react-navigation/native': { useIsFocused: () => state.focused },
     'expo-router': { useRouter: () => router, useLocalSearchParams: () => ({}),
       useFocusEffect(callback) { const focused = state.focused; React.useEffect(() => focused ? callback() : undefined, [callback, focused]); } },
     'react-native': { ...Object.fromEntries(['ActivityIndicator', 'ImageBackground', 'ScrollView', 'Text', 'TextInput', 'TouchableOpacity', 'Switch', 'View'].map(x => [x, x])),

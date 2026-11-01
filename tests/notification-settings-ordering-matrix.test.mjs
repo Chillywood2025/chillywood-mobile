@@ -119,7 +119,7 @@ test('failed disable save never revokes and releases the boundary for a current 
   assert.ok(m.row('Notification settings unavailable'));
   assert.equal(m.row('Messages').props.value, 'Loading');
   assert.equal(m.state.alerts.length, 1);
-  assert.equal(m.state.authoritySubscriptions, 1);
+  m.assertMountedAuthorityListeners();
   m.state.write = null;
   await m.act(() => m.button('Refresh').onPress());
   await m.act(() => m.button('Register Device').onPress());

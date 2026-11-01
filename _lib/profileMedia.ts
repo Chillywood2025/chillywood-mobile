@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { ImagePickerAsset } from "expo-image-picker";
 import { createClient } from "@supabase/supabase-js";
 import { captureAccountBoundSupabaseMutationSubject, assertAccountBoundSupabaseMutationSubjectCurrent } from "./accountBoundSupabaseMutation";
+import { sameAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
 
 import type { Database, TablesUpdate } from "../supabase/database.types";
 import { normalizeImageUploadFile } from "./imageUploadNormalization";
@@ -119,19 +120,30 @@ const validateProfileMediaFile = async (kind: ProfileMediaKind, file: ProfileMed
   return { uri, mimeType, size };
 };
 
-const captureProfileMediaOperation = async () => {
+type ProfileMediaRemovalOwner = {
+  authority: AccountSessionAuthorityBinding;
+  isCurrent: () => boolean;
+};
+
+const captureProfileMediaOperation = async (owner?: ProfileMediaRemovalOwner) => {
+  if (owner && !owner.isCurrent()) throw new Error("The Profile action is no longer current.");
   const subject = await captureAccountBoundSupabaseMutationSubject();
+  if (owner && (!owner.isCurrent() || !sameAccountSessionAuthority(owner.authority, subject.authority))) {
+    throw new Error("The signed-in account changed before this action finished.");
+  }
   // Every request (including retries/cleanup) keeps the initiating token. The
   // shared SDK client may adopt another account while a native upload is held.
   const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
   });
-  return { subject, client };
+  return { subject, client, owner };
 };
 type ProfileMediaOperation = Awaited<ReturnType<typeof captureProfileMediaOperation>>;
-const assertMediaOperationCurrent = (operation: ProfileMediaOperation) =>
+const assertMediaOperationCurrent = (operation: ProfileMediaOperation) => {
+  if (operation.owner && !operation.owner.isCurrent()) throw new Error("The Profile action is no longer current.");
   assertAccountBoundSupabaseMutationSubjectCurrent(operation.subject);
+};
 class ProfileAppearanceWriteRejectedError extends Error {}
 
 const loadImagePicker = async () => {
@@ -496,8 +508,9 @@ export async function uploadProfileMedia(
   return saved;
 }
 
-export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserProfile> {
-  const operation = await captureProfileMediaOperation();
+export async function removeProfileMedia(kind: ProfileMediaKind, owner: ProfileMediaRemovalOwner): Promise<UserProfile> {
+  if (!owner) throw new Error("The Profile action requires its initiating account.");
+  const operation = await captureProfileMediaOperation(owner);
   const userId = operation.subject.authority.userId;
   const existingProfile = await readUserProfile(userId);
   assertMediaOperationCurrent(operation);

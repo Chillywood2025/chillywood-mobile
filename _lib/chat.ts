@@ -446,19 +446,13 @@ function parseChatMessage(
   };
 }
 
-const timestampForCollectionOrder = (value?: string) => {
-  const parsed = Date.parse(toText(value));
-  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
-};
-
 const sortChatThreadsForInbox = (threads: ChatThreadSummary[]) => [...threads].sort((left, right) => {
   return compareChatActivityTimestamps(right.displayLastActivityAt, left.displayLastActivityAt)
     || left.threadId.localeCompare(right.threadId);
 });
 
 const sortChatMessagesForThread = (messages: ChatMessage[]) => [...messages].sort((left, right) => {
-  const createdDifference = timestampForCollectionOrder(left.createdAt)
-    - timestampForCollectionOrder(right.createdAt);
+  const createdDifference = compareChatActivityTimestamps(left.createdAt, right.createdAt);
   return createdDifference || left.id.localeCompare(right.id);
 });
 
@@ -1300,12 +1294,18 @@ export function subscribeToInbox(onChange: () => void) {
   };
 }
 
+let threadChannelSequence = 0;
 export function subscribeToThread(threadId: string, onChange: () => void) {
   const normalizedThreadId = toText(threadId);
-  if (!normalizedThreadId) return () => {};
+  const binding = getCurrentAccountSessionAuthoritySnapshot();
+  if (!normalizedThreadId || !binding) return () => {};
+  let active = true;
+  const notify = () => {
+    if (active && sameAccountSessionAuthority(binding, getCurrentAccountSessionAuthoritySnapshot())) onChange();
+  };
 
   const channel = supabase
-    .channel(`chat-thread-${normalizedThreadId}`)
+    .channel(`chat-thread-${normalizedThreadId}-${++threadChannelSequence}`)
     .on(
       "postgres_changes",
       {
@@ -1319,7 +1319,7 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
           threadId: normalizedThreadId,
           table: CHAT_MESSAGES_TABLE,
         });
-        onChange();
+        notify();
       },
     )
     .on(
@@ -1335,7 +1335,7 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
           threadId: normalizedThreadId,
           table: CHAT_CALL_INVITES_TABLE,
         });
-        onChange();
+        notify();
       },
     )
     .on(
@@ -1351,7 +1351,7 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
           threadId: normalizedThreadId,
           table: CHAT_CALL_EVENTS_TABLE,
         });
-        onChange();
+        notify();
       },
     )
     .on(
@@ -1367,7 +1367,7 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
           threadId: normalizedThreadId,
           table: CHAT_THREAD_MEMBERS_TABLE,
         });
-        onChange();
+        notify();
       },
     )
     .on(
@@ -1383,7 +1383,7 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
           threadId: normalizedThreadId,
           table: CHAT_THREADS_TABLE,
         });
-        onChange();
+        notify();
       },
     )
     .subscribe((status) => {
@@ -1391,9 +1391,12 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
         threadId: normalizedThreadId,
         status,
       });
+      // Both initial subscription and reconnect close the fetch/subscribe gap.
+      if (status === "SUBSCRIBED") notify();
     });
 
   return () => {
-    supabase.removeChannel(channel);
+    active = false;
+    void supabase.removeChannel(channel).catch(() => {});
   };
 }

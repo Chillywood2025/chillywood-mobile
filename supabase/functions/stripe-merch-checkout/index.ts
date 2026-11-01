@@ -26,6 +26,13 @@ const STRIPE_API_VERSION = "2026-02-25.clover";
 const DEFAULT_SUCCESS_URL = "chillywoodmobile://merch/orders";
 const DEFAULT_CANCEL_URL = "chillywoodmobile://merch/orders";
 
+async function boundedCleanup<T>(work: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([Promise.resolve(work), new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("checkout_cleanup_outcome_unknown")), 5000);
+  })]); } finally { if (timer) clearTimeout(timer); }
+}
+
 type MerchCheckoutPayload = {
   tracking_mode?: unknown;
   expected_unit_price_minor?: unknown;
@@ -83,13 +90,18 @@ const normalizeQuantity = (value: unknown) => {
 const stripeRequest = async <T extends object>(
   secret: string,
   path: string,
-  input: { body?: Record<string, unknown>; idempotencyKey?: string },
+  input: { body?: Record<string, unknown>; idempotencyKey?: string; authorizeDispatch: () => Promise<void> },
 ) => {
   const body = new URLSearchParams();
   Object.entries(input.body ?? {}).forEach(([key, value]) => {
     if (value === undefined || value === null) return;
     body.append(key, String(value));
   });
+
+  // Finish every local parameter/serialization step before the irreversible
+  // durable dispatch marker. Nothing fallible remains before fetch except the
+  // transport itself, whose result must always be treated as ambiguous.
+  await input.authorizeDispatch();
 
   const response = await fetch(`${STRIPE_API_BASE_URL}${path}`, {
     body,
@@ -99,6 +111,8 @@ const stripeRequest = async <T extends object>(
       ...(input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : {}),
     },
     method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(15000),
   });
   const payload = (await response.json().catch(() => null)) as (T & { error?: { message?: string; type?: string } }) | null;
 
@@ -155,6 +169,23 @@ Deno.serve(async (req) => {
 
   let adminClient: SupabaseClientLike | null = null;
   let currentUser: AuthenticatedUser | null = null;
+  let checkoutActor: { p_buyer_id: string; p_session_id: string; p_attempt_id: string; p_request: Record<string, unknown> } | null = null;
+  let dispatched = false;
+  // All exits after reservation, including malformed responses and exceptions,
+  // use the same durable compensation gate. Cleanup failure remains unknown.
+  const failureResponse = async (status: number, body: Record<string, unknown>) => {
+    if (adminClient && checkoutActor && !dispatched) {
+      try {
+        const result = await boundedCleanup(adminClient.rpc("transition_merch_checkout_dispatch", { ...checkoutActor, p_action: "abort" }));
+        if (!result.error && result.data?.aborted === true && typeof result.data.attemptId === "string"
+          && result.data.attemptId.toLowerCase() === checkoutActor.p_attempt_id.toLowerCase()) {
+          return jsonResponse(status, { ...body, checkoutRetrySafe: true, abortedAttemptId: checkoutActor.p_attempt_id,
+            message: "Checkout did not start. Its stock hold was released. You can review the shop and try again." });
+        }
+      } catch { /* No acknowledgement means no permission to replace an attempt. */ }
+    }
+    return jsonResponse(status, body);
+  };
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -232,7 +263,16 @@ Deno.serve(async (req) => {
     const authority = authorityResponse.ok
       ? parseExactCurrentSessionAuthority(await authorityResponse.json().catch(() => null), currentUser.id) : null;
     if (!authority) return jsonResponse(401, { error: "invalid_session", checkoutCreated: false });
-    const reservationResult = await adminClient.rpc("reserve_merch_checkout_for_actor_with_tracking", {
+    const taxAccount = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
+    if (!taxAccount || !/^acct_[A-Za-z0-9]+$/.test(taxAccount)) return jsonResponse(409, {
+      error: "provider_tax_settings_unverified", checkoutCreated: false,
+      message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available.",
+    });
+    checkoutActor = { p_buyer_id: authority.userId, p_session_id: authority.sessionGeneration, p_attempt_id: attemptId,
+      p_request: { productId: product.id, quantity, variantId: variantId || null,
+        trackingMode: parsed.value.tracking_mode ?? null, unitPriceMinor: parsed.value.expected_unit_price_minor ?? null,
+        currency: parsed.value.expected_currency ?? null } };
+    const reservationResult = await adminClient.rpc("reserve_merch_checkout_dispatch", {
       p_buyer_id: authority.userId, p_session_id: authority.sessionGeneration,
       p_product_id: product.id, p_quantity: quantity, p_attempt_id: attemptId,
       p_variant_id: variantId || null,
@@ -262,24 +302,19 @@ Deno.serve(async (req) => {
         merch_platform_unavailable: "This Platform is not available to your account. Your existing order status remains available.",
       };
       const reason = Object.keys(safeReasons).find(key => reservationResult.error?.message?.includes(key));
-      return jsonResponse(409, { error: "merch_reservation_unavailable", checkoutCreated: false,
+      return await failureResponse(409, { error: "merch_reservation_unavailable", checkoutCreated: false,
         message: reason ? safeReasons[reason] : "This product or checkout attempt is unavailable. Refresh the shop and check My orders before retrying." });
     }
     const hasNetTerms = reservation.netSharePolicyVersion != null;
     if ((hasNetTerms && (reservation.netSharePolicyVersion !== "physical_merch_net_90_10_v1"
       || reservation.platformNetShareBps !== 1000 || reservation.creatorNetShareBps !== 9000))
       || (!hasNetTerms && (reservation.platformNetShareBps != null || reservation.creatorNetShareBps != null))) {
-      return jsonResponse(409, { error: "merch_net_share_terms_invalid", checkoutCreated: false });
+      return await failureResponse(409, { error: "merch_net_share_terms_invalid", checkoutCreated: false });
     }
     const orderId = reservation.id;
-    const taxAccount = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
-    if (!taxAccount || !/^acct_[A-Za-z0-9]+$/.test(taxAccount)) return jsonResponse(409, {
-      error: "provider_tax_settings_unverified", checkoutCreated: false,
-      message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available.",
-    });
     const taxPolicy = await readCommerceTaxReadiness(adminClient, { feature: "physical_merch", identityId: orderId,
       productId: product.id, accountId: taxAccount, environment: "sandbox", permittedScope: "US_all_destinations" });
-    if (!taxPolicy.ready) return jsonResponse(409, { error: taxPolicy.reason, checkoutCreated: false,
+    if (!taxPolicy.ready) return await failureResponse(409, { error: taxPolicy.reason, checkoutCreated: false,
       message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available." });
     const accountResponse = await fetch(`${STRIPE_API_BASE_URL}/account`, { method: "GET", redirect: "error",
       headers: { Authorization: `Bearer ${stripeSecret.secret}`, "Stripe-Version": STRIPE_API_VERSION },
@@ -296,6 +331,12 @@ Deno.serve(async (req) => {
     const successUrl = `${DEFAULT_SUCCESS_URL}?orderId=${encodeURIComponent(orderId)}`;
     const cancelUrl = `${DEFAULT_CANCEL_URL}?orderId=${encodeURIComponent(orderId)}`;
     const session = await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {
+      authorizeDispatch: async () => {
+        const dispatch = await adminClient!.rpc("transition_merch_checkout_dispatch", { ...checkoutActor!, p_action: "dispatch" });
+        if (dispatch.error || dispatch.data?.authorized !== true || dispatch.data.orderId !== orderId) throw new Error("merch_dispatch_unavailable");
+        // Even a thrown fetch or missing response now retains this hold.
+        dispatched = true;
+      },
       body: {
         ...commerceTaxParameters(taxPolicy),
         "line_items[0][price_data][product_data][tax_code]": taxPolicy.taxCode,
@@ -403,7 +444,15 @@ Deno.serve(async (req) => {
       message: "Stripe sandbox Checkout session created for physical merch only.",
     });
   } catch (error) {
-    await safeWriteAuditLog(adminClient, {
+    // Compensate before best-effort audit: an unavailable logging sink must not
+    // strand a known never-dispatched reservation. A lost cleanup ack is unknown.
+    const response = await failureResponse(500, {
+      error: "stripe_merch_checkout_failed", liveMoneyAction: false, checkoutCreated: false,
+      physicalMerchOnly: true, digitalAccessGrantCreated: false, revenueCatEntitlementCreated: false,
+      premiumEntitlementCreated: false, payoutCreated: false, cashOutEnabled: false,
+      message: sanitizeErrorMessage(error), provider: "stripe", providerKey: "stripe_physical_goods", mode: "sandbox",
+    });
+    await boundedCleanup(safeWriteAuditLog(adminClient, {
       action: "stripe_merch_checkout_failed",
       actorEmail: currentUser?.email ?? null,
       actorRole: "operator",
@@ -416,22 +465,7 @@ Deno.serve(async (req) => {
       severity: "warning",
       targetType: "merch_order",
       targetUserId: currentUser?.id ?? null,
-    });
-
-    return jsonResponse(500, {
-      error: "stripe_merch_checkout_failed",
-      liveMoneyAction: false,
-      checkoutCreated: false,
-      physicalMerchOnly: true,
-      digitalAccessGrantCreated: false,
-      revenueCatEntitlementCreated: false,
-      premiumEntitlementCreated: false,
-      payoutCreated: false,
-      cashOutEnabled: false,
-      message: sanitizeErrorMessage(error),
-      provider: "stripe",
-      providerKey: "stripe_physical_goods",
-      mode: "sandbox",
-    });
+    })).catch(() => {});
+    return response;
   }
 });

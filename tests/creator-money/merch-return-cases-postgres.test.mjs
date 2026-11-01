@@ -11,7 +11,9 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
  const queue='20261031012501_merch_return_case_queues.sql';
  const successors=['20261031011531_merch_provider_dispute_observations.sql',replies,queue,'20261031012502_merch_reconciliation_driver.sql',
   '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
-  '20261031034904_merch_tracking_reviewed_supersession.sql'];
+  '20261031034904_merch_tracking_reviewed_supersession.sql',
+  '20261101045810_merch_checkout_dispatch_provenance.sql',
+  '20261101045816_merch_reconciliation_bounded_drain.sql'];
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const creator=await one("select md5('return-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('return-host:'||n::text)::uuid::text,20260814),100)=0 limit 1");

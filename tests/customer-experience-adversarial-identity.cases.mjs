@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { assertRestorationIntentForwarding } from "./helpers/account-intent-source-contracts.mjs";
 
 import {
   accountAuthority,
@@ -170,7 +171,7 @@ test("actor-implicit customer and operator mutations use immutable account-bound
 
   const accountDeletionSource = read("_lib/accountDeletionRequests.ts");
   const mutationHelper = read("_lib/accountBoundSupabaseMutation.ts");
-  assert.match(accountDeletionSource, /runAccountRestorationBoundSupabaseMutationRpc<unknown>\(expected\)/u);
+  assertRestorationIntentForwarding(accountDeletionSource);
   assert.match(mutationHelper, /"restore_scheduled_account_deletion"/u);
   assert.doesNotMatch(
     accountDeletionSource,

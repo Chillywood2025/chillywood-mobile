@@ -68,7 +68,7 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
     const shownPrices=new Map();
     const reserve=async(variant,attempt=randomUUID(),quantity=1,user=buyer,session=bs)=>{
       const expectedPrice=shownPrices.get(attempt)??product.priceMinor;
-      await admin();const reserved=await one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,$4,$5,$6,$$tracked$$,$7,$$usd$$)',[user,session,id,quantity,attempt,variant,expectedPrice]);
+      await admin();const reserved=await one('select public.reserve_merch_checkout_dispatch($1,$2,$3,$4,$5,$6,$$tracked$$,$7,$$usd$$)',[user,session,id,quantity,attempt,variant,expectedPrice]);
       shownPrices.set(attempt,reserved.priceMinor);return reserved;
     };
     await assert.rejects(()=>reserve(null),/variant_unavailable/);
@@ -76,6 +76,24 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
     const attempt=randomUUID();const order=await reserve(small,attempt);
     assert.equal(order.sku,'TEE-S-RED');assert.equal(order.size,'S');assert.equal(order.color,'Red');assert.equal(order.priceMinor,1000);
     assert.equal((await reserve(small,attempt)).id,order.id);
+    // Prospective no-dispatch cancellation restores both SKU and aggregate
+    // counts once; transaction rollback restores the exact pending reservation.
+    // UUID wire casing must not turn a valid reservation into an uncleanable
+    // hold. Compare UUID identity, not its textual capitalization.
+    const request={productId:id.toUpperCase(),quantity:1,variantId:small.toUpperCase(),trackingMode:'tracked',unitPriceMinor:1000,currency:'usd'};
+    for(const key of ['productId','variantId']){
+      await assert.rejects(()=>one('select public.transition_merch_checkout_dispatch($1,$2,$3,$$abort$$,$4)',[buyer,bs,attempt,JSON.stringify({...request,[key]:'not-a-uuid'})]),/uuid/);
+      assert.equal((await one('select public.transition_merch_checkout_dispatch($1,$2,$3,$$abort$$,$4)',[buyer,bs,attempt,JSON.stringify({...request,[key]:randomUUID()})])).aborted,false);
+      assert.equal(await one('select reserved_quantity from public.merch_product_variants where id=$1',[small]),1);
+      assert.equal(await one('select reserved_quantity from public.merch_products where id=$1',[id]),1);
+    }
+    await db.exec('begin');
+    for(let duplicate=0;duplicate<2;duplicate++){
+      assert.equal((await one('select public.transition_merch_checkout_dispatch($1,$2,$3,$$abort$$,$4)',[buyer,bs,attempt,JSON.stringify(request)])).aborted,true);
+      assert.equal(await one('select reserved_quantity from public.merch_product_variants where id=$1',[small]),0);
+      assert.equal(await one('select reserved_quantity from public.merch_products where id=$1',[id]),0);
+    }
+    await db.exec('rollback');assert.equal(await one('select reserved_quantity from public.merch_product_variants where id=$1',[small]),1);
     await assert.rejects(()=>reserve(large,attempt),/attempt_conflict/);
     await assert.rejects(()=>reserve(large),/existing_pending_order/);
     await assert.rejects(()=>reserve(small,randomUUID(),1,other,os),/sold_out/);
@@ -170,7 +188,7 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
     // Released simple-order history also blocks changing inventory identity.
     await claim(host,hs);
     const simple=await save([randomUUID(),'Simple history','',null,1000,1,'published',null]);
-    await admin();const simpleOrder=await one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,simple.id,randomUUID()]);
+    await admin();const simpleOrder=await one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,simple.id,randomUUID()]);
     await db.query("update public.merch_orders set stripe_checkout_session_id='cs_test_simple_history' where id=$1",[simpleOrder.id]);
     await event('evt_simple_history','checkout.session.expired',{...facts,object_id:'cs_test_simple_history',payment_intent_id:null,metadata_order_id:simpleOrder.id,client_reference_id:simpleOrder.id});
     await claim(host,hs);const current=(await one('select public.list_creator_merch_products(null,true)')).products.find(p=>p.id===simple.id);

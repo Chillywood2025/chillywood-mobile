@@ -3,13 +3,15 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { notificationHistoricalSource, notificationHistoryProvenance } from './helpers/notification-history-fixtures.mjs';
-import { gallerySettingsContext as galleryContext, priorAccountActionSettings } from './helpers/gallery-settings-context.mjs';
+import { gallerySettingsContext as galleryContext, removalSettingsContext, priorGallerySettings, priorAccountActionSettings } from './helpers/gallery-settings-context.mjs';
 const source = path => fs.readFileSync(path,'utf8');
 const digest = value => createHash('sha256').update(value).digest('hex');
 const span = (text,start,end) => {const i=text.indexOf(start);assert.ok(i>=0);return text.slice(i,end?text.indexOf(end,i):undefined);};
 
 const originalForegroundTitle='      title: category === "creator_money_sale" ? "New creator activity" : normalizeText(content.title) || "Activity",';
 const reviewedForegroundTitle='      title: normalizeText(content.title) || (category === "creator_money_sale" ? "New creator activity" : "Activity"),';
+const originalRestorationBoundary='            lastSession = currentSession;\n            setAuthority(nextAuthority); setSession(currentSession); setUser(null);';
+const reviewedRestorationBoundary='            lastSession = currentSession;\n            // Restoration uses this same exact-session snapshot; ordinary\n            // mutations still reject its restoreOnly authority.\n            publishAccountSessionAuthoritySnapshot(nextAuthority);\n            setAuthority(nextAuthority); setSession(currentSession); setUser(null);';
 function assertHeldBoundaries({mobile=source('_lib/notifications.ts'),edge=source('supabase/functions/notification-device-tokens/index.ts'),session=source('_lib/session.tsx')}={}) {
   // The original witness spans the revoke helper through EOF, including the
   // unrelated foreground renderer. The 2026-10-31 notification-context review
@@ -18,17 +20,29 @@ function assertHeldBoundaries({mobile=source('_lib/notifications.ts'),edge=sourc
   const suffix=span(mobile,'const invokePendingPushRevocation = ');
   assert.equal(suffix.split(reviewedForegroundTitle).length-1,1,'exactly one reviewed foreground title line is required');
   assert.equal(suffix.includes(originalForegroundTitle),false,'old and reviewed title implementations cannot coexist');
+  // The 2026-11-01 restoration repair authorizes this publication only, not
+  // changes to notification ownership cleanup. Keep the original session hash.
+  assert.equal(session.split(reviewedRestorationBoundary).length-1,1,'exactly one reviewed restoration publication is required');
+  assert.equal(session.includes(originalRestorationBoundary),false,'old and reviewed restoration boundaries cannot coexist');
+  assert.equal(digest(session),'8977a2c821003b27d4841f0289067c604be038cc3a20ec9343010b1fdb543a34','held source changed after restoration-only review');
   const checks=[
     [suffix.replace(reviewedForegroundTitle,originalForegroundTitle),'99b66e721985625a42f9f6d2c1c93fc800bc2d7a42cda7e088ebc2eac66a48e1'],
     [span(mobile,'    // Exact old-session cleanup cannot revoke','\n  if (!exactResponse'),'c1d14670ecc01992c088b2243563fcc85da1f06848f19e9a2c5f7f58a25f0b94'],
     [span(edge,'    if (action === "revoke")','    if (!platform || !provider)'),'71f0fdbc7c6d2de8329c4f6aabd5cae6e8d3dc3becd37454ebd88269af9d5d59'],
-    [session,'3cc24c91bb74c2aaa26a4956bf5bb8d7cee97019036073fe9e55895100b8ced1'],
+    [session.replace(reviewedRestorationBoundary,originalRestorationBoundary),'3cc24c91bb74c2aaa26a4956bf5bb8d7cee97019036073fe9e55895100b8ced1'],
     [source('supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql'),'a6ac07ff03d576ae984b31bddc00531ffe2962eb29dee0dd259a934c20bb8f0f'],
   ];
   for(const [actual,expected] of checks)assert.equal(digest(actual),expected,'held source changed from PR593 93976ea7; reopen scope review rather than silently updating this hash');
 }
-test('registration and account-action repairs preserve held bytes except one reviewed foreground display line',()=>{
+test('registration and account-action repairs preserve held bytes except reviewed foreground and restoration deltas',()=>{
   assertHeldBoundaries();
+});
+test('restoration projection rejects absent, duplicate and altered publication',()=>{
+  const session=source('_lib/session.tsx');
+  for(const replacement of ['',reviewedRestorationBoundary+reviewedRestorationBoundary,originalRestorationBoundary,
+    reviewedRestorationBoundary.replace('Snapshot(nextAuthority)','Snapshot(null)')]) {
+    assert.throws(()=>assertHeldBoundaries({session:session.replace(reviewedRestorationBoundary,replacement)}),/reviewed restoration publication/);
+  }
 });
 test('held witness rejects missing, duplicate and unreviewed foreground copy',()=>{
   const mobile=source('_lib/notifications.ts');
@@ -56,7 +70,8 @@ test('explicitly reviewed account-action Settings context retains original notif
   const reviewedSettingsSha256='b19c26bbb792aab62a034c53a87ae3df3f43cbfbdbf1eefbdb3e81e0a0d5795b';
   const settings=source('app/settings.tsx');
   assert.equal(galleryContext.accountActionContextSha256,reviewedSettingsSha256);
-  assert.equal(digest(settings),galleryContext.galleryContextSha256,'Settings changed after gallery scope review');
+  assert.equal(digest(settings),removalSettingsContext.removalContextSha256,'Settings changed after removal scope review');
+  assert.equal(digest(priorGallerySettings(settings)),galleryContext.galleryContextSha256,'exact prior gallery scope is preserved');
   assert.equal(digest(priorAccountActionSettings(settings)),reviewedSettingsSha256,'non-gallery Settings changed after account-action scope review');
   for(const [name,originalTarget] of [
     ['original-settings','7dd4b554a8455b0f934883b264ad2530e06f1a1da356d744ea66254d85e5997d'],
@@ -84,12 +99,25 @@ test('explicitly reviewed account-action Settings context retains original notif
 });
 
 test('gallery witness rejects absent, duplicate and unreviewed appearance changes',()=>{
-  const settings=source('app/settings.tsx');
+  const settings=priorGallerySettings(source('app/settings.tsx'));
   const first=galleryContext.changes[0];
   for(const replacement of ['',first.galleryContext+first.galleryContext,first.accountActionContext]) {
-    assert.throws(()=>priorAccountActionSettings(settings.replace(first.galleryContext,replacement)),/exactly one reviewed gallery hunk/);
+    const mutated=settings.replace(first.galleryContext,replacement);
+    assert.notEqual(mutated,settings);
+    assert.throws(()=>priorAccountActionSettings(mutated),assert.AssertionError);
   }
-  assert.throws(()=>priorAccountActionSettings(settings.replace('const profileGalleryPending = useRef(false);','const profileGalleryPending = useRef(true);')),/exactly one reviewed gallery hunk/);
+  assert.throws(()=>priorAccountActionSettings(settings.replace('const profileGalleryPending = useRef(false);','const profileGalleryPending = useRef(true);')),assert.AssertionError);
+});
+
+test('removal witness rejects missing, duplicate and altered removal hunks',()=>{
+  const settings=source('app/settings.tsx');
+  for(const {removalContext:current,galleryContext:previous} of removalSettingsContext.changes) {
+    for(const replacement of ['',current+current,previous]) {
+      const mutated=settings.replace(current,replacement);
+      assert.notEqual(mutated,settings);
+      assert.throws(()=>priorAccountActionSettings(mutated),assert.AssertionError);
+    }
+  }
 });
 
 test('gallery projection cannot excuse notification, sign-out or deletion changes',()=>{

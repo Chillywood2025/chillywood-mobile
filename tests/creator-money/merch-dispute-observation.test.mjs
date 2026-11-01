@@ -33,6 +33,7 @@ test('actual endpoint starts a server attempt before provider observation and pe
   if(name==='record_merch_provider_cost_observation')return{data:{financialAuthority:false}};throw Error(name);}};
  const runtime={exports:{},Deno:{serve:f=>handler=f},require:name=>{
   if(name.startsWith('jsr:'))return{};
+  if(name.endsWith('merch-observation-budget.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts');
   if(name.endsWith('merch-dispute-observation.ts'))return{observeMerchDisputes:async(c,s,account)=>{calls.push('provider_disputes');return observe(c,s,account,f.transport);}};
   if(name.endsWith('stripe-merch-cost-observation.ts'))return{observeStripeMerchCosts:async()=>{calls.push('provider_costs');return{};}};
   if(name.endsWith('stripe-connect.ts'))return{readOptionalEnv:k=>k==='SUPABASE_SERVICE_ROLE_KEY'?'service_synthetic':'acct_test',readStripeTestSecret:()=>({configured:true,secret:'sk_test_synthetic'}),createAdminClient:()=>({configured:true,client:admin}),jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status})};throw Error(name);

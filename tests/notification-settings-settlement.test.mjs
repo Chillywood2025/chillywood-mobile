@@ -99,12 +99,12 @@ test('settled provider rejection releases the install lease for a successful cur
   assert.equal(m.section().props.value, 'Unable to verify');
   assert.equal(m.button('Register Device').disabled, false);
   assert.equal(m.state.writes.length, 0);
-  assert.equal(m.state.authoritySubscriptions, 1);
+  m.assertMountedAuthorityListeners();
   m.state.backendBarrier = null;
   await m.act(() => m.button('Register Device').onPress());
   assert.equal(m.section().props.value, 'Registered');
   assert.equal(m.state.writes.length, 1);
-  assert.equal(m.state.authoritySubscriptions, 1);
+  m.assertMountedAuthorityListeners();
 });
 
 test('actual provider deadline retains unresolved transport debt and later reconciles backend truth', async t => {
@@ -212,6 +212,6 @@ for (const method of ['requestPushPermissionAndRegister', 'refreshPushRegistrati
     assert.equal(result.status, 'error');
     assert.equal(m.state.nativeTokens, 0, 'no provider token is requested for a retired owner');
     assert.equal(m.state.transport.filter(x => x.action === 'register').length, 0);
-    assert.equal(m.state.authoritySubscriptions, 1, 'only the mounted Settings listener remains');
+    m.assertMountedAuthorityListeners();
   });
 }

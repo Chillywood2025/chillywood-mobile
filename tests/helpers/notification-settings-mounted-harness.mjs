@@ -144,10 +144,22 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     } };
   const authority = load(compile(source('_lib/accountSessionAuthority.ts')), { './supabase': { supabase: database }, './entitlementAuthority': deadline });
   const subscribe = authority.subscribeToAccountSessionAuthority;
-  authority.subscribeToAccountSessionAuthority = listener => {
+  const authorityListeners = new Set();
+  const screenAuthorityListeners = new Set();
+  const trackAuthoritySubscription = (listener, screen = false) => {
+    const subscription = Symbol('authority subscription');
+    authorityListeners.add(subscription);
+    if (screen) screenAuthorityListeners.add(subscription);
     state.authoritySubscriptions++; const unsubscribe = subscribe(listener);
-    return () => { state.authoritySubscriptions--; unsubscribe(); };
+    return () => {
+      assert.ok(authorityListeners.delete(subscription), 'authority subscription releases exactly once');
+      screenAuthorityListeners.delete(subscription);
+      state.authoritySubscriptions--; unsubscribe();
+    };
   };
+  authority.subscribeToAccountSessionAuthority = listener => trackAuthoritySubscription(listener);
+  const screenAuthority = { ...authority,
+    subscribeToAccountSessionAuthority: listener => trackAuthoritySubscription(listener, true) };
   authority.publishAccountSessionAuthoritySnapshot(initialAuthority);
   const rpc = load(compile(source('_lib/accountBoundSupabaseRpc.mjs')), {}, { URL, fetch: async (url, options) => {
     const name = new URL(url).pathname.split('/').at(-1);
@@ -226,6 +238,7 @@ export async function mount(t, { read, write, register, authority: initialAuthor
   const appState = { currentState: 'active', addEventListener(_, listener) { appListeners.add(listener); return { remove: () => appListeners.delete(listener) }; } };
   const mocks = {
     react: React,
+    '@react-navigation/native': { useIsFocused: () => state.focused },
     'expo-router': { useRouter: () => router, useLocalSearchParams: () => ({ section: 'notifications' }),
       useFocusEffect(callback) { const focused = state.focused; React.useEffect(() => focused ? callback() : undefined, [callback, focused]); } },
     'react-native': { ...Object.fromEntries(['ActivityIndicator', 'ImageBackground', 'ScrollView', 'Text', 'TextInput', 'TouchableOpacity', 'Switch', 'View'].map(x => [x, x])),
@@ -233,7 +246,7 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     'expo-clipboard': {}, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     '../_lib/session': { useSession: () => ({ isLoading: false, isSignedIn: !!state.authority, user: state.authority ? { id: state.authority.userId } : null,
       authority: state.authority, authorityStatus: state.authority ? 'active' : 'signed_out' }) },
-    '../_lib/accountSessionAuthority': authority,
+    '../_lib/accountSessionAuthority': screenAuthority,
     '../_lib/monetization': { getCachedMonetizationSnapshot: () => ({ targets: {} }), subscribeToMonetizationSnapshot: () => noop, readMonetizationSnapshot: async () => ({ targets: {} }), isPremiumPurchaseShellAvailable: () => false },
     '../_lib/accountDeletionRequests': { ...deletionRequests, readMyAccountDeletionStatus: async () => ({ scheduled: state.authority?.restoreOnly === true }) },
     '../_lib/accountSessionActions': { accountSessionActionIdentity: () => null, async signOutExactAccountSession(expected) {
@@ -262,6 +275,15 @@ export async function mount(t, { read, write, register, authority: initialAuthor
   const render = () => act(() => root.render(React.createElement(screen, { key: keyed ? authority.getAccountNavigationTreeKey(state.authority) : 'unkeyed-test-control' })));
   const unmount = async () => { if (!unmounted) { unmounted = true; await React.act(async () => root.unmount()); } };
   await render(); t.after(unmount);
+  // The actual screen owns separate notification and retained media-removal
+  // authority effects. Track the actual module importer and live identities:
+  // effects may legitimately replace closures after an authority rerender,
+  // but a leaked transport callback cannot masquerade as either screen effect.
+  const assertMountedAuthorityListeners = () => {
+    assert.equal(screenAuthorityListeners.size, 2, 'notification and media ownership effects are the two screen subscriptions');
+    assert.deepEqual(new Set(authorityListeners), new Set(screenAuthorityListeners), 'only the current mounted screen subscriptions remain');
+    assert.equal(state.authoritySubscriptions, authorityListeners.size);
+  };
   const section = () => walk(tree, n => n.props?.id === 'notifications')[0];
   const row = title => walk(section(), n => n.props?.title === title)[0];
   const button = label => {
@@ -274,7 +296,7 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     const matches = rows.length ? walk(rows.at(-1), n => n.type === 'Switch') : [];
     assert.equal(matches.length, 1, `one ${label} toggle`); return matches[0].props;
   };
-  return { state, authority, notifications, appListeners, act, render, unmount, button, toggle, row, section,
+  return { state, authority, notifications, appListeners, act, render, unmount, button, toggle, row, section, assertMountedAuthorityListeners,
     action(id) { const matches = walk(tree, n => n.props?.testID === id); assert.equal(matches.length, 1, id); return matches[0].props; },
     async expireProviderDeadline() { await act(() => {
       const matches = [...timers].filter(([, timer]) => timer.delay === 15_000);

@@ -10,7 +10,7 @@ import { MerchTrackingPanel } from "./merch-tracking-panel";
 import { MerchShippingDetails } from "./merch-shipping-details";
 import { MerchReturnQueue } from "./merch-return-queue";
 import { MerchReturnCases } from "./merch-return-cases";
-import { configureMerchVariants, createMerchCheckoutAttemptId, launchMerchCheckout, readMerchOrders, readMerchProducts, saveMerchProduct, updateMerchFulfillment, type MerchOrder, type MerchProduct, type MerchProductInput, type MerchVariantInput } from "../../_lib/creatorMerch";
+import { configureMerchVariants, createMerchCheckoutAttemptId, launchMerchCheckout, MerchCheckoutAbortedError, readMerchOrders, readMerchProducts, saveMerchProduct, updateMerchFulfillment, type MerchOrder, type MerchProduct, type MerchProductInput, type MerchVariantInput } from "../../_lib/creatorMerch";
 
 import { approveMerchProductPhoto, assignMerchProductPhoto, discardMerchProductPhoto, pickMerchProductPhoto, readMerchProductPhotoStatus, resolveMerchProductPhotos, uploadMerchProductPhoto, type MerchProductPhotoFile, type MerchProductPhotoUploadAttempt } from "../../_lib/merchProductPhotos";
 
@@ -80,7 +80,12 @@ function Shop({ creatorId }: { creatorId: string }) {
     const generation = focusGeneration.current;
     latch.current = true; setBusy(true); setNotice(null); attempt.current ??= createMerchCheckoutAttemptId();
     try { const result = await launchMerchCheckout({ productId: selected.id, variantId: selectedVariant?.id ?? null, quantity, attemptId: attempt.current, trackingMode: selected.shippingTrackingMode, expectedUnitPriceMinor: selected.priceMinor, expectedCurrency: selected.currency, isPresentationCurrent: () => alive.current && generation === focusGeneration.current }); if (alive.current && generation === focusGeneration.current) { setNotice("Checkout opened. Returning or canceling does not confirm payment. Check your order status."); router.push({ pathname: "/merch/orders", params: { orderId: result.orderId } }); } }
-    catch (e) { if (alive.current && generation === focusGeneration.current) setNotice(`${errorText(e)} Check your orders before trying again; payment may still be pending.`); }
+    catch (e) {
+      if (e instanceof MerchCheckoutAbortedError && e.attemptId === attempt.current) {
+        attempt.current = null; // Explicit durable no-dispatch acknowledgement only; never auto-retry.
+        if (alive.current && generation === focusGeneration.current) setNotice(errorText(e));
+      } else if (alive.current && generation === focusGeneration.current) setNotice(`${errorText(e)} Check your orders before trying again; payment may still be pending.`);
+    }
     finally { latch.current = false; if (alive.current) setBusy(false); }
   };
   return <Shell title={selected ? selected.title : "Shop"}>

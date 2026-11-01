@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 const compile=file=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 const loaded={exports:{},AbortSignal};
 vm.runInNewContext(compile('supabase/functions/_shared/stripe-merch-cost-observation.ts'),loaded);
@@ -73,6 +74,7 @@ test('refund cash movements are disjoint and partial tax reversal remains unknow
 test('service endpoint requires exact service credential before provider reads and forbids caller fee proof',async()=>{
  let handler,calls=0;const runtime={exports:{},Deno:{serve:fn=>handler=fn},require:specifier=>{
   if(specifier.startsWith('jsr:'))return{};
+  if(specifier.endsWith('merch-observation-budget.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts');
   if(specifier.endsWith('stripe-merch-cost-observation.ts'))return{observeStripeMerchCosts:async()=>{calls++;return{};}};
   return{readOptionalEnv:key=>key==='SUPABASE_SERVICE_ROLE_KEY'?'service_synthetic':'acct_fixture',readStripeTestSecret:()=>({configured:true,secret:'sk_test_synthetic'}),jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status}),createAdminClient:()=>{throw Error('must not reach database');}};
  }};
@@ -80,4 +82,38 @@ test('service endpoint requires exact service credential before provider reads a
  assert.equal((await handler(new Request('https://test.invalid',{method:'POST',headers:{Authorization:'Bearer user_jwt'},body:'{}'}))).status,403);
  assert.equal((await handler(new Request('https://test.invalid',{method:'POST',headers:{Authorization:'Bearer service_synthetic'},body:JSON.stringify({order_id:order.id,provider_fee_minor:0})}))).status,400);
  assert.equal(calls,0);assert.match(fs.readFileSync('supabase/config.toml','utf8'),/\[functions\.stripe-merch-cost-reconcile\][\s\S]*?verify_jwt = true/);
+});
+
+test('actual worker and both real observers share64 GET ceiling; oversized refund history remains incomplete',async()=>{
+ for(const refundCount of [0,60]){
+  let handler;const f=fixture(),sql=[];
+  f.data['/disputes?charge=ch_merch&limit=100']={object:'list',data:[],has_more:false};
+  f.data['/charges/ch_merch'].amount_refunded=refundCount;
+  for(let i=0;i<refundCount;i++){
+   f.data['/refunds?charge=ch_merch&limit=100'].data.push({id:'re_'+i,charge:'ch_merch',payment_intent:'pi_merch',currency:'usd',status:'succeeded',amount:1,balance_transaction:'txn_refund_'+i});
+   f.data['/balance_transactions/txn_refund_'+i]={id:'txn_refund_'+i,object:'balance_transaction',source:'re_'+i,type:'refund',amount:-1,fee:0,net:-1,currency:'usd',status:'available'};
+  }
+  const runtime={exports:{},Deno:{serve:fn=>handler=fn},require:name=>{
+   if(name.startsWith('jsr:'))return{};
+   if(name.endsWith('merch-observation-budget.ts'))return{createMerchObservationBudget:()=>loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts').createMerchObservationBudget(f.transport)};
+   if(name.endsWith('stripe-merch-cost-observation.ts'))return{observeStripeMerchCosts:observe};
+   if(name.endsWith('merch-dispute-observation.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-dispute-observation.ts');
+   if(name.endsWith('stripe-connect.ts'))return{
+    readOptionalEnv:key=>key==='SUPABASE_SERVICE_ROLE_KEY'?'synthetic_service':'acct_fixture',readStripeTestSecret:()=>({configured:true,secret:'sk_test_synthetic'}),
+    jsonResponse:(status,body)=>Response.json(body,{status}),createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
+     sql.push(name);
+     if(name==='get_merch_cost_reconciliation_context')return{data:order};
+     if(name==='begin_merch_dispute_observation')return{data:{id:order.id,order_id:order.id,payment_intent_id:'pi_merch',charge_id:null,amount_minor:1000,currency:'usd'}};
+     if(name==='complete_merch_dispute_observation'){assert.equal(args.p_facts.complete,true);return{data:{disputeState:'none'}};}
+     if(name==='record_merch_provider_cost_observation'){assert.equal(args.p_facts.financial_authority,false);return{data:{status:'held',observationId:order.id}};}
+     throw Error(name);
+    }}}),
+   };throw Error(name);
+  }};
+  vm.runInNewContext(compile('supabase/functions/stripe-merch-cost-reconcile/index.ts'),runtime);
+  const r=await handler(new Request('https://synthetic.test',{method:'POST',headers:{Authorization:'Bearer synthetic_service'},body:JSON.stringify({order_id:order.id})}));
+  assert.equal(r.status,refundCount?409:200);assert.equal((await r.json()).financialAuthority,false);
+  if(refundCount){assert.equal(f.calls.length,64);assert.ok(!sql.includes('record_merch_provider_cost_observation'));}
+  else assert.ok(sql.includes('record_merch_provider_cost_observation'));
+ }
 });

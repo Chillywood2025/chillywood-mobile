@@ -354,13 +354,14 @@ export async function mountFullChatThread(options = {}) {
     readChatActivityCut: async () => runtime.readActivityCut ? runtime.readActivityCut() : '2026-10-31T23:59:59Z',
     getChatThread: async (id) => runtime.readThread ? runtime.readThread(id)
       : durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
-    listChatMessages: async (id) => runtime.readMessages ? runtime.readMessages(id)
+    listChatMessages: async (id, cut) => runtime.readMessages ? runtime.readMessages(id, cut)
       : durableThread ? durableThread.list(runtime.userId, id) : [],
     sendChatMessage: async (id, body, attachment) => {
       if (!durableThread) throw Error("message writes require the durable thread fixture");
       return durableThread.send(runtime.userId, id, body, attachment);
     },
     markChatThreadRead: async (...args) => runtime.markRead?.(...args), subscribeToThread: (_id, fn) => {
+      if (runtime.subscribeThread) return runtime.subscribeThread(_id, fn);
       runtime.threadSubscriptions.add(fn); durableThread?.listeners.add(fn);
       return () => { runtime.threadSubscriptions.delete(fn); durableThread?.listeners.delete(fn); };
     },
@@ -458,6 +459,12 @@ export async function mountFullChatThread(options = {}) {
       Keyboard: { dismiss: () => { runtime.keyboard.visible = false; runtime.keyboard.dismissals += 1; } } },
     "react-native-safe-area-context": { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     "../../_lib/analytics": { trackEvent: noop }, "../../_lib/appConfig": { DEFAULT_APP_CONFIG: defaults, readAppConfig: async () => defaults },
+    "../../_lib/accountSessionAuthority": {
+      getCurrentAccountSessionAuthoritySnapshot: () => runtime.liveAuthority ?? ({ userId: runtime.userId,
+        accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }),
+      sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.accountId === b.accountId
+        && a.sessionGeneration === b.sessionGeneration && a.state === b.state && a.restoreOnly === b.restoreOnly,
+    },
     "../../_lib/chillyChatCalls": inviteApi, "../../_lib/chat": chat,
     "../../_lib/communication": { getCommunicationRoomSnapshot: async (roomId) => ({ room: {
       status: durableThread ? durableThread.rooms.get(roomId)?.status ?? "ended"

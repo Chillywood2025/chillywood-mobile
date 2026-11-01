@@ -90,6 +90,7 @@ function harness({legacyCacheWrite = false, realSdk = false} = {}) {
     './usernameHandles':{normalizeUsernameHandle:normalize,formatUsernameHandle:normalize},
   });
   const media = load('_lib/profileMedia.ts', {
+    './accountSessionAuthority':{sameAccountSessionAuthority:(a,b) => JSON.stringify(a)===JSON.stringify(b)},
     'expo-file-system':{File:class {}},
     'expo-file-system/legacy':{uploadAsync:async () => ({status:200}),FileSystemUploadType:{BINARY_CONTENT:0},getInfoAsync:async () => ({exists:true,size:10})},
     '@supabase/supabase-js':sdk, './accountBoundSupabaseMutation':mutation,
@@ -113,7 +114,7 @@ function harness({legacyCacheWrite = false, realSdk = false} = {}) {
 }
 const operations = {
   upload:h => h.media.uploadProfileMedia('avatar',{uri:'file:///photo.jpg',mimeType:'image/jpeg',size:10}),
-  remove:h => h.media.removeProfileMedia('avatar'),
+  remove:h => h.media.removeProfileMedia('avatar', {authority:h.binding(), isCurrent:() => true}),
   fit:h => h.media.updateProfileMediaFitMode('background','fit'),
   about:h => h.userData.saveUserProfileAbout('new About','A',h.binding()),
 };

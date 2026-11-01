@@ -35,7 +35,8 @@ const successors=[
   '20261031204123_live_room_join_activity.sql',
   '20261031204321_atomic_chilly_chat_call_candidate.sql',
   '20261031205522_chat_meaningful_activity_and_call_reads.sql',
-];
+  '20261101045810_merch_checkout_dispatch_provenance.sql',
+  '20261101045816_merch_reconciliation_bounded_drain.sql'];
 // Full migrated schema, real application predicates/triggers and provider SQL.
 // Only managed auth/storage infrastructure is the shared fixture; no network.
 test('catalog selection and immutable quote survive source edits, duplicates, terminal order and account changes', {timeout:240_000}, async t=>{

@@ -203,8 +203,12 @@ export async function runCurrentAccountBoundSupabaseMutationRpc<T>(
 // Account restoration is the only mutation permitted while a scheduled
 // deletion has quarantined the session. Keep that exception literal and bind
 // it to the same exact published session generation as every other mutation.
-export async function runAccountRestorationBoundSupabaseMutationRpc<T>(expected?: AccountSessionAuthorityBinding) {
+// Callers may additionally retire intent across an intervening authority gap;
+// identity returning to its prior value must not revive a pending action.
+export async function runAccountRestorationBoundSupabaseMutationRpc<T>(expected?: AccountSessionAuthorityBinding, isCurrent: () => boolean = () => true) {
+  if (!isCurrent()) throw new AccountBoundSupabaseMutationError();
   const subject = await capturePublishedAccountBoundSupabaseMutationSubject(undefined, true);
+  if (!isCurrent()) throw new AccountBoundSupabaseMutationError();
   if (expected && !sameAccountSessionAuthority(expected, subject.authority)) throw new AccountBoundSupabaseMutationError();
   const readback = await invokeAccountBoundSupabaseMutationRpc<unknown>(
     subject,
@@ -216,6 +220,7 @@ export async function runAccountRestorationBoundSupabaseMutationRpc<T>(expected?
   if (!sameAccountSessionAuthority(subject.authority, exactReadback)) {
     throw new AccountBoundSupabaseMutationError();
   }
+  if (!isCurrent()) throw new AccountBoundSupabaseMutationError();
   return invokeAccountBoundSupabaseMutationRpc<T>(
     subject,
     "restore_scheduled_account_deletion",

@@ -7,7 +7,7 @@ import ts from 'typescript';
 // The actual endpoint and shared adapter execute unchanged. Only network,
 // authentication and database boundaries use explicit synthetic fixtures.
 function load(file, modules = {}, extras = {}) {
-  const context = { exports: {}, Response, Request, URL, URLSearchParams, AbortSignal,
+  const context = { exports: {}, Response, Request, URL, URLSearchParams, AbortSignal,setTimeout,clearTimeout,
     require: name => {
       if (name.startsWith('jsr:')) return {};
       assert.ok(Object.hasOwn(modules, name), `Unexpected import ${name}`);
@@ -83,7 +83,8 @@ async function blockedCheckout(kind, { authenticated = true, taxResult = { ready
     calls.push({ name, args });
     if (name === 'bind_commerce_tax_checkout_policy') { readinessCalls.push(args); return { data: taxResult }; }
     if (name.startsWith('prepare_creator_')) return { data: q };
-    if (name === 'reserve_merch_checkout_for_actor_with_tracking') return { data: { id: ids.quote,
+    if (name === 'transition_merch_checkout_dispatch') return { data: args.p_action==='dispatch' ? {authorized:true,orderId:ids.quote} : {aborted:true,attemptId:args.p_attempt_id} };
+    if (name === 'reserve_merch_checkout_dispatch') return { data: { id: ids.quote,
       priceMinor: 1000, currency: 'usd', title: 'Synthetic product', createdAt: new Date().toISOString() } };
     throw Error(`Unexpected database call ${name}`);
   } };

@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv, readStripeTestSecret } from "../_shared/stripe-connect.ts";
 import { observeStripeMerchCosts, type MerchCostOrder } from "../_shared/stripe-merch-cost-observation.ts";
 import { observeMerchDisputes, type MerchDisputeContext } from "../_shared/merch-dispute-observation.ts";
+import { createMerchObservationBudget } from "../_shared/merch-observation-budget.ts";
 
 // JWT verification remains enabled. A user JWT is NOT worker authority. This
 // worker additionally requires the exact existing server credential. No new
@@ -14,29 +15,30 @@ Deno.serve(async (req: Request) => {
   const account = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID"), secret = readStripeTestSecret();
   if (!account || !secret.configured)
     return jsonResponse(503, { error: "merch_cost_reconciliation_not_configured", financialAuthority: false });
+  const budget = createMerchObservationBudget();
   try {
-    const body = await req.json();
+    const body = await budget.run(() => req.json(), 5000);
     // Caller supplies only the order, never account, costs, transport or proof.
     if (!body || Object.keys(body).some(key => key !== "order_id")
       || typeof body.order_id !== "string" || !/^[0-9a-f-]{36}$/i.test(body.order_id))
       return jsonResponse(400, { error: "order_id_only_required" });
     const admin = createAdminClient();
     if (!admin.configured) return jsonResponse(503, { error: "server_not_configured" });
-    const context = await admin.client.rpc("get_merch_cost_reconciliation_context", { p_order_id: body.order_id });
+    const context = await budget.run(() => admin.client.rpc("get_merch_cost_reconciliation_context", { p_order_id: body.order_id }), 5000);
     if (context.error || !context.data) throw Error("merch_order_context_unavailable");
-    const attempt = await admin.client.rpc("begin_merch_dispute_observation", { p_order_id: body.order_id });
+    const attempt = await budget.run(() => admin.client.rpc("begin_merch_dispute_observation", { p_order_id: body.order_id }), 5000);
     if (attempt.error || !attempt.data) throw Error("merch_dispute_context_unavailable");
-    const disputes = await observeMerchDisputes(attempt.data as MerchDisputeContext, secret.secret, account);
-    const disputeResult = await admin.client.rpc("complete_merch_dispute_observation", {
+    const disputes = await budget.run(() => observeMerchDisputes(attempt.data as MerchDisputeContext, secret.secret, account, budget.transport));
+    const disputeResult = await budget.run(() => admin.client.rpc("complete_merch_dispute_observation", {
       p_attempt_id: attempt.data.id, p_facts: disputes,
-    });
+    }), 5000);
     if (disputeResult.error || !disputeResult.data) throw Error("merch_dispute_observation_not_recorded");
-    const facts = await observeStripeMerchCosts(context.data as MerchCostOrder, secret.secret, account);
-    const recorded = await admin.client.rpc("record_merch_provider_cost_observation", { p_order_id: body.order_id, p_facts: facts });
+    const facts = await budget.run(() => observeStripeMerchCosts(context.data as MerchCostOrder, secret.secret, account, budget.transport));
+    const recorded = await budget.run(() => admin.client.rpc("record_merch_provider_cost_observation", { p_order_id: body.order_id, p_facts: facts }), 5000);
     if (recorded.error || !recorded.data) throw Error("merch_cost_observation_not_recorded");
     return jsonResponse(200, { ...recorded.data as Record<string, unknown>, financialAuthority: false, payoutCreated: false });
   } catch {
     // Never echo provider payload, Authorization or raw SDK errors.
     return jsonResponse(409, { error: "merch_cost_observation_incomplete", retryable: true, financialAuthority: false });
-  }
+  } finally { budget.close(); }
 });
