@@ -107,11 +107,18 @@ revoke all on function private.commerce_positive_release_ready(private.commerce_
 create function public.release_commerce_known_earnings(p_feature text,p_source_id uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare s private.commerce_known_cost_snapshots; q private.commerce_earnings_qualifications; prior private.commerce_payable_releases; result private.commerce_payable_releases;
- target bigint; difference bigint; provider_id uuid; money_id uuid; earning_id uuid; debt_id uuid; required_switch text;
+ target bigint; difference bigint; provider_id uuid; money_id uuid; earning_id uuid; debt_id uuid; required_switch text; reconciled jsonb;
 begin
  if auth.role() is distinct from 'service_role' then raise exception 'service_role_required'; end if;
- -- Reconcile obtains domain row -> component account -> creator-payout locks.
- select * into strict s from private.commerce_known_cost_snapshots where id=(public.reconcile_commerce_known_costs(p_feature,p_source_id)->>'id')::uuid;
+ -- Match existing auction release lock order before acquiring the contract,
+ -- component and creator locks; room/event updates must never wait in reverse.
+ if p_feature in ('event_auction','room_auction') then
+  perform private.lock_auction_release_domain(p_source_id);
+  perform private.lock_auction_release_qualification(p_source_id);
+ end if;
+ -- Reconcile obtains sale row -> component account -> creator-payout locks.
+ reconciled:=public.reconcile_commerce_known_costs(p_feature,p_source_id);
+ select * into strict s from private.commerce_known_cost_snapshots where id=(reconciled->>'id')::uuid;
  select * into result from private.commerce_payable_releases where snapshot_id=s.id;
  if result.id is not null then return to_jsonb(result); end if;
  if s.environment<>'live' then raise exception 'sandbox_not_payable'; end if;
@@ -147,10 +154,10 @@ begin
   values(s.creator_id,s.creator_id,provider_id,'commerce_verified_cost_release',difference::integer,s.currency,'production','payable','verified','product',s.source_id,
    jsonb_build_object('payout_readiness_proved',true,'live_money_enabled_at_verification',true,'commerce_snapshot_id',s.id)) returning id into money_id;
   insert into public.creator_earnings_ledger(creator_id,source_type,source_id,gross_amount_cents,net_creator_amount_cents,currency,ledger_status,
-   money_ledger_event_id,provider_event_id,settlement_reference_hash,settlement_started_at,normal_eligible_at,reserve_amount_cents,reserve_release_at,settlement_policy_version,metadata)
+   money_ledger_event_id,provider_event_id,settlement_reference_hash,settlement_started_at,normal_eligible_at,reserve_amount_cents,reserve_release_at,settlement_policy_version,metadata,created_at)
   values(s.creator_id,'product',s.source_id,difference::integer,difference::integer,s.currency,'available',money_id,provider_id,s.manifest_sha256,
    clock_timestamp(),clock_timestamp(),0,clock_timestamp(),'known_costs_future_unpaid_adjustments_v1',
-   jsonb_build_object('commerce_snapshot_id',s.id,'future_adjustments_possible',true,'final_fees',false)) returning id into earning_id;
+   jsonb_build_object('commerce_snapshot_id',s.id,'future_adjustments_possible',true,'final_fees',false),clock_timestamp()) returning id into earning_id;
  elsif difference<0 then
   insert into private.commerce_creator_fee_adjustments(creator_id,acceptance_id,currency,amount_minor,reason,source_type,source_id,evidence_hash)
   values(s.creator_id,s.acceptance_id,s.currency,-difference,
@@ -248,7 +255,8 @@ begin
   remaining:=least(debt.balance,private.creator_fee_recovery_amount(p_creator,p_currency));
   if remaining<=0 then continue; end if;
   for earning in select e.id from public.creator_earnings_ledger e join public.money_access_ledger_events m on m.id=e.money_ledger_event_id
-   where e.creator_id=p_creator and e.currency=p_currency and m.environment='production' and m.status='verified' and m.payable_state='payable'
+   where e.creator_id=p_creator and e.currency=p_currency and e.created_at>debt.created_at
+    and m.environment='production' and m.status='verified' and m.payable_state='payable'
     and public.creator_earnings_current_state_internal(e.id)='available' order by e.created_at,e.id for update of e
   loop
    available:=public.creator_earnings_withdrawable_cents_internal(earning.id,clock_timestamp())-
@@ -348,9 +356,9 @@ begin
  values(p_creator,p_creator,provider_id,'verified_provider_fee_credit',p_amount_minor::integer,'usd','production','payable','verified','adjustment',p_source_id,
   jsonb_build_object('payout_readiness_proved',true,'live_money_enabled_at_verification',true,'original_money_event_id',origin.id)) returning id into money_id;
  insert into public.creator_earnings_ledger(creator_id,source_type,source_id,gross_amount_cents,net_creator_amount_cents,currency,ledger_status,
-  money_ledger_event_id,provider_event_id,settlement_reference_hash,settlement_started_at,normal_eligible_at,reserve_amount_cents,reserve_release_at,settlement_policy_version,metadata)
+  money_ledger_event_id,provider_event_id,settlement_reference_hash,settlement_started_at,normal_eligible_at,reserve_amount_cents,reserve_release_at,settlement_policy_version,metadata,created_at)
  values(p_creator,'adjustment',p_source_id,p_amount_minor::integer,p_amount_minor::integer,'usd','available',money_id,provider_id,p_evidence_hash,
-  clock_timestamp(),clock_timestamp(),0,clock_timestamp(),'known_costs_future_unpaid_adjustments_v1',jsonb_build_object('fee_credit',true)) returning id into earning_id;
+  clock_timestamp(),clock_timestamp(),0,clock_timestamp(),'known_costs_future_unpaid_adjustments_v1',jsonb_build_object('fee_credit',true),clock_timestamp()) returning id into earning_id;
  insert into private.creator_fee_credit_sources(earnings_ledger_id,creator_id,original_earnings_ledger_id,source_type,source_id,evidence_hash,amount_minor,platform_account_id,recipient_account_id,acceptance_id)
  values(earning_id,p_creator,p_original_earning,p_source_type,p_source_id,p_evidence_hash,p_amount_minor,p_platform_account,p_recipient_account,accepted);
  return earning_id;

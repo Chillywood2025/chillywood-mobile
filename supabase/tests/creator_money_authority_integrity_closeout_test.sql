@@ -2815,14 +2815,18 @@ select ok(
   'payout provider result projector is service-only'
 );
 select ok(
-  pg_get_functiondef('public.create_creator_payout_request_safe(integer,text)'::regprocedure)
+  pg_get_functiondef('public.create_creator_payout_request_before_fee_policy(integer,text)'::regprocedure)
     ilike '%state%in (%reserved%,%processing%,%paid%)%'
-  and pg_get_functiondef('public.create_creator_payout_request_safe(integer,text)'::regprocedure)
+  and pg_get_functiondef('public.create_creator_payout_request_before_fee_policy(integer,text)'::regprocedure)
     ilike '%last_provider_sync_at%interval ''15 minutes''%'
-  and pg_get_functiondef('public.create_creator_payout_request_safe(integer,text)'::regprocedure)
+  and pg_get_functiondef('public.create_creator_payout_request_before_fee_policy(integer,text)'::regprocedure)
     ilike '%earnings.%currency%=%usd%'
+  and pg_get_functiondef('public.create_creator_payout_request_before_fee_policy(integer,text)'::regprocedure)
+    ilike '%pg_advisory_xact_lock%creator-payout:%'
   and pg_get_functiondef('public.create_creator_payout_request_safe(integer,text)'::regprocedure)
-    ilike '%pg_advisory_xact_lock%creator-payout:%',
+    like '%get_creator_fee_policy_status%creator_fee_policy_acceptance_required%pg_advisory_xact_lock%creator-payout:%consume_creator_fee_recovery%creator_fee_recovery_pending%return public.create_creator_payout_request_before_fee_policy(p_amount_cents,p_payout_type)%'
+  and not has_function_privilege('authenticated','public.create_creator_payout_request_before_fee_policy(integer,text)','EXECUTE')
+  and not has_function_privilege('service_role','public.create_creator_payout_request_before_fee_policy(integer,text)','EXECUTE'),
   'payout reservation counts in-flight allocations and requires fresh USD provider proof under creator lock'
 );
 select ok(

@@ -1,5 +1,10 @@
 # RevenueCat non-purchase lifecycle
 
+Follow-on source: [exact pending snapshots](REVENUECAT_PENDING_SNAPSHOTS.md) adds
+the dormant provider-read worker and narrowly audited access-only restoration
+contract discussed below. Its modes remain OFF until provider qualification;
+it does not reverse financial refunds or create earnings.
+
 `PRODUCT_CHANGE` can announce a deferred replacement. All public lifecycle
 entry points and the authenticated webhook now retain its immutable ingress
 receipt without granting the target product, changing original-transaction

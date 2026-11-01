@@ -198,3 +198,12 @@ test("late reminder result is suppressed after an account change",async t=>{
   await h.resolve(d,{status:'completed',message:'Old account reminder saved'});assert.doesNotMatch(h.text(),/Old account reminder saved/);
   assert.equal(h.node('event-reminder-toggle').props.disabled,false);
 });
+
+test('auction-only event source never advertises a fixed-price purchase or launches generic checkout',async t=>{
+ let purchases=0;
+ const h=await mount(t,{access:{...locked,offer:{...offer,status:'active',provider:'stripe_event_auction'}},purchase:async()=>{purchases++;return {ok:false,access:locked};}});
+ assert.equal(h.node('event-pass-purchase-button'),undefined);
+ assert.match(h.text(),/Price set by the winning bid/);
+ assert.match(h.text(),/only the eligible winner can open checkout/);
+ assert.equal(purchases,0);
+});

@@ -1,7 +1,7 @@
 -- Owner-approved bounded-known-cost policy, November 1 2026. No creator is
 -- accepted on their behalf and no money/provider switches are activated.
 create function private.commerce_known_cost_terms() returns text language sql immutable set search_path='' as $$
- select 'After applicable return, fulfillment and other payment holds, earnings are calculated using verified fees known at that time. Later verified fees, refunds or other payment adjustments are shown in your earnings history and may be deducted only from future unpaid earnings. If future unpaid earnings are insufficient, the remaining negative balance blocks further cashout until covered. Chi''llywood will not automatically debit your bank account under this policy. No fixed reserve percentage is introduced. Existing product revenue shares and accepted cashout fees remain unchanged.'::text;
+ select 'After applicable return, fulfillment and other payment holds, earnings are calculated using verified fees known at that time. Later verified fees, refunds or other payment adjustments are shown in your earnings history and may be deducted only from unpaid earnings recorded after the adjustment. Previously recorded earnings are not automatically deducted. If those future unpaid earnings are insufficient, the remaining negative balance blocks further cashout until covered. Chi''llywood will not automatically debit your bank account under this policy. No fixed reserve percentage is introduced. Existing product revenue shares and accepted cashout fees remain unchanged.'::text;
 $$;
 revoke all on function private.commerce_known_cost_terms() from public,anon,authenticated,service_role;
 create table private.commerce_creator_fee_acceptances (

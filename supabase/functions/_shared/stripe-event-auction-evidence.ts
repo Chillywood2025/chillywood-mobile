@@ -23,7 +23,7 @@ const amount = (v: unknown): v is number => typeof v === "number"
 
 export function parseAuctionEvidence(input: unknown, platformAccount?: string): AuctionEvidence | null {
   const raw = record(input);
-  const platform = raw?.account === undefined && identity(platformAccount, "acct") && raw?.livemode === false;
+  const platform = raw?.account === undefined && identity(platformAccount, "acct") && typeof raw?.livemode === "boolean";
   const e = platform ? { ...raw, account: platformAccount } : raw, o = record(record(e?.data)?.object);
   if (!e || !o || !identity(e.id, "evt") || !identity(e.account, "acct")
     || typeof e.livemode !== "boolean" || o.livemode !== e.livemode
@@ -69,7 +69,7 @@ export function parseAuctionEvidence(input: unknown, platformAccount?: string): 
 
 export function parseAuctionNoPaymentEvidence(input: unknown, platformAccount?: string) {
   const raw = record(input);
-  const platform = raw?.account === undefined && identity(platformAccount, "acct") && raw?.livemode === false;
+  const platform = raw?.account === undefined && identity(platformAccount, "acct") && typeof raw?.livemode === "boolean";
   const e = platform ? { ...raw, account: platformAccount } : raw, o = record(record(e?.data)?.object), m = record(o?.metadata);
   if (!e || !o || !identity(e.id, "evt") || !identity(e.account, "acct")
     || typeof e.livemode !== "boolean" || o.livemode !== e.livemode

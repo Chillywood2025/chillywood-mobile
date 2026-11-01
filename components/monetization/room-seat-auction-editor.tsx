@@ -64,7 +64,7 @@ export function RoomSeatAuctionEditor({ partyId, creatorId, sourceKind }: { part
       const session = confirm ? review : await prepareCreatorRoomSeatAuction(partyId, sourceKind);
       if (!current()) return;
       if (!session) throw new Error("Review this room session before creating the auction.");
-      const input = { partyId, sourceKind, roomSessionId: session.roomSessionId, startingAmountMinor, minIncrementMinor, closesAt, paymentDeadline, environment: "test" as const };
+      const input = { partyId, sourceKind, roomSessionId: session.roomSessionId, startingAmountMinor, minIncrementMinor, closesAt, paymentDeadline, environment: session.environment };
       if (!confirm) { setReview(input); return; }
       if (!review || JSON.stringify(review) !== JSON.stringify(input)) throw new Error("Review the updated auction terms before creating it.");
       await createCreatorRoomSeatAuction(review);
@@ -92,7 +92,7 @@ export function RoomSeatAuctionEditor({ partyId, creatorId, sourceKind }: { part
     <Text style={styles.body}>Give your winner time to pay—allowing at least an hour after closing is recommended. Open checkout at least 31 minutes before the deadline: 30 minutes to pay, plus a minute to set it up. The room must remain available for the promised session.</Text>
     <Text style={styles.body}>For this checkout, choose a payment deadline more than 31 minutes and no more than 24 hours after closing.</Text>
     <Text style={styles.body}>Test-only auction; not a live payment activation.</Text>
-    {review ? <View style={styles.card}><Text style={styles.title}>Review your auction</Text><Text style={styles.body}>One reserved room-session spot · Starting bid ${(review.startingAmountMinor / 100).toFixed(2)} USD · Minimum increase ${(review.minIncrementMinor / 100).toFixed(2)} USD</Text>
+    {review ? <View style={styles.card}><Text style={styles.title}>Review your auction</Text><Text style={styles.body}>{review.environment === "live" ? "Live auction: the winner may make a real payment after independent eligibility checks." : "Test auction: no real payment or payable earnings."}</Text><Text style={styles.body}>One reserved room-session spot · Starting bid ${(review.startingAmountMinor / 100).toFixed(2)} USD · Minimum increase ${(review.minIncrementMinor / 100).toFixed(2)} USD</Text>
       <Text style={styles.body}>Closes: {new Intl.DateTimeFormat(undefined, {dateStyle:"full", timeStyle:"long", timeZone}).format(new Date(review.closesAt))} ({timeZone})</Text>
       <Text style={styles.body}>Winner pays by: {new Intl.DateTimeFormat(undefined, {dateStyle:"full", timeStyle:"long", timeZone}).format(new Date(review.paymentDeadline))} ({timeZone})</Text>
       <Text style={styles.body}>Winner must open checkout by: {new Intl.DateTimeFormat(undefined, {dateStyle:"full", timeStyle:"long", timeZone}).format(new Date(Date.parse(review.paymentDeadline) - 31 * 60_000))} ({timeZone})</Text>

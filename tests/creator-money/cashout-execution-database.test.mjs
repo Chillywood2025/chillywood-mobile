@@ -39,8 +39,10 @@ test('actual full-schema cashout reserve→fund→bank→fee→paid→returned a
   assert.equal(await scalar("select private.creator_fee_recovery_amount($1,'usd')",[creator]),25);
   assert.equal((await fee(late)).status,'paid','replay cannot create a second debt');
   assert.equal(await scalar('select count(*)::int from private.creator_cashout_fee_adjustment_checkpoints'),1);
-  const credit={...qualified,reportRunId:'frr_cashoutCredit',rows:[{...component,feeTransactionId:'fee_laterCredit',amountMinor:-25}]};
+  const credit={...qualified,reportRunId:'frr_cashoutCredit',rows:[{...component,feeTransactionId:'fee_laterCredit',amountMinor:-10}]};
   assert.equal((await fee(credit)).status,'paid');
+  assert.equal(await scalar("select private.creator_fee_recovery_amount($1,'usd')",[creator]),15);
+  assert.equal((await fee({...credit,reportRunId:'frr_cashoutCreditSecond',rows:[{...credit.rows[0],feeTransactionId:'fee_laterCreditSecond',amountMinor:-15}]})).status,'paid','multiple distinct credits on one payout are independently preserved');
   assert.equal(await scalar('select sum(amount_minor)::int from private.commerce_creator_fee_offsets'),25,'credit pays outstanding debt without a bank debit');
   assert.equal(await scalar('select sum(amount_minor)::int from private.creator_fee_credit_sources'),25);
   assert.equal(await scalar('select sum(delta_minor)::int from private.creator_cashout_fee_adjustment_checkpoints'),0);
@@ -87,11 +89,34 @@ test('actual full-schema cashout reserve→fund→bank→fee→paid→returned a
   await thirdObserve({...payout,objectId:'po_thirdBank',status:'failed',failureBalanceTransactionId:'txn_thirdReturn',returnTransactionId:'txn_thirdReturn',returnedMinor:9800});
   const thirdReversal=await thirdClaim('reversal');
   await thirdObserve({kind:'reversal',objectId:'trr_thirdReturn',transferId:'tr_thirdFunding',amountMinor:9800,accountId:c.accountId,environment:'live'},thirdReversal.token);
-  assert.equal(await scalar('select public.creator_earnings_withdrawable_cents_internal($1,now())',[earning]),9970,'return does not double-charge the fee already issued as debt');
+  assert.equal(await scalar('select public.creator_earnings_withdrawable_cents_internal($1,now())',[earning]),10000,'returned earlier earnings are not retroactively offset');
+  assert.equal(await scalar("select private.creator_fee_recovery_amount($1,'usd')",[creator]),30,'only earnings recorded after the adjustment may cover debt');
   const thirdCredit={...thirdReport,reportRunId:'frr_thirdCredit',rows:[{...thirdReport.rows[0],feeTransactionId:'fee_thirdRefund',amountMinor:-30}]};
   assert.equal((await rpc('select public.record_creator_cashout_fee_report($1,$2)',[third.requestId,JSON.stringify(thirdCredit)])).status,'returned');
   assert.equal(await scalar("select private.creator_fee_recovery_amount($1,'usd')",[creator]),0);
-  assert.equal(await scalar("select sum(public.creator_earnings_withdrawable_cents_internal(earnings_ledger_id,now()))::int from private.creator_fee_credit_sources where source_id=$1",[third.requestId]),30,'fee refund remains withdrawable after prior debt was consumed');
+  assert.equal(await scalar("select sum(public.creator_earnings_withdrawable_cents_internal(earnings_ledger_id,now()))::int from private.creator_fee_credit_sources where source_id=$1",[third.requestId]),0,'new fee credit covers remaining debt; earlier returned earnings remain intact');
+  await db.query(`insert into private.creator_cashout_provider_qualifications
+   select (jsonb_populate_record(null::private.creator_cashout_provider_qualifications,to_jsonb(q)||jsonb_build_object(
+    'id',gen_random_uuid(),'verified_at',clock_timestamp(),'expires_at',clock_timestamp()+interval '1 day','payout_inline_zero_attribution_verified',true))).*
+   from private.creator_cashout_provider_qualifications q where q.id=$1`,[qualification]);
+  await claims('authenticated');await db.exec('set role authenticated');
+  const zeroQuote=await scalar("select public.preview_qualified_creator_cashout(10000,'instant')");
+  const zero=await scalar(requestSql,[zeroQuote.qualificationId,zeroQuote.operationId]);await db.exec('reset role');
+  assert.equal((await rpc('select public.get_creator_cashout_execution_context($1)',[zero.requestId])).inlineKnownZeroQualified,true);
+  const zeroClaim=stage=>rpc('select public.claim_creator_cashout_dispatch($1,$2)',[zero.requestId,stage]);
+  const zeroObserve=(facts,token=null)=>rpc('select public.record_creator_cashout_observation($1,$2,$3)',[zero.requestId,token,JSON.stringify(facts)]);
+  const zeroFunding=await zeroClaim('funding');await zeroObserve({...transfer,objectId:'tr_zeroFunding'},zeroFunding.token);
+  const zeroPayout=await zeroClaim('payout');await zeroObserve({...payout,objectId:'po_zeroBank',balanceTransactionId:'txn_zeroBank'},zeroPayout.token);
+  const empty={...report,payoutId:'po_zeroBank',reportRunId:'frr_zeroEmpty'};
+  const zeroFees=payload=>rpc('select public.record_creator_cashout_fee_report($1,$2)',[zero.requestId,JSON.stringify(payload)]);
+  assert.equal((await zeroFees(empty)).accountingComplete,false,'qualified empty report alone still cannot establish zero');
+  const inline={transactionId:'txn_zeroBank',payoutId:'po_zeroBank',accountId:c.accountId,environment:'live',currency:'usd',amountMinor:-9800,netMinor:-9800,feeMinor:0,status:'available',type:'payout'};
+  await assert.rejects(zeroObserve({...payout,objectId:'po_zeroBank',balanceTransactionId:'txn_zeroBank',inlineZeroBalance:{...inline,netMinor:-9801}}),/cashout_inline_zero_binding_invalid/);
+  await zeroObserve({...payout,objectId:'po_zeroBank',balanceTransactionId:'txn_zeroBank',inlineZeroBalance:inline});
+  const knownZero=await zeroFees(empty);assert.equal(knownZero.accountingComplete,true);assert.equal(knownZero.costBasis,'known_inline_zero');assert.equal(knownZero.costsMayChange,true);
+  const zeroLater=await zeroFees({...empty,reportRunId:'frr_zeroLaterFee',rows:[{...component,incurredBy:'po_zeroBank',feeTransactionId:'fee_zeroLater',amountMinor:12}]});
+  assert.equal(zeroLater.status,'paid');assert.equal(zeroLater.costBasis,'known_report_components');
+  assert.equal(await scalar("select private.creator_fee_recovery_amount($1,'usd')",[creator]),12,'later platform charge remains future-only debt, never a retroactive bank debit');
   for(const role of ['anon','authenticated']){
    await db.exec(`set role ${role}`);await assert.rejects(db.query('select public.get_creator_cashout_execution_context($1)',[request.id]),/permission denied/);await db.exec('reset role');
   }

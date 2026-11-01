@@ -164,6 +164,8 @@ jobs:
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/create-creator-tip-checkout/index.ts supabase/functions/stripe-tip-webhook/index.ts supabase/functions/stripe-event-auction-checkout/index.ts supabase/functions/stripe-event-auction-webhook/index.ts supabase/functions/stripe-room-auction-checkout/index.ts supabase/functions/stripe-room-auction-webhook/index.ts supabase/functions/google-play-external-reporter/index.ts supabase/functions/stripe-merch-checkout/index.ts supabase/functions/stripe-merch-webhook/index.ts supabase/functions/stripe-merch-cost-reconcile/index.ts supabase/functions/merch-tracking-webhook/index.ts supabase/functions/merch-tracking-reconcile/index.ts supabase/functions/creator-event-broadcast/index.ts supabase/functions/stripe-auction-cost-reconcile/index.ts supabase/functions/stripe-auction-test-transfer/index.ts supabase/functions/merch-reconciliation-driver/index.ts supabase/functions/auction-observation-driver/index.ts supabase/functions/auction-approved-automation/index.ts supabase/functions/stripe-fee-report-import/index.ts
       - name: Run exact role and explicit permission checks
         run: deno test --node-modules-dir=none --no-lock supabase/functions/_shared/exact-subject-authority_test.ts supabase/functions/_shared/platform-role-authority_test.ts
+      - name: Typecheck cashout and pending provider reconciliation entry points
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/creator-cashout-driver/index.ts supabase/functions/creator-cashout-worker/index.ts supabase/functions/creator-cashout-webhook/index.ts supabase/functions/creator-cashout-fee-import/index.ts supabase/functions/revenuecat-pending-reconcile/index.ts supabase/functions/stripe-connect-live-observation-webhook/index.ts
 
   database:
     name: Validation / Database
@@ -204,6 +206,7 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-return-cases-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-cashout-execution-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-commerce-fee-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-clip-export-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-chat-call-retry-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs
           node scripts/test-content-inspection-postgres.mjs

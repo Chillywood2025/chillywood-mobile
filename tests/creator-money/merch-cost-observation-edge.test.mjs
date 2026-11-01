@@ -99,6 +99,7 @@ test('actual worker and both real observers share64 GET ceiling; oversized refun
   }
   const runtime={exports:{},Deno:{serve:fn=>handler=fn},require:name=>{
    if(name.startsWith('jsr:'))return{};
+   if(name.endsWith('commerce-fee-accounting-drain.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/commerce-fee-accounting-drain.ts');
    if(name.endsWith('merch-observation-budget.ts'))return{createMerchObservationBudget:()=>loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts').createMerchObservationBudget(f.transport)};
    if(name.endsWith('stripe-merch-cost-observation.ts'))return{observeStripeMerchCosts:observe};
    if(name.endsWith('merch-dispute-observation.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-dispute-observation.ts');
@@ -110,6 +111,7 @@ test('actual worker and both real observers share64 GET ceiling; oversized refun
      if(name==='begin_merch_dispute_observation')return{data:{id:order.id,order_id:order.id,payment_intent_id:'pi_merch',charge_id:null,amount_minor:1000,currency:'usd'}};
      if(name==='complete_merch_dispute_observation'){assert.equal(args.p_facts.complete,true);return{data:{disputeState:'none'}};}
      if(name==='record_merch_provider_cost_observation'){assert.equal(args.p_facts.financial_authority,false);return{data:{status:'held',observationId:order.id}};}
+     if(name==='process_commerce_fee_accounting_jobs')return{data:{outcomes:[]}};
      throw Error(name);
     }}}),
    };throw Error(name);

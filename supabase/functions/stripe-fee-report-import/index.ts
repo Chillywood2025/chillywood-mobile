@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { drainCommerceFeeAccounting } from "../_shared/commerce-fee-accounting-drain.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv } from "../_shared/stripe-connect.ts";
 import { observeStripeFeeReport, type FeeReportContext } from "../_shared/stripe-fee-report-evidence.ts";
 
@@ -54,7 +55,8 @@ Deno.serve(async (req: Request) => {
       ...(merch ? { p_order_id: body.order_id } : { p_contract_id: body.contract_id }), p_source_observation_id: bound.sourceObservationId, p_evidence: evidence,
     });
     if (recorded.error || !recorded.data) throw Error("record_failed");
-    return jsonResponse(200, { ...recorded.data, financialAuthority: false, settlementReady: false });
+    const accounting = await drainCommerceFeeAccounting(admin.client, body.order_id ?? body.contract_id);
+    return jsonResponse(200, { ...recorded.data, accounting, financialAuthority: false, settlementReady: false });
   } catch {
     return jsonResponse(409, { error: "fee_report_import_incomplete", financialAuthority: false, settlementReady: false });
   }

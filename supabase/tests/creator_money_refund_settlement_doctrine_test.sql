@@ -92,8 +92,13 @@ select is(public.creator_earnings_withdrawable_cents_internal(
   'ordinary earnings are unavailable before normal hold expiry'
 );
 select ok(
-  pg_get_functiondef('public.create_creator_payout_request_safe(integer,text)'::regprocedure)
-    like '%creator_earnings_withdrawable_cents_internal%(earnings."id",v_now)%',
+  pg_get_functiondef('public.create_creator_payout_request_before_fee_policy(integer,text)'::regprocedure)
+    like '%creator_earnings_withdrawable_cents_internal%(earnings."id",v_now)%'
+  and pg_get_functiondef('public.create_creator_payout_request_safe(integer,text)'::regprocedure)
+    like '%creator_fee_policy_acceptance_required%consume_creator_fee_recovery%creator_fee_recovery_pending%return public.create_creator_payout_request_before_fee_policy(p_amount_cents,p_payout_type)%'
+  and pg_get_functiondef('public.creator_earnings_withdrawable_cents_internal(uuid,timestamptz)'::regprocedure)
+    like '%creator_earnings_withdrawable_before_fee_offsets(p_earnings_ledger_id,p_at)%creator_earning_fee_offset%'
+  and not has_function_privilege('authenticated','public.create_creator_payout_request_before_fee_policy(integer,text)','EXECUTE'),
   'payout request sizing and allocation consume the reserve-aware server amount'
 );
 

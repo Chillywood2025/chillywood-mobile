@@ -78,6 +78,6 @@ export function CreatorCashoutPanel() {
     </View>:null}
     {current?.notice?<Text accessibilityLiveRegion="polite" style={text}>{current.notice}</Text>:null}
     <Pressable accessibilityRole="button" disabled={busy} onPress={()=>void run("history")}><Text style={{...title,paddingVertical:10}}>{busy?"Checking…":"Refresh cashout history"}</Text></Pressable>
-    {current?.rows.map(row=><View key={row.requestId} style={{gap:4}}><Text style={title}>{CREATOR_CASHOUT_STATUS[row.status]??"Cashout status needs review"}</Text><Text style={text}>Requested {money(row.grossMinor)} · Bank {money(row.bankMinor)} · Actual provider cost {money(row.observedProviderFeeMinor)}</Text>{row.canCancel?<Pressable accessibilityRole="button" disabled={busy} onPress={()=>void run("cancel",row)}><Text style={{...title,paddingVertical:10}}>Cancel before funds are sent</Text></Pressable>:null}</View>)}
+    {current?.rows.map(row=><View key={row.requestId} style={{gap:4}}><Text style={title}>{CREATOR_CASHOUT_STATUS[row.status]??"Cashout status needs review"}</Text><Text style={text}>Requested {money(row.grossMinor)} · Bank {money(row.bankMinor)} · Verified known provider cost {money(row.observedProviderFeeMinor)}. Later verified adjustments may still arrive.</Text>{row.canCancel?<Pressable accessibilityRole="button" disabled={busy} onPress={()=>void run("cancel",row)}><Text style={{...title,paddingVertical:10}}>Cancel before funds are sent</Text></Pressable>:null}</View>)}
   </View>;
 }

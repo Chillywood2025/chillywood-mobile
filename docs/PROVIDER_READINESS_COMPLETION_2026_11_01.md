@@ -64,9 +64,43 @@ Primary sources:
    path, filing responsibility/calendar and evidence-bound runtime gates. No
    registration or live qualification was completed by this source change.
 
-**Current blocker:** the accessible Stripe connector returned two accounts,
-both `livemode=false`; another connection requires reauthentication. Live Tax
-enrollment, settings, registrations and payout configuration are not verified.
+**Updated live read-only audit, November 1, 2026, 15:12–15:18 UTC:** the owner
+authorized the live Chi'llywood account and it is now accessible. Tax Settings
+is `active`, with Chicago, Illinois, U.S. head office and default
+`tax_behavior=inferred_by_currency`. The default `txcd_10000000` is General –
+Electronically Supplied Services, **not a physical-merchandise classification**.
+The API did not establish the Tax Basic billing plan. All-status tax registrations
+returned an empty, complete list. Threshold monitoring returned empty locations
+and `computed_at=null`: no computation timestamp or freshness information was
+returned, and this is not a legal no-registration determination.
+
+The live standard platform account reports charges/payouts enabled and card
+payments/transfers active. Currently-due/past-due fields and errors are empty;
+business-model support remains under `pending_verification`. Platform payouts
+are daily with a two-day delay; this is **not** a creator payout policy. The
+complete connected-account list is empty. Both v1 webhook endpoints and v2 event
+destinations returned empty complete lists. Live Checkout Sessions and balance
+transactions also returned empty complete lists. No actual live checkout,
+refund, fee, payout-destination or delivery sample was available to qualify.
+
+The connector exposed no Tax Association or report-run operation through its
+documented API search. Authenticated analytics schema discovery exposes
+`itemized_fees`; its `amount` and `tax` columns explicitly use **major currency
+units**, notwithstanding generic analytics-tool minor-unit guidance. An attempted
+read-only query was rejected because this account has **no Sigma subscription**;
+no query run or subscription was created. Do not buy Sigma merely to finish this
+audit: prefer the existing Fees Report export/API when available. No zero fee,
+tax completeness or external-auction store-fee exemption is inferred from the
+empty live balance history.
+
+No provider setting, credential, registration, agreement or money operation was
+changed. Remaining prerequisites are exact legal/product classification and
+required registration, confirmation of intended pay-as-you-go plan, correctly
+scoped live event delivery and safely installed signing secret, connected creator
+onboarding/fee-payer/manual-payout qualification, and actual provider evidence.
+Pending verification should be followed in Stripe, not replaced by submitting
+identity documents through chat. Results only use information available to
+Stripe. Always review with a qualified tax professional before taking action.
 
 ## 8. Google Play → RevenueCat → Chi'llywood
 

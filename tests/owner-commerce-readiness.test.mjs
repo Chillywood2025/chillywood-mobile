@@ -24,27 +24,29 @@ test('mounted owner panel gates roles and exact sessions, clears failures/back/r
  const host=name=>function Host(p){const key=React.useId();nodes.set(key,{name,p});React.useLayoutEffect(()=>()=>nodes.delete(key),[key]);return React.createElement(React.Fragment,null,...React.Children.toArray(p.children).filter(x=>typeof x==='object'));};
  const native={Text:host('Text'),View:host('View'),Pressable:host('Pressable')},visuals=createSharedVisualLoader(React,native,host);
  const helper=compile('_lib/ownerCommerceReadiness.ts',()=>({runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{calls.push({name,args});if(fail)throw Error('private failure');return {data:pending?await pending:payload(),error:null};}}));
+ const feeHelper=compile('_lib/ownerFeeAccountingHealth.ts',()=>({runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{calls.push({name,args});if(fail)throw Error('private failure');return {data:pending?await pending:{pendingCount:1,retryCount:0,blockedCount:0,newScheduleCreated:false,jobs:[]},error:null};}}));
+ const feePanel=compile('components/admin/owner-fee-accounting-health.tsx',name=>visuals(name)??(name==='react'?React:name==='react-native'?native:feeHelper));
  const authority={getCurrentAccountSessionAuthoritySnapshot:()=>session,subscribeToAccountSessionAuthority:f=>{listeners.add(f);return()=>listeners.delete(f);}};
- const mod=compile('components/admin/owner-commerce-readiness.tsx',name=>visuals(name)??(name==='react'?React:name==='react-native'?native:name==='@react-navigation/native'?{useIsFocused:()=>focused}:name.endsWith('/accountSessionAuthority')?authority:helper));
+ const mod=compile('components/admin/owner-commerce-readiness.tsx',name=>visuals(name)??(name==='react'?React:name==='react-native'?native:name==='@react-navigation/native'?{useIsFocused:()=>focused}:name.endsWith('/accountSessionAuthority')?authority:name.endsWith('/owner-fee-accounting-health')?feePanel:helper));
  const root=createRoot(container());let props={isOwner:false,ownerSessionKey:JSON.stringify(session)};
  const render=()=>React.act(async()=>root.render(React.createElement(mod.OwnerCommerceReadinessPanel,props)));
  const text=x=>Array.isArray(x)?x.map(text).join(' '):x&&typeof x==='object'?text(x.props?.children):x??'';
  const visible=()=>[...nodes.values()].filter(x=>x.name==='Text').map(x=>text(x.p.children)).join(' ');
- const refresh=()=>React.act(async()=>{const button=[...nodes.values()].find(x=>x.name==='Pressable');assert.ok(button);assert.notEqual(button.p.disabled,true);button.p.onPress();});
+ const refresh=()=>React.act(async()=>{const button=[...nodes.values()].find(x=>x.name==='Pressable'&&x.p.accessibilityLabel==='Refresh commerce setup status');assert.ok(button);assert.notEqual(button.p.disabled,true);button.p.onPress();});
  try {
   await render();assert.equal(calls.length,0);assert.equal(visible(),''); // public/creator/non-owner
   props.isOwner=true;await render();assert.match(visible(),/Creator merchandise/);assert.match(visible(),/not launch approval or payout authorization/);assert.match(visible(),/not verified by this check/);
   const card=[...nodes.values()].find(x=>x.p.testID==='owner-commerce-readiness');assert.equal(card.p.style.backgroundColor,visuals('chillywood-visual-system').CHILLYWOOD_VISUAL.glassBackground);
-  assert.equal([...nodes.values()].filter(x=>x.name==='Pressable').length,1);
+  assert.equal([...nodes.values()].filter(x=>x.name==='Pressable').length,2);assert.match(visible(),/1\s+pending/);
   fail=true;await refresh();assert.match(visible(),/unavailable/);assert.doesNotMatch(visible(),/Creator merchandise|private failure/);
   fail=false;let resolve;pending=new Promise(r=>resolve=r);await refresh();assert.match(visible(),/Checking/);
   await React.act(async()=>{session={...session,userId:'B',accountId:'B',sessionGeneration:'2'};listeners.forEach(f=>f());});assert.equal(visible(),'');
   await React.act(async()=>resolve(payload()));assert.equal(visible(),''); // old owner result cannot follow account
   pending=null;props={isOwner:true,ownerSessionKey:JSON.stringify(session)};await render();assert.match(visible(),/Creator merchandise/);
-  focused=false;await render();assert.equal(visible(),'');const before=calls.length;focused=true;await render();assert.equal(calls.length,before+1);
+  focused=false;await render();assert.equal(visible(),'');const before=calls.length;focused=true;await render();assert.equal(calls.length,before+2);
   props.isOwner=false;await render();assert.equal(visible(),'');
   props.isOwner=true;await React.act(async()=>{session={...session,restoreOnly:true};listeners.forEach(f=>f());});props.ownerSessionKey=JSON.stringify(session);await render();assert.equal(visible(),'');
-  assert.ok(calls.every(x=>x.name==='get_owner_commerce_tax_readiness'));
+  assert.ok(calls.every(x=>['get_owner_commerce_tax_readiness','get_owner_commerce_fee_accounting_health'].includes(x.name)));
  } finally {await React.act(async()=>root.unmount());}
  const admin=fs.readFileSync('app/admin.tsx','utf8');assert.match(admin,/isOwnerStaff && adminReadAuthorityKey \? <OwnerCommerceReadinessPanel/);assert.match(admin,/ownerSessionKey=\{JSON.stringify\(authority\)\}/);
 });

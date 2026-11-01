@@ -1,7 +1,7 @@
 // Read-only provider policy: never infer liability or registration from a buyer,
 // a zero tax amount, a platform label, or a Stripe charge pattern.
 type TaxInput = { feature: "physical_merch" | "event_auction" | "room_auction";
-  identityId: string; productId: string; accountId: string; environment: "sandbox" | "test";
+  identityId: string; productId: string; accountId: string; environment: "sandbox" | "production" | "test" | "live";
   permittedScope: "US_all_destinations" | "worldwide" };
 type Rpc = { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> };
 export type CommerceTaxReadiness = { ready: false; reason: string } | {
@@ -13,6 +13,8 @@ const reasons = new Set(["tax_qualification_required", "tax_qualification_expire
   "tax_scope_coverage_required", "provider_tax_settings_unverified", "tax_policy_changed", "tax_checkout_identity_invalid", "tax_pricing_behavior_unsupported"]);
 export async function readCommerceTaxReadiness(client: Rpc, input: TaxInput): Promise<CommerceTaxReadiness> {
   const blocked = { ready: false as const, reason: "tax_qualification_required" };
+  if (!(input.feature === "physical_merch" ? ["sandbox", "production"] : ["test", "live"]).includes(input.environment))
+    return { ready: false, reason: "tax_checkout_identity_invalid" };
   const result = await client.rpc("bind_commerce_tax_checkout_policy", {
     p_feature: input.feature, p_identity_id: input.identityId, p_product_id: input.productId,
     p_account_id: input.accountId, p_environment: input.environment, p_permitted_scope: input.permittedScope,

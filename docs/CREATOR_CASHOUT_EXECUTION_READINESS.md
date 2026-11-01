@@ -40,6 +40,15 @@ account/card. Provider costs in this preview are quotes, never actual charges.
   account coverage establish actual cost. Empty reports do not prove
   zero cost. Duplicate components cannot double-charge; changed components
   conflict. Unqualified/negative/overflow costs require review.
+  For a qualified zero-cost quote, the dormant inline-known-zero path requires
+  additional independent platform-payer/attribution qualification, an exact
+  authenticated connected-account payout balance transaction (zero fee,
+  available, amount/net equal negative bank principal), an authenticated report
+  observation and accepted adjustment terms. Neither empty reports nor the
+  quoted zero alone suffice. This records **known inline zero, not final total
+  zero**; a later standalone platform fee becomes future-only debt. Nonzero
+  quoted costs retain the report-component evidence path rather than receiving
+  a premature credit from a zero connected-account inline fee.
 * Failed/canceled payouts require the exact available positive bank-return
   balance transaction before reversing the funding transfer. Only confirmed
   return of that transfer plus actual fee accounting releases reservations.
@@ -48,7 +57,8 @@ account/card. Provider costs in this preview are quotes, never actual charges.
   quarantines or a reversed source earning.
 * The companion known-cost policy migration preserves the confirmed bank
   amount and accepted app fee when verified provider costs differ. Positive
-  deltas become immutable debt against future unpaid earnings only; verified
+  deltas become immutable debt against unpaid earnings recorded after the
+  adjustment only; previously recorded earnings are not retroactively offset. Verified
   credits create source-bound earnings, offset remaining debt, and leave any
   excess withdrawable. No bank debit is authorized. Cumulative component hashes
   make retries idempotent. Bank-return release subtracts already-accounted

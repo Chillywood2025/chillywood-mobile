@@ -12,7 +12,7 @@ if(process.argv.includes('--help')){console.log('After local Supabase reset, tes
 assert.equal(process.argv.length,2,'no arbitrary target arguments');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/mu)?.[1];assert.ok(project);
 const container=process.env.SUPABASE_DB_CONTAINER??`supabase_db_${project}`;assert.match(container,/^supabase_db_[A-Za-z0-9_.-]{1,200}$/u);
-const database=`cashout_execution_${randomUUID().replaceAll('-','')}`,restore=createBrandGuardCloneRestorer({container});
+const database=`runtime_authority_${process.pid}_${randomUUID().replaceAll('-','').slice(0,12)}_cashout_execution`,restore=createBrandGuardCloneRestorer({container});
 const lit=x=>x===null?'null':`'${String(x).replaceAll("'","''")}'`;
 const args=(db=database,user='postgres')=>['exec','-i',container,'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U',user,'-d',db];
 const docker=(a,input,encoding='utf8')=>spawnSync('docker',a,{encoding,input,maxBuffer:256*1024*1024,timeout:120000});

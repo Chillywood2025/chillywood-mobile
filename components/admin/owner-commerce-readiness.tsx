@@ -4,6 +4,7 @@ import { Pressable, Text, View } from "react-native";
 import { getCurrentAccountSessionAuthoritySnapshot, subscribeToAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { COMMERCE_READINESS_FEATURES, COMMERCE_READINESS_REASONS, readOwnerCommerceReadiness, type OwnerCommerceReadinessItem } from "../../_lib/ownerCommerceReadiness";
 import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
+import { OwnerFeeAccountingHealthPanel } from "./owner-fee-accounting-health";
 
 const snapshotKey = () => {
   const session = getCurrentAccountSessionAuthoritySnapshot();
@@ -49,6 +50,7 @@ export function OwnerCommerceReadinessPanel({ isOwner, ownerSessionKey }: { isOw
     </View>)}
     <Text style={body}>Registration evidence, sandbox verification, and app-store tax handling: not verified by this check. Provider configuration is not confirmed unless separately verified. Unknown does not mean no tax is due.</Text>
     <Text style={body}>Next: establish tax responsibility by sales type and location, then verify any required registration and provider setup. This panel cannot register, file, purchase a tax service, or turn on payments.</Text>
+    <OwnerFeeAccountingHealthPanel sessionKey={sessionKey} />
     <Pressable accessibilityRole="button" accessibilityLabel="Refresh commerce setup status" disabled={current?.busy === true} onPress={() => void load()} style={{ paddingVertical: 10 }}>
       <Text style={{ color: CHILLYWOOD_VISUAL.textPrimary }}>{current?.busy ? "Checking…" : "Refresh setup status"}</Text>
     </Pressable>

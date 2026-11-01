@@ -146,10 +146,10 @@ const readProduct = async (adminClient: SupabaseClientLike, payload: MerchChecko
   return result.data as MerchProductRow;
 };
 
-const assertPhysicalSandboxMerchProduct = (product: MerchProductRow) => {
+const assertPhysicalMerchProduct = (product: MerchProductRow) => {
   if (product.provider !== "stripe_physical_goods") throw new Error("Only Stripe physical merch products can use this checkout.");
-  if (product.environment !== "sandbox") throw new Error("Stripe merch checkout is sandbox-only in this lane.");
-  if (product.status !== "sandbox") throw new Error("Only sandbox merch products can use this checkout.");
+  if (!["sandbox", "production"].includes(product.environment ?? "")) throw new Error("Merch provider mode is invalid.");
+  if (product.status !== (product.environment === "production" ? "active" : "sandbox")) throw new Error("This merchandise product is not active in its provider mode.");
   if (product.is_physical_good !== true) throw new Error("Merch checkout requires a physical good.");
   if (product.creates_digital_access === true) throw new Error("Merch checkout cannot create digital access.");
   if (!Number.isInteger(product.price_minor) || (product.price_minor ?? 0) <= 0) throw new Error("Merch product price is missing.");
@@ -171,6 +171,7 @@ Deno.serve(async (req) => {
   let currentUser: AuthenticatedUser | null = null;
   let checkoutActor: { p_buyer_id: string; p_session_id: string; p_attempt_id: string; p_request: Record<string, unknown> } | null = null;
   let dispatched = false;
+  let checkoutEnvironment: "sandbox" | "production" | null = null;
   // All exits after reservation, including malformed responses and exceptions,
   // use the same durable compensation gate. Cleanup failure remains unknown.
   const failureResponse = async (status: number, body: Record<string, unknown>) => {
@@ -206,19 +207,6 @@ Deno.serve(async (req) => {
     }
     adminClient = adminConfig.client;
 
-    const [isOperator, isSandboxTester] = await Promise.all([
-      userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]),
-      userHasActiveSandboxTesterAccess(adminClient, currentUser),
-    ]);
-    if (!isOperator && !isSandboxTester) {
-      return jsonResponse(403, {
-        error: "sandbox_tester_required",
-        message: "Sandbox physical merch checkout is limited to exact owner/operator subjects or active exact-subject beta testers.",
-        liveMoneyAction: false,
-        checkoutCreated: false,
-      });
-    }
-
     const parsed = await parseJsonPayload<MerchCheckoutPayload>(req);
     if ("error" in parsed) return parsed.error;
     const quantity = normalizeQuantity(parsed.value.quantity);
@@ -227,9 +215,28 @@ Deno.serve(async (req) => {
     }
 
     const product = await readProduct(adminClient, parsed.value);
-    assertPhysicalSandboxMerchProduct(product);
+    assertPhysicalMerchProduct(product);
 
-    const stripeSecret = readStripeTestSecret();
+    const [isOperator, isSandboxTester] = await Promise.all([
+      userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]),
+      userHasActiveSandboxTesterAccess(adminClient, currentUser),
+    ]);
+    if (product.environment === "sandbox" && !isOperator && !isSandboxTester) {
+      return jsonResponse(403, {
+        error: "sandbox_tester_required",
+        message: "Sandbox physical merch checkout is limited to exact owner/operator subjects or active exact-subject beta testers.",
+        liveMoneyAction: false,
+        checkoutCreated: false,
+      });
+    }
+
+    const environment = product.environment as "sandbox" | "production";
+    checkoutEnvironment = environment;
+    const liveSecret = environment === "production" ? readOptionalEnv("STRIPE_MERCH_LIVE_CHECKOUT_KEY") : null;
+    const stripeSecret = environment === "sandbox" ? readStripeTestSecret()
+      : liveSecret && /^(sk|rk)_live_[A-Za-z0-9]+$/.test(liveSecret)
+        ? { configured: true as const, secret: liveSecret }
+        : { configured: false as const, reason: "merch_live_key_unconfigured", message: "Live merchandise checkout is not configured." };
     if (!stripeSecret.configured) {
       return jsonResponse(
         200,
@@ -263,7 +270,7 @@ Deno.serve(async (req) => {
     const authority = authorityResponse.ok
       ? parseExactCurrentSessionAuthority(await authorityResponse.json().catch(() => null), currentUser.id) : null;
     if (!authority) return jsonResponse(401, { error: "invalid_session", checkoutCreated: false });
-    const taxAccount = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
+    const taxAccount = readOptionalEnv(environment === "production" ? "STRIPE_MERCH_LIVE_ACCOUNT_ID" : "STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
     if (!taxAccount || !/^acct_[A-Za-z0-9]+$/.test(taxAccount)) return jsonResponse(409, {
       error: "provider_tax_settings_unverified", checkoutCreated: false,
       message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available.",
@@ -281,7 +288,7 @@ Deno.serve(async (req) => {
       p_expected_currency: typeof parsed.value.expected_currency === "string" ? parsed.value.expected_currency : null,
     });
     const reservation = reservationResult.data as {
-      id?: string; title?: string; priceMinor?: number; currency?: string; createdAt?: string;
+      id?: string; environment?: string; title?: string; priceMinor?: number; currency?: string; createdAt?: string;
       netSharePolicyVersion?: string | null; platformNetShareBps?: number | null; creatorNetShareBps?: number | null;
       shippingTrackingMode?: "tracked" | "untracked" | null; returnPolicyVersion?: string | null; returnWindowDays?: number | null;
       variantId?: string | null; sku?: string | null; size?: string | null; color?: string | null;
@@ -293,12 +300,12 @@ Deno.serve(async (req) => {
         merch_tracking_declaration_changed: "The shipping and return terms changed. Refresh the shop and review them before checkout.",
         merch_displayed_price_changed: "The price changed. Refresh the shop and review the current price before checkout.",
         merch_existing_pending_order_check_orders: "You already have a pending order for this product. Resume it from My orders instead of starting another.",
-        merch_pending_order_limit_check_orders: "You have three unresolved sandbox orders. Check My orders before starting another.",
+        merch_pending_order_limit_check_orders: "You have three unresolved orders. Check My orders before starting another.",
         merch_attempt_closed_check_orders: "This checkout window has ended. Check My orders for provider confirmation; do not start a replacement payment.",
         merch_sold_out: "There is not enough available stock. Refresh the shop or choose a smaller quantity.",
         merch_variant_unavailable: "Choose an available size/color option. Refresh the shop if the option has changed.",
         merch_variant_not_expected: "This product no longer uses that option. Refresh the shop before checkout.",
-        merch_creator_not_ready: "This creator is not ready to accept sandbox orders. Your existing order status remains available.",
+        merch_creator_not_ready: "This creator is not ready to accept orders. Your existing order status remains available.",
         merch_platform_unavailable: "This Platform is not available to your account. Your existing order status remains available.",
       };
       const reason = Object.keys(safeReasons).find(key => reservationResult.error?.message?.includes(key));
@@ -312,8 +319,16 @@ Deno.serve(async (req) => {
       return await failureResponse(409, { error: "merch_net_share_terms_invalid", checkoutCreated: false });
     }
     const orderId = reservation.id;
+    if (environment === "production") {
+      if (reservation.environment !== environment) throw new Error("merch_order_mode_mismatch");
+      const binding = await adminClient.rpc("bind_merch_checkout_provider", {
+        p_order_id: orderId, p_environment: environment, p_account_id: taxAccount,
+      });
+      if (binding.error || binding.data?.bound !== true || binding.data.orderId !== orderId
+        || binding.data.environment !== environment || binding.data.accountId !== taxAccount) throw new Error("merch_provider_binding_unconfirmed");
+    }
     const taxPolicy = await readCommerceTaxReadiness(adminClient, { feature: "physical_merch", identityId: orderId,
-      productId: product.id, accountId: taxAccount, environment: "sandbox", permittedScope: "US_all_destinations" });
+      productId: product.id, accountId: taxAccount, environment, permittedScope: "US_all_destinations" });
     if (!taxPolicy.ready) return await failureResponse(409, { error: taxPolicy.reason, checkoutCreated: false,
       message: "Checkout isn't available yet. Tax setup needs verification; your existing orders remain available." });
     const accountResponse = await fetch(`${STRIPE_API_BASE_URL}/account`, { method: "GET", redirect: "error",
@@ -325,7 +340,7 @@ Deno.serve(async (req) => {
     // Only immutable reservation snapshots contribute to provider parameters.
     // Renaming an option after checkout cannot alter an idempotent retry.
     const optionName = [reservation.size, reservation.color].filter(Boolean).join(" / ");
-    const productName = `${reservation.title || "Chi'llywood sandbox merch"}${optionName ? ` — ${optionName}` : ""}`;
+    const productName = `${reservation.title || "Chi'llywood merch"}${optionName ? ` — ${optionName}` : ""}`;
     // These fixed return destinations are not proof of payment; My orders reads
     // the signed-webhook projection. Caller redirects cannot alter retry params.
     const successUrl = `${DEFAULT_SUCCESS_URL}?orderId=${encodeURIComponent(orderId)}`;
@@ -348,7 +363,7 @@ Deno.serve(async (req) => {
         "line_items[0][price_data][product_data][metadata][chillywood_merch_variant_id]": reservation.variantId ?? undefined,
         "line_items[0][price_data][product_data][metadata][sku]": reservation.sku ?? undefined,
         "line_items[0][price_data][product_data][metadata][creates_digital_access]": "false",
-        "line_items[0][price_data][product_data][metadata][environment]": "sandbox",
+        "line_items[0][price_data][product_data][metadata][environment]": environment,
         "line_items[0][price_data][product_data][metadata][rail]": "physical_merch",
         "line_items[0][price_data][product_data][name]": productName,
         "line_items[0][price_data][unit_amount]": reservation.priceMinor,
@@ -357,7 +372,7 @@ Deno.serve(async (req) => {
         "metadata[chillywood_order_id]": orderId,
         "metadata[chillywood_product_id]": product.id,
         "metadata[creates_digital_access]": "false",
-        "metadata[environment]": "sandbox",
+        "metadata[environment]": environment,
         "metadata[not_payable]": "true",
         ...(reservation.shippingTrackingMode ? {
           "metadata[shipping_tracking_mode]": reservation.shippingTrackingMode,
@@ -375,7 +390,7 @@ Deno.serve(async (req) => {
         mode: "payment",
         "payment_intent_data[metadata][chillywood_order_id]": orderId,
         "payment_intent_data[metadata][creates_digital_access]": "false",
-        "payment_intent_data[metadata][environment]": "sandbox",
+        "payment_intent_data[metadata][environment]": environment,
         "payment_intent_data[metadata][rail]": "physical_merch",
         "shipping_address_collection[allowed_countries][0]": "US",
         success_url: successUrl,
@@ -386,7 +401,9 @@ Deno.serve(async (req) => {
     const sessionId = toText(session.id);
     const sessionUrl = toText(session.url);
     if (!sessionId || !sessionUrl) throw new Error("Stripe checkout session did not include an id and URL.");
-    if (session.livemode !== false) throw new Error("Stripe checkout session did not confirm test mode; refusing checkout.");
+    if (session.livemode !== (environment === "production")) throw new Error("Stripe checkout session did not confirm the exact provider mode; refusing checkout.");
+    if (environment === "production" && (session.metadata?.environment !== environment
+      || session.metadata?.chillywood_order_id !== orderId || session.metadata?.rail !== "physical_merch")) throw new Error("merch_session_binding_mismatch");
     if (session.object !== "checkout.session" || session.client_reference_id !== orderId
       || session.currency !== reservation.currency || session.amount_total !== reservation.priceMinor! * quantity
       || session.amount_subtotal !== session.amount_total
@@ -417,9 +434,9 @@ Deno.serve(async (req) => {
         order_id: orderId,
         product_id: product.id,
         rail: "physical_merch",
-        sandbox_only: true,
+        sandbox_only: environment === "sandbox",
       },
-      reason: "Stripe sandbox physical merch checkout session created.",
+      reason: "Stripe physical merch checkout session created.",
       targetId: orderId,
       targetType: "merch_order",
       targetUserId: currentUser.id,
@@ -429,8 +446,8 @@ Deno.serve(async (req) => {
       status: "checkout_created",
       provider: "stripe",
       providerKey: "stripe_physical_goods",
-      mode: "sandbox",
-      liveMoneyAction: false,
+      mode: environment,
+      liveMoneyAction: environment === "production",
       checkoutCreated: true,
       physicalMerchOnly: true,
       digitalAccessGrantCreated: false,
@@ -441,16 +458,16 @@ Deno.serve(async (req) => {
       orderId,
       sessionId,
       url: sessionUrl,
-      message: "Stripe sandbox Checkout session created for physical merch only.",
+      message: "Stripe Checkout session created for physical merch only.",
     });
   } catch (error) {
     // Compensate before best-effort audit: an unavailable logging sink must not
     // strand a known never-dispatched reservation. A lost cleanup ack is unknown.
     const response = await failureResponse(500, {
-      error: "stripe_merch_checkout_failed", liveMoneyAction: false, checkoutCreated: false,
+      error: "stripe_merch_checkout_failed", liveMoneyAction: dispatched && checkoutEnvironment === "production", checkoutCreated: false,
       physicalMerchOnly: true, digitalAccessGrantCreated: false, revenueCatEntitlementCreated: false,
       premiumEntitlementCreated: false, payoutCreated: false, cashOutEnabled: false,
-      message: sanitizeErrorMessage(error), provider: "stripe", providerKey: "stripe_physical_goods", mode: "sandbox",
+      message: sanitizeErrorMessage(error), provider: "stripe", providerKey: "stripe_physical_goods", mode: checkoutEnvironment,
     });
     await boundedCleanup(safeWriteAuditLog(adminClient, {
       action: "stripe_merch_checkout_failed",
@@ -461,7 +478,7 @@ Deno.serve(async (req) => {
         error: sanitizeErrorMessage(error),
         function_name: FUNCTION_NAME,
       },
-      reason: "Stripe sandbox physical merch checkout failed.",
+      reason: "Stripe physical merch checkout failed.",
       severity: "warning",
       targetType: "merch_order",
       targetUserId: currentUser?.id ?? null,

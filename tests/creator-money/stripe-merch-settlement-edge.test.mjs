@@ -10,7 +10,7 @@ const compile = file => ts.transpileModule(fs.readFileSync(file,'utf8'), {
 }).outputText;
 const shared={exports:{}};
 vm.runInNewContext(compile('supabase/functions/_shared/stripe-payment-settlement.ts'),shared);
-function harness({signature=true,rpc}={}) {
+function harness({signature=true,rpc,env,verify}={}) {
   let handler; const calls=[],audits=[];
   const admin={rpc:async(name,args)=>{calls.push({name,args});return rpc ? rpc(name,args) :
     {data:{status:'processed',reason:'payment_confirmed',eventStored:true,orderUpdated:true,retryable:false,orderId:order},error:null};},
@@ -24,11 +24,11 @@ function harness({signature=true,rpc}={}) {
         jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status}),
         notConfiguredPayload:(reason,message,rest)=>({reason,message,...rest}),
         optionsResponse:()=>new Response(null,{status:204}),
-        parseStripeEvent:JSON.parse,readOptionalEnv:()=> 'whsec_synthetic',
+        parseStripeEvent:JSON.parse,readOptionalEnv:name=>env ? env[name] ?? null : 'whsec_synthetic',
         readStripeWebhookSecret:()=>({configured:true,secret:'whsec_synthetic'}),
         safeWriteAuditLog:async(_client,value)=>{audits.push(value);},
         sanitizeErrorMessage:error=>String(error.message),toText:value=>String(value??'').trim(),
-        verifyStripeWebhookSignature:async()=>signature,
+        verifyStripeWebhookSignature:async(...args)=>verify ? verify(...args) : signature,
       };
       throw Error(`Unexpected module ${specifier}`);
     }};
@@ -115,4 +115,16 @@ test('legitimate settlement does not query sale eligibility or a current viewer 
   assert.equal(h.calls.length,1);assert.equal(h.calls[0].args.p_facts.metadata_buyer_id,null);
   assert.equal(h.calls[0].args.p_facts.payment_intent_id,'pi_merch');
   assert.equal(h.audits.length,1);
+});
+
+test('live webhook authority derives from distinct signing secret and exact server account, not event mode',async()=>{
+ const env={STRIPE_MERCH_WEBHOOK_SECRET:'whsec_test',STRIPE_MERCH_LIVE_WEBHOOK_SECRET:'whsec_live',STRIPE_MERCH_LIVE_ACCOUNT_ID:'acct_live'};
+ const verify=(_body,_sig,secret)=>secret==='whsec_live';
+ const event=checkout(undefined,{livemode:true,metadata:{chillywood_order_id:order,environment:'production',rail:'physical_merch',commerce_tax_policy_id:'policy'}});event.livemode=true;
+ const h=harness({env,verify}),out=await h.send(event);assert.equal(out.status,200);assert.equal(out.body.mode,'production');
+ assert.equal(h.calls[0].args.p_facts.provider_account_id,'acct_live');assert.equal(h.calls[0].args.p_facts.verified_environment,'production');assert.equal(h.calls[0].args.p_facts.metadata_tax_policy_id,'policy');
+ const wrong=harness({env,verify});assert.equal((await wrong.send(checkout())).body.status,'ignored');assert.equal(wrong.calls.length,0);
+ const testSecret=harness({env,verify:(_b,_s,secret)=>secret==='whsec_test'});assert.equal((await testSecret.send(event)).body.status,'ignored');assert.equal(testSecret.calls.length,0);
+ const ambiguous=harness({env,verify:()=>true});assert.equal((await ambiguous.send(event)).status,400);assert.equal(ambiguous.calls.length,0);
+ const missing=harness({env:{...env,STRIPE_MERCH_LIVE_ACCOUNT_ID:null},verify});assert.equal((await missing.send(event)).status,400);assert.equal(missing.calls.length,0);
 });

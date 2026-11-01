@@ -30,9 +30,18 @@ test('platform webhook uses separately pinned signature/account and cannot masqu
   assert.equal((await send('whsec_platform')).status,200);assert.equal(calls.length,1);
   assert.equal(calls[0].args.p_evidence.accountId,'acct_platform');
   assert.equal((await send('whsec_platform',{...e,account:'acct_fixture'})).status,400);
+  const live=structuredClone(e);live.livemode=true;live.data.object.livemode=true;
+  live.data.object.metadata.environment='live';live.data.object.id='cs_live_Fixture';
+  assert.equal((await send('whsec_platform',live)).status,503,'no live signing configuration is inferred');
+  env.STRIPE_AUCTION_PLATFORM_LIVE_ACCOUNT_ID='acct_liveplatform';
+  env.STRIPE_ROOM_AUCTION_PLATFORM_LIVE_WEBHOOK_SECRET='whsec_liveplatform';
+  assert.equal((await send('whsec_platform',live)).status,400,'test signing secret cannot authenticate live');
+  assert.equal((await send('whsec_liveplatform',live)).status,200);
+  assert.equal(calls.at(-1).args.p_evidence.environment,'live');
+  assert.equal(calls.at(-1).args.p_evidence.accountId,'acct_liveplatform');
   delete env.STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID;
   assert.equal((await send('whsec_platform')).status,503);
-  assert.equal(calls.length,1);
+  assert.equal(calls.length,2);
 });
 
 const root='supabase/functions/';

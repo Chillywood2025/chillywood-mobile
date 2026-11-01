@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { observeLiveConnectAccount } from "../_shared/stripe-connect-live-observation.ts";
 
 import {
   authenticateRequest,
@@ -35,6 +36,7 @@ Deno.serve(async (req) => {
 
   let adminClient: SupabaseClientLike | null = null;
   let currentUser: AuthenticatedUser | null = null;
+  let observationMode: "test" | "live" = "test";
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -81,6 +83,31 @@ Deno.serve(async (req) => {
         accountSynced: false,
         message: "A Stripe Connect test-mode account must be created before provider status can be synced.",
       });
+    }
+
+    if (payoutAccount.provider_environment === "live") {
+      observationMode = "live";
+      // Existing server binding only. This branch never creates or onboards an
+      // account and never changes provider settings or financial switches.
+      const secret = Deno.env.get("STRIPE_CASHOUT_LIVE_KEY") ?? "";
+      if (!/^(sk|rk)_live_[A-Za-z0-9]+$/.test(secret)) {
+        return jsonResponse(200, { status: "not_configured", mode: "live", accountSynced: false,
+          providerCall: false, providerWrite: false, liveMoneyAction: false,
+          message: "Live read-only provider observation is not configured. Payouts remain inactive." });
+      }
+      const context = await adminClient.rpc("get_creator_connect_live_observation_context", { p_creator: currentUser.id });
+      if (context.error) throw new Error("Live read-only provider observation policy is unavailable.");
+      const facts = await observeLiveConnectAccount(context.data, secret);
+      const freshAuthority = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
+      if ("error" in freshAuthority) return freshAuthority.error;
+      if (freshAuthority.user.id !== currentUser.id) return jsonResponse(403, { error: "creator_mismatch" });
+      const recorded = await adminClient.rpc("record_creator_connect_live_observation", { p_context: context.data, p_facts: facts });
+      if (recorded.error) throw new Error("Live provider observation could not be recorded.");
+      return jsonResponse(200, { status: recorded.data?.recorded ? "synced" : "stale_observation", mode: "live",
+        provider: "stripe", providerKey: "stripe_connect", creatorUserId: currentUser.id, providerAccountPresent: true,
+        accountSynced: recorded.data?.recorded === true, providerCall: true, providerWrite: false,
+        liveMoneyAction: false, payoutExecution: false,
+        message: "Provider status checked. This does not enable payments or payouts." });
     }
 
     const stripeSecret = readStripeTestSecret();
@@ -176,7 +203,7 @@ Deno.serve(async (req) => {
       error: "stripe_connect_account_sync_failed",
       liveMoneyAction: false,
       message: sanitizeErrorMessage(error),
-      mode: "test",
+      mode: observationMode,
       provider: "stripe",
       providerKey: "stripe_connect",
     });

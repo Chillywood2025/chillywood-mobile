@@ -42,6 +42,19 @@ test('accepted known-cost snapshots bind real observations, deduplicate fees and
   await save({reportRunId:'frr_Credit',rows:[{...row,feeTransactionId:'fee_Credit',amountMinor:-3,balanceTransactionId:'txn_credit'}]});s=await reconcile();assert.equal(Number(s.fee_minor),33);
   await save({reportRunId:'frr_OverCredit',rows:[{...row,feeTransactionId:'fee_OverCredit',amountMinor:-100,balanceTransactionId:'txn_overcredit'}]});await assert.rejects(reconcile(),/overcredit/);
   await root();assert.equal(await one("select private.commerce_tax_fee_settlement_ready('physical_merch',$1)",[order.id]),false);
+  const zeroId='e7100000-0000-4000-8000-000000000004';
+  await db.query(`insert into public.merch_orders(id,buyer_id,creator_id,provider,environment,order_status,fulfillment_status,payment_status,amount_subtotal_minor,amount_total_minor,currency,stripe_checkout_session_id,stripe_payment_intent_id)
+   values($1,$2,'e7100000-0000-4000-8000-000000000003','stripe_physical_goods','sandbox','paid','not_started','paid',1000,1000,'usd','cs_test_zero','pi_zero')`,[zeroId,order.buyer_id]);
+  await service();await one('select public.record_merch_provider_cost_observation($1,$2)',[zeroId,JSON.stringify({...facts,order_id:zeroId,
+   checkout_id:'cs_test_zero',payment_intent_id:'pi_zero',charge_id:'ch_zero',balance_id:'txn_zero',provider_fee_minor:0,charge_net_minor:1000})]);
+  const zeroContext=await one('select public.get_merch_fee_report_import_context($1)',[zeroId]);
+  await assert.rejects(one("select public.reconcile_commerce_known_costs('physical_merch',$1)",[zeroId]),/current_fee_report_required/);
+  await one('select public.record_merch_fee_report_observation($1,$2,$3)',[zeroId,zeroContext.sourceObservationId,JSON.stringify({...evidence,
+   reportRunId:'frr_Zero',fileId:'file_Zero',chargeId:'ch_zero',rows:[],observedRowCount:0})]);
+  const zero=await one("select public.reconcile_commerce_known_costs('physical_merch',$1)",[zeroId]);
+  assert.equal(Number(zero.fee_minor),0,'explicit verified inline zero is known zero, not inferred from absent data');
+  assert.equal(Number(zero.creator_minor),810);assert.equal(zero.finalFees,false);assert.equal(zero.futureAdjustmentsPossible,true);
+  await root();
   await assert.rejects(db.exec('delete from private.commerce_known_cost_snapshots'),/immutable/);
  }finally{await db.close();}
 });

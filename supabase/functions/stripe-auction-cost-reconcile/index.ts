@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { drainCommerceFeeAccounting } from "../_shared/commerce-fee-accounting-drain.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv } from "../_shared/stripe-connect.ts";
 import { observeStripeAuctionCosts, type AuctionCostContext } from "../_shared/stripe-auction-cost-observation.ts";
 
@@ -28,7 +29,8 @@ Deno.serve(async (req: Request) => {
     const facts = await observeStripeAuctionCosts(context.data as AuctionCostContext, key, account);
     const recorded = await admin.client.rpc("record_auction_platform_cost_observation", { p_contract_id: body.contract_id, p_facts: facts });
     if (recorded.error || !recorded.data) throw Error("auction_cost_not_recorded");
-    return jsonResponse(200, { ...recorded.data as Record<string, unknown>, financialAuthority: false, transferCreated: false });
+    const accounting = await drainCommerceFeeAccounting(admin.client, body.contract_id);
+    return jsonResponse(200, { ...recorded.data as Record<string, unknown>, accounting, financialAuthority: false, transferCreated: false });
   } catch {
     return jsonResponse(409, { error: "auction_cost_observation_incomplete", retryable: true, financialAuthority: false });
   }

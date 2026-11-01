@@ -160,7 +160,7 @@ select is(
     'complete_content_notification_view',
     'create_channel_subscription_intent_pre_source_lock',
     'create_creator_channel_subscription_purchase_intent',
-    'create_creator_payout_request_safe',
+    'create_creator_payout_request_before_fee_policy',
     'create_event_pass_intent_pre_source_lock',
     'create_ios_app_store_intent_pre_source_lock',
     'create_ios_creator_money_intent_pre_source_lock',
@@ -505,6 +505,16 @@ select ok(
     current_setting('request.jwt.claims', true)::jsonb ->> 'state'
   ),
   'cached or client-projected ACTIVE state cannot override authoritative expiry'
+);
+
+select ok(
+  pg_get_functiondef('public.create_creator_payout_request_safe(integer,text)'::regprocedure)
+    like '%get_creator_fee_policy_status%creator_fee_policy_acceptance_required%creator_fee_recovery_pending%return public.create_creator_payout_request_before_fee_policy(p_amount_cents,p_payout_type)%'
+  and pg_get_functiondef('public.create_creator_payout_request_before_fee_policy(integer,text)'::regprocedure)
+    like '%wave1_session_authority_readback%'
+  and not has_function_privilege('authenticated','public.create_creator_payout_request_before_fee_policy(integer,text)','EXECUTE')
+  and not has_function_privilege('service_role','public.create_creator_payout_request_before_fee_policy(integer,text)','EXECUTE'),
+  'current payout wrapper reaches corrected session root only after explicit fee acceptance and recovery admission; old root has no API bypass'
 );
 
 select * from finish();

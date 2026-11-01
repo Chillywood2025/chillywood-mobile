@@ -86,3 +86,9 @@ export async function createCreatorEventAuction(input: {
     || row.environment !== input.environment) throw new Error("Created auction terms could not be verified. Refresh before trying again.");
   return row;
 }
+
+export async function readCreatorEventAuctionCreationMode(): Promise<"test" | "live"> {
+  const mode = await rpc("read_creator_auction_creation_mode", { p_feature: "event_auction" });
+  if (mode !== "test" && mode !== "live") throw new Error("Auction setup is not available right now.");
+  return mode;
+}

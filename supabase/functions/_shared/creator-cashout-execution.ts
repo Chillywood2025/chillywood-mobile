@@ -9,6 +9,7 @@ export type CashoutContext = {
   bankMinor: number; currency: "usd"; phase: string;
   transferId: string | null; payoutId: string | null; reversalId: string | null;
   dispatchKey: string; dispatchedAt: number | null;
+  inlineKnownZeroQualified?: boolean;
 };
 export type CashoutStore = {
   read(requestId: string): Promise<CashoutContext>;
@@ -135,6 +136,16 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
   }
   if (["payout_pending", "paid", "return_pending", "needs_review"].includes(c.phase) && c.payoutId) {
     const payout = normalizeCashoutPayout(await call(`/v1/payouts/${c.payoutId}`, c.accountId), c);
+    if (payout.status === "paid" && payout.balanceTransactionId && c.inlineKnownZeroQualified === true && c.expectedProviderFeeMinor === 0) {
+      const bt = await call(`/v1/balance_transactions/${payout.balanceTransactionId}`, c.accountId);
+      if (bt.object !== "balance_transaction" || bt.id !== payout.balanceTransactionId || bt.source !== payout.objectId
+        || bt.type !== "payout" || bt.currency !== c.currency || bt.amount !== -c.bankMinor || bt.net !== -c.bankMinor
+        || bt.fee !== 0 || bt.status !== "available" || !Array.isArray(bt.fee_details) || bt.fee_details.some((fee: Json) => fee.amount !== 0))
+        fail("inline_zero_balance_unqualified");
+      return store.observe(requestId, null, { ...payout, inlineZeroBalance: { transactionId: bt.id, payoutId: bt.source,
+        accountId: c.accountId, environment: c.environment, currency: bt.currency, amountMinor: bt.amount,
+        netMinor: bt.net, feeMinor: 0, status: bt.status, type: bt.type } });
+    }
     if (["failed", "canceled"].includes(payout.status) && payout.failureBalanceTransactionId) {
       const bt = await call(`/v1/balance_transactions/${payout.failureBalanceTransactionId}`, c.accountId);
       if (bt.object !== "balance_transaction" || bt.id !== payout.failureBalanceTransactionId

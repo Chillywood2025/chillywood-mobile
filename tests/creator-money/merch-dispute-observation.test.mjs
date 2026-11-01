@@ -30,9 +30,10 @@ test('actual endpoint starts a server attempt before provider observation and pe
  let handler;const calls=[],f=fixture();const a={...context};
  const admin={rpc:async(name,args)=>{calls.push(name);if(name==='get_merch_cost_reconciliation_context')return{data:{id:context.order_id,environment:'sandbox'}};
   if(name==='begin_merch_dispute_observation')return{data:a};if(name==='complete_merch_dispute_observation'){assert.equal(args.p_attempt_id,a.id);assert.equal(args.p_facts.complete,true);return{data:{disputeState:'none'}};}
-  if(name==='record_merch_provider_cost_observation')return{data:{financialAuthority:false}};throw Error(name);}};
+  if(name==='record_merch_provider_cost_observation')return{data:{financialAuthority:false}};if(name==='process_commerce_fee_accounting_jobs')return{data:{outcomes:[]}};throw Error(name);}};
  const runtime={exports:{},Deno:{serve:f=>handler=f},require:name=>{
   if(name.startsWith('jsr:'))return{};
+  if(name.endsWith('commerce-fee-accounting-drain.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/commerce-fee-accounting-drain.ts');
   if(name.endsWith('merch-observation-budget.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts');
   if(name.endsWith('merch-dispute-observation.ts'))return{observeMerchDisputes:async(c,s,account)=>{calls.push('provider_disputes');return observe(c,s,account,f.transport);}};
   if(name.endsWith('stripe-merch-cost-observation.ts'))return{observeStripeMerchCosts:async()=>{calls.push('provider_costs');return{};}};
@@ -42,7 +43,7 @@ test('actual endpoint starts a server attempt before provider observation and pe
  const send=token=>handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer '+token},body:JSON.stringify({order_id:context.order_id})}));
  assert.equal((await send('user_jwt')).status,403);assert.deepEqual(calls,[]);
  assert.equal((await send('service_synthetic')).status,200);
- assert.deepEqual(calls,['get_merch_cost_reconciliation_context','begin_merch_dispute_observation','provider_disputes','complete_merch_dispute_observation','provider_costs','record_merch_provider_cost_observation']);
+ assert.deepEqual(calls,['get_merch_cost_reconciliation_context','begin_merch_dispute_observation','provider_disputes','complete_merch_dispute_observation','provider_costs','record_merch_provider_cost_observation','process_commerce_fee_accounting_jobs']);
 });
 test('actual full-schema roles: delivery-independent none/open/lost snapshots, stale attempts and nonfinancial holds',{timeout:240000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});

@@ -8,7 +8,7 @@ import {runMerchCheckoutDispatchRaces} from '../../scripts/lib/merch-checkout-di
 
 const migration='20261101045810_merch_checkout_dispatch_provenance.sql';
 test('real Edge + full SQL: no-dispatch proof, actor gates, retries, rollback and ambiguous holds', {timeout:240000}, async()=>{
- const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
+ const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,'20261101151506_merch_live_checkout_binding.sql']});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const root=()=>db.exec('reset role');
  const service=async()=>{await root();await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false);set role service_role`);};

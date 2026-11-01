@@ -138,6 +138,7 @@ function endpoint(file, row, overrides = {}) {
   };
   load(`supabase/functions/${file}/index.ts`, {
     "jsr:@supabase/functions-js/edge-runtime.d.ts": {}, "../_shared/stripe-connect.ts": api,
+    "../_shared/stripe-connect-live-observation.ts": { observeLiveConnectAccount: () => { throw Error("test mode must not call live provider"); } },
   }, { Deno: { serve: callback => { handler = callback; } } });
   return { calls, request: async () => {
     const response = await handler(new Request("https://synthetic.test/function", {

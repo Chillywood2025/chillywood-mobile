@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
-import { createCreatorEventAuction } from "../../_lib/creatorEventAuctions";
+import { createCreatorEventAuction, readCreatorEventAuctionCreationMode } from "../../_lib/creatorEventAuctions";
 import { parseCreatorTipAmount } from "../../_lib/creatorTipAmount";
 import { EventAuctionTimeInput } from "./event-auction-time-input";
 import type { CreatorEventSummary } from "../../_lib/liveEvents";
@@ -32,7 +32,9 @@ export function EventAuctionEditor({ event, offer }: { event: CreatorEventSummar
       if (!event.startsAt || Date.parse(paymentDeadline) >= Date.parse(event.startsAt)) throw new Error("The winner’s payment deadline must be before the event starts.");
       if (Date.parse(paymentDeadline) - Date.parse(closesAt) <= 31 * 60_000) throw new Error("Choose a payment deadline more than 31 minutes after closing, so the winner has time to open checkout. Allowing at least an hour gives them more time.");
       if (Date.parse(paymentDeadline) - Date.parse(closesAt) > 24 * 60 * 60_000) throw new Error("This checkout supports payment deadlines up to 24 hours after the auction closes. Choose an earlier payment deadline.");
-      const input = { eventId: event.id, revisionId: offer.termsRevisionId, startingAmountMinor, minIncrementMinor, closesAt, paymentDeadline, environment: offer.status === "active" ? "live" as const : "test" as const };
+      const mode = confirm ? review?.environment : await readCreatorEventAuctionCreationMode();
+      if (!current() || !mode) return;
+      const input = { eventId: event.id, revisionId: offer.termsRevisionId, startingAmountMinor, minIncrementMinor, closesAt, paymentDeadline, environment: mode };
       if (!confirm) { setReview(input); return; }
       if (!review || JSON.stringify(review) !== JSON.stringify(input)) throw new Error("Review the updated auction terms before creating it.");
       await createCreatorEventAuction(review);
@@ -51,7 +53,7 @@ export function EventAuctionEditor({ event, offer }: { event: CreatorEventSummar
     <Text style={styles.body}>For this checkout, choose a payment deadline more than 31 minutes and no more than 24 hours after closing.</Text>
     {!offer?.termsRevisionId ? <Text style={styles.body}>Publish saved ticket terms first. Auctions are unavailable until the exact ticket revision is verified.</Text> : null}
     <Text style={styles.body}>{offer?.status === "active" ? "Live auction authoring; payment eligibility remains separately gated." : "Test-only auction; not a live payment activation."}</Text>
-    {review ? <View style={styles.card}><Text style={styles.title}>Review your auction</Text><Text style={styles.body}>One virtual Event ticket · Starting bid ${(review.startingAmountMinor / 100).toFixed(2)} USD · Minimum increase ${(review.minIncrementMinor / 100).toFixed(2)} USD</Text>
+    {review ? <View style={styles.card}><Text style={styles.title}>Review your auction</Text><Text style={styles.body}>{review.environment === "live" ? "Live auction: the winner may make a real payment after independent eligibility checks." : "Test auction: no real payment or payable earnings."}</Text><Text style={styles.body}>One virtual Event ticket · Starting bid ${(review.startingAmountMinor / 100).toFixed(2)} USD · Minimum increase ${(review.minIncrementMinor / 100).toFixed(2)} USD</Text>
       <Text style={styles.body}>Closes: {new Intl.DateTimeFormat(undefined, {dateStyle:"full", timeStyle:"long", timeZone:event.timeZone}).format(new Date(review.closesAt))}</Text>
       <Text style={styles.body}>Winner pays by: {new Intl.DateTimeFormat(undefined, {dateStyle:"full", timeStyle:"long", timeZone:event.timeZone}).format(new Date(review.paymentDeadline))}</Text>
       <Text style={styles.body}>Winner must open checkout by: {new Intl.DateTimeFormat(undefined, {dateStyle:"full", timeStyle:"long", timeZone:event.timeZone}).format(new Date(Date.parse(review.paymentDeadline) - 31 * 60_000))}</Text>

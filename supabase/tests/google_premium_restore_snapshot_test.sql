@@ -257,14 +257,30 @@ select is(pg_temp.restore_graph()-array['events','entitlements','grants','bindin
   'restoring ordinary expiration adds no billing or money and changes no catalog or switch');
 
 select is(pg_temp.google_terminal(n,kind)->>'status',expected,'real terminal fixture: '||kind)
-from (values(3,'REFUND','refunded'),(4,'REVOCATION','reversed'),(5,'SUBSCRIPTION_PAUSED','reversed')) cases(n,kind,expected);
+from (values(3,'REFUND','refunded'),(4,'REVOCATION','reversed')) cases(n,kind,expected);
 update stable_graph set graph=pg_temp.restore_graph();
 select throws_ok(format('select pg_temp.google_snapshot(%s,%L)',n,'google-restore-after-financial-'||n),
   'premium_reconciliation_terminal_authority_not_superseded','Restore cannot supersede '||kind)
-from (values(3,'REFUND'),(4,'REVOCATION'),(5,'SUBSCRIPTION_PAUSED')) cases(n,kind);
+from (values(3,'REFUND'),(4,'REVOCATION')) cases(n,kind);
 select is(pg_temp.restore_graph(),(select graph from stable_graph),'all financial-terminal refusals preserve their graph');
 select ok(not public.premium_subject_has_finite_authority_internal(pg_temp.restore_user(n)::text),
-  'terminal account '||n||' stays without Premium') from generate_series(3,5) n;
+  'terminal account '||n||' stays without Premium') from generate_series(3,4) n;
+
+-- A scheduled Google pause is not a refund, revocation, or effective expiry.
+update stable_graph set graph=pg_temp.restore_graph();
+select is(pg_temp.google_event(5,'google-restore-scheduled-pause','SUBSCRIPTION_PAUSED',
+  now()-interval '3 hours',now()+interval '1 hour',now()-interval '1 hour')->>'status','ignored',
+  'scheduled pause is retained without terminating the paid period');
+select is(pg_temp.restore_graph()-'events',(select graph-'events' from stable_graph),
+  'scheduled pause changes no binding, entitlement, grant, ledger, transaction, or financial rail');
+select ok(public.premium_subject_has_finite_authority_internal(pg_temp.restore_user(5)::text),
+  'scheduled pause retains finite Premium until an effective terminal event');
+select is(pg_temp.google_terminal(5,'EXPIRATION')->>'status','processed',
+  'the actual later expiration, not the scheduled pause, removes access');
+select ok(not public.premium_subject_has_finite_authority_internal(pg_temp.restore_user(5)::text),
+  'actual expiration after a scheduled pause removes Premium');
+select is(pg_temp.google_snapshot(5,'google-restore-after-paused-expiration')->>'status','processed',
+  'a newer verified ordinary-expiry period may restore access without overriding a financial terminal');
 
 savepoint scoped_quarantine;
 select is(public.quarantine_revenuecat_terminal_authority('revenuecat_google_play','google-restore-quarantine',

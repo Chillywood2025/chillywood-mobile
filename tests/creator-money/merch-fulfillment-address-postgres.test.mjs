@@ -19,7 +19,13 @@ test('signed exact Checkout → private SQL address under actual API roles → m
   '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
   '20261031034904_merch_tracking_reviewed_supersession.sql',
   '20261101045810_merch_checkout_dispatch_provenance.sql',
-  '20261101045816_merch_reconciliation_bounded_drain.sql'];
+  '20261101045816_merch_reconciliation_bounded_drain.sql',
+  '20261101141605_merch_reconciliation_observability.sql',
+  '20261101141625_commerce_fee_component_accounting.sql',
+  '20261101141708_partial_refund_tax_evidence.sql',
+  '20261101144801_commerce_explicit_provider_modes.sql',
+  '20261101150901_commerce_live_return_contract.sql',
+  '20261101151506_merch_live_checkout_binding.sql'];
  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const creator=await one("select md5('shipping-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('shipping-host:'||n::text)::uuid::text,20260814),100)=0 limit 1");

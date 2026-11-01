@@ -8,6 +8,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {runMerchCheckoutDispatchRaces} from './lib/merch-checkout-dispatch-races.mjs';
+import {runMerchLiveCheckoutRaces} from './lib/merch-live-checkout-races.mjs';
 import {runMerchAdmissionCutoverRace} from './lib/merch-admission-cutover-race.mjs';
 
 if(process.argv.includes('--help')){
@@ -151,7 +152,9 @@ try{
   await runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json});
   assert.equal(checks,10);
   await runMerchAdmissionCutoverRace({query,rpc,session,until,auth,actors,lit});
-  console.log('PASS native: ten PostgreSQL blocking-edge schedules; cases, carrier/dispute orderings, duplicate checkout allocation, dispatch/abort races, once-only stock release and retained global-latch interoperation. Synthetic source fixture only.');
+  await runMerchLiveCheckoutRaces({query,race,auth,actors,lit,json});
+  assert.equal(checks,14);
+  console.log('PASS native: fourteen PostgreSQL blocking-edge schedules; cases, carrier/dispute orderings, duplicate checkout allocation, dispatch/abort races, once-only stock release and retained global-latch interoperation. Synthetic source fixture only.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop owned clone');}

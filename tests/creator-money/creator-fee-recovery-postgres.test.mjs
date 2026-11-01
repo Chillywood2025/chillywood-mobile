@@ -20,17 +20,33 @@ test('verified fee debt consumes unpaid earnings once and later fee credits rema
   await db.query(`insert into private.commerce_creator_fee_adjustments(creator_id,acceptance_id,currency,amount_minor,reason,source_type,source_id,evidence_hash)
    values($1,$2,'usd',150,'later_verified_fee','cashout_fee',$3,$4)`,[creator,acceptance,source,'a'.repeat(64)]);
   const consume=()=>one("select private.consume_creator_fee_recovery($1,'usd')",[creator]);
-  assert.equal(Number(await consume()),100);assert.equal(Number(await consume()),0);
-  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[original]),0);
-  assert.equal(Number(await one("select private.creator_fee_recovery_amount($1,'usd')",[creator])),50);
+  assert.equal(Number(await consume()),0,'pre-adjustment earnings cannot be automatically deducted');assert.equal(Number(await consume()),0);
+  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[original]),100);
+  assert.equal(Number(await one("select private.creator_fee_recovery_amount($1,'usd')",[creator])),150);
   const credit=(amount=100,hash='b'.repeat(64))=>one("select private.record_creator_verified_fee_credit($1,$2,'cashout_fee',$3,$4,$5,'acct_platform','acct_recipient')",[creator,original,source,hash,amount]);
   const restored=await credit();assert.equal(await credit(),restored);await assert.rejects(credit(101),/replay_conflict/);
   assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[restored]),100);
-  assert.equal(Number(await consume()),50);assert.equal(Number(await consume()),0);
-  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[restored]),50);
+  assert.equal(Number(await consume()),100);assert.equal(Number(await consume()),0);
+  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[restored]),0);
+  assert.equal(Number(await one("select private.creator_fee_recovery_amount($1,'usd')",[creator])),50);
+  const second=await credit(100,'c'.repeat(64));assert.equal(Number(await consume()),50);
+  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[second]),50);
   assert.equal(await one("select private.creator_fee_recovery_outstanding($1,'usd')",[creator]),false);
   assert.equal(await one("select private.commerce_cashout_earning_account_exact($1,'acct_other','acct_recipient')",[restored]),false);
   assert.equal(await one("select private.commerce_cashout_earning_account_exact($1,'acct_platform','acct_recipient')",[restored]),true);
+  await db.query(`insert into private.commerce_creator_fee_adjustments(creator_id,acceptance_id,currency,amount_minor,reason,source_type,source_id,evidence_hash,created_at)
+   select $1,$2,'usd',50,'later_verified_fee','cashout_fee',$3,$4,created_at from public.creator_earnings_ledger where id=$5`,[creator,acceptance,source,'d'.repeat(64),second]);
+  assert.equal(Number(await consume()),0,'equal timestamps are not after the adjustment');
+  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[second]),50);
+  const third=await credit(50,'e'.repeat(64));assert.equal(Number(await consume()),50);
+  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[third]),0);
+  await db.exec('begin');
+  await db.query(`insert into private.commerce_creator_fee_adjustments(creator_id,acceptance_id,currency,amount_minor,reason,source_type,source_id,evidence_hash)
+   values($1,$2,'usd',25,'later_verified_fee','cashout_fee',$3,$4)`,[creator,acceptance,source,'f'.repeat(64)]);
+  const sameTransaction=await credit(25,'1'.repeat(64));
+  assert.equal(Number(await consume()),25,'later credit in same transaction uses recording clock, not transaction-start time');
+  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[sameTransaction]),0);
+  await db.exec('commit');
   for(const role of ['anon','authenticated','service_role']){
    await db.exec(`set role ${role}`);await assert.rejects(credit(1,'c'.repeat(64)),/permission denied/);await assert.rejects(consume(),/permission denied/);await db.exec('reset role');
   }

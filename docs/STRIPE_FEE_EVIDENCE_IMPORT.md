@@ -147,7 +147,9 @@ and qualify coverage before using any observed payout fee.
 2. Deploy `stripe-fee-report-import` and its exact shared closure only after the
    new merchandise RPCs exist. Old contract-only callers remain compatible.
 3. Verify FORCE RLS/no direct API grants, two new table triggers, the service-only
-   RPC grants, and unchanged money switches and tax settlement gate.
+   RPC grants and unchanged money switches. The later accepted-policy bundle
+   replaces the permanent fee block with evidence-qualified known-cost readiness;
+   see [known-cost policy](COMMERCE_KNOWN_COST_POLICY.md). This never means final fees.
 4. Use disposable provider fixtures for the non-authoritative import path;
    production provider qualification is a distinct authorized operation.
 5. Roll back the endpoint version if needed. Do not delete immutable evidence or

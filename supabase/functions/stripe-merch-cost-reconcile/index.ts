@@ -3,6 +3,7 @@ import { createAdminClient, jsonResponse, readOptionalEnv, readStripeTestSecret 
 import { observeStripeMerchCosts, type MerchCostOrder } from "../_shared/stripe-merch-cost-observation.ts";
 import { observeMerchDisputes, type MerchDisputeContext } from "../_shared/merch-dispute-observation.ts";
 import { createMerchObservationBudget } from "../_shared/merch-observation-budget.ts";
+import { drainCommerceFeeAccounting } from "../_shared/commerce-fee-accounting-drain.ts";
 
 // JWT verification remains enabled. A user JWT is NOT worker authority. This
 // worker additionally requires the exact existing server credential. No new
@@ -43,7 +44,8 @@ Deno.serve(async (req: Request) => {
     const facts = await budget.run(() => observeStripeMerchCosts(context.data as MerchCostOrder, key, account, budget.transport));
     const recorded = await budget.run(() => admin.client.rpc("record_merch_provider_cost_observation", { p_order_id: body.order_id, p_facts: facts }), 5000);
     if (recorded.error || !recorded.data) throw Error("merch_cost_observation_not_recorded");
-    return jsonResponse(200, { ...recorded.data as Record<string, unknown>, financialAuthority: false, payoutCreated: false });
+    const accounting = await drainCommerceFeeAccounting(admin.client, body.order_id, budget);
+    return jsonResponse(200, { ...recorded.data as Record<string, unknown>, accounting, financialAuthority: false, payoutCreated: false });
   } catch {
     // Never echo provider payload, Authorization or raw SDK errors.
     return jsonResponse(409, { error: "merch_cost_observation_incomplete", retryable: true, financialAuthority: false });

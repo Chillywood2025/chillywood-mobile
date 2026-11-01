@@ -12,6 +12,17 @@ const context={requestId:'a0000000-0000-4000-8000-000000000001',executionId:'a00
  sourceType:'card',grossMinor:10000,appFeeMinor:200,expectedProviderFeeMinor:0,bankMinor:9800,currency:'usd',phase:'prepared',
  transferId:null,payoutId:null,reversalId:null,dispatchKey:'cw-cashout-a0000000-0000-4000-8000-000000000002',dispatchedAt:100};
 const metadata={chillywood_cashout_execution:context.executionId,chillywood_cashout_request:context.requestId};
+test('qualified inline-known zero is exact connected payout balance evidence, never an empty-report inference',async()=>{
+ const f=fixture({phase:'paid',payoutId:'po_bank',transferId:'tr_funding',inlineKnownZeroQualified:true});
+ const bt={object:'balance_transaction',id:'txn_payout',source:'po_bank',type:'payout',currency:'usd',amount:-9800,net:-9800,fee:0,status:'available',fee_details:[]};
+ const transport=async(url,options)=>url.endsWith('/v1/payouts/po_bank')?Response.json({...p(),status:'paid'}):url.endsWith('/v1/balance_transactions/txn_payout')?Response.json(bt):f.transport(url,options);
+ await run(context.requestId,f.store,'rk_live_fixture',transport);
+ assert.equal(f.observed[0].facts.inlineZeroBalance.feeMinor,0);assert.equal(f.observed[0].facts.inlineZeroBalance.accountId,'acct_creator');assert.equal(f.claims.length,0);
+ for(const mutation of [{fee:1},{net:-9801},{source:'po_other'},{status:'pending'},{type:'charge'},{amount:9800}]){
+  const changed=async(url,options)=>url.endsWith('/v1/balance_transactions/txn_payout')?Response.json({...bt,...mutation}):transport(url,options);
+  await assert.rejects(run(context.requestId,f.store,'rk_live_fixture',changed),/inline_zero_balance_unqualified/);
+ }
+});
 const t=()=>({object:'transfer',id:'tr_funding',livemode:true,amount:9800,currency:'usd',destination:'acct_creator',metadata,amount_reversed:0,reversed:false});
 const p=()=>({object:'payout',id:'po_bank',livemode:true,amount:9800,currency:'usd',destination:'ba_destination',metadata,method:'instant',source_type:'card',automatic:false,status:'pending',application_fee:null,balance_transaction:'txn_payout',failure_balance_transaction:null});
 function fixture(overrides={}){

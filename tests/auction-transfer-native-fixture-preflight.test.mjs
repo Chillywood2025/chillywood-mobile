@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import ts from 'typescript';
@@ -113,9 +113,15 @@ for(const checkpoint of ['current','historical'])test(`${checkpoint} native tran
   }\n`+fragment.slice(raceEnd);
   // The positive transfer protocol is explicitly historical; current full
   // schema executes only hard-block schedules and never overrides fee readiness.
-  const historicalSuccessors=['20261031033642_auction_approved_automation.sql',
-    '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
-    '20261031034904_merch_tracking_reviewed_supersession.sql'];
+  // This is an actual historical checkpoint, not current schema with selected
+  // prerequisites removed. Newer successors may depend on the excluded tax
+  // tables/functions. Hold the complete suffix back, then replay all of it in
+  // order below to prove the historical reservations fail closed after upgrade.
+  const historicalSuccessors=readdirSync('supabase/migrations').filter(name=>
+    /^\d{14}_.+\.sql$/u.test(name)&&name>='20261031033642_auction_approved_automation.sql').sort();
+  assert.equal(historicalSuccessors[0],'20261031033642_auction_approved_automation.sql');
+  for(const required of ['20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
+    '20261031034904_merch_tracking_reviewed_supersession.sql'])assert.ok(historicalSuccessors.includes(required));
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
     excludeMigrations:checkpoint==='historical'?historicalSuccessors:[]});
   try {

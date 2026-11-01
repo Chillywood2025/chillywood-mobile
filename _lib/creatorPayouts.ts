@@ -414,8 +414,15 @@ const toCreatorPayoutSetupFields = (
   const configuration = isPlainObject(metadata.provider_configuration) ? metadata.provider_configuration : {};
   const observed = isPlainObject(configuration.observed) ? configuration.observed : {};
   const expected = isPlainObject(configuration.expected) ? configuration.expected : {};
+  const liveProof = isPlainObject(configuration.liveProof) ? configuration.liveProof : {};
+  const verifiedPolicy = expected.key === "stripe_connect_test_express_controller_v1"
+    || (expected.key === "stripe_connect_live_express_recipient_controller_v1"
+      && metadata.provider_environment === "live" && liveProof.environment === "live"
+      && liveProof.modeVerified === true && liveProof.source === "authenticated_stripe_get_v1_v2"
+      && liveProof.v2Dashboard === "express" && liveProof.v2FeesCollector === "application"
+      && liveProof.v2LossesCollector === "application");
   const verifiedMatch = configuration.status === "match"
-    && expected.key === "stripe_connect_test_express_controller_v1"
+    && verifiedPolicy
     && ["express", "none"].includes(String(observed.account_type))
     && observed.controller_type === "application" && observed.is_controller === true
     && observed.dashboard_type === "express" && observed.fees_payer === "platform"

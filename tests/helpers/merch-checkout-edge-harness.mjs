@@ -11,7 +11,7 @@ export const reviewedTaxPolicy={ready:true,policyId:'70000000-0000-4000-8000-000
 export const buyer='70000000-0000-4000-8000-000000000001',session='70000000-0000-4000-8000-000000000002';
 export const product='70000000-0000-4000-8000-000000000003',attempt='70000000-0000-4000-8000-000000000004';
 export const order='70000000-0000-4000-8000-000000000005';
-export function harness({beta=true,authority=true,reservationError=false,providerError=false,livemode=false,snapshot={},taxPolicy=reviewedTaxPolicy,rpc,readRow,writeRow,envAccount='acct_fixture',accountError=false,source,audit}={}) {
+export function harness({beta=true,authority=true,reservationError=false,providerError=false,livemode=false,snapshot={},taxPolicy=reviewedTaxPolicy,rpc,readRow,writeRow,envAccount='acct_fixture',accountError=false,source,audit,env={}}={}) {
   const calls=[],provider=[],updates=[];let handler;
   const productRow={id:product,creator_id:'creator',provider:'stripe_physical_goods',environment:'sandbox',status:'sandbox',is_physical_good:true,creates_digital_access:false,price_minor:9999,currency:'usd'};
   const admin={from:table=>{
@@ -24,7 +24,7 @@ export function harness({beta=true,authority=true,reservationError=false,provide
     provider.push({url,options});if(providerError)throw Error('transport outcome unknown');
     const body=new URLSearchParams(options.body),amount=Number(body.get('line_items[0][price_data][unit_amount]'))*Number(body.get('line_items[0][quantity]'));
     return new Response(JSON.stringify({id:'cs_test_order',object:'checkout.session',client_reference_id:body.get('client_reference_id'),currency:'usd',amount_total:amount,amount_subtotal:amount,
-      automatic_tax:{enabled:true},metadata:{commerce_tax_policy_id:body.get('metadata[commerce_tax_policy_id]')},url:'https://checkout.stripe.com/c/pay/test',livemode,payment_intent:null}),{status:200});
+      automatic_tax:{enabled:true},metadata:{commerce_tax_policy_id:body.get('metadata[commerce_tax_policy_id]'),environment:body.get('metadata[environment]'),chillywood_order_id:body.get('metadata[chillywood_order_id]'),rail:body.get('metadata[rail]')},url:'https://checkout.stripe.com/c/pay/test',livemode,payment_intent:null}),{status:200});
   },require:name=>{
     if(name.startsWith('jsr:'))return {};
     if(name.endsWith('/commerce-tax-readiness.ts'))return taxModule;
@@ -33,7 +33,7 @@ export function harness({beta=true,authority=true,reservationError=false,provide
       authenticateRequest:async()=>({user:{id:buyer,email:null}}),createAuthClient:()=>({supabaseUrl:'https://db.invalid',supabaseAnonKey:'public'}),
       createAdminClient:()=>({configured:true,client:admin}),userHasPlatformRole:async()=>false,
       readStripeTestSecret:()=>({configured:true,secret:'synthetic_test_only'}),
-      readOptionalEnv:name=>name==='STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID'?envAccount:null,
+      readOptionalEnv:name=>Object.hasOwn(env,name)?env[name]:name==='STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID'?envAccount:null,
       parseJsonPayload:async req=>({value:await req.json()}),toText:x=>String(x??'').trim(),
       jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status}),optionsResponse:()=>new Response(null,{status:204}),
       notConfiguredPayload:()=>({}),safeWriteAuditLog:async()=>audit?.(),sanitizeErrorMessage:e=>String(e?.message??e),

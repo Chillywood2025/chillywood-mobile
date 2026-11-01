@@ -31,7 +31,11 @@ test('production Hero Reel pauses on blur/background, removes listeners, and han
   await React.act(async()=>button().props.onPress());assert.equal(plays,1);
   await React.act(async()=>{AppState.currentState='background';background('background');});assert.ok(pauses>0);
   await React.act(async()=>button().props.onPress());assert.equal(plays,1);
+  const stalePlay=button().props.onPress;
   await React.act(async()=>{AppState.currentState='active';focusCleanup();});assert.ok(pauses>=2);
+  await React.act(async()=>stalePlay());assert.equal(plays,1,'retained play callback cannot play after blur');
+  const beforeNative=pauses;await React.act(async()=>listeners.get('playingChange')({isPlaying:true}));
+  assert.equal(pauses,beforeNative+1,'native play event after blur is immediately paused');
   await React.act(async()=>listeners.get('statusChange')({status:'error'}));assert.equal(button(),undefined);
   assert.ok(all().some(n=>n.name==='Text'&&String(n.props.children).includes('could not play')));
  }finally{await React.act(async()=>root.unmount());}

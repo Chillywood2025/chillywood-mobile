@@ -199,7 +199,7 @@ export default function PaidCreatorEventRoute() {
   }, [eventId, load]);
 
   const onBuyEventPass = async () => {
-    if (!eventId || !purchaseLatchRef.current.tryAcquire()) return;
+    if (!eventId || access?.offer?.provider === "stripe_event_auction" || !purchaseLatchRef.current.tryAcquire()) return;
     const context = purchaseContextRef.current;
     setPurchaseLoading(true);
     setNotice("");
@@ -253,7 +253,7 @@ export default function PaidCreatorEventRoute() {
   // legacy pass resolver reports an ended event.
   const hasEventAccess = confirmedEventPass || creatorPreview || freeEvent || !!destination;
   const priceLabel = offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null;
-  const oneTimePriceLabel = priceLabel ? formatOneTimePrice(priceLabel) : null;
+  const oneTimePriceLabel = offer?.provider === "stripe_event_auction" ? "Price set by the winning bid" : priceLabel ? formatOneTimePrice(priceLabel) : null;
   const customerState = resolveEventCustomerPresentation({
     status: event?.status ?? offer?.status,
     startsAt: event?.starts_at ?? offer?.startsAt,
@@ -265,7 +265,7 @@ export default function PaidCreatorEventRoute() {
     hasLiveDestination: destination?.kind === "live",
     hasReplayDestination: destination?.kind === "replay",
   });
-  const canPurchaseEventPass = locked
+  const canPurchaseEventPass = offer?.provider !== "stripe_event_auction" && locked
     && verifiedTicketTerms
     && !terminalEventState
     && customerState.action === "buy_pass";
@@ -421,6 +421,8 @@ export default function PaidCreatorEventRoute() {
                   )}
                 </Pressable>
               </MoneyOfferCard>
+            ) : offer?.provider === "stripe_event_auction" && !confirmedEventPass ? (
+              <Text style={styles.body}>This ticket is offered through the event auction. Review the auction below; only the eligible winner can open checkout.</Text>
             ) : accessUnavailable ? (
               <View style={styles.stateBox} testID="event-pass-access-denied-state">
                 <View style={styles.stateHeaderRow}>
