@@ -21,7 +21,7 @@ const textOf = x => Array.isArray(x) ? x.map(textOf).join(' ') : x==null||typeof
 async function mount(t,{screen='MerchShopScreen',props={creatorId:'creator'},rpc,fetch:fetcher,mutateScreen,picker=async()=>null,uploader=async()=>{throw Error("Unexpected upload");}}={}) {
   const nodes=new Map(),calls=[],routes=[],opens=[];let current=session('buyer'),snapshot=current.authority,focused=true;
   const host=name=>function Host(p){const id=React.useId();nodes.set(id,{type:name,props:p});React.useLayoutEffect(()=>()=>nodes.delete(id),[id]);return React.createElement(React.Fragment,null,...React.Children.toArray(p.children).filter(v=>typeof v==='object'));};
-  const native={StyleSheet:{create:x=>x},Linking:{openURL:async u=>opens.push(u)}};for(const n of ['View','Text','TextInput','Pressable','ScrollView','ActivityIndicator','Image'])native[n]=host(n);
+  const native={StyleSheet:{create:x=>x,flatten:x=>x},Linking:{openURL:async u=>opens.push(u)}};for(const n of ['View','Text','TextInput','Pressable','TouchableOpacity','ScrollView','ActivityIndicator','Image'])native[n]=host(n);
   const visuals=createSharedVisualLoader(React,native,host);
   function compile(file,imports,extras={}) {const exports={};let source=fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8');if(file==='components/merch/merch-screens.tsx'&&mutateScreen)source=mutateScreen(source);vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{exports,require:name=>visuals(name)??imports(name),console,Intl,Date,Map,Promise,URL,Error,Uint8Array,setTimeout,clearTimeout,AbortController,crypto:webcrypto,fetch:fetcher??(async()=>{throw Error('Unexpected fetch');}),...extras});return exports;}
   const helper=compile('_lib/creatorMerch.ts',name=>name==='react-native'?native:name.endsWith('/merchProductPhotos')?{resolveMerchProductPhotos:products=>photos.resolveMerchProductPhotos(products)}:name.endsWith('/supabase')?{SUPABASE_URL:'https://example.test'}:{
@@ -77,7 +77,8 @@ async function mount(t,{screen='MerchShopScreen',props={creatorId:'creator'},rpc
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useFocusEffect:fn=>React.useEffect(()=>focused?fn():undefined,[fn,focused]),
   }:returnHelper);
-  const module=compile('components/merch/merch-screens.tsx',name=>name==='react'?React:name==='react-native'?native:name==='expo-router'?{
+  const back=compile('components/navigation/app-back-button.tsx',name=>name==='react'?React:name==='react-native'?native:{Ionicons:host('Icon')});
+  const module=compile('components/merch/merch-screens.tsx',name=>name==='react'?React:name==='react-native'?native:name.endsWith('/navigation/app-back-button')?back:name==='expo-router'?{
     useRouter:()=>({push:r=>routes.push(r),back:()=>routes.push('back'),replace:r=>routes.push(r),canGoBack:()=>true}),
     // Harness focus changes explicitly rerender the root.
     // eslint-disable-next-line react-hooks/exhaustive-deps

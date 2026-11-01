@@ -15,7 +15,8 @@ export const loadStubbed = (path, mocks = {}) => {
   new Function("exports", "module", "require", "__DEV__", javascript)(
     module.exports,
     module,
-    (id) => mocks[id] ?? (id === "./userCollectionSync" ? loadStubbed("_lib/userCollectionSync.ts") : {}),
+    (id) => mocks[id] ?? (id === "./userCollectionSync" ? loadStubbed("_lib/userCollectionSync.ts")
+      : id === "./chatActivity" ? loadStubbed("_lib/chatActivity.ts") : {}),
     false,
   );
   return module.exports;

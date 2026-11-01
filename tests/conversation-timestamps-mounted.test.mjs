@@ -35,7 +35,11 @@ function read(file) {
   if (file === "hooks/use-conversation-clock.ts" && process.env.TIMESTAMP_CONTROL === "frozen") source = source.replace("listeners.forEach((listener) => listener());", "// deliberately broken clock notification");
   if (file === "components/social/conversation-timestamp.tsx" && process.env.TIMESTAMP_CONTROL === "short-accessibility") source = source.replace("accessibilityLabel={timestamp.fullLabel}", "accessibilityLabel={timestamp.label}");
   if (file === "_lib/chat.ts" && process.env.TIMESTAMP_CONTROL === "invented-provenance") source = source.replace("displayCreatedAt: toText(row.created_at) || null", "displayCreatedAt: new Date().toISOString()");
+  if (file === "_lib/chat.ts" && process.env.TIMESTAMP_CONTROL === "metadata-activity") source = source.replace("toText(row.last_message_at) || toText(row.created_at) || null", "toText(row.last_message_at) || toText(row.updated_at) || null");
   if (file === "_lib/notifications.ts" && process.env.TIMESTAMP_CONTROL === "normalized-invalid-date") source = source.replace("displayCreatedAt: normalizeText(row.created_at) || null", "displayCreatedAt: normalizeIsoTimestamp(row.created_at)");
+  if (file === "app/chat/index.tsx" && process.env.TIMESTAMP_CONTROL === "changed-back-wrapper") source = source.replace('backNavigation: { position: "absolute", zIndex: 1', 'backNavigation: { position: "absolute", zIndex: 2');
+  if (file === "app/chat/[threadId].tsx" && process.env.TIMESTAMP_CONTROL === "changed-unread-color") source = source.replace('borderColor: "#C5A8FF"', 'borderColor: "#000000"');
+  if (file === "app/chat/index.tsx" && process.env.TIMESTAMP_CONTROL === "changed-original-style") source = source.replace('paddingBottom: 38', 'paddingBottom: 39');
   return source;
 }
 const ast = file => ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true, file.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -347,6 +351,9 @@ test("whole inbox loads threads, preserves row order/navigation and updates time
   h.native.FlatList = ({ data, renderItem, ListHeaderComponent }) => React.createElement(React.Fragment, null,
     ListHeaderComponent, ...data.map(item => React.createElement(React.Fragment, { key: item.threadId }, renderItem({ item }))));
   h.native.Alert = { alert: noop };
+  h.native.StyleSheet.flatten = value => value;
+  // Mount the real shared Back control; only its native icon is a host stub.
+  h.load("components/navigation/app-back-button.tsx", { "@expo/vector-icons": { Ionicons: () => null } });
   const inboxAuthority = { userId: "u", accountId: "u", sessionGeneration: "inbox-one", state: "ACTIVE", restoreOnly: false };
   const inboxOwnerKey = a => a ? JSON.stringify([a.userId, a.accountId, a.sessionGeneration]) : "";
   const Screen = h.load("app/chat/index.tsx", {
@@ -383,9 +390,16 @@ test("actual thread summary parser carries raw activity through the rendered inb
   const source = ast("app/chat/index.tsx");
   const node = nodes(source, n => ts.isJsxSelfClosingElement(n) && n.tagName.getText(source) === "ConversationTimestamp")[0];
   const render = h.evaluate(`export function render(item) { return (${node.getText(source)}); }`, { ConversationTimestamp: h.component, styles: {} }).exports.render;
-  for (const [last, updated, expected] of [[null, null, "Time unavailable"], [null, "2025-12-31T12:00:00Z", "Dec 31, 2025, 4:00 AM"], ["2026-10-16T07:59:00Z", "2025-12-31T12:00:00Z", "Fri 12:59 AM"]]) {
-    const row = parse({ id: "t", participant_pair_key: "u:v", created_by: "u", last_message_at: last, updated_at: updated }, "u", { requireCurrentMember: false });
-    assert.equal(row.updatedAt, updated ?? new Date(h.state.now).toISOString(), "legacy ordering fallback is unchanged");
+  for (const [activity, expected] of [
+    [{}, "Time unavailable"],
+    [{ updated_at: "2026-10-16T08:30:00Z" }, "Time unavailable"],
+    [{ created_at: "2025-12-31T12:00:00Z", updated_at: "2026-10-16T08:30:00Z" }, "Dec 31, 2025, 4:00 AM"],
+    [{ last_message_at: "2026-10-16T07:59:00Z", updated_at: "2025-12-31T12:00:00Z" }, "Fri 12:59 AM"],
+    [{ last_activity_at: "2026-10-16T07:59:00Z", last_message_at: "2025-12-31T12:00:00Z" }, "Fri 12:59 AM"],
+    [{ last_activity_at: null, last_message_at: "2026-10-16T07:59:00Z" }, "Time unavailable"],
+  ]) {
+    const row = parse({ id: "t", participant_pair_key: "u:v", created_by: "u", ...activity }, "u", { requireCurrentMember: false });
+    assert.equal(row.updatedAt, activity.updated_at ?? "", "missing metadata cannot manufacture fresh activity");
     await h.render(render(row)); assert.equal(textOf(h.texts()[0].children), expected);
   }
 });
@@ -452,7 +466,18 @@ test("actual Party insert receipt preserves raw time through Stage and Player sa
 
 test("audited surfaces retain exact original StyleSheet colors, backgrounds and layout", () => {
   for (const [file] of sources) {
-    const original = execFileSync("git", ["show", `934db4003e604e9ac42aa6feb9d4511e1c80a97b:${file}`], { cwd: rootPath, encoding: "utf8" });
+    let original = execFileSync("git", ["show", `934db4003e604e9ac42aa6feb9d4511e1c80a97b:${file}`], { cwd: rootPath, encoding: "utf8" });
+    if (file === "app/player/[id].tsx") {
+      // Reviewed shared arrow Back conversion: 44px target replaces the old
+      // 112px text button. Project only these two exact historical fragments.
+      for (const [previous, replacement] of [
+        ['standaloneBelowBackButton: {\n    minHeight: 44,\n    minWidth: 112,', 'standaloneBelowBackButton: {\n    minHeight: 44,\n    minWidth: 44,'],
+        ['  standaloneBelowBackText: {\n    color: "#EEF1F7",\n    fontSize: 12.5,\n    fontWeight: "800",\n  },\n', ''],
+      ]) {
+        assert.equal(original.split(previous).length, 2, 'exact historical Back witness');
+        original = original.replace(previous, replacement);
+      }
+    }
     const before = ts.createSourceFile(file, original, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const after = ast(file);
     const additions = file === "app/profile/[userId].tsx" ? [
@@ -460,19 +485,30 @@ test("audited surfaces retain exact original StyleSheet colors, backgrounds and 
       'profileListHeader: { gap: 16 }',
       'feedFreshnessOverlay: { position: "absolute", top: 8, left: 0, right: 0, zIndex: 20, alignItems: "center" }',
       'feedFreshnessButton: { backgroundColor: "#29131D", borderColor: "#DC143C", borderWidth: 1, borderRadius: 24, paddingHorizontal: 18, paddingVertical: 12 }',
+    ] : file === "app/chat/index.tsx" ? [
+      'backNavigation: { position: "absolute", zIndex: 1, alignItems: "flex-start" }',
+    ] : file === "app/chat/[threadId].tsx" ? [
+      'stateBackNavigation: { position: "absolute", zIndex: 1, alignItems: "flex-start" }',
+      'callEventCardUnread: {\n    borderColor: "#C5A8FF",\n    backgroundColor: "rgba(138,73,255,0.18)",\n  }',
+      'callEventUnreadLabel: {\n    color: "#E2D3FF",\n    fontSize: 10,\n    fontWeight: "800",\n  }',
     ] : [];
     const styles = source => nodes(source, n => ts.isCallExpression(n) && n.expression.getText(source) === "StyleSheet.create").map(n => {
       if (!additions.length) return n.getText(source);
       assert.ok(ts.isObjectLiteralExpression(n.arguments[0]), `${file}: literal style inventory`);
       return n.arguments[0].properties.map(property => property.getText(source));
     });
-    // Permit only the reviewed virtualization wrappers and new-post overlay. Every original
+    // Permit only the exact reviewed wrappers, new-post overlay and unread-call styles. Every original
     // style property remains text-exact and ordered; unknown additions fail.
     if (additions.length) {
       const current = styles(after);
       assert.equal(current.length, 1, file);
-      assert.deepEqual(current[0].slice(0, additions.length), additions, file);
-      assert.deepEqual(current[0].slice(additions.length), styles(before)[0], file);
+      assert.deepEqual(current[0].filter(property => additions.includes(property)), additions, file);
+      const removals = file === "app/chat/[threadId].tsx" ? [
+        'backText: {\n    color: "#E2E9F7",\n    fontSize: 14,\n    fontWeight: "800",\n  }',
+      ] : [];
+      const original = styles(before)[0];
+      assert.deepEqual(original.filter(property => removals.includes(property)), removals, file);
+      assert.deepEqual(current[0].filter(property => !additions.includes(property)), original.filter(property => !removals.includes(property)), file);
       continue;
     }
     assert.deepEqual(styles(after), styles(before), file);
@@ -480,7 +516,7 @@ test("audited surfaces retain exact original StyleSheet colors, backgrounds and 
 });
 
 test("old source and deliberately broken timestamp controls fail the real renderer suite", { skip: !!process.env.TIMESTAMP_CONTROL }, () => {
-  for (const mutation of ["old-renderers", "inclusive-week", "utc", "missing-now", "frozen", "short-accessibility", "invented-provenance", "normalized-invalid-date"]) {
+  for (const mutation of ["old-renderers", "inclusive-week", "utc", "missing-now", "frozen", "short-accessibility", "invented-provenance", "metadata-activity", "normalized-invalid-date"]) {
     // Node marks test workers in the environment. Inheriting that marker makes
     // the child emit an IPC protocol instead of running an independent suite.
     const env = { ...process.env, TIMESTAMP_CONTROL: mutation };
@@ -492,5 +528,16 @@ test("old source and deliberately broken timestamp controls fail the real render
     assert.notEqual(result.status, 0, `${mutation}: actual visible/accessibility/lifecycle assertion must catch regression`);
     assert.match(result.stdout, /ERR_ASSERTION/, `${mutation}: assertion failure rather than import/runtime failure`);
     assert.match(result.stdout, /tests [1-9]/, `${mutation}: nonempty suite executed`);
+  }
+});
+
+test("reviewed visual additions cannot mask modified Back, unread or original styles", { skip: !!process.env.TIMESTAMP_CONTROL }, () => {
+  for (const mutation of ["changed-back-wrapper", "changed-unread-color", "changed-original-style"]) {
+    const env = { ...process.env, TIMESTAMP_CONTROL: mutation }; delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, ["--test", "--test-name-pattern=^audited surfaces", import.meta.filename], {
+      cwd: rootPath, encoding: "utf8", env, timeout: 30000,
+    });
+    assert.notEqual(result.status, 0, `${mutation} must fail the exact style witness`);
+    assert.match(`${result.stdout}${result.stderr}`, /AssertionError/, mutation);
   }
 });

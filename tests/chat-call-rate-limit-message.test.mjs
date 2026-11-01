@@ -22,7 +22,7 @@ function fixture({ stage = "invite", message = "rate_limited", created = true } 
       return query;
     } } },
     "./communication": {
-      createCommunicationRoom: async () => { calls.create++; return stage === "room" ? { error: { message } } : { roomId: "ROOM" }; },
+      prepareChatCallRoomCandidate: async () => { calls.create++; return { roomId: "ROOM", capturePolicy: "best_effort" }; },
       endCommunicationRoom: async () => { calls.cleanup++; },
     },
     "./chillyChatCalls": {
@@ -43,11 +43,12 @@ for (const stage of ["room", "invite"]) {
     const { api, calls } = fixture({ stage });
     await assert.rejects(api.startChatThreadCall("thread", "voice"), error => {
       assert.equal(errors.getUserFacingErrorMessage(error, "generic failure"), expectedMessage);
+      assert.equal(error.code, "chat_call_rate_limited", "definitive throttle has a typed outcome, not uncertain Start");
       return true;
     });
     assert.equal(calls.create, 1);
-    assert.equal(calls.begin, stage === "room" ? 0 : 1);
-    assert.equal(calls.cleanup, stage === "room" ? 0 : 1, "unused room cleanup is retained");
+    assert.equal(calls.begin, 1, "room/invite rejection is one atomic server outcome");
+    assert.equal(calls.cleanup, 0, "server rolls back rejected room; client never ends unknown committed work");
     assert.equal(calls.dispatch, 0);
   });
 }
@@ -58,7 +59,7 @@ test("unknown invite backend text remains private and cannot become rate-limit s
     assert.doesNotMatch(error.message, /private_internal_failure|could not be saved/);
     return true;
   });
-  assert.equal(calls.cleanup, 1);
+  assert.equal(calls.cleanup, 0, "unknown result cannot trigger speculative room End");
   assert.equal(calls.dispatch, 0);
 });
 
@@ -72,6 +73,6 @@ for (const created of [true, false]) {
     assert.equal(calls.create, 1);
     assert.equal(calls.begin, 1);
     assert.equal(calls.dispatch, Number(created), "only a newly created server invite dispatches, exactly once");
-    assert.equal(calls.cleanup, Number(!created), "a reused invite retires only the unused room");
+    assert.equal(calls.cleanup, 0, "atomic reuse does not allocate an unused room");
   });
 }

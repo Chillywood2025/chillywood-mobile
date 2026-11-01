@@ -134,7 +134,8 @@ select is(pg_temp.social_plan('profile_reply')->>'eligible','false','recipient-t
 delete from public.channel_audience_blocks where channel_user_id='9b330000-0000-4000-8000-000000000002';
 
 insert into auth.sessions(id,user_id) values
- ('9b330000-0000-4000-8000-000000000101','9b330000-0000-4000-8000-000000000001');
+ ('9b330000-0000-4000-8000-000000000101','9b330000-0000-4000-8000-000000000001'),
+ ('9b330000-0000-4000-8000-000000000102','9b330000-0000-4000-8000-000000000002');
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"9b330000-0000-4000-8000-000000000001","session_id":"9b330000-0000-4000-8000-000000000101"}',true);
 insert into public.chat_threads(id,participant_pair_key,created_by) values
  ('9b334000-0000-4000-8000-000000000001','9b330000-0000-4000-8000-000000000001::9b330000-0000-4000-8000-000000000002','9b330000-0000-4000-8000-000000000001');
@@ -153,7 +154,16 @@ select is((select unread_count from public.chat_thread_members where thread_id='
 select is(pg_temp.social_plan('chat_message')->>'body','Social Creator (@social_1) sent you a Chi''lly Chat message.','message alert identifies the authorized sender without previewing message content');
 select ok(position('private message fixture' in pg_temp.social_plan('chat_message')::text)=0,'private chat body is absent from the entire delivery plan, including target context');
 select is(pg_temp.social_plan('chat_message')->>'target_entity_id','9b334000-0000-4000-8000-000000000001','identified sender still opens the exact authorized chat thread');
-update public.chat_thread_members set last_read_at=now() where thread_id='9b334000-0000-4000-8000-000000000001' and user_id='9b330000-0000-4000-8000-000000000002';
+-- now() is the enclosing transaction's start, not an observed-message read.
+-- Exercise the current exact-session read RPC with the actual admitted boundary.
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"9b330000-0000-4000-8000-000000000002","session_id":"9b330000-0000-4000-8000-000000000102"}',true);
+select lives_ok($$select public.mark_chilly_chat_thread_read(
+ '9b334000-0000-4000-8000-000000000001',
+ (select created_at from public.chat_messages where id='9b335000-0000-4000-8000-000000000001'),null)$$,
+ 'actual recipient acknowledges the observed message with exact session authority');
+reset role;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"9b330000-0000-4000-8000-000000000001","session_id":"9b330000-0000-4000-8000-000000000101"}',true);
 select is(pg_temp.social_plan('chat_message')->>'eligible','false','read before delivery suppresses message alert');
 update public.chat_thread_members set last_read_at=null where thread_id='9b334000-0000-4000-8000-000000000001' and user_id='9b330000-0000-4000-8000-000000000002';
 update public.chat_messages set moderation_status='hidden' where id='9b335000-0000-4000-8000-000000000001';

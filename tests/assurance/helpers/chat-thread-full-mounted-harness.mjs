@@ -277,7 +277,7 @@ export async function mountFullChatThread(options = {}) {
   }
   const notifyInvite = async () => { for (const fn of runtime.subscriptions) fn(); await settle(); };
   const inviteApi = {
-    listChillyChatCallEvents: async () => [],
+    listChillyChatCallEvents: async () => runtime.readCallEvents ? runtime.readCallEvents() : [],
     readChillyChatCallInvite: async (id) => runtime.readInvite ? runtime.readInvite(id)
       : runtime.invite?.id === id ? ({ ...runtime.invite }) : null,
     readLatestChillyChatCallInviteForRoom: async (roomId) => runtime.readLatestInvite ? runtime.readLatestInvite(roomId)
@@ -351,6 +351,7 @@ export async function mountFullChatThread(options = {}) {
     "./use-legacy-android-audio-route": ownedAudio.hook,
   });
   const chat = {
+    readChatActivityCut: async () => runtime.readActivityCut ? runtime.readActivityCut() : '2026-10-31T23:59:59Z',
     getChatThread: async (id) => runtime.readThread ? runtime.readThread(id)
       : durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
     listChatMessages: async (id) => runtime.readMessages ? runtime.readMessages(id)
@@ -359,7 +360,7 @@ export async function mountFullChatThread(options = {}) {
       if (!durableThread) throw Error("message writes require the durable thread fixture");
       return durableThread.send(runtime.userId, id, body, attachment);
     },
-    markChatThreadRead: async () => {}, subscribeToThread: (_id, fn) => {
+    markChatThreadRead: async (...args) => runtime.markRead?.(...args), subscribeToThread: (_id, fn) => {
       runtime.threadSubscriptions.add(fn); durableThread?.listeners.add(fn);
       return () => { runtime.threadSubscriptions.delete(fn); durableThread?.listeners.delete(fn); };
     },
@@ -481,6 +482,7 @@ export async function mountFullChatThread(options = {}) {
     },
     "../../_lib/officialAccounts": { getOfficialPlatformAccount: () => null },
     "../../_lib/performancePolicy": { READ_RECEIPT_THROTTLE_MS: 500 },
+    "../../_lib/chatActivity": compile(fs.readFileSync("_lib/chatActivity.ts", "utf8"), "_lib/chatActivity.ts", {}),
     "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }, session: { access_token: runtime.accessToken ?? "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration, runtime.accessToken]) },
     "../../_lib/userFacingErrors": options.userFacingErrors ?? { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
     "../../_lib/usernameHandles": { formatUsernameHandle: () => "" },
@@ -608,6 +610,8 @@ export async function mountFullChatThread(options = {}) {
   // Retain every screen hook/effect/callback. Only the render tree is replaced;
   // no call handlers, response checks, states, or lifecycle effects are replaced.
   const marker = "  if (authLoading || loading) {";
+  const recentCallBinding = source.match(/\{(\[\.\.\.callEvents\][^\n]+?)\.map\(\(event\) =>/u)?.[1];
+  assert.ok(recentCallBinding, "actual recent call ordering expression is retained");
   assert.equal(source.split(marker).length, 2);
   source = source.slice(0, source.indexOf(marker)) + `
     ${presentationDeclarations}
@@ -626,6 +630,7 @@ export async function mountFullChatThread(options = {}) {
       callTitle, callBody, initialCallMediaPreferences, messages, renderedMessages, draft, sending, setDraft,
       handleAcceptIncomingCall, handleJoinOrCloseCall, handleStartCall, handleToggleCallMic,
       handleToggleCallCamera, handleSwitchCallCamera, handleToggleNativeAudioRoute,
+      recentCalls: (${recentCallBinding}), markThreadReadWithThrottle,
       loadThreadState, handleSend, handleDeclineIncomingCall }; });
     return null;
   }`;

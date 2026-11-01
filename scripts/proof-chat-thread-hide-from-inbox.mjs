@@ -56,7 +56,8 @@ const releaseDoc = read("docs/release/CROSS_APP_PEOPLE_HANDLE_SEARCH_FIX.md");
 [
   "hiddenAt?: string",
   "isHiddenFromCurrentInbox",
-  "lastMessageTime <= hiddenTime",
+  "const lastMessageAt = toText(thread.displayLastActivityAt);",
+  "compareChatActivityTimestamps(lastMessageAt, hiddenAt) <= 0",
   "hideChatThreadFromInbox",
   "unhideChatThreadForMe",
   "hide_chat_thread_from_inbox",

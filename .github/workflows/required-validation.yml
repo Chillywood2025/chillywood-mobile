@@ -191,6 +191,7 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-tip-cross-rail-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-tracking-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-return-cases-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-chat-call-retry-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs
           node scripts/test-content-inspection-postgres.mjs
           node scripts/test-deleted-content-retention-postgres.mjs

@@ -5,6 +5,7 @@ import test from "node:test";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import ts from "typescript";
+import {loadStubbed} from './customer-experience-adversarial-helpers.mjs';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const noop = () => {};
@@ -30,6 +31,7 @@ async function mount(t) {
     "../../_lib/session": { useSession: () => ({ isLoading: false, isSignedIn: !!state.authority, user: state.authority ? { id: state.authority.userId } : null, authority: state.authority }) },
     "../../_lib/accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => state.authority },
     "../../_lib/notificationActivity": { getNotificationActivityOwnerKey: ownerKey },
+    "../../_lib/displayText": loadStubbed('_lib/displayText.ts'),
     "../../_lib/accountAccess": { readAccountAccessStatus: async () => ({ restricted: false }) },
     "../../_lib/analytics": { trackEvent: noop },
     "../../_lib/chat": {

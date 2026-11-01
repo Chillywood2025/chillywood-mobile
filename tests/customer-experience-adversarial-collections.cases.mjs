@@ -277,7 +277,8 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
     created_by: account.userId,
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
-    last_message_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+    last_message_at: "2026-01-01T00:00:00.000Z",
+    last_activity_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
     members: memberRows,
   }));
   const messageRows = Array.from({ length: 405 }, (_, index) => ({
@@ -288,9 +289,9 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
     created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, 404 - index)).toISOString(),
     moderation_status: "clean",
   }));
-  const chatCursors = { chat_threads: [], chat_messages: [] };
-  const chatLimits = { chat_threads: [], chat_messages: [] };
-  const chatPageReads = { chat_threads: 0, chat_messages: 0 };
+  const chatCursors = { chat_thread_activity: [], chat_messages: [] };
+  const chatLimits = { chat_thread_activity: [], chat_messages: [] };
+  const chatPageReads = { chat_thread_activity: 0, chat_messages: 0 };
   const makeChatQuery = (table) => {
     const query = {
       cursor: "",
@@ -298,7 +299,7 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
       pageSize: 200,
       select() { return this; },
       eq(column, value) {
-        if (table === "chat_threads" && column === "id") this.exactId = value;
+        if (table === "chat_thread_activity" && column === "id") this.exactId = value;
         return this;
       },
       order() { return this; },
@@ -315,7 +316,7 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
         return this;
       },
       returns() {
-        if (table === "chat_threads" && this.exactId) {
+        if (table === "chat_thread_activity" && this.exactId) {
           return {
             maybeSingle: async () => ({
               data: threadRows.find((row) => row.id === this.exactId) ?? null,
@@ -323,8 +324,8 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
             }),
           };
         }
-        if (table === "chat_threads" || table === "chat_messages") {
-          const rows = table === "chat_threads" ? threadRows : messageRows;
+        if (table === "chat_thread_activity" || table === "chat_messages") {
+          const rows = table === "chat_thread_activity" ? threadRows : messageRows;
           const start = this.cursor
             ? rows.findIndex((row) => row.id > this.cursor)
             : 0;
@@ -361,9 +362,9 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
   assert.equal(new Set(messages.map((message) => message.id)).size, 405);
   assert.equal(threads[0].threadId, "thread-0404");
   assert.equal(messages[0].id, "message-0404");
-  assert.deepEqual(chatCursors.chat_threads, ["thread-0199", "thread-0399"]);
+  assert.deepEqual(chatCursors.chat_thread_activity, ["thread-0199", "thread-0399"]);
   assert.deepEqual(chatCursors.chat_messages, ["message-0199", "message-0399"]);
-  assert.deepEqual(chatLimits.chat_threads, [200, 200, 200]);
+  assert.deepEqual(chatLimits.chat_thread_activity, [200, 200, 200]);
   assert.deepEqual(chatLimits.chat_messages, [200, 200, 200]);
 
   const userDataSource = read("_lib/userData.ts");

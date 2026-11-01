@@ -22,8 +22,14 @@ function harness({ read = () => ({ data: [], error: null }), capture, room, comm
     from(table) {
       const query = { table, filters: {}, signal: null, select() { return this; }, order() { return this; }, limit() { return this; },
         eq(key, value) { this.filters[key] = value; return this; }, gt(key, value) { this.filters[`after_${key}`] = value; return this; },
+        lte(key,value) { this.filters[`through_${key}`]=value; return this; },
         in() { return this; }, abortSignal(signal) { this.signal = signal; return this; },
-        returns() { state.queries.push(this); return read(this); },
+        returns() { state.queries.push(this);
+          if(this.table==='chat_thread_activity' && this.filters.id) return {maybeSingle:async()=>{
+            const result=await read(this);return {...result,data:result.data?.[0]??null};
+          }};
+          return read(this);
+        },
       }; return query;
     },
     channel(name) {
@@ -34,6 +40,7 @@ function harness({ read = () => ({ data: [], error: null }), capture, room, comm
   };
   const api = loadStubbed("_lib/chat.ts", {
     "./supabase": { supabase }, "./userFacingErrors": { UserFacingError },
+    "./socialAttachments": {readSocialAttachmentsForSurfaces:async()=>new Map()},
     "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => state.authority, sameAccountSessionAuthority: same },
     "./accountBoundSupabaseMutation": {
       captureAccountBoundSupabaseMutationSubject: capture ?? (async () => ({ authority: state.authority, accessToken: "frozen-token" })),
@@ -51,6 +58,61 @@ function harness({ read = () => ({ data: [], error: null }), capture, room, comm
   });
   return { api, state };
 }
+
+test("inbox ranks meaningful call activity ahead of old messages, retains microseconds and never reads by sorting", async () => {
+  const rows = [
+    {...row('old'),last_message_at:'2026-08-01T00:00:00Z',updated_at:'2099-01-01T00:00:00Z'},
+    {...row('call'),last_activity_at:'2026-10-31T20:15:00.123456Z',last_activity_preview:'Voice call ended',
+      members:row('call').members.map(m=>({...m,unread_count:2,unread_call_count:1}))},
+    {...row('earlier'),last_activity_at:'2026-10-31T20:15:00.123400Z'},
+    {...row('same-b'),last_activity_at:'2026-10-31T20:15:00.123456Z'},
+    {...row('unknown'),updated_at:'2099-01-01T00:00:00Z'},
+  ];
+  const h=harness({read:q=>({data:q.table==='chat_thread_activity'?rows:[],error:null})});
+  const result=await h.api.listChatThreads();
+  assert.deepEqual(result.map(t=>t.threadId),['call','same-b','earlier','old','unknown']);
+  assert.equal(result[0].lastActivityPreview,'Voice call ended');
+  assert.equal(result[0].currentMember.unreadCount,3);
+  assert.equal(result[0].currentMember.unreadCallCount,1);
+  assert.equal(h.state.writes.length,0);
+});
+
+test("read acknowledgement preserves observed microseconds and uses exact frozen authority",async()=>{
+  const h=harness();
+  await h.api.markChatThreadRead('thread');
+  assert.equal(h.state.writes.length,0,'no synthetic now acknowledgement');
+  await h.api.markChatThreadRead('thread','2026-10-31T20:15:00.123456Z');
+  assert.equal(h.state.writes[0][1],'mark_chilly_chat_thread_read');
+  assert.equal(h.state.writes[0][2].p_read_through,'2026-10-31T20:15:00.123456Z');
+  assert.equal(h.state.writes[0][0].accessToken,'frozen-token');
+});
+
+test("authoritative empty preview never falls back to deleted legacy text",async()=>{
+  const h=harness({read:q=>({data:q.table==='chat_thread_activity'?[{...row('empty'),last_activity_at:null,last_activity_preview:null,last_message_at:'2099-01-01',last_message_preview:'Deleted private text'}]:[],error:null})});
+  const [thread]=await h.api.listChatThreads();
+  assert.equal(thread.lastActivityPreview,'');
+  assert.equal(thread.displayLastActivityAt,null);
+});
+
+test("new activity after hide resurfaces even inside the same millisecond",async()=>{
+  const rows=['same','newer'].map(id=>({...row(id),last_activity_at:`2026-10-31T20:15:00.${id==='same'?'123400':'123456'}Z`,
+    members:row(id).members.map(m=>({...m,hidden_at:'2026-10-31T20:15:00.123400Z'}))}));
+  const h=harness({read:q=>({data:q.table==='chat_thread_activity'?rows:[],error:null})});
+  assert.deepEqual((await h.api.listChatThreads()).map(t=>t.threadId),['newer']);
+});
+
+test("message UUID pagination uses the same immutable server cut on every page",async()=>{
+  const cut='2026-10-31T20:15:00.123456Z';
+  const messages=Array.from({length:201},(_,i)=>({id:String(i).padStart(4,'0'),thread_id:'thread',sender_user_id:'other',body:'retained',message_type:'text',created_at:cut}));
+  const h=harness({read:q=>({error:null,data:q.table==='chat_thread_activity'?[row('thread')]
+    :q.table==='chat_messages'?messages.filter(m=>!q.filters.after_id || m.id>q.filters.after_id).slice(0,200):[]})});
+  const result=await h.api.listChatMessages('thread',cut);
+  assert.equal(result.length,201);
+  const queries=h.state.queries.filter(q=>q.table==='chat_messages');
+  assert.equal(queries.length,2);
+  assert.ok(queries.every(q=>q.filters.through_created_at===cut));
+  assert.equal(h.state.writes.length,0,'paging only reads');
+});
 
 test("inbox query failure rejects instead of manufacturing an empty inbox", async () => {
   const h = harness({ read: () => ({ data: null, error: { message: "offline" } }) });
@@ -99,7 +161,7 @@ test("cancelling one reconciliation retains ownership until abort-ignoring sibli
   const controller = new AbortController(); const held = deferred();
   let rooms = 0;
   const h = harness({
-    read: q => ({ data: q.table === "chat_threads" ? [row("one", true), row("two", true)] : [], error: null }),
+    read: q => ({ data: q.table === "chat_thread_activity" ? [row("one", true), row("two", true)] : [], error: null }),
     room: async () => { rooms++; if (rooms === 1) return held.promise; controller.abort(); return { room: null }; },
   });
   let settled = false;
@@ -143,7 +205,7 @@ test("reconciliation uses actual cancellable room-only helper without an unrelat
         returns() { return this; }, maybeSingle() { return table === "communication_rooms" ? held.promise : new Promise(() => {}); } };
     } } },
   });
-  const h = harness({ communication, read: q => ({ data: q.table === "chat_threads" ? [row("one", true)] : [], error: null }) });
+  const h = harness({ communication, read: q => ({ data: q.table === "chat_thread_activity" ? [row("one", true)] : [], error: null }) });
   let settled = false;
   const pending = h.api.listChatThreads({ signal: controller.signal }).finally(() => { settled = true; });
   for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -171,7 +233,7 @@ test("actual room helper checks cancellation before legacy fallback dispatch", a
 test("room-only optimization is confined to signal-owned inbox reads while legacy cleanup keeps its snapshot", async () => {
   let snapshots = 0, roomReads = 0;
   const h = harness({
-    read: q => ({ data: q.table === "chat_threads" ? [row("one", true)] : [], error: null }),
+    read: q => ({ data: q.table === "chat_thread_activity" ? [row("one", true)] : [], error: null }),
     communication: {
       formatCommunicationRoomCode: value => value, isCommunicationRoomActive: () => false,
       getCommunicationRoomSnapshot: async () => { snapshots++; return { room: null }; },

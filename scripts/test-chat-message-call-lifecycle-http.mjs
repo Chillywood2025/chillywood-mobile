@@ -79,6 +79,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
   const communication = loadCommunicationApiSource(client, mutation.runExactSessionAccountBoundSupabaseMutationRpc);
   const errors = loadSource("_lib/userFacingErrors.ts", {});
   const calls = loadSource("_lib/chillyChatCalls.ts", {
+    "./chatActivity": loadSource("_lib/chatActivity.ts", {}),
     "./supabase": bootstrap, "./accountSessionAuthority": authority,
     "./accountBoundSupabaseMutation": mutation,
     "./chillyChatCallDispatchSchema": loadSource("_lib/chillyChatCallDispatchSchema.ts", {}),
@@ -99,6 +100,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
   });
   const diagnostics = [];
   const chat = loadSource("_lib/chat.ts", {
+    "./chatActivity": loadSource("_lib/chatActivity.ts", {}),
     "./communication": communication, "./chillyChatCalls": calls,
     "./socialAttachments": attachments, "./supabase": bootstrap,
     "./peopleSearchNormalization": loadSource("_lib/peopleSearchNormalization.ts", {}),
@@ -144,7 +146,7 @@ const localFetch = async (input, init) => {
   const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
   assert.equal(url.origin, origin, "this test never contacts a remote API or provider");
   const response = await originalFetch(input, init);
-  if (heldRead && url.pathname === "/rest/v1/chat_threads" && (!init?.method || init.method === "GET")) {
+  if (heldRead && url.pathname === "/rest/v1/chat_thread_activity" && (!init?.method || init.method === "GET")) {
     const gate = heldRead;
     heldRead = null;
     gate.arrived();
@@ -299,12 +301,15 @@ try {
     "End commits both participants' durable media cleanup before subsequent messaging");
   await messagesBothWays("after-end");
 
-  // The real invite trigger permits three initiations per caller/thread/callee
-  // in 300 seconds, and room creation permits five per host in 600 seconds.
-  // This single-thread sequence uses three calls in each direction instead of
-  // exempting fixtures, clearing throttle history, or sleeping for five minutes.
-  // First prove a fourth initiation in the original direction remains blocked.
-  phase("fourth original-direction invite is rate limited");
+  // Durable callee acceptance plus End credits only that completed invite.
+  // The canceled/declined attempts stay counted. Exercise the released slot,
+  // then cancel it to restore three unanswered attempts without deleting the
+  // ledger, bypassing guards, or sleeping through the five-minute budget.
+  phase("completed call permits another original-direction invite");
+  const creditedRetry = await begin("completed-credit");
+  requireData(await transition(creditedRetry, caller, "canceled"), "cancel credited retry without earning another credit");
+  await assertTerminal(creditedRetry, "canceled");
+  phase("fourth unanswered original-direction invite is rate limited");
   const limitedRoom = await createRoom("limited");
   await assert.rejects(callerApi.calls.beginChillyChatCall({ actorUserId: caller,
     threadId, communicationRoomId: limitedRoom, callType: "video" }),
@@ -430,11 +435,16 @@ try {
     "begin_chilly_chat_call", { p_thread_id: threadId, p_communication_room_id: expiredRoom, p_call_type: "video" }), /account changed/iu); checks++;
 
   phase("final committed messages and invite budgets");
-  const inviteRows = requireData(await admin.from("chat_call_invites").select("caller_user_id,callee_user_id")
+  const inviteRows = requireData(await admin.from("chat_call_invites").select("caller_user_id,callee_user_id,status,accepted_at")
     .eq("thread_id", threadId), "final invite budget readback");
-  check(inviteRows.length === 6 && [caller, callee].every((initiator) => inviteRows.filter((row) =>
-    row.caller_user_id === initiator && row.callee_user_id === participants.get(initiator).otherUser).length === 3),
-  "three committed invites per direction include the expired fixture, with no rate-limit bypass");
+  check(inviteRows.length === 7 && [[caller,4],[callee,3]].every(([initiator,count]) => inviteRows.filter((row) =>
+    row.caller_user_id === initiator && row.callee_user_id === participants.get(initiator).otherUser).length === count),
+  "four original and three reverse invites retain completed credit and the expired fixture without rate-limit bypass");
+  const originalInvites=inviteRows.filter((row)=>row.caller_user_id===caller);
+  check(originalInvites.filter((row)=>row.status==='ended'&&row.accepted_at).length===1
+    && originalInvites.filter((row)=>row.status==='canceled'&&!row.accepted_at).length===2
+    && originalInvites.filter((row)=>row.status==='declined'&&!row.accepted_at).length===1,
+  "only the accepted-and-ended original invite earns credit; three unanswered attempts stay charged");
   const finalRows = requireData(await admin.from("chat_messages").select("id,sender_user_id,body").eq("thread_id", threadId), "final committed message readback");
   check(finalRows.length === expectedMessages.length, "no duplicate, missing, rejected, or stale-account message was committed");
   for (const expected of expectedMessages) {

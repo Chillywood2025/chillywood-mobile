@@ -41,12 +41,17 @@ function createStartBoundary({ readback = "error", beginFailure, afterDispatch }
     communication_room_id: store.invite.communicationRoomId, status: store.invite.status,
     expires_at: store.invite.expiresAt } : null;
   const realBeginApi = loadStubbed("_lib/chillyChatCalls.ts", {
-    "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: authority },
+    "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: authority,
+      readCurrentAccountSessionAuthority: async () => authority(),
+      sameAccountSessionAuthority: (a,b) => !!a && !!b && a.userId===b.userId
+        && a.accountId===b.accountId && a.sessionGeneration===b.sessionGeneration
+        && a.state===b.state && a.restoreOnly===b.restoreOnly },
     "./accountBoundSupabaseMutation": {
       AccountBoundSupabaseMutationError: class extends Error {},
       isAccountBoundSupabaseMutationOutcomeAmbiguous: () => false,
       runCurrentAccountBoundSupabaseMutationRpc: async (name, input, actorUserId) => {
-        assert.equal(name, "begin_chilly_chat_call");
+        assert.equal(name, "start_chilly_chat_call");
+        assert.equal(input.p_capture_policy, "best_effort");
         if (state.beginFailure === "rate_limited") return { data: null, error: { message: "rate_limited" } };
         if (state.beginFailure) return { data: null, error: null };
         const invite = store.start(actorUserId, input.p_thread_id, input.p_call_type);
@@ -81,7 +86,7 @@ function createStartBoundary({ readback = "error", beginFailure, afterDispatch }
       const query = { select: () => query, eq: (key, value) => { filters[key] = value; return query; },
         in: () => query, order: () => query, limit: () => query, returns: () => query,
         maybeSingle: async () => {
-          assert.equal(table, "chat_threads", "only actual thread reads use this boundary");
+          assert.equal(table, "chat_thread_activity", "only actual RLS-derived thread reads use this boundary");
           counts.threadReads += 1;
           requests.reads.push({ ...filters });
           const row = threadRow();
@@ -98,7 +103,7 @@ function createStartBoundary({ readback = "error", beginFailure, afterDispatch }
       return query;
     } } },
     "./communication": {
-      createCommunicationRoom: async () => { counts.create += 1; return { roomId: `FIXTURE-ROOM-${store.serial + 1}` }; },
+      prepareChatCallRoomCandidate: async () => { counts.create += 1; return { roomId: `FIXTURE-ROOM-${store.serial + 1}`, capturePolicy: "best_effort" }; },
       endCommunicationRoom: async (...args) => {
         counts.cleanup += 1;
         requests.cleanup.push({ functionName: "endCommunicationRoom", args });
@@ -686,6 +691,22 @@ for (const endReplacement of [false, true]) {
   });
 }
 
+test("successful explicit retry clears the old throttle error even when realtime is lost", async () => {
+  const h = await mountStartBoundary({ beginFailure: "rate_limited" });
+  try {
+    h.store.notify = () => {};
+    await h.run(() => h.runtime.snapshot.handleStartCall("video"));
+    assert.match(h.runtime.snapshot.error, /Too many attempts/);
+    h.state.beginFailure = null;
+    h.state.readback = null;
+    await h.run(() => h.runtime.snapshot.handleStartCall("video"));
+    assert.equal(h.runtime.snapshot.error, null);
+    assert.equal(h.counts.dispatch, 1);
+    assert.equal(h.store.invite.status, "ringing");
+    assert.doesNotMatch(h.runtime.snapshot.displayedCallDeliveryStatus ?? "", /Too many attempts/);
+  } finally { await h.unmount(); }
+});
+
 for (const beginFailure of ["controlled unknown begin response", "rate_limited"]) {
   test(`${beginFailure} never gains a confirmed-start receipt and remains retryable`, async () => {
     const h = await mountStartBoundary({ beginFailure });
@@ -708,6 +729,10 @@ for (const beginFailure of ["controlled unknown begin response", "rate_limited"]
         assert.match(h.runtime.snapshot.displayedCallDeliveryStatus, /Unable to confirm call setup/,
           "unknown begin delivery copy must preserve uncertainty");
         assert.doesNotMatch(h.runtime.snapshot.displayedCallDeliveryStatus, /not started|not sent|invite failed/i);
+      } else {
+        assert.equal(h.runtime.snapshot.displayedCallDeliveryStatus, h.runtime.snapshot.error,
+          "definitive rejection must not show a conflicting uncertain-setup banner");
+        assert.doesNotMatch(h.runtime.snapshot.displayedCallDeliveryStatus, /confirm|refresh/i);
       }
       const before = { ...h.counts };
       await h.run(() => h.runtime.snapshot.handleRecoverCallStart());

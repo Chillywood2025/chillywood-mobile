@@ -24,12 +24,19 @@ const labels: Record<string, string> = {
   circle_request: "Circle request", circle_accepted: "Circle request accepted", circle_added: "Added to Circle",
   content_shared: "Title shared", circle_post: "Circle update", profile_post_liked: "Profile post liked",
   profile_comment: "Profile comment", profile_reply: "Profile reply", video_comment: "Video comment",
-  video_reply: "Video reply", chat_message: "Chat message",
+  video_reply: "Video reply", chat_message: "Chat message", live_room_member_joined: "Live attendance update",
 };
 const socialTypes = new Set(["social_follow", "social_follow_request", "social_follow_accepted", "circle_request", "circle_accepted", "circle_added", "content_shared", "circle_post", "profile_post_liked", "profile_comment", "profile_reply", "video_comment", "video_reply", "chat_message"]);
 const record = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const clean = (value: unknown) => typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 160) || null : null;
 export const needsNotificationDisplayContext = (row: Row) => Object.hasOwn(labels, row.notification_type ?? "");
+
+/** Attendance is sensitive: never render cached identity/room labels while its
+ * current audience revalidation is unavailable, timed out, or still pending. */
+export function redactUnverifiedLiveAttendance<T extends Row>(rows: T[]): T[] {
+  return rows.map(row => row.notification_type === "live_room_member_joined"
+    ? { ...row, title: "Live attendance update", body: "Open details to check current availability." } : row);
+}
 
 function parseContext(value: unknown): Context | null {
   const item = record(value);
@@ -70,6 +77,7 @@ export function applyNotificationDisplayContext<T extends Row>(rows: T[], payloa
       : type === "live_watch_party_seat_eligible" ? `Your Seat Pass for ${detail} was recorded. Payment alone does not approve speaking, camera or microphone; host approval is required. Open details for current status.`
       : type === "public_upload" ? `${creator || "This creator"} posted ${subject ? `“${subject}”` : "a public video"}.`
       : type === "creator_event_canceled" ? `${subject || "This event"}${creator ? ` by ${creator}` : ""} was canceled.`
+      : type === "live_room_member_joined" ? `${creator} joined ${subject || "a live room"}. Open details to check current availability.`
       : `This update concerns ${detail}. Open details for current status and availability.`;
     return { ...row, title, body };
   });

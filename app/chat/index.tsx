@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import { ChillywoodBrandedSurface } from "../../components/ui/chillywood-branded-surface";
+import { AppBackButton } from "../../components/navigation/app-back-button";
 
 import { readAccountAccessStatus, type AccountAccessStatusReadback } from "../../_lib/accountAccess";
 import { trackEvent } from "../../_lib/analytics";
@@ -66,7 +67,8 @@ function buildPreview(thread: ChatThreadSummary) {
   if (thread.activeCommunicationRoomId && thread.activeCallType) {
     return `${thread.activeCallType === "video" ? "Video" : "Voice"} call active`;
   }
-  return thread.lastMessagePreview ? decodeVisiblePercentEscapes(thread.lastMessagePreview) : "Start the thread";
+  const preview = thread.lastActivityPreview ?? thread.lastMessagePreview;
+  return preview ? decodeVisiblePercentEscapes(preview) : "Start the thread";
 }
 
 function getIdentityLabel(thread: ChatThreadSummary) {
@@ -85,8 +87,8 @@ function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
     thread.otherMember?.displayName,
     thread.otherMember?.username,
     thread.otherMember?.tagline,
-    thread.lastMessagePreview,
-    thread.lastMessagePreview ? decodeVisiblePercentEscapes(thread.lastMessagePreview) : undefined,
+    thread.lastActivityPreview ?? thread.lastMessagePreview,
+    decodeVisiblePercentEscapes(thread.lastActivityPreview ?? thread.lastMessagePreview ?? ""),
     thread.activeCallType,
   ], rawQuery);
 }
@@ -94,6 +96,22 @@ function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
 export default function ChillyChatInboxScreen() {
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
+  const inboxBackControl = (
+    <View style={[styles.backNavigation, {
+      top: safeAreaInsets.top + 8,
+      left: Math.max(safeAreaInsets.left, 16),
+      right: Math.max(safeAreaInsets.right, 16),
+    }]}>
+      <AppBackButton
+        testID="chat-inbox-back-button"
+        accessibilityLabel="Go back from Chi'lly Chat Inbox"
+        onPress={() => {
+          if (router.canGoBack()) router.back();
+          else router.replace("/(tabs)");
+        }}
+      />
+    </View>
+  );
   const { isLoading: authLoading, isSignedIn, user, authority } = useSession();
   const ownerKey = !authLoading && isSignedIn && authority?.userId === user?.id
     ? getNotificationActivityOwnerKey(authority) : "";
@@ -817,7 +835,8 @@ export default function ChillyChatInboxScreen() {
 
   if (authLoading || loading) {
     return (
-      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 64 }]}>
+        {inboxBackControl}
         <ActivityIndicator size="small" color="#F34B74" />
         <Text style={styles.stateText}>{authLoading ? "Checking Chi'lly Chat access..." : "Loading Chi'lly Chat..."}</Text>
       </ChillywoodBrandedSurface>
@@ -826,7 +845,8 @@ export default function ChillyChatInboxScreen() {
 
   if (!isSignedIn) {
     return (
-      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 64 }]}>
+        {inboxBackControl}
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sign in to open Chi&apos;lly Chat</Text>
           <Text style={styles.emptyBody}>
@@ -848,10 +868,11 @@ export default function ChillyChatInboxScreen() {
     return (
       <ChillywoodBrandedSurface
         variant="chat"
-        style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}
+        style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 64 }]}
         testID="chat-access-restricted-state"
         accessibilityLabel="Chi'lly Chat account access restricted"
       >
+        {inboxBackControl}
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Chat is not available for this account.</Text>
           <Text style={styles.emptyBody}>
@@ -876,9 +897,10 @@ export default function ChillyChatInboxScreen() {
   return (
     <ChillywoodBrandedSurface
       variant="chat"
-      style={[styles.screen, { paddingTop: safeAreaInsets.top + 12 }]}
+      style={[styles.screen, { paddingTop: safeAreaInsets.top + 64 }]}
       testID="chat-inbox-branded-surface"
     >
+      {inboxBackControl}
       <View
       testID="chat-inbox-screen"
       accessibilityLabel="Chi'lly Chat inbox screen"
@@ -961,7 +983,7 @@ export default function ChillyChatInboxScreen() {
                       </View>
                     ) : null}
                   </View>
-                  <ConversationTimestamp style={styles.threadTime} value={item.displayLastActivityAt === undefined ? (item.lastMessageAt ?? item.updatedAt) : item.displayLastActivityAt} />
+                  <ConversationTimestamp style={styles.threadTime} value={item.displayLastActivityAt === undefined ? (item.lastMessageAt ?? item.createdAt) : item.displayLastActivityAt} />
                 </View>
                 <View style={styles.threadMetaRow}>
                   <View style={[styles.threadKindPill, officialAccount && styles.threadKindPillOfficial]}>
@@ -1022,6 +1044,7 @@ export default function ChillyChatInboxScreen() {
 }
 
 const styles = StyleSheet.create({
+  backNavigation: { position: "absolute", zIndex: 1, alignItems: "flex-start" },
   screen: {
     flex: 1,
   },

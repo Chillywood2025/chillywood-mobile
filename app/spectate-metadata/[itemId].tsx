@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppBackButton } from "../../components/navigation/app-back-button";
 
 import {
   getDiscoveryAdPolicyLabel,
@@ -314,9 +315,7 @@ export default function SpectatorMetadataScreen() {
   const renderUnavailable = () => (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: Math.max(28, safeAreaInsets.top + 12) }]}>
-        <TouchableOpacity style={styles.navButton} activeOpacity={0.84} onPress={() => router.back()}>
-          <Text style={styles.navButtonText}>Back</Text>
-        </TouchableOpacity>
+        <AppBackButton testID="spectator-back-button" accessibilityLabel="Go back from Spectator" style={styles.navButton} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")} />
         <Text style={styles.headerTitle}>Spectator</Text>
         <View style={styles.navSpacer} />
       </View>
@@ -370,9 +369,7 @@ export default function SpectatorMetadataScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: 36 + safeAreaInsets.bottom }]}
       >
         <View style={[styles.header, { paddingTop: Math.max(28, safeAreaInsets.top + 12) }]}>
-          <TouchableOpacity style={styles.navButton} activeOpacity={0.84} onPress={() => router.back()}>
-            <Text style={styles.navButtonText}>Back</Text>
-          </TouchableOpacity>
+          <AppBackButton testID="spectator-back-button" accessibilityLabel="Go back from Spectator" style={styles.navButton} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")} />
           <Text style={styles.headerTitle}>Spectator</Text>
           <View style={styles.navSpacer} />
         </View>
@@ -516,8 +513,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   navButton: {
-    minWidth: 70,
-    minHeight: 40,
+    minWidth: 44,
+    minHeight: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -526,18 +523,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
   },
-  navButtonText: {
-    color: "#F7FAFF",
-    fontSize: 13,
-    fontWeight: "900",
-  },
   headerTitle: {
     color: "#F7FAFF",
     fontSize: 15,
     fontWeight: "900",
   },
   navSpacer: {
-    width: 70,
+    width: 44,
   },
   centerCard: {
     margin: 18,

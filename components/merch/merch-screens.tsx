@@ -1,4 +1,5 @@
 import { ChillywoodBrandedSurface } from "../ui/chillywood-branded-surface";
+import { AppBackButton } from "../navigation/app-back-button";
 import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -26,7 +27,7 @@ function Button({ label, onPress, disabled = false, selected }: { label: string;
 }
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   const router = useRouter();
-  return <ChillywoodBrandedSurface variant="app" testID="merch-branded-surface"><ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"><Button label="Back" onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/profile")} /><Text accessibilityRole="header" style={styles.title}>{title}</Text><Text style={styles.notice}>{NOTICE}</Text>{children}</ScrollView></ChillywoodBrandedSurface>;
+  return <ChillywoodBrandedSurface variant="app" testID="merch-branded-surface"><ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"><AppBackButton testID="merch-back-button" accessibilityLabel={`Go back from ${title}`} style={{ alignSelf: "flex-start" }} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/profile")} /><Text accessibilityRole="header" style={styles.title}>{title}</Text><Text style={styles.notice}>{NOTICE}</Text>{children}</ScrollView></ChillywoodBrandedSurface>;
 }
 
 // Exact-session remount removes private order/editor state synchronously on account

@@ -7,6 +7,17 @@ new Function('exports',ts.transpileModule(fs.readFileSync('_lib/notificationDisp
 const row=(type='vip_access_active',extra={})=>({id:'notice-a',notification_type:type,target_route:'/vip-pass/[creatorId]',target_entity_id:'creator-a',title:'VIP Pass active.',body:'Your creator VIP access is active.',created_at:'2026-07-05T12:55:00Z',read_at:null,...extra});
 const item=(r,extra={})=>({notificationId:r.id,notificationType:r.notification_type,targetRoute:r.target_route,targetId:r.target_entity_id,creatorId:'creator-a',creatorName:'Rachi (@rachi)',targetTitle:null,resolution:'resolved',...extra});
 const apply=(rows,items)=>api.applyNotificationDisplayContext(rows,{schemaVersion:1,items});
+test('attendance never displays cached private identity without current bound context',()=>{
+ const r=row('live_room_member_joined',{target_route:'/watch-party/live-stage/[partyId]',target_entity_id:'EXACT-ROOM',title:'PRIVATE PERSON joined',body:'PRIVATE ROOM'});
+ const redacted=api.redactUnverifiedLiveAttendance([r]);
+ assert.doesNotMatch(JSON.stringify(redacted),/PRIVATE PERSON|PRIVATE ROOM/);
+ const actual=apply(redacted,[item(r,{creatorName:'Exact Member',targetTitle:'Exact Room'})])[0];
+ assert.match(actual.body,/Exact Member joined Exact Room/);
+ const unavailable=apply([actual],[item(r,{resolution:'unavailable',creatorName:null,targetTitle:null})])[0];
+ assert.doesNotMatch(unavailable.title+unavailable.body,/Exact Member|Exact Room/);
+ assert.equal(actual.target_entity_id,'EXACT-ROOM');
+ assert.equal(actual.target_route,'/watch-party/live-stage/[partyId]');
+});
 test('historic VIP identifies its exact creator without claiming current active access',()=>{
  const r=row(),actual=apply([r],[item(r)])[0];
  assert.match(actual.title,/VIP Pass confirmed.*Rachi/);assert.match(actual.body,/Rachi.*was recorded/);

@@ -128,6 +128,8 @@ async function operationSql(db, table, privilege) {
 // New public tables must be deliberately classified, not automatically granted.
 // Private tables remain inaccessible to all three API roles, including service.
 const recentPublic = {
+  // Exact-session RPCs only; neither callers nor service have direct access.
+  'public.person_notification_preferences': {},
   // Exact-session creator/buyer RPCs own SKU reads and reservations; even
   // service transport has no direct table privilege on this inventory.
   'public.merch_product_variants': {},
@@ -318,11 +320,35 @@ test('authenticated client operations and anonymous readable surfaces do not rel
       assert.equal(authenticated.length, requested.length, 'every client table/operation exists in the fresh catalog');
       snapshots.push(authenticated);
       if (!implicitApiGrants) {
+        // This one reviewed private view has no table RLS flag of its own.
+        // It must retain invoker security and signed-in SELECT-only access;
+        // actual member/outsider visibility is exercised by the activity DB suite.
+        const assertPrivateActivityView = async () => {
+          const { rows } = await db.query(`select c.relkind,
+            coalesce(c.reloptions @> array['security_invoker=true'],false) as invoker,
+            has_table_privilege('anon',c.oid,'SELECT') as anon_read,
+            has_table_privilege('authenticated',c.oid,'SELECT') as auth_read,
+            has_table_privilege('authenticated',c.oid,'INSERT,UPDATE,DELETE') as auth_write
+            from pg_class c where c.oid='public.chat_thread_activity'::regclass`);
+          assert.deepEqual(rows, [{relkind:'v', invoker:true, anon_read:false, auth_read:true, auth_write:false}]);
+        };
+        await assertPrivateActivityView();
+        for (const mutation of [
+          'alter view public.chat_thread_activity set (security_invoker=false)',
+          'grant select on public.chat_thread_activity to anon',
+          'grant update on public.chat_thread_activity to authenticated',
+        ]) {
+          await db.exec(`begin; ${mutation};`);
+          try { await assert.rejects(assertPrivateActivityView, {code:'ERR_ASSERTION'}); }
+          finally { await db.exec('rollback'); }
+        }
+        await assertPrivateActivityView();
         // Loss of an unused anon GRANT is not loss of a public surface. Require
         // RLS and no anon/PUBLIC/inherited-role SELECT policy for every denied
         // relation; do not repair these by exposing signed-in or staff data.
         const anonymous = (await db.query(`select c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
-          where n.nspname='public' and c.relname=any($1::text[]) and not has_table_privilege('anon',c.oid,'SELECT')
+          where n.nspname='public' and c.relname=any($1::text[]) and c.relname<>'chat_thread_activity'
+            and not has_table_privilege('anon',c.oid,'SELECT')
             and (not c.relrowsecurity or exists(select 1 from pg_policy p where p.polrelid=c.oid and p.polcmd in ('r','*')
               and exists(select 1 from unnest(p.polroles) role_id where case when role_id=0 then true
                 else pg_has_role('anon',role_id,'MEMBER') end)))`, [tables])).rows;

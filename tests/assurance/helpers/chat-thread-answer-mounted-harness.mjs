@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import {loadStubbed} from '../../customer-experience-adversarial-helpers.mjs';
 import { resolveAcceptedChatCallRoomId } from "../../../_lib/communicationCallMediaPolicy.mjs";
 
 const require = createRequire(import.meta.url);
@@ -184,10 +185,12 @@ export async function mountChatAnswer(options = {}) {
     reportIosNativeCallRemoteEnd: async () => runtime.nativeEndResult ?? true,
     Date, Promise, setTimeout: options.timerMode ? (callback, delay) => { const timer = { callback, delay }; runtime.timeouts.push(timer); return timer; } : setTimeout, clearTimeout: options.timerMode ? noop : clearTimeout,
     resolveAcceptedChatCallRoomId,
+    ...loadStubbed('_lib/chatActivity.ts'),
     Platform: { OS: runtime.platform }, Vibration: { cancel: noop },
     AppState: { addEventListener: () => ({ remove: noop }) },
     readChillyChatCallInvite: (id) => runtime.readInvite(id),
     getChatThread: (id) => runtime.readThread(id),
+    readChatActivityCut: async () => '2026-10-31T23:59:59Z',
     listChatMessages: (id) => runtime.readMessages(id),
     listChillyChatCallEvents: async () => [],
     readLatestRingingChillyChatCallInvite: async () => null,

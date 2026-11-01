@@ -22,7 +22,31 @@ const iconOnlyBackSurfaces = [
 
 assert.match(sharedBackButton, /accessibilityRole="button"/u);
 assert.match(sharedBackButton, /minHeight:\s*44/u);
-assert.match(sharedBackButton, />← \{label\}<\/Text>/u);
+assert.match(sharedBackButton, /<Ionicons[\s\S]*?name="arrow-back"[\s\S]*?size=\{24\}/u);
+assert.doesNotMatch(sharedBackButton, /<Text\b|>←/u);
+assert.match(sharedBackButton, /minWidth:\s*44/u);
+assert.match(sharedBackButton, /hitSlop = 12/u);
+
+const inbox = read("app/chat/index.tsx");
+assert.match(inbox, /<AppBackButton[\s\S]*?testID="chat-inbox-back-button"/u);
+assert.match(inbox, /if \(router\.canGoBack\(\)\) router\.back\(\);/u);
+assert.match(inbox, /else router\.replace\("\/\(tabs\)"\)/u);
+assert.equal((inbox.match(/\{inboxBackControl\}/gu) ?? []).length, 4, "all Inbox loading, signed-out, restricted and ready branches need an exit");
+const thread = read("app/chat/[threadId].tsx");
+assert.match(thread, /else router\.replace\("\/chat"\)/u);
+assert.equal((thread.match(/\{threadStateBackControl\(\)\}/gu) ?? []).length, 4, "all thread gate states need an exit");
+assert.equal((thread.match(/onPress=\{onThreadBack\}/gu) ?? []).length, 2, "thread gate and main header share functional Back");
+assert.doesNotMatch(thread, /← Back/u);
+for (const [file, testId, count] of [
+  ["app/spectate-metadata/[itemId].tsx", "spectator-back-button", 2],
+  ["app/player/[id].tsx", "standalone-player-back-button", 1],
+  ["components/merch/merch-screens.tsx", "merch-back-button", 1],
+]) {
+  const controls = [...read(file).matchAll(/<AppBackButton[\s\S]*?\/>/gu)]
+    .filter(([control]) => control.includes(`testID="${testId}"`));
+  assert.equal(controls.length, count, `${file} must retain every shared Back render branch`);
+  for (const [control] of controls) assert.match(control, /router\.canGoBack\(\) \? router\.back\(\) : router\.replace/u);
+}
 
 assert.match(waitingRoom, /testID="watch-party-waiting-room-back-button"/u);
 assert.match(waitingRoom, /if \(router\.canGoBack\(\)\)/u);

@@ -72,7 +72,7 @@ test("a delayed Start result cannot resurrect ringing after its call ended durin
         then: resolve => Promise.resolve({ data: table === "user_profiles" ? [] : row(), error: null }).then(resolve) };
       return query;
     } } },
-    "./communication": { createCommunicationRoom: async () => ({ roomId: "FIXTURE-ROOM-1" }) },
+    "./communication": { prepareChatCallRoomCandidate: async () => ({ roomId: "FIXTURE-ROOM-1", capturePolicy: "best_effort" }) },
     "./chillyChatCalls": {
       beginChillyChatCall: async ({ actorUserId, threadId, callType }) => ({
         created: true, role: "caller", invite: store.start(actorUserId, threadId, callType),

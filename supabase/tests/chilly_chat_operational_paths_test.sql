@@ -77,8 +77,8 @@ select is(
   (select unread_count from public.chat_thread_members
    where thread_id = 'ca110000-0000-4000-8000-000000000010'
      and user_id = 'ca110001-0000-4000-8000-000000000001'),
-  0,
-  '5. sender read state is synchronized'
+  4,
+  '5. sending does not acknowledge the sender''s preexisting unread activity'
 );
 select is(
   (select unread_count from public.chat_thread_members

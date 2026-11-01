@@ -70,11 +70,12 @@ export default function LiveTabScreen() {
   const discoveryCardWidth = resolveLiveHubCardWidth(viewportWidth);
   const liveTransitionLatchRef = useRef(createActionSingleFlightLatch());
   const [liveTransitionInFlight, setLiveTransitionInFlight] = useState(false);
+  const [partyTransitionInFlight, setPartyTransitionInFlight] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [premiumGate, setPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [premiumGateVisible, setPremiumGateVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const discovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, preserveBrowsePosition: true, limit: 40 });
+  const discovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, includeCircle: true, preserveBrowsePosition: true, limit: 40 });
   const discoveryItems = discovery.items;
   const upcoming = useLiveUpcomingEvents({ limit: 32 });
   const events = upcoming.items;
@@ -98,8 +99,21 @@ export default function LiveTabScreen() {
     useCallback(() => {
       liveTransitionLatchRef.current.release();
       setLiveTransitionInFlight(false);
+      setPartyTransitionInFlight(false);
     }, []),
   );
+
+  const openWatchParty = () => {
+    if (!liveTransitionLatchRef.current.tryAcquire()) return;
+    setPartyTransitionInFlight(true);
+    try {
+      router.push({ pathname: "/watch-party", params: { source: "bottom-live-tab" } });
+    } catch {
+      liveTransitionLatchRef.current.release();
+      setPartyTransitionInFlight(false);
+      Alert.alert("Unable to open Watch-Party", "Please try again.");
+    }
+  };
 
   const openLiveWatchParty = async () => {
     if (!liveTransitionLatchRef.current.tryAcquire()) return;
@@ -201,7 +215,7 @@ export default function LiveTabScreen() {
               </View>
             </View>
             <Text style={styles.title}>Live</Text>
-            <Text style={styles.heroSubtitle}>Watch what is live now, see upcoming events, start a people-first room, or enter a Watch-Party code.</Text>
+            <Text style={styles.heroSubtitle}>Watch what is live now, see upcoming events, start Live, or start a Watch-Party Live.</Text>
           </View>
 
           {errorMsg || discovery.error ? (
@@ -229,17 +243,17 @@ export default function LiveTabScreen() {
               <Text style={styles.buttonText}>Start Live</Text>
             </Pressable>
             <Pressable
-              style={[styles.secondaryButton, styles.quickActionSecondary]}
-              onPress={() => router.push({ pathname: "/watch-party", params: { source: "bottom-live-tab" } })}
+              style={[styles.primaryButton, partyTransitionInFlight && styles.primaryButtonDisabled]}
+              onPress={openWatchParty}
+              disabled={partyTransitionInFlight}
               accessibilityRole="button"
-              testID="live-tab-enter-code-button"
+              accessibilityLabel={partyTransitionInFlight ? "Opening Watch Party Live" : "Start Watch Party Live"}
+              accessibilityState={{ disabled: partyTransitionInFlight, busy: partyTransitionInFlight }}
+              testID="live-tab-start-watch-party-button"
             >
+              <ChillywoodPrimaryActionFill radius={12} />
               <MaterialIcons name="confirmation-number" size={18} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Enter Code</Text>
-            </Pressable>
-            <Pressable style={[styles.secondaryButton, styles.quickActionSecondary]} onPress={() => router.push("/(tabs)/explore")} accessibilityRole="button">
-              <MaterialIcons name="explore" size={18} color="#FFFFFF" />
-              <Text style={styles.buttonText}>Explore</Text>
+              <Text style={styles.buttonText}>Start Watch Party Live</Text>
             </Pressable>
           </View>
 
@@ -269,7 +283,7 @@ export default function LiveTabScreen() {
               </ScrollView>
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateTitle}>{discovery.error ? "Live discovery unavailable" : "Nothing public is live right now"}</Text>
+                <Text style={styles.emptyStateTitle}>{discovery.error ? "Live discovery unavailable" : "No live rooms available right now"}</Text>
                 <Text style={styles.emptyStateBody}>{discovery.error ?? "Pull down to refresh, start your own Live room, or Explore other content."}</Text>
               </View>
             )}
@@ -336,8 +350,8 @@ export default function LiveTabScreen() {
             {detailsOpen ? (
               <View style={styles.detailList}>
                 <Text style={styles.detailText}>Start Live opens the people-first Live Watch-Party path.</Text>
-                <Text style={styles.detailText}>Enter Code joins an existing Watch-Party Live room.</Text>
-                <Text style={styles.detailText}>Live Now is backed by public discovery and public creator-event data.</Text>
+                <Text style={styles.detailText}>Start Watch Party Live opens the Watch-Party path, where you can also enter a room code.</Text>
+                <Text style={styles.detailText}>Live Now includes public rooms and rooms shared with your Chi&apos;lly Circle. Private rooms stay invite-only.</Text>
                 <Text style={styles.detailText}>Upcoming Events opens the exact Event so viewers can see its access and schedule.</Text>
               </View>
             ) : null}
@@ -383,7 +397,6 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: CHILLYWOOD_VISUAL.accentPurple, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, flexBasis: "100%", overflow: "hidden", borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.primaryBorder },
   primaryButtonDisabled: { opacity: 0.55 },
   secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, alignSelf: "flex-start" },
-  quickActionSecondary: { flexGrow: 1, flexBasis: 132, alignSelf: "stretch" },
   buttonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   section: { gap: 9 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },

@@ -162,6 +162,7 @@ import {
   ProfileMediaReviewSheet,
 } from "../../components/profile/profile-media-sheets";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
+import { PersonNotificationPreferencesButton } from "../../components/notifications/person-notification-preferences";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { AccessSheet } from "../../components/monetization/access-sheet";
 import { StableImage } from "../../components/ui/StableImage";
@@ -4435,6 +4436,7 @@ export default function ProfileScreen() {
               </>
             ) : (
               <>
+                <PersonNotificationPreferencesButton actorUserId={userId} displayName={profile.displayName} />
                 {canShowFollowAction || !isOfficialProfile ? (
                   <View style={styles.primaryActionRow}>
                     {canShowFollowAction ? (

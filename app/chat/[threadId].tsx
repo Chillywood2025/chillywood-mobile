@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import { ChillywoodBrandedSurface } from "../../components/ui/chillywood-branded-surface";
+import { AppBackButton } from "../../components/navigation/app-back-button";
 import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 import { trackEvent } from "../../_lib/analytics";
@@ -52,6 +53,7 @@ import {
   clearEndedChatThreadCall,
   getChatThread,
   listChatMessages,
+  readChatActivityCut,
   markChatThreadRead,
   readChatCallStartRecovery,
   sendChatMessage,
@@ -130,9 +132,7 @@ import {
   type NotificationPreferenceSettings,
 } from "../../_lib/notifications";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
-import {
-  READ_RECEIPT_THROTTLE_MS,
-} from "../../_lib/performancePolicy";
+import { compareChatActivityTimestamps, isUnreadChatCallEvent, latestObservedChatTimestamp, observedChatTimestamp } from "../../_lib/chatActivity";
 import { useSession } from "../../_lib/session";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
@@ -451,6 +451,23 @@ function useIosNativeMicrophoneAcknowledgements(contextKey: string, callUuid: st
 export default function ChillyChatThreadScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
+  const onThreadBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/chat");
+  };
+  const threadStateBackControl = () => (
+    <View style={[styles.stateBackNavigation, {
+      top: safeAreaInsets.top + 8,
+      left: Math.max(safeAreaInsets.left, 16),
+      right: Math.max(safeAreaInsets.right, 16),
+    }]}>
+      <AppBackButton
+        testID="chat-thread-back-button"
+        accessibilityLabel="Back from Chi'lly Chat thread"
+        onPress={onThreadBack}
+      />
+    </View>
+  );
   const { authority, session, user, isLoading: authLoading, isSignedIn } = useSession();
   const currentUserId = String(user?.id ?? "").trim();
   const {
@@ -647,7 +664,8 @@ export default function ChillyChatThreadScreen() {
     deadlineMs: number;
   } | null>(null);
   const handledActiveTerminalInviteIdsRef = useRef<Set<string>>(new Set());
-  const lastReadReceiptWriteAtRef = useRef(0);
+  const lastReadReceiptWriteAtRef = useRef<{ owner: string; through: string | null; callThrough: string | null } | null>(null);
+  const readReceiptFocusedRef = useRef(false);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const handledIncomingInviteIdsRef = useRef<Set<string>>(new Set());
@@ -990,13 +1008,21 @@ export default function ChillyChatThreadScreen() {
     }
   }, []);
 
-  const markThreadReadWithThrottle = useCallback(async () => {
-    if (!threadId) return;
-    const now = Date.now();
-    if (now - lastReadReceiptWriteAtRef.current < READ_RECEIPT_THROTTLE_MS) return;
-    lastReadReceiptWriteAtRef.current = now;
-    await markChatThreadRead(threadId).catch(() => null);
-  }, [threadId]);
+  const markThreadReadWithThrottle = useCallback(async (through: string | null, callThrough: string | null = null) => {
+    if (!threadId || (!through && !callThrough) || !readReceiptFocusedRef.current || AppState.currentState !== "active") return;
+    const previous = lastReadReceiptWriteAtRef.current;
+    if (previous?.owner === messageEntryKey && compareChatActivityTimestamps(through, previous.through) <= 0
+      && compareChatActivityTimestamps(callThrough, previous.callThrough) <= 0) return;
+    try {
+      await markChatThreadRead(threadId, through, callThrough);
+      // A newer observed boundary need not wait behind a wall-clock throttle;
+      // failed acknowledgements remain retryable and never invent read state.
+      const latest = lastReadReceiptWriteAtRef.current;
+      lastReadReceiptWriteAtRef.current = { owner: messageEntryKey,
+        through: latestObservedChatTimestamp([through, latest?.owner === messageEntryKey ? latest.through : null]),
+        callThrough: latestObservedChatTimestamp([callThrough, latest?.owner === messageEntryKey ? latest.callThrough : null]) };
+    } catch { /* Keep unread until a later authorized read can acknowledge it. */ }
+  }, [messageEntryKey, threadId]);
 
   useEffect(() => {
     let active = true;
@@ -1098,10 +1124,12 @@ export default function ChillyChatThreadScreen() {
 
     try {
       logChatThread("load_state_start", { threadId });
+      const activityCut = await readChatActivityCut(threadId);
+      if (!isCurrent()) return;
       const [loadedThread, nextMessages, nextCallEvents, latestInvite, nextCallPreferences] = await Promise.all([
         getChatThread(threadId),
-        listChatMessages(threadId),
-        listChillyChatCallEvents(threadId),
+        listChatMessages(threadId, activityCut),
+        listChillyChatCallEvents(threadId, activityCut),
         readLatestRingingChillyChatCallInvite(threadId),
         readNotificationPreferences(),
       ]);
@@ -1172,7 +1200,8 @@ export default function ChillyChatThreadScreen() {
         activeCallType: visibleThread.activeCallType ?? "",
       });
 
-      await markThreadReadWithThrottle();
+      await markThreadReadWithThrottle(latestObservedChatTimestamp(nextMessages.map(observedChatTimestamp)),
+        latestObservedChatTimestamp(nextCallEvents.map(observedChatTimestamp)));
       if (!isCurrent()) return;
 
       if (cleanupPending) {
@@ -1204,8 +1233,9 @@ export default function ChillyChatThreadScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      readReceiptFocusedRef.current = true;
       if (authLoading) {
-        return () => {};
+        return () => { readReceiptFocusedRef.current = false; };
       }
 
       if (!isSignedIn) {
@@ -1213,7 +1243,7 @@ export default function ChillyChatThreadScreen() {
         setThread(null);
         setMessages([]);
         setError("Sign in to open Chi'lly Chat.");
-        return () => {};
+        return () => { readReceiptFocusedRef.current = false; };
       }
 
       setLoading(true);
@@ -1224,7 +1254,7 @@ export default function ChillyChatThreadScreen() {
       });
 
       if (!threadId) {
-        return () => {};
+        return () => { readReceiptFocusedRef.current = false; };
       }
 
       const unsubscribe = subscribeToThread(threadId, () => {
@@ -1232,7 +1262,7 @@ export default function ChillyChatThreadScreen() {
         void loadThreadState();
       });
 
-      return unsubscribe;
+      return () => { readReceiptFocusedRef.current = false; unsubscribe(); };
     }, [authLoading, isSignedIn, loadThreadState, threadId]),
   );
 
@@ -2347,7 +2377,8 @@ export default function ChillyChatThreadScreen() {
         hasAttachment: selectedAttachment ? "true" : "false",
       });
       setMessages((prev) => prev.map((message) => (message.id === tempId ? sent : message)));
-      await markThreadReadWithThrottle();
+      // Sending our own message must not acknowledge concurrent remote content
+      // that this screen has not loaded. Focused reads own acknowledgements.
     } catch (sendError) {
       if (!isCurrent()) return;
       setMessages((prev) => prev.filter((message) => message.id !== tempId));
@@ -2363,7 +2394,7 @@ export default function ChillyChatThreadScreen() {
         setSending(false);
       }
     }
-  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, markThreadReadWithThrottle, messageSendContext, sending, thread, threadId]);
+  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, messageSendContext, sending, thread, threadId]);
 
   const handleRecoverCallStart = useCallback(async () => {
     const pending = pendingCallStartRecoveryRef.current;
@@ -2436,6 +2467,7 @@ export default function ChillyChatThreadScreen() {
     const operation = beginStartOperation();
     if (!operation) return;
     try {
+      setError(null);
       setCallDeliveryStatus(null);
       setOutgoingCallDeviceAlertSent(false);
       void (Platform.OS === "android"
@@ -2518,7 +2550,15 @@ export default function ChillyChatThreadScreen() {
       });
       const message = getUserFacingErrorMessage(callStartError, "Unable to start Chi'lly Chat call.");
       setError(message);
-      setCallDeliveryStatus("Unable to confirm call setup. Refresh the thread before trying again.");
+      // A definitive backend throttle is not an ambiguous committed Start.
+      // Keep the useful wait message, without asking for a needless refresh.
+      const rateLimited = callStartError && typeof callStartError === "object"
+        && "code" in callStartError && callStartError.code === "chat_call_rate_limited";
+      if (rateLimited) {
+        setCallDeliveryStatus(message);
+      } else {
+        setCallDeliveryStatus("Unable to confirm call setup. Refresh the thread before trying again.");
+      }
       reportRuntimeError("chat-thread-start-call", callStartError, {
         threadId,
         mode,
@@ -3526,7 +3566,8 @@ export default function ChillyChatThreadScreen() {
 
   if (authLoading || loading) {
     return (
-      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 64 }]}>
+        {threadStateBackControl()}
         <ActivityIndicator size="small" color="#F34B74" />
         <Text style={styles.stateText}>{authLoading ? "Checking Chi'lly Chat access..." : "Loading thread…"}</Text>
       </ChillywoodBrandedSurface>
@@ -3535,7 +3576,8 @@ export default function ChillyChatThreadScreen() {
 
   if (!isSignedIn) {
     return (
-      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 64 }]}>
+        {threadStateBackControl()}
         <Text style={styles.stateText}>Sign in to open Chi&apos;lly Chat.</Text>
         <TouchableOpacity
           style={[styles.secondaryBtn, styles.signInBtn]}
@@ -3549,27 +3591,23 @@ export default function ChillyChatThreadScreen() {
         >
           <Text style={styles.secondaryBtnText}>Sign In</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
-          <Text style={styles.secondaryBtnText}>Back</Text>
-        </TouchableOpacity>
       </ChillywoodBrandedSurface>
     );
   }
 
   if (!thread) {
     return (
-      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 64 }]}>
+        {threadStateBackControl()}
         <Text style={styles.stateText}>{error ?? "This Chi'lly Chat thread is unavailable."}</Text>
-        <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
-          <Text style={styles.secondaryBtnText}>Back</Text>
-        </TouchableOpacity>
       </ChillywoodBrandedSurface>
     );
   }
 
   if (officialAccount) {
     return (
-      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28, paddingHorizontal: 24 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 64, paddingHorizontal: 24 }]}>
+        {threadStateBackControl()}
         <Text style={styles.stateText}>Rachi now lives in Chi&apos;lly Circle.</Text>
         <Text style={[styles.stateText, styles.centeredStateBody]}>
           Rachi is your first official Chi&apos;lly Circle connection. Chi&apos;lly Chat is for direct threads with people.
@@ -3582,9 +3620,6 @@ export default function ChillyChatThreadScreen() {
           }}
         >
           <Text style={styles.secondaryBtnText}>Open Chi&apos;lly Circle</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
-          <Text style={styles.secondaryBtnText}>Back</Text>
         </TouchableOpacity>
       </ChillywoodBrandedSurface>
     );
@@ -3608,14 +3643,11 @@ export default function ChillyChatThreadScreen() {
       accessibilityLabel="Chi'lly Chat direct thread screen"
     >
       <View style={styles.header}>
-        <TouchableOpacity
+        <AppBackButton
           testID="chat-thread-back-button"
           accessibilityLabel="Back from Chi'lly Chat thread"
-          activeOpacity={0.8}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+          onPress={onThreadBack}
+        />
         <TouchableOpacity
           style={styles.headerAvatarButton}
           activeOpacity={0.86}
@@ -3958,8 +3990,9 @@ export default function ChillyChatThreadScreen() {
         {callEvents.length ? (
           <View style={styles.callEventStack} testID="chat-thread-call-events">
             <Text style={styles.callEventSectionLabel}>Recent calls in this thread</Text>
-            {callEvents.slice(-3).map((event) => (
-              <View key={event.id} style={styles.callEventCard}>
+            {[...callEvents].sort((a, b) => compareChatActivityTimestamps(observedChatTimestamp(b), observedChatTimestamp(a)) || b.id.localeCompare(a.id)).slice(0, 3).map((event) => (
+              <View key={event.id} style={[styles.callEventCard, isUnreadChatCallEvent(event, currentUserId, thread?.currentMember?.lastCallReadAt) && styles.callEventCardUnread]}
+                accessibilityLabel={`${formatCallEventTitle(event, currentUserId)}${isUnreadChatCallEvent(event, currentUserId, thread?.currentMember?.lastCallReadAt) ? ", unread" : ""}`}>
                 <View style={styles.callEventIcon}>
                   <MaterialIcons
                     name={event.callType === "video" ? "videocam" : "call"}
@@ -3969,6 +4002,7 @@ export default function ChillyChatThreadScreen() {
                 </View>
                 <View style={styles.callEventCopy}>
                   <Text style={styles.callEventTitle}>{formatCallEventTitle(event, currentUserId)}</Text>
+                  {isUnreadChatCallEvent(event, currentUserId, thread?.currentMember?.lastCallReadAt) ? <Text style={styles.callEventUnreadLabel}>Unread</Text> : null}
                   <ConversationTimestamp style={styles.callEventMeta} value={conversationCreatedAt(event)} />
                 </View>
               </View>
@@ -4200,6 +4234,7 @@ export default function ChillyChatThreadScreen() {
 }
 
 const styles = StyleSheet.create({
+  stateBackNavigation: { position: "absolute", zIndex: 1, alignItems: "flex-start" },
   screen: {
     flex: 1,
   },
@@ -4221,11 +4256,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(132,40,255,0.4)",
     backgroundColor: "rgba(7,5,27,0.8)",
-  },
-  backText: {
-    color: "#E2E9F7",
-    fontSize: 14,
-    fontWeight: "800",
   },
   headerAvatarButton: {
     borderRadius: 24,
@@ -4631,6 +4661,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(243,75,116,0.16)",
+  },
+  callEventCardUnread: {
+    borderColor: "#C5A8FF",
+    backgroundColor: "rgba(138,73,255,0.18)",
+  },
+  callEventUnreadLabel: {
+    color: "#E2D3FF",
+    fontSize: 10,
+    fontWeight: "800",
   },
   callEventCopy: {
     flex: 1,
