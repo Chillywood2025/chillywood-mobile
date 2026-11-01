@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {parse} from 'yaml';
-import {assertDatabaseUpgradeCI, databaseUpgradeCommands} from './helpers/assert-database-upgrade-ci.mjs';
+import {assertDatabaseUpgradeCI, databaseUpgradeCommands, databaseCronBoundary} from './helpers/assert-database-upgrade-ci.mjs';
 import {chatActivityUpgradeSQL, chatActivityMigration} from './helpers/chat-activity-upgrade-fixture.mjs';
 
 const runner = 'scripts/test-chat-activity-upgrade-postgres.mjs';
@@ -36,7 +36,8 @@ test('populated regression applies actual migration bytes inside rollback bounda
 test('canonical CI uses one predecessor reset, real upgrade test, official migration up, then full suite', () => {
   const workflow = readFileSync('.github/workflows/required-validation.yml','utf8');
   assert.equal((workflow.match(/supabase db reset --local --version 20261031204321/gu) ?? []).length,1);
-  assert.match(workflow,/supabase db reset --local --version 20261031204321[\s\S]*node scripts\/test-chat-activity-upgrade-postgres\.mjs\s+supabase migration up --local\s+supabase test db/u);
+  const step=parse(workflow).jobs.database.steps.find(s=>s.run?.split('\n').includes(databaseUpgradeCommands[2]));
+  assertDatabaseUpgradeCI(step.run);
   assert.match(workflow,/node scripts\/test-chat-call-retry-concurrency-postgres\.mjs/u);
   const source = readFileSync(runner,'utf8');
   assert.match(source,/preflight.version >= 170000 && preflight.version < 180000/u);
@@ -70,5 +71,19 @@ test('upgrade CI sequence rejects missing, reordered, duplicated, skipped or swa
     // Moving the final command to the end is still correctly ordered.
     if (mode === 'reorder' && command === commands.at(-1)) step.run = `${command}\n${step.run.replace(command,'')}`;
     assert.throws(() => check(candidate),assert.AssertionError,`${mode}: ${command}`);
+  }
+  for(const mutate of [
+    run=>run.replace(databaseCronBoundary,''),
+    run=>run.replace(databaseCronBoundary,databaseCronBoundary+' || true'),
+    run=>run.replace(databaseCronBoundary,databaseCronBoundary.replace("'NATIVE_PROOFS'",'NATIVE_PROOFS')),
+    run=>run.replace(databaseCronBoundary,'echo ignored\n'+databaseCronBoundary),
+    run=>run.replace(databaseCronBoundary,databaseCronBoundary+'\n'+databaseCronBoundary),
+    run=>run.replace('\nNATIVE_PROOFS',''),
+    run=>run.replace('\nNATIVE_PROOFS','')+'\nNATIVE_PROOFS\ntrue',
+    run=>run.replace('supabase test db','NATIVE_PROOFS\nsupabase test db').replace(/\nNATIVE_PROOFS\n?$/u,''),
+  ]) {
+    const candidate=structuredClone(workflow);
+    const step=candidate.jobs.database.steps.find(s=>s.run?.includes(commands[2]));step.run=mutate(step.run);
+    assert.throws(()=>check(candidate),assert.AssertionError,'invalid isolation boundary must fail');
   }
 });
