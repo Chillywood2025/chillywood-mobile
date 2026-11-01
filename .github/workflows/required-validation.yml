@@ -123,7 +123,10 @@ jobs:
     if: needs.plan.outputs.sensitive == 'true'
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Hosted run 41334686390 used 29m38s through the main Node matrix alone
+    # (28m58s in that matrix), before six SQL files and retained Deno gates.
+    # Budget the complete job; no individual test or provider deadline changes.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
