@@ -1,3 +1,4 @@
+import {assertDatabaseUpgradeCI} from '../helpers/assert-database-upgrade-ci.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import test from 'node:test';
@@ -13,7 +14,8 @@ function assertGate(candidate) {
   assert.equal(job.if,"needs.plan.outputs.database == 'true'");assert.equal(job['continue-on-error'],undefined);
   const steps=job.steps.filter(s=>s.run?.split('\n').includes(command));assert.equal(steps.length,1);
   const step=steps[0];assert.equal(step.if,undefined);assert.equal(step['continue-on-error'],undefined);
-  const commands=step.run.split('\n'),start=commands.indexOf('supabase start'),reset=commands.indexOf('supabase db reset'),tap=commands.indexOf('supabase test db');
+  assertDatabaseUpgradeCI(step.run);
+  const commands=step.run.split('\n'),start=commands.indexOf('supabase start'),reset=commands.indexOf('supabase db reset --local --version 20261031204321'),tap=commands.indexOf('supabase test db');
   assert.ok(start>=0&&start<reset&&reset<tap&&tap<commands.indexOf(command));
   assert.ok(commands.includes('node scripts/test-r2-qualification-ledger-postgres.mjs'));
   assert.ok(commands.includes('node --test supabase/functions/_shared/r2-disposable-qualification.test.mjs supabase/functions/_shared/r2-disposable-qualification-store.test.mjs'));

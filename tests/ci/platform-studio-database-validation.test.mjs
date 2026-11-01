@@ -1,3 +1,4 @@
+import {assertDatabaseUpgradeCI} from '../helpers/assert-database-upgrade-ci.mjs';
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -17,8 +18,9 @@ function assertNativeDatabaseGate(candidate) {
   const step = steps[0];
   assert.equal(step.if, undefined, "concurrency is not an optional sub-gate");
   assert.equal(step["continue-on-error"], undefined, "a concurrency failure blocks required validation");
+  assertDatabaseUpgradeCI(step.run);
   const commands = step.run.split("\n");
-  const start = commands.indexOf("supabase start"), reset = commands.indexOf("supabase db reset");
+  const start = commands.indexOf("supabase start"), reset = commands.indexOf("supabase db reset --local --version 20261031204321");
   const pgTap = commands.indexOf("supabase test db"), concurrency = commands.indexOf(command);
   assert.ok(start >= 0 && start < reset && reset < pgTap && pgTap < concurrency,
     "execute real concurrency only after local Supabase start, full migration replay and pgTAP");

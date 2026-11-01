@@ -1,3 +1,4 @@
+import {assertDatabaseUpgradeCI} from '../helpers/assert-database-upgrade-ci.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -17,9 +18,10 @@ function assertNativeGate(candidate) {
   const step = steps[0];
   assert.equal(step.if, undefined, 'Brand/global native proof cannot be optional');
   assert.equal(step['continue-on-error'], undefined, 'native failure must fail required validation');
+  assertDatabaseUpgradeCI(step.run);
   const commands = step.run.split('\n');
   assert.equal(commands.filter(value => value === command).length, 1, 'one shell block cannot duplicate the native run');
-  const start = commands.indexOf('supabase start'), reset = commands.indexOf('supabase db reset'), tap = commands.indexOf('supabase test db');
+  const start = commands.indexOf('supabase start'), reset = commands.indexOf('supabase db reset --local --version 20261031204321'), tap = commands.indexOf('supabase test db');
   assert.ok(start >= 0 && start < reset && reset < tap && tap < commands.indexOf(command),
     'native concurrency runs after full migration replay and pgTAP');
 }
