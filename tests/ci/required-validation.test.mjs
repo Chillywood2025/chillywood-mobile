@@ -1,3 +1,4 @@
+import {assertDatabaseUpgradeCI} from '../helpers/assert-database-upgrade-ci.mjs';
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -102,7 +103,8 @@ test("runtime authority repair requires native lock-queue proof in the database 
     assert.equal(steps.length, 1, "native authority runner must execute exactly once in required Database validation");
     assert.equal(steps[0].if, undefined, "native queue proof cannot have a separate skip condition");
     assert.equal(steps[0]["continue-on-error"], undefined);
-    for (const prerequisite of ["supabase db reset", "supabase test db"]) {
+    assertDatabaseUpgradeCI(steps[0].run);
+    for (const prerequisite of ["supabase db reset --local --version 20261031204321", "supabase test db"]) {
       const position = steps[0].run.indexOf(prerequisite);
       assert.ok(position >= 0 && position < steps[0].run.indexOf(command), `${prerequisite} must precede native authority proof`);
     }
@@ -114,7 +116,7 @@ test("runtime authority repair requires native lock-queue proof in the database 
   }
   assert.throws(() => assertWired(removed), assert.AssertionError,
     "the old workflow without native authority invocation must fail the wiring assertion");
-  for (const prerequisite of ["supabase db reset", "supabase test db"]) {
+  for (const prerequisite of ["supabase db reset --local --version 20261031204321", "supabase test db"]) {
     const absent = structuredClone(workflow);
     for (const step of absent.jobs.database.steps) {
       if (step.run) step.run = step.run.replace(prerequisite, "");

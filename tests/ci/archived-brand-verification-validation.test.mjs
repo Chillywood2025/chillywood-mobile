@@ -1,3 +1,4 @@
+import {assertDatabaseUpgradeCI} from '../helpers/assert-database-upgrade-ci.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -18,9 +19,10 @@ function assertNativeGate(candidate) {
     assert.equal(matches.length, 1, 'each native proof must execute exactly once');
     const step = matches[0];
     assert.equal(step.if, undefined); assert.equal(step['continue-on-error'], undefined);
+    assertDatabaseUpgradeCI(step.run);
     const lines = step.run.split('\n');
     assert.equal(lines.filter(line => line === invocation).length, 1);
-    const start = lines.indexOf('supabase start'), reset = lines.indexOf('supabase db reset'), tap = lines.indexOf('supabase test db');
+    const start = lines.indexOf('supabase start'), reset = lines.indexOf('supabase db reset --local --version 20261031204321'), tap = lines.indexOf('supabase test db');
     assert.ok(start >= 0 && start < reset && reset < tap && tap < lines.indexOf(invocation), 'complete reset and pgTAP precede native proof');
     assert.ok(lines.indexOf(command) < lines.indexOf(`${command} --negative-control`), 'positive native suite precedes the mandatory mutation control');
   }

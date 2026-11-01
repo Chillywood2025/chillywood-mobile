@@ -1,3 +1,4 @@
+import {assertDatabaseUpgradeCI} from '../helpers/assert-database-upgrade-ci.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -46,8 +47,9 @@ function assertEngineGate(candidate) {
     if (owner) assert.equal(step, owner, "build and isolated run belong in the same required block");
     owner = step;
   }
+  assertDatabaseUpgradeCI(owner.run);
   const lines = owner.run.split("\n");
-  const start = lines.indexOf("supabase start"), reset = lines.indexOf("supabase db reset"), tap = lines.indexOf("supabase test db");
+  const start = lines.indexOf("supabase start"), reset = lines.indexOf("supabase db reset --local --version 20261031204321"), tap = lines.indexOf("supabase test db");
   assert.ok(start >= 0 && start < reset && reset < tap && tap < lines.indexOf(unit) && lines.indexOf(unit) < lines.indexOf(build));
   assert.equal(lines.indexOf(run), lines.indexOf(build) + 1, "the freshly built scanner image is used immediately, without setup or signature updates");
 }

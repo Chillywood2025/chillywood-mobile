@@ -4,7 +4,28 @@ alter table public.chat_threads
   add column activity_admission_watermark timestamptz;
 alter table public.chat_thread_members
   add column last_call_read_at timestamptz;
-update public.chat_thread_members set last_call_read_at=last_read_at;
+-- Initialize the new field as a schema transformation, not an application
+-- membership write. Retained restricted accounts must keep their exact read
+-- evidence too; their existing write guards remain armed and unchanged.
+alter table public.chat_thread_members
+  alter column last_call_read_at type timestamptz using last_read_at;
+
+-- A row UPDATE would invoke updated_at triggers and manufacture activity.
+-- USING cannot contain subqueries; this transaction-local, invoker-only helper
+-- derives the same exact historical maximum without changing existing fields.
+-- Both rewrites take ACCESS EXCLUSIVE locks; the migration runner must retain
+-- its bounded lock/statement deadlines and transactional rollback.
+create function pg_temp.initialize_chat_activity_watermark(p_thread_id uuid)
+returns timestamptz language sql stable set search_path='' as $$
+  select greatest(
+    (select max(created_at) from public.chat_messages where thread_id=p_thread_id),
+    (select max(created_at) from public.chat_call_events where thread_id=p_thread_id),
+    '1970-01-01'::timestamptz)
+$$;
+alter table public.chat_threads
+  alter column activity_admission_watermark type timestamptz
+  using pg_temp.initialize_chat_activity_watermark(id);
+drop function pg_temp.initialize_chat_activity_watermark(uuid);
 
 -- Legacy direct inserts remain supported. Serialize admission before stamping
 -- either stream so a blocked insert cannot commit behind a later read boundary.
@@ -414,13 +435,5 @@ begin
   );
 end;
 $$;
-do $$ declare item record; begin
-  for item in select id from public.chat_threads loop
-    update public.chat_threads set activity_admission_watermark=greatest(
-      (select max(created_at) from public.chat_messages where thread_id=item.id),
-      (select max(created_at) from public.chat_call_events where thread_id=item.id),'1970-01-01'::timestamptz)
-      where id=item.id;
-  end loop;
-end $$;
 -- Existing column-specific UPDATE grants remain unchanged. Clients cannot
 -- write the admission watermark, call read watermark, or read-derived view.
