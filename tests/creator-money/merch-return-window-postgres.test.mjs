@@ -14,7 +14,9 @@ test('30-day verified-delivery terms are prospective, immutable, and cannot conf
   '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
   '20261031034904_merch_tracking_reviewed_supersession.sql',
   '20261101045810_merch_checkout_dispatch_provenance.sql',
-  '20261101045816_merch_reconciliation_bounded_drain.sql'];
+  '20261101045816_merch_reconciliation_bounded_drain.sql',
+  '20261101141708_partial_refund_tax_evidence.sql','20261101144801_commerce_explicit_provider_modes.sql',
+  '20261101150901_commerce_live_return_contract.sql'];
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const insert=id=>db.query(`insert into public.merch_orders(id,buyer_id,creator_id,provider,environment,order_status,fulfillment_status,payment_status,amount_subtotal_minor,amount_total_minor,currency,stripe_checkout_session_id,stripe_payment_intent_id,created_at)

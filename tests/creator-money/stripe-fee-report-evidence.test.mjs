@@ -16,6 +16,18 @@ const context = { accountId: 'acct_fixture', environment: 'test', reportRunId: '
 const header = 'fee_transaction_id,incurred_by,incurred_by_type,amount,tax,currency,product,suite,feature_name,settled_via';
 const row = 'fee_one,ch_fixture,charge,0.10,0.01,usd,Tax,Revenue,Automatic tax,balance';
 const csv = `${header}\n${row}\n`;
+test('payout reports bind only the exact payout and cannot mix sale objects',()=>{
+ const {chargeId,refundIds,...base}=context;
+ const payout={...base,payoutId:'po_fixture'};
+ const output=normalize(`${header}\nfee_payout,po_fixture,payout,0.50,0.00,usd,Connect,Money management,Payout,balance\n${row}`,payout);
+ assert.equal(output.payoutId,'po_fixture');assert.equal(output.rows.length,1);assert.equal(output.unattributedRows,1);
+ assert.equal(output.rows[0].incurredByType,'payout');assert.equal(output.rows[0].amountMinor,50);
+ assert.equal(output.financialAuthority,false);assert.equal(output.totalFeeMinor,null);
+ assert.equal('chargeId' in output,false);assert.equal('refundIds' in output,false);
+ assert.throws(()=>normalize(header,{...context,payoutId:'po_fixture'}),/context_invalid/);
+ assert.throws(()=>normalize(header,{...base,payoutId:'ch_fixture'}),/identity_invalid/);
+ assert.throws(()=>normalize(`${header}\nfee_payout,po_fixture,charge,0.50,0.00,usd,Connect,Money management,Payout,balance`,payout),/object_type_mismatch/);
+});
 function fixture() {
   const calls = [];
   const run = { id: context.reportRunId, object: 'reporting.report_run', livemode: false, report_type: context.reportType,

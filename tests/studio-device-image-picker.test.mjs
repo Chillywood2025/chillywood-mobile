@@ -88,7 +88,7 @@ test('permission denial/native failure is safe and unlocks retry; oversize is re
 });
 // Exercise actual JSX onPress props rather than a parallel test implementation.
 // This proves source wiring, not a physical OS window or full installed screen.
-test('all rendered Studio still-image actions bind Photos and separate Files callbacks', () => {
+test('all rendered Studio media actions bind gallery and separate Files callbacks', () => {
   const source = fs.readFileSync('app/channel-settings.tsx', 'utf8');
   const ast = ts.createSourceFile('studio.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const nodes = [];
@@ -107,9 +107,9 @@ test('all rendered Studio still-image actions bind Photos and separate Files cal
     const context = { React, TouchableOpacity: 'button', onPickClipCoverFile: source => calls.push(['cover', source]), pickPlatformBrandAsset: (asset, source = 'photos') => calls.push([asset, source]) };
     vm.runInNewContext(js, context); context.element.props.onPress();
   }
-  assert.equal(nodes.length, 11); // two cover states, one Files; four Brand source pairs
+  assert.equal(nodes.length, 15); // two cover states, one Files; six Brand source pairs
   assert.equal(calls.filter(x => x[0] === 'cover' && x[1] === 'photos').length, 2);
-  for (const asset of ['cover', 'hero_image', 'background_image', 'avatar', 'logo']) {
+  for (const asset of ['cover', 'hero_image', 'hero_video', 'background_image', 'avatar', 'logo', 'watermark']) {
     assert.ok(calls.some(x => x[0] === asset && x[1] === 'photos'));
     assert.ok(calls.some(x => x[0] === asset && x[1] === 'files'));
   }

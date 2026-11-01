@@ -9,10 +9,6 @@ Deno.serve(async (req: Request) => {
   const service = readOptionalEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!service || req.headers.get("Authorization") !== `Bearer ${service}`)
     return jsonResponse(403, { error: "service_authority_required" });
-  const account = readOptionalEnv("STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID");
-  const key = readOptionalEnv("STRIPE_AUCTION_PLATFORM_TEST_KEY");
-  if (!account || !key || !/^(rk|sk)_test_[A-Za-z0-9]+$/.test(key))
-    return jsonResponse(503, { error: "auction_cost_reconciliation_not_configured", financialAuthority: false });
   try {
     const body = await req.json();
     if (!body || Object.keys(body).some(name => name !== "contract_id")
@@ -21,7 +17,14 @@ Deno.serve(async (req: Request) => {
     const admin = createAdminClient();
     if (!admin.configured) return jsonResponse(503, { error: "server_not_configured" });
     const context = await admin.client.rpc("get_auction_cost_reconciliation_context", { p_contract_id: body.contract_id });
-    if (context.error || !context.data || context.data.platform_account_id !== account) throw Error("auction_context_unavailable");
+    if (context.error || !context.data) throw Error("auction_context_unavailable");
+    const live = context.data.environment === "live";
+    const account = readOptionalEnv(live ? "STRIPE_AUCTION_LIVE_OBSERVATION_ACCOUNT_ID" : "STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID");
+    const key = readOptionalEnv(live ? "STRIPE_AUCTION_LIVE_OBSERVATION_KEY" : "STRIPE_AUCTION_PLATFORM_TEST_KEY");
+    if (!["test", "live"].includes(context.data.environment) || !account || !key
+      || !new RegExp(`^(rk|sk)_${live ? "live" : "test"}_[A-Za-z0-9_]+$`).test(key)
+      || context.data.platform_account_id !== account)
+      return jsonResponse(503, { error: "auction_cost_reconciliation_not_configured", financialAuthority: false });
     const facts = await observeStripeAuctionCosts(context.data as AuctionCostContext, key, account);
     const recorded = await admin.client.rpc("record_auction_platform_cost_observation", { p_contract_id: body.contract_id, p_facts: facts });
     if (recorded.error || !recorded.data) throw Error("auction_cost_not_recorded");

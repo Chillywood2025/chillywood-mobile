@@ -1,10 +1,11 @@
+import { observeStripeRefundTax } from "./stripe-refund-tax-evidence.ts";
 // Server-only GET adapter. Transport injection is for synthetic tests, never a
 // request parameter. This establishes observed cash costs, NOT payout authority.
 type ObjectMap = Record<string, unknown>;
 export type MerchCostOrder = {
   id: string; buyer_id: string; stripe_checkout_session_id: string;
   stripe_payment_intent_id: string; stripe_charge_id: string | null;
-  amount_total_minor: number; currency: string; environment: string;
+  amount_total_minor: number; currency: string; environment: string; platform_account_id?: string | null;
 };
 const object = (v: unknown): ObjectMap => {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("merch_provider_object_invalid");
@@ -23,7 +24,11 @@ const requireMatch = (condition: boolean) => { if (!condition) throw Error("merc
 export async function observeStripeMerchCosts(
   order: MerchCostOrder, secret: string, expectedAccount: string, transport: typeof fetch = fetch,
 ) {
-  requireMatch(order.environment === "sandbox" && secret.startsWith("sk_test_") && /^acct_[A-Za-z0-9_]+$/.test(expectedAccount));
+  const live = order.environment === "production";
+  requireMatch(["sandbox", "production"].includes(order.environment)
+    && new RegExp(`^(sk|rk)_${live ? "live" : "test"}_[A-Za-z0-9_]+$`).test(secret)
+    && /^acct_[A-Za-z0-9_]+$/.test(expectedAccount)
+    && (!live || order.platform_account_id === expectedAccount));
   const get = async (path: string) => {
     const response = await transport(`https://api.stripe.com/v1${path}`, {
       method: "GET", redirect: "error", headers: { Authorization: `Bearer ${secret}`, "Stripe-Version": "2026-10-28.endive" },
@@ -34,23 +39,23 @@ export async function observeStripeMerchCosts(
   };
   const account = await get("/account");
   requireMatch(account.object === "account" && account.id === expectedAccount);
-  const checkout = await get(`/checkout/sessions/${id(order.stripe_checkout_session_id, "cs_test")}`);
+  const checkout = await get(`/checkout/sessions/${id(order.stripe_checkout_session_id, live ? "cs_live" : "cs_test")}`);
   const metadata = object(checkout.metadata);
   requireMatch(checkout.id === order.stripe_checkout_session_id && checkout.object === "checkout.session"
-    && checkout.livemode === false && checkout.mode === "payment" && checkout.status === "complete"
+    && checkout.livemode === live && checkout.mode === "payment" && checkout.status === "complete"
     && checkout.payment_status === "paid" && checkout.client_reference_id === order.id
     && metadata.chillywood_order_id === order.id && metadata.buyer_user_id === order.buyer_id
-    && metadata.environment === "sandbox" && metadata.rail === "physical_merch"
+    && metadata.environment === order.environment && metadata.rail === "physical_merch"
     && checkout.currency === order.currency && checkout.amount_total === order.amount_total_minor
     && checkout.payment_intent === order.stripe_payment_intent_id);
   const intent = await get(`/payment_intents/${id(order.stripe_payment_intent_id, "pi")}`);
   requireMatch(intent.id === order.stripe_payment_intent_id && intent.object === "payment_intent"
-    && intent.livemode === false && intent.status === "succeeded" && intent.currency === order.currency
+    && intent.livemode === live && intent.status === "succeeded" && intent.currency === order.currency
     && intent.amount === order.amount_total_minor && intent.amount_received === order.amount_total_minor);
   const chargeId = id(intent.latest_charge, "ch");
   requireMatch(!order.stripe_charge_id || order.stripe_charge_id === chargeId);
   const charge = await get(`/charges/${chargeId}`);
-  requireMatch(charge.id === chargeId && charge.object === "charge" && charge.livemode === false
+  requireMatch(charge.id === chargeId && charge.object === "charge" && charge.livemode === live
     && charge.payment_intent === order.stripe_payment_intent_id && charge.paid === true && charge.captured === true
     && charge.currency === order.currency && charge.amount === order.amount_total_minor
     && charge.amount_captured === order.amount_total_minor && typeof charge.disputed === "boolean");
@@ -98,12 +103,15 @@ export async function observeStripeMerchCosts(
   }
   requireMatch(refunds.reduce((sum, r) => sum + r.amount, 0) === refunded);
   refunds.sort((a, b) => a.id.localeCompare(b.id));
+  const refundTax = refunded > 0 && refunded < order.amount_total_minor && tax !== null && tax > 0
+    ? await observeStripeRefundTax({ paymentIntentId: order.stripe_payment_intent_id, currency: order.currency,
+      grossMinor: order.amount_total_minor, taxMinor: tax, refunds, livemode: live }, secret, transport) : null;
   // Re-read prevents refund/dispute changes during the multi-request snapshot.
   const finalCharge = await get(`/charges/${chargeId}`);
   requireMatch(finalCharge.id === chargeId && finalCharge.amount_refunded === refunded
     && finalCharge.disputed === charge.disputed && finalCharge.balance_transaction === balanceId);
   return {
-    account_id: expectedAccount, environment: "sandbox", order_id: order.id,
+    account_id: expectedAccount, environment: order.environment, order_id: order.id,
     checkout_id: order.stripe_checkout_session_id, payment_intent_id: order.stripe_payment_intent_id,
     charge_id: chargeId, balance_id: balanceId, currency: order.currency,
     gross_minor: order.amount_total_minor, provider_fee_minor: fee, charge_net_minor: net,
@@ -112,7 +120,8 @@ export async function observeStripeMerchCosts(
     balance_status: balance.status, refunds,
     // Partial refunds need actual tax-reversal evidence. Full refunds return the
     // entire collected tax; dispute debits are NOT subtracted again as refunds.
-    tax_reversal_minor: refunded === 0 ? 0 : refunded === order.amount_total_minor ? tax : null,
+    tax_reversal_minor: refunded === 0 || tax === 0 ? 0 : refunded === order.amount_total_minor ? tax : refundTax?.tax_reversal_minor ?? null,
+    refund_tax_evidence: refundTax,
     adjustments_qualified: false, financial_authority: false,
   };
 }

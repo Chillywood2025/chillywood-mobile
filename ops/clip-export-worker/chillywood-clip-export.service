@@ -1,0 +1,23 @@
+[Unit]
+Description=Chi'llywood bounded private Clip export
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=chillywood
+WorkingDirectory=/opt/chillywood/clip-export
+EnvironmentFile=/etc/chillywood/clip-export.env
+ExecStart=/usr/bin/node scripts/clip-export-worker-cli.mjs --once
+TimeoutStartSec=7900
+TimeoutStopSec=45
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp
+MemoryMax=3G
+CPUQuota=200%
+
+# Installation/activation is an explicitly qualified operator step.

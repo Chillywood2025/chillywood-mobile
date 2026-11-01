@@ -6,16 +6,22 @@ import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 const {googlePlayReporterAccessToken}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-reporter-oauth.ts');
 const source=readFileSync('supabase/functions/google-play-external-reporter/index.ts','utf8');
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-function harness({enabled=true,result={status:'unknown',reason:'synthetic_lost_response'},commit=true}={}){
+function harness({enabled=true,result={status:'unknown',reason:'synthetic_lost_response'},commit=true,tax=false,taxFails=false}={}){
   const secret='synthetic-worker-secret-'+'.'.repeat(40),calls=[];let handler;
   const env={GOOGLE_PLAY_EXTERNAL_REPORTER_WORKER_SECRET:secret,GOOGLE_PLAY_EXTERNAL_REPORTING_ENABLED:String(enabled),
     GOOGLE_PLAY_EXTERNAL_LICENSE_TEST_MODE:'true',GOOGLE_PLAY_EXTERNAL_REPORTER_SERVICE_ACCOUNT_JSON:'synthetic-not-a-real-key'};
+  if(tax){env.STRIPE_SECRET_KEY='sk_test_synthetic';env.STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID='acct_platform';}
   const require=name=>{
     if(name.startsWith('jsr:'))return {};
+    if(name.endsWith('google-refund-tax-reconciliation.ts'))return {observeGoogleRefundTax:async()=>{
+      calls.push({name:'observe-tax'});if(taxFails)throw Error('synthetic-provider-unavailable');return {synthetic:'provider-bound-facts'};
+    }};
+    if(name.endsWith('merch-observation-budget.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts');
     if(name.endsWith('stripe-connect.ts'))return {
       readOptionalEnv:key=>env[key],jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status}),
       createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
-        calls.push({name,args});return name==='claim_google_play_external_report'
+        calls.push({name,args});if(name==='claim_google_refund_tax_context')return{data:{transaction_id:'synthetic-id',feature:'creator_tip'}};
+        return name==='claim_google_play_external_report'
           ?{data:{outboxId:'synthetic-outbox',report:{externalTransactionToken:'private-synthetic'}},error:null}
           :{data:commit,error:null};
       }}}),
@@ -44,6 +50,14 @@ test('worker persists unknown outcome using lease, returns no token/private quot
 test('worker does not acknowledge a failed durable result commit',async()=>{
   const h=harness({commit:false});const response=await h.send();assert.equal(response.status,503);
   assert.deepEqual(await response.json(),{error:'google_report_commit_pending'});
+});
+test('configured worker reconciles tax before report claim; unresolved tax does not block unrelated reports',async()=>{
+ for(const taxFails of [false,true]){
+  const h=harness({tax:true,taxFails});assert.equal((await h.send()).status,200);
+  const names=h.calls.map(c=>c.name);assert.ok(names.indexOf('claim_google_refund_tax_context')<names.indexOf('claim_google_play_external_report'));
+  assert.equal(names.includes('record_google_refund_tax_evidence'),!taxFails);
+  assert.ok(names.includes('finish_google_play_external_report'));
+ }
 });
 
 test('OAuth helper signs only the fixed Android Publisher scope and never follows a credential-supplied endpoint',async()=>{

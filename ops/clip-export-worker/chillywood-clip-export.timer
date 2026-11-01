@@ -1,0 +1,10 @@
+[Unit]
+Description=Chi'llywood bounded private Clip export timer
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=30s
+Unit=chillywood-clip-export.service
+
+[Install]
+WantedBy=timers.target

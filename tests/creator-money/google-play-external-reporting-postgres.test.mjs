@@ -152,8 +152,31 @@ test('private Google obligations lease/reconcile idempotently without financial 
     assert.equal(await one("select count(*)::integer from private.google_play_external_report_outbox where state='blocked_tax'"),1);
     const taxed=await seed();await enqueue(taxed,evidence({googlePlayTax:{provenance:'stripe_checkout_automatic_tax_complete',countryCode:'US',preTaxAmountMinor:218,taxAmountMinor:19}}));
     job=await claim();await finish(job,{status:'reported',reason:'synthetic_fixture_only',receipt:receipt(job.report)});
+    await enqueue(taxed,evidence({outcome:'refunded',refundedAmountMinor:40}));
     await enqueue(taxed,evidence({outcome:'refunded',refundedAmountMinor:100}));
     assert.equal(await claim(),null,'taxed partial refund must not guess allocation');
+    await db.query(`insert into public.creator_tip_transactions(id,sender_id,buyer_account_id,buyer_session_generation,creator_id,tip_amount_cents,total_paid_cents,
+      creator_net_cents,currency,provider,provider_environment,provider_account_id,provider_checkout_session_id,provider_payment_intent_id,payment_status)
+      values($1,$2,$2,$4,$3,237,237,237,'usd','stripe_connect','test','acct_fixture','cs_test_taxed','pi_taxed','pending')`,[taxed,buyer.user_id,creator.user_id,buyer.session_id]);
+    const taxContext=await one('select public.claim_google_refund_tax_context()');
+    assert.equal(taxContext.quote_id,taxed);assert.equal(taxContext.tax_minor,19);
+    assert.equal(await one('select public.claim_google_refund_tax_context()'),null,'fair bounded claim backs off a pending association');
+    const taxFacts={account_id:'acct_platform',environment:'test',checkout_id:'cs_test_taxed',payment_intent_id:'pi_taxed',
+      charge_id:'ch_taxed',currency:'usd',gross_minor:237,tax_minor:19,refunded_minor:100,tax_reversal_minor:8,
+      refunds:[{id:'re_taxed',amount:100}],refund_tax_evidence:{provenance:'stripe_tax_association_get_v1',association_id:'taxa_taxed',
+       original_tax_transaction_id:'tax_original',payment_intent_id:'pi_taxed',currency:'usd',gross_minor:237,original_tax_minor:19,
+       refunded_minor:100,tax_reversal_minor:8,refunds:[{refund_id:'re_taxed',refund_minor:100,tax_reversal_minor:8,tax_transaction_id:'tax_reversal'}]}};
+    const record=facts=>one('select public.record_google_refund_tax_evidence($1,$2)',[taxContext.transaction_id,facts]);
+    await assert.rejects(()=>record({...taxFacts,checkout_id:'cs_test_wrong'}),/binding_invalid/);
+    await assert.rejects(()=>record({...taxFacts,refund_tax_evidence:null}),/binding_invalid/);
+    assert.equal(await record(taxFacts),true);
+    assert.equal(await record(taxFacts),false,'immutable retry does not requeue or multiply reporting obligations');
+    assert.equal(await one("select count(*)::int from private.google_play_external_report_outbox where transaction_id=$1 and state='reported' and operation='refund'",[taxContext.transaction_id]),0,'ingestion is not a Google receipt');
+    job=await claim();assert.equal(job.report.refundPreTaxMinor,92);assert.equal(job.report.remainingPreTaxMinor,126);assert.equal(job.report.remainingTaxMinor,11);
+    await assert.rejects(()=>finish(job,{status:'reported',receipt:{...receipt(job.report),currentTaxAmount:googlePrice(10)}}),/receipt_required/);
+    await finish(job,{status:'reported',reason:'synthetic_fixture_only',receipt:receipt(job.report)});
+    assert.equal(await one("select reason from private.google_play_external_report_outbox where transaction_id=$1 and cumulative_refund_minor=40",[taxContext.transaction_id]),'covered_by_canonical_cumulative_refund');
+    assert.equal(await one("select reported_refund_minor from private.google_play_external_transactions where id=$1",[taxContext.transaction_id]),100);
     assert.equal(await one('select count(*)::integer from public.access_grants'),0,'opaque token/report does not grant access');
     assert.equal(await one("select count(*)::integer from public.creator_tip_transactions where payment_status<>'pending'"),0,'report cannot invent a paid charge');
     await assert.rejects(()=>db.query("update private.google_play_external_launch_bindings set external_transaction_token='changed'"),/immutable/);

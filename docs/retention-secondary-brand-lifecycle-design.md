@@ -1,7 +1,8 @@
 # Remaining retention lifecycle: scoped implementation design
 
-Status: secondary-object coverage remains a source design, not production
-qualification. The separate Brand adapter described historically below is now
+Status: the November 1 durable producer and dormant per-object expiry path are
+implemented in migrations `20261101141441` and `20261101142934`; see the
+commissioning section below. They are not production qualification. The separate Brand adapter described historically below is now
 implemented in the October 21 and October 25 migrations; preserve that adapter.
 The October 21 snapshot contains 31 secondary records (six video renditions,
 15 media renditions, ten jobs), 63 brand assets, and 23 Supabase originals.
@@ -110,3 +111,89 @@ those covered/uncovered classifications are backed by runtime proof.
 
 The held scanner remediation is excluded. This design does not authorize rescans,
 marking bytes clean, provider operations, flags, schedules or deletion.
+
+
+## November 1 commissioning and rollback
+
+### Implemented path (not permission to delete)
+
+Both HLS producers now reserve immutable source-incarnation/object ownership
+before provider writes. Keys include the entire producer UUID. Dispatch is
+one-shot create-only PUT; complete byte readback binds hash, size, ETag and the
+write-token metadata. Hetzner additionally requires a non-null immutable version.
+Unknown PUT outcomes recover by GET only; an absent read never allows another
+PUT. Verified objects are skipped on inventory retry. A source change prevents
+publication; late receipts settle outstanding writers without reviving the source.
+Clip render output may attach a second source binding in the same transaction
+as creating its draft. Every binding must expire before object removal.
+
+Actual removal starts the fixed 720-hour window once. Publication withdrawal,
+ordinary metadata editing and generation replacement do not impersonate deletion.
+Owner protection, legal/account/parent holds, all surviving source bindings,
+public references and incomplete dispatches block expiry. Permanent claims fence
+later reference/hold/owner admission. The dormant consumer checks every byte and
+rechecks SQL authority immediately before deletion. No scheduler is installed.
+
+R2 qualification means permanent key retirement and complete writer fencing;
+GET followed by DELETE is **not** an atomic conditional deletion primitive.
+Hetzner uses the exact version for GET/HEAD/DELETE. Claim authority pins the
+contract hash, writer-fence hash and deletion mode. Replacing qualification proof
+invalidates prior authority. Observation of absence never means permanently absent.
+
+### Exact commissioning sequence
+
+1. Freeze the merged commit; require full Required Validation, including the
+   native PostgreSQL runner's sixteen independent-session blocking schedules.
+   Local PGlite replay and HTTP doubles are supplemental, not that race proof.
+2. Deploy both forward migrations with settings disabled. Compare remote version,
+   statement hash and source head. Confirm private RLS/FORCE RLS, service-only RPC
+   grants and body role checks; confirm payments, payouts and cleanup stay OFF.
+3. Commission only an explicitly approved private output origin. Supply approved
+   `MEDIA_OUTPUT_R2_*` credentials through the existing secret mechanism; never
+   borrow scanner credentials. Inventory **every** writer (CLI, rendering worker,
+   application uploader, admin/provider tools), credential scope and retirement
+   check. Retire/drain obsolete writers before certifying their fence hash.
+4. Run an approved synthetic create-only upload: record intent, complete readback,
+   seal, publish draft and read via intended authorized delivery. Exercise lost
+   PUT response with GET-only recovery; changed source must deny publication.
+   Verify no raw provider URL or secret appears in logs. Use a fresh UUID for each
+   generation. Keep outputs private and within configured scanner limits.
+5. For Hetzner, establish versioning and exact version evidence at original write;
+   an ETag or current-object scan cannot retrofit immutable historical identity.
+   For cached public HLS, first prove private preservation plus publication/cache
+   withdrawal. Until then those buckets remain individually unqualified.
+6. Dry-run candidate SQL/readiness and hold/reference checks without enabling
+   expiry or invoking the consumer. Record object/source IDs, all bindings,
+   server deletion time, exact deadline, unsettled dispatches, blocker reasons,
+   provider/version/hash/size and proposed qualification hashes. Do not shorten
+   production retention to manufacture a test candidate.
+7. Only after separately authorized qualification and one-object destruction may
+   the operator enable the dormant setting and invoke `expireSecondaryMediaObject`
+   for that exact approved object. A deployment or broad completion approval is
+   not per-object destruction permission. Test provider DELETE semantics with
+   separately approved disposable bytes first. No automatic schedule is included.
+
+### Monitoring and stop/rollback proof
+
+Monitor unresolved dispatched writes, invalidated producers awaiting receipt,
+source/owner/hold blocks, unqualified buckets, expired qualification, rejected
+reference reuse and failed/identity-changed expiry receipts. Alert on growth or
+any unauthorized producer/publication attempt; unknown writes stay blocked rather
+than timing out into presumed safety. Logs must identify producer/object IDs but
+never signed URLs or credentials.
+
+Before a rollout, prove the stop switch returns disabled authority and zero
+provider requests using the runtime tests. Roll back application producers to a
+compatible fail-closed release only: never restore overwrite uploads. Disable the
+expiry setting and qualification authority for new actions; preserve immutable
+claims, receipts, bindings and deadlines. A request already sent cannot be
+unsent, so drain worker execution before declaring stop complete. Never drop the
+ledger or reset the monotonic reference fence. Corrections are forward migrations.
+
+### Still requiring external evidence
+
+Historical secondary objects without exact immutable inventory, undrained legacy
+writers, unversioned Hetzner originals, public-cache/private-preservation gaps and
+unqualified delivery origins remain real blockers. Existing global readiness
+counts are unchanged. The new executable per-object path does not erase those
+records or imply provider commissioning, native CI or production deletion ran.

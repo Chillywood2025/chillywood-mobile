@@ -1,4 +1,4 @@
-# Physical merchandise: automatic tracking (provisional sandbox source)
+# Physical merchandise: automatic tracking (mode-bound, dormant live source)
 
 This adds **tracking only**, not label purchasing or shipping tools. The seller
 enters the carrier and existing tracking number once on the order. Tracking mode
@@ -7,7 +7,7 @@ was already frozen at purchase. A failed provider never changes it to untracked.
 ## Implemented path
 
 1. `assign_merch_tracking` checks the current exact session, seller ownership,
-   paid sandbox order and tracked mode. Assignment is immutable. A number cannot
+   paid order in a supported environment and tracked mode. Assignment is immutable. A number cannot
    be assigned to another order, including apparent recycled numbers. Corrections
    use the reviewed pre-delivery supersession flow below; deleting tracking is not a bypass.
    Creators can now submit a proposed correction with a reason from the order.
@@ -16,7 +16,7 @@ was already frozen at purchase. A failed provider never changes it to untracked.
 
 ### Reviewed pre-delivery corrections
 
-The creator's current exact session and paid, tracked sandbox order are checked
+The creator's current exact session and paid, tracked order environment are checked
 before an append-only request is accepted. One pending proposal per order, bounded
 notes, at most 100 historical proposals per order, normalized identity validation,
 global already-assigned identity exclusion and frozen UUID replay checks prevent
@@ -63,10 +63,20 @@ is performed by this source change.
    first claim. It registers the existing number at most once and performs an
    authenticated merchant-scoped GET. An uncertain registration is not re-POSTed;
    polling still works. Lost leases reject late completions.
+   Provider calls and streamed bodies share a ten-second deadline, SQL calls
+   have a five-second response budget, and the worker stops admitting another
+   registration/GET/completion cycle within its 75-second aggregate budget.
+   Stale lease acknowledgements are not successful completions. The transport
+   helper and worker support an explicitly selected live mode for future
+   qualification. `MERCH_TRACKING_ENVIRONMENT` defaults to `sandbox`; production
+   requires `MERCH_SHIPPO_LIVE_TOKEN` with a live prefix, never a test-key fallback.
+   SQL claims, frozen job mode/account, qualifications, callback hints, provider
+   `test` flag and final order mode must agree. Sandbox qualification cannot
+   qualify a live merchant. No live qualification or credential is seeded.
 4. The canonical signed Stripe Checkout lifecycle stores only shipping country
    and postal code, not full street/name. It uses the pinned Clover
    `collected_information.shipping_details.address`, never billing or metadata.
-5. A matching carrier/number, test environment, destination country/postcode,
+5. A matching carrier/number, exact order/provider environment, destination country/postcode,
    plausible earliest tracking event after verified purchase, and explicit-offset
    delivery timestamp produce **corroborated** delivery. This starts the existing
    720-hour return clock automatically. It is not proof of parcel contents or an

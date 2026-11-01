@@ -5,7 +5,10 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 const compile=file=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-const loaded={exports:{},AbortSignal};
+const loaded={exports:{},AbortSignal,require:name=>{
+ if(name==='./stripe-refund-tax-evidence.ts')return loadPureTypeScriptModule('supabase/functions/_shared/stripe-refund-tax-evidence.ts');
+ throw Error(`Unexpected production dependency ${name}`);
+}};
 vm.runInNewContext(compile('supabase/functions/_shared/stripe-merch-cost-observation.ts'),loaded);
 export const observe=loaded.exports.observeStripeMerchCosts;
 export const order={id:'e7100000-0000-4000-8000-000000000001',buyer_id:'e7100000-0000-4000-8000-000000000002',stripe_checkout_session_id:'cs_test_merch',stripe_payment_intent_id:'pi_merch',stripe_charge_id:null,amount_total_minor:1000,currency:'usd',environment:'sandbox'};
@@ -23,6 +26,7 @@ export function fixture(patch={}){
   assert.equal(options.method,'GET');assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer sk_test_synthetic');
   assert.equal(options.headers['Stripe-Version'],'2026-10-28.endive');assert.equal(options.headers['Stripe-Account'],undefined);
   const key=url.replace('https://api.stripe.com/v1','');calls.push(key);
+  if(key.startsWith('/tax/associations/find?')&&!data[key])return new Response('{}',{status:404});
   assert.ok(data[key],`Unexpected synthetic transport request ${key}`);
   return new Response(JSON.stringify(data[key]),{status:200});
  }};

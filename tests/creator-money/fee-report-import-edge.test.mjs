@@ -13,12 +13,12 @@ function fixture(patch={}) {
   if(path.endsWith('stripe-fee-report-evidence.ts')) return {observeStripeFeeReport:async(c,key)=>{calls.push(['provider',c,key]);return{financialAuthority:false,settlementReady:false};}};
   return {readOptionalEnv:key=>env[key],jsonResponse:(status,body)=>Response.json(body,{status}),createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
    calls.push([name,args]);
-   if(name==='get_commerce_fee_report_import_context') return {data:context};
+   if(name==='get_commerce_fee_report_import_context'||name==='get_merch_fee_report_import_context') return {data:context};
    return patch.recordFailure?{error:{message:'private'}}:{data:{status:'observed_only',financialAuthority:false,settlementReady:false}};
   }}})};
  }};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('supabase/functions/stripe-fee-report-import/index.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,runtime);
- const request=(body={},authorization='Bearer service_fixture')=>new Request('https://fixture.invalid',{method:'POST',headers:{Authorization:authorization},body:JSON.stringify({contract_id:contract,report_run_id:'frr_fixture',file_id:'file_fixture',interval_start:100,interval_end:200,...body})});
+ const request=(body={},authorization='Bearer service_fixture')=>new Request('https://fixture.invalid',{method:'POST',headers:{Authorization:authorization},body:JSON.stringify({...('order_id' in body?{}:{contract_id:contract}),report_run_id:'frr_fixture',file_id:'file_fixture',interval_start:100,interval_end:200,...body})});
  return {handler,calls,request};
 }
 test('service report ingestion derives account and objects from private DB then persists observed-only evidence',async()=>{
@@ -27,6 +27,19 @@ test('service report ingestion derives account and objects from private DB then 
  assert.equal(f.calls[1][1].accountId,'acct_fixture'); assert.equal(f.calls[1][1].chargeId,'ch_fixture');
  assert.equal(f.calls[2][1].p_source_observation_id,'e7100000-0000-4000-8000-000000000002');
  const result=await response.json();assert.equal(result.financialAuthority,false);assert.equal(result.settlementReady,false);
+});
+test('merch identity uses stored order chain and the merch evidence RPC',async()=>{
+ const f=fixture({context:{orderId:contract}});
+ assert.equal((await f.handler(f.request({order_id:contract}))).status,200);
+ assert.deepEqual(f.calls.map(x=>x[0]),['get_merch_fee_report_import_context','provider','record_merch_fee_report_observation']);
+ assert.equal(f.calls[0][1].p_order_id,contract);assert.equal(f.calls[2][1].p_order_id,contract);
+ assert.equal('p_contract_id' in f.calls[2][1],false);
+});
+test('ambiguous sale identity is rejected before either provider path',async()=>{
+ const f=fixture();assert.equal((await f.handler(f.request({order_id:contract,contract_id:contract}))).status,400);assert.equal(f.calls.length,0);
+});
+test('mismatched stored merchandise identity cannot reach Stripe',async()=>{
+ const f=fixture({context:{orderId:'different'}});assert.equal((await f.handler(f.request({order_id:contract}))).status,409);assert.equal(f.calls.some(x=>x[0]==='provider'),false);
 });
 test('non-service caller cannot reach DB or Stripe',async()=>{
  const f=fixture();assert.equal((await f.handler(f.request({},'Bearer user_jwt'))).status,403);assert.equal(f.calls.length,0);

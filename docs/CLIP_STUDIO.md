@@ -1,6 +1,16 @@
 # Chi'llywood Clip Studio
 
-Updated: 2026-05-25
+Updated: 2026-11-01
+
+## November 1 render/export implementation
+
+The new private server-rendering path implements saved trim/crop/fit and approved
+watermark export to a separate draft. See [CLIP_RENDER_PIPELINE.md](./CLIP_RENDER_PIPELINE.md)
+for the exact request, queue, worker, receipt, scanner, review and publish flow,
+tests, deployment gate and remaining production-host qualification. It does not
+overwrite originals or automatically publish. The older metadata-only and
+research sections below describe the previous baseline; they are superseded for
+trim/frame/watermark exports, not for advanced timelines or title burn-in.
 
 Clip Studio is the creator-facing video preparation area inside Platform Studio. It lets creators choose a source video, stage a cover image, add title/template metadata, preview the result, and save or publish through the existing creator-video flow. It is not a timeline editor and it does not export a new video file.
 

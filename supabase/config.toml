@@ -293,3 +293,16 @@ verify_jwt = true
 verify_jwt = true
 [functions.stripe-fee-report-import]
 verify_jwt = true
+
+[functions.creator-cashout-worker]
+verify_jwt = true
+
+[functions.creator-cashout-fee-import]
+verify_jwt = true
+
+[functions.creator-cashout-driver]
+verify_jwt = true
+
+[functions.creator-cashout-webhook]
+# Dedicated raw-body signature plus authenticated current-provider readback.
+verify_jwt = false

@@ -339,6 +339,11 @@ const navigationParams = (pathname: string, params: URLSearchParams) => {
     if (pathname === "/settings" && name === "section" && NAVIGATION_VALUE_PATTERN.test(value)) {
       safe.set(name, value); return;
     }
+    // Presentation only; the admin route still enforces exact owner/session authority.
+    if (pathname === "/admin" && ((name === "tab" && value === "money-center")
+      || (name === "section" && value === "overview"))) {
+      safe.set(name, value); return;
+    }
     if (!pathname.startsWith("/chat/")) { valid = false; return; }
     if (name === "openCall" && value === "1") safe.set(name, value);
     else if (name === "startCall" && (value === "voice" || value === "video")) safe.set(name, value);
@@ -425,7 +430,10 @@ export const parseApplicationLink = (value: unknown): ParsedApplicationLink | nu
     return { kind: "legal", pathname: normalizedPathname, route: normalizedPathname, source: input.source };
   }
 
-  const contentPathname = resolveSupportedContentPath(input.pathname);
+  const ownerHealthPresentation = input.source === "notification_path" && input.pathname === "/admin"
+    && input.routeParams.get("tab") === "money-center" && input.routeParams.get("section") === "overview";
+  const contentPathname = resolveSupportedContentPath(input.pathname)
+    ?? (ownerHealthPresentation ? "/admin" : null);
   if (!contentPathname) return null;
   const safeParams = navigationParams(contentPathname, input.routeParams);
   if (!safeParams) return null;

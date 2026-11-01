@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync,symlinkSync,readFileSync} from 'node:fs';
@@ -5,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {buildHlsOutputInventory} from '../scripts/lib/hls-output-inventory.mjs';
+import {premiumHlsProofPaths} from '../scripts/lib/premium-hls-proof-paths.mjs';
 
 function fixture(t,contents) {
   const outputRoot=mkdtempSync(path.join(os.tmpdir(),'hls-inventory-'));
@@ -69,10 +71,21 @@ test('rejects symlink aliasing, invalid roots, duplicate paths and size/count ov
   assert.throws(()=>buildHlsOutputInventory(input),/file_size_invalid/);
 });
 test('both real producers validate exact upload lists before starting provider uploads',()=>{
-  for(const [filename,upload] of [['media-automation-cli.mjs','const uploaded = uploadHlsTree('],['media-premium-hd-cli.mjs','const uploaded = [];']]) {
+  for(const filename of ['media-automation-cli.mjs','media-premium-hd-cli.mjs']) {
     const source=readFileSync(new URL(`../scripts/${filename}`,import.meta.url),'utf8');
     const validation=source.indexOf('const outputInventory = buildHlsOutputInventory(');
-    assert.ok(validation>0);assert.ok(source.indexOf(upload,validation)>validation);
+    assert.ok(validation>0);assert.ok(source.indexOf('await producerTransport.persist(',validation)>validation);
+    assert.ok(source.indexOf('await producerTransport.begin(')<validation);
     assert.match(source.slice(validation),/uploadedObjectCount: uploaded.length,\s+outputInventory,/);
   }
+});
+test('premium proof and denial token keep the complete producer generation prefix',()=>{
+ const outputPrefix='playback/protected/premium/creator_video/source/batch/11111111-1111-4111-8111-111111111111/';
+ const result=premiumHlsProofPaths(outputPrefix,{label:'720p',segments:['segment-000.ts']});
+ assert.deepEqual(result,{masterPath:outputPrefix+'720p/master.m3u8',variantPath:outputPrefix+'720p/index.m3u8',
+  segmentPath:outputPrefix+'720p/segment-000.ts',wrongPath:outputPrefix+'720p/wrong.m3u8'});
+ const source=readFileSync(new URL('../scripts/media-premium-hd-cli.mjs',import.meta.url),'utf8');
+ assert.match(source,/proveWorkerAccess\(candidate, outputPrefix, rendition, outputRoot\)/);
+ assert.ok(!source.includes('proveWorkerAccess(candidate, batchId'));
+ assert.throws(()=>premiumHlsProofPaths(outputPrefix,{label:'720p',segments:['../outside.ts']}),/identity_invalid/);
 });

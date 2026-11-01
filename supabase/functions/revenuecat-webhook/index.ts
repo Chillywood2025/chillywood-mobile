@@ -207,14 +207,13 @@ const ACTIVE_EVENT_TYPES = new Set([
 const CANCELED_EVENT_TYPES = new Set(["CANCELLATION"]);
 const EXPIRED_EVENT_TYPES = new Set(["EXPIRATION"]);
 const BILLING_ISSUE_EVENT_TYPES = new Set(["BILLING_ISSUE"]);
-const REVOKED_EVENT_TYPES = new Set(["REFUND", "REVOCATION", "SUBSCRIPTION_PAUSED"]);
+const REVOKED_EVENT_TYPES = new Set(["REFUND", "REVOCATION"]);
 const TERMINAL_DISPATCH_EVENT_TYPES = new Set([
   "CANCELLATION",
   "BILLING_ISSUE",
   "EXPIRATION",
   "REFUND",
   "REVOCATION",
-  "SUBSCRIPTION_PAUSED",
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -1788,6 +1787,9 @@ const inspectRevenueCatTerminalEnvelope = (event: RevenueCatEvent) => {
   const reportedEventType = normalizeEventType(event.type);
   if (
     reportedEventType === "TEST"
+    || reportedEventType === "SUBSCRIPTION_PAUSED"
+    || reportedEventType === "SUBSCRIPTION_EXTENDED"
+    || reportedEventType === "REFUND_REVERSED"
     || ACTIVE_EVENT_TYPES.has(reportedEventType)
   ) return null;
 
@@ -2418,7 +2420,49 @@ Deno.serve(async (req) => {
       });
     }
 
+    // A scheduled pause does not end the current paid period. Keep the immutable
+    // ingress receipt above, but do not update entitlements, financial state or
+    // event ordering. A later EXPIRATION (including pause expiry) remains terminal.
+    if (["SUBSCRIPTION_PAUSED", "PRODUCT_CHANGE"].includes(normalizeEventType(event.type))) {
+      const productChange = normalizeEventType(event.type) === "PRODUCT_CHANGE";
+      return jsonResponse(200, {
+        status: "ignored",
+        reason: productChange ? "product_change_pending_effective_proof" : "subscription_pause_scheduled",
+        signatureVerified: true,
+        webhookProcessed: true,
+        authorityGranted: false,
+        premiumGranted: false,
+        accessStateChanged: false,
+        liveMoneyAction: false,
+        message: productChange
+          ? "Product change recorded; effective replacement requires independent purchase or snapshot proof."
+          : "Scheduled subscription pause recorded without changing current access.",
+      });
+    }
+
     const storePolicy = revenueCatStorePolicy(event);
+    if (["SUBSCRIPTION_EXTENDED", "REFUND_REVERSED"].includes(normalizeEventType(event.type))) {
+      const productId = resolveProductId(event);
+      const google = storePolicy.provider === "revenuecat_google_play"
+        ? resolveGooglePlayProductReference(productId) : null;
+      const { data, error } = await adminConfig.client.rpc("process_revenuecat_nonpurchase_lifecycle_atomic", {
+        p_provider: storePolicy.provider,
+        p_provider_event_id: await resolveEventId(event, rawBody),
+        p_event_type: normalizeEventType(event.type),
+        p_user_id: resolveUserId(event),
+        p_provider_product_id: storePolicy.provider === "revenuecat_google_play" ? google?.providerProductId ?? null : productId,
+        p_provider_base_plan_id: google?.providerBasePlanId ?? null,
+        p_environment: normalizeMoneyAccessEnvironment(event.environment),
+        p_original_transaction_id: resolveOriginalTransactionId(event),
+        p_starts_at: toIsoFromMs(event.purchased_at_ms),
+        p_expires_at: toIsoFromMs(event.expiration_at_ms),
+        p_occurred_at: toIsoFromMs(event.event_timestamp_ms),
+        p_raw_payload_hash: await hashText(rawBody),
+      });
+      if (error || !isRecord(data)) throw new Error("RevenueCat nonpurchase reconciliation unavailable.");
+      return jsonResponse(200, { ...data, signatureVerified: true, webhookProcessed: true,
+        premiumGranted: false, liveMoneyAction: false });
+    }
     if (normalizeEventType(event.type) === "TRANSFER") {
       const transferWrite = await writePremiumTransferFromRevenueCatEvent(adminConfig.client, event, rawBody);
       await writeProviderReadinessAudit(adminConfig.client, {

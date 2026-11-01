@@ -28,7 +28,7 @@ test('incomplete pagination, changed snapshot and account mismatch fail closed',
 });
 test('actual endpoint starts a server attempt before provider observation and persists before cost work',async()=>{
  let handler;const calls=[],f=fixture();const a={...context};
- const admin={rpc:async(name,args)=>{calls.push(name);if(name==='get_merch_cost_reconciliation_context')return{data:{id:context.order_id}};
+ const admin={rpc:async(name,args)=>{calls.push(name);if(name==='get_merch_cost_reconciliation_context')return{data:{id:context.order_id,environment:'sandbox'}};
   if(name==='begin_merch_dispute_observation')return{data:a};if(name==='complete_merch_dispute_observation'){assert.equal(args.p_attempt_id,a.id);assert.equal(args.p_facts.complete,true);return{data:{disputeState:'none'}};}
   if(name==='record_merch_provider_cost_observation')return{data:{financialAuthority:false}};throw Error(name);}};
  const runtime={exports:{},Deno:{serve:f=>handler=f},require:name=>{

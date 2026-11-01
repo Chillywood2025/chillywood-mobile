@@ -12,9 +12,6 @@ Deno.serve(async (req: Request) => {
   const service = readOptionalEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!service || req.headers.get("Authorization") !== `Bearer ${service}`)
     return jsonResponse(403, { error: "service_authority_required" });
-  const account = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID"), secret = readStripeTestSecret();
-  if (!account || !secret.configured)
-    return jsonResponse(503, { error: "merch_cost_reconciliation_not_configured", financialAuthority: false });
   const budget = createMerchObservationBudget();
   try {
     const body = await budget.run(() => req.json(), 5000);
@@ -26,14 +23,24 @@ Deno.serve(async (req: Request) => {
     if (!admin.configured) return jsonResponse(503, { error: "server_not_configured" });
     const context = await budget.run(() => admin.client.rpc("get_merch_cost_reconciliation_context", { p_order_id: body.order_id }), 5000);
     if (context.error || !context.data) throw Error("merch_order_context_unavailable");
+    // Mode comes only from the stored order. Separate optional live read-only
+    // configuration is never inferred from a request or borrowed test key.
+    const live = context.data.environment === "production";
+    const account = readOptionalEnv(live ? "STRIPE_MERCH_LIVE_OBSERVATION_ACCOUNT_ID" : "STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
+    const testSecret = live ? null : readStripeTestSecret();
+    const key = live ? readOptionalEnv("STRIPE_MERCH_LIVE_OBSERVATION_KEY") : testSecret?.configured ? testSecret.secret : null;
+    if (!["sandbox", "production"].includes(context.data.environment) || !account || !key
+      || !new RegExp(`^(sk|rk)_${live ? "live" : "test"}_[A-Za-z0-9_]+$`).test(key)
+      || (live && context.data.platform_account_id !== account))
+      return jsonResponse(503, { error: "merch_cost_reconciliation_not_configured", financialAuthority: false });
     const attempt = await budget.run(() => admin.client.rpc("begin_merch_dispute_observation", { p_order_id: body.order_id }), 5000);
     if (attempt.error || !attempt.data) throw Error("merch_dispute_context_unavailable");
-    const disputes = await budget.run(() => observeMerchDisputes(attempt.data as MerchDisputeContext, secret.secret, account, budget.transport));
+    const disputes = await budget.run(() => observeMerchDisputes(attempt.data as MerchDisputeContext, key, account, budget.transport));
     const disputeResult = await budget.run(() => admin.client.rpc("complete_merch_dispute_observation", {
       p_attempt_id: attempt.data.id, p_facts: disputes,
     }), 5000);
     if (disputeResult.error || !disputeResult.data) throw Error("merch_dispute_observation_not_recorded");
-    const facts = await budget.run(() => observeStripeMerchCosts(context.data as MerchCostOrder, secret.secret, account, budget.transport));
+    const facts = await budget.run(() => observeStripeMerchCosts(context.data as MerchCostOrder, key, account, budget.transport));
     const recorded = await budget.run(() => admin.client.rpc("record_merch_provider_cost_observation", { p_order_id: body.order_id, p_facts: facts }), 5000);
     if (recorded.error || !recorded.data) throw Error("merch_cost_observation_not_recorded");
     return jsonResponse(200, { ...recorded.data as Record<string, unknown>, financialAuthority: false, payoutCreated: false });

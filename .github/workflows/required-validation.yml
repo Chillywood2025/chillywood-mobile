@@ -84,6 +84,12 @@ jobs:
       - run: npm ci --prefix tests/integration/real-peer-browser --ignore-scripts
       - name: Install pinned browser for real paired call negotiation
         run: node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
+      - name: Install actual media renderer test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - name: Run product and navigation regression tests
         # Each SQL file owns a full disposable WASM database; serialize files
         # rather than let CPU-count defaults multiply memory unexpectedly.
@@ -196,6 +202,8 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-tip-cross-rail-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-tracking-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-return-cases-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-cashout-execution-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-commerce-fee-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-chat-call-retry-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs
           node scripts/test-content-inspection-postgres.mjs
@@ -219,6 +227,7 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-empty-test-concurrency.mjs --negative-control
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-brand-retention-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-global-retention-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-secondary-media-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-archived-brand-verification-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-archived-brand-verification-concurrency.mjs --negative-control
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-brand-soft-removal-concurrency.mjs

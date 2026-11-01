@@ -1,6 +1,7 @@
 # Observed-only Stripe fee evidence import
 
-This source adds read/import and private observation persistence, **not
+This source adds read/import, private observation persistence, cross-report
+component accounting and a bounded-known-cost calculator, **not operational
 settlement qualification**. It does not activate a worker, create reports, write
 payable ledgers, change accounts, or remove the existing tax-service-fee hold.
 
@@ -43,7 +44,12 @@ report run ID, file ID and interval. It resolves account, mode, currency, charge
 and refund IDs from an existing immutable auction cost observation. It requires
 the corresponding `STRIPE_FEE_REPORT_<TEST|LIVE>_ACCOUNT_ID` and key to agree,
 then authenticates the provider GET and records the normalized observation via
-`record_commerce_fee_report_observation`. No credentials are configured by this
+`record_commerce_fee_report_observation`. Physical-merch callers instead provide
+`order_id` (never both IDs); `get_merch_fee_report_import_context` binds the
+latest current stored cost observation, and
+`record_merch_fee_report_observation` rechecks the order under its row lock.
+The `sandbox` merchandise environment maps explicitly to Stripe `test`, never
+to live. No credentials are configured by this
 change and no scheduler invokes it. JWT verification and an exact service bearer
 are both retained.
 
@@ -69,20 +75,87 @@ support before operational ingestion. No live provider request was made here.
   complete fees. Neither 96 elapsed hours nor a report watermark releases money.
 - Standalone processing fees can appear after the charge, while the charge's
   balance transaction shows zero fees. Never treat that zero as final costs.
-- Published guide/schema descriptions differ on whether `amount` includes fee
-  tax. This importer keeps `amountMinor` and `taxMinor` separate and leaves the
-  aggregate null until version/account semantics are independently qualified.
+- The itemized-report guide specifies `amount` before fee tax and `tax`
+  separately. Summary schemas describe included tax. The bounded-known-cost
+  calculator therefore pins the **itemized v2** contract
+  `all_fees.incurred_at.itemized.2:amount_excludes_tax_v1`; it never applies
+  that arithmetic to summary reports. The archive retains the two raw fields.
 - Adjustments/refunds are observations only. Persistence binds the existing
   contract/account/mode and preserves immutable observations. Future accounting
   qualification must reconcile overlapping reports across runs, establish
   supported charge/refund/invoice coverage, and review fee attribution.
 - This import has **not** been run against the owner's provider account.
-  Automated report scheduling, accounting qualification, physical-merch binding
-  and live operation remain unfinished. Observation persistence is source-only,
-  tested against a disposable full-schema database, and not deployed.
+  Physical-merch binding and component accounting are implemented. Actual
+  report availability, account coverage, policy/creator acceptance, automated
+  report scheduling, operational settlement qualification and live operation
+  still require qualification. Source test results are not deployment evidence.
 - The current hard-false `commerce_tax_fee_settlement_ready` gate is untouched.
   All imported artifacts retain `financialAuthority: false`,
   `settlementReady: false`, and unverified completeness.
+
+## Component accounting and late adjustments
+
+`commerce_fee_components` and `commerce_fee_component_sources` preserve one
+immutable component plus every report that observed it. Account, mode, fee ID,
+incurred object, currency, product, suite, feature and pricing tier form its
+identity. Overlapping reports never add the same component twice. Changed
+amounts, tax, settlement routing or balance identity on the same component
+raise a conflict and roll back the import. A genuine new adjustment with a new
+provider ID is retained, including negative amounts. A component cannot be
+bound to two sales. Existing report rows are backfilled transactionally; any
+historical conflict aborts rather than selecting a winner.
+
+The optional `balance_transaction_id` export column is preserved and validated.
+It is required for known-cost reconciliation. A report component on the same
+balance transaction as an already-observed inline fee must reconcile exactly
+to that fee, and is counted once. Components from separately identified balance
+transactions are disjoint additions. Unknown attribution, invoiced/mixed or
+credit-funded fees remain review states, not guesses about who pays them.
+
+`get_commerce_fee_component_summary` is service-only, shows deduplicated raw
+amount/tax groups as integer strings (safe even above JavaScript's integer
+range), and never labels a negative component total as extra payable earnings.
+An empty archive is unknown, not authoritative zero.
+
+## Proposed bounded-known-cost policy (not activated)
+
+`commerce-known-cost-accounting.ts` implements a pure calculation for
+`known_costs_future_unpaid_adjustments_v1`. It uses then-known verified costs,
+not an assertion that every future fee is final. After existing return,
+fulfillment and remedy holds, a qualified version could allow release while
+later real adjustments are applied only to future unpaid earnings. A negative
+balance would block new cashout, not authorize a bank debit. No arbitrary
+reserve percentage is introduced.
+
+This policy is **not active and not accepted on behalf of creators**. Current
+terms do not establish this exact future-offset arrangement. Activation needs
+the owner's explicit policy choice, versioned creator acceptance, qualified
+account/report coverage and a tested ledger/recovery bridge. The calculator
+itself returns `financialAuthority:false`, `finalFees:false`, and
+`futureAdjustmentsPossible:true`; neither an imported report nor its arithmetic
+can open `commerce_tax_fee_settlement_ready`.
+
+Payout fee reports use the separately typed `PayoutFeeReportContext`, binding
+only `payoutId` and `incurred_by_type=payout`. Sale/refund fields cannot coexist
+with that context. Cashout execution must separately bind the payout/account
+and qualify coverage before using any observed payout fee.
+
+## Deployment and verification
+
+1. Review/apply `commerce_fee_component_accounting` after its existing fee-report
+   predecessor. Inspect historical component conflicts before production apply.
+2. Deploy `stripe-fee-report-import` and its exact shared closure only after the
+   new merchandise RPCs exist. Old contract-only callers remain compatible.
+3. Verify FORCE RLS/no direct API grants, two new table triggers, the service-only
+   RPC grants, and unchanged money switches and tax settlement gate.
+4. Use disposable provider fixtures for the non-authoritative import path;
+   production provider qualification is a distinct authorized operation.
+5. Roll back the endpoint version if needed. Do not delete immutable evidence or
+   rewrite deployed migration history; a schema correction is forward-only.
+
+Additional regression commands:
+
+`node --test tests/creator-money/fee-component-accounting-postgres.test.mjs tests/creator-money/known-cost-accounting.test.mjs tests/creator-money/fee-report-import-edge.test.mjs`
 
 ## Evidence sources
 

@@ -77,6 +77,7 @@ import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monet
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
+import { PlatformHeroReel } from "../../components/creator-media/PlatformHeroReel";
 import { AppActionButton, AppEmptyState, AppSection } from "../../components/ui/app-surface";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { PlatformLiveNow } from "../../components/live/platform-live-now";
@@ -420,6 +421,7 @@ export default function PublicChannelScreen() {
   };
   const visibleBrandHeroImage = canShowDraftAsset(platformBranding?.heroImage);
   const visibleBrandHeroPoster = canShowDraftAsset(platformBranding?.heroPoster);
+  const visibleBrandHeroVideo = canShowDraftAsset(platformBranding?.heroVideo);
   const visibleBrandBackground = canShowDraftAsset(platformBranding?.backgroundImage);
   const visibleBrandAvatar = canShowDraftAsset(platformBranding?.avatar);
   const visibleBrandLogo = canShowDraftAsset(platformBranding?.logo);
@@ -907,6 +909,10 @@ export default function PublicChannelScreen() {
           ) : null}
           <View style={[styles.heroOverlay, { backgroundColor: heroOverlayColor }]} />
           <View style={styles.heroContent}>
+            {visibleBrandHeroVideo?.signedUrl && visibleBrandHeroVideo.scanStatus === "clean" ? <PlatformHeroReel
+              key={`${brandImageIdentity(visibleBrandHeroVideo)}:${visibleBrandHeroVideo.signedUrl}`}
+              uri={visibleBrandHeroVideo.signedUrl} label={channel?.displayName || "Platform"}
+            /> : null}
             {brandLogoSource ? (
               <StableImage
                 source={{ uri: brandLogoSource }} identityKey={brandImageIdentity(visibleBrandLogo)}
