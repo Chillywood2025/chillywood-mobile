@@ -64,9 +64,60 @@ account/card. Provider costs in this preview are quotes, never actual charges.
   make retries idempotent. Bank-return release subtracts already-accounted
   deltas so the same cost/credit is not applied twice. No creator acceptance is
   seeded. Unrelated provider review holds are never cleared by a fee import.
-* A prepared request can be canceled by its current creator before dispatch;
-  dispatched/unknown requests cannot be canceled or blindly retried. Returned,
+* A prepared request can be canceled by its current creator before dispatch.
+  A funded request has a separate terminal bank-cancellation lane, below;
+  ambiguous bank dispatch cannot be canceled or blindly retried. Returned,
   canceled and review-blocked work are not automatically dispatched again.
+
+### Funded, bank-never-dispatched cancellation
+
+The forward migration adds prospective immutable creation and dispatch receipts.
+Legacy executions without a creation-before-dispatch receipt **do not** qualify
+by absence of a payout ID/event. Current creator cancellation, or an actual
+commerce source hold at bank-dispatch admission, freezes bank dispatch forever.
+Allocated source-domain locks precede the creator lock. A committed competing
+bank claim wins; cancellation cannot reinterpret its uncertain outcome as safe.
+
+`funding_return_pending` holds the original reserve. Independently verified
+funding-correction return authority, exclusive-writer provenance and operational
+switches are required before one `funding_return` claim. Stripe documents
+reversals for refunds/disputes or correcting transfer errors, not arbitrary
+withdrawals: [separate charges and transfers](https://docs.stripe.com/connect/separate-charges-and-transfers#reverse-transfers).
+No qualification is inserted by this migration. Failed/unknown reversal attempts
+remain `funding_return_unknown`, GET-only; they never redispatch a bank payout
+or infer no reversal from an empty list.
+
+Release requires the exact original platform transfer balance transaction and
+exact reversal's available platform balance transaction (source, currency,
+principal, signed fee and amount-minus-fee net). No bank-return row is fabricated.
+The [reversal object](https://docs.stripe.com/api/transfer_reversals/object) binds
+its transfer and balance transaction. Report import uses a separate exact
+transfer context, not an invented payout ID. Funding fee attribution must be
+independently qualified for this account/report version; no live sample or
+configuration has been qualified here. Signed inline fees and report components
+are deduplicated by exact balance transaction. Unknown/invoice/mixed attribution
+stays held. Empty report alone never establishes zero: even a known-zero basis
+needs authenticated balances, independent semantics and accepted future-only
+adjustment terms. Later fees may exceed original gross and become future-only
+debt; later credits are source-bound earnings, never lost or bank-debited.
+
+Only returned principal plus retained unused funds, less verified known provider
+costs, releases allocations; the app instant fee is returned. Original source
+refund/dispute/fulfillment holds still control withdrawability. Creator UI says
+bank payout canceled/funds held, not refunded instantly. Owner fee-accounting
+status lists bounded pending returns and exact evidence/GET-only actions, with
+no financial retry control.
+
+Validation includes full-schema sequential return/fee/credit/legacy controls and
+mounted cancellation UX. The existing native command now also covers natural
+dispatch-versus-funded-cancel commit/rollback schedules and actual fulfillment
+hold-versus-dispatch commit/rollback, asserting `pg_blocking_pids`. Local Docker
+is absent (`spawnSync docker ENOENT`); authored native schedules are **not** a
+claim of executed contention proof. Hosted Required Validation must run:
+
+```sh
+SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-cashout-execution-concurrency-postgres.mjs
+```
 
 ### Deployment and activation boundaries
 

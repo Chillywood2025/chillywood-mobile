@@ -21,6 +21,8 @@ export function OwnerFeeAccountingHealthPanel({sessionKey}:{sessionKey:string}) 
   {!current||current.busy?<Text style={body}>Checking accounting…</Text>:null}
   {current?.error?<Text style={body}>Accounting status is unavailable. This does not mean the queue is clear.</Text>:null}
   {current?.health?<><Text style={body}>{current.health.pendingCount} pending · {current.health.retryCount} retrying · {current.health.blockedCount} need attention</Text>
+   <Text style={body}>{current.health.fundingReturnHoldCount} canceled bank payouts awaiting funding return/accounting. Never manually resend these payouts.</Text>
+   {current.health.fundingReturnHolds.slice(0,10).map(h=><Text selectable key={h.request_id} style={body}>{h.request_id} · {h.phase.replaceAll("_"," ")} · {h.required_action.replaceAll("_"," ")}</Text>)}
    {current.health.jobs.slice(0,10).map(j=><Text selectable key={`${j.source_type}:${j.source_id}`} style={body}>{j.source_type.replaceAll("_"," ")} · {j.source_id} · {j.state}: {(j.reason??"awaiting accounting check").replaceAll("_"," ")}</Text>)}</>:null}
   <Text style={body}>Read-only status. Missing acceptance, provider evidence, return clearance or disabled money controls keep releases blocked. No bank debit or payout is started here.</Text>
   <Pressable accessibilityRole="button" accessibilityLabel="Refresh fee accounting status" disabled={current?.busy===true} onPress={()=>void load()}><Text style={{color:CHILLYWOOD_VISUAL.textPrimary}}>Refresh accounting status</Text></Pressable>

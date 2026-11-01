@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createOrRecoverLiveConnectAccount, selectConnectOnboardingRoute } from "../_shared/stripe-connect-live-onboarding.ts";
 
 import {
   authenticateRequest,
@@ -38,6 +39,7 @@ Deno.serve(async (req) => {
 
   let adminClient: SupabaseClientLike | null = null;
   let currentUser: AuthenticatedUser | null = null;
+  let selectedMode: "test" | "live" = "test";
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -76,6 +78,18 @@ Deno.serve(async (req) => {
       return jsonResponse(200, notConfiguredPayload(adminConfig.reason, adminConfig.message, { creatorUserId: currentUser.id }));
     }
     adminClient = adminConfig.client;
+
+    const route = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (route.mode === "live") {
+      selectedMode = "live";
+      if (route.status !== "available") return jsonResponse(200, { ...route, liveMoneyAction: false, accountCreated: false,
+        message: route.status === "account_migration_review_required"
+          ? "Your existing payout account needs a reviewed transition. It has not been replaced."
+          : "Live onboarding requires eligible creator status, current payout terms and qualified provider setup." });
+      const secret = Deno.env.get("STRIPE_CONNECT_LIVE_ONBOARDING_KEY") ?? "";
+      if (!/^(sk|rk)_live_[A-Za-z0-9]+$/.test(secret)) return jsonResponse(200, { status: "not_configured", mode: "live", liveMoneyAction: false, accountCreated: false });
+      return jsonResponse(200, await createOrRecoverLiveConnectAccount(adminClient, currentUser, secret));
+    }
 
     const existingAccount = await readCreatorPayoutAccount(adminClient, currentUser.id);
     const stripeSecret = readStripeTestSecret();
@@ -208,7 +222,7 @@ Deno.serve(async (req) => {
       message: sanitizeErrorMessage(error),
       provider: "stripe",
       providerKey: "stripe_connect",
-      mode: "test",
+      mode: selectedMode,
     });
   }
 });

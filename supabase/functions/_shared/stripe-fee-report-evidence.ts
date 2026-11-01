@@ -22,6 +22,8 @@ export type FeeReportContext = FeeReportBaseContext & {
   refundIds: string[];
 };
 export type PayoutFeeReportContext = FeeReportBaseContext & { payoutId: string };
+export type TransferFeeReportContext = FeeReportBaseContext & { transferId: string };
+type ReportContext = FeeReportContext | PayoutFeeReportContext | TransferFeeReportContext;
 
 const fail = (reason: string): never => { throw new Error(`stripe_fee_evidence_${reason}`); };
 const identity = (value: unknown, prefix: string) => {
@@ -70,20 +72,25 @@ function usdMinor(value: string): number {
   return Number(negative ? -amount : amount);
 }
 
-export function normalizeStripeFeeReport(csv: string, context: FeeReportContext | PayoutFeeReportContext) {
+export function normalizeStripeFeeReport(csv: string, context: ReportContext) {
   identity(context.accountId, "acct"); identity(context.reportRunId, "frr"); identity(context.fileId, "file");
   const payout = "payoutId" in context;
+  const transfer = "transferId" in context;
+  const charge = !payout && !transfer;
   if (payout) {
     identity(context.payoutId, "po");
+    if ("chargeId" in context || "refundIds" in context || transfer) fail("context_invalid");
+  } else if (transfer) {
+    identity(context.transferId, "tr");
     if ("chargeId" in context || "refundIds" in context) fail("context_invalid");
   } else identity(context.chargeId, "ch");
   if (!["test", "live"].includes(context.environment) || context.currency !== "usd"
     || context.reportType !== "all_fees.incurred_at.itemized.2"
     || !Number.isSafeInteger(context.intervalStart) || !Number.isSafeInteger(context.intervalEnd)
     || context.intervalStart < 0 || context.intervalEnd <= context.intervalStart
-    || (!payout && (!Array.isArray(context.refundIds) || context.refundIds.length > 2000))) fail("context_invalid");
-  const boundObjects = new Map<string, string>(payout ? [[context.payoutId, "payout"]] : [[context.chargeId, "charge"]]);
-  for (const refund of payout ? [] : context.refundIds) {
+    || (charge && (!Array.isArray(context.refundIds) || context.refundIds.length > 2000))) fail("context_invalid");
+  const boundObjects = new Map<string, string>(payout ? [[context.payoutId, "payout"]] : transfer ? [[context.transferId, "transfer"]] : [[context.chargeId, "charge"]]);
+  for (const refund of charge ? context.refundIds : []) {
     identity(refund, "re"); if (boundObjects.has(refund)) fail("duplicate_refund_binding");
     boundObjects.set(refund, "refund");
   }
@@ -122,7 +129,7 @@ export function normalizeStripeFeeReport(csv: string, context: FeeReportContext 
     schemaVersion: 1, accountId: context.accountId, environment: context.environment,
     reportRunId: context.reportRunId, fileId: context.fileId, reportType: context.reportType,
     intervalStart: context.intervalStart, intervalEnd: context.intervalEnd,
-    ...(payout ? { payoutId: context.payoutId } : { chargeId: context.chargeId, refundIds: [...context.refundIds].sort() }), rows: evidence,
+    ...(payout ? { payoutId: context.payoutId } : transfer ? { transferId: context.transferId } : { chargeId: context.chargeId, refundIds: [...context.refundIds].sort() }), rows: evidence,
     unattributedRows, observedRowCount: rawRows.length,
     // Retain amount and tax separately until exact report-version semantics have
     // been independently qualified. Do not add them or label this a final fee.
@@ -135,7 +142,7 @@ export function normalizeStripeFeeReport(csv: string, context: FeeReportContext 
 /** GET-only adapter for an already-created v1 report. No report creation or
  * payment operations; no arbitrary URL, account selector or credential export.
  * Result can be archived by the server, but cannot qualify any settlement. */
-export async function observeStripeFeeReport(context: FeeReportContext | PayoutFeeReportContext, secret: string, transport: typeof fetch = fetch) {
+export async function observeStripeFeeReport(context: ReportContext, secret: string, transport: typeof fetch = fetch) {
   // Validate every context field before even contacting the provider.
   normalizeStripeFeeReport(required.join(","), context);
   if (!new RegExp(`^(sk|rk)_${context.environment}_[A-Za-z0-9]+$`).test(secret)) fail("credential_mode_mismatch");

@@ -5,18 +5,18 @@ import {randomUUID} from 'node:crypto';
 import vm from 'node:vm';
 import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
-function endpoint({claimed=true,configured=true,tracking=true,fail=false,count=1,malformed=false,project="https://synthetic.supabase.co"}={}){
+function endpoint({claimed=true,configured=true,tracking=true,fail=false,count=1,malformed=false,historyPending=false,project="https://synthetic.supabase.co"}={}){
  let handler;const runId=randomUUID(),calls=[],jobs=Array.from({length:count},()=>({order_id:randomUUID(),lease:randomUUID()}));
  const env={SUPABASE_URL:project,SUPABASE_SERVICE_ROLE_KEY:'service_synthetic',MERCH_TRACKING_WORKER_SECRET:tracking?'worker_synthetic':undefined};
  const runtime={exports:{},setTimeout,clearTimeout,AbortSignal,TextDecoder,fetch:async(url,opts)=>{
   calls.push({url,opts});assert.equal(opts.method,'POST');assert.equal(opts.redirect,'error');assert.ok(opts.signal);
-  return new Response(JSON.stringify(malformed?{financialAuthority:false,error:'incomplete'}:url.endsWith('/merch-tracking-reconcile')?{financialAuthority:false,claimed:1,completed:1}:{financialAuthority:false,payoutCreated:false,status:'held',observationId:randomUUID()}),{status:fail?503:200});
+  return new Response(JSON.stringify(malformed?{financialAuthority:false,error:'incomplete'}:url.endsWith('/merch-tracking-reconcile')?{financialAuthority:false,claimed:1,completed:1}:{financialAuthority:false,payoutCreated:false,status:historyPending?'history_pending':'held',observationId:randomUUID()}),{status:fail?503:200});
  },Deno:{serve:f=>handler=f},require:name=>{
   if(name.startsWith('jsr:'))return{};
   if(name.endsWith('stripe-connect.ts'))return{readOptionalEnv:k=>env[k],createAdminClient:()=>({configured,client:{rpc:async(name,args)=>{
    calls.push({name,args});if(name==='claim_merch_reconciliation_batch')return{data:{claimed,runId,jobs:claimed?jobs:[]}};
    if(name==='continue_merch_reconciliation_batch')return{data:{claimed:true,runId,jobs:[]}};
-   assert.equal(name,'complete_merch_cost_refresh');return{data:{stale:false}};
+   assert.equal(name,historyPending?'continue_merch_cost_history_refresh':'complete_merch_cost_refresh');return{data:{stale:false}};
   }}}),jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status})};throw Error(name);
  }};
  vm.runInNewContext(ts.transpileModule(readFileSync('supabase/functions/merch-reconciliation-driver/index.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,runtime);
@@ -40,6 +40,13 @@ test('actual driver fixed destinations, exact distinct credentials, failure comp
  const h=endpoint({tracking:false});await h.send();assert.equal(h.calls.filter(c=>c.url).length,1);
  const batch=endpoint({count:3});await batch.send();assert.equal(batch.calls.filter(c=>c.url).length,4);
  const oversized=endpoint({count:4});assert.equal((await oversized.send()).status,503);assert.equal(oversized.calls.filter(c=>c.url).length,0);
+});
+test('partial history uses continuation rather than successful completion',async()=>{
+ const h=endpoint({historyPending:true});const result=await(await h.send()).json();
+ assert.equal(result.completed,0);assert.equal(result.financialAuthority,false);
+ const progress=h.calls.find(c=>c.name==='continue_merch_cost_history_refresh');
+ assert.ok(progress);assert.equal(progress.args.p_complete,undefined);
+ assert.equal(h.calls.some(c=>c.name==='complete_merch_cost_refresh'),false);
 });
 test('actual full-schema service leases, dormant control, bounded fairness, retries, expiry and stale completions',{timeout:240000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});

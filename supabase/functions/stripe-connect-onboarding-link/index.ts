@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createLiveConnectHostedLink, selectConnectOnboardingRoute } from "../_shared/stripe-connect-live-onboarding.ts";
 
 import {
   authenticateRequest,
@@ -39,6 +40,7 @@ Deno.serve(async (req) => {
 
   let adminClient: SupabaseClientLike | null = null;
   let currentUser: AuthenticatedUser | null = null;
+  let selectedMode: "test" | "live" = "test";
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -72,6 +74,16 @@ Deno.serve(async (req) => {
       return jsonResponse(200, notConfiguredPayload(adminConfig.reason, adminConfig.message, { creatorUserId: currentUser.id }));
     }
     adminClient = adminConfig.client;
+
+    const route = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (route.mode === "live") {
+      selectedMode = "live";
+      if (route.status !== "available") return jsonResponse(200, { ...route, liveMoneyAction: false, onboardingUrlCreated: false,
+        message: "Complete creator eligibility and current payout terms, or resolve the existing account transition, before live onboarding." });
+      const secret = Deno.env.get("STRIPE_CONNECT_LIVE_ONBOARDING_KEY") ?? "";
+      if (!/^(sk|rk)_live_[A-Za-z0-9]+$/.test(secret)) return jsonResponse(200, { status: "not_configured", mode: "live", liveMoneyAction: false, onboardingUrlCreated: false });
+      return jsonResponse(200, await createLiveConnectHostedLink(adminClient, currentUser, secret));
+    }
 
     const payoutAccount = await readCreatorPayoutAccount(adminClient, currentUser.id);
     if (!payoutAccount?.provider_account_id) {
@@ -192,7 +204,7 @@ Deno.serve(async (req) => {
       error: "stripe_connect_onboarding_link_failed",
       liveMoneyAction: false,
       message: sanitizeErrorMessage(error),
-      mode: "test",
+      mode: selectedMode,
       provider: "stripe",
       providerKey: "stripe_connect",
     });

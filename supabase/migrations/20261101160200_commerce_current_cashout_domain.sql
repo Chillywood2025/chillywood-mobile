@@ -20,7 +20,7 @@ begin
   select * into strict c from private.auction_platform_settlement_contracts where id=r.source_id;
   if private.auction_release_negative_holds(c.id) then return false; end if;
   select proof.id into evidence from private.auction_release_evidence proof where proof.contract_id=c.id and proof.revoked_at is null
-   and proof.environment=c.environment order by proof.qualified_at desc,proof.id desc limit 1;
+   and proof.environment=c.environment and proof.qualified_at<=clock_timestamp() and proof.expires_at>clock_timestamp() order by proof.qualified_at desc,proof.id desc limit 1;
   if evidence is null or not private.auction_release_mature(c.id,evidence) then return false; end if;
   select id,auction.facts into obs,facts from private.auction_settlement_observations auction where contract_id=c.id order by created_at desc,id desc limit 1;
   identity:=c.quote_id;product:=c.platform_product_id;raw_mode:=c.environment;

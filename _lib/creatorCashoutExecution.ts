@@ -15,7 +15,7 @@ export type CreatorCashoutRecord = {
   requestId: string; status: string; grossMinor: number | null; appFeeMinor: number | null;
   bankMinor: number | null; expectedProviderFeeMinor: number | null; observedProviderFeeMinor: number | null;
   feeStatus: string; bankPaid: boolean; returnedToPlatform: boolean; canRetry: false;
-  canCancel?: boolean; subject?: AccountBoundSupabaseMutationSubject;
+  canCancel?: boolean; fundingReturnHeld?: boolean; ownerAction?: string | null; subject?: AccountBoundSupabaseMutationSubject;
 };
 const uuid = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(v);
 const money = (v: unknown): v is number => Number.isSafeInteger(v) && Number(v) >= 0 && Number(v) <= 2147483647;
@@ -59,7 +59,7 @@ export async function cancelQualifiedCreatorCashout(record: CreatorCashoutRecord
   assertAccountBoundSupabaseMutationSubjectCurrent(record.subject);
   const {data,error}=await invokeAccountBoundSupabaseMutationRpc<CreatorCashoutRecord>(record.subject,"cancel_undispatched_creator_cashout",{p_request_id:record.requestId});
   assertAccountBoundSupabaseMutationSubjectCurrent(record.subject);
-  if(error||!data||data.requestId!==record.requestId||data.status!=="canceled") throw Error("Cancellation was not confirmed. Refresh history; funds may already be processing.");
+  if(error||!data||data.requestId!==record.requestId||!["canceled","funding_return_pending","funding_return_unknown","returned"].includes(data.status)) throw Error("Cancellation was not confirmed. Refresh history; funds may already be processing.");
   return {...data,subject:record.subject};
 }
 export async function readCreatorCashoutHistory() {
@@ -74,6 +74,8 @@ export async function readCreatorCashoutHistory() {
 export const CREATOR_CASHOUT_STATUS: Record<string, string> = {
   awaiting_qualification: "Waiting for payout setup verification", prepared: "Request accepted",
   canceled: "Canceled before funds were sent",
+  funding_return_pending: "Bank payout canceled; funding held until verified return",
+  funding_return_unknown: "Bank payout canceled; confirming funding return. Do not retry.",
   funding_unknown: "Confirming funding. Do not start another cashout.", funded: "Preparing bank payout",
   payout_unknown: "Confirming bank payout. Do not start another cashout.", payout_pending: "Bank payout processing",
   paid: "Bank payout reported paid", return_pending: "Bank returned payout; verifying funds",

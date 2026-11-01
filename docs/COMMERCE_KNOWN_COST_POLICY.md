@@ -159,3 +159,18 @@ restore the prior Edge version if needed; do not delete evidence, offsets or
 terms acceptances. Preserve negative-adjustment recording and inspect ambiguous
 queue outcomes before retrying. Provider qualification/registration/creator
 acceptance remain required operational inputs, not implementation placeholders.
+
+### Fully refunded, already-issued earnings
+Historical delivery/remedy records are not silently rewritten or called resolved.
+For an already-issued sale only, an exact current full refund (all gross returned,
+all tax reversed, available authenticated refund balances, no current dispute,
+current tax/account/fee qualifications) may provide monetary clearance once its
+current known-cost snapshot has an immutable release/adjustment entry. The sale's
+net target must be zero or negative. Initial fulfillment release is unchanged;
+partial refunds cannot use this branch. Outstanding adjustment debt still blocks
+cashout until covered by strictly later earnings. This avoids both charging the
+future earnings for the refund and permanently withholding the old earnings.
+Subsequent verified fee credits may restore previously charged costs but cannot
+create positive sale proceeds under this branch. Current fraud/account/dispute
+holds remain effective. This is accounting clearance, not a domain remedy closure
+or permission to resume revoked access.

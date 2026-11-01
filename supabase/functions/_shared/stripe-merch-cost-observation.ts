@@ -22,7 +22,7 @@ const id = (v: unknown, prefix: string): string => {
 const requireMatch = (condition: boolean) => { if (!condition) throw Error("merch_provider_binding_mismatch"); };
 
 export async function observeStripeMerchCosts(
-  order: MerchCostOrder, secret: string, expectedAccount: string, transport: typeof fetch = fetch,
+  order: MerchCostOrder, secret: string, expectedAccount: string, transport: typeof fetch = fetch, expandRefundBalances=false,
 ) {
   const live = order.environment === "production";
   requireMatch(["sandbox", "production"].includes(order.environment)
@@ -79,7 +79,7 @@ export async function observeStripeMerchCosts(
   // pagination is a retry/error, never a partial monetary observation.
   for (let page = 0; ; page++) {
     if (page >= 20) throw Error("merch_refund_pagination_incomplete");
-    const list = await get(`/refunds?charge=${chargeId}&limit=100${cursor ? `&starting_after=${cursor}` : ""}`);
+    const list = await get(`/refunds?charge=${chargeId}&limit=100${expandRefundBalances ? "&expand%5B%5D=data.balance_transaction" : ""}${cursor ? `&starting_after=${cursor}` : ""}`);
     requireMatch(list.object === "list" && Array.isArray(list.data) && typeof list.has_more === "boolean");
     for (const raw of list.data as unknown[]) {
       const refund = object(raw), refundId = id(refund.id, "re");
@@ -88,8 +88,10 @@ export async function observeStripeMerchCosts(
       // Pending/failed refunds and reversals need a separate qualified lifecycle;
       // do not silently count them or turn missing balance transactions into 0.
       requireMatch(refund.status === "succeeded");
-      const amount = integer(refund.amount), refundBalanceId = id(refund.balance_transaction, "txn");
-      const rb = await get(`/balance_transactions/${refundBalanceId}`);
+      const amount = integer(refund.amount);
+      const expanded=expandRefundBalances?object(refund.balance_transaction):null;
+      const refundBalanceId = id(expanded?expanded.id:refund.balance_transaction, "txn");
+      const rb = expanded??await get(`/balance_transactions/${refundBalanceId}`);
       const refundFee = integer(rb.fee, true), refundNet = integer(rb.net, true);
       requireMatch(rb.id === refundBalanceId && rb.object === "balance_transaction" && rb.source === refundId
         && rb.type === "refund" && rb.currency === order.currency && rb.amount === -amount

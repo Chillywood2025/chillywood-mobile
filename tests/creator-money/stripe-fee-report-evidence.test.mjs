@@ -16,6 +16,18 @@ const context = { accountId: 'acct_fixture', environment: 'test', reportRunId: '
 const header = 'fee_transaction_id,incurred_by,incurred_by_type,amount,tax,currency,product,suite,feature_name,settled_via';
 const row = 'fee_one,ch_fixture,charge,0.10,0.01,usd,Tax,Revenue,Automatic tax,balance';
 const csv = `${header}\n${row}\n`;
+test('transfer fee reports bind funding only, do not claim zero or accept mixed payout context',()=>{
+ const {chargeId,refundIds,...base}=context;const transfer={...base,transferId:'tr_fixture'};
+ const output=normalize(`${header}\nfee_transfer,tr_fixture,transfer,0.12,0.03,usd,Connect,Payments,Transfer,balance\n${row}`,transfer);
+ assert.equal(output.transferId,'tr_fixture');assert.equal(output.rows.length,1);assert.equal(output.rows[0].amountMinor,12);
+ assert.equal(output.rows[0].taxMinor,3);assert.equal(output.rows[0].incurredByType,'transfer');assert.equal(output.totalFeeMinor,null);
+ assert.equal(output.financialAuthority,false);assert.equal(output.unattributedRows,1);
+ assert.equal('payoutId' in output,false);assert.equal('chargeId' in output,false);
+ assert.throws(()=>normalize(header,{...transfer,payoutId:'po_fixture'}),/context_invalid/);
+ assert.throws(()=>normalize(header,{...transfer,chargeId,refundIds}),/context_invalid/);
+ assert.throws(()=>normalize(header,{...base,transferId:'po_fixture'}),/identity_invalid/);
+ assert.equal(normalize(header,transfer).totalFeeMinor,null);
+});
 test('payout reports bind only the exact payout and cannot mix sale objects',()=>{
  const {chargeId,refundIds,...base}=context;
  const payout={...base,payoutId:'po_fixture'};

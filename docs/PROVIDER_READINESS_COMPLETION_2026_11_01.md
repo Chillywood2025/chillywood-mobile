@@ -75,8 +75,15 @@ and `computed_at=null`: no computation timestamp or freshness information was
 returned, and this is not a legal no-registration determination.
 
 The live standard platform account reports charges/payouts enabled and card
-payments/transfers active. Currently-due/past-due fields and errors are empty;
-business-model support remains under `pending_verification`. Platform payouts
+payments/transfers active. At 15:16, currently-due/past-due fields and errors were
+empty and business-model support was pending. **Fresh authenticated account
+read at 16:04 UTC supersedes that requirement status:** charges/payouts and
+details-submitted remain enabled; `pending_verification` is empty, so the earlier
+business-model pending item is resolved. A representative identity-document
+live-capture requirement is now listed as currently due, past due and eventually
+due. `disabled_reason` is null, errors and future requirements are empty. The
+owner must complete the current secure Stripe verification prompt directly;
+no documents or personal identifiers are collected through this task. Platform payouts
 are daily with a two-day delay; this is **not** a creator payout policy. The
 complete connected-account list is empty. Both v1 webhook endpoints and v2 event
 destinations returned empty complete lists. Live Checkout Sessions and balance

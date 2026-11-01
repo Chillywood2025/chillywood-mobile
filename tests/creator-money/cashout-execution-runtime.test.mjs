@@ -24,6 +24,41 @@ test('qualified inline-known zero is exact connected payout balance evidence, ne
  }
 });
 const t=()=>({object:'transfer',id:'tr_funding',livemode:true,amount:9800,currency:'usd',destination:'acct_creator',metadata,amount_reversed:0,reversed:false});
+test('funded cancellation reverses once; unknown and empty recovery are GET-only, exact platform balances required',async()=>{
+ const reversal={object:'transfer_reversal',id:'trr_fundingReturn',transfer:'tr_funding',amount:9800,currency:'usd',metadata,balance_transaction:'txn_return'};
+ const fundingBt={object:'balance_transaction',id:'txn_funding',source:'tr_funding',amount:-9800,fee:12,net:-9812,currency:'usd',status:'available',type:'transfer'};
+ const returnBt={object:'balance_transaction',id:'txn_return',source:'trr_fundingReturn',amount:9800,fee:3,net:9797,currency:'usd',status:'available',type:'transfer_refund'};
+ for(const phase of ['funding_return_pending','funding_return_unknown']){
+  const f=fixture({phase,transferId:'tr_funding'});let writes=0;
+  const transport=async(url,options)=>{
+   assert.equal(options.headers['Stripe-Account'],undefined,'platform return evidence is not read from connected balance');
+   if(url.endsWith('/v1/transfers/tr_funding'))return Response.json({...t(),balance_transaction:'txn_funding',...(phase==='funding_return_unknown'?{amount_reversed:9800,reversed:true}:{})});
+   if(url.endsWith('/reversals')&&options.method==='POST'){writes++;assert.match(options.headers['Idempotency-Key'],/-funding-return$/);return Response.json(reversal);}
+   if(url.includes('/reversals?'))return Response.json({object:'list',data:[reversal],has_more:false});
+   if(url.endsWith('/balance_transactions/txn_funding'))return Response.json(fundingBt);
+   if(url.endsWith('/balance_transactions/txn_return'))return Response.json(returnBt);
+   return f.transport(url,options);
+  };
+  await run(context.requestId,f.store,'rk_live_fixture',transport);
+  assert.equal(writes,phase==='funding_return_pending'?1:0);
+  assert.deepEqual(f.claims,phase==='funding_return_pending'?['funding_return']:[]);
+  assert.equal(f.observed[0].facts.kind,'funding_return');assert.equal(f.observed[0].facts.returnBalance.feeMinor,3);
+  for(const mutation of [{source:'trr_other'},{amount:9700},{net:9800},{status:'pending'},{type:'charge'}]){
+   const unknown=fixture({phase:'funding_return_unknown',transferId:'tr_funding'});
+   await assert.rejects(run(context.requestId,unknown.store,'rk_live_fixture',async(url,options)=>url.endsWith('/balance_transactions/txn_return')?Response.json({...returnBt,...mutation}):transport(url,options)),/funding_return_balance_/);
+   assert.equal(unknown.claims.length,0);
+  }
+ }
+ const f=fixture({phase:'funding_return_unknown',transferId:'tr_funding'});
+ const empty=async(url,options)=>{assert.equal(options.method,'GET');if(url.endsWith('/v1/transfers/tr_funding'))return Response.json({...t(),balance_transaction:'txn_funding'});
+  if(url.includes('/reversals?'))return Response.json({object:'list',data:[],has_more:false});return f.transport(url,options);};
+ assert.equal((await run(context.requestId,f.store,'rk_live_fixture',empty)).status,'funding_return_unknown');assert.equal(f.claims.length,0);assert.equal(f.observed.length,0);
+ const before=fixture({phase:'funding_return_pending',transferId:'tr_funding'});
+ await assert.rejects(run(context.requestId,before.store,'rk_live_fixture',async(url,options)=>{
+  if(url.endsWith('/v1/transfers/tr_funding'))return Response.json({...t(),balance_transaction:'txn_funding'});
+  if(options.method==='POST')throw Error('network timeout after dispatch');return before.transport(url,options);
+ }),/network timeout/);assert.deepEqual(before.claims,['funding_return']);assert.equal(before.observed.length,0);
+});
 const p=()=>({object:'payout',id:'po_bank',livemode:true,amount:9800,currency:'usd',destination:'ba_destination',metadata,method:'instant',source_type:'card',automatic:false,status:'pending',application_fee:null,balance_transaction:'txn_payout',failure_balance_transaction:null});
 function fixture(overrides={}){
  const c={...context,...overrides},calls=[],observed=[],claims=[];

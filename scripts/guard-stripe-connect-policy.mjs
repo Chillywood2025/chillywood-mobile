@@ -29,6 +29,7 @@ const payoutRelease = read("supabase/functions/payout-release-preflight/index.ts
 const merchCheckout = read("supabase/functions/stripe-merch-checkout/index.ts");
 const merchWebhook = read("supabase/functions/stripe-merch-webhook/index.ts");
 const merchSettlement = read("supabase/migrations/20261027034844_creator_merch_payment_refund_reconciliation.sql");
+const merchLiveSettlement = read("supabase/migrations/20261101151506_merch_live_checkout_binding.sql");
 const merchMigration = `${read("supabase/migrations/20260603165000_money_access_grants_product_catalog.sql")}\n${read("supabase/migrations/20260604043000_stripe_merch_payout_sandbox_readiness.sql")}`;
 const creatorMonetization = read("_lib/creatorMonetization.ts");
 const creatorPayouts = read("_lib/creatorPayouts.ts");
@@ -123,8 +124,13 @@ assertNotIncludes(merchCheckout, "money_access_ledger_events", "merch checkout m
 
 assertIncludes(merchWebhook, "readStripeWebhookSecret", "merch webhook secret reader");
 assertIncludes(merchWebhook, "verifyStripeWebhookSignature", "merch webhook signature verification");
-assertIncludes(merchWebhook, "event.livemode !== false", "merch webhook explicit test envelope");
-assertIncludes(merchWebhook, "object?.livemode !== false", "merch webhook explicit test object");
+assertIncludes(merchWebhook, "Number(testVerified) + Number(liveVerified) !== 1", "merch webhook exactly one authenticated signing lane");
+assertIncludes(merchWebhook, "event.livemode !== liveVerified", "merch webhook envelope matches authenticated lane");
+assertIncludes(merchWebhook, "object?.livemode !== liveVerified", "merch webhook object matches authenticated lane");
+assertIncludes(merchWebhook, 'const environment = liveVerified ? "production" : "sandbox"', "merch mode is signature-derived, not client-provided");
+assertIncludes(merchLiveSettlement, "p_facts->'object_livemode' is distinct from p_facts->'event_livemode'", "SQL envelope/object agreement");
+assertIncludes(merchLiveSettlement, "p_facts->>'verified_environment' is distinct from v_environment", "SQL verified mode binding");
+assertIncludes(merchLiveSettlement, "b.environment=v_environment and b.account_id=p_facts->>'provider_account_id'", "SQL frozen order account/mode binding");
 assertIncludes(merchWebhook, "process_stripe_merch_webhook_lifecycle", "merch webhook atomic settlement");
 assertIncludes(merchSettlement, "insert into public.stripe_merch_events", "merch webhook event storage");
 assertIncludes(merchSettlement, "pg_advisory_xact_lock", "merch delivery serialization");

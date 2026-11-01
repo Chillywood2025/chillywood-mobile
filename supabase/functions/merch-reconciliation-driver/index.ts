@@ -51,7 +51,10 @@ Deno.serve(async(req:Request)=>{
      return await response.json();
     })(),remaining);
     if(!data||data.error||data.financialAuthority!==false)return false;
-    if(name==="stripe-merch-cost-reconcile")return ["held","duplicate"].includes(data.status)&&typeof data.observationId==="string"&&/^[0-9a-f-]{36}$/i.test(data.observationId)&&data.payoutCreated===false;
+    if(name==="stripe-merch-cost-reconcile"){
+     if(data.status==='history_pending'&&data.payoutCreated===false)return 'history_pending';
+     return ["held","duplicate"].includes(data.status)&&typeof data.observationId==="string"&&/^[0-9a-f-]{36}$/i.test(data.observationId)&&data.payoutCreated===false;
+    }
     return Number.isInteger(data.claimed)&&data.claimed>=0&&data.claimed<=5&&data.completed===data.claimed;
    }catch{return false;}
   };
@@ -64,8 +67,9 @@ Deno.serve(async(req:Request)=>{
    if(jobs.length===0||deadline-Date.now()<85000)break;
    jobs.forEach(job=>seen.add(job.order_id));orders+=jobs.length;
    const results=await Promise.all(jobs.map(async(job)=>{
-    const ok=await invoke("stripe-merch-cost-reconcile",service,{order_id:job.order_id});
-    const saved=await bounded(admin.client.rpc("complete_merch_cost_refresh",{p_order_id:job.order_id,p_lease:job.lease,p_complete:ok}));
+    const outcome=await invoke("stripe-merch-cost-reconcile",service,{order_id:job.order_id}),ok=outcome===true;
+    const saved=await bounded(admin.client.rpc(outcome==='history_pending'?"continue_merch_cost_history_refresh":"complete_merch_cost_refresh",
+     {p_order_id:job.order_id,p_lease:job.lease,...(outcome==='history_pending'?{}:{p_complete:ok})}));
     return ok&&!saved.error&&saved.data?.stale===false;
    }));
    completed+=results.filter(Boolean).length;

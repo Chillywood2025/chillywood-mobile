@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(7);
+select plan(9);
 select is(private.auction_checkout_mode_allowed('unknown'),false,'unknown mode denied');
 select ok(not has_function_privilege('authenticated','public.get_auction_checkout_provider_context(text,uuid,uuid,uuid)','execute'),'buyer cannot read privileged dispatch context');
 select ok(has_function_privilege('service_role','public.get_auction_checkout_provider_context(text,uuid,uuid,uuid)','execute'),'server can read exact dispatch context');
@@ -10,5 +10,7 @@ select ok(not has_table_privilege('authenticated','private.auction_live_checkout
 update public.platform_money_kill_switches set state='off' where key='live_money_enabled';
 select is(private.auction_checkout_mode_allowed('live'),false,'live activation off blocks live checkout');
 select is((select count(*) from private.auction_live_checkout_admissions),0::bigint,'migration creates no live admission');
+select ok(not has_function_privilege('service_role','private.promote_live_party_auction_source(text,uuid)','execute'),'service cannot directly promote Party source');
+select ok(not has_function_privilege('authenticated','private.promote_live_party_auction_source(text,uuid)','execute'),'creator must use exact room-session auction confirmation');
 select * from finish();
 rollback;

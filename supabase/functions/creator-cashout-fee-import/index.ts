@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv } from "../_shared/stripe-connect.ts";
 import { readCashoutBody } from "../_shared/creator-cashout-execution.ts";
-import { observeStripeFeeReport, type PayoutFeeReportContext } from "../_shared/stripe-fee-report-evidence.ts";
+import { observeStripeFeeReport, type PayoutFeeReportContext, type TransferFeeReportContext } from "../_shared/stripe-fee-report-evidence.ts";
 
 // Authenticated read-only provider evidence. It never creates a report or payout.
 Deno.serve(async (req: Request) => {
@@ -20,9 +20,9 @@ Deno.serve(async (req: Request) => {
     const bound = read.data, key = readOptionalEnv("STRIPE_FEE_REPORT_LIVE_KEY");
     if (!key || readOptionalEnv("STRIPE_FEE_REPORT_LIVE_ACCOUNT_ID") !== bound.accountId) throw Error("fee_report_account_not_configured");
     const evidence = await observeStripeFeeReport({ accountId: bound.accountId, environment: bound.environment,
-      payoutId: bound.payoutId, currency: bound.currency, reportRunId: body.report_run_id, fileId: body.file_id,
+      ...(bound.transferId ? {transferId: bound.transferId} : {payoutId: bound.payoutId}), currency: bound.currency, reportRunId: body.report_run_id, fileId: body.file_id,
       intervalStart: body.interval_start, intervalEnd: body.interval_end,
-      reportType: "all_fees.incurred_at.itemized.2" } as PayoutFeeReportContext, key);
+      reportType: "all_fees.incurred_at.itemized.2" } as PayoutFeeReportContext | TransferFeeReportContext, key);
     const recorded = await admin.client.rpc("record_creator_cashout_fee_report", { p_request_id: body.request_id, p_evidence: evidence });
     if (recorded.error || !recorded.data) throw Error("record_failed");
     return jsonResponse(200, { ...recorded.data, providerMutation: false });

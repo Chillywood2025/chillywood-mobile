@@ -65,3 +65,12 @@ test('mounted prepared cancellation is one-shot and retires on account switch',a
  await React.act(async()=>{void current.props.onPress();void current.props.onPress();});assert.equal(cancels,1);
  assert.equal(m.button('Cancel before funds are sent'),undefined);
 });
+test('funded cancellation says bank canceled and funds still held, never claims an immediate refund',async t=>{
+ const row={requestId:'request',status:'funded',canCancel:true,grossMinor:10000,bankMinor:9800,observedProviderFeeMinor:null};
+ const m=await mount(t,{readCreatorCashoutHistory:async()=>[row],cancelQualifiedCreatorCashout:async()=>({...row,status:'funding_return_pending',canCancel:false,fundingReturnHeld:true})});
+ await m.press(m.button('Refresh cashout history'));assert.equal(m.button('Cancel before funds are sent'),undefined);
+ await m.press(m.button('Cancel bank payout'));
+ const rendered=[...m.nodes.values()].map(textOf).join(' ');
+ assert.match(rendered,/Funds remain held/);assert.match(rendered,/app cashout fee will/);
+ assert.equal(m.button('Cancel bank payout'),undefined);
+});

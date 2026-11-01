@@ -2505,6 +2505,11 @@ export function ChannelStudioScreen() {
     try {
       const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
       if (!isCurrent()) return;
+      if (["creation_pending", "creator_onboarding_eligibility_required", "account_migration_review_required", "onboarding_authority_changed"].includes(String(accountPayload.status))) {
+        setPayoutSetupNotice(accountPayload.message || "Payout setup needs a verified current account before continuing. No existing account was replaced.");
+        await refreshCreatorPayouts();
+        return;
+      }
       if (accountPayload.status === "configuration_review_required") {
         setPayoutSetupNotice(accountPayload.message || "Provider account configuration needs review. Refresh status before continuing setup. Payouts remain inactive.");
         await refreshCreatorPayouts();
@@ -2523,7 +2528,7 @@ export function ChannelStudioScreen() {
       });
       if (!isCurrent()) return;
 
-      if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required" || linkPayload.status === "configuration_review_required") {
+      if (["not_configured", "setup_required", "configuration_review_required", "creator_onboarding_eligibility_required", "account_migration_review_required"].includes(String(linkPayload.status))) {
         setPayoutSetupNotice(linkPayload.message || "Payout provider setup needs owner/provider resolution. No payout movement is enabled.");
         await refreshCreatorPayouts();
         return;

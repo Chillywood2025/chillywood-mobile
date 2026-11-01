@@ -1,5 +1,6 @@
 import {runCurrentAccountBoundSupabaseMutationRpc} from "./accountBoundSupabaseMutation";
 export type OwnerFeeAccountingHealth = {pendingCount:number;retryCount:number;blockedCount:number;
+ fundingReturnHoldCount:number;fundingReturnHolds:{request_id:string;phase:string;updated_at:string;required_action:string}[];
  jobs:{source_type:string;source_id:string;state:"pending"|"retry"|"blocked";reason:string|null;attempts:number;updated_at:string}[]};
 export function parseOwnerFeeAccountingHealth(value:unknown):OwnerFeeAccountingHealth {
  if(!value||typeof value!=="object")throw Error("Fee accounting status is unavailable.");
@@ -15,7 +16,13 @@ export function parseOwnerFeeAccountingHealth(value:unknown):OwnerFeeAccountingH
    ||!Number.isSafeInteger(j.attempts)||(j.attempts as number)<0||typeof j.updated_at!=="string")throw Error("Fee accounting status is unavailable.");
   return j as OwnerFeeAccountingHealth["jobs"][number];
  });
- return {pendingCount:r.pendingCount as number,retryCount:r.retryCount as number,blockedCount:r.blockedCount as number,jobs};
+ const fundingReturnHolds=r.fundingReturnHolds,fundingReturnHoldCount=r.fundingReturnHoldCount;
+ if(!Number.isSafeInteger(fundingReturnHoldCount)||(fundingReturnHoldCount as number)<0||!Array.isArray(fundingReturnHolds)||fundingReturnHolds.length>50
+  ||fundingReturnHolds.some(h=>!h||typeof h!=="object"||typeof h.request_id!=="string"||!/^[a-f0-9-]{36}$/i.test(h.request_id)
+   ||typeof h.phase!=="string"||typeof h.updated_at!=="string"||typeof h.required_action!=="string"
+   ||!["verify_correction_qualification_and_switches","get_only_exact_return_reconciliation_no_redispatch","verify_returned_principal_and_funding_fee_evidence"].includes(h.required_action)))throw Error("Fee accounting status is unavailable.");
+ return {pendingCount:r.pendingCount as number,retryCount:r.retryCount as number,blockedCount:r.blockedCount as number,jobs,
+  fundingReturnHoldCount:fundingReturnHoldCount as number,fundingReturnHolds};
 }
 export async function readOwnerFeeAccountingHealth() {
  const result=await runCurrentAccountBoundSupabaseMutationRpc<unknown>("get_owner_commerce_fee_accounting_health",{});

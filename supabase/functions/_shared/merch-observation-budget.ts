@@ -1,9 +1,10 @@
 // One aggregate budget spans dispute pagination, refund balance lookups and all
 // SQL waits. Exhaustion never means a complete observation or financial release.
-export function createMerchObservationBudget(transport: typeof fetch = fetch) {
-  const deadline = Date.now() + 75000;
+export function createMerchObservationBudget(transport: typeof fetch = fetch, milliseconds=75000) {
+  if(!Number.isInteger(milliseconds)||milliseconds<1000||milliseconds>75000)throw Error("merch_observation_budget_invalid");
+  const deadline = Date.now() + milliseconds;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 75000);
+  const timer = setTimeout(() => controller.abort(), milliseconds);
   let requests = 0;
   const run = async <T>(work: () => PromiseLike<T>, maxWait = 75000): Promise<T> => {
     const remaining = Math.min(maxWait, deadline - Date.now());
@@ -25,5 +26,5 @@ export function createMerchObservationBudget(transport: typeof fetch = fetch) {
       signal: AbortSignal.any([controller.signal, ...(init.signal ? [init.signal] : [])]),
     }), 15000);
   };
-  return { run, transport: limitedFetch, close: () => { clearTimeout(timer); controller.abort(); } };
+  return { run, transport: limitedFetch, remaining: () => Math.max(0,64-requests), close: () => { clearTimeout(timer); controller.abort(); } };
 }

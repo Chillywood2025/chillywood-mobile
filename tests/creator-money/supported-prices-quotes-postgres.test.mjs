@@ -1,48 +1,17 @@
+import {migrationsFrom} from '../helpers/historical-migration-boundary.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 
 const migration='20261026164507_creator_supported_prices_and_purchase_quotes.sql';
-const referenceGuardsMigration='20261027021608_creator_monetization_reference_guard_integration.sql';
-const subscriptionBindingsMigration='20261030155923_creator_subscription_catalog_bindings.sql';
-const auctionPaymentMigration='20261030155939_creator_event_auction_payment_projection.sql';
-// These successors depend on the quote/auction projection or wrap its functions.
-// Defer and replay the explicit dependency chain; none are skipped in the final schema.
-const successors=[
-  '20261030165642_google_external_transaction_reporting.sql',
-  '20261030165918_creator_room_auction_payment_projection.sql',
-  '20261030182620_ios_external_checkout_admission.sql',
-  '20261030182836_creator_auction_lifecycle_notifications.sql',
-  '20261030185719_creator_tip_route_fee_comparison.sql',
-  '20261030190449_creator_tip_cross_rail_action_claim.sql',
-  '20261030193217_creator_tip_exact_selected_capability_quote.sql',
-  '20261030200311_creator_auction_platform_settlement.sql',
-  '20261030202414_auction_transfer_execution_boundary.sql',
-  '20261030204119_event_auction_release_policy.sql',
-  '20261030204252_auction_release_qualification_serialization.sql',
-  '20261030204513_auction_verified_net_recovery_issuer.sql',
-  '20261031013158_auction_held_visibility_observer.sql',
-  '20261031033642_auction_approved_automation.sql',
-  '20261031033820_commerce_tax_readiness.sql',
-  '20261031033911_merch_tracking_correction_intake.sql',
-  '20261031034904_merch_tracking_reviewed_supersession.sql',
-  '20261031173602_google_external_program_capability_binding.sql',
-  '20261031173636_commerce_fee_report_observations.sql',
-  '20261031191024_discovery_notification_subject_context.sql',
-  '20261031191128_notification_display_context_read.sql',
-  '20261031203703_chilly_chat_completed_call_retry_accounting.sql',
-  '20261031204123_live_room_join_activity.sql',
-  '20261031204321_atomic_chilly_chat_call_candidate.sql',
-  '20261031205522_chat_meaningful_activity_and_call_reads.sql',
-  '20261101045810_merch_checkout_dispatch_provenance.sql',
-  '20261101045816_merch_reconciliation_bounded_drain.sql'];
+const successors=migrationsFrom(migration,{inclusive:false});
 // Full migrated schema, real application predicates/triggers and provider SQL.
 // Only managed auth/storage infrastructure is the shared fixture; no network.
 test('catalog selection and immutable quote survive source edits, duplicates, terminal order and account changes', {timeout:240_000}, async t=>{
   // The guard integration requires the quote table created by this migration.
   // Keep the original pre-price negative control, then install dependencies in order.
-  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:[migration,referenceGuardsMigration,subscriptionBindingsMigration,auctionPaymentMigration,...successors]});
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:[migration,...successors]});
   let step='setup'; let checks=0;
   const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
@@ -77,9 +46,6 @@ test('catalog selection and immutable quote survive source edits, duplicates, te
     await deny(()=>db.query("select public.set_paid_watch_party_offer('QUOTEPRICE','Original room',299,null,'sandbox')"),/approved_sandbox_price_required/);
     await service();
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${migration}`,import.meta.url),'utf8'));
-    await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${referenceGuardsMigration}`,import.meta.url),'utf8'));
-    await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${subscriptionBindingsMigration}`,import.meta.url),'utf8'));
-    await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${auctionPaymentMigration}`,import.meta.url),'utf8'));
     for(const successor of successors)await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${successor}`,import.meta.url),'utf8'));
     eq(await scalar("select to_regclass('private.google_play_external_capability_program_bindings') is not null"),true,'exact program-binding successor is replayed after its prerequisites');
     eq(await scalar("select to_regclass('private.commerce_fee_report_observations') is not null"),true,'fee-report successor is replayed after its settlement prerequisite');

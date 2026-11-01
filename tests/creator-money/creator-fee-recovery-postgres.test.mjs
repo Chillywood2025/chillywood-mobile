@@ -47,6 +47,18 @@ test('verified fee debt consumes unpaid earnings once and later fee credits rema
   assert.equal(Number(await consume()),25,'later credit in same transaction uses recording clock, not transaction-start time');
   assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[sameTransaction]),0);
   await db.exec('commit');
+  await db.exec('begin');
+  await db.query(`insert into private.commerce_creator_fee_adjustments(creator_id,acceptance_id,currency,amount_minor,reason,source_type,source_id,evidence_hash)
+   values($1,$2,'usd',10,'later_verified_fee','cashout_fee',$3,$4)`,[creator,acceptance,source,'2'.repeat(64)]);
+  const laterProvider=await one(`insert into public.provider_events(provider,provider_event_id,user_id,environment,event_type,status,idempotency_key,metadata)
+   values('stripe_connect','evt_LaterDefaultClock',$1,'production','synthetic_settlement','processed','laterDefaultClock','{"synthetic_fixture":true}') returning id`,[creator]);
+  const laterMoney=await one(`insert into public.money_access_ledger_events(user_id,creator_id,provider_event_id,event_type,amount_minor,currency,environment,payable_state,status,source_type,metadata)
+   values($1,$1,$2,'synthetic_settlement',10,'usd','production','payable','verified','tip','{"payout_readiness_proved":true,"live_money_enabled_at_verification":true,"synthetic_fixture":true}') returning id`,[creator,laterProvider]);
+  const defaultClock=await one(`insert into public.creator_earnings_ledger(creator_id,source_type,gross_amount_cents,net_creator_amount_cents,ledger_status,money_ledger_event_id,provider_event_id,settlement_started_at,normal_eligible_at,reserve_amount_cents,reserve_release_at,settlement_policy_version,metadata)
+   values($1,'tip',10,10,'available',$2,$3,clock_timestamp()-interval '30 days',clock_timestamp()-interval '1 day',0,clock_timestamp()-interval '1 day','2026-08-31-v1','{"synthetic_fixture":true}') returning id`,[creator,laterMoney,laterProvider]);
+  assert.equal(Number(await consume()),10,'other earning issuers using the default also record actual accrual order');
+  assert.equal(await one('select public.creator_earnings_withdrawable_cents_internal($1,clock_timestamp())',[defaultClock]),0);
+  await db.exec('commit');
   for(const role of ['anon','authenticated','service_role']){
    await db.exec(`set role ${role}`);await assert.rejects(credit(1,'c'.repeat(64)),/permission denied/);await assert.rejects(consume(),/permission denied/);await db.exec('reset role');
   }

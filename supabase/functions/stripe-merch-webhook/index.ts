@@ -141,13 +141,13 @@ Deno.serve(async (req) => {
       || toText((event as unknown as Record<string, unknown>).account)) {
       await safeWriteAuditLog(adminClient, {
         action: "stripe_merch_webhook_failed", targetType: "stripe_merch_webhook", severity: "warning",
-        reason: "Stripe merch webhook was rejected by the sandbox environment guard.",
+        reason: "Stripe merch webhook did not match the authenticated environment or platform account.",
         metadata: { event_id: toText(event.id), event_type: type,
           failure_reason: "test_environment_required", function_name: FUNCTION_NAME },
       });
       return jsonResponse(200, { ...responseFacts, status: "ignored", reason: "test_environment_required",
         eventStored: false, signatureVerified: true, webhookProcessed: false,
-        message: "Only explicit test-mode platform merch events are accepted." });
+        message: "The event environment and account must match the authenticated platform webhook lane." });
     }
     if (!merchEventTypes.has(type) || !providerEventStateSupported(type, object)) {
       return jsonResponse(200, { ...responseFacts, status: "ignored", reason: "payment_state_not_confirmed",

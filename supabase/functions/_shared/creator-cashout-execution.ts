@@ -13,7 +13,7 @@ export type CashoutContext = {
 };
 export type CashoutStore = {
   read(requestId: string): Promise<CashoutContext>;
-  claim(requestId: string, stage: "funding" | "payout" | "reversal"): Promise<{claimed: boolean; token: string}>;
+  claim(requestId: string, stage: "funding" | "payout" | "reversal" | "funding_return"): Promise<{claimed: boolean; token: string}>;
   observe(requestId: string, token: string | null, facts: Record<string, unknown>): Promise<unknown>;
 };
 type Json = Record<string, any>;
@@ -104,6 +104,58 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
     body.set("metadata[chillywood_cashout_request]", c.requestId);
     return body;
   };
+  if (["funding_return_pending", "funding_return_unknown"].includes(c.phase)) {
+    if (!objectId(c.transferId, "tr") || c.payoutId !== null) fail("funding_return_context_invalid");
+    const transfer = await call(`/v1/transfers/${c.transferId}`, null);
+    normalizeCashoutTransfer(transfer, c);
+    let reversal: Json | null = null;
+    if (c.phase === "funding_return_pending" && transfer.amount_reversed === 0 && !reconcileOnly) {
+      const claim = await store.claim(requestId, "funding_return");
+      if (!claim.claimed) return { status: "not_claimed" };
+      if (!uuid(claim.token)) fail("claim_invalid");
+      // Durable freeze and single-use claim precede this one attempt. Even a
+      // rejected HTTP response becomes GET-only; never infer safe redispatch.
+      reversal = await call(`/v1/transfers/${c.transferId}/reversals`, null,
+        metadata(new URLSearchParams({ amount: String(c.bankMinor) })), `${c.dispatchKey}-funding-return`);
+    } else {
+      let cursor: string | null = null;
+      for (;;) {
+        const query = new URLSearchParams({ limit: "100" });
+        if (cursor) query.set("starting_after", cursor);
+        const list = await call(`/v1/transfers/${c.transferId}/reversals?${query}`, null);
+        if (list.object !== "list" || !Array.isArray(list.data) || typeof list.has_more !== "boolean") fail("provider_page_invalid");
+        for (const item of list.data) {
+          if (item.metadata?.chillywood_cashout_execution !== c.executionId) continue;
+          if (reversal && reversal.id !== item.id) fail("duplicate_provider_objects");
+          reversal = item;
+        }
+        if (!list.has_more) break;
+        const next = list.data.at(-1)?.id;
+        if (!objectId(next, "trr") || next === cursor) fail("provider_page_invalid");
+        cursor = next;
+      }
+    }
+    if (!reversal) return { status: c.phase, ownerAction: "Verify funding return; do not retry bank payout or reversal." };
+    if (reversal.object !== "transfer_reversal" || !objectId(reversal.id, "trr") || reversal.transfer !== c.transferId
+      || reversal.amount !== c.bankMinor || reversal.currency !== c.currency
+      || reversal.metadata?.chillywood_cashout_execution !== c.executionId
+      || reversal.metadata?.chillywood_cashout_request !== c.requestId
+      || !objectId(reversal.balance_transaction, "txn") || !objectId(transfer.balance_transaction, "txn")) fail("funding_return_binding_invalid");
+    const original = await call(`/v1/balance_transactions/${transfer.balance_transaction}`, null);
+    const returned = await call(`/v1/balance_transactions/${reversal.balance_transaction}`, null);
+    for (const [bt, id, source, amount] of [[original, transfer.balance_transaction, c.transferId, -c.bankMinor],
+      [returned, reversal.balance_transaction, reversal.id, c.bankMinor]] as const) {
+      if (bt.object !== "balance_transaction" || bt.id !== id || bt.source !== source || bt.currency !== c.currency
+        || bt.amount !== amount || !Number.isSafeInteger(bt.fee) || Math.abs(bt.fee) > 2147483647
+        || bt.net !== amount - bt.fee || bt.status !== "available") fail("funding_return_balance_unconfirmed");
+    }
+    if (original.type !== "transfer" || !["transfer_refund", "transfer_cancel"].includes(returned.type)) fail("funding_return_balance_type_invalid");
+    const proof = (bt: Json) => ({ transactionId: bt.id, sourceId: bt.source, amountMinor: bt.amount,
+      feeMinor: bt.fee, netMinor: bt.net, currency: bt.currency, status: bt.status, type: bt.type });
+    return store.observe(requestId, null, { kind: "funding_return", objectId: reversal.id, transferId: c.transferId,
+      amountMinor: c.bankMinor, accountId: c.accountId, platformAccountId: c.platformAccountId, environment: c.environment,
+      fundingBalance: proof(original), returnBalance: proof(returned) });
+  }
   // Unknown dispatch: search the exact account and metadata, with complete
   // pagination within a bounded budget. An empty result NEVER authorizes POST.
   const recover = async (kind: "transfer" | "payout") => {

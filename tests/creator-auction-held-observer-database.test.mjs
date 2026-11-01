@@ -100,7 +100,7 @@ test('historical observer protocol replays forward into current tax-held financi
     const session=actors.creator.session_id;actors.creator.session_id=randomUUID();await assert.rejects(read(),/creator_earnings_unavailable/);actors.creator.session_id=session;
     await observe({provider_fee_minor:237});page=await read();assert.equal(page.entries[0].netMinor,0);assert.equal(page.entries[0].creatorMinor,0,'known zero is not missing evidence');
     assert.ok(page.entries[0].holdReasons.includes('not_payable_source_only'));
-    const other=await configure('show3','buyer3');const second=await rpc('buyer3',other.call,'service_role');
+    const other=await configure('show3','buyer3');await rpc('buyer3',other.call,'service_role');
     page=await read('creator','null',1);assert.equal(page.entries.length,1);assert.equal(page.nextCursor,page.entries[0].id);
     const next=await read('creator',lit(page.nextCursor),1);assert.equal(next.entries.length,1);assert.notEqual(next.entries[0].id,page.entries[0].id);assert.equal(next.nextCursor,null);
     assert.equal((await read('creator',lit(next.entries[0].id),1)).entries.length,0);
@@ -134,6 +134,20 @@ test('historical observer protocol replays forward into current tax-held financi
     for(const table of ['auction_transfer_operations','auction_transfer_plans','auction_transfer_result_observations'])assert.equal((await rows(`select count(*)::int n from private.${table}`))[0].n,0);
     assert.equal((await rows('select count(*)::int n from public.creator_earnings_ledger'))[0].n,0);
     for(const file of successors)await db.exec(fs.readFileSync(new URL(file,migrationDir),'utf8'));
+    // Current resumable observer continuation uses the real auction contract,
+    // private checkpoint and durable queue; it does not clear the refund/tax hold.
+    await assert.rejects(worker(`public.begin_stripe_cost_history('auction','${claim.settlementContractId}','acct_wrong')`),/source_account_mismatch/);
+    const history=await worker(`public.begin_stripe_cost_history('auction','${claim.settlementContractId}','acct_platform')`);
+    const progressLease=randomUUID();
+    await db.exec(`update private.auction_observer_jobs set lease='${progressLease}',lease_until=clock_timestamp()+interval '5 minutes',consecutive_failures=3 where contract_id='${claim.settlementContractId}'`);
+    const beforeProgress=(await rows(`select last_success_at from private.auction_observer_jobs where contract_id='${claim.settlementContractId}'`))[0].last_success_at;
+    const checkpoint={version:1,phase:'collect',cursor:1,verificationStartedAt:null,entries:[{path:'/v1/account',facts:{id:'acct_platform',object:'account'},status:200,observedAt:Date.now()}]};
+    const saved=await worker(`public.save_stripe_cost_history('auction','${claim.settlementContractId}','${history.generation}','${history.lease}',${lit(JSON.stringify(checkpoint))}::jsonb,null)`);
+    assert.equal(saved.status,'history_pending');
+    assert.equal((await worker(`public.continue_auction_cost_history_refresh('${claim.settlementContractId}','${progressLease}')`)).historyProgress,true);
+    const continued=(await rows(`select consecutive_failures,last_success_at,domain_status,next_attempt_at between clock_timestamp()+interval '14 minutes' and clock_timestamp()+interval '16 minutes' timely from private.auction_observer_jobs where contract_id='${claim.settlementContractId}'`))[0];
+    assert.equal(continued.consecutive_failures,3);assert.equal(continued.last_success_at?.getTime(),beforeProgress?.getTime());assert.equal(continued.domain_status,'unknown');assert.equal(continued.timely,true);
+    assert.equal((await rows('select count(*)::int n from private.stripe_cost_history_receipts'))[0].n,0);
     const current=await worker(`public.reserve_auction_test_transfer('${claim.settlementContractId}')`);
     assert.equal(current.status,'held');assert.equal(current.reason,'tax_service_fee_unverified');
     assert.ok((await read()).entries[0].holdReasons.includes('tax_service_fee_unverified'));

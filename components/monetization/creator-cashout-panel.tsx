@@ -33,7 +33,7 @@ export function CreatorCashoutPanel() {
     try {
       if(action==="cancel"&&row){
         const canceled=await cancelQualifiedCreatorCashout(row);
-        if(current())setState(previous=>({...previous,key,busy:false,rows:previous.rows.map(old=>old.requestId===canceled.requestId?canceled:old),notice:"Canceled before funds were sent."}));
+        if(current())setState(previous=>({...previous,key,busy:false,rows:previous.rows.map(old=>old.requestId===canceled.requestId?canceled:old),notice:canceled.status==="canceled"?"Canceled before funds were sent.":"Bank payout canceled. Funds remain held until the funding return and actual costs are verified; the app cashout fee will not be retained."}));
       }else if(action==="policy"){
         const subject=await captureAccountBoundSupabaseMutationSubject();
         const status=await loadCreatorFeePolicyStatus(subject);
@@ -78,6 +78,6 @@ export function CreatorCashoutPanel() {
     </View>:null}
     {current?.notice?<Text accessibilityLiveRegion="polite" style={text}>{current.notice}</Text>:null}
     <Pressable accessibilityRole="button" disabled={busy} onPress={()=>void run("history")}><Text style={{...title,paddingVertical:10}}>{busy?"Checking…":"Refresh cashout history"}</Text></Pressable>
-    {current?.rows.map(row=><View key={row.requestId} style={{gap:4}}><Text style={title}>{CREATOR_CASHOUT_STATUS[row.status]??"Cashout status needs review"}</Text><Text style={text}>Requested {money(row.grossMinor)} · Bank {money(row.bankMinor)} · Verified known provider cost {money(row.observedProviderFeeMinor)}. Later verified adjustments may still arrive.</Text>{row.canCancel?<Pressable accessibilityRole="button" disabled={busy} onPress={()=>void run("cancel",row)}><Text style={{...title,paddingVertical:10}}>Cancel before funds are sent</Text></Pressable>:null}</View>)}
+    {current?.rows.map(row=><View key={row.requestId} style={{gap:4}}><Text style={title}>{CREATOR_CASHOUT_STATUS[row.status]??"Cashout status needs review"}</Text><Text style={text}>Requested {money(row.grossMinor)} · Planned bank amount {money(row.bankMinor)} · Verified known provider cost {money(row.observedProviderFeeMinor)}. Later verified adjustments may still arrive.</Text>{row.fundingReturnHeld?<Text style={text}>Your bank payout is canceled. Funds remain held while the platform verifies their return and actual costs. The app cashout fee will be returned.</Text>:null}{row.canCancel?<Pressable accessibilityRole="button" disabled={busy} onPress={()=>void run("cancel",row)}><Text style={{...title,paddingVertical:10}}>{row.status==="funded"?"Cancel bank payout":"Cancel before funds are sent"}</Text></Pressable>:null}</View>)}
   </View>;
 }

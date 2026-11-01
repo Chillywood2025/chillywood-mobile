@@ -80,7 +80,8 @@ test('actual SQL live observation CAS preserves holds and never grants financial
  const service=()=>db.exec(`reset role;select set_config('request.jwt.claims','{"role":"service_role"}',false);set role service_role`);
  try{
   await db.query(`insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values($1,false,false,now())`,[context.creatorId]);
-  await db.query(`insert into public.creator_payout_accounts(id,creator_user_id,provider,provider_environment,provider_account_id) values($1,$2,'stripe_connect','live',$3)`,[context.rowId,context.creatorId,context.accountId]);
+  await db.query(`insert into public.creator_payout_accounts(id,creator_user_id,provider,provider_environment,provider_account_id,details_submitted,payouts_enabled) values($1,$2,'stripe_connect','live',$3,true,true)`,[context.rowId,context.creatorId,context.accountId]);
+  assert.deepEqual(await one("select jsonb_build_array(kyc_ready,provider_ready,eligible_for_payouts) from public.creator_payout_eligibility_records where creator_user_id=$1",[context.creatorId]),[false,false,false], 'unobserved live configuration projects false, not NULL, readiness');
   for(const role of ['anon','authenticated']){
    await db.exec(`set role ${role}`);await assert.rejects(()=>one('select public.get_creator_connect_live_observation_context($1)',[context.creatorId]),/permission denied/);await root();
   }
