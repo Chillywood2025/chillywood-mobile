@@ -7,7 +7,7 @@ export async function seedCashoutExecutionFixture(db,{fundingReturnQualified=fal
  const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const claims=async role=>db.query("select set_config('request.jwt.claims',$1,false),set_config('request.jwt.claim.role',$2,false)",[JSON.stringify({role,sub:creator,session_id:session}),role]);
  const rpc=async(sql,args=[])=>{await claims('service_role');await db.exec('set role service_role');try{return await scalar(sql,args);}finally{await db.exec('reset role');}};
-  await db.query("insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values($1,'cashout-execution@example.test',now(),false,false)",[creator]);
+  await db.query("insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values($1,$2,now(),false,false)",[creator,`cashout-${creator}@example.test`]);
   await db.query('insert into auth.sessions(id,user_id) values($1,$2)',[session,creator]);
   await db.exec("insert into public.wave1_legal_document_versions(document_key,version,market,capability,effective_at) values('payout_terms','cashout-fixture','UNITED_STATES','payout',now()-interval '1 day') on conflict do nothing");
   await db.query(`insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
