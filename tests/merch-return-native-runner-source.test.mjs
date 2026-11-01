@@ -9,6 +9,16 @@ test('return race runner help and remote rejection require no local server',()=>
  const help=spawnSync(process.execPath,[path,'--help'],{encoding:'utf8'});assert.equal(help.status,0);assert.match(help.stdout,/generated local clone/);
  const remote=spawnSync(process.execPath,[path,'postgres://remote.invalid/forbidden'],{encoding:'utf8'});assert.notEqual(remote.status,0);assert.match(remote.stderr,/no remote URL or positional arguments accepted/);
 });
+test('registered native cutover uses exact pause artifact and observes a surviving idle pre-cutoff waiter',()=>{
+ assert.match(source,/await runMerchAdmissionCutoverRace/);
+ const cutover=readFileSync('scripts/lib/merch-admission-cutover-race.mjs','utf8');
+ for(const marker of ['scripts/operations/merch-checkout-admission-pause.sql','scripts/operations/merch-checkout-admission-drain.sql',
+  'pg_blocking_pids','CUTOVER_WAITER_READY','idle in transaction','transactionStart)<=Date.parse(cutoff)',
+  'permission denied for function reserve_merch_checkout_for_actor_with_tracking','public.reserve_merch_checkout_dispatch'])assert.ok(cutover.includes(marker),marker);
+ const drain=readFileSync('scripts/operations/merch-checkout-admission-drain.sql','utf8');
+ for(const marker of ['pg_is_in_recovery','pg_read_all_stats','pg_prepared_xacts','xact_start is not null',"state like 'idle in transaction%'"])assert.ok(drain.includes(marker),marker);
+ assert.doesNotMatch(drain,/query\s+(?:like|ilike)|pg_terminate_backend|pg_cancel_backend/iu);
+});
 test('canonical Database job registers return contention and retains carrier races',()=>{
  const workflow=readFileSync('.github/workflows/required-validation.yml','utf8');
  for(const runner of ['merch-return-cases','merch-tracking'])assert.ok(workflow.includes('SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-'+runner+'-concurrency-postgres.mjs'));
