@@ -51,7 +51,7 @@ function harness(options={}) {
     timingKey:'original-time',title:options.title??'Chicago Stories',creatorDisplayName:'Untrusted caller name',triggerType,eligibilityReason:'public_safe_eligible',
   })};
 }
-for(const platform of ['android','ios'])for(const trigger of ['public_upload','followed_creator_live','circle_friend_live','event_starts_soon','replay_later'])test(`${platform} ${trigger}: exact trusted subject in row and push, original tap and dedupe preserved`,async()=>{
+for(const platform of ['android','ios'])for(const trigger of ['public_upload','event_starts_soon','replay_later'])test(`${platform} ${trigger}: exact trusted subject in row and push, original tap and dedupe preserved`,async()=>{
   const h=harness({platform});await h.run(trigger);
   assert.equal(h.rows.length,1);assert.equal(h.sends.length,1);
   assert.match(h.rows[0].title+' '+h.rows[0].body,/Rachi/);assert.match(h.rows[0].body,/Chicago Stories/);
@@ -60,6 +60,15 @@ for(const platform of ['android','ios'])for(const trigger of ['public_upload','f
   assert.equal(h.sends[0].data.path,'/player/exact-video');assert.equal(h.rows[0].target_entity_id,'exact-video');
   assert.equal(h.rows[0].target_context.display_context.creator_id,'creator-1');
   await h.run(trigger);assert.equal(h.sends.length,1);
+});
+for(const trigger of ['followed_creator_live','circle_friend_live'])test(`${trigger}: direct recipient helper cannot bypass canonical preference authority`,async()=>{
+  const h=harness();
+  for(let attempt=0;attempt<2;attempt++) {
+    const result=await h.run(trigger);
+    assert.equal(result.reason,'canonical_lifecycle_required');
+    assert.equal(result.pushSent,false);assert.equal(result.notificationId,null);
+  }
+  assert.equal(h.rows.length,0);assert.equal(h.sends.length,0);assert.equal(h.reads.length,0);assert.equal(h.attempts.length,0);
 });
 test('another creator is not mistaken for first creator',async()=>{
   const h=harness({name:'Maya',title:'Second Story'});await h.run();assert.match(h.sends[0].title,/Maya/);assert.match(h.sends[0].body,/Second Story/);assert.doesNotMatch(h.sends[0].title,/Rachi/);
