@@ -1,5 +1,5 @@
-// Reviewed November 1 completion stack plus the returning-fee policy correction.
-// 48 migrations; 192 added, 94 replaced, zero removed function signatures.
+// Reviewed November 1 completion stack, returning-fee policy and consume-only tracking.
+// 49 migrations; 192 added, 94 replaced, zero removed function signatures.
 // Explicit identities, not a runtime whitelist generated from the schema under
 // test. Missing/unexpected functions and migrations must fail exact assertions.
 export const appCompletionFiles = Object.freeze([
@@ -50,7 +50,9 @@ export const appCompletionFiles = Object.freeze([
   "20261101171959_merch_draft_copy_retry_identity.sql",
   "20261101172200_creator_connect_all_mode_setup_admission.sql",
   "20261101172219_merch_publication_current_legal_fence.sql",
-  "20261101180001_creator_cashout_returning_fee_adjustments.sql"
+  "20261101180001_creator_cashout_returning_fee_adjustments.sql",
+  // Replaces only the already-reviewed claim/complete tracking bodies, preserving ABI and ACLs.
+  "20261101215711_merch_tracking_consume_existing_only.sql"
 ]);
 
 export const appCompletionAddedFunctionIdentities = new Map([
