@@ -60,12 +60,15 @@ is performed by this source change.
    evidence. No unsigned notification is accepted.
 3. The dedicated-secret `merch-tracking-reconcile` worker claims at most five
    jobs with expiring leases. Qualified merchant account identity is frozen on
-   first claim. It registers the existing number at most once and performs an
-   authenticated merchant-scoped GET. An uncertain registration is not re-POSTed;
-   polling still works. Lost leases reject late completions.
+   first claim. It performs only an authenticated merchant-scoped GET for existing
+   tracking. There is no outbound registration POST capability, shipment creation,
+   or label purchase. Lost leases reject late completions. Historical registration
+   states are retained unchanged and are not readiness requirements; claims do not
+   manufacture attempted registration, and legacy `p_registered` acknowledgments
+   cannot manufacture registered evidence. Missing tracking stays unknown/reviewed.
    Provider calls and streamed bodies share a ten-second deadline, SQL calls
    have a five-second response budget, and the worker stops admitting another
-   registration/GET/completion cycle within its 75-second aggregate budget.
+   GET/completion cycle within its 75-second aggregate budget.
    Stale lease acknowledgements are not successful completions. The transport
    helper and worker support an explicitly selected live mode for future
    qualification. `MERCH_TRACKING_ENVIRONMENT` defaults to `sandbox`; production
@@ -127,7 +130,7 @@ This is an operational estimate, not a promised provider billing schedule.
 Shippo's public API tracking price is $0.02 per unique external tracking number;
 its free-label quota is not free external tracking. Marketplace managed-account
 setup and HMAC require provider coordination, so this is not a confirmed
-Chi'llywood contract or final total. Confirm GET/repeated registration treatment,
+Chi'llywood contract or final total. Confirm existing-tracking GET billing,
 managed-account fees and rate limits before activation. No provider inquiry,
 account acceptance or paid activation was performed by this source task.
 
@@ -139,6 +142,47 @@ Official references checked October 30, 2026:
 - https://docs.goshippo.com/guides/integration-paths
 - https://goshippo.com/pricing/api
 - https://support.goshippo.com/hc/en-us/articles/360003855652-Shippo-Subscription-Plan-Overview
+
+### Consume-existing-only decision and vendor handoff (November 1, 2026)
+
+The owner explicitly selected consumption of tracking already provided, not
+automatic registration. `readExistingShippoTracking` has no method/register
+option. The forward consume-only migration preserves old evidence without
+requiring registration. Signed callback hints still require authenticated GET
+corroboration; receiving a hint is not verified delivery. Tracked failures never
+switch to purchase-date returns. Untracked orders still need verified purchase
+time before their 30-day window can be established.
+
+Official tracking docs say Shippo-purchased labels can send updates to an existing
+configured webhook. External labels require separate registration for webhook
+updates; this app deliberately does not do that. A creator's own Shippo account
+does not automatically grant Chi'llywood account-scoped read or webhook access.
+Existing account authorization, signing, carrier support and cost qualification
+must be demonstrated before live consumption is enabled. GET-only does not prove
+free API use; published API pricing lists 2 cents per track and marketplace terms
+still need confirmation. No labels, fees, accounts or credentials are created here.
+
+Creators can arrange shipping and eligible return labels in their own Shippo
+workflow, subject to their account, carrier, country and charges. Shippo documents
+return label creation from an existing outbound shipment; labels may be sent to
+the buyer by the seller. Buyers are not promised a Shippo account or free postage.
+The current app exposes order tracking assignment, status and return-case requests,
+but has no integrated Shippo order transfer, hosted label workflow, return-label
+attachment/delivery or return-parcel tracking binding. These are separate handoff
+gaps, not capabilities supplied by this tracking repair. Do not treat an outbound
+shipment delivery as return-parcel delivery or a return case as a label purchase.
+
+Verified official references:
+- https://docs.goshippo.com/tracking/tracking/
+- https://goshippo.com/pricing/api
+- https://support.goshippo.com/hc/en-us/articles/360035826412-How-to-Create-Return-Labels-in-Shippo
+- https://goshippo.com/shipping/return-shipping-labels
+
+Deployment note: this is materially different source from the held registration-
+capable worker, not permission to retry that payload. Review/validate/merge the
+new source and forward migration first. A GET-only worker is safe against the old
+RPC signature but old claims still misleadingly advance registration state until
+the migration lands. No rollout or paid activation is performed by this patch.
 - https://github.com/stripe/stripe-php/blob/master/lib/Checkout/Session.php
 - https://supabase.com/docs/guides/functions/auth
 

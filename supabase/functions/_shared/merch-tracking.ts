@@ -66,7 +66,7 @@ export function trackingNotification(raw: string, environment: "sandbox" | "prod
   if (!/^[a-z_]{2,30}$/.test(carrier) || !/^[A-Z0-9_-]{5,100}$/.test(tracking_number)) throw new Error("invalid_tracking_identity");
   return {carrier, tracking_number};
 }
-export async function shippoRequest(job: TrackingJob, token: string, register: boolean,
+export async function readExistingShippoTracking(job: TrackingJob, token: string,
   transport: typeof fetch = fetch, environment: "sandbox" | "production" = "sandbox"): Promise<string> {
   // No live-key fallback. Production transport is dormant unless a caller
   // explicitly selects it after independent account/environment qualification.
@@ -77,12 +77,9 @@ export async function shippoRequest(job: TrackingJob, token: string, register: b
   const controller = new AbortController(), started = Date.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-  const response = await Promise.race([transport(register ? base : `${base}${encodeURIComponent(job.carrier)}/${encodeURIComponent(job.tracking_number)}`,
-    { method: register ? "POST" : "GET", redirect: "error", signal: controller.signal,
-      headers: { Authorization: `ShippoToken ${token}`, "SHIPPO-ACCOUNT-ID": job.provider_account,
-        ...(register ? {"Content-Type": "application/x-www-form-urlencoded"} : {}) },
-      ...(register ? {body: new URLSearchParams({carrier: job.carrier, tracking_number: job.tracking_number,
-        metadata: job.id}).toString()} : {}) }), new Promise<Response>((_, reject) => {
+  const response = await Promise.race([transport(`${base}${encodeURIComponent(job.carrier)}/${encodeURIComponent(job.tracking_number)}`,
+    { method: "GET", redirect: "error", signal: controller.signal,
+      headers: { Authorization: `ShippoToken ${token}`, "SHIPPO-ACCOUNT-ID": job.provider_account } }), new Promise<Response>((_, reject) => {
       timer = setTimeout(() => { controller.abort(); reject(new Error("tracking_request_deadline")); }, 10000);
     })]);
   if (!response.ok) throw new Error(response.status === 429 ? "carrier_rate_limited" : "carrier_unavailable");
