@@ -165,13 +165,17 @@ test('history deadline respects external abort without dispatching already-abort
  const stopped=clock.create({},async()=>{calls++;return Response.json({id:'acct_never',object:'account'});},()=>64);
  await assert.rejects(stopped.transport('https://api.stripe.com/v1/account',{...init,signal:controller.signal}),/history_body_deadline/);
  assert.equal(calls,0);assert.deepEqual(clock.counts(),{fired:0,cleared:0});assert.equal(clock.active.size,0);
+ const queued=new AbortController();queueMicrotask(()=>queued.abort());
+ await assert.rejects(stopped.transport('https://api.stripe.com/v1/account',{...init,signal:queued.signal}),/history_body_deadline/);
+ assert.equal(calls,0,'an abort queued ahead of dispatch must suppress the transport too');
+ assert.equal(clock.active.size,0);
  const during=new AbortController();let response;
  const active=clock.create({},async()=>{
   response=new Response(new ReadableStream({pull(){during.abort();return new Promise(()=>{});},cancel(){return Promise.reject(Error('cancel_failed'));}},{highWaterMark:0}));
   return response;
  },()=>64);
  await assert.rejects(active.transport('https://api.stripe.com/v1/account',{...init,signal:during.signal}),/history_body_deadline/);
- assert.equal(active.checkpoint().entries.length,0);assert.equal(response.body.locked,false);assert.equal(clock.active.size,0);assert.equal(clock.counts().cleared,1);
+ assert.equal(active.checkpoint().entries.length,0);assert.equal(response.body.locked,false);assert.equal(clock.active.size,0);assert.equal(clock.counts().cleared,2);
 });
 test('history deadline timers are cleared on success, provider failure, missing association, and malformed bodies',async()=>{
  for(const kind of ['success','provider_error','missing','malformed','oversized']){

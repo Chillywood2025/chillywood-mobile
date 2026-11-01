@@ -52,7 +52,7 @@ export function createStripeHistoryCheckpoint(saved:unknown,transport:typeof fet
   const bounded=async<T>(work:()=>Promise<T>):Promise<T>=>{
    if(signal.aborted)throw Error('history_body_deadline');let abort:()=>void=()=>{};
    const aborted=new Promise<never>((_,reject)=>{abort=()=>reject(Error('history_body_deadline'));signal.addEventListener('abort',abort,{once:true});});
-   try{return await Promise.race([Promise.resolve().then(work),aborted]);}
+   try{return await Promise.race([Promise.resolve().then(()=>{if(signal.aborted)throw Error('history_body_deadline');return work();}),aborted]);}
    finally{signal.removeEventListener('abort',abort);}
   };
   try{
