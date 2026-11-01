@@ -146,7 +146,7 @@ const localFetch = async (input, init) => {
   const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
   assert.equal(url.origin, origin, "this test never contacts a remote API or provider");
   const response = await originalFetch(input, init);
-  if (heldRead && url.pathname === "/rest/v1/chat_threads" && (!init?.method || init.method === "GET")) {
+  if (heldRead && url.pathname === "/rest/v1/chat_thread_activity" && (!init?.method || init.method === "GET")) {
     const gate = heldRead;
     heldRead = null;
     gate.arrived();

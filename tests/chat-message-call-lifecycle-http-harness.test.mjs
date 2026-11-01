@@ -9,6 +9,32 @@ import ts from 'typescript';
 const root = new URL('../', import.meta.url);
 const script = new URL('scripts/test-chat-message-call-lifecycle-http.mjs', root);
 
+test('account-switch transport barrier holds only the actual activity-view GET after server response',async()=>{
+  const source=fs.readFileSync(script,'utf8');
+  const block=source.slice(source.indexOf('const localFetch = async'),source.indexOf('globalThis.fetch = localFetch;'));
+  for(const [pathname,method,shouldHold] of [
+    ['/rest/v1/chat_thread_activity','GET',true],
+    ['/rest/v1/chat_thread_activity','POST',false],
+    ['/rest/v1/chat_threads','GET',false],
+  ]){
+    const events=[];let release;
+    const resume=new Promise(resolve=>{release=resolve;});
+    const response={fixture:true};
+    const context=vm.createContext({URL,assert,origin:'http://127.0.0.1:54321',
+      originalFetch:async()=>{events.push('server-response');return response;},
+      heldRead:{arrived:()=>events.push('barrier'),resume},
+    });
+    const fetch=vm.runInContext(`${block}\nlocalFetch`,context);
+    const pending=fetch(`http://127.0.0.1:54321${pathname}`,{method});
+    let settled=false;pending.then(()=>{settled=true;});
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.deepEqual(events,shouldHold?['server-response','barrier']:['server-response']);
+    assert.equal(settled,!shouldHold);
+    release();assert.equal(await pending,response);
+    await assert.rejects(fetch('https://example.com/rest/v1/chat_thread_activity'),/never contacts a remote/);
+  }
+});
+
 test('local HTTP harness loads the complete current production dependency graph without contacting a backend', () => {
   const env = {...process.env};
   delete env.NODE_TEST_CONTEXT;
