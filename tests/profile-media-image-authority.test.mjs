@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
+import { assertSettingsRemovalIntentPublication } from "./helpers/account-intent-source-contracts.mjs";
 
 const javascript = ts.transpileModule(readFileSync("_lib/profileMediaImageAuthority.ts", "utf8"), {
   compilerOptions: {
@@ -149,7 +150,7 @@ test("Settings previews use saved active URLs and replacement/removal refreshes 
   assert.match(settings, /source=\{\{ uri: activeProfilePhotoUrl \}\}/);
   assert.match(settings, /source=\{\{ uri: activeProfileBackgroundUrl \}\}/);
   assert.match(settings, /const nextProfile = await uploadProfileMedia[\s\S]*?setMyProfile\(nextProfile\)/);
-  assert.match(settings, /const nextProfile = await removeProfileMedia\(kind\);[\s\S]*?setMyProfile\(nextProfile\)/);
+  assertSettingsRemovalIntentPublication(settings);
 });
 
 test("persisted profile-media URLs never contain bearer credentials", () => {
