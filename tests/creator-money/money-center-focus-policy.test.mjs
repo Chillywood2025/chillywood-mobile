@@ -53,6 +53,16 @@ test("Money policy allows measured non-money focus but rejects a removed or comm
   }
 });
 
+test("Money setup visibility remains authenticated without depending on financial activation", () => {
+  for (const replacement of ["true", "isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)"]) {
+    const changed = studio.replace("canStartStripeSetup = Boolean(user?.id)", `canStartStripeSetup = ${replacement}`);
+    assert.notEqual(changed, studio);
+    const result = runGuard(changed);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.failures.some(value => value.includes("authenticated payout setup readiness visibility")));
+  }
+});
+
 test("Money policy rejects direct and differently named imperative manager scrolling", () => {
   for (const command of ["studioScrollRef.current?.scrollTo({ y: 900 });", "otherList.current?.scrollToIndex({ index: 1 });"]) {
     const marker = "const focusMoneyCenterSection = useCallback((id: MoneyCenterFocusSection) => {";

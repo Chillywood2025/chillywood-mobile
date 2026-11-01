@@ -30,6 +30,18 @@ test('worker transport failure never tells caller that a second payout is safe',
  const e=endpoint('creator-cashout-worker',{run:async()=>{throw Error('ambiguous provider timeout');}});
  const res=await e.handler(request({request_id:id}));assert.equal(res.status,409);assert.equal((await res.json()).canRetryPayout,false);
 });
+test('worker refuses malformed reconciliation results without claiming a safe payout retry',async()=>{
+ for(const result of [null,undefined,[],['paid'],'paid',true,42]){
+  let runs=0;const e=endpoint('creator-cashout-worker',{run:async()=>{runs++;return result;}});
+  const response=await e.handler(request({request_id:id}));
+  assert.equal(response.status,409);assert.deepEqual(await response.json(),{error:'cashout_requires_reconciliation',canRetryPayout:false});
+  assert.equal(runs,1);
+ }
+ const expected={status:'needs_review',canRetryPayout:false};
+ const e=endpoint('creator-cashout-worker',{run:async()=>expected});
+ const response=await e.handler(request({request_id:id}));
+ assert.equal(response.status,200);assert.deepEqual(await response.json(),expected);
+});
 const event={object:'event',id:'evt_fixture',livemode:true,type:'payout.paid',account:'acct_creator',data:{object:{metadata:{chillywood_cashout_request:id,chillywood_cashout_execution:'execution'}}}};
 test('signed webhook only wakes GET reconciliation and cannot claim a dispatch',async()=>{
  let reconciled=0;const e=endpoint('creator-cashout-webhook',{run:async(requestId,store,key,transport,now,readOnly)=>{

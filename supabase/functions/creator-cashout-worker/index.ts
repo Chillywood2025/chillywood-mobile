@@ -2,6 +2,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv } from "../_shared/stripe-connect.ts";
 import { readCashoutBody, runCreatorCashout, type CashoutStore } from "../_shared/creator-cashout-execution.ts";
 
+const isResponseObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 // Dormant until separately qualified and activated. A service invocation is not
 // sufficient to open the SQL money switches or bypass provider qualification.
 Deno.serve(async (req: Request) => {
@@ -29,7 +32,9 @@ Deno.serve(async (req: Request) => {
       claim: (requestId, stage) => rpc("claim_creator_cashout_dispatch", { p_request_id: requestId, p_stage: stage }),
       observe: (requestId, token, facts) => rpc("record_creator_cashout_observation", { p_request_id: requestId, p_dispatch_token: token, p_facts: facts }),
     };
-    return jsonResponse(200, await runCreatorCashout(body.request_id, store, key));
+    const result = await runCreatorCashout(body.request_id, store, key);
+    if (!isResponseObject(result)) throw Error("cashout_result_unresolved");
+    return jsonResponse(200, result);
   } catch {
     // Never claim that an error means no transfer/payout occurred. SQL retains
     // unknown dispatch and the next run can only reconcile it with GETs.
