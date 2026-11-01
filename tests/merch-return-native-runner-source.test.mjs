@@ -20,6 +20,7 @@ test('native return races assert real locking edges, aggregate holds and both ca
 test('registered native runner includes exact checkout dispatch/cancellation blocking schedules',()=>{
  assert.match(source,/await runMerchCheckoutDispatchRaces/);assert.match(source,/assert.equal\(checks,10\)/);
  const checkout=readFileSync('scripts/lib/merch-checkout-dispatch-races.mjs','utf8');
+ assert.doesNotMatch(checkout.match(/insert into public\.beta_access_memberships[^;]+;/)?.[0]??'',/on conflict/i);
  for(const marker of ['checkout duplicate reservations serialize to one hold','proven no-dispatch abort wins before dispatch',
   'durable dispatch wins before cleanup','duplicate no-dispatch cancellation cannot double-restock',
   'retained webhook global latch precedes new cancellation product lock','retained reservation global latch precedes new reservation buyer lock'])assert.ok(checkout.includes(marker),marker);
