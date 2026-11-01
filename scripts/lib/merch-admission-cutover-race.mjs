@@ -15,8 +15,14 @@ export async function runMerchAdmissionCutoverRace({query,rpc,session,until,auth
  query(`begin;${pause}rollback;`);
  assert.equal(query(`select has_function_privilege('service_role',${lit(signature)},'EXECUTE')`),'t','failed/rolled-back pause must not partly revoke');
  const baseline=JSON.parse(query(drain));assessMerchAdmissionDrain(baseline);
- const untracked=session("set track_activities=off;select 'UNTRACKED_READY';");
- await until(()=>untracked.output().includes('UNTRACKED_READY'),'untracked fixture not ready');
+ // track_activities is superuser-only. Supabase's postgres is intentionally
+ // not a superuser; use the existing disposable-clone admin transport for
+ // this session only, never grant it new privilege or change server config.
+ const untracked=session("set track_activities=off;select 'UNTRACKED_READY';",{admin:true});
+ await until(()=>{
+  if(untracked.child.exitCode!==null)throw Error(`untracked fixture exited: ${JSON.stringify(untracked.diagnostics())}`);
+  return untracked.output().includes('UNTRACKED_READY');
+ },'untracked fixture not ready');
  await until(()=>JSON.parse(query(drain)).unknownActivityRows>0,'disabled activity did not become visible');
  assert.throws(()=>assessMerchAdmissionDrain(JSON.parse(query(drain)),{baseline}),'disabled activity must fail closed');
  untracked.child.stdin.end();assert.equal((await untracked.done).code,0);

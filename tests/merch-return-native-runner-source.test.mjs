@@ -18,6 +18,9 @@ test('registered native cutover uses exact pause artifact and observes a survivi
  const drain=readFileSync('scripts/operations/merch-checkout-admission-drain.sql','utf8');
  for(const marker of ['pg_is_in_recovery','pg_read_all_stats','pg_prepared_xacts','xact_start is not null',"state like 'idle in transaction%'"])assert.ok(drain.includes(marker),marker);
  assert.doesNotMatch(drain,/query\s+(?:like|ilike)|pg_terminate_backend|pg_cancel_backend/iu);
+ assert.match(cutover,/UNTRACKED_READY';",\{admin:true\}/);
+ assert.match(cutover,/untracked\.diagnostics\(\)/);
+ assert.match(source,/args\(database,'supabase_admin'\)\.slice\(3\)/);
 });
 test('canonical Database job registers return contention and retains carrier races',()=>{
  const workflow=readFileSync('.github/workflows/required-validation.yml','utf8');
