@@ -8,6 +8,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {runMerchCheckoutDispatchRaces} from './lib/merch-checkout-dispatch-races.mjs';
+import {runMerchAdmissionCutoverRace} from './lib/merch-admission-cutover-race.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset. Writes only a generated local clone. No remote URLs or provider calls.');process.exit(0);
@@ -21,21 +22,28 @@ const database=`runtime_authority_${process.pid}_${randomUUID().replaceAll('-','
 const restore=createBrandGuardCloneRestorer({container});
 const lit=x=>`'${String(x).replaceAll("'","''")}'`;
 const json=x=>`${lit(JSON.stringify(x))}::jsonb`;
-const args=(db=database)=>['exec','-i',container,'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d',db];
+const args=(db=database,user='postgres')=>['exec','-i',container,'psql','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U',user,'-d',db];
 const docker=(a,input,encoding='utf8')=>spawnSync('docker',a,{encoding,input,maxBuffer:256*1024*1024,timeout:120000});
 const success=(r,label)=>{assert.equal(r.status,0,`${label}: ${r.error?.message??r.stderr??''}`);return r.stdout;};
 const query=(sql,db)=>success(docker(args(db),`set statement_timeout='20s';set time zone 'UTC';${sql}`),'fixture query').trim();
 const admin=(a,input,encoding='utf8')=>docker(['exec',...(input===undefined?[]:['-i']),container,'sh','-lc',
   'PGPASSWORD="$POSTGRES_PASSWORD" exec "$@"','merch-return-cases-fixture-admin',...a],input,encoding);
 const sessions=[];let serial=0,checks=0;
-function session(sql){
+function session(sql,{admin=false}={}){
   const name=`merch-return-cases-${++serial}`;
-  const child=spawn('docker',args(),{stdio:['pipe','pipe','pipe']});let stdout='',stderr='';
+  // Same local-clone admin transport as restore/export below. Only the
+  // disabled-statistics observation fixture needs a superuser session; the
+  // reservation holder/waiter and every prior schedule retain postgres.
+  const command=admin?['exec','-i',container,'sh','-lc','PGPASSWORD="$POSTGRES_PASSWORD" exec "$@"',
+    'merch-return-cases-fixture-session',...args(database,'supabase_admin').slice(3)]:args();
+  const child=spawn('docker',command,{stdio:['pipe','pipe','pipe']});let stdout='',stderr='';
   child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');
   child.stdout.on('data',s=>stdout+=s);child.stderr.on('data',s=>stderr+=s);
   const done=new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',code=>resolve({code,stdout,stderr}));});
-  child.stdin.write(`set application_name=${lit(name)};set statement_timeout='30s';set time zone 'UTC';${sql}\n`);
-  const s={child,done,output:()=>stdout,name};sessions.push(s);return s;
+  const adminGuard=admin?`do $fixture_admin$ begin if current_database()<>${lit(database)} or current_user<>'supabase_admin'
+    or not current_setting('is_superuser')::boolean then raise exception 'wrong disposable fixture admin target';end if;end $fixture_admin$;`:'';
+  child.stdin.write(`set application_name=${lit(name)};set statement_timeout='30s';set time zone 'UTC';${adminGuard}${sql}\n`);
+  const s={child,done,output:()=>stdout,diagnostics:()=>({exitCode:child.exitCode,stderr}),name};sessions.push(s);return s;
 }
 async function until(predicate,label){const deadline=Date.now()+20000;while(Date.now()<deadline){if(predicate())return;await delay(25);}throw Error(label);}
 const parsed=s=>JSON.parse(s.trim().split('\n').findLast(line=>line.startsWith('{')||line.startsWith('[')));
@@ -142,6 +150,7 @@ try{
   assert.equal(checks,4);
   await runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json});
   assert.equal(checks,10);
+  await runMerchAdmissionCutoverRace({query,rpc,session,until,auth,actors,lit});
   console.log('PASS native: ten PostgreSQL blocking-edge schedules; cases, carrier/dispute orderings, duplicate checkout allocation, dispatch/abort races, once-only stock release and retained global-latch interoperation. Synthetic source fixture only.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
