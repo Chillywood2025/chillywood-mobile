@@ -1,10 +1,11 @@
+import { observeStripeRefundTax } from "./stripe-refund-tax-evidence.ts";
 // Server-only GET adapter. Transport injection is for synthetic tests, never a
 // request parameter. This establishes observed cash costs, NOT payout authority.
 type ObjectMap = Record<string, unknown>;
 export type AuctionCostContext = {
   id: string; quote_id: string; lane: "event" | "room"; platform_product_id: string; buyer_id: string; stripe_checkout_session_id: string;
   stripe_payment_intent_id: string; stripe_charge_id: string | null;
-  amount_total_minor: number; currency: string; environment: string;
+  amount_total_minor: number; currency: string; environment: string; platform_account_id?: string | null;
 };
 const object = (v: unknown): ObjectMap => {
   if (!v || typeof v !== "object" || Array.isArray(v)) throw Error("auction_provider_object_invalid");
@@ -21,9 +22,13 @@ const id = (v: unknown, prefix: string): string => {
 const requireMatch = (condition: boolean) => { if (!condition) throw Error("auction_provider_binding_mismatch"); };
 
 export async function observeStripeAuctionCosts(
-  order: AuctionCostContext, secret: string, expectedAccount: string, transport: typeof fetch = fetch,
+  order: AuctionCostContext, secret: string, expectedAccount: string, transport: typeof fetch = fetch, expandRefundBalances=false,
 ) {
-  requireMatch(order.environment === "test" && /^(sk|rk)_test_[A-Za-z0-9]+$/.test(secret) && /^acct_[A-Za-z0-9_]+$/.test(expectedAccount));
+  const live = order.environment === "live";
+  requireMatch(["test", "live"].includes(order.environment)
+    && new RegExp(`^(sk|rk)_${live ? "live" : "test"}_[A-Za-z0-9_]+$`).test(secret)
+    && /^acct_[A-Za-z0-9_]+$/.test(expectedAccount)
+    && (!live || order.platform_account_id === expectedAccount));
   const get = async (path: string) => {
     const response = await transport(`https://api.stripe.com/v1${path}`, {
       method: "GET", redirect: "error", headers: { Authorization: `Bearer ${secret}`, "Stripe-Version": "2026-10-28.endive" },
@@ -34,26 +39,26 @@ export async function observeStripeAuctionCosts(
   };
   const account = await get("/account");
   requireMatch(account.object === "account" && account.id === expectedAccount);
-  const checkout = await get(`/checkout/sessions/${id(order.stripe_checkout_session_id, "cs_test")}`);
+  const checkout = await get(`/checkout/sessions/${id(order.stripe_checkout_session_id, live ? "cs_live" : "cs_test")}`);
   const metadata = object(checkout.metadata);
   requireMatch(checkout.id === order.stripe_checkout_session_id && checkout.object === "checkout.session"
-    && checkout.livemode === false && checkout.mode === "payment" && checkout.status === "complete"
+    && checkout.livemode === live && checkout.mode === "payment" && checkout.status === "complete"
     && checkout.payment_status === "paid" && checkout.client_reference_id === order.quote_id
     && metadata.auction_quote_id === order.quote_id
     && metadata.settlement_contract_id === order.id && metadata.settlement_policy === "auction_platform_net_80_20_v1"
     && metadata.provider_product_id === order.platform_product_id && metadata.buyer_user_id === order.buyer_id
-    && metadata.environment === "test" && metadata.rail === `stripe_${order.lane}_auction`
+    && metadata.environment === order.environment && metadata.rail === `stripe_${order.lane}_auction`
     && checkout.currency === order.currency && checkout.amount_total === order.amount_total_minor
     && checkout.payment_intent === order.stripe_payment_intent_id);
   const intent = await get(`/payment_intents/${id(order.stripe_payment_intent_id, "pi")}`);
   requireMatch(intent.id === order.stripe_payment_intent_id && intent.object === "payment_intent"
-    && intent.livemode === false && intent.status === "succeeded" && intent.currency === order.currency
+    && intent.livemode === live && intent.status === "succeeded" && intent.currency === order.currency
     && intent.amount === order.amount_total_minor && intent.amount_received === order.amount_total_minor
     && intent.transfer_data === null && intent.application_fee_amount === null && intent.on_behalf_of === null);
   const chargeId = id(intent.latest_charge, "ch");
   requireMatch(!order.stripe_charge_id || order.stripe_charge_id === chargeId);
   const charge = await get(`/charges/${chargeId}`);
-  requireMatch(charge.id === chargeId && charge.object === "charge" && charge.livemode === false
+  requireMatch(charge.id === chargeId && charge.object === "charge" && charge.livemode === live
     && charge.payment_intent === order.stripe_payment_intent_id && charge.paid === true && charge.captured === true
     && charge.currency === order.currency && charge.amount === order.amount_total_minor
     && charge.amount_captured === order.amount_total_minor && typeof charge.disputed === "boolean");
@@ -77,7 +82,7 @@ export async function observeStripeAuctionCosts(
   // pagination is a retry/error, never a partial monetary observation.
   for (let page = 0; ; page++) {
     if (page >= 20) throw Error("auction_refund_pagination_incomplete");
-    const list = await get(`/refunds?charge=${chargeId}&limit=100${cursor ? `&starting_after=${cursor}` : ""}`);
+    const list = await get(`/refunds?charge=${chargeId}&limit=100${expandRefundBalances ? "&expand%5B%5D=data.balance_transaction" : ""}${cursor ? `&starting_after=${cursor}` : ""}`);
     requireMatch(list.object === "list" && Array.isArray(list.data) && typeof list.has_more === "boolean");
     for (const raw of list.data as unknown[]) {
       const refund = object(raw), refundId = id(refund.id, "re");
@@ -86,8 +91,10 @@ export async function observeStripeAuctionCosts(
       // Pending/failed refunds and reversals need a separate qualified lifecycle;
       // do not silently count them or turn missing balance transactions into 0.
       requireMatch(refund.status === "succeeded");
-      const amount = integer(refund.amount), refundBalanceId = id(refund.balance_transaction, "txn");
-      const rb = await get(`/balance_transactions/${refundBalanceId}`);
+      const amount = integer(refund.amount);
+      const expanded=expandRefundBalances?object(refund.balance_transaction):null;
+      const refundBalanceId = id(expanded?expanded.id:refund.balance_transaction, "txn");
+      const rb = expanded??await get(`/balance_transactions/${refundBalanceId}`);
       const refundFee = integer(rb.fee, true), refundNet = integer(rb.net, true);
       requireMatch(rb.id === refundBalanceId && rb.object === "balance_transaction" && rb.source === refundId
         && rb.type === "refund" && rb.currency === order.currency && rb.amount === -amount
@@ -101,12 +108,15 @@ export async function observeStripeAuctionCosts(
   }
   requireMatch(refunds.reduce((sum, r) => sum + r.amount, 0) === refunded);
   refunds.sort((a, b) => a.id.localeCompare(b.id));
+  const refundTax = refunded > 0 && refunded < order.amount_total_minor && tax !== null && tax > 0
+    ? await observeStripeRefundTax({ paymentIntentId: order.stripe_payment_intent_id, currency: order.currency,
+      grossMinor: order.amount_total_minor, taxMinor: tax, refunds, livemode: live }, secret, transport) : null;
   // Re-read prevents refund/dispute changes during the multi-request snapshot.
   const finalCharge = await get(`/charges/${chargeId}`);
   requireMatch(finalCharge.id === chargeId && finalCharge.amount_refunded === refunded
     && finalCharge.disputed === charge.disputed && finalCharge.balance_transaction === balanceId);
   return {
-    account_id: expectedAccount, environment: "test", contract_id: order.id,
+    account_id: expectedAccount, environment: order.environment, contract_id: order.id,
     checkout_id: order.stripe_checkout_session_id, payment_intent_id: order.stripe_payment_intent_id,
     charge_id: chargeId, balance_id: balanceId, currency: order.currency,
     gross_minor: order.amount_total_minor, provider_fee_minor: fee, charge_net_minor: net,
@@ -116,7 +126,8 @@ export async function observeStripeAuctionCosts(
     balance_status: balance.status, refunds,
     // Partial refunds need actual tax-reversal evidence. Full refunds return the
     // entire collected tax; dispute debits are NOT subtracted again as refunds.
-    tax_reversal_minor: refunded === 0 ? 0 : refunded === order.amount_total_minor ? tax : null,
+    tax_reversal_minor: refunded === 0 || tax === 0 ? 0 : refunded === order.amount_total_minor ? tax : refundTax?.tax_reversal_minor ?? null,
+    refund_tax_evidence: refundTax,
     adjustments_qualified: false, financial_authority: false,
   };
 }

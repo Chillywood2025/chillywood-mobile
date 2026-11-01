@@ -36,10 +36,10 @@ async function mount(t,options={}){
  '../../_lib/creatorEventAuctionCheckout':{createCreatorEventAuctionCheckout:async a=>{calls.push(['checkout',a.id]);return options.checkout?options.checkout(a):{url:'https://checkout.stripe.com/c/pay/test',launchStrategy:'system_browser',platform:options.platform??'ios'};}},
  '../../_lib/creatorRoomSeatAuctionCheckout':{createCreatorRoomSeatAuctionCheckout:async(a,input)=>{calls.push(['checkout',a.id,input]);return options.checkout?options.checkout(a):{url:'https://checkout.stripe.com/c/pay/test',launchStrategy:'system_browser',platform:options.platform??'ios'};}},
  '../../_lib/creatorRoomSeatAuctions':{listCreatorRoomSeatAuctions:async id=>{calls.push(['list',id]);return options.list?options.list(id):rows;},readCreatorRoomSeatAuctionBidEligibility:async(...args)=>{calls.push(['eligibility',...args]);return options.eligibility?options.eligibility(...args):true;},placeCreatorRoomSeatAuctionBid:async(...args)=>{calls.push(['bid',...args]);return options.bid?options.bid(...args):rows[0];},createCreatorRoomSeatAuction:async input=>{calls.push(['create',input]);return options.create?options.create(input):rows[0];},
- prepareCreatorRoomSeatAuction:async(...args)=>{calls.push(['prepareRoom',...args]);return options.prepareRoom?options.prepareRoom(...args):{roomSessionId:'44444444-4444-4444-8444-444444444444',serverNow:'2099-01-01T00:00:00Z'};},
+ prepareCreatorRoomSeatAuction:async(...args)=>{calls.push(['prepareRoom',...args]);return options.prepareRoom?options.prepareRoom(...args):{roomSessionId:'44444444-4444-4444-8444-444444444444',environment:options.mode??'test',serverNow:'2099-01-01T00:00:00Z'};},
  readPendingCreatorRoomSeatAuction:async()=>options.pendingRead?options.pendingRead():null},
  '../../_lib/accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,getAccountNavigationTreeKey:a=>a?`${a.userId}:${a.sessionGeneration}`:'none',sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&a.userId===b.userId&&a.sessionGeneration===b.sessionGeneration,subscribeToAccountSessionAuthority:f=>{subscribers.add(f);return()=>subscribers.delete(f);}},
- '../../_lib/creatorEventAuctions':{listCreatorEventAuctions:async id=>{calls.push(['list',id]);return options.list?options.list(id):rows;},readCreatorEventAuctionBidEligibility:async(...args)=>{calls.push(['eligibility',...args]);return options.eligibility?options.eligibility(...args):true;},placeCreatorEventAuctionBid:async(...args)=>{calls.push(['bid',...args]);return options.bid?options.bid(...args):row;},createCreatorEventAuction:async input=>{calls.push(['create',input]);return row;}},
+ '../../_lib/creatorEventAuctions':{readCreatorEventAuctionCreationMode:async()=>options.creationMode?options.creationMode():options.mode??'test',listCreatorEventAuctions:async id=>{calls.push(['list',id]);return options.list?options.list(id):rows;},readCreatorEventAuctionBidEligibility:async(...args)=>{calls.push(['eligibility',...args]);return options.eligibility?options.eligibility(...args):true;},placeCreatorEventAuctionBid:async(...args)=>{calls.push(['bid',...args]);return options.bid?options.bid(...args):row;},createCreatorEventAuction:async input=>{calls.push(['create',input]);return row;}},
  '../../_lib/auctionNavigation':load('_lib/auctionNavigation.ts'),
  '../../_lib/creatorTipAmount':load('_lib/creatorTipAmount.ts'),
  '../../_lib/eventSchedule':load('_lib/eventSchedule.ts'),
@@ -171,8 +171,13 @@ test('winner latest-start cutoff uses server clock and background prevents late 
  const h=await mount(t,{rows:[{...row,state:'awarded',isWinner:true,awardAmountMinor:100,serverNow:'2099-01-01T11:30:00Z'}]});assert.equal(h.find('Continue to eligible test payment'),undefined);assert.match(h.text(),/time to open a new checkout has passed/);
  const d=deferred();const pending=await mount(t,{rows:[{...row,state:'awarded',isWinner:true,awardAmountMinor:100}],checkout:()=>d.promise});await pending.press('Continue to eligible test payment');await pending.background('background');await pending.resolve(d,'https://checkout.stripe.com/c/pay/test');assert.equal(pending.calls.filter(c=>c[0]==='browser').length,0);
 });
-test('live bidding stays unavailable while only test checkout is implemented',async t=>{
- const h=await mount(t,{rows:[{...row,environment:'live'}]});assert.equal(h.find('Review bid'),undefined);assert.match(h.text(),/Live auction bidding is not activated/);assert.equal(h.calls.filter(c=>c[0]==='eligibility'||c[0]==='bid'||c[0]==='checkout').length,0);
+test('live auction review is explicit and server eligibility denial cannot submit a bid or payment',async t=>{
+ for(const room of [false,true]){
+  const h=await mount(t,{room,rows:[{...row,environment:'live'}],eligibility:async()=>false});
+  assert.ok(h.find('Review bid'));assert.equal(h.calls.filter(c=>c[0]==='eligibility'||c[0]==='bid'||c[0]==='checkout').length,0);
+  await h.press('Review bid');assert.match(h.text(),/isn’t available for this account/);
+  assert.equal(h.calls.filter(c=>c[0]==='bid'||c[0]==='checkout').length,0);
+ }
 });
 test('creator review rejects checkout windows over 24 hours and accepts the exact upper bound',async t=>{
  const h=await mount(t,{editor:true,startsAt:'2099-01-05T00:00:00Z'});await h.input('2.50','Starting price in USD');await enterTime(h,'Auction closes');await enterTime(h,'Winner payment deadline',{day:'2',hour:'10',minute:'01'});await h.press('Review ticket auction');assert.match(h.text(),/up to 24 hours/);assert.equal(h.find('Confirm and create ticket auction'),undefined);await h.input('00','Winner payment deadline minute');await h.press('Review ticket auction');assert.ok(h.find('Confirm and create ticket auction'));
@@ -267,4 +272,22 @@ test('notification navigation cannot auto-open without active authority or after
  options.routeParams={...options.routeParams,auctionId:'33333333-3333-4333-8333-333333333333'};
  await h.focus(false);await h.focus(true);
  assert.equal(h.all().find(n=>n.type==='Modal').props.visible,false);
+});
+
+test('first live creator auction explicitly reviews server mode before confirmation',async t=>{
+ const h=await mount(t,{editor:true,mode:'live'});
+ await h.input('2.50','Starting price in USD');await enterTime(h,'Auction closes');
+ await enterTime(h,'Winner payment deadline',{hour:'11'});await h.press('Review ticket auction');
+ assert.match(h.text(),/Live auction: the winner may make a real payment/);
+ assert.equal(h.calls.filter(c=>c[0]==='create').length,0);
+ await h.press('Confirm and create ticket auction');
+ assert.equal(h.calls.find(c=>c[0]==='create')[1].environment,'live');
+});
+test('late creator mode cannot restore a review after account replacement',async t=>{
+ const d=deferred();const h=await mount(t,{editor:true,creationMode:()=>d.promise});
+ await h.input('2.50','Starting price in USD');await enterTime(h,'Auction closes');
+ await enterTime(h,'Winner payment deadline',{hour:'11'});await h.press('Review ticket auction');
+ await h.account();await h.resolve(d,'live');
+ assert.equal(h.find('Confirm and create ticket auction'),undefined);
+ assert.equal(h.calls.filter(c=>c[0]==='create').length,0);
 });

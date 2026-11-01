@@ -125,15 +125,15 @@ deny(`update public.creator_payout_accounts set provider_account_id=${literal(re
   /configuration_observation_check/,'raw replacement cannot inherit a matching observation');
 check(accountState(),boundBefore,'rejected replacement preserves the account binding');
 check(eligibility(),eligibleBefore,'rejected replacement preserves matching eligibility atomically');
-sql(`update public.creator_payout_accounts set provider_account_id=${literal(replacement)},
-  provider_configuration_status='unknown',provider_configuration_observed_at=null,provider_configuration_account_id=null where id='${row.id}';`);
-check(eligibility().status,'unknown','cleared replacement invalidates observed configuration');
-check(eligibility().ready,false,'cleared replacement cannot inherit provider readiness');
-check(parse(sql(observe(boundBefore,'match'))).updated,0,'old account observation cannot update the replacement');
+deny(`update public.creator_payout_accounts set provider_account_id=${literal(replacement)},
+  provider_configuration_status='unknown',provider_configuration_observed_at=null,provider_configuration_account_id=null where id='${row.id}';`,
+  /connect_account_binding_immutable/,'even a cleared observation cannot replace an immutable account binding');
+check(accountState(),boundBefore,'failed cleared replacement preserves the original account and observation');
+check(parse(sql(observe(boundBefore,'match'))).updated,1,'original account observation can still refresh its unchanged binding');
 
 sql(`update public.creator_payout_eligibility_records set fraud_hold_active=true,admin_review_status='on_hold',
     eligibility_status='on_hold',eligibility_reason='Synthetic native platform hold',tax_ready=true where creator_user_id='${creator}';
-  update public.creator_payout_accounts set provider_configuration_account_id=${literal(replacement)},provider_configuration_status='match',
+  update public.creator_payout_accounts set provider_configuration_account_id=${literal(account)},provider_configuration_status='match',
     provider_configuration_observed_at=clock_timestamp(),provider_dashboard_type='express' where id='${row.id}';`);
 check(eligibility(),{status:'match',ready:false,payable:false,hold:true,review:'on_hold',reason:'Synthetic native platform hold',tax:true},
   'fresh valid observation preserves platform holds and independent tax state');

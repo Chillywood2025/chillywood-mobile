@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createLiveConnectHostedLink, selectConnectOnboardingRoute } from "../_shared/stripe-connect-live-onboarding.ts";
 
 import {
   authenticateRequest,
@@ -39,6 +40,7 @@ Deno.serve(async (req) => {
 
   let adminClient: SupabaseClientLike | null = null;
   let currentUser: AuthenticatedUser | null = null;
+  let selectedMode: "test" | "live" = "test";
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -72,6 +74,23 @@ Deno.serve(async (req) => {
       return jsonResponse(200, notConfiguredPayload(adminConfig.reason, adminConfig.message, { creatorUserId: currentUser.id }));
     }
     adminClient = adminConfig.client;
+
+    const route = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (route.mode === "test" && route.status && route.status !== "available") return jsonResponse(200, {
+      mode: "test", status: route.status, liveMoneyAction: false, onboardingUrlCreated: false,
+      reason: route.reason,
+      message: route.reason === "live_setup_required"
+        ? "Live payout setup is not configured yet. Sandbox setup is limited to approved testers."
+        : "Complete eligible adult creator status and the current payout terms before starting provider setup.",
+    });
+    if (route.mode === "live") {
+      selectedMode = "live";
+      if (route.status !== "available") return jsonResponse(200, { ...route, liveMoneyAction: false, onboardingUrlCreated: false,
+        message: "Complete creator eligibility and current payout terms, or resolve the existing account transition, before live onboarding." });
+      const secret = Deno.env.get("STRIPE_CONNECT_LIVE_ONBOARDING_KEY") ?? "";
+      if (!/^(sk|rk)_live_[A-Za-z0-9]+$/.test(secret)) return jsonResponse(200, { status: "not_configured", mode: "live", liveMoneyAction: false, onboardingUrlCreated: false });
+      return jsonResponse(200, await createLiveConnectHostedLink(adminClient, currentUser, secret));
+    }
 
     const payoutAccount = await readCreatorPayoutAccount(adminClient, currentUser.id);
     if (!payoutAccount?.provider_account_id) {
@@ -113,12 +132,20 @@ Deno.serve(async (req) => {
       );
     }
 
+    const dispatchRoute = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (dispatchRoute.mode !== "test" || (dispatchRoute.status && dispatchRoute.status !== "available")) {
+      return jsonResponse(200, { status: "onboarding_authority_changed", mode: "test", liveMoneyAction: false, onboardingUrlCreated: false });
+    }
     const link = await createStripeConnectOnboardingLink(
       stripeSecret.secret,
       payoutAccount.provider_account_id,
       redirectUrls.value.returnUrl,
       redirectUrls.value.refreshUrl,
     );
+    const completedRoute = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (completedRoute.mode !== "test" || (completedRoute.status && completedRoute.status !== "available")) {
+      return jsonResponse(200, { status: "onboarding_authority_changed", mode: "test", liveMoneyAction: false, onboardingUrlCreated: false });
+    }
     const onboardingUrl = toText(link.url);
     if (!onboardingUrl) throw new Error("Stripe onboarding link response did not include a URL.");
 
@@ -192,7 +219,7 @@ Deno.serve(async (req) => {
       error: "stripe_connect_onboarding_link_failed",
       liveMoneyAction: false,
       message: sanitizeErrorMessage(error),
-      mode: "test",
+      mode: selectedMode,
       provider: "stripe",
       providerKey: "stripe_connect",
     });

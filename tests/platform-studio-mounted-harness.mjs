@@ -42,11 +42,13 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
   });
   const native={};for(const n of ['View','Text','TextInput','TouchableOpacity','Pressable','ScrollView','ImageBackground','ActivityIndicator','Image','Video'])native[n]=host(n);
   native.Modal=function FixtureModal({visible,children}){return visible?React.createElement(React.Fragment,null,children):null;};
-  Object.assign(native,{StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:'android',select:x=>x.android??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
+  Object.assign(native,{AppState:{currentState:'active',addEventListener:()=>({remove(){}})},StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:'android',select:x=>x.android??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
   const config={branding:{appDisplayName:"Chi'llywood"},features:{creatorSettingsEnabled:true},runtimeControls:{uploads_enabled:true,creator_posting_enabled:true,max_upload_size_mb:500}};
   const snapshot={targets:{premium_subscription:{hasEntitlement:true}}};
   const authorityApi=productionFunctions('_lib/accountSessionAuthority.ts',['sameAccountSessionAuthority'],{});
   const base={
+    ...productionFunctions('_lib/clipStudio.ts',['getClipTrimValidationMessage'],{}),
+    invokeAccountBoundSupabaseMutationRpc:async()=>({data:null,error:null}),
     captureAccountBoundSupabaseMutationSubject:async()=>({accessToken:'synthetic-clip-token',authority:session.authority}),
     getCurrentAccountSessionAuthoritySnapshot:()=>session.authority??null,
     readCreatorAuthoringPrices:async sourceType=>({status:'resolved',subjectUserId:session.user.id,prices:[{priceKey:'fixture-price',productKey:'fixture-product',amountMinor:['vip_pass','channel_subscription'].includes(sourceType)?499:99,currency:'usd',label:['vip_pass','channel_subscription'].includes(sourceType)?'$4.99':'$0.99',environment:'sandbox',provider:'revenuecat_app_store',providerProductId:'fixture-store-product',platform:'ios',status:'sandbox',providerVerified:false,availablePlatforms:['ios','android'],availabilityLabel:'iOS and Android'}]}),
@@ -91,7 +93,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     const imports=name=>{
       if(name==='react')return React;if(name==='react-native')return native;
       if(name==='react-native-safe-area-context')return {useSafeAreaInsets:()=>({top:0,bottom:0,left:0,right:0})};
-      if(name==='expo-router')return {useLocalSearchParams:()=>params,useRouter:()=>router};
+      if(name==='expo-router')return {useLocalSearchParams:()=>params,useRouter:()=>router,useFocusEffect:callback=>React.useEffect(callback,[callback])};
       if(name==='expo-av')return {Video:native.Video,ResizeMode:{CONTAIN:'contain',COVER:'cover'}};
       if(name==='expo-image-picker')return {UIImagePickerPreferredAssetRepresentationMode:{Compatible:'compatible'},launchImageLibraryAsync:(...args)=>{calls.push(['launchImageLibraryAsync',...args]);return mocks.launchImageLibraryAsync?.(...args)??Promise.resolve({canceled:true});}};
       if(name.endsWith('/deviceImagePicker'))return evaluate('_lib/deviceImagePicker.ts');
@@ -99,6 +101,8 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name==='expo-document-picker')return {getDocumentAsync:(...args)=>{calls.push(['getDocumentAsync',...args]);return mocks.getDocumentAsync(...args);}};
       if(name.endsWith('.jpg'))return 1;
       if(name.endsWith('/creator-video-card'))return evaluate('components/creator-media/creator-video-card.tsx');
+      if(name.endsWith('/ClipExportPanel'))return evaluate('components/creator-media/ClipExportPanel.tsx');
+      if(name.endsWith('/deviceVideoPicker'))return evaluate('_lib/deviceVideoPicker.ts');
       if(name.endsWith('/creatorVideoPreview'))return evaluate('_lib/creatorVideoPreview.ts');
       if(name.endsWith('/CreatorContentActionSheet'))return evaluate('components/creator-media/CreatorContentActionSheet.tsx');
       if(name.endsWith('/creatorMonetizationFeatures'))return evaluate('_lib/creatorMonetizationFeatures.ts');
@@ -109,6 +113,9 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name.endsWith('/event-sale-editor'))return evaluate('components/monetization/event-sale-editor.tsx');
       if(name.endsWith('/event-auction-editor'))return {EventAuctionEditor:()=>null};
       if(name.endsWith('/creator-auction-held-earnings'))return {CreatorAuctionHeldEarnings:()=>null};
+      // Cashout has its own production-panel mounted suite; generic Studio
+      // tests here retain that unrelated financial boundary explicitly.
+      if(name.endsWith('/creator-cashout-panel'))return {CreatorCashoutPanel:()=>null};
       if(name.endsWith('/subscription-price-request-status'))return {SubscriptionPriceRequestStatus:()=>null};
       if(name.endsWith('/liveEvents'))return new Proxy(replayPolicy,{get:(target,key)=>{
         if(key in target)return target[key];
@@ -124,7 +131,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
         throw Error(`Unconfigured import ${name}:${String(key)}`);
       }});
     };
-    vm.runInNewContext(code,{exports,require:imports,__DEV__:false,console,Date,Intl,Set,Map,URL,Promise,Math,Error,requestAnimationFrame:f=>{f();return 1;},cancelAnimationFrame:noop,setTimeout:(f)=>{timers.set(++timerId,f);return timerId;},clearTimeout:id=>timers.delete(id)});return exports;
+    vm.runInNewContext(code,{exports,require:imports,__DEV__:false,console,Date,Intl,Set,Map,URL,Promise,Math,Error,requestAnimationFrame:f=>{f();return 1;},cancelAnimationFrame:noop,setTimeout:(f)=>{timers.set(++timerId,f);return timerId;},clearTimeout:id=>timers.delete(id),setInterval:(f)=>{timers.set(++timerId,f);return timerId;},clearInterval:id=>timers.delete(id)});return exports;
   }
   const screen=evaluate('app/channel-settings.tsx');
   // Exercise the app's exact account-keyed navigator JSX rather than pretending

@@ -6,7 +6,7 @@ import { account, connect, creator, clientFor, payoutsFor } from "./stripe-conne
 
 const migration = "20261027034858_creator_connect_observed_configuration.sql";
 test("observed Connect configuration persists through actual SQL, eligibility and client round trip without granting payout authority", { timeout: 240_000 }, async () => {
-  const { db } = await createDatabase({ includeHeldStudio: true, implicitApiGrants: false, excludeMigrations: [migration] });
+  const { db } = await createDatabase({ includeHeldStudio: true, implicitApiGrants: false, excludeMigrations: [migration, "20261101154121_creator_connect_live_observation.sql", "20261101162340_creator_connect_unobserved_readiness.sql", "20261101170000_creator_connect_distinct_mode_bindings.sql", "20261101171600_creator_connect_atomic_mode_projection.sql", "20261101172200_creator_connect_all_mode_setup_admission.sql"] });
   const one = async (sql, args = []) => (await db.query(sql, args)).rows[0];
   const schemaAuthority = async () => (await db.query(`select relname,relacl::text,relrowsecurity,relforcerowsecurity
     from pg_class where oid in ('public.creator_payout_accounts'::regclass,'public.creator_payout_eligibility_records'::regclass) order by relname`)).rows;

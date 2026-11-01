@@ -21,19 +21,23 @@ test('dedicated auction checkout is fail-closed, single-dispatch and revalidates
     expires_at:Math.floor(Date.parse(q.expiresAt)/1000),automatic_tax:{enabled:true,status:'requires_location'},
     payment_method_types:['card'],url:'https://checkout.stripe.com/c/pay/cs_test_Fixture',
     metadata:{auction_quote_id:quote,auction_id:auction,buyer_user_id:buyer,creator_user_id:creator,provider_product_id:'prod_AuctionFixture',environment:'test',rail:'stripe_room_auction',settlement_contract_id:quote,settlement_policy:'auction_platform_net_80_20_v1',commerce_tax_policy_id:quote}};
-  const run=async({configured=true,start=true,release=true,authorityAfter=true,response=valid,claimFields={},nativePayload={},nativeBound=true,recovery=false,providerAccountId='acct_platform',providerTaxCode='txcd_10000000'}={})=>{
+  const run=async({dispatch=true,taxCurrent=true,mode='test',configured=true,start=true,release=true,authorityAfter=true,response=valid,claimFields={},nativePayload={},nativeBound=true,recovery=false,providerAccountId='acct_platform',providerTaxCode='txcd_10000000'}={})=>{
+    const expectedId=mode==='live'?'cs_live_Fixture':valid.id;
+    if(mode==='live'&&response===valid)response={...valid,id:expectedId,livemode:true,
+      url:'https://checkout.stripe.com/c/pay/'+expectedId,metadata:{...valid.metadata,environment:'live'}};
     let handler,fetches=0,reads=0;const calls=[];
-    const env={STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID:'acct_platform',STRIPE_AUCTION_PLATFORM_TEST_KEY:configured?'rk_test_fixture':undefined,STRIPE_ROOM_AUCTION_RETURN_URL:'https://example.test/return'};
-    const client={rpc:async(name,args)=>{calls.push(name);if(name==='prepare_creator_room_auction_platform_checkout')return{data:{...q,startAuthorized:start,...claimFields}};
+    const env={STRIPE_AUCTION_PLATFORM_LIVE_ACCOUNT_ID:'acct_platform',STRIPE_AUCTION_PLATFORM_LIVE_KEY:configured?'rk_live_fixture':undefined,STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID:'acct_platform',STRIPE_AUCTION_PLATFORM_TEST_KEY:configured?'rk_test_fixture':undefined,STRIPE_ROOM_AUCTION_RETURN_URL:'https://example.test/return'};
+    const client={rpc:async(name,args)=>{calls.push(name);if(name==='get_auction_checkout_provider_context')return{data:!dispatch&&calls.filter(c=>c===name).length>1?null:{environment:mode,platformAccountId:'acct_platform'}};if(name==='prepare_creator_room_auction_platform_checkout')return{data:{...q,environment:mode,startAuthorized:start,...claimFields}};
       if(name==='bind_commerce_tax_checkout_policy'){
+        if(!taxCurrent&&calls.filter(c=>c===name).length>1)return {data:{ready:false,reason:'tax_qualification_expired'}};
         assert.equal(args.p_feature,'room_auction');assert.equal(args.p_identity_id,quote);
-        assert.equal(args.p_account_id,'acct_platform');assert.equal(args.p_environment,'test');
+        assert.equal(args.p_account_id,'acct_platform');assert.equal(args.p_environment,mode);
         assert.equal(args.p_product_id,'prod_AuctionFixture');assert.equal(args.p_permitted_scope,'worldwide');
         return{data:{ready:true,policyId:quote,taxBehavior:'inclusive',taxCode:'txcd_10000000',
           liabilityType:'self',liabilityAccountId:null,collectionMode:'automatic'}};
       }
-      if(name==='recover_creator_room_auction_platform_checkout')return{data:recovery?{...q,...claimFields,startAuthorized:false,
-        recoveryAuthorized:true,providerCheckoutSessionId:valid.id}:null};
+      if(name==='recover_creator_room_auction_platform_checkout')return{data:recovery?{...q,environment:mode,...claimFields,startAuthorized:false,
+        recoveryAuthorized:true,providerCheckoutSessionId:expectedId}:null};
       if(name==='bind_creator_room_auction_checkout'){assert.equal(args.p_session_id,response.id);return{error:null};}
       if(name==='bind_google_play_external_checkout'){
         assert.equal(args.p_feature,'room_seat_auction');
@@ -61,9 +65,9 @@ test('dedicated auction checkout is fail-closed, single-dispatch and revalidates
       }
       if(url==='https://api.stripe.com/v1/products/prod_AuctionFixture'){
         assert.equal(request.method,'GET');
-        return Response.json({object:'product',id:'prod_AuctionFixture',livemode:false,active:true,tax_code:providerTaxCode});
+        return Response.json({object:'product',id:'prod_AuctionFixture',livemode:mode==='live',active:true,tax_code:providerTaxCode});
       }
-      fetches++;assert.equal(url,'https://api.stripe.com/v1/checkout/sessions'+(recovery?'/'+valid.id:''));assert.equal(request.headers['Stripe-Account'],undefined);
+      fetches++;assert.equal(url,'https://api.stripe.com/v1/checkout/sessions'+(recovery?'/'+expectedId:''));assert.equal(request.headers['Stripe-Account'],undefined);
       assert.equal(request.headers['Idempotency-Key'],`room-auction-platform-v1-${quote}`);
       assert.equal(request.headers['Stripe-Version'],'2026-10-28.endive');
       if(recovery){assert.equal(request.method,'GET');assert.equal(request.body,undefined);return Response.json(response);}
@@ -100,6 +104,8 @@ test('dedicated auction checkout is fail-closed, single-dispatch and revalidates
     finally{globalThis.fetch=oldFetch;}
   };
   assert.equal((await run({configured:false})).fetches,0);
+  assert.equal((await run({mode:'live',dispatch:false})).fetches,0,'stop or provider revocation during GETs prevents POST');
+  assert.equal((await run({mode:'live',taxCurrent:false})).fetches,0,'tax revocation during GETs prevents POST');
   assert.equal((await run({providerAccountId:'acct_wrong'})).fetches,0,'wrong key account cannot create checkout');
   assert.equal((await run({providerTaxCode:'txcd_99999999'})).fetches,0,'provider product tax category must match reviewed policy');
   assert.equal((await run({providerTaxCode:null})).fetches,0,'missing provider tax category cannot use account defaults');
@@ -114,6 +120,12 @@ test('dedicated auction checkout is fail-closed, single-dispatch and revalidates
   const wrongRecovered=await run({start:false,recovery:true,response:{...valid,id:'cs_test_Different'}});
   assert.equal(wrongRecovered.body.checkoutUrl,undefined);
   assert.equal(wrongRecovered.fetches,1,'mismatched recovery cannot fall back to creating a new payment');
+  const live=await run({mode:'live'});assert.equal(live.body.status,'checkout_ready');assert.equal(live.body.liveMoneyAction,true);
+  const liveRecovery=await run({mode:'live',start:false,recovery:true});assert.equal(liveRecovery.body.status,'checkout_ready');
+  assert.equal(liveRecovery.body.liveMoneyAction,false,'GET recovery is not a new live charge');
+  const liveMissing=await run({mode:'live',configured:false});assert.equal(liveMissing.fetches,0);
+  assert.ok(!liveMissing.calls.includes('prepare_creator_room_auction_platform_checkout'),'missing live key does not consume claim');
+  const liveMismatch=await run({mode:'live',response:{...valid}});assert.equal(liveMismatch.body.checkoutUrl,undefined);
   const good=await run();assert.equal(good.fetches,1);assert.equal(good.body.status,'checkout_ready');assert.equal(good.body.quoteId,quote);
   // Inclusive prices retain the full bid in amount_subtotal and amount_total;
   // a nonzero tax breakdown is included, never added on top of the winning bid.

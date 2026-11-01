@@ -9,8 +9,12 @@ Deno.serve(async req => {
   let event;
   try { event = JSON.parse(raw); } catch { return jsonResponse(400, { error: "invalid_event" }); }
   const platform = event?.account === undefined;
-  const platformAccount = platform ? readOptionalEnv("STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID") ?? undefined : undefined;
-  const secret = readOptionalEnv(platform ? "STRIPE_EVENT_AUCTION_PLATFORM_WEBHOOK_SECRET" : "STRIPE_EVENT_AUCTION_WEBHOOK_SECRET");
+  if (typeof event?.livemode !== "boolean") return jsonResponse(400, { error: "event_mode_required" });
+  const live = event.livemode === true;
+  const platformAccount = platform ? readOptionalEnv(live ? "STRIPE_AUCTION_PLATFORM_LIVE_ACCOUNT_ID" : "STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID") ?? undefined : undefined;
+  const secret = readOptionalEnv(platform
+    ? live ? "STRIPE_EVENT_AUCTION_PLATFORM_LIVE_WEBHOOK_SECRET" : "STRIPE_EVENT_AUCTION_PLATFORM_WEBHOOK_SECRET"
+    : live ? "STRIPE_EVENT_AUCTION_LIVE_WEBHOOK_SECRET" : "STRIPE_EVENT_AUCTION_WEBHOOK_SECRET");
   if (!secret?.startsWith("whsec_") || (platform && !/^acct_[A-Za-z0-9]+$/.test(platformAccount ?? "")))
     return jsonResponse(503, { error: "auction_webhook_not_configured" });
   if (!await verifyStripeWebhookSignature(raw, req.headers.get("stripe-signature"), secret)) {

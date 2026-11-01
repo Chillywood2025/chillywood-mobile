@@ -1,0 +1,12 @@
+begin;
+select plan(8);
+select ok(has_function_privilege('authenticated','public.review_creator_merch_live_publication(uuid,timestamptz)','execute'),'creator can request review');
+select ok(has_function_privilege('authenticated','public.confirm_creator_merch_live_publication(uuid)','execute'),'creator can explicitly confirm');
+select ok(not has_function_privilege('anon','public.confirm_creator_merch_live_publication(uuid)','execute'),'anonymous cannot publish');
+select ok(not has_function_privilege('service_role','public.confirm_creator_merch_live_publication(uuid)','execute'),'service cannot impersonate creator consent');
+select ok(not has_table_privilege('authenticated','private.merch_publication_reviews','insert'),'creator cannot forge review');
+select ok(not has_table_privilege('authenticated','private.merch_publication_confirmation_context','insert'),'creator cannot forge confirmation context');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_publication_reviews'::regclass),'review table is private and forced RLS');
+select ok(not has_function_privilege('authenticated','private.merch_live_publication_authority(public.merch_products)','execute'),'qualification helper not client callable');
+select * from finish();
+rollback;

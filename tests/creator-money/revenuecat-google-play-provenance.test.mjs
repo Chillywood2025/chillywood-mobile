@@ -638,8 +638,10 @@ test("all removal lifecycle events use one atomic cross-domain original-transact
 
   const eventSet = sliceBetween(webhook, "const TERMINAL_DISPATCH_EVENT_TYPES", "const isRecord");
   for (const eventType of [
-    "CANCELLATION", "BILLING_ISSUE", "EXPIRATION", "REFUND", "REVOCATION", "SUBSCRIPTION_PAUSED",
+    "CANCELLATION", "BILLING_ISSUE", "EXPIRATION", "REFUND", "REVOCATION",
   ]) assert.match(eventSet, new RegExp(`"${eventType}"`, "u"), eventType);
+  assert.doesNotMatch(eventSet, /"SUBSCRIPTION_PAUSED"/u,
+    "scheduled pause is not expiration or revocation");
 
   const dispatcher = sliceBetween(
     closeout,

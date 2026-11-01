@@ -22,3 +22,12 @@ test('late RPC response cannot become a new account auction and malformed eligib
  let resolve;const d=new Promise(r=>{resolve=r;});const h=harness(()=>d);const pending=h.api.listCreatorEventAuctions('event');await new Promise(r=>setImmediate(r));h.switch();resolve([row]);await assert.rejects(pending);
  for(const value of [null,{},true,{available:'true'},{available:false}])assert.equal(await harness(()=>value).api.readCreatorEventAuctionBidEligibility('auction',100),false);
 });
+test('creator review accepts only exact server mode and rejects stale-account mode responses',async()=>{
+ for(const mode of ['test','live']){
+  const h=harness(()=>mode);assert.equal(await h.api.readCreatorEventAuctionCreationMode(),mode);
+  assert.equal(h.calls[0].name,'read_creator_auction_creation_mode');assert.equal(h.calls[0].args.p_feature,'event_auction');
+ }
+ for(const value of [null,{},'production','LIVE'])await assert.rejects(harness(()=>value).api.readCreatorEventAuctionCreationMode());
+ let resolve;const h=harness(()=>new Promise(r=>{resolve=r;}));const pending=h.api.readCreatorEventAuctionCreationMode();
+ await new Promise(r=>setImmediate(r));h.switch();resolve('live');await assert.rejects(pending);
+});

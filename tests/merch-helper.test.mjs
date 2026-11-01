@@ -5,6 +5,19 @@ import test from 'node:test';
 import {webcrypto} from 'node:crypto';
 import ts from 'typescript';
 
+test('known fee metadata remains nonfinal and fails closed for unsafe amounts or unsupported policy',()=>{
+ const h=harness();
+ const known={policyVersion:'known_costs_future_unpaid_adjustments_v1',knownFeeMinor:36,knownCreatorShareMinor:778,
+  currentEvidence:true,released:false,finalFees:false,futureAdjustmentsPossible:true,bankDebitAllowed:false};
+ const parsed=h.api.parseMerchTaxFeeMetadata({knownCostPolicy:known});
+ assert.equal(parsed.knownCostPolicy.knownFeeMinor,36);assert.equal(parsed.knownCostPolicy.knownCreatorShareMinor,778);
+ assert.equal(parsed.finalCreatorShareMinor,null);assert.equal(parsed.financialAuthority,false);
+ for(const patch of [{finalFees:true},{futureAdjustmentsPossible:false},{bankDebitAllowed:true},{knownFeeMinor:-1},
+  {knownCreatorShareMinor:Number.MAX_SAFE_INTEGER+1},{policyVersion:'unknown'},{currentEvidence:'true'}])
+  assert.equal(h.api.parseMerchTaxFeeMetadata({knownCostPolicy:{...known,...patch}}).knownCostPolicy,null);
+ assert.equal(h.api.parseMerchTaxFeeMetadata({knownCostPolicy:{...known,currentEvidence:false}}).knownCostPolicy.currentEvidence,false);
+});
+
 function harness({reply,request,open,timers,rpcReply}={}) {
   let current=true;
   const calls=[],opened=[],subject={accessToken:'synthetic-token',authority:{userId:'buyer'}};

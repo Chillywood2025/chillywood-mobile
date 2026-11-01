@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { confirmDistinctLiveConnectSetup, createOrRecoverLiveConnectAccount, selectConnectOnboardingRoute } from "../_shared/stripe-connect-live-onboarding.ts";
 
 import {
   authenticateRequest,
@@ -38,6 +39,7 @@ Deno.serve(async (req) => {
 
   let adminClient: SupabaseClientLike | null = null;
   let currentUser: AuthenticatedUser | null = null;
+  let selectedMode: "test" | "live" = "test";
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -67,7 +69,7 @@ Deno.serve(async (req) => {
     if (accountType && accountType !== "express") {
       return jsonResponse(400, {
         error: "unsupported_account_type",
-        message: "Stripe Connect payout setup is test-mode Express only in this pass.",
+        message: "Stripe Connect payout setup requires the server-qualified Express configuration.",
       });
     }
 
@@ -76,6 +78,30 @@ Deno.serve(async (req) => {
       return jsonResponse(200, notConfiguredPayload(adminConfig.reason, adminConfig.message, { creatorUserId: currentUser.id }));
     }
     adminClient = adminConfig.client;
+
+    let route = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (route.mode === "test" && route.status && route.status !== "available") return jsonResponse(200, {
+      mode: "test", status: route.status, liveMoneyAction: false, accountCreated: false,
+      reason: route.reason,
+      message: route.reason === "live_setup_required"
+        ? "Live payout setup is not configured yet. Sandbox setup is limited to approved testers."
+        : "Complete eligible adult creator status and the current payout terms before starting provider setup.",
+    });
+    if (route.mode === "live" && route.status === "live_setup_confirmation_required" && parsed.value.live_setup_disclosure === "distinct-live-account-v1") {
+      route = await confirmDistinctLiveConnectSetup(adminClient, currentUser, parsed.value.live_setup_disclosure);
+    }
+    if (route.mode === "live") {
+      selectedMode = "live";
+      if (route.status !== "available") return jsonResponse(200, { ...route, liveMoneyAction: false, accountCreated: false,
+        message: route.status === "live_setup_confirmation_required"
+          ? "Set up a separate live Stripe payout account? Your test account and test history will stay unchanged. Stripe will ask you to complete its identity, bank and agreement steps. This does not enable payments or payouts."
+          : route.status === "account_migration_review_required"
+          ? "Your existing payout account needs a reviewed transition. It has not been replaced."
+          : "Live onboarding requires eligible creator status, current payout terms and qualified provider setup." });
+      const secret = Deno.env.get("STRIPE_CONNECT_LIVE_ONBOARDING_KEY") ?? "";
+      if (!/^(sk|rk)_live_[A-Za-z0-9]+$/.test(secret)) return jsonResponse(200, { status: "not_configured", mode: "live", liveMoneyAction: false, accountCreated: false });
+      return jsonResponse(200, await createOrRecoverLiveConnectAccount(adminClient, currentUser, secret));
+    }
 
     const existingAccount = await readCreatorPayoutAccount(adminClient, currentUser.id);
     const stripeSecret = readStripeTestSecret();
@@ -129,6 +155,10 @@ Deno.serve(async (req) => {
       });
     }
 
+    const dispatchRoute = await selectConnectOnboardingRoute(adminClient, currentUser);
+    if (dispatchRoute.mode !== "test" || (dispatchRoute.status && dispatchRoute.status !== "available")) {
+      return jsonResponse(200, { status: "onboarding_authority_changed", mode: "test", liveMoneyAction: false, accountCreated: false });
+    }
     const stripeAccount = await createStripeConnectAccount(stripeSecret.secret, currentUser);
     const normalizedAccount = normalizeStripeAccount(stripeAccount);
     const accountRow = await upsertCreatorPayoutAccountFromStripe(
@@ -208,7 +238,7 @@ Deno.serve(async (req) => {
       message: sanitizeErrorMessage(error),
       provider: "stripe",
       providerKey: "stripe_connect",
-      mode: "test",
+      mode: selectedMode,
     });
   }
 });

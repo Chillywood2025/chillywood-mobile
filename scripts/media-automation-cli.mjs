@@ -17,6 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { buildHlsOutputInventory } from "./lib/hls-output-inventory.mjs";
+import { createLinkedSecondaryMediaProducer } from "./lib/secondary-media-cli-producer.mjs";
 
 const cityLightsSourceId = "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1";
 const autoDetectConfirmation = "I_UNDERSTAND_AUTO_DETECT_BATCH";
@@ -466,63 +467,6 @@ function runFfmpegDecode(target) {
   });
 }
 
-function uploadObjectToPublicPlayback(key, filePath) {
-  const safeKey = safeOutputPrefix(path.dirname(key) === "." ? key : `${path.dirname(key)}/`).slice(0, -1) === key ? key : key;
-  if (!safeKey.startsWith("playback/public/auto/")) failClosed("r2_upload_key_outside_auto_public_prefix");
-  if (/(^|\/)(originals?|masters?|sources?|uploads|private|premium|processing|moderation[-_]blocked|unscanned)(\/|$)/i.test(safeKey)) {
-    failClosed("r2_upload_key_forbidden_prefix");
-  }
-  const result = spawnSync(
-    wranglerCommand,
-    [
-      "wrangler",
-      "r2",
-      "object",
-      "put",
-      `${publicPlaybackBucket}/${safeKey}`,
-      "--file",
-      filePath,
-      "--remote",
-      "--content-type",
-      contentTypeFor(filePath),
-      "--cache-control",
-      cacheControlFor(filePath),
-      "--force",
-    ],
-    {
-      cwd: repoRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 120000,
-      maxBuffer: 20 * 1024 * 1024,
-    },
-  );
-  assertNoSecretLikeText(result.stdout || "");
-  assertNoSecretLikeText(result.stderr || "");
-  if (result.status !== 0) failClosed("r2_public_playback_upload_failed", { key: safeKey, stderrRedacted: true });
-  return {
-    key: safeKey,
-    contentType: contentTypeFor(filePath),
-    cacheControl: cacheControlFor(filePath),
-    bytes: statSync(filePath).size,
-  };
-}
-
-function uploadHlsTree(outputRoot, outputPrefix, renditions) {
-  const uploaded = [];
-  const uploadFile = (relativePath) => {
-    const localPath = path.join(outputRoot, relativePath);
-    const key = `${outputPrefix}${relativePath.split(path.sep).join("/")}`;
-    uploaded.push(uploadObjectToPublicPlayback(key, localPath));
-  };
-  uploadFile("master.m3u8");
-  for (const rendition of renditions) {
-    uploadFile(path.join(rendition.label, "index.m3u8"));
-    for (const segment of rendition.segments) uploadFile(path.join(rendition.label, segment));
-  }
-  return uploaded;
-}
-
 async function fetchPublicObject(pathname) {
   const response = await fetch(`https://${publicPlaybackHost}/${pathname}`, { signal: AbortSignal.timeout(60000) });
   const bytes = new Uint8Array(await response.arrayBuffer());
@@ -811,8 +755,10 @@ function auditAndPromoteRows({ jobId, sourceId, outputPrefix, renditionLabels })
 
 async function executeCandidate(candidate) {
   const batchId = `auto-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 12)}`;
-  const outputPrefix = safeOutputPrefix(`playback/public/auto/${candidate.sourceType}/${candidate.sourceId}/${batchId}/`);
   const jobId = randomUUID();
+  const outputPrefix = safeOutputPrefix(`playback/public/auto/${candidate.sourceType}/${candidate.sourceId}/${batchId}/${jobId}/`);
+  const producerTransport = createLinkedSecondaryMediaProducer({ query: runSupabaseLinkedQuery, bucket: publicPlaybackBucket });
+  const producer = await producerTransport.begin({ sourceId: candidate.sourceId, producerId: jobId, outputPrefix });
   const metadata = readTranscodeSourceMetadata(candidate.sourceId);
   const download = await downloadTranscodeSource(candidate);
   const outputRoot = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-auto-hls-"));
@@ -850,7 +796,9 @@ async function executeCandidate(candidate) {
     });
     runFfmpegDecode(masterPath);
     updateJobStatus(jobId, "uploading");
-    const uploaded = uploadHlsTree(outputRoot, outputPrefix, generated);
+    const durableOutput = await producerTransport.persist({ producer, inventory: outputInventory, outputRoot,
+      contentType: object => contentTypeFor(object.relativePath), cacheControl: object => cacheControlFor(object.relativePath) });
+    const uploaded = outputInventory.objects.map(object => ({ key: object.objectKey, bytes: object.sizeBytes }));
     uploadedKeys.push(...uploaded.map((object) => object.key));
     const publicProof = await verifyUploadedHls(outputPrefix, generated);
     insertPendingRenditionRows({
@@ -887,6 +835,7 @@ async function executeCandidate(candidate) {
       renditionLabels: generated.map((rendition) => rendition.label),
       uploadedObjectCount: uploaded.length,
       outputInventory,
+      durableOutput,
       publicProof,
       rollbackScope: {
         source_id: candidate.sourceId,

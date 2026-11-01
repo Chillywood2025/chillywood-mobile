@@ -8,7 +8,10 @@ import {runMerchCheckoutDispatchRaces} from '../../scripts/lib/merch-checkout-di
 
 const migration='20261101045810_merch_checkout_dispatch_provenance.sql';
 test('real Edge + full SQL: no-dispatch proof, actor gates, retries, rollback and ambiguous holds', {timeout:240000}, async()=>{
- const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
+ const successors=fs.readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')&&name>=migration).sort();
+ // Exercise the old/new dispatch boundary in chronological schema order, then
+ // replay every successor. Never omit a live binding beneath dependent guards.
+ const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:successors});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const root=()=>db.exec('reset role');
  const service=async()=>{await root();await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false);set role service_role`);};
@@ -143,5 +146,10 @@ test('real Edge + full SQL: no-dispatch proof, actor gates, retries, rollback an
   assert.equal(retry.provider[0].options.headers['Idempotency-Key'],uncertain.provider[0].options.headers['Idempotency-Key']);
   assert.equal(String(retry.provider[0].options.body),String(uncertain.provider[0].options.body),'immutable provider parameters on retry');
   assert.equal((await transition(uncertainKey,'abort')).aborted,false);
+  await root();
+  for(const file of successors.filter(name=>name!==migration))await db.exec(fs.readFileSync(`supabase/migrations/${file}`,'utf8'));
+  assert.equal((await transition(uncertainKey,'abort')).aborted,false,'current guards retain the ambiguous dispatch hold');
+  await root();
+  assert.equal(await one('select count(*)::int from public.creator_earnings_ledger'),0,'successor replay does not create payable money');
  }finally{await db.close();}
 });

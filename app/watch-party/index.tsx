@@ -1,3 +1,4 @@
+import { RoomSeatAuctionEntry } from "../../components/monetization/room-seat-auction-entry";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1287,6 +1288,7 @@ export default function WatchPartyIndexScreen() {
   }, [captureWaitingOwner, entryTitleName, paidTicketSeatLimit, paidWatchPartyCheckoutAvailable, partyRoomEntryOffer?.priceCents, partyRoomPrice, preparedRoom, preview, waitingOwnerKey]);
 
   const onBuyPaidTicketAndJoin = useCallback(async () => {
+    if (paidTicketGate?.offer?.provider === "stripe_room_auction") return;
     if (!paidWatchPartyCheckoutAvailable) {
       setPaidTicketNotice("Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.");
       return;
@@ -1318,7 +1320,7 @@ export default function WatchPartyIndexScreen() {
     } finally {
       setPaidTicketBusy(false);
     }
-  }, [isSignedIn, navigateToPreviewRoom, paidWatchPartyCheckoutAvailable, preparedRoom, preview, router]);
+  }, [isSignedIn, navigateToPreviewRoom, paidTicketGate?.offer?.provider, paidWatchPartyCheckoutAvailable, preparedRoom, preview, router]);
 
   const onResolveJoinAccess = useCallback(async (action: "purchase" | "restore") => {
     if (!pendingAccessPreview || !pendingAccessDecision || !accessSheetReason) {
@@ -2064,7 +2066,13 @@ export default function WatchPartyIndexScreen() {
     && !!paidTicketGate.currency
     ? formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents, paidTicketGate.currency)
     : null;
-  const paidTicketCheckoutReady = paidWatchPartyCheckoutAvailable && !!paidTicketPriceLabel;
+  const auctionOnly = paidTicketGate?.offer?.provider === "stripe_room_auction";
+  const auctionTarget = preview ?? preparedRoom;
+  const partyAuctionEntry = auctionOnly && auctionTarget?.room.partyId && auctionTarget.room.hostUserId ? <>
+    <AppText scale="footnote">Price set by the winning bid. Review this Party Room admission auction; only the eligible winner can open checkout.</AppText>
+    <RoomSeatAuctionEntry partyId={auctionTarget.room.partyId} creatorId={auctionTarget.room.hostUserId} sourceKind="party_admission" />
+  </> : null;
+  const paidTicketCheckoutReady = !auctionOnly && paidWatchPartyCheckoutAvailable && !!paidTicketPriceLabel;
   const savedPartyRoomEntryPrice = partyRoomEntryOffer
     ? formatPaidWatchPartyTicketPrice(partyRoomEntryOffer.priceCents, partyRoomEntryOffer.currency)
     : null;
@@ -2255,7 +2263,7 @@ export default function WatchPartyIndexScreen() {
                       : "Viewer preview: Free entry to this exact Party Room. No Party Room Pass is required."}
                 </AppText>
               </>
-            ) : paidTicketGate?.requiresPurchase ? (
+            ) : auctionOnly ? partyAuctionEntry : paidTicketGate?.requiresPurchase ? (
               <>
                 <TouchableOpacity
                   style={[styles.generateCodeButton, (paidTicketBusy || !paidTicketCheckoutReady) && styles.generateCodeButtonDisabled]}
@@ -2529,7 +2537,7 @@ export default function WatchPartyIndexScreen() {
                   </Pressable>
                 </View>
                 {joinError ? <AppText scale="footnote" style={styles.errorText}>{joinError}</AppText> : null}
-                {paidTicketGate?.requiresPurchase ? (
+                {auctionOnly ? partyAuctionEntry : paidTicketGate?.requiresPurchase ? (
                   <View style={styles.inlineTicketGate}>
                     <AppText scale="subhead" style={styles.inlineTicketGateTitle}>Party Room Pass required</AppText>
                     <AppText scale="footnote" style={styles.inlineTicketGateBody}>

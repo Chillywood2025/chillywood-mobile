@@ -22,6 +22,211 @@
   },
   "components": [
     {
+      "supportedPlatforms": [
+        "shared"
+      ],
+      "approvalLevel": 4,
+      "guard": "guard:autonomous-component-inventory",
+      "physicalProofRequired": false,
+      "id": "creator_clip_export_worker",
+      "owningSystem": "creator_media",
+      "componentType": "foundation_only_off",
+      "paths": [
+        "ops/clip-export-worker/chillywood-clip-export.service",
+        "ops/clip-export-worker/chillywood-clip-export.timer",
+        "scripts/clip-export-worker-cli.mjs",
+        "supabase/migrations/20261101141646_creator_clip_export_jobs.sql"
+      ],
+      "schedulerCadence": "template disabled; bounded single job every30 seconds only after host and worker qualification",
+      "allowedReads": [
+        "exact owned source generation and approved watermark bytes"
+      ],
+      "allowedWrites": [
+        "private create-only export bytes and immutable receipts",
+        "pending-scan draft under exact lease and owner"
+      ],
+      "forbiddenScope": [
+        "silent activation",
+        "original overwrite",
+        "automatic publication",
+        "cross-account media",
+        "unqualified deletion"
+      ],
+      "proof": "tests/clip-export-worker.test.mjs and tests/clip-export-database.test.mjs",
+      "killSwitch": "disable private Clip worker gate and stop systemd timer",
+      "rollback": "stop admission; preserve original bytes, pending jobs and immutable output receipts",
+      "deploymentState": "template_disabled"
+    },
+    {
+      "supportedPlatforms": [
+        "shared"
+      ],
+      "approvalLevel": 4,
+      "guard": "guard:autonomous-component-inventory",
+      "physicalProofRequired": false,
+      "id": "secondary_media_expiry_consumer",
+      "owningSystem": "privacy_compliance",
+      "componentType": "foundation_only_off",
+      "paths": [
+        "scripts/lib/secondary-media-expiry.mjs",
+        "supabase/migrations/20261101142934_secondary_media_dormant_expiry.sql"
+      ],
+      "schedulerCadence": "none installed; separately authorized exact-object execution only",
+      "allowedReads": [
+        "qualified immutable object identity",
+        "current owner, legal holds and all live references"
+      ],
+      "allowedWrites": [
+        "permanent claim fence and verified expiry outcome within separately approved scope"
+      ],
+      "forbiddenScope": [
+        "unqualified historic inventory",
+        "automatic activation",
+        "unapproved irreversible deletion",
+        "replacement object deletion"
+      ],
+      "proof": "tests/secondary-media-expiry.test.mjs and tests/secondary-media-producer-runtime.test.mjs",
+      "killSwitch": "disable exact provider qualification and stop consumer invocation",
+      "rollback": "stop dispatch; preserve all permanent claims and unknown outcomes for reconciliation",
+      "deploymentState": "foundation_only_off"
+    },
+    {
+      "supportedPlatforms": [
+        "shared"
+      ],
+      "approvalLevel": 4,
+      "guard": "guard:autonomous-component-inventory",
+      "physicalProofRequired": false,
+      "id": "creator_cashout_execution",
+      "owningSystem": "money_flow_control",
+      "componentType": "foundation_only_off",
+      "paths": [
+        "supabase/functions/creator-cashout-driver/index.ts",
+        "supabase/functions/creator-cashout-worker/index.ts",
+        "supabase/functions/creator-cashout-fee-import/index.ts",
+        "supabase/functions/creator-cashout-webhook/index.ts",
+        "supabase/migrations/20261101141656_creator_cashout_execution_lifecycle.sql"
+      ],
+      "schedulerCadence": "none installed; bounded explicit driver admission behind money controls and exact qualification",
+      "allowedReads": [
+        "accepted creator cashout terms",
+        "exact provider account, destination, balance and fee evidence"
+      ],
+      "allowedWrites": [
+        "durable operation and accounting records",
+        "qualified funding and bank payout dispatch only within separately authorized financial scope"
+      ],
+      "forbiddenScope": [
+        "silent money activation",
+        "unknown-outcome retry POST",
+        "unaccepted fees",
+        "automatic bank debit",
+        "new credentials"
+      ],
+      "proof": "tests/creator-money/cashout-execution-runtime.test.mjs and tests/creator-money/cashout-execution-database.test.mjs",
+      "killSwitch": "cashout_enabled, payouts_enabled and live_money_enabled OFF; qualifications unseeded",
+      "rollback": "stop new dispatch, preserve reserves and reconcile existing external outcomes",
+      "deploymentState": "foundation_only_off"
+    },
+    {
+      "supportedPlatforms": [
+        "shared"
+      ],
+      "approvalLevel": 4,
+      "guard": "guard:autonomous-component-inventory",
+      "physicalProofRequired": false,
+      "id": "revenuecat_pending_snapshot_worker",
+      "owningSystem": "premium_entitlements",
+      "componentType": "foundation_only_off",
+      "paths": [
+        "supabase/functions/revenuecat-pending-reconcile/index.ts",
+        "supabase/migrations/20261101151722_revenuecat_pending_snapshot_worker.sql"
+      ],
+      "schedulerCadence": "none installed; bounded single pending event behind separately qualified mode gate",
+      "allowedReads": [
+        "exact project/customer/store/current subscription and complete transaction history"
+      ],
+      "allowedWrites": [
+        "immutable snapshot receipt and exact existing access projection"
+      ],
+      "forbiddenScope": [
+        "unproven refund resurrection",
+        "money or earnings changes",
+        "provider transaction writes",
+        "silent activation"
+      ],
+      "proof": "tests/creator-money/revenuecat-pending-snapshot.test.mjs",
+      "killSwitch": "private.revenuecat_snapshot_worker_modes.enabled=false",
+      "rollback": "disable claim admission; retain event and prior terminal graph evidence",
+      "deploymentState": "foundation_only_off"
+    },
+    {
+      "supportedPlatforms": [
+        "shared"
+      ],
+      "approvalLevel": 4,
+      "guard": "guard:autonomous-component-inventory",
+      "physicalProofRequired": false,
+      "id": "commerce_fee_accounting_queue",
+      "owningSystem": "money_flow_control",
+      "componentType": "registered_surface",
+      "paths": [
+        "supabase/functions/_shared/commerce-fee-accounting-drain.ts",
+        "supabase/migrations/20261101152800_commerce_fee_accounting_queue.sql"
+      ],
+      "schedulerCadence": "no new scheduler; bounded exact-source drain after existing provider observation completion",
+      "allowedReads": [
+        "immutable fee/source snapshots and exact accepted terms"
+      ],
+      "allowedWrites": [
+        "qualified earnings and future-only adjustment records",
+        "bounded queue completion and retry state"
+      ],
+      "forbiddenScope": [
+        "bank debit",
+        "unaccepted fee policy",
+        "guessed zero costs",
+        "positive release with disabled money controls"
+      ],
+      "proof": "tests/creator-money/commerce-payable-bridge-postgres.test.mjs",
+      "killSwitch": "stop processor invocation; existing positive release controls remain authoritative",
+      "rollback": "stop admission; never erase immutable debt, credits or source observations",
+      "deploymentState": "source_complete"
+    },
+    {
+      "supportedPlatforms": [
+        "shared"
+      ],
+      "approvalLevel": 4,
+      "guard": "guard:autonomous-component-inventory",
+      "physicalProofRequired": false,
+      "id": "owner_reconciliation_health_monitor",
+      "owningSystem": "observability",
+      "componentType": "registered_surface",
+      "paths": [
+        "supabase/migrations/20261101145618_owner_reconciliation_alert_delivery.sql",
+        "components/admin/owner-reconciliation-health.tsx"
+      ],
+      "schedulerCadence": "source migration installs five-minute PostgreSQL diagnostic monitor; no financial driver enablement",
+      "allowedReads": [
+        "bounded health snapshot and exact current owner notification preferences"
+      ],
+      "allowedWrites": [
+        "deduplicated owner incident/recovery notices and existing notification outbox"
+      ],
+      "forbiddenScope": [
+        "money movement",
+        "qualification renewal",
+        "reconciliation driver activation",
+        "non-owner delivery",
+        "external recipient invention"
+      ],
+      "proof": "tests/creator-money/merch-owner-alerts.test.mjs and tests/creator-money/merch-reconciliation-health.test.mjs",
+      "killSwitch": "unschedule merch-reconciliation-owner-health and preserve incident history",
+      "rollback": "stop monitor, retain delivery and incident records without replay",
+      "deploymentState": "source_complete"
+    },
+    {
       "id": "auction_approved_automation",
       "owningSystem": "creator_commerce",
       "componentType": "foundation_only_off",

@@ -18,11 +18,12 @@ export type MerchProduct = MerchPhotoFields & {
   id: string; creatorId: string; title: string; description: string | null;
   imageUrl: string | null; priceMinor: number; currency: string;
   publicationStatus: "draft" | "published" | "paused" | "archived";
-  stockQuantity: number; availableQuantity: number; environment: "sandbox";
+  stockQuantity: number; availableQuantity: number; environment: "sandbox" | "production";
   checkoutAvailable: boolean; checkoutReason: string; updatedAt: string; shippingSummary: string;
   variantMode?: "simple" | "options"; variants?: MerchVariant[];
 };
 export type MerchOrder = {
+  knownCostPolicy?: { knownFeeMinor: number; knownCreatorShareMinor: number; currentEvidence: boolean; released: boolean; finalFees: false; futureAdjustmentsPossible: true } | null;
   shippingTrackingMode?: "tracked" | "untracked" | null; verifiedPurchaseAt?: string | null; unitPriceMinor?: number | null;
   returnPolicyVersion?: string | null; returnWindowDays?: number | null;
   verifiedDeliveryAt?: string | null; returnWindowEndsAt?: string | null;
@@ -62,6 +63,10 @@ export function createMerchCheckoutAttemptId() {
 }
 
 const MERCH_ERRORS: Record<string, string> = {
+  merch_publish_review_required: "Review this listing and explicitly confirm real purchases before publishing.",
+  merch_publish_review_changed: "Your publication review expired or the product changed. Review the current listing again.",
+  merch_publish_eligibility_changed: "Live publishing eligibility changed. Refresh the listing and review the current verification requirements.",
+  merch_publish_history_requires_copy: "This test listing has checkout history. Create a separate live-ready draft to preserve those orders.",
   merch_current_session_required: "Sign in again to continue with your shop or orders.",
   merch_creator_required: "Only the creator can manage this shop.",
   merch_platform_unavailable: "This creator's Platform is not available to your account.",
@@ -131,14 +136,22 @@ export function parseMerchDisputeMetadata(row: Record<string, unknown>, now = Da
     providerDisputeCheckedAt: checked, providerDisputeFreshUntil: until };
 }
 
-/** Phase one has no qualified fee importer. Preserve observed arithmetic and
- * historical receipts, but never present an absent or forged fee as final net. */
+/** Known costs never claim that future provider fees cannot arrive. */
 export function parseMerchTaxFeeMetadata(row: Record<string, unknown>) {
-  // Deliberately ignore claimed fee/final amounts until an independently reviewed
-  // provider-evidence contract exists. This is not a zero-fee default.
-  void row;
+  const value = row.knownCostPolicy;
+  const known = value && typeof value === "object" ? value as Record<string, unknown> : null;
+  const qualified = known?.policyVersion === "known_costs_future_unpaid_adjustments_v1"
+    && known.finalFees === false && known.futureAdjustmentsPossible === true && known.bankDebitAllowed === false
+    && Number.isSafeInteger(known.knownFeeMinor) && (known.knownFeeMinor as number) >= 0
+    && Number.isSafeInteger(known.knownCreatorShareMinor) && (known.knownCreatorShareMinor as number) >= 0
+    && typeof known.currentEvidence === "boolean" && typeof known.released === "boolean";
   return { taxServiceFeeMinor: null, taxServiceFeeStatus: "unverified" as const,
-    finalNetBaseMinor: null, finalCreatorShareMinor: null, financialAuthority: false as const };
+    finalNetBaseMinor: null, finalCreatorShareMinor: null, financialAuthority: false as const,
+    knownCostPolicy: qualified && known ? {
+      knownFeeMinor: known.knownFeeMinor as number, knownCreatorShareMinor: known.knownCreatorShareMinor as number,
+      currentEvidence: known.currentEvidence as boolean, released: known.released as boolean,
+      finalFees: false as const, futureAdjustmentsPossible: true as const,
+    } : null };
 }
 
 export async function readMerchOrders(input: { role: "buyer" | "creator"; cursor?: string | null; orderId?: string }) {
@@ -235,4 +248,19 @@ export async function launchMerchCheckout(input: { productId: string; quantity: 
   });
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   return { orderId: payload.orderId };
+}
+
+export type MerchLivePublicationReview = {
+  ready: boolean; reason?: string; copyRequired?: boolean; reviewId?: string;
+  title?: string; priceMinor?: number; currency?: string; availableQuantity?: number;
+  trackingMode?: "tracked" | "untracked"; expiresAt?: string; summary?: string;
+};
+export function reviewMerchLivePublication(product: MerchProduct) {
+  return merchRpc<MerchLivePublicationReview>("review_creator_merch_live_publication", { p_product_id: product.id, p_expected_updated_at: product.updatedAt });
+}
+export function confirmMerchLivePublication(reviewId: string) {
+  return merchRpc<MerchProduct>("confirm_creator_merch_live_publication", { p_review_id: reviewId });
+}
+export function copyMerchLiveDraft(product: MerchProduct) {
+  return merchRpc<MerchProduct>("copy_creator_merch_live_draft", { p_product_id: product.id, p_expected_updated_at: product.updatedAt });
 }

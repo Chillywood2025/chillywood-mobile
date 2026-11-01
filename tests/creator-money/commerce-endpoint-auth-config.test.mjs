@@ -113,14 +113,22 @@ test('reporter settings never bypass its dedicated credential or independently a
         readOptionalEnv: name => env[name], jsonResponse: (status, body) => new Response(JSON.stringify(body), { status }),
         createAdminClient: () => { calls.push('admin'); throw Error('unexpected privileged client'); },
       },
+      '../_shared/merch-observation-budget.ts': load('_shared/merch-observation-budget.ts'),
+      '../_shared/google-refund-tax-reconciliation.ts': load('_shared/google-refund-tax-reconciliation.ts', { modules: {
+        './stripe-refund-tax-evidence.ts': load('_shared/stripe-refund-tax-evidence.ts'),
+      } }),
       '../_shared/google-play-reporter-oauth.ts': { googlePlayReporterAccessToken: async () => { calls.push('oauth'); throw Error('unexpected OAuth'); } },
       '../_shared/google-play-external-reporting.ts': { submitExternalReport: async () => { calls.push('provider'); throw Error('unexpected provider'); } },
     } });
     const auth = Object.hasOwn(entry, 'auth') ? entry.auth : `Bearer ${secret}`;
-    const response = await handler(new Request('https://fixture.invalid', {
-      method: entry.method ?? 'POST', headers: auth === null ? {} : { authorization: auth },
-    }));
-    assert.equal(response.status, entry.status);
-    assert.deepEqual(calls, [], 'invalid credential/setup must stop before admin, OAuth or provider work');
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { calls.push('transport'); throw Error('unexpected provider transport'); };
+    try {
+      const response = await handler(new Request('https://fixture.invalid', {
+        method: entry.method ?? 'POST', headers: auth === null ? {} : { authorization: auth },
+      }));
+      assert.equal(response.status, entry.status);
+      assert.deepEqual(calls, [], 'invalid credential/setup must stop before admin, OAuth or provider work');
+    } finally { globalThis.fetch = originalFetch; }
   }
 });

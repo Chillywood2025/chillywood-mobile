@@ -15,6 +15,13 @@ export const CLIP_STUDIO_COVER_MAX_BYTES = 20 * 1024 * 1024;
 export const CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH = 80;
 export const CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH = 140;
 
+export function getClipTrimValidationMessage(start: string, end: string): string | null {
+  const valid = (value: string) => value.trim() === "" || (/^\d+(?:\.\d{0,3})?$/.test(value.trim()) && Number(value) <= 9000);
+  if (!valid(start) || !valid(end)) return "Enter seconds from 0 to 9000, with up to three decimal places.";
+  if (Number(start || 0) >= 9000 || (end.trim() && Number(end) <= Number(start || 0))) return "End must be after Start. Leave End empty to use the rest of the video.";
+  return null;
+}
+
 export type ClipStudioFormat = "vertical_9_16" | "square_1_1" | "landscape_16_9";
 export type ClipStudioFitMode = "fill" | "fit" | "center";
 export type ClipStudioOverlayPosition = "top" | "center" | "bottom";

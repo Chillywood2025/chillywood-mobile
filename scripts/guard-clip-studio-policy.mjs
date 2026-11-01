@@ -30,12 +30,13 @@ const requiredStudioCopy = [
   "Draft saved and confirmed in Content Library.",
   "Retry Save Draft",
   "View Draft",
-  "Preview crop is used for display. Final export editing is coming later.",
-  "Trim/export is coming later.",
+  "Preview frame is display-only. Export Video creates a separate rendered draft.",
+  "Publishing the original does not apply these changes.",
+  "<ClipExportPanel",
   "Add a title for this clip.",
   "Public display",
   "Editor preview only",
-  "Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, stickers, and full export rendering are not active in this MVP.",
+  "Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, and stickers are not active.",
 ];
 
 for (const needle of requiredStudioCopy) {

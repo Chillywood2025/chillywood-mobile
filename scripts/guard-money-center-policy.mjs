@@ -238,7 +238,7 @@ assertIncludes(channelSettings, "saveCreatorSetupConfig", "shared creator setup 
 assertIncludes(channelSettings, "money-saved-sandbox-config-readback", "saved sandbox config visible readback");
 assertIncludes(channelSettings, "money-manager-watch-party-save-config-button", "Watch-Party setup save config action");
 assertIncludes(channelSettings, "watchPartySetupSavingId", "Watch-Party setup save busy state");
-assertIncludes(channelSettings, "canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)", "safe payout setup readiness visibility");
+assertIncludes(channelSettings, "canStartStripeSetup = Boolean(user?.id)", "authenticated payout setup readiness visibility independent of financial activation");
 assertIncludes(channelSettings, "No verified tips yet.", "no fake earnings copy");
 assertIncludes(channelSettings, 'const storeProviderName = Platform.OS === "ios" ? "App Store" : "Google Play"', "platform-aware store provider naming");
 assertIncludes(channelSettings, "It does not charge users for digital goods.", "digital Stripe block");

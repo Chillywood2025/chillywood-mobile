@@ -1,3 +1,4 @@
+import {migrationsFrom} from '../helpers/historical-migration-boundary.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -96,15 +97,7 @@ test('signed successful purchase event supplies immutable real-role SQL timestam
 
 test('pre-policy orders remain historical after migration and do not acquire purchase-time authority',{timeout:180000},async()=>{
  // Address evidence depends on tracking: defer it too, then replay every successor in order.
- const names=['20261030200156_physical_merch_return_window.sql','20261030201916_merch_verified_purchase_time.sql',
-  '20261030202009_merch_declared_tracking_return_terms.sql','20261030202330_merch_automatic_tracking.sql',
-  '20261030210200_merch_private_fulfillment_address.sql','20261030212744_merch_return_cases.sql',
-  '20261031011531_merch_provider_dispute_observations.sql','20261031011906_merch_return_buyer_replies.sql',
-  '20261031012501_merch_return_case_queues.sql','20261031012502_merch_reconciliation_driver.sql',
-  '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
-  '20261031034904_merch_tracking_reviewed_supersession.sql',
-  '20261101045810_merch_checkout_dispatch_provenance.sql',
-  '20261101045816_merch_reconciliation_bounded_drain.sql'];
+ const names=migrationsFrom('20261030200156_physical_merch_return_window.sql');
  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:names});
  try{
   const id='e7330000-0000-4000-8000-000000000001';

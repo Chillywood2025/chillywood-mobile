@@ -17,8 +17,8 @@ function harness(options={}){
  './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>a?.userId===b?.userId&&a?.sessionGeneration===b?.sessionGeneration},
  './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority:{...authority},accessToken:'test-token'}),invokeAccountBoundSupabaseMutationRpc:async(s,name,args)=>{
   if(name==='admit_google_play_external_session'){calls.push(['admission',name,args]);if(options.admissionDenied)return {error:{message:'denied'},data:null};return {error:null,data:{capabilityId:quoteId,expiresAt:'2099-01-01T00:00:00Z',verification:'native_sdk_observation_unverified',financialAuthority:false,accessGranted:false,...options.admission}};}
-  calls.push(['quote',name,args]);if(options.quoteError)return {error:{message:'old_checkout_pending'},data:null};return {error:null,data:{id:quoteId,auctionId:id,amountMinor:250,currency:'usd',environment:'test',state:'awarded',checkoutStarted:false,expiresAt:'2099-01-01T00:00:00Z',...(options.room?roomBinding:{}),...options.quote}};}},
- './supabase':{supabase:{functions:{invoke:async(name,input)=>{calls.push(['edge',name,input]);if(options.edge)return options.edge(input);return {error:null,data:{status:'checkout_ready',checkoutCreated:true,liveMoneyAction:false,routeKind:'external_browser_checkout',launchStrategy:'system_browser',platform:options.platform??'ios',storefrontCountry:'US',quoteId:input.body.quote_id,attemptId:input.body.attempt_id,buyerId:'buyer',auctionId:id,amountMinor:250,currency:'usd',environment:'test',checkoutUrl:'https://checkout.stripe.com/c/pay/test',...(options.room?roomBinding:{})}};}}}},
+  calls.push(['quote',name,args]);if(options.quoteError)return {error:{message:'old_checkout_pending'},data:null};return {error:null,data:{id:quoteId,auctionId:id,amountMinor:250,currency:'usd',environment:options.mode??'test',state:'awarded',checkoutStarted:false,expiresAt:'2099-01-01T00:00:00Z',...(options.room?roomBinding:{}),...options.quote}};}},
+ './supabase':{supabase:{functions:{invoke:async(name,input)=>{calls.push(['edge',name,input]);if(options.edge)return options.edge(input);return {error:null,data:{status:'checkout_ready',checkoutCreated:true,liveMoneyAction:options.mode==='live',routeKind:'external_browser_checkout',launchStrategy:'system_browser',platform:options.platform??'ios',storefrontCountry:'US',quoteId:input.body.quote_id,attemptId:input.body.attempt_id,buyerId:'buyer',auctionId:id,amountMinor:250,currency:'usd',environment:options.mode??'test',checkoutUrl:'https://checkout.stripe.com/c/pay/test',...(options.room?roomBinding:{})}};}}}},
  };
  const context={exports,require:n=>{assert.ok(n in imports,n);return imports[n];},URL,AbortController,setTimeout,clearTimeout,crypto:webcrypto,Uint8Array,Map,Set,Date,Promise};
  const admission={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('_lib/googlePlayExternalAdmission.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{...context,exports:admission});imports['./googlePlayExternalAdmission']=admission;
@@ -78,9 +78,9 @@ test('room checkout rejects changed room incarnation, claim, right type and crea
  await assert.rejects(next.run({...auction,...roomBinding,roomSessionId:'66666666-6666-4666-8666-666666666666'}),/Saved checkout/);
  assert.equal(next.calls.length,0);assert.equal(store.size,1);
 });
-test('wrong quote, live activation, pending and non-winner cannot start checkout',async()=>{
+test('wrong quote, unknown mode, pending and non-winner cannot start checkout',async()=>{
  const h=harness({quote:{amountMinor:251}});await assert.rejects(h.run());assert.equal(h.calls.filter(c=>c[0]==='edge').length,0);
- for(const change of [{environment:'live'},{isWinner:false},{state:'payment_pending'}]){const h=harness();await assert.rejects(h.run({...auction,...change}));assert.equal(h.calls.length,0);}
+ for(const change of [{environment:'unknown'},{isWinner:false},{state:'payment_pending'}]){const h=harness();await assert.rejects(h.run({...auction,...change}));assert.equal(h.calls.length,0);}
 });
 test('mismatched receipt or untrusted URL never escapes to browser caller',async()=>{
  for(const change of [{buyerId:'other'},{amountMinor:251},{status:'pending'},{routeKind:'unknown'},{launchStrategy:'in_app_browser'},{platform:'android'},{storefrontCountry:'FR'},{checkoutUrl:'https://checkout.stripe.com.evil.example/c/pay/test'},{checkoutUrl:'https://user@checkout.stripe.com/c/pay/test'}]){
@@ -106,5 +106,15 @@ test('iOS event and room checkout admit exact award before quote and denied stor
   assert.equal(admitted.feature,room?'room_seat_auction':'event_auction');assert.equal(admitted.amountMinor,250);assert.equal(admitted.sourceId,id);assert.equal(admitted.creatorId,auction.creatorId);
   assert.equal(h.calls.find(c=>c[0]==='quote')[2].p_capability_id,quoteId);
   const denied=harness({room,iosAdmission:()=>{throw Error('storefront unavailable');}});await assert.rejects(denied.run(),/storefront unavailable/);assert.equal(denied.calls.length,0);assert.equal(denied.storage.size,0);
+ }
+});
+
+test('live mode uses the same exact account-bound quote and response checks for event and room',async()=>{
+ for(const room of [false,true]){
+  const h=harness({mode:'live',room});
+  assert.equal((await h.run({...auction,environment:'live',...(room?roomBinding:{})})).launchStrategy,'system_browser');
+  assert.equal(h.calls.filter(c=>c[0]==='edge').length,1);
+  const wrong=harness({room});await assert.rejects(wrong.run({...auction,environment:'live',...(room?roomBinding:{})}));
+  assert.equal(wrong.calls.filter(c=>c[0]==='edge').length,0,'test quote cannot launch live checkout');
  }
 });

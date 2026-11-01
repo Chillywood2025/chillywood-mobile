@@ -10,6 +10,7 @@ import {monetizationAuditFiles, monetizationImplementationFiles,
 } from './helpers/creator-monetization-migration-inventory.mjs';
 import {profileFeedFiles, profileFeedFunctions, assertProfileFeedInventory} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles, discoveryInvalidationFunctions, assertDiscoveryInvalidationInventory} from './helpers/discovery-invalidation-runtime-inventory.mjs';
+import {appCompletionFiles,appCompletionAddedFunctionIdentities,appCompletionReplacedFunctionIdentities,appCompletionRemovedFunctionIdentities} from './helpers/app-completion-migration-inventory.mjs';
 
 // Explicit reviewed successors: excluded from historical delta checkpoints,
 // required in full-chain repair qualification alongside their real prerequisites.
@@ -61,8 +62,9 @@ const flexibleCommerceFiles = [
   "20261031204321_atomic_chilly_chat_call_candidate.sql",
   "20261031205522_chat_meaningful_activity_and_call_reads.sql",
   '20261101045810_merch_checkout_dispatch_provenance.sql',
-  '20261101045816_merch_reconciliation_bounded_drain.sql'];
+  '20261101045816_merch_reconciliation_bounded_drain.sql',...appCompletionFiles];
 const flexibleCommerceAddedFunctionIdentities = new Map([
+  ...appCompletionAddedFunctionIdentities,
   ["public.reserve_merch_checkout_dispatch/9", "reserve_merch_checkout_dispatch(uuid,uuid,uuid,integer,uuid,uuid,text,integer,text)"],
   ["private.assert_merch_checkout_actor/2", "private.assert_merch_checkout_actor(uuid,uuid)"],
   ["public.transition_merch_checkout_dispatch/5", "transition_merch_checkout_dispatch(uuid,uuid,uuid,text,jsonb)"],
@@ -780,6 +782,29 @@ const queries={
   policies:`select * from pg_policies where schemaname in ${schemas} order by schemaname,tablename,policyname`,
 };
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
+
+test('November completion bundle has the exact reviewed added/replaced catalog signatures', {timeout:180_000}, async()=>{
+  const completionOnDisk=fs.readdirSync(new URL('../supabase/migrations/',import.meta.url))
+    .filter(file=>file.endsWith('.sql')&&file>='20261101141441_secondary_media_producer_registry.sql').sort();
+  assert.deepEqual(completionOnDisk,[...appCompletionFiles],'every completion successor, including data-only migrations, requires explicit inventory review');
+  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:appCompletionFiles});
+  try{
+    assert.deepEqual(replayReport.excludedMigrations,[...appCompletionFiles]);
+    const before=(await db.query(queries.functions)).rows;
+    for(const file of appCompletionFiles)for(const statement of splitSQL(fs.readFileSync(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8'))){
+      const clean=statement.replace(/--[^\n]*/gu,'').replace(/\/\*[\s\S]*?\*\//gu,'').trim();
+      if(!clean||/^(?:begin|commit|rollback)\s*;?$/iu.test(clean))continue;
+      await db.exec(/^lock table/iu.test(clean)?`begin;${statement};commit;`:statement);
+    }
+    const after=(await db.query(queries.functions)).rows;
+    const previous=new Map(before.map(fn=>[fn.identity,fn])),current=new Map(after.map(fn=>[fn.identity,fn]));
+    const identities=rows=>rows.map(fn=>[fn.key,fn.identity]).sort();
+    assert.deepEqual(identities(after.filter(fn=>!previous.has(fn.identity))),[...appCompletionAddedFunctionIdentities].sort(),'only reviewed completion signatures are added');
+    assert.deepEqual(identities(before.filter(fn=>!current.has(fn.identity))),[...appCompletionRemovedFunctionIdentities],'no previous signature is silently removed');
+    assert.deepEqual(identities(after.filter(fn=>previous.has(fn.identity)&&fn.definition!==previous.get(fn.identity).definition)),
+      [...appCompletionReplacedFunctionIdentities].sort(),'only reviewed completion predecessors change');
+  }finally{await db.close();}
+});
 
 test('creator monetization has the exact declared catalog delta from the audit checkpoint', {timeout:180_000}, async()=>{
   const excluded=[...monetizationImplementationFiles,...merchStorefrontFiles,...flexibleCommerceFiles];

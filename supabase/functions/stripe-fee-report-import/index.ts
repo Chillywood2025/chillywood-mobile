@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { drainCommerceFeeAccounting } from "../_shared/commerce-fee-accounting-drain.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv } from "../_shared/stripe-connect.ts";
 import { observeStripeFeeReport, type FeeReportContext } from "../_shared/stripe-fee-report-evidence.ts";
 
@@ -27,13 +28,17 @@ Deno.serve(async (req: Request) => {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     const body = JSON.parse(text);
     if (!body || typeof body !== "object" || Array.isArray(body)
-      || Object.keys(body).some(k => !["contract_id", "report_run_id", "file_id", "interval_start", "interval_end"].includes(k))
-      || typeof body.contract_id !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.contract_id))
+      || Object.keys(body).some(k => !["contract_id", "order_id", "report_run_id", "file_id", "interval_start", "interval_end"].includes(k))
+      || (Object.hasOwn(body, "contract_id") === Object.hasOwn(body, "order_id"))
+      || typeof (body.contract_id ?? body.order_id) !== "string"
+      || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.contract_id ?? body.order_id))
       return jsonResponse(400, { error: "fee_report_identity_required" });
     const admin = createAdminClient();
     if (!admin.configured) return jsonResponse(503, { error: "server_not_configured" });
-    const read = await admin.client.rpc("get_commerce_fee_report_import_context", { p_contract_id: body.contract_id });
-    if (read.error || !read.data || read.data.contractId !== body.contract_id) throw Error("context_unavailable");
+    const merch = Object.hasOwn(body, "order_id");
+    const read = await admin.client.rpc(merch ? "get_merch_fee_report_import_context" : "get_commerce_fee_report_import_context",
+      merch ? { p_order_id: body.order_id } : { p_contract_id: body.contract_id });
+    if (read.error || !read.data || (merch ? read.data.orderId !== body.order_id : read.data.contractId !== body.contract_id)) throw Error("context_unavailable");
     const bound = read.data;
     // Explicit environment-qualified configuration. No fallback between modes.
     if (!["test", "live"].includes(bound.environment)) throw Error("mode_invalid");
@@ -46,11 +51,12 @@ Deno.serve(async (req: Request) => {
       chargeId: bound.chargeId, refundIds: bound.refundIds, currency: bound.currency,
       reportRunId: body.report_run_id, fileId: body.file_id, intervalStart: body.interval_start,
       intervalEnd: body.interval_end, reportType: "all_fees.incurred_at.itemized.2" } as FeeReportContext, key);
-    const recorded = await admin.client.rpc("record_commerce_fee_report_observation", {
-      p_contract_id: body.contract_id, p_source_observation_id: bound.sourceObservationId, p_evidence: evidence,
+    const recorded = await admin.client.rpc(merch ? "record_merch_fee_report_observation" : "record_commerce_fee_report_observation", {
+      ...(merch ? { p_order_id: body.order_id } : { p_contract_id: body.contract_id }), p_source_observation_id: bound.sourceObservationId, p_evidence: evidence,
     });
     if (recorded.error || !recorded.data) throw Error("record_failed");
-    return jsonResponse(200, { ...recorded.data, financialAuthority: false, settlementReady: false });
+    const accounting = await drainCommerceFeeAccounting(admin.client, body.order_id ?? body.contract_id);
+    return jsonResponse(200, { ...recorded.data, accounting, financialAuthority: false, settlementReady: false });
   } catch {
     return jsonResponse(409, { error: "fee_report_import_incomplete", financialAuthority: false, settlementReady: false });
   }

@@ -5,6 +5,8 @@ import { useAdminReadLifecycle } from "../hooks/use-admin-read-lifecycle";
 import { useAdminScopedRead } from "../hooks/use-admin-scoped-read";
 import { useAdminHistoryRead } from "../hooks/use-admin-history-read";
 import { OwnerCommerceReadinessPanel } from "../components/admin/owner-commerce-readiness";
+import { OwnerTaxCategoryReviewPanel } from "../components/admin/owner-tax-category-review";
+import { OwnerReconciliationHealthPanel } from "../components/admin/owner-reconciliation-health";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { buildAdminNavigation, getAdminContentInsets } from "../_lib/adminNavigation";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
@@ -12435,6 +12437,8 @@ export default function AdminStudioScreen() {
           <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneyOff ? "success" : "danger"} />
         </View>
         {isOwnerStaff && adminReadAuthorityKey ? <OwnerCommerceReadinessPanel isOwner={isOwnerStaff} ownerSessionKey={JSON.stringify(authority)} /> : null}
+        {isOwnerStaff && adminReadAuthorityKey ? <OwnerTaxCategoryReviewPanel isOwner={isOwnerStaff} ownerSessionKey={JSON.stringify(authority)} /> : null}
+        {isOwnerStaff && adminReadAuthorityKey ? <OwnerReconciliationHealthPanel isOwner={isOwnerStaff} ownerSessionKey={JSON.stringify(authority)} /> : null}
         <OwnerDisabledReason reason="Live money remains fail-closed unless live_money_enabled is on, the specific capability switch allows it, provider readiness proves it, and future backend action guards pass." />
         {moneySwitchNotice ? <Text style={styles.noticeText}>{moneySwitchNotice}</Text> : null}
         {providerReadinessNotice ? <Text style={styles.noticeText}>{providerReadinessNotice}</Text> : null}

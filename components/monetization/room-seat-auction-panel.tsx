@@ -101,7 +101,7 @@ function AuctionCard({ auction: a, refresh, verified, visible }: { auction: Crea
     finally { flight.current = false; if (current()) setBusy(false); }
   };
   const act = async (confirm: boolean) => {
-    if (flight.current || !verified || !visible || a.state !== "open" || a.environment !== "test") return;
+    if (flight.current || !verified || !visible || a.state !== "open") return;
     const authority = getCurrentAccountSessionAuthoritySnapshot();
     const current = () => alive.current && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
     const cents = confirm ? review : parseCreatorTipAmount(amount || formatCreatorTipAmountInput(a.nextBidAmountMinor));
@@ -137,15 +137,14 @@ function AuctionCard({ auction: a, refresh, verified, visible }: { auction: Crea
     <Text style={styles.body}>{a.highestAmountMinor ? `Current highest bid: ${money(a.highestAmountMinor)}` : `Starting price: ${money(a.startingAmountMinor)}`}</Text>
     <Text style={styles.body}>Closes {time(a.closesAt)}. {a.state === "open" ? `${remaining} minutes remaining at last server refresh; refresh for the authoritative result.` : `Status: ${a.state.replaceAll("_", " ")}.`}</Text>
     {a.myBidAmountMinor ? <Text accessibilityLiveRegion="polite" style={styles.body}>{a.isHighestBidder ? "You were the highest bidder at the last refresh. This does not grant admission." : `You have been outbid. Your last bid: ${money(a.myBidAmountMinor)}.`}</Text> : null}
-    {a.state === "open" && a.environment === "test" ? <>
+    {a.state === "open" ? <>
       <Text style={styles.body}>Next minimum: {money(a.nextBidAmountMinor)} · Minimum increase: {money(a.minIncrementMinor)}</Text>
       <TextInput style={styles.input} value={amount} onChangeText={text => { setAmount(text); setReview(null); }} editable={!busy} keyboardType="decimal-pad" accessibilityLabel="Your auction bid in USD" placeholder={formatCreatorTipAmountInput(a.nextBidAmountMinor)} placeholderTextColor="#9AA5B8" />
       {review !== null ? <><Text style={styles.body}>Review: bid {money(review)} for this reserved room-session spot. If you win, open checkout by {time(a.latestCheckoutStartAt)} and pay by {time(a.paymentDeadline)}. Admission included, same-account rejoin; the host still controls media and moderation. No VIP or host rights. No charge now.</Text><Action label={`Confirm bid ${money(review)}`} disabled={busy || !verified || !visible} onPress={() => void act(true)} /><Action label="Cancel bid review" disabled={busy} onPress={() => setReview(null)} /></> : <Action label="Review bid" disabled={busy || !verified || !visible} onPress={() => void act(false)} />}
     </> : null}
-    {a.state === "open" && a.environment === "live" ? <Text style={styles.body}>Live auction bidding is not activated. No bid or payment can be started here.</Text> : null}
-    {a.isWinner && a.state === "awarded" ? <><Text style={styles.body}>You won. Open checkout by {time(a.latestCheckoutStartAt)} and pay {money(a.awardAmountMinor ?? a.highestAmountMinor ?? a.startingAmountMinor)} by {time(a.paymentDeadline)}. We’ll check that payment is available for your account before opening checkout. Winning alone does not grant admission.</Text>{a.environment === "test" && Date.parse(a.serverNow) < Date.parse(a.latestCheckoutStartAt) ? <Action label="Continue to eligible test payment" disabled={busy || !verified || !visible} onPress={() => void pay()} /> : <Text style={styles.body}>{a.environment === "test" ? "The time to open a new checkout has passed. Refresh to check any payment already started." : "Live auction payments are not activated."}</Text>}</> : null}
+    {a.isWinner && a.state === "awarded" ? <><Text style={styles.body}>You won. Open checkout by {time(a.latestCheckoutStartAt)} and pay {money(a.awardAmountMinor ?? a.highestAmountMinor ?? a.startingAmountMinor)} by {time(a.paymentDeadline)}. We’ll check that payment is available for your account before opening checkout. Winning alone does not grant admission.</Text>{Date.parse(a.serverNow) < Date.parse(a.latestCheckoutStartAt) ? <Action label={a.environment === "test" ? "Continue to eligible test payment" : "Continue to eligible payment"} disabled={busy || !verified || !visible} onPress={() => void pay()} /> : <Text style={styles.body}>The time to open a new checkout has passed. Refresh to check any payment already started.</Text>}</> : null}
     {a.state === "payment_pending" || a.state === "reconciliation_required" ? <Text style={styles.body}>Payment is being checked. Do not start another checkout. Refresh for confirmation; admission stays subject to verified room-session access.</Text> : null}
-    {a.state === "payment_pending" && a.isWinner && a.environment === "test" ? <>
+    {a.state === "payment_pending" && a.isWinner ? <>
       <Text style={styles.body}>If you closed checkout, you can check the same saved payment attempt. This cannot start a new quote or charge. An unknown provider outcome stays under review.</Text>
       <Action label="Resume existing checkout" disabled={busy || !verified || !visible} onPress={() => void pay()} />
     </> : null}

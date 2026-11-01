@@ -9,6 +9,7 @@ import {createDatabase,repairMigrationPath,merchStorefrontFiles} from './helpers
 import {monetizationAuditFiles} from './helpers/creator-monetization-migration-inventory.mjs';
 import {profileFeedFiles} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles} from './helpers/discovery-invalidation-runtime-inventory.mjs';
+import {appCompletionFiles} from './helpers/app-completion-migration-inventory.mjs';
 
 // Explicit reviewed successors: excluded from historical delta checkpoints,
 // required in full-chain repair qualification alongside their real prerequisites.
@@ -60,7 +61,7 @@ const flexibleCommerceFiles = [
   "20261031204321_atomic_chilly_chat_call_candidate.sql",
   "20261031205522_chat_meaningful_activity_and_call_reads.sql",
   '20261101045810_merch_checkout_dispatch_provenance.sql',
-  '20261101045816_merch_reconciliation_bounded_drain.sql'];
+  '20261101045816_merch_reconciliation_bounded_drain.sql',...appCompletionFiles];
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.

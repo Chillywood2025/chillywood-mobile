@@ -1,7 +1,7 @@
-// Provisional Shippo transport. Qualification is independent of credentials.
+// Tracking-only Shippo transport. Qualification is independent of credentials.
 // Carrier status corroborates a parcel, never its contents or dispute clearance.
 export type TrackingJob = { id: string; order_id: string; carrier: string; tracking_number: string;
-  provider_account: string; lease: string; registration_state: string };
+  provider_account: string; lease: string; registration_state: string; environment?: "sandbox" | "production" };
 export type TrackingFacts = { status: string; status_date: string | null; first_event_at: string | null;
   destination_zip: string | null; destination_country: string | null; carrier: string;
   tracking_number: string; test: boolean; payload_hash: string; review_reason: string | null;
@@ -9,19 +9,21 @@ export type TrackingFacts = { status: string; status_date: string | null; first_
 const object = (v: unknown): Record<string, unknown> => v && typeof v === "object" && !Array.isArray(v)
   ? v as Record<string, unknown> : {};
 const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
-export async function readBoundedTrackingBody(body: ReadableStream<Uint8Array> | null) {
+export async function readBoundedTrackingBody(body: ReadableStream<Uint8Array> | null, milliseconds = 10000) {
   if (!body) return "";
   const reader = body.getReader(), chunks: Uint8Array[] = [];
-  let length = 0;
+  let length = 0, timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => {}); }, milliseconds);
   try {
     while (true) {
       const {value, done} = await reader.read();
+      if (timedOut) throw new Error("tracking_body_deadline");
       if (done) break;
       length += value.byteLength;
       if (length > 256000) { await reader.cancel(); throw new Error("payload_too_large"); }
       chunks.push(value);
     }
-  } finally { reader.releaseLock(); }
+  } finally { clearTimeout(timer); void reader.cancel().catch(() => {}); reader.releaseLock(); }
   const bytes = new Uint8Array(length); let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   return new TextDecoder("utf-8", {fatal: true}).decode(bytes);
@@ -45,7 +47,8 @@ export async function normalizeTracking(raw: string): Promise<TrackingFacts> {
     test: p.test === true, payload_hash: await hashTrackingBody(raw),
     raw_status_date: text(status.status_date).slice(0,64) || null,
     carrier_event_id: text(status.object_id).slice(0,128) || null,
-    review_reason: dates.some(d => d === null) || !instant(status.status_date) ? "ambiguous_carrier_timestamp" : null };
+    review_reason: typeof p.test !== "boolean" ? "provider_environment_ambiguous"
+      : dates.some(d => d === null) || !instant(status.status_date) ? "ambiguous_carrier_timestamp" : null };
 }
 export async function verifyTrackingSignature(raw: string, header: string, secret: string, now = Date.now()) {
   const m = /^t=(\d{10}),v1=([a-fA-F0-9]{64})$/.exec(header);
@@ -55,24 +58,36 @@ export async function verifyTrackingSignature(raw: string, header: string, secre
   const signature = Uint8Array.from(m[2].match(/../g)!, n => parseInt(n, 16));
   return crypto.subtle.verify("HMAC", key, signature, new TextEncoder().encode(`${m[1]}.${raw}`));
 }
-export function trackingNotification(raw: string) {
+export function trackingNotification(raw: string, environment: "sandbox" | "production" = "sandbox") {
   const p = object(JSON.parse(raw)), data = object(p.data);
-  if (p.event !== "track_updated" || data.test !== true) throw new Error("unsupported_tracking_notification");
+  if (!["sandbox", "production"].includes(environment) || p.event !== "track_updated"
+    || data.test !== (environment === "sandbox")) throw new Error("unsupported_tracking_notification");
   const carrier = text(data.carrier).toLowerCase(), tracking_number = text(data.tracking_number).toUpperCase();
   if (!/^[a-z_]{2,30}$/.test(carrier) || !/^[A-Z0-9_-]{5,100}$/.test(tracking_number)) throw new Error("invalid_tracking_identity");
   return {carrier, tracking_number};
 }
 export async function shippoRequest(job: TrackingJob, token: string, register: boolean,
-  transport: typeof fetch = fetch): Promise<string> {
-  // This source is intentionally sandbox-only. No accidental live key fallback.
-  if (!token.startsWith("shippo_test_") || !job.provider_account) throw new Error("tracking_sandbox_credentials_required");
+  transport: typeof fetch = fetch, environment: "sandbox" | "production" = "sandbox"): Promise<string> {
+  // No live-key fallback. Production transport is dormant unless a caller
+  // explicitly selects it after independent account/environment qualification.
+  // The worker defaults to sandbox; production requires explicit configuration.
+  const prefix = environment === "sandbox" ? "shippo_test_" : environment === "production" ? "shippo_live_" : null;
+  if (!prefix || !token.startsWith(prefix) || !job.provider_account) throw new Error("tracking_environment_credentials_required");
   const base = "https://api.goshippo.com/tracks/";
-  const response = await transport(register ? base : `${base}${encodeURIComponent(job.carrier)}/${encodeURIComponent(job.tracking_number)}`,
-    { method: register ? "POST" : "GET", redirect: "error", signal: AbortSignal.timeout(10000),
+  const controller = new AbortController(), started = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+  const response = await Promise.race([transport(register ? base : `${base}${encodeURIComponent(job.carrier)}/${encodeURIComponent(job.tracking_number)}`,
+    { method: register ? "POST" : "GET", redirect: "error", signal: controller.signal,
       headers: { Authorization: `ShippoToken ${token}`, "SHIPPO-ACCOUNT-ID": job.provider_account,
         ...(register ? {"Content-Type": "application/x-www-form-urlencoded"} : {}) },
       ...(register ? {body: new URLSearchParams({carrier: job.carrier, tracking_number: job.tracking_number,
-        metadata: job.id}).toString()} : {}) });
+        metadata: job.id}).toString()} : {}) }), new Promise<Response>((_, reject) => {
+      timer = setTimeout(() => { controller.abort(); reject(new Error("tracking_request_deadline")); }, 10000);
+    })]);
   if (!response.ok) throw new Error(response.status === 429 ? "carrier_rate_limited" : "carrier_unavailable");
-  return readBoundedTrackingBody(response.body);
+  const remaining = 10000 - (Date.now() - started);
+  if (remaining <= 0) { void response.body?.cancel().catch(() => {}); throw new Error("tracking_request_deadline"); }
+  return await readBoundedTrackingBody(response.body, remaining);
+  } finally { if (timer) clearTimeout(timer); controller.abort(); }
 }

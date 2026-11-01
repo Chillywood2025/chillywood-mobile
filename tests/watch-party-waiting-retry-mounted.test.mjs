@@ -66,7 +66,7 @@ const walk = (tree, predicate) => {
 };
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
-async function mount(t, { normal = false, prepared = true, viewer = false, initialLive = false, create = null, roomReader = null, age = 0, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null, catalog = null } = {}) {
+async function mount(t, { ticketAccess = null, normal = false, prepared = true, viewer = false, initialLive = false, create = null, roomReader = null, age = 0, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null, catalog = null } = {}) {
   let tree;
   const runtime = { authority: owner(), focused: true, room: room(), params: { mode: 'live', partyId: 'ROOM01' }, premiumAllowed: true,
     reads: [], preparedReads: [], refreshes: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null,
@@ -132,7 +132,7 @@ async function mount(t, { normal = false, prepared = true, viewer = false, initi
       formatPaidWatchPartyTicketPrice: (cents, currency) => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100),
       savePaidWatchPartyOffer: async input => { runtime.paidWrites.push(input); return offerSave(input); },
       purchasePaidWatchPartyTicket: async () => { runtime.checkoutCalls += 1; throw Error('host setup must not purchase'); },
-      resolvePaidWatchPartyTicketAccess: async () => ({ allowed: true, reason: 'free_room', offer: null }),
+      resolvePaidWatchPartyTicketAccess: async () => ticketAccess ?? ({ allowed: true, reason: 'free_room', offer: null }),
     },
     '../../_lib/monetization': { getMonetizationAccessSheetPresentation: () => ({}) },
     '../../_lib/actionSingleFlight.mjs': { createActionSingleFlightLatch },
@@ -154,7 +154,7 @@ async function mount(t, { normal = false, prepared = true, viewer = false, initi
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText, priceHook);
   mocks['../../_lib/useCreatorAuthoringPrice'] = priceHook.exports;
-  for (const [path, name] of [['chat/internal-invite-sheet', 'InternalInviteSheet'], ['monetization/MoneyScopeInfoButton', 'MoneyScopeInfoButton'], ['system/beta-access-screen', 'BetaAccessScreen'], ['room/room-code-invite-card', 'RoomCodeInviteCard'], ['notifications/notification-bell-button', 'NotificationBellButton'], ['navigation/app-back-button', 'AppBackButton'], ['ui/typography', 'AppText']]) mocks[`../../components/${path}`] = { [name]: name };
+  for (const [path, name] of [['chat/internal-invite-sheet', 'InternalInviteSheet'], ['monetization/MoneyScopeInfoButton', 'MoneyScopeInfoButton'], ['monetization/room-seat-auction-entry', 'RoomSeatAuctionEntry'], ['system/beta-access-screen', 'BetaAccessScreen'], ['room/room-code-invite-card', 'RoomCodeInviteCard'], ['notifications/notification-bell-button', 'NotificationBellButton'], ['navigation/app-back-button', 'AppBackButton'], ['ui/typography', 'AppText']]) mocks[`../../components/${path}`] = { [name]: name };
   const context = { exports: {}, require: name => { assert.ok(name in mocks, `unmodeled import ${name}`); return mocks[name]; }, capture: value => { tree = value; return null; }, setInterval: () => 1, clearInterval: noop, URLSearchParams };
   vm.runInNewContext(code, context);
   const root = createRoot(container());
@@ -907,3 +907,13 @@ for (const transition of ['focus', 'background']) {
     });
   }
 }
+
+test('auction-only Party admission shows exact-room auction instead of fixed-price checkout',async t=>{
+ const h=await mount(t,{normal:true,viewer:true,checkoutAvailable:true,ticketAccess:{allowed:false,requiresPurchase:true,
+  reason:'watch_party_ticket_required',priceCents:99,currency:'usd',offer:{provider:'stripe_room_auction',priceCents:99,currency:'usd',status:'active'}}});
+ await h.act(()=>h.find(n=>n.props?.testID==='watch-party-preview-join').onPress());
+ assert.equal(walk(h.tree(),n=>n.props?.testID==='tester-watch-party-ticket-button').length,0);
+ const entries=walk(h.tree(),n=>n.type==='RoomSeatAuctionEntry');assert.ok(entries.length>0);
+ for(const entry of entries){assert.equal(entry.props.partyId,'ROOM01');assert.equal(entry.props.creatorId,'host');assert.equal(entry.props.sourceKind,'party_admission');}
+ assert.match(h.text(),/Price set by the winning bid/);assert.equal(h.runtime.checkoutCalls,0);assert.equal(h.runtime.navigations.length,0);
+});

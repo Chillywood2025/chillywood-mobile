@@ -72,11 +72,11 @@ export async function placeCreatorRoomSeatAuctionBid(id: string, amount: number,
 export async function prepareCreatorRoomSeatAuction(partyId: string, sourceKind: CreatorRoomAuctionCreationInput["sourceKind"]) {
   const data = await rpc("prepare_creator_room_seat_auction", { p_party_id: partyId });
   const row = data && typeof data === "object" ? data as Record<string, unknown> : null;
-  if (!row || row.partyId !== partyId || row.sourceKind !== sourceKind || typeof row.roomSessionId !== "string"
+  if (!row || !["test", "live"].includes(String(row.environment)) || row.partyId !== partyId || row.sourceKind !== sourceKind || typeof row.roomSessionId !== "string"
     || !UUID.test(row.roomSessionId) || typeof row.serverNow !== "string" || !Number.isFinite(Date.parse(row.serverNow))) {
     throw new Error("This room session could not be verified. Refresh before reviewing an auction.");
   }
-  return { roomSessionId: row.roomSessionId, serverNow: row.serverNow };
+  return { roomSessionId: row.roomSessionId, serverNow: row.serverNow, environment: row.environment as "test" | "live" };
 }
 export async function readPendingCreatorRoomSeatAuction(partyId: string, sourceKind: CreatorRoomAuctionCreationInput["sourceKind"]) {
   const authority = getCurrentAccountSessionAuthoritySnapshot();

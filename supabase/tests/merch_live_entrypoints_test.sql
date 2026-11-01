@@ -1,0 +1,15 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+set search_path=public,extensions;
+select plan(9);
+select ok(not private.merch_live_checkout_ready(),'production checkout remains disabled');
+select is((select count(*)::integer from private.merch_live_checkout_qualifications),0,'no live qualification seeded');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_checkout_provider_bindings'::regclass),'binding RLS forced');
+select ok((select relrowsecurity and relforcerowsecurity from pg_class where oid='private.merch_live_checkout_qualifications'::regclass),'qualification RLS forced');
+select ok(not has_function_privilege('authenticated','public.bind_merch_checkout_provider(uuid,text,text)','execute'),'buyer cannot bind provider');
+select ok(not has_function_privilege('anon','public.bind_merch_checkout_provider(uuid,text,text)','execute'),'anonymous cannot bind provider');
+select ok(has_function_privilege('service_role','public.bind_merch_checkout_provider(uuid,text,text)','execute'),'trusted edge can bind');
+select ok(not has_function_privilege('service_role','public.reserve_merch_checkout_for_actor_with_tracking(uuid,uuid,uuid,integer,uuid,uuid,text,integer,text)','execute'),'old unsafe admission remains revoked');
+select ok(exists(select 1 from pg_trigger where tgrelid='public.merch_orders'::regclass and tgname='merch_checkout_quote_immutable' and tgenabled='O'),'quote changes are fenced');
+select * from finish();
+rollback;

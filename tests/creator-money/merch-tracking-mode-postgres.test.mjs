@@ -32,7 +32,7 @@ test('declared shipping mode freezes the proper 30-day clock and never falls bac
   // signed-callback suite qualifies issuance; root seeding is not provider proof.
   const purchased=new Date(new Date(await one('select clock_timestamp()')).getTime()-31*86400000).toISOString();
   for(const id of [tracked,untracked]){
-   const event='evt_'+id.replaceAll('-','');await db.query("insert into public.stripe_merch_events(stripe_event_id,event_type,status,linked_order_id) values($1,'payment_intent.succeeded','processed',$2)",[event,id]);
+   const event='evt_'+id.replaceAll('-','');await db.query("insert into public.stripe_merch_events(stripe_event_id,event_type,status,linked_order_id,object_id,raw_event_hash,environment) select $1,'payment_intent.succeeded','processed',id,stripe_payment_intent_id,repeat('a',64),environment from public.merch_orders where id=$2",[event,id]);
    await db.query(`insert into private.merch_purchase_time_evidence(order_id,stripe_event_id,stripe_payment_intent_id,succeeded_at,raw_event_hash)
     select id,$2,stripe_payment_intent_id,$3,repeat('a',64) from public.merch_orders where id=$1`,[id,event,purchased]);
   }

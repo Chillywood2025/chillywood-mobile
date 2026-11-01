@@ -31,7 +31,7 @@ function harness(options = {}) {
       captureAccountBoundSupabaseMutationSubject:async()=>({authority:{...authority},accessToken:"test"}),
       invokeAccountBoundSupabaseMutationRpc:async(_subject,name,args)=>{
         calls.push({name,args});
-        if(name==="prepare_creator_room_seat_auction")return {error:null,data:{partyId:input.partyId,roomSessionId:options.currentSession??roomSessionId,sourceKind:input.sourceKind,serverNow:"2099-01-01T00:00:00Z"}};
+        if(name==="prepare_creator_room_seat_auction")return {error:null,data:{partyId:input.partyId,roomSessionId:options.currentSession??roomSessionId,sourceKind:input.sourceKind,environment:options.mode??"test",serverNow:"2099-01-01T00:00:00Z"}};
         if(options.create)await options.create(args);
         return {error:null,data:{id:"33333333-3333-4333-8333-333333333333",requestId:args.p_request_id,partyId:args.p_party_id,roomSessionId:args.p_expected_room_session_id,
           claimId:"44444444-4444-4444-8444-444444444444",creatorId:creator,sourceKind:args.p_source_kind,startingAmountMinor:args.p_starting_amount_minor,

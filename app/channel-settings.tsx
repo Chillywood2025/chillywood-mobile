@@ -1,9 +1,11 @@
 import { CreatorAuctionHeldEarnings } from "../components/monetization/creator-auction-held-earnings";
+import { CreatorCashoutPanel } from "../components/monetization/creator-cashout-panel";
 import { SubscriptionPriceRequestStatus } from "../components/monetization/subscription-price-request-status";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { pickDeviceImage, type DeviceImageSource } from "../_lib/deviceImagePicker";
+import { pickDeviceVideo } from "../_lib/deviceVideoPicker";
 import { ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -255,6 +257,7 @@ import {
   getClipStudioCoverValidationMessage,
   getClipStudioTemplatePresetConfig,
   getClipStudioTitleOverlayValidationMessage,
+  getClipTrimValidationMessage,
   normalizeClipStudioFitMode,
   normalizeClipStudioFormat,
   normalizeClipStudioOverlayPosition,
@@ -304,6 +307,7 @@ import {
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfileRemote, updateMyPlatformAccessVisibility } from "../_lib/userData";
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
+import { ClipExportPanel } from "../components/creator-media/ClipExportPanel";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../components/creator-media/CreatorContentActionSheet";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
 import { NotificationBellButton } from "../components/notifications/notification-bell-button";
@@ -2499,8 +2503,28 @@ export function ChannelStudioScreen() {
     });
 
     try {
-      const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
+      let accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
       if (!isCurrent()) return;
+      if (accountPayload.status === "live_setup_confirmation_required") {
+        const disclosure = "This creates a separate live Stripe account. Your test account and history stay unchanged. You will complete Stripe’s identity, bank and agreement steps yourself. Payments and payouts stay off until separately qualified.";
+        const confirmed = Platform.OS === "web"
+          ? typeof window !== "undefined" && window.confirm(disclosure)
+          : await new Promise<boolean>((resolve) => Alert.alert(
+          "Set up live payouts?",
+          disclosure,
+          [{ text: "Not now", style: "cancel", onPress: () => resolve(false) },
+            { text: "Set up live payouts", onPress: () => resolve(true) }],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        ));
+        if (!confirmed || !isCurrent()) return;
+        accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId, true);
+      }
+      if (!isCurrent()) return;
+      if (["creation_pending", "live_setup_confirmation_required", "creator_onboarding_eligibility_required", "account_migration_review_required", "onboarding_authority_changed"].includes(String(accountPayload.status))) {
+        setPayoutSetupNotice(accountPayload.message || "Payout setup needs a verified current account before continuing. No existing account was replaced.");
+        await refreshCreatorPayouts();
+        return;
+      }
       if (accountPayload.status === "configuration_review_required") {
         setPayoutSetupNotice(accountPayload.message || "Provider account configuration needs review. Refresh status before continuing setup. Payouts remain inactive.");
         await refreshCreatorPayouts();
@@ -2519,7 +2543,7 @@ export function ChannelStudioScreen() {
       });
       if (!isCurrent()) return;
 
-      if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required" || linkPayload.status === "configuration_review_required") {
+      if (["not_configured", "setup_required", "configuration_review_required", "creator_onboarding_eligibility_required", "account_migration_review_required"].includes(String(linkPayload.status))) {
         setPayoutSetupNotice(linkPayload.message || "Payout provider setup needs owner/provider resolution. No payout movement is enabled.");
         await refreshCreatorPayouts();
         return;
@@ -2866,8 +2890,8 @@ export function ChannelStudioScreen() {
           videoPreviewUrl: previewVideo?.playbackUrl || current.videoPreviewUrl,
           clipFormat: edit.clipFormat,
           fitMode: edit.fitMode,
-          trimStartMs: edit.trimStartMs == null ? "" : String(edit.trimStartMs),
-          trimEndMs: edit.trimEndMs == null ? "" : String(edit.trimEndMs),
+          trimStartMs: edit.trimStartMs == null ? "" : String(edit.trimStartMs / 1000),
+          trimEndMs: edit.trimEndMs == null ? "" : String(edit.trimEndMs / 1000),
           coverStoragePath: edit.coverStoragePath,
           coverMimeType: edit.coverMimeType,
           coverFileSizeBytes: edit.coverFileSizeBytes,
@@ -3951,10 +3975,6 @@ export function ChannelStudioScreen() {
       return;
     }
 
-    const documentTypes = assetType === "hero_video"
-      ? ["video/mp4", "video/quicktime", "video/webm"]
-      : ["image/jpeg", "image/png", "image/webp"];
-
     try {
       brandUploadInFlightRef.current = true;
       setBrandBusyAssetType(assetType);
@@ -3962,10 +3982,8 @@ export function ChannelStudioScreen() {
       let pickedFile = brandUploadAttemptRef.current?.file;
       if (!pickedFile) {
         if (assetType === "hero_video") {
-          const result = await DocumentPicker.getDocumentAsync({ type: documentTypes, copyToCacheDirectory: true, multiple: false });
+          pickedFile = await pickDeviceVideo(source) ?? undefined;
           assertOperationCurrent();
-          const asset = result.canceled ? null : result.assets[0];
-          if (asset) pickedFile = { uri: asset.uri, name: asset.name, mimeType: asset.mimeType, size: asset.size };
         } else {
           pickedFile = await pickDeviceImage(source) ?? undefined;
           assertOperationCurrent();
@@ -4015,14 +4033,14 @@ export function ChannelStudioScreen() {
     }
   };
 
-  const removeBrandAssetFromDesign = async (assetType: "hero_image" | "background_image") => {
+  const removeBrandAssetFromDesign = async (assetType: "hero_image" | "hero_video" | "watermark" | "background_image") => {
     const authority = getCurrentAccountSessionAuthoritySnapshot();
     const isCurrent = () => replayActionsMountedRef.current
       && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
     if (!isCurrent()) return;
-    const asset = assetType === "hero_image" ? platformBranding?.heroImage : platformBranding?.backgroundImage;
+    const asset = assetType === "hero_image" ? platformBranding?.heroImage : assetType === "hero_video" ? platformBranding?.heroVideo : assetType === "watermark" ? platformBranding?.watermark : platformBranding?.backgroundImage;
     const patch: Partial<PlatformBrandProfile> = assetType === "hero_image"
-      ? { heroImageAssetId: null } : { backgroundImageAssetId: null };
+      ? { heroImageAssetId: null } : assetType === "hero_video" ? { heroVideoAssetId: null } : assetType === "watermark" ? { watermarkAssetId: null } : { backgroundImageAssetId: null };
     const savedProfile = await saveBrandDraftPatch(patch);
     if (!isCurrent()) return;
     if (savedProfile) {
@@ -4214,8 +4232,8 @@ export function ChannelStudioScreen() {
     return {
       clipFormat: normalizeClipStudioFormat(clipEditor.clipFormat),
       fitMode: normalizeClipStudioFitMode(clipEditor.fitMode),
-      trimStartMs: null,
-      trimEndMs: null,
+      trimStartMs: clipEditor.trimStartMs.trim() ? Math.round(Number(clipEditor.trimStartMs) * 1000) : null,
+      trimEndMs: clipEditor.trimEndMs.trim() ? Math.round(Number(clipEditor.trimEndMs) * 1000) : null,
       coverStoragePath: coverUpload?.storagePath ?? clipEditor.coverStoragePath,
       coverMimeType: coverUpload?.mimeType ?? clipEditor.coverMimeType,
       coverFileSizeBytes: coverUpload?.fileSizeBytes ?? clipEditor.coverFileSizeBytes,
@@ -4279,6 +4297,8 @@ export function ChannelStudioScreen() {
     }
 
     const title = clipEditor.title.trim();
+    const trimError = getClipTrimValidationMessage(clipEditor.trimStartMs, clipEditor.trimEndMs);
+    if (trimError) { setClipSaveState("save_failed"); setClipNotice(trimError); return; }
     const isPublishing = targetVisibility === "public";
     if (!title) {
       setClipSaveState("save_failed");
@@ -4439,8 +4459,8 @@ export function ChannelStudioScreen() {
           videoPreviewUrl: confirmedPlayerVideo?.playbackUrl || current.videoPreviewUrl,
           clipFormat: confirmedEdit.clipFormat,
           fitMode: confirmedEdit.fitMode,
-          trimStartMs: confirmedEdit.trimStartMs == null ? "" : String(confirmedEdit.trimStartMs),
-          trimEndMs: confirmedEdit.trimEndMs == null ? "" : String(confirmedEdit.trimEndMs),
+          trimStartMs: confirmedEdit.trimStartMs == null ? "" : String(confirmedEdit.trimStartMs / 1000),
+          trimEndMs: confirmedEdit.trimEndMs == null ? "" : String(confirmedEdit.trimEndMs / 1000),
           coverStoragePath: confirmedEdit.coverStoragePath ?? confirmedVideo.thumbStoragePath ?? null,
           coverMimeType: confirmedEdit.coverMimeType,
           coverFileSizeBytes: confirmedEdit.coverFileSizeBytes,
@@ -4469,8 +4489,8 @@ export function ChannelStudioScreen() {
         videoPreviewUrl: confirmedPlayerVideo?.playbackUrl || current.videoPreviewUrl,
         clipFormat: confirmedEdit.clipFormat,
         fitMode: confirmedEdit.fitMode,
-        trimStartMs: confirmedEdit.trimStartMs == null ? "" : String(confirmedEdit.trimStartMs),
-        trimEndMs: confirmedEdit.trimEndMs == null ? "" : String(confirmedEdit.trimEndMs),
+        trimStartMs: confirmedEdit.trimStartMs == null ? "" : String(confirmedEdit.trimStartMs / 1000),
+        trimEndMs: confirmedEdit.trimEndMs == null ? "" : String(confirmedEdit.trimEndMs / 1000),
         coverStoragePath: confirmedEdit.coverStoragePath ?? confirmedVideo.thumbStoragePath ?? null,
         coverMimeType: confirmedEdit.coverMimeType,
         coverFileSizeBytes: confirmedEdit.coverFileSizeBytes,
@@ -4523,8 +4543,8 @@ export function ChannelStudioScreen() {
               videoPreviewUrl: confirmedPartialPlayerVideo?.playbackUrl || current.videoPreviewUrl,
               clipFormat: confirmedPartialEdit.clipFormat,
               fitMode: confirmedPartialEdit.fitMode,
-              trimStartMs: confirmedPartialEdit.trimStartMs == null ? "" : String(confirmedPartialEdit.trimStartMs),
-              trimEndMs: confirmedPartialEdit.trimEndMs == null ? "" : String(confirmedPartialEdit.trimEndMs),
+              trimStartMs: confirmedPartialEdit.trimStartMs == null ? "" : String(confirmedPartialEdit.trimStartMs / 1000),
+              trimEndMs: confirmedPartialEdit.trimEndMs == null ? "" : String(confirmedPartialEdit.trimEndMs / 1000),
               coverStoragePath: confirmedPartialEdit.coverStoragePath ?? confirmedPartialVideo.thumbStoragePath ?? null,
               coverMimeType: confirmedPartialEdit.coverMimeType,
               coverFileSizeBytes: confirmedPartialEdit.coverFileSizeBytes,
@@ -5513,10 +5533,11 @@ export function ChannelStudioScreen() {
         ? "Ready to publish"
         : brandPublished ? "Published" : "Draft changes";
   const approvedClipBrandAsset = useMemo(
-    () => [platformBranding?.logo, platformBranding?.avatar, platformBranding?.watermark].find((asset) => (
+    () => [platformBranding?.watermark, platformBranding?.logo, platformBranding?.avatar].find((asset) => (
       !!asset
       && asset.assetState === "published"
       && ["clean", "reported"].includes(asset.moderationStatus)
+      && asset.scanStatus === "clean"
       && !asset.deletedAt
     )) ?? null,
     [platformBranding?.avatar, platformBranding?.logo, platformBranding?.watermark],
@@ -6106,7 +6127,7 @@ export function ChannelStudioScreen() {
             </Text>
             <Text style={styles.brandPreviewMeta}>
               {previewVideoUri
-                ? "Preview crop is used for display. Final export editing is coming later."
+                ? "Preview frame is display-only. Export Video creates a separate rendered draft."
                 : coverPreviewUri
                   ? "Preview is using the selected cover."
                   : "Preview uses a neutral placeholder until media or cover is ready."}
@@ -6370,12 +6391,18 @@ export function ChannelStudioScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Trim/export is coming later.</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    Clip Studio stores display metadata only in this MVP. It does not render a permanent crop or trimmed video.
-                  </Text>
-                </View>
+                <Text style={styles.sectionLabel}>Trim · seconds</Text>
+                <TextInput style={styles.input} keyboardType="decimal-pad" accessibilityLabel="Trim start in seconds"
+                  placeholder="Start · 0" placeholderTextColor="#8d8d8d" value={clipEditor.trimStartMs}
+                  editable={!clipSaving} onChangeText={trimStartMs => updateClipEditor({ trimStartMs })} />
+                <TextInput style={styles.input} keyboardType="decimal-pad" accessibilityLabel="Trim end in seconds"
+                  placeholder="End · leave empty for full length" placeholderTextColor="#8d8d8d" value={clipEditor.trimEndMs}
+                  editable={!clipSaving} onChangeText={trimEndMs => updateClipEditor({ trimEndMs })} />
+                <Text style={styles.permissionCopy}>Save your edit, then Export Video to permanently apply trim and frame to a new draft. Publishing the original does not apply these changes.</Text>
+                <ClipExportPanel key={`${user?.id}:${clipEditorGenerationRef.current}:${clipEditor.editingVideoId}`}
+                  videoId={clipEditor.editingVideoId} ownerId={String(user?.id ?? "")}
+                  saved={clipSaveState === "saved" && !clipSaving && !clipLoading && !clipLoadError}
+                  edit={buildClipStudioEditPatch()} onReview={id => router.push({ pathname: "/channel-settings", params: { videoId: id } })} />
               </>
             ),
           })}
@@ -6475,7 +6502,7 @@ export function ChannelStudioScreen() {
                   </Text>
                 </TouchableOpacity>
                 <Text style={styles.brandPreviewMeta}>
-                  Brand mark display is preview metadata for this draft.
+                  Export Video burns the approved brand mark into the new draft. The original video stays unchanged.
                 </Text>
               </>
             ) : (
@@ -6496,8 +6523,8 @@ export function ChannelStudioScreen() {
             statusTone: "muted",
             children: (
               <View style={styles.roadmapList}>
-                <Text style={styles.roadmapItem}>Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, stickers, and full export rendering are not active in this MVP.</Text>
-                <Text style={styles.roadmapItem}>Trim/export status stays visible until the backed editor path is active.</Text>
+                <Text style={styles.roadmapItem}>Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, and stickers are not active.</Text>
+                <Text style={styles.roadmapItem}>Title cards and templates remain display metadata. Export applies trim, frame and the selected approved brand mark.</Text>
                 <Text style={styles.roadmapItem}>Poster frame extraction status stays visible until the backed extraction path is active.</Text>
               </View>
             ),
@@ -7401,7 +7428,7 @@ export function ChannelStudioScreen() {
   const renderBrandStudioTab = () => {
     if (!profile) return null;
     const draft = activeBrandProfile;
-    const heroBusy = brandBusyAssetType === "hero_image" || brandBusyAssetType === "hero_poster";
+    const heroBusy = brandBusyAssetType === "hero_image" || brandBusyAssetType === "hero_poster" || brandBusyAssetType === "hero_video";
     const backgroundBusy = brandBusyAssetType === "background_image";
     const kitBusy = brandBusyAssetType === "avatar" || brandBusyAssetType === "logo" || brandBusyAssetType === "watermark";
 
@@ -7504,9 +7531,21 @@ export function ChannelStudioScreen() {
                     testID="brand-hero-files-button" accessibilityLabel="Choose hero image from Files">
                     <Text style={styles.eventSecondaryButtonText}>Files · Hero</Text>
                   </TouchableOpacity>
-                  <Text style={styles.permissionCopy}>
-                    Hero Reel not available yet. Use Hero Image or a public Spotlight upload for now.
-                  </Text>
+                  <TouchableOpacity style={styles.eventSecondaryButton} activeOpacity={0.88}
+                    disabled={heroBusy || brandSaving} onPress={() => pickPlatformBrandAsset("hero_video")}
+                    testID="brand-hero-reel-gallery-button" accessibilityLabel="Choose Hero Reel from gallery">
+                    <Text style={styles.eventSecondaryButtonText}>{platformBranding?.heroVideo ? "Change Hero Reel" : "Choose Hero Reel"} · Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.eventSecondaryButton} activeOpacity={0.88}
+                    disabled={heroBusy || brandSaving} onPress={() => pickPlatformBrandAsset("hero_video", "files")}
+                    accessibilityLabel="Choose Hero Reel from Files">
+                    <Text style={styles.eventSecondaryButtonText}>Files · Hero Reel</Text>
+                  </TouchableOpacity>
+                  {platformBranding?.heroVideo ? <TouchableOpacity style={styles.eventSecondaryButton}
+                    disabled={heroBusy || brandSaving} onPress={() => removeBrandAssetFromDesign("hero_video")}>
+                    <Text style={styles.eventSecondaryButtonText}>Remove Hero Reel from design</Text>
+                  </TouchableOpacity> : null}
+                  <Text style={styles.permissionCopy}>Hero Reels play on your Platform after scanning, review and Publish Changes. Visitors choose Play; audio starts muted.</Text>
                 </View>
                 {platformBranding?.heroImage ? (
                   <>
@@ -7736,9 +7775,22 @@ export function ChannelStudioScreen() {
                     <Text style={styles.eventSecondaryButtonText}>Files · Logo</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.permissionCopy}>
-                  Watermark not available yet. Public video watermark rendering is not active.
-                </Text>
+                {renderBrandAssetPreview({ title: "Video Watermark", asset: platformBranding?.watermark, fallback: "WATERMARK" })}
+                <View style={styles.brandButtonRow}>
+                  <TouchableOpacity style={styles.eventSecondaryButton} disabled={kitBusy || brandSaving}
+                    onPress={() => pickPlatformBrandAsset("watermark")} accessibilityLabel="Choose video watermark from gallery">
+                    <Text style={styles.eventSecondaryButtonText}>Choose Watermark · Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.eventSecondaryButton} disabled={kitBusy || brandSaving}
+                    onPress={() => pickPlatformBrandAsset("watermark", "files")} accessibilityLabel="Choose video watermark from Files">
+                    <Text style={styles.eventSecondaryButtonText}>Files · Watermark</Text>
+                  </TouchableOpacity>
+                  {platformBranding?.watermark ? <TouchableOpacity style={styles.eventSecondaryButton} disabled={kitBusy || brandSaving}
+                    onPress={() => removeBrandAssetFromDesign("watermark")}>
+                    <Text style={styles.eventSecondaryButtonText}>Remove Watermark from design</Text>
+                  </TouchableOpacity> : null}
+                </View>
+                <Text style={styles.permissionCopy}>Publish an approved watermark to make it available for Clip Studio exports. Existing video files are unchanged.</Text>
               </>
             ),
           })}
@@ -8101,9 +8153,10 @@ export function ChannelStudioScreen() {
       : providerReadinessSummary.some((row) => row.status === "sandbox_ready")
         ? "Sandbox ready"
         : "Setup needed";
-    const canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)
-      && payoutsFlag.state !== "on"
-      && liveMoneyFeatureFlag.state !== "on";
+    // Setup/status are not money execution. Exact creator/session/legal and
+    // qualified onboarding policy are checked server-side, independently of
+    // whether transaction rails are off, sandbox-only, or active.
+    const canStartStripeSetup = Boolean(user?.id);
     const canReviewCashoutReadiness = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)
       || moneyFlag("creator_balance_visible").state === "on";
     const paidTipTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "paid");
@@ -9460,6 +9513,7 @@ export function ChannelStudioScreen() {
     const renderPayoutReadinessContent = (testID = "money-manager-cashout-readiness") => (
       <View testID={testID}>
         {renderSummaryMetricCards(payoutCards)}
+        <CreatorCashoutPanel />
         <View style={styles.eventEmptyCard}>
           <Text style={styles.eventEmptyTitle}>Cashout not live yet.</Text>
           <Text style={styles.eventEmptyBody}>
@@ -9481,9 +9535,9 @@ export function ChannelStudioScreen() {
             <Text style={styles.eventPrimaryButtonText}>Review cashout readiness</Text>
           </TouchableOpacity>
         </View>
-        {canStartStripeSetup && (creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus) ? (
+        {canStartStripeSetup ? (
           <View style={styles.eventActionRow}>
-            {creatorPayoutSummary.setupActionLabel ? (
+            {(
               <TouchableOpacity
                 style={[styles.eventPrimaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
                 activeOpacity={0.88}
@@ -9497,10 +9551,10 @@ export function ChannelStudioScreen() {
                     <Text style={styles.eventPrimaryButtonText}>Opening setup</Text>
                   </View>
                 ) : (
-                  <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel}</Text>
+                  <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel || "Review payout setup"}</Text>
                 )}
               </TouchableOpacity>
-            ) : null}
+            )}
             {creatorPayoutSummary.canRefreshProviderStatus ? (
               <TouchableOpacity
                 style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}

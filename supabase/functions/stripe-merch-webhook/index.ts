@@ -80,6 +80,7 @@ const providerFacts = (event: StripeMerchEvent, object: StripeObject) => {
     metadata_order_id: toText(metadata.chillywood_order_id) || null,
     metadata_buyer_id: toText(metadata.buyer_user_id) || null,
     metadata_environment: toText(metadata.environment) || null,
+    metadata_tax_policy_id: toText(metadata.commerce_tax_policy_id) || null,
     metadata_rail: toText(metadata.rail) || null,
     amount_minor: minorAmount(type.startsWith("checkout.session.") ? object.amount_total : object.amount),
     amount_received_minor: minorAmount(object.amount_received),
@@ -107,7 +108,11 @@ Deno.serve(async (req) => {
   let adminClient: SupabaseClientLike | null = null;
   try {
     const secret = readStripeMerchWebhookSecret();
-    if (!secret.configured) return jsonResponse(200, notConfiguredPayload(secret.reason, secret.message, {
+    const liveSecret = readOptionalEnv("STRIPE_MERCH_LIVE_WEBHOOK_SECRET");
+    const liveAccount = readOptionalEnv("STRIPE_MERCH_LIVE_ACCOUNT_ID");
+    const liveConfigured = !!liveSecret?.startsWith("whsec_") && /^acct_[A-Za-z0-9]+$/.test(liveAccount ?? "")
+      && (!secret.configured || liveSecret !== secret.secret);
+    if (!secret.configured && !liveConfigured) return jsonResponse(200, notConfiguredPayload(secret.reason, secret.message, {
       ...responseFacts, eventStored: false, signatureVerified: false, webhookProcessed: false,
     }));
     const admin = createAdminClient();
@@ -116,7 +121,10 @@ Deno.serve(async (req) => {
     }));
     adminClient = admin.client;
     const rawBody = await req.text();
-    if (!await verifyStripeWebhookSignature(rawBody, req.headers.get("stripe-signature"), secret.secret)) {
+    // Mode comes from the matching endpoint secret, never unsigned JSON.
+    const testVerified = secret.configured && await verifyStripeWebhookSignature(rawBody, req.headers.get("stripe-signature"), secret.secret);
+    const liveVerified = liveConfigured && await verifyStripeWebhookSignature(rawBody, req.headers.get("stripe-signature"), liveSecret!);
+    if (Number(testVerified) + Number(liveVerified) !== 1) {
       await safeWriteAuditLog(adminClient, {
         action: "stripe_merch_webhook_failed", targetType: "stripe_merch_webhook", severity: "warning",
         reason: "Stripe merch webhook signature verification failed.",
@@ -125,20 +133,21 @@ Deno.serve(async (req) => {
       return jsonResponse(400, { ...responseFacts, error: "invalid_signature", signatureVerified: false,
         eventStored: false, webhookProcessed: false, message: "Stripe merch webhook signature verification failed." });
     }
+    const environment = liveVerified ? "production" : "sandbox";
     const event = parseStripeEvent(rawBody), object = eventObject(event), type = toText(event.type);
     // Missing environment is not evidence of a test event; connected-account
     // events are not this platform's physical-merch Checkout authority.
-    if (event.livemode !== false || object?.livemode !== false
+    if (event.livemode !== liveVerified || object?.livemode !== liveVerified
       || toText((event as unknown as Record<string, unknown>).account)) {
       await safeWriteAuditLog(adminClient, {
         action: "stripe_merch_webhook_failed", targetType: "stripe_merch_webhook", severity: "warning",
-        reason: "Stripe merch webhook was rejected by the sandbox environment guard.",
+        reason: "Stripe merch webhook did not match the authenticated environment or platform account.",
         metadata: { event_id: toText(event.id), event_type: type,
           failure_reason: "test_environment_required", function_name: FUNCTION_NAME },
       });
       return jsonResponse(200, { ...responseFacts, status: "ignored", reason: "test_environment_required",
         eventStored: false, signatureVerified: true, webhookProcessed: false,
-        message: "Only explicit test-mode platform merch events are accepted." });
+        message: "The event environment and account must match the authenticated platform webhook lane." });
     }
     if (!merchEventTypes.has(type) || !providerEventStateSupported(type, object)) {
       return jsonResponse(200, { ...responseFacts, status: "ignored", reason: "payment_state_not_confirmed",
@@ -149,7 +158,8 @@ Deno.serve(async (req) => {
     // order still settle after sales are disabled, through the same test guards.
     const { data, error } = await adminClient.rpc("process_stripe_merch_webhook_lifecycle", {
       p_event_id: toText(event.id), p_event_type: type,
-      p_raw_event_hash: await hashText(rawBody), p_facts: providerFacts(event, object!),
+      p_raw_event_hash: await hashText(rawBody), p_facts: { ...providerFacts(event, object!), verified_environment: environment,
+        provider_account_id: liveVerified ? liveAccount : null },
     });
     if (error) throw new Error(`Merch reconciliation failed: ${error.message}`);
     const result = data as Record<string, unknown> | null;
@@ -159,12 +169,12 @@ Deno.serve(async (req) => {
     await safeWriteAuditLog(adminClient, {
       action: "stripe_merch_webhook_processed", targetType: "merch_order",
       targetId: toText(result.orderId) || null,
-      reason: "Verified sandbox merch payment state reconciled without payout or digital access.",
+      reason: "Verified account-bound merch payment state reconciled without payout or digital access.",
       metadata: { event_id: toText(event.id), event_type: type, function_name: FUNCTION_NAME,
         processing_reason: toText(result.reason), physical_merch_only: true, creates_digital_access: false },
     });
     return jsonResponse(result.retryable ? 409 : 200, {
-      ...responseFacts, status: result.status, reason: result.reason, signatureVerified: true,
+      ...responseFacts, mode: environment, status: result.status, reason: result.reason, signatureVerified: true,
       eventStored: result.eventStored, webhookProcessed: !result.retryable && result.status !== "duplicate",
       orderUpdated: result.orderUpdated, linkedOrderId: result.orderId ?? null, retryable: result.retryable,
       message: result.retryable

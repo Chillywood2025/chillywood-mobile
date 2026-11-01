@@ -9,6 +9,7 @@ export const databaseUpgradeCommands = [
   'supabase migration up --local',
   'supabase test db',
 ];
+export const databaseCronBoundary = "node scripts/with-local-ci-cron-paused.mjs <<'NATIVE_PROOFS'";
 export function assertDatabaseUpgradeCI(run) {
   const lines = run.split('\n');
   let previous = -1;
@@ -18,4 +19,11 @@ export function assertDatabaseUpgradeCI(run) {
     assert.ok(position > previous,'predecessor reset -> populated upgrade -> latest migrations -> full pgTAP');
     previous = position;
   }
+  const between = lines.slice(lines.indexOf('supabase migration up --local')+1,lines.indexOf('supabase test db'))
+    .filter(line=>line.trim() && !line.trimStart().startsWith('#'));
+  assert.deepEqual(between,[databaseCronBoundary],'only the fixed local cron isolation boundary may precede full pgTAP');
+  assert.equal(lines.filter(line=>line===databaseCronBoundary).length,1,'one exact failure-propagating isolation invocation');
+  assert.equal(lines.filter(line=>line==='NATIVE_PROOFS').length,1,'one exact quoted-heredoc terminator');
+  assert.equal(lines.filter(line=>line.trim() && !line.trimStart().startsWith('#')).at(-1),'NATIVE_PROOFS',
+    'all later native gates remain inside the isolation block');
 }

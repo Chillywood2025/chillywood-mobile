@@ -48,6 +48,19 @@ test('actual full-chain SQL records verified adapter costs, immutable 90/10 held
   const held=await save(partial);assert.equal(held.netBaseMinor,null);assert.equal(held.creatorShareMinor,null);assert.ok(held.holdReasons.includes('refund_tax_reversal_unverified'));
   await assert.rejects(save({...partial,refunds:[{...partial.refunds[0],fee:1,net:-501}]}),/immutable/);
   await root();assert.equal(await one('select creator_delta_minor::int from private.merch_held_net_allocations order by id desc limit 1'),-783);
+  const verifiedPartial={...partial,tax_reversal_minor:50,refund_tax_evidence:{
+   provenance:'stripe_tax_association_get_v1',association_id:'taxa_merch',original_tax_transaction_id:'tax_original',
+   payment_intent_id:'pi_merch',currency:'usd',gross_minor:1000,original_tax_minor:100,refunded_minor:500,tax_reversal_minor:50,
+   refunds:[{refund_id:'re_first',refund_minor:500,tax_reversal_minor:50,tax_transaction_id:'tax_refund'}]}};
+  await service();
+  await assert.rejects(save({...partial,tax_reversal_minor:50}),/tax_reversal_unqualified/,'an asserted amount is not tax evidence');
+  const qualified=await save(verifiedPartial);assert.equal(qualified.netBaseMinor,420);assert.equal(qualified.creatorShareMinor,378);
+  assert.ok(!qualified.holdReasons.includes('refund_tax_reversal_unverified'));assert.equal(qualified.financialAuthority,false);
+  assert.equal((await save(verifiedPartial)).status,'duplicate');
+  const changed=structuredClone(verifiedPartial);changed.tax_reversal_minor=49;changed.refund_tax_evidence.tax_reversal_minor=49;changed.refund_tax_evidence.refunds[0].tax_reversal_minor=49;
+  await assert.rejects(save(changed),/refund_tax_evidence_conflict/,'same refund cannot acquire different immutable tax');
+  await root();assert.equal(await one('select count(*)::int from private.stripe_refund_tax_evidence'),1);
+  await assert.rejects(db.exec('delete from private.stripe_refund_tax_evidence'),/immutable/);
   await service();await assert.rejects(save(evidence),/stale/);
   const full={...partial,refunded_minor:1000,tax_reversal_minor:100,refunds:[...partial.refunds,{id:'re_second',balance_id:'txn_second',amount:500,fee:0,net:-500,status:'available'}]};
   const recovery=await save(full);assert.equal(recovery.netBaseMinor,-30);assert.equal(recovery.recoveryObligationMinor,30);assert.equal(recovery.creatorShareMinor,0);

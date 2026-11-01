@@ -23,7 +23,7 @@ test('signed callback → durable inbox → scoped authenticated GET → real SQ
   STRIPE_MERCH_WEBHOOK_SECRET:'whsec_fixture',SUPABASE_URL:'https://fixture.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'fixture'};
  const rpc=async(name,args)=>{
   await service();
-  const specs={receive_merch_tracking_hint:['p_hash','p_carrier','p_tracking_number'],claim_merch_tracking_jobs:['p_limit'],
+  const specs={receive_merch_tracking_hint:['p_hash','p_carrier','p_tracking_number','p_environment'],claim_merch_tracking_jobs:['p_limit','p_environment'],
    complete_merch_tracking_job:['p_assignment_id','p_lease','p_facts','p_registered'],
    process_stripe_merch_webhook_lifecycle:['p_event_id','p_event_type','p_raw_event_hash','p_facts']};
   const keys=specs[name];assert.ok(keys,name);
@@ -87,6 +87,11 @@ test('signed callback → durable inbox → scoped authenticated GET → real SQ
    values($1,$2,'physical_merch_net_90_10_v1',0,0,0,0,0,0,array['sandbox_not_payable','verified_purchase_required','merch_tracking_review_required'])`,[costObservation,order]);
   await db.exec("insert into private.merch_tracking_qualification values(true,true,'SYNTHETIC TEST ONLY',clock_timestamp()+interval '1 day')");
   await db.query("insert into private.merch_tracking_accounts values($1,'managed_fixture',true,'SYNTHETIC TEST ONLY',clock_timestamp()+interval '1 day')",[creator]);
+  assert.equal(await one("select private.merch_tracking_configured($1,'production')",[creator]),false,
+   'sandbox qualification cannot qualify a live merchant');
+  assert.deepEqual(await one("select public.claim_merch_tracking_jobs(5,'production')"),[],
+   'live worker cannot claim sandbox shipments');
+  await assert.rejects(one("select public.claim_merch_tracking_jobs(5,'unknown')"),/environment_invalid/);
   const iso=n=>new Date(n*1000).toISOString();
   snapshot={carrier:'usps',tracking_number:'ABC123456',test:true,address_to:{zip:'12345',country:'US'},
    tracking_status:{status:'DELIVERED',status_date:iso(delivered)},tracking_history:[{status:'TRANSIT',status_date:iso(first)}]};

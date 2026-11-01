@@ -16,10 +16,8 @@ Deno.serve(async req => {
   let started = false;
   try {
     // Dedicated configuration is required; never fall back to another money rail.
-    const key = readOptionalEnv("STRIPE_AUCTION_PLATFORM_TEST_KEY");
-    const platformAccount = readOptionalEnv("STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID");
     const returnUrl = readOptionalEnv("STRIPE_ROOM_AUCTION_RETURN_URL");
-    if (!key || !/^(rk|sk)_test_[A-Za-z0-9]+$/.test(key) || !/^acct_[A-Za-z0-9]+$/.test(platformAccount ?? "") || !returnUrl) return unavailable("provider_not_configured");
+    if (!returnUrl) return unavailable("provider_not_configured");
     const destination = new URL(returnUrl);
     if (destination.protocol !== "https:" || destination.username || destination.password) return unavailable("return_destination_not_configured");
     const { supabaseUrl, supabaseAnonKey } = createAuthClient();
@@ -34,6 +32,16 @@ Deno.serve(async req => {
       || Object.keys(payload).some(k => !["quote_id", "attempt_id", "google_play_external_transaction_token", "google_play_external_link_api_version"].includes(k))) return unavailable("checkout_identity_required", 400);
     const admin = createAdminClient();
     if (!admin.configured) return unavailable("server_not_configured");
+    const provider = await admin.client.rpc("get_auction_checkout_provider_context", {
+      p_lane: "room", p_quote_id: payload.quote_id, p_buyer_id: auth.user.id, p_session_id: authority.sessionGeneration,
+    });
+    if (provider.error || !["test", "live"].includes(provider.data?.environment)) return unavailable("approved_checkout_unavailable");
+    const mode = provider.data.environment as "test" | "live", live = mode === "live";
+    const key = readOptionalEnv(live ? "STRIPE_AUCTION_PLATFORM_LIVE_KEY" : "STRIPE_AUCTION_PLATFORM_TEST_KEY");
+    const platformAccount = readOptionalEnv(live ? "STRIPE_AUCTION_PLATFORM_LIVE_ACCOUNT_ID" : "STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID");
+    if (!key || !new RegExp(`^(rk|sk)_${mode}_[A-Za-z0-9]+$`).test(key)
+      || !/^acct_[A-Za-z0-9]+$/.test(platformAccount ?? "") || platformAccount !== provider.data.platformAccountId)
+      return unavailable("provider_not_configured");
     // Atomic claim creates the immutable award intent and shared reservation.
     // Missing server capability/product qualification rolls the entire claim back.
     const claim = await admin.client.rpc("prepare_creator_room_auction_platform_checkout", {
@@ -52,7 +60,7 @@ Deno.serve(async req => {
         p_session_id: authority.sessionGeneration, p_attempt_id: payload.attempt_id,
       });
       if (recovered.error || recovered.data?.recoveryAuthorized !== true
-        || !/^cs_test_[A-Za-z0-9]+$/.test(recovered.data.providerCheckoutSessionId)) {
+        || !new RegExp(`^cs_${mode}_[A-Za-z0-9]+$`).test(recovered.data.providerCheckoutSessionId)) {
         return jsonResponse(200, { status: "pending", reason: "checkout_already_claimed",
           checkoutCreated: false, liveMoneyAction: false });
       }
@@ -61,7 +69,7 @@ Deno.serve(async req => {
     started = true;
     const android = q.platform === "android" && q.routeKind === "android_external_content_link";
     const browser = ["ios", "web"].includes(q.platform) && q.routeKind === "external_browser_checkout";
-    if (q.environment !== "test" || q.buyerId !== auth.user.id || q.quoteId !== payload.quote_id
+    if (q.environment !== mode || q.buyerId !== auth.user.id || q.quoteId !== payload.quote_id
       || (!android && !browser)
       || q.storefrontCountry !== "US"
       || typeof q.partyId !== "string" || !q.partyId || !uuid(q.roomSessionId) || !uuid(q.claimId)
@@ -74,7 +82,7 @@ Deno.serve(async req => {
       || q.recipientAccountId === platformAccount
       || !/^prod_[A-Za-z0-9]+$/.test(q.providerProductId)) throw new Error("invalid_claim");
     const taxPolicy = recovering ? null : await readCommerceTaxReadiness(admin.client, { feature: "room_auction", identityId: q.quoteId,
-      productId: q.providerProductId, accountId: platformAccount!, environment: "test", permittedScope: "worldwide" });
+      productId: q.providerProductId, accountId: platformAccount!, environment: mode, permittedScope: "worldwide" });
     if (taxPolicy && !taxPolicy.ready) return unavailable(taxPolicy.reason);
     if (android) {
       // Bind the same fresh native observation that admitted this buyer/quote.
@@ -103,7 +111,7 @@ Deno.serve(async req => {
     if (taxPolicy?.ready) for (const [name, value] of Object.entries(commerceTaxParameters(taxPolicy))) body.set(name, value);
     body.set("billing_address_collection", "required");
     const metadata = { auction_quote_id: q.quoteId, auction_id: q.auctionId, buyer_user_id: q.buyerId,
-      creator_user_id: q.creatorId, provider_product_id: q.providerProductId, environment: "test", rail: "stripe_room_auction",
+      creator_user_id: q.creatorId, provider_product_id: q.providerProductId, environment: mode, rail: "stripe_room_auction",
       settlement_contract_id: q.settlementContractId, settlement_policy: q.settlementPolicy };
     for (const [name, value] of Object.entries(metadata)) {
       body.set(`metadata[${name}]`, String(value));
@@ -122,8 +130,21 @@ Deno.serve(async req => {
         signal: AbortSignal.timeout(15000) });
       if (!productResponse.ok) throw new Error("tax_product_unverified");
       const taxProduct = await productResponse.json();
-      if (taxProduct.id !== q.providerProductId || taxProduct.object !== "product" || taxProduct.livemode !== false
+      if (taxProduct.id !== q.providerProductId || taxProduct.object !== "product" || taxProduct.livemode !== live || taxProduct.active !== true
         || taxProduct.tax_code !== taxPolicy.taxCode) throw new Error("tax_product_unverified");
+    }
+    if (!recovering) {
+      // Provider reads can outlast a qualification or a stop decision. Recheck
+      // current server authority immediately before the one permitted POST.
+      const dispatch = await admin.client.rpc("get_auction_checkout_provider_context", {
+        p_lane: "room", p_quote_id: q.quoteId, p_buyer_id: auth.user.id, p_session_id: authority.sessionGeneration,
+      });
+      if (dispatch.error || dispatch.data?.environment !== mode || dispatch.data?.platformAccountId !== platformAccount)
+        throw new Error("checkout_dispatch_authority_changed");
+      const currentTax = await readCommerceTaxReadiness(admin.client, { feature: "room_auction", identityId: q.quoteId,
+        productId: q.providerProductId, accountId: platformAccount!, environment: mode, permittedScope: "worldwide" });
+      if (!currentTax.ready || !taxPolicy?.ready || currentTax.policyId !== taxPolicy.policyId)
+        throw new Error("checkout_dispatch_tax_changed");
     }
     const response = await fetch(providerUrl, { method: recovering ? "GET" : "POST",
       headers: { Authorization: `Bearer ${key}`, "Stripe-Version": "2026-10-28.endive",
@@ -132,9 +153,9 @@ Deno.serve(async req => {
     if (!response.ok) throw new Error("provider_checkout_uncertain");
     const session = await response.json();
     const url = new URL(session.url);
-    if (session.object !== "checkout.session" || session.livemode !== false || session.mode !== "payment"
+    if (session.object !== "checkout.session" || session.livemode !== live || session.mode !== "payment"
       || session.status !== "open" || session.payment_status !== "unpaid"
-      || !/^cs_test_[A-Za-z0-9]+$/.test(session.id) || session.client_reference_id !== q.quoteId
+      || !new RegExp(`^cs_${mode}_[A-Za-z0-9]+$`).test(session.id) || session.client_reference_id !== q.quoteId
       || (recovering && session.id !== q.providerCheckoutSessionId)
       || session.amount_total !== q.amountMinor || session.amount_subtotal !== q.amountMinor || session.currency !== q.currency
       || (taxPolicy?.ready && (session.automatic_tax?.enabled !== (taxPolicy.collectionMode === "automatic")
@@ -154,7 +175,7 @@ Deno.serve(async req => {
       p_quote_id: q.quoteId, p_buyer_id: auth.user.id, p_session_id: authority.sessionGeneration, p_attempt_id: payload.attempt_id,
     });
     if (release.error || release.data !== true) throw new Error("checkout_release_unavailable");
-    return jsonResponse(200, { status: "checkout_ready", checkoutCreated: true, liveMoneyAction: false,
+    return jsonResponse(200, { status: "checkout_ready", checkoutCreated: true, liveMoneyAction: live && !recovering,
       quoteId: q.quoteId, attemptId: payload.attempt_id, buyerId: q.buyerId, auctionId: q.auctionId,
       partyId: q.partyId, roomSessionId: q.roomSessionId, claimId: q.claimId, sourceKind: q.sourceKind, creatorId: q.creatorId,
       amountMinor: q.amountMinor, currency: q.currency, environment: q.environment, checkoutUrl: url.href,

@@ -1,5 +1,5 @@
 begin;
-select plan(68);
+select plan(81);
 insert into auth.users(id,is_sso_user,is_anonymous) values
   ('af200000-0000-4000-8000-000000000001',false,false), ('af200000-0000-4000-8000-000000000002',false,false), ('af200000-0000-4000-8000-000000000003',false,false),
   ('af200000-0000-4000-8000-000000000004',false,false), ('af200000-0000-4000-8000-000000000005',false,false) on conflict(id) do nothing;
@@ -135,27 +135,66 @@ insert into public.monetization_products( id,product_key,product_type,display_na
   provider_base_plan_id,revenuecat_entitlement,environment,status,is_android_digital,metadata ) values ( 'af210000-0000-4000-8000-000000000001','test_premium_product_change',
   'premium_subscription','Test Premium Product Change','revenuecat_google_play', 'test.premium.changed','test-base-plan','premium','sandbox','sandbox',true,
   '{"test_only":true}'::jsonb );
-select is( (select public.process_revenuecat_premium_event_atomic( 'revenuecat_google_play','generation-lifecycle-product-change','PRODUCT_CHANGE',
+select is( (select public.process_revenuecat_premium_event_atomic( 'revenuecat_google_play','generation-lifecycle-scheduled-change','PRODUCT_CHANGE',
     'af200000-0000-4000-8000-000000000003',product.provider_product_id, product.provider_base_plan_id,'sandbox','active',clock_timestamp()-interval '1 minute',
     clock_timestamp()+interval '30 days',clock_timestamp(),999,'usd',repeat('0',64), 'NORMAL','google_play','android',null,product.id,'recoverable-generation-original'
   )->>'status' from public.monetization_products product where product.id='af210000-0000-4000-8000-000000000001'),
-  'processed','product change preserves the admitted generation while changing exact catalog identity');
+  'ignored','scheduled product change does not grant its future SKU');
+select is((select current_provider_product_id from public.revenuecat_premium_transaction_authority
+  where provider='revenuecat_google_play' and original_transaction_id='recoverable-generation-original'),'premium_subscription',
+  'scheduled product change preserves the current catalog binding');
+select ok(not exists(select 1 from public.access_grants g join public.provider_events e on e.id=g.provider_event_id
+    where e.provider_event_id='generation-lifecycle-scheduled-change')
+  and not exists(select 1 from public.money_access_ledger_events l join public.provider_events e on e.id=l.provider_event_id
+    where e.provider_event_id='generation-lifecycle-scheduled-change'),
+  'scheduled product change creates no access grant or money ledger');
+
+select is( (select public.process_revenuecat_premium_event_atomic( 'revenuecat_google_play','generation-lifecycle-effective-renewal','RENEWAL',
+    'af200000-0000-4000-8000-000000000003',product.provider_product_id, product.provider_base_plan_id,'sandbox','active',clock_timestamp(),
+    clock_timestamp()+interval '30 days',clock_timestamp(),999,'usd',repeat('0',64), 'NORMAL','google_play','android',null,product.id,'recoverable-generation-original'
+  )->>'status' from public.monetization_products product where product.id='af210000-0000-4000-8000-000000000001'),
+  'processed','effective renewal preserves the admitted generation while changing exact catalog identity');
 select is( (select current_provider_product_id||':'||coalesce(product_change_projection_event_id,'clear') from public.revenuecat_premium_transaction_authority
    where provider='revenuecat_google_play' and original_transaction_id='recoverable-generation-original'),
   'test.premium.changed:clear','the product-change marker clears and the new provider product becomes current');
 select throws_ok(
   $$select public.process_revenuecat_premium_event_atomic(
-    'revenuecat_google_play','generation-lifecycle-product-change-failure','PRODUCT_CHANGE','af200000-0000-4000-8000-000000000003',
+    'revenuecat_google_play','generation-lifecycle-effective-renewal-failure','RENEWAL','af200000-0000-4000-8000-000000000003',
     product.provider_product_id,product.provider_base_plan_id,'sandbox','active',clock_timestamp()-interval '1 minute',clock_timestamp()+interval '30 days',
     clock_timestamp(),999,'usd','invalid-hash','NORMAL','google_play','android',null,product.id,'recoverable-generation-original'
   ) from public.monetization_products product where product.id='af210000-0000-4000-8000-000000000001'$$,
-  'revenuecat_premium_transaction_identity_invalid','a failed product-change projection rolls back instead of leaving a marker');
+  'revenuecat_premium_transaction_identity_invalid','a failed effective-renewal projection rolls back instead of leaving a marker');
 select is((select product_change_projection_event_id from public.revenuecat_premium_transaction_authority
   where provider='revenuecat_google_play' and original_transaction_id='recoverable-generation-original'),null,
   'the transaction-local product-change marker remains clear after the forced failure');
 select is( (select count(*)::integer from public.money_access_ledger_events ledger join public.provider_events event on event.id=ledger.provider_event_id
-   where event.provider_event_id in ( 'generation-lifecycle-renewal','generation-lifecycle-uncancellation', 'generation-lifecycle-product-change'
+   where event.provider_event_id in ( 'generation-lifecycle-renewal','generation-lifecycle-uncancellation', 'generation-lifecycle-effective-renewal'
    ) and ledger.payable_state<>'not_payable'), 0,'continued sandbox lifecycle authority creates no payable money');
+select throws_ok($sql$select public.process_revenuecat_premium_event_atomic(
+  'revenuecat_google_play','effective-transition-stale','RENEWAL','af200000-0000-4000-8000-000000000003',
+  p.provider_product_id,p.provider_base_plan_id,'sandbox','active',clock_timestamp()-interval '1 day',clock_timestamp()+interval '30 days',
+  clock_timestamp(),999,'usd',repeat('a',64),'NORMAL','google_play','android',null,p.id,'recoverable-generation-original')
+  from public.monetization_products p where p.product_key='premium_subscription_monthly' and p.provider='revenuecat_google_play'$sql$,
+  'revenuecat_premium_original_transaction_product_mismatch','stale input cannot stage an effective changed-SKU renewal');
+select throws_ok($sql$select public.process_revenuecat_premium_event_atomic(
+  'revenuecat_google_play','effective-transition-future','RENEWAL','af200000-0000-4000-8000-000000000003',
+  p.provider_product_id,p.provider_base_plan_id,'sandbox','active',clock_timestamp()+interval '1 day',clock_timestamp()+interval '30 days',
+  clock_timestamp(),999,'usd',repeat('a',64),'NORMAL','google_play','android',null,p.id,'recoverable-generation-original')
+  from public.monetization_products p where p.product_key='premium_subscription_monthly' and p.provider='revenuecat_google_play'$sql$,
+  'revenuecat_premium_original_transaction_product_mismatch','future input cannot stage an effective changed-SKU renewal');
+select throws_ok($sql$select public.process_revenuecat_premium_event_atomic(
+  'revenuecat_google_play','effective-transition-uncancellation','UNCANCELLATION','af200000-0000-4000-8000-000000000003',
+  p.provider_product_id,p.provider_base_plan_id,'sandbox','active',clock_timestamp(),clock_timestamp()+interval '30 days',
+  clock_timestamp(),999,'usd',repeat('a',64),'NORMAL','google_play','android',null,p.id,'recoverable-generation-original')
+  from public.monetization_products p where p.product_key='premium_subscription_monthly' and p.provider='revenuecat_google_play'$sql$,
+  'revenuecat_premium_original_transaction_product_mismatch','uncancellation input cannot stage an effective changed-SKU renewal');
+select ok((select current_provider_product_id='test.premium.changed' and latest_event_id='generation-lifecycle-effective-renewal'
+  and product_change_projection_event_id is null and authority_state='active' from public.revenuecat_premium_transaction_authority
+  where provider='revenuecat_google_play' and original_transaction_id='recoverable-generation-original')
+  and not exists(select 1 from public.provider_events where provider_event_id like 'effective-transition-%'),
+  'rejected changed-SKU inputs leave the exact effective binding, marker and event history unchanged');
+select ok(not has_function_privilege('service_role','private.revenuecat_effective_renewal_scope(text,text,uuid,text)','execute'),
+  'service callers cannot directly invoke the transaction-scoped effective renewal predicate');
 select ok( not public.revenuecat_premium_post_quarantine_generation_internal( 'revenuecat_google_play','af200000-0000-4000-8000-000000000002',
     'sandbox','recoverable-generation-original' ), 'the immutable generation cannot be rebound to another user' );
 select lives_ok(
@@ -194,14 +233,29 @@ select is( (select count(*)::text||':'||(select latest_event_id from public.reve
    from public.provider_events where provider_event_id='restore-generation-second'),
   '1:restore-generation-second','the duplicate Restore creates no row and preserves the watermark');
 select is( (select public.process_revenuecat_premium_event_atomic(
-    'revenuecat_app_store','restore-generation-product-change','PRODUCT_CHANGE','af200000-0000-4000-8000-000000000005',mapping.provider_product_id,null,
+    'revenuecat_app_store','restore-generation-scheduled-change','PRODUCT_CHANGE','af200000-0000-4000-8000-000000000005',mapping.provider_product_id,null,
     'sandbox','active',clock_timestamp()-interval '30 minutes',clock_timestamp()+interval '365 days',clock_timestamp()-interval '10 minutes',4999,'usd',repeat('4',64),
     'NORMAL','app_store','ios',mapping.id,mapping.product_id,'restore-generation-original' )->>'status' from public.monetization_product_store_mappings mapping
   where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' and mapping.provider_product_id='com.chillywood.premium.yearly'),
-  'processed','a legitimate App Store Premium product change becomes the current bound generation');
+  'ignored','scheduled product change does not grant its future SKU');
+select is((select current_provider_product_id from public.revenuecat_premium_transaction_authority
+  where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original'),'com.chillywood.premium.monthly',
+  'scheduled product change preserves the current catalog binding');
+select ok(not exists(select 1 from public.access_grants g join public.provider_events e on e.id=g.provider_event_id
+    where e.provider_event_id='restore-generation-scheduled-change')
+  and not exists(select 1 from public.money_access_ledger_events l join public.provider_events e on e.id=l.provider_event_id
+    where e.provider_event_id='restore-generation-scheduled-change'),
+  'scheduled product change creates no access grant or money ledger');
+
+select is( (select public.process_revenuecat_premium_event_atomic(
+    'revenuecat_app_store','restore-generation-effective-renewal','RENEWAL','af200000-0000-4000-8000-000000000005',mapping.provider_product_id,null,
+    'sandbox','active',clock_timestamp()-interval '30 minutes',clock_timestamp()+interval '365 days',clock_timestamp()-interval '10 minutes',4999,'usd',repeat('4',64),
+    'NORMAL','app_store','ios',mapping.id,mapping.product_id,'restore-generation-original' )->>'status' from public.monetization_product_store_mappings mapping
+  where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' and mapping.provider_product_id='com.chillywood.premium.yearly'),
+  'processed','an effective App Store Premium renewal becomes the current bound generation');
 select is((select current_provider_product_id||':'||latest_event_id||':'||coalesce(product_change_projection_event_id,'clear')
   from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original'),
-  'com.chillywood.premium.yearly:restore-generation-product-change:clear','the App Store binding records the changed product and clears its marker');
+  'com.chillywood.premium.yearly:restore-generation-effective-renewal:clear','the App Store binding records the changed product and clears its marker');
 create temporary table historical_restore_duplicate_result on commit drop as
 select public.reconcile_revenuecat_premium_snapshot_atomic(
   'restore-generation-second','af200000-0000-4000-8000-000000000005','restore-generation-subscription','restore-generation-original',
@@ -211,7 +265,7 @@ select public.reconcile_revenuecat_premium_snapshot_atomic(
 select is((select (result->>'status')||':'||(result->>'entitlementActive') from historical_restore_duplicate_result),'duplicate_ignored:true',
   'an exact historical Restore retry stays idempotent after a legitimate product change');
 select is((select latest_event_id from public.revenuecat_premium_transaction_authority
-  where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original'),'restore-generation-product-change',
+  where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original'),'restore-generation-effective-renewal',
   'the historical Restore duplicate cannot regress the product-change watermark');
 select throws_ok(
   $sql$select public.reconcile_revenuecat_premium_snapshot_atomic(
@@ -220,14 +274,14 @@ select throws_ok(
   ) from public.monetization_product_store_mappings mapping where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox'
     and mapping.concept='premium' and mapping.provider_product_id='com.chillywood.premium.monthly'$sql$,
   'premium_reconciliation_duplicate_identity_mismatch','an old-SKU Restore ID cannot be replayed after product change with a different immutable payload hash');
-select ok((select current_provider_product_id='com.chillywood.premium.yearly' and latest_event_id='restore-generation-product-change' and latest_event_hash=repeat('4',64)
+select ok((select current_provider_product_id='com.chillywood.premium.yearly' and latest_event_id='restore-generation-effective-renewal' and latest_event_hash=repeat('4',64)
     and authority_state='active' from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store'
       and original_transaction_id='restore-generation-original') and
   (select count(*)=1 from public.provider_events where provider_event_id='restore-generation-second') and
   (select count(*)=1 from public.access_grants grant_row join public.provider_events event on event.id=grant_row.provider_event_id
-    where event.provider_event_id='restore-generation-product-change') and
+    where event.provider_event_id='restore-generation-effective-renewal') and
   (select count(*)=1 from public.money_access_ledger_events ledger join public.provider_events event on event.id=ledger.provider_event_id
-    where event.provider_event_id='restore-generation-product-change'),
+    where event.provider_event_id='restore-generation-effective-renewal'),
   'the changed-hash Restore rejection preserves the product-change watermark and grant/ledger cardinality');
 create temporary table stale_restore_result on commit drop as
 select public.reconcile_revenuecat_premium_snapshot_atomic( 'restore-generation-stale','af200000-0000-4000-8000-000000000005',
@@ -240,7 +294,7 @@ select is( (select (result->>'duplicateEvent')||':'||(result->>'entitlementActiv
 select is( (select count(*)::text||':'||(select latest_event_id from public.revenuecat_premium_transaction_authority
     where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original')
    from public.provider_events where provider_event_id='restore-generation-stale'),
-  '0:restore-generation-product-change','the stale pre-change Restore creates no event and cannot regress the watermark');
+  '0:restore-generation-effective-renewal','the stale pre-change Restore creates no event and cannot regress the watermark');
 select is((select current_provider_product_id||':'||latest_event_hash from public.revenuecat_premium_transaction_authority
   where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original'),
   'com.chillywood.premium.yearly:'||repeat('4',64),'the stale pre-change Restore preserves the current product and immutable event hash');
@@ -256,6 +310,16 @@ select public.process_revenuecat_premium_event_atomic( 'revenuecat_app_store','r
 select is((select result->>'status' from restore_revocation_result),'reversed','a provider-signed revocation terminates the restored generation');
 select ok(not public.premium_subject_has_finite_authority_internal( 'af200000-0000-4000-8000-000000000005'),
   'revocation removes authoritative Premium for the restored generation');
+select throws_ok($sql$select public.process_revenuecat_premium_event_atomic(
+  'revenuecat_app_store','effective-transition-after-revocation','RENEWAL','af200000-0000-4000-8000-000000000005',
+  m.provider_product_id,null,'sandbox','active',clock_timestamp(),clock_timestamp()+interval '30 days',
+  clock_timestamp(),999,'usd',repeat('b',64),'NORMAL','app_store','ios',m.id,m.product_id,'restore-generation-original')
+  from public.monetization_product_store_mappings m where m.provider='revenuecat_app_store' and m.environment='sandbox'
+    and m.provider_product_id='com.chillywood.premium.monthly'$sql$,
+  'revenuecat_premium_original_transaction_product_mismatch','changed-SKU renewal cannot resurrect a financially revoked original');
+select ok(not public.premium_subject_has_finite_authority_internal('af200000-0000-4000-8000-000000000005')
+  and not exists(select 1 from public.provider_events where provider_event_id='effective-transition-after-revocation'),
+  'financial-terminal changed-SKU rejection leaves access revoked and creates no event');
 select is( (select public.reconcile_revenuecat_premium_snapshot_atomic(
     'restore-generation-second','af200000-0000-4000-8000-000000000005','restore-generation-subscription','restore-generation-original',
     mapping.provider_product_id,'active',clock_timestamp()-interval '1 day',clock_timestamp()+interval '29 days',clock_timestamp(),repeat('e',64)

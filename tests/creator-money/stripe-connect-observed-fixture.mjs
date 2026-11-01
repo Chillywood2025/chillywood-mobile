@@ -26,10 +26,10 @@ export const creator = "cf100000-0000-4000-8000-000000000001";
 export function clientFor(db) {
   const identifier = value => { assert.match(value, /^[a-z_]+$/u); return `"${value}"`; };
   return { from(table) {
-    let operation = "select", values, filters = [], limit;
+    let operation = "select", values, filters = [], limit, ordering;
     const query = {
       select() { return query; }, eq(key, value) { filters.push([key, value]); return query; },
-      is(key, value) { filters.push([key, value]); return query; }, order() { return query; },
+      is(key, value) { filters.push([key, value]); return query; }, order(key, options={}) { ordering=`${identifier(key)} ${options.ascending === false ? 'desc' : 'asc'}`; return query; },
       in(key, value) { filters.push([key, value, "in"]); return query; },
       limit(value) { limit = value; return query; },
       update(value) { operation = "update"; values = value; return query; },
@@ -40,7 +40,7 @@ export function clientFor(db) {
           const args = [], parameter = value => { args.push(value); return `$${args.length}`; };
           const where = filters.length ? ` where ${filters.map(([key, value, operator]) => operator === "in" ? `${identifier(key)}=any(${parameter(value)}::text[])` : value === null ? `${identifier(key)} is null` : `${identifier(key)}=${parameter(value)}`).join(" and ")}` : "";
           let sql;
-          if (operation === "select") sql = `select * from public.${identifier(table)}${where}${limit ? ` limit ${Number(limit)}` : ""}`;
+          if (operation === "select") sql = `select * from public.${identifier(table)}${where}${ordering ? ` order by ${ordering}` : ''}${limit ? ` limit ${Number(limit)}` : ""}`;
           else if (operation === "update") sql = `update public.${identifier(table)} set ${Object.entries(values).map(([key, value]) => `${identifier(key)}=${parameter(value)}`).join(",")}${where} returning *`;
           else {
             const columns = Object.keys(values);

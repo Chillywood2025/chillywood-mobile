@@ -83,6 +83,11 @@ test('iOS final-thirty-minute admission resumes bound checkout but cannot create
     Date.now=()=>realDateNow()+20*60*1000;
     assert.ok(Number(await one('select extract(epoch from clock_timestamp())'))-Number(before)>=1199,'only disposable PGlite clock advances');
     await asBuyer(buyer);
+    await assert.rejects(admit(),/external_payment_capability_unavailable/,'twenty-minute-old provider configuration cannot authorize refreshed admission');
+    // Model a new independent provider observation in this disposable fixture;
+    // refreshing native storefront evidence alone must not refresh Connect.
+    await db.query(`update public.creator_payout_accounts set provider_configuration_observed_at=clock_timestamp()
+      where creator_user_id=$1 and provider='stripe_connect' and provider_environment='test' and provider_account_id='acct_fixture'`,[creator.user_id]);
     const refreshed=await admit();assert.equal(refreshed.capabilityId,cap);
     assert.ok(Date.parse(refreshed.expiresAt)<=Date.now()+121000);
     await service();

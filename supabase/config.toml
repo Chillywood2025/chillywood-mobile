@@ -70,6 +70,9 @@ verify_jwt = false
 [functions.stripe-connect-webhook]
 verify_jwt = false
 
+[functions.stripe-connect-live-observation-webhook]
+verify_jwt = false
+
 [functions.stripe-merch-checkout]
 verify_jwt = false
 
@@ -267,6 +270,10 @@ verify_jwt = false
 # Service-only cost observation, additionally exact server-key authenticated.
 verify_jwt = true
 
+[functions.revenuecat-pending-reconcile]
+# Existing service credential plus JWT verification; private mode gates default OFF.
+verify_jwt = true
+
 [functions.stripe-auction-cost-reconcile]
 # GET-only provider observation with the existing server credential as well.
 verify_jwt = true
@@ -292,4 +299,20 @@ verify_jwt = true
 [functions.auction-approved-automation]
 verify_jwt = true
 [functions.stripe-fee-report-import]
+verify_jwt = true
+
+[functions.creator-cashout-worker]
+verify_jwt = true
+
+[functions.creator-cashout-fee-import]
+verify_jwt = true
+
+[functions.creator-cashout-driver]
+verify_jwt = true
+
+[functions.creator-cashout-webhook]
+# Dedicated raw-body signature plus authenticated current-provider readback.
+verify_jwt = false
+
+[functions.stripe-tax-category-catalog]
 verify_jwt = true

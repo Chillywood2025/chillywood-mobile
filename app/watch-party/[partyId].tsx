@@ -2027,7 +2027,7 @@ export default function WatchPartyRoomScreen() {
 
   const onBuyPaidTicketFromRoomGate = useCallback(async () => {
     const normalizedPartyId = String(room?.partyId ?? partyId ?? "").trim();
-    if (!normalizedPartyId || paidTicketBusy) return;
+    if (!normalizedPartyId || paidTicketBusy || paidTicketGate?.offer?.provider === "stripe_room_auction") return;
     if (!paidWatchPartyCheckoutAvailable) {
       setPaidTicketNotice("Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.");
       return;
@@ -2054,7 +2054,7 @@ export default function WatchPartyRoomScreen() {
       paidTicketPurchaseLatchRef.current.release();
       setPaidTicketBusy(false);
     }
-  }, [paidTicketBusy, paidWatchPartyCheckoutAvailable, partyId, room?.partyId]);
+  }, [paidTicketBusy, paidTicketGate?.offer?.provider, paidWatchPartyCheckoutAvailable, partyId, room?.partyId]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async () => {
@@ -2855,7 +2855,8 @@ export default function WatchPartyRoomScreen() {
     const priceLabel = offer
       ? `${(offer.priceCents / 100).toLocaleString(undefined, { style: "currency", currency: offer.currency.toUpperCase() })}`
       : null;
-    const oneTimePriceLabel = formatOneTimePrice(priceLabel);
+    const auctionOnly = offer?.provider === "stripe_room_auction";
+    const oneTimePriceLabel = auctionOnly ? "Price set by the winning bid" : formatOneTimePrice(priceLabel);
     return (
       <View style={styles.center} testID="screen-party-room">
         <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
@@ -2867,7 +2868,7 @@ export default function WatchPartyRoomScreen() {
           </View>
           {priceLabel ? <Text style={styles.ticketPrice}>{oneTimePriceLabel}</Text> : null}
           <Text style={styles.errorBody}>
-            {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable && priceLabel
+            {auctionOnly ? "Admission is offered through this Party Room auction. Only the eligible winner can open checkout; winning alone does not grant access." : paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable && priceLabel
               ? `A Party Room Pass gives you entry to this exact Party Room for ${oneTimePriceLabel}. It does not include Live Stage, speaking, camera, microphone, host, moderator, broadcast permission, Premium, subscriptions, VIP, paid videos, other rooms, or Events.`
               : "Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified."}
           </Text>
@@ -2876,7 +2877,7 @@ export default function WatchPartyRoomScreen() {
             excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, Event Passes, broadcast permission, host controls, and other rooms stay separate."
           />
           <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Party Room Pass unlock?" />
-          {paidTicketGate.requiresPurchase && priceLabel ? (
+          {!auctionOnly && paidTicketGate.requiresPurchase && priceLabel ? (
             <TouchableOpacity
               style={[styles.secondaryBtn, styles.accessPrimaryButton, paidTicketBusy && styles.secondaryBtnDisabled]}
               onPress={onBuyPaidTicketFromRoomGate}

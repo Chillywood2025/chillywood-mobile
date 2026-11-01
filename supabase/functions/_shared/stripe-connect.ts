@@ -7,6 +7,7 @@ import {
 export type AuthenticatedUser = {
   email: string | null;
   id: string;
+  sessionGeneration?: string;
 };
 
 type AuthResult = { user: AuthenticatedUser } | { error: Response };
@@ -16,6 +17,7 @@ type JsonObject = Record<string, unknown>;
 export type SupabaseClientLike = ReturnType<typeof createClient<any>>;
 
 export type StripeConnectAccountPayload = {
+  live_setup_disclosure?: unknown;
   creator_user_id?: unknown;
   creatorUserId?: unknown;
   provider_account_id?: unknown;
@@ -376,10 +378,11 @@ export const authenticateRequest = async (
 
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
+  const authority = !error && userId ? await readExactCurrentSessionAuthority(authClient, userId) : null;
   if (
     error ||
     !userId ||
-    !(await readExactCurrentSessionAuthority(authClient, userId))
+    !authority
   ) {
     return { error: jsonResponse(401, { error: "invalid_session", message: "Supabase could not verify the current user session." }) };
   }
@@ -388,6 +391,7 @@ export const authenticateRequest = async (
     user: {
       email: data.user?.email ?? null,
       id: userId,
+      sessionGeneration: authority.sessionGeneration,
     },
   };
 };
@@ -695,6 +699,9 @@ export const readCreatorPayoutAccount = async (adminClient: SupabaseClientLike, 
     .select("*")
     .eq("creator_user_id", creatorUserId)
     .eq("provider", DB_PROVIDER)
+    .in("provider_environment", ["live", "test"])
+    .order("provider_environment", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw new Error(`Payout account read failed: ${error.message}`);

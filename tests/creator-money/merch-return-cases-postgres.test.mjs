@@ -1,3 +1,4 @@
+import {migrationsFrom} from '../helpers/historical-migration-boundary.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -7,13 +8,7 @@ import {mountReturns} from '../helpers/merch-return-mounted-harness.mjs';
 
 test('actual API actors: order-bound cases, immutable aggregate holds, scoped staff review, independent provider evidence',{timeout:240000},async()=>{
  const migration='20261030212744_merch_return_cases.sql';
- const replies='20261031011906_merch_return_buyer_replies.sql';
- const queue='20261031012501_merch_return_case_queues.sql';
- const successors=['20261031011531_merch_provider_dispute_observations.sql',replies,queue,'20261031012502_merch_reconciliation_driver.sql',
-  '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
-  '20261031034904_merch_tracking_reviewed_supersession.sql',
-  '20261101045810_merch_checkout_dispatch_provenance.sql',
-  '20261101045816_merch_reconciliation_bounded_drain.sql'];
+ const successors=migrationsFrom(migration,{inclusive:false});
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const creator=await one("select md5('return-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('return-host:'||n::text)::uuid::text,20260814),100)=0 limit 1");
@@ -127,8 +122,12 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
   assert.equal((await submit(elapsed,'non_delivery')).status,'open','support report never implies return deadline waiver');
   const untracked=await make('untracked',60);await root();
   await db.query("update public.merch_orders set stripe_payment_intent_id=$2 where id=$1",[untracked,'pi_'+untracked]);
-  const event='evt_'+untracked;await db.query("insert into public.stripe_merch_events(stripe_event_id,event_type,status,linked_order_id) values($1,'payment_intent.succeeded','processed',$2)",[event,untracked]);
-  // Consumption-only fixture; signed purchase issuance is separately tested.
+  await assert.rejects(submit(untracked,'return'),/window_unavailable/,'untracked creator-marked paid cannot supply the purchase timestamp');
+  await root();
+  const event='evt_'+untracked;await db.query(`insert into public.stripe_merch_events(stripe_event_id,event_type,status,linked_order_id,environment,object_id,raw_event_hash)
+   values($1,'payment_intent.succeeded','processed',$2,'sandbox',$3,repeat('a',64))`,[event,untracked,'pi_'+untracked]);
+  // Consumption-only fixture models the exact canonical mode/object/hash join;
+  // actual signed purchase issuance is separately tested, never inferred here.
   await db.query(`insert into private.merch_purchase_time_evidence(order_id,stripe_event_id,stripe_payment_intent_id,succeeded_at,raw_event_hash)
    values($1,$2,$3,clock_timestamp()-interval '29 days',repeat('a',64))`,[untracked,event,'pi_'+untracked]);
   const untrackedCase=await submit(untracked,'return');assert.equal(untrackedCase.acceptedTerms.shippingTrackingMode,'untracked');

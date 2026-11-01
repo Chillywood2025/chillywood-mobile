@@ -31,7 +31,7 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await assert.rejects(()=>save([id,'Conflict','Physical test only',null,1000,2,'published',null]),/changed_reload/);
     assert.equal((await one('select public.list_creator_merch_products(null,true,null,20)')).products.length,1);
     await claim(other,os);
-    assert.equal((await one('select public.list_creator_merch_products($1)',[host])).products[0].checkoutAvailable,false);
+    assert.deepEqual((await one('select public.list_creator_merch_products($1)',[host])).products,[],'non-beta buyers cannot discover sandbox listings');
     await assert.rejects(()=>save([id,'Stolen','',null,1000,2,'draft',product.updatedAt]),/(not_found|changed_reload)/);
     await assert.rejects(()=>one('select public.reserve_merch_checkout($1,1,$2)',[id,randomUUID()]),/permission denied/);
     await admin();

@@ -82,6 +82,7 @@ async function blockedCheckout(kind, { authenticated = true, taxResult = { ready
   const client = { from: () => query, rpc: async (name, args) => {
     calls.push({ name, args });
     if (name === 'bind_commerce_tax_checkout_policy') { readinessCalls.push(args); return { data: taxResult }; }
+    if (name === 'get_auction_checkout_provider_context') return { data: { environment: 'test', platformAccountId: 'acct_platform' } };
     if (name.startsWith('prepare_creator_')) return { data: q };
     if (name === 'transition_merch_checkout_dispatch') return { data: args.p_action==='dispatch' ? {authorized:true,orderId:ids.quote} : {aborted:true,attemptId:args.p_attempt_id} };
     if (name === 'reserve_merch_checkout_dispatch') return { data: { id: ids.quote,

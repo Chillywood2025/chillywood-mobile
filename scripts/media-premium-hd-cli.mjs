@@ -17,6 +17,8 @@ import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { buildHlsOutputInventory } from "./lib/hls-output-inventory.mjs";
+import { createLinkedSecondaryMediaProducer } from "./lib/secondary-media-cli-producer.mjs";
+import { premiumHlsProofPaths } from "./lib/premium-hls-proof-paths.mjs";
 
 const repoRoot = process.cwd();
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -434,36 +436,6 @@ function cacheControlFor(filePath) {
   return filePath.endsWith(".m3u8") ? "private, max-age=60" : "private, max-age=31536000, immutable";
 }
 
-function uploadObject(key, filePath) {
-  const safeKey = assertProtectedKey(key);
-  const fileBytes = statSync(filePath).size;
-  const result = spawnSync(npxCommand, [
-    "wrangler", "r2", "object", "put", `${protectedBucket}/${safeKey}`,
-    "--file", filePath,
-    "--remote",
-    "--content-type", contentTypeFor(filePath),
-    "--cache-control", cacheControlFor(filePath),
-    "--force",
-  ], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: 300000,
-    maxBuffer: 20 * 1024 * 1024,
-  });
-  assertNoSecretLikeText(result.stdout || "");
-  assertNoSecretLikeText(result.stderr || "");
-  if (result.status !== 0) {
-    failClosed("premium_hd_r2_upload_failed", {
-      key: safeKey,
-      fileBytes,
-      stderrSnippet: String(result.stderr || "").replace(/\x1b\[[0-9;]*m/g, "").slice(0, 500),
-      stdoutSnippet: String(result.stdout || "").replace(/\x1b\[[0-9;]*m/g, "").slice(0, 200),
-    });
-  }
-  return { key: safeKey, bytes: statSync(filePath).size, cacheControl: cacheControlFor(filePath), contentType: contentTypeFor(filePath) };
-}
-
 async function signWorkerToken(claims) {
   const secret = readWorkerSecret();
   const worker = await import("../workers/premium-media-access/worker.mjs");
@@ -488,10 +460,8 @@ async function fetchWorkerPath(pathname, { token = "", userId = proofUserId } = 
   };
 }
 
-async function proveWorkerAccess(candidate, batchId, rendition, outputRoot) {
-  const masterPath = `${protectedPrefix}${candidate.sourceType}/${candidate.sourceId}/${batchId}/${rendition.label}/master.m3u8`;
-  const variantPath = `${protectedPrefix}${candidate.sourceType}/${candidate.sourceId}/${batchId}/${rendition.label}/index.m3u8`;
-  const segmentPath = `${protectedPrefix}${candidate.sourceType}/${candidate.sourceId}/${batchId}/${rendition.label}/${rendition.segments[0]}`;
+async function proveWorkerAccess(candidate, outputPrefix, rendition, outputRoot) {
+  const { masterPath, variantPath, segmentPath, wrongPath } = premiumHlsProofPaths(outputPrefix, rendition);
   const now = Math.floor(Date.now() / 1000);
   const claimsFor = (requestPath, label = rendition.label, patch = {}) => ({
     tokenType: "premium_cdn_playback",
@@ -521,7 +491,7 @@ async function proveWorkerAccess(candidate, batchId, rendition, outputRoot) {
   const missingToken = await fetchWorkerPath(masterPath);
   const freeToken = await signWorkerToken(claimsFor(masterPath, rendition.label, { premiumEntitlement: false }));
   const freeDenied = await fetchWorkerPath(masterPath, { token: freeToken });
-  const wrongPathToken = await signWorkerToken(claimsFor(`${protectedPrefix}${candidate.sourceType}/${candidate.sourceId}/${batchId}/${rendition.label}/wrong.m3u8`));
+  const wrongPathToken = await signWorkerToken(claimsFor(wrongPath));
   const wrongPathDenied = await fetchWorkerPath(masterPath, { token: wrongPathToken });
   if (missingToken.status !== 403 || freeDenied.status !== 403 || wrongPathDenied.status !== 403) {
     failClosed("premium_hd_worker_denial_failed", {
@@ -700,8 +670,10 @@ async function executeCandidate(candidate) {
   const labels = candidate.missingPremiumRenditions;
   const selectedRenditions = ladder.filter((entry) => labels.includes(entry.label));
   const batchId = `premium-hd-${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${randomUUID().slice(0, 12)}`;
-  const outputPrefix = assertProtectedKey(`${protectedPrefix}${candidate.sourceType}/${candidate.sourceId}/${batchId}/`);
   const jobId = randomUUID();
+  const outputPrefix = assertProtectedKey(`${protectedPrefix}${candidate.sourceType}/${candidate.sourceId}/${batchId}/${jobId}/`);
+  const producerTransport = createLinkedSecondaryMediaProducer({ query: runSupabaseLinkedQuery, bucket: protectedBucket });
+  const producer = await producerTransport.begin({ sourceId: candidate.sourceId, producerId: jobId, outputPrefix });
   const download = await downloadSource(candidate);
   const outputRoot = mkdtempSync(path.join(os.tmpdir(), "chillywood-premium-hd-hls-"));
   try {
@@ -721,17 +693,12 @@ async function executeCandidate(candidate) {
         ...rendition.segments.map(segment => `${rendition.label}/${segment}`),
       ]),
     });
-    const uploaded = [];
-    for (const rendition of generated) {
-      uploaded.push(uploadObject(`${outputPrefix}${rendition.label}/master.m3u8`, path.join(outputRoot, rendition.label, "master.m3u8")));
-      uploaded.push(uploadObject(`${outputPrefix}${rendition.label}/index.m3u8`, path.join(outputRoot, rendition.label, "index.m3u8")));
-      for (const segment of rendition.segments) {
-        uploaded.push(uploadObject(`${outputPrefix}${rendition.label}/${segment}`, path.join(outputRoot, rendition.label, segment)));
-      }
-    }
+    const durableOutput = await producerTransport.persist({ producer, inventory: outputInventory, outputRoot,
+      contentType: object => contentTypeFor(object.relativePath), cacheControl: object => cacheControlFor(object.relativePath) });
+    const uploaded = outputInventory.objects.map(object => ({ key: object.objectKey, bytes: object.sizeBytes }));
     const workerProofs = [];
     for (const rendition of generated) {
-      workerProofs.push(await proveWorkerAccess(candidate, batchId, rendition, outputRoot));
+      workerProofs.push(await proveWorkerAccess(candidate, outputPrefix, rendition, outputRoot));
     }
     insertJob({ jobId, candidate, batchId, outputPrefix, labels, sourceHash, probe });
     const audit = insertAndPromoteRenditions({
@@ -753,6 +720,7 @@ async function executeCandidate(candidate) {
       renditionLabels: generated.map((rendition) => rendition.label),
       uploadedObjectCount: uploaded.length,
       outputInventory,
+      durableOutput,
       workerProofs: workerProofs.map((proof) => ({
         renditionLabel: proof.renditionLabel,
         masterStatus: proof.master.status,

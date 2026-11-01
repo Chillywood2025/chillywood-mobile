@@ -26,7 +26,7 @@ export async function createCreatorEventAuctionCheckout(auction: CreatorEventAuc
   if (Platform.OS !== "ios" && Platform.OS !== "web" && !(Platform.OS === "android" && native)) throw new Error("Auction checkout requires the approved native Google Play flow on Android.");
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   if (!authority || authority.restoreOnly || !auction.isWinner || !["awarded", "payment_pending"].includes(auction.state) || !auction.awardAmountMinor
-    || auction.environment !== "test") throw new Error("Eligible winner checkout is unavailable. Refresh auction status.");
+    || !["test", "live"].includes(auction.environment)) throw new Error("Eligible winner checkout is unavailable. Refresh auction status.");
   const key = `@chillywood:event-auction-checkout:v1:${authority.userId}:${auction.id}`;
   // Retain prior-session records for reconciliation. A replacement session
   // must request a server quote; only the server may supersede an unstarted
@@ -73,7 +73,7 @@ export async function createCreatorEventAuctionCheckout(auction: CreatorEventAuc
     } finally { clearTimeout(timeout); }
     if (!current() || response.error) throw new Error("Checkout outcome is unknown. Refresh auction and purchase status before continuing.");
     const data = response.data;
-    if (!data || data.status !== "checkout_ready" || data.checkoutCreated !== true || data.liveMoneyAction !== false
+    if (!data || data.status !== "checkout_ready" || data.checkoutCreated !== true || (typeof data.liveMoneyAction !== "boolean" || (auction.environment === "test" && data.liveMoneyAction !== false))
       || data.routeKind !== (Platform.OS === "android" ? "android_external_content_link" : "external_browser_checkout")
       || data.launchStrategy !== (Platform.OS === "android" ? "google_play_external_content_link" : "system_browser")
       || data.platform !== Platform.OS || data.storefrontCountry !== "US"

@@ -1,3 +1,4 @@
+import {migrationsFrom} from '../helpers/historical-migration-boundary.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 const migration='20261030184536_creator_instant_cashout_fee.sql';
 const switchMigration='20261030185416_creator_instant_cashout_switch_off.sql';
 test('actual authenticated cash-out reservations charge instant 2%, standard zero, and preserve accepted fees', {timeout:240000},async()=>{
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:[migration,switchMigration]});
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:migrationsFrom(migration)});
  const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try{
   const creator='a1000000-0000-4000-8000-000000000001';
@@ -38,6 +39,12 @@ test('actual authenticated cash-out reservations charge instant 2%, standard zer
   assert.equal(await scalar("select state from public.platform_money_kill_switches where key='cashout_enabled'"),'off');
   await assert.rejects(db.exec("insert into public.platform_money_kill_switches(key,state,display_label) values('unrecognized_switch','off','Synthetic fixture')"),/platform_money_kill_switches_key_check/);
   await assertAuthenticatedReservations(db);
+  // The byte-identical historical assertion above remains at its actual era.
+  // Now replay every later dependency and verify accepted fees stay immutable.
+  await db.exec("reset role;select set_config('request.jwt.claims','{}',false),set_config('request.jwt.claim.role','',false)");
+  for(const file of migrationsFrom(switchMigration,{inclusive:false}))await db.exec(fs.readFileSync(`supabase/migrations/${file}`,'utf8'));
+  assert.equal(await scalar('select instant_fee_cents from public.creator_payout_requests where id=$1',[old]),150);
+  await assert.rejects(db.query('update public.creator_payout_requests set instant_fee_cents=200 where id=$1',[old]),/accepted_payout_fee_terms_immutable/);
  }finally{await db.close();}
 });
 

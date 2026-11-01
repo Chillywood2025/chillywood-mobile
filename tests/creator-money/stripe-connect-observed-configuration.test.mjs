@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {readFileSync} from 'node:fs';
 import { loadStudioFunctions, deferred } from "../helpers/studio-source-harness.mjs";
 import { account, connect, creator, load, payoutsFor } from "./stripe-connect-observed-fixture.mjs";
+
+test('actual Studio setup visibility is independent of transaction rail state',()=>{
+ const source=readFileSync('app/channel-settings.tsx','utf8');
+ const expression=source.match(/const canStartStripeSetup = ([^;]+);/u)?.[1];assert.ok(expression);
+ const visible=new Function('user','stripeConnectFlag','payoutsFlag','liveMoneyFeatureFlag',`return ${expression};`);
+ for(const state of ['off','sandbox','on'])assert.equal(visible({id:creator},{state},{state},{state}),true);
+ assert.equal(visible(null,{state:'on'},{state:'on'},{state:'on'}),false);
+ assert.match(source,/\{canStartStripeSetup \? \(/u);
+ assert.match(source,/setupActionLabel \|\| "Review payout setup"/u);
+});
 
 test("Connect distinguishes observed controller configuration from creation policy, including type none", () => {
   for (const type of ["none", "express"]) for (const payer of ["application", "application_express"]) {
@@ -89,7 +100,16 @@ function studio(stage, response = {}) {
     replayActionsMountedRef: { current: true }, getCurrentAccountSessionAuthoritySnapshot: () => authority,
     sameAccountSessionAuthority, setPayoutSetupBusy: value => calls.push(["busy", value]),
     setPayoutSetupNotice: value => calls.push(["notice", value]), trackEvent() {},
-    createOrReuseCreatorPayoutProviderAccount: io("account", response.account || { status: "account_reused" }),
+    createOrReuseCreatorPayoutProviderAccount: (_creator, reviewed) => reviewed
+      ? io("confirmedAccount", { status: "account_created" })()
+      : io("account", response.account || { status: "account_reused" })(),
+    Platform: { OS: response.platform || 'ios' },
+    window: { confirm: () => { calls.push('confirmation'); return response.confirm === true; } },
+    Alert: { alert: (_title, _disclosure, buttons) => {
+      calls.push('confirmation');
+      if(stage==='confirmation')pending.promise.then(yes=>buttons[yes?1:0].onPress());
+      else buttons[response.confirm===true?1:0].onPress();
+    } },
     createCreatorPayoutOnboardingLink: io("link", response.link || { status: "created", onboarding_url: "https://connect.stripe.test/synthetic-private-link" }),
     createPayoutSetupRedirectUrl: () => "synthetic://payout",
     Linking: { canOpenURL: io("canOpen", true), openURL: io("open", undefined) },
@@ -109,6 +129,18 @@ test("Studio mismatch blocks onboarding and presents the review notice without c
   }
   const valid = studio(); await valid.api.handleStartPayoutProviderSetup();
   assert.equal(valid.calls.filter(call => call === "open").length, 1);
+});
+test('Studio explicitly reviews distinct live setup on native and web and rejects stale confirmation', async()=>{
+ for(const platform of ['ios','web'])for(const confirm of [false,true]){
+  const h=studio(null,{platform,confirm,account:{status:'live_setup_confirmation_required'}});
+  await h.api.handleStartPayoutProviderSetup();
+  assert.equal(h.calls.includes('confirmation'),true);
+  assert.equal(h.calls.includes('confirmedAccount'),confirm);assert.equal(h.calls.includes('open'),confirm);
+ }
+ const h=studio('confirmation',{account:{status:'live_setup_confirmation_required'}});
+ const run=h.api.handleStartPayoutProviderSetup();while(!h.calls.includes('confirmation'))await Promise.resolve();
+ h.switchAccount();h.pending.resolve(true);await run;
+ assert.equal(h.calls.includes('confirmedAccount'),false);assert.equal(h.calls.includes('open'),false);
 });
 test("Studio discards stale account/session callbacks before opening private links or changing current UI", async () => {
   for (const stage of ["account", "link", "canOpen", "sync"]) {
@@ -138,6 +170,8 @@ function endpoint(file, row, overrides = {}) {
   };
   load(`supabase/functions/${file}/index.ts`, {
     "jsr:@supabase/functions-js/edge-runtime.d.ts": {}, "../_shared/stripe-connect.ts": api,
+    "../_shared/stripe-connect-live-observation.ts": { observeLiveConnectAccount: () => { throw Error("test mode must not call live provider"); } },
+    "../_shared/stripe-connect-live-onboarding.ts": { selectConnectOnboardingRoute: overrides.onboardingRoute || (async () => ({ mode: "test" })) },
   }, { Deno: { serve: callback => { handler = callback; } } });
   return { calls, request: async () => {
     const response = await handler(new Request("https://synthetic.test/function", {
@@ -153,6 +187,23 @@ const stored = (changes = {}) => ({
   provider_is_controller: true, provider_dashboard_type: "express", provider_fees_payer: "platform",
   provider_fees_payer_raw: "application", provider_losses_collector: "platform", provider_requirements_collection: "stripe",
   provider_configuration_observed_at: "2026-10-27T03:50:00Z", ...changes,
+});
+test('legacy test writes recheck exact setup admission and never return a link after revocation',async()=>{
+ for(const file of ['stripe-connect-account','stripe-connect-onboarding-link']){
+  let routes=0,writes=0;
+  const h=endpoint(file,file==='stripe-connect-account'?null:stored(),{
+   onboardingRoute:async()=>++routes===1?{mode:'test'}:{mode:'test',status:'creator_onboarding_eligibility_required'},
+   createStripeConnectAccount:async()=>{writes++;throw Error('must not dispatch');},
+   createStripeConnectOnboardingLink:async()=>{writes++;throw Error('must not dispatch');},
+  });
+  const {body}=await h.request();assert.equal(body.status,'onboarding_authority_changed');assert.equal(writes,0);
+ }
+ let routes=0;
+ const h=endpoint('stripe-connect-onboarding-link',stored(),{
+  onboardingRoute:async()=>++routes<3?{mode:'test'}:{mode:'test',status:'creator_onboarding_eligibility_required'},
+  createStripeConnectOnboardingLink:async()=>({url:'https://connect.stripe.com/setup/must-not-return',expires_at:9999999999}),
+ });
+ const {body}=await h.request();assert.equal(body.status,'onboarding_authority_changed');assert.equal(body.onboarding_url,undefined);
 });
 test("actual account reuse and onboarding endpoints refuse unknown or mismatched configuration before provider calls", async () => {
   for (const row of [stored({ provider_configuration_observed_at: null }),

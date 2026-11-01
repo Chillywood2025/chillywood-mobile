@@ -79,7 +79,11 @@ lost responses. Refunds use `:refund` and either `fullRefund: {}` or the officia
 `partialRefund: {refundId, refundPreTaxAmount}` shape. Full refunds and partial
 refunds of an authoritatively zero-tax original are automatically allocated.
 Taxed partial refunds remain `blocked_tax` pending separately verified tax
-reversal evidence; **that evidence ingestion is not implemented here**. A later
+reversal evidence. The bounded [tax-evidence reconciler](PARTIAL_REFUND_TAX_EVIDENCE.md)
+can ingest actual Stripe Tax Association/Transaction evidence and unlock only
+the exact cumulative obligation. Checkout-specific association availability
+and Google tax-rounding interoperability still require provider qualification.
+A later
 verified full refund can be reported and canonically covers earlier blocked
 partials. Do not claim taxed-partial reconciliation is complete.
 
