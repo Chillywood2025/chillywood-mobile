@@ -556,6 +556,18 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   preferences: NotificationPreference | undefined;
   deliveryMode?: "ordinary" | "internal_ios_proof";
 }) {
+  // Live/Watch-Party starts belong exclusively to the canonical lifecycle
+  // outbox. Its prepare/reserve RPCs revalidate per-person preferences and
+  // current audience; privileged manual delivery must not bypass that boundary.
+  if (input.triggerType === "followed_creator_live" || input.triggerType === "circle_friend_live") {
+    return {
+      notificationId: null,
+      pushSent: false,
+      recipientUserId: input.recipient.id,
+      status: "skipped",
+      reason: "canonical_lifecycle_required",
+    };
+  }
   const prefField = preferenceFieldForTrigger(input.triggerType);
   const preference = input.preferences;
   const categoryAllowed = !prefField || preference?.[prefField] !== false;
@@ -865,6 +877,17 @@ Deno.serve(async (req): Promise<Response> => {
     const timingKey = toText(body.timingKey ?? body.timing_key) || "default";
     if (!triggerType) return jsonResponse(400, { error: "invalid_trigger_type" });
     if (!sourceId) return jsonResponse(400, { error: "missing_source_id" });
+
+    // Retired manual start actions: do not read recipients, claim a dedupe,
+    // insert a notification or contact a provider, even for owner/service role.
+    if (triggerType === "followed_creator_live" || triggerType === "circle_friend_live") {
+      return jsonResponse(200, {
+        blockedReason: "canonical_lifecycle_required",
+        eligible: false,
+        pushSent: false,
+        triggerType,
+      });
+    }
 
     const plan = await buildDispatchPlan(auth.adminClient, triggerType, sourceId);
     if ("blockedReason" in plan) {
