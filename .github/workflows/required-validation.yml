@@ -193,12 +193,16 @@ jobs:
           npm ci --prefix tests/integration/real-peer-browser --ignore-scripts
           node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
           supabase start
+          node --test tests/local-ci-cron-isolation.test.mjs
           supabase db reset --help
           supabase migration up --help
           supabase db reset --local --version 20261031204321
           node --test tests/chat-activity-upgrade-runner-source.test.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-chat-activity-upgrade-postgres.mjs
           supabase migration up --local
+          # Pause after CLI resets/rebuilds, which may replace server configuration.
+          # Keep every cron row and source fingerprint intact during native proofs.
+          node scripts/with-local-ci-cron-paused.mjs <<'NATIVE_PROOFS'
           supabase test db
           node --test tests/auction-transfer-native-runner-source.test.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-subscription-bindings-native-postgres.mjs
@@ -271,6 +275,7 @@ jobs:
           npm run test:cognitive-public-research-liveness-concurrency
           npm run test:cognitive-product-sentinel-concurrency
           npm run test:cognitive-runtime-login-integration
+          NATIVE_PROOFS
 
   database-brand-native:
     name: Validation / Brand Native PostgreSQL 17.6
