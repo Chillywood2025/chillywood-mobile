@@ -19,7 +19,10 @@ export function localSessionMatchesAccountIdentity(value: unknown, expected: Acc
   return sameAccountSessionIdentity(accountSessionActionIdentity(value), expected);
 }
 
-export async function signOutExactAccountSession(expected: AccountSessionAuthorityBinding) {
+// A retained screen intent may retire even if the same session later returns.
+// Recheck its optional lifecycle guard after every pre-dispatch wait completes.
+export async function signOutExactAccountSession(expected: AccountSessionAuthorityBinding, isCurrent: () => boolean = () => true) {
+  if (!isCurrent()) return false;
   const auth = supabase.auth as unknown as LockedLocalAuthClient & {
     _notifyAllSubscribers(event: "SIGNED_OUT", session: null): Promise<void>;
   };
@@ -31,7 +34,7 @@ export async function signOutExactAccountSession(expected: AccountSessionAuthori
     // session after refresh failure. Capture without that implicit mutation.
     const session = await accountSessionStorage.readSession(ACCOUNT_SESSION_STORAGE_KEY) as LocalAuthSession | null;
     const published = getCurrentAccountSessionAuthoritySnapshot();
-    if ((published && !sameAccountSessionIdentity(expected, published))
+    if (!isCurrent() || (published && !sameAccountSessionIdentity(expected, published))
       || !localSessionMatchesAccountIdentity(session, expected)) return false;
     // Pin the initiating token. The SDK's public signOut instead rereads mutable
     // session state and unconditionally removes it after the request.

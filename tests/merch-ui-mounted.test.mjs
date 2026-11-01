@@ -109,6 +109,17 @@ test('shop product detail shows price, shipping and disabled checkout reason thr
  await h.press('View Shirt tee');assert.match(h.text(),/\$20.00/);assert.match(h.text(),/no physical shipment/);assert.match(h.text(),/Checkout unavailable:\s+Approved sandbox testers only/);assert.equal(h.button('Sandbox checkout · $20.00'),undefined);
  await h.press('All products');assert.ok(h.button('View Shirt tee'));await h.press('My orders');assert.equal(h.routes.at(-1),'/merch/orders');
 });
+test('shop resets attempt only after exact authoritative abort; explicit retry never auto-pays',async t=>{
+ const requests=[];let mode='abort';
+ const h=await mount(t,{rpc:async()=>({products:[{...product(),checkoutAvailable:true}],nextCursor:null}),fetch:async(_url,options)=>{
+  const request=JSON.parse(options.body);requests.push(request);
+  return {ok:false,json:async()=>({checkoutCreated:false,checkoutRetrySafe:mode==='abort',abortedAttemptId:request.attempt_id,message:'not confirmed'})};
+ }});
+ await h.press('View Shirt tee');await h.press('Sandbox checkout · $20.00');
+ assert.equal(requests.length,1);assert.match(h.text(),/stock hold was released/);assert.doesNotMatch(h.text(),/payment may still be pending/);assert.equal(h.opens.length,0);
+ mode='unknown';await h.press('Sandbox checkout · $20.00');assert.equal(requests.length,2);assert.notEqual(requests[1].attempt_id,requests[0].attempt_id);
+ await h.press('Sandbox checkout · $20.00');assert.equal(requests.length,3);assert.equal(requests[2].attempt_id,requests[1].attempt_id,'unknown outcomes retain stable attempt');
+});
 test('catalog error is not a false empty shop and Retry requests real helper again',async t=>{
  let fail=true;const h=await mount(t,{rpc:async()=>{if(fail)throw Error('Catalog offline');return {products:[],nextCursor:null};}});
  assert.match(h.text(),/Catalog offline/);assert.doesNotMatch(h.text(),/No products are published/);fail=false;await h.press('Retry');assert.match(h.text(),/No products are published/);assert.equal(h.calls.length,2);

@@ -93,8 +93,8 @@ export async function scheduleAccountDeletion(input: {
   return parseAccountDeletionResult(data, "Account deletion scheduled.");
 }
 
-export async function restoreScheduledAccountDeletion(expected?: AccountSessionAuthorityBinding): Promise<AccountDeletionRequestResult> {
-  const { data, error } = await runAccountRestorationBoundSupabaseMutationRpc<unknown>(expected);
+export async function restoreScheduledAccountDeletion(expected?: AccountSessionAuthorityBinding, isCurrent?: () => boolean): Promise<AccountDeletionRequestResult> {
+  const { data, error } = await runAccountRestorationBoundSupabaseMutationRpc<unknown>(expected, isCurrent);
 
   if (error) throw new Error(getAccountDeletionRequestErrorMessage(error));
 

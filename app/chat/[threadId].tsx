@@ -26,6 +26,7 @@ import { AppBackButton } from "../../components/navigation/app-back-button";
 import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 import { trackEvent } from "../../_lib/analytics";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { normalizeChatMessageId } from "../../_lib/notificationMessageTarget";
 import { useChatMessagePosition } from "../../_lib/useChatMessagePosition";
 import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
@@ -1010,6 +1011,7 @@ export default function ChillyChatThreadScreen() {
 
   const markThreadReadWithThrottle = useCallback(async (through: string | null, callThrough: string | null = null) => {
     if (!threadId || (!through && !callThrough) || !readReceiptFocusedRef.current || AppState.currentState !== "active") return;
+    if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return;
     const previous = lastReadReceiptWriteAtRef.current;
     if (previous?.owner === messageEntryKey && compareChatActivityTimestamps(through, previous.through) <= 0
       && compareChatActivityTimestamps(callThrough, previous.callThrough) <= 0) return;
@@ -1022,7 +1024,7 @@ export default function ChillyChatThreadScreen() {
         through: latestObservedChatTimestamp([through, latest?.owner === messageEntryKey ? latest.through : null]),
         callThrough: latestObservedChatTimestamp([callThrough, latest?.owner === messageEntryKey ? latest.callThrough : null]) };
     } catch { /* Keep unread until a later authorized read can acknowledge it. */ }
-  }, [messageEntryKey, threadId]);
+  }, [authority, messageEntryKey, threadId]);
 
   useEffect(() => {
     let active = true;
@@ -1104,10 +1106,15 @@ export default function ChillyChatThreadScreen() {
     return (await getChatThread(nextThread.threadId).catch(() => null)) ?? null;
   }, [threadId]);
 
-  const loadThreadState = useCallback(async () => {
+  const explicitThreadReadRef = useRef<{ owner: string; promise: Promise<void> } | null>(null);
+  const incomingCallReconciliationRef = useRef<{ owner: string; promise: Promise<void> } | null>(null);
+  const incomingCallReconciliationEpochRef = useRef(0);
+  const readThreadState = useCallback(async (isRefreshCurrent: () => boolean = () => true) => {
+    const ownsSession = () => sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isRefreshCurrent() || !ownsSession()) return;
     const read = beginThreadRead();
     if (!read) return;
-    const isCurrent = () => isThreadReadCurrent(read);
+    const isCurrent = () => isRefreshCurrent() && ownsSession() && isThreadReadCurrent(read);
     if (!threadId) {
       setError("Missing Chi'lly Chat thread.");
       setLoading(false);
@@ -1229,7 +1236,21 @@ export default function ChillyChatThreadScreen() {
       setError(getUserFacingErrorMessage(loadError, "Unable to load this Chi'lly Chat thread."));
       setLoading(false);
     }
-  }, [applyAcceptedIncomingInviteState, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, messageEntryKey, observeIncomingCallProjection, reconcileEndedCallState, stopOutgoingRingback, threadId]);
+  }, [applyAcceptedIncomingInviteState, authority, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, messageEntryKey, observeIncomingCallProjection, reconcileEndedCallState, stopOutgoingRingback, threadId]);
+
+  const loadThreadState = useCallback((isRefreshCurrent?: () => boolean) => {
+    const promise = readThreadState(isRefreshCurrent);
+    if (!isRefreshCurrent) {
+      // Call transitions await their projection before settling an operation.
+      // A trailing transport refresh must not supersede that explicit read.
+      const explicit = { owner: messageEntryKey, promise };
+      explicitThreadReadRef.current = explicit;
+      void promise.finally(() => {
+        if (explicitThreadReadRef.current === explicit) explicitThreadReadRef.current = null;
+      });
+    }
+    return promise;
+  }, [messageEntryKey, readThreadState]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1247,23 +1268,73 @@ export default function ChillyChatThreadScreen() {
       }
 
       setLoading(true);
-      void loadThreadState();
+      let active = true;
+      let foregroundEpoch = 0;
+      let pending = false;
+      let running = false;
+      const isCurrent = () => active && readReceiptFocusedRef.current && AppState.currentState === "active";
+      const refresh = async (initialBackgroundLoad = false) => {
+        pending = true;
+        if (running || (!initialBackgroundLoad && !isCurrent())) return;
+        running = true;
+        let bootstrap = initialBackgroundLoad;
+        try {
+          // Retain invalidations received during a read, including SUBSCRIBED.
+          // Each pass obtains a fresh cut; receipts only cover observed rows.
+          while (pending && (isCurrent() || (bootstrap && active && readReceiptFocusedRef.current))) {
+            const explicit = explicitThreadReadRef.current;
+            if (explicit?.owner === messageEntryKey) {
+              await explicit.promise;
+              continue;
+            }
+            const reconciliation = incomingCallReconciliationRef.current;
+            if (reconciliation?.owner === messageOwnerKey) {
+              await reconciliation.promise;
+              continue;
+            }
+            pending = false;
+            const backgroundBootstrap = bootstrap;
+            bootstrap = false;
+            const epoch = foregroundEpoch;
+            const callEpoch = incomingCallReconciliationEpochRef.current;
+            await loadThreadState(() => (backgroundBootstrap
+              ? active && readReceiptFocusedRef.current
+              : isCurrent() && epoch === foregroundEpoch)
+              && callEpoch === incomingCallReconciliationEpochRef.current);
+            if (callEpoch !== incomingCallReconciliationEpochRef.current) {
+              pending = true;
+              bootstrap = backgroundBootstrap;
+            }
+          }
+        } finally {
+          running = false;
+        }
+      };
+      // Preserve the original authenticated initial load for native call
+      // bootstrap even when the app mounts inactive/backgrounded. Receipt
+      // writes remain foreground-only; subsequent transport hints can wait.
+      void refresh(AppState.currentState !== "active");
       trackEvent("chat_thread_opened", {
         surface: "chat-thread",
         threadId,
       });
 
-      if (!threadId) {
-        return () => { readReceiptFocusedRef.current = false; };
-      }
-
+      const appStateSubscription = AppState.addEventListener("change", state => {
+        if (state === "active") void refresh();
+        else foregroundEpoch++;
+      });
       const unsubscribe = subscribeToThread(threadId, () => {
         logChatThread("thread_subscription_refresh", { threadId });
-        void loadThreadState();
+        void refresh();
       });
 
-      return () => { readReceiptFocusedRef.current = false; unsubscribe(); };
-    }, [authLoading, isSignedIn, loadThreadState, threadId]),
+      return () => {
+        active = false;
+        readReceiptFocusedRef.current = false;
+        appStateSubscription.remove();
+        unsubscribe();
+      };
+    }, [authLoading, isSignedIn, loadThreadState, messageEntryKey, messageOwnerKey, threadId]),
   );
 
   // The server clears the thread projection when the invite becomes terminal.
@@ -1982,7 +2053,7 @@ export default function ChillyChatThreadScreen() {
     const timeoutMs = Number.isFinite(expiresAt) ? Math.max(0, expiresAt - Date.now()) : 0;
     const scheduleReconciliation = (delayMs: number) => {
       if (!isCurrent()) return;
-      incomingCallTimeoutRef.current = setTimeout(async () => {
+      const reconcile = async () => {
         const latestInvite = await readChillyChatCallInvite(incomingCallInvite.id).catch(() => null);
         if (!isCurrent()) return;
         const exactInvite = latestInvite?.id === incomingCallInvite.id
@@ -2034,6 +2105,17 @@ export default function ChillyChatThreadScreen() {
         if (!isCurrent()) return;
         clearVisibleIncomingCallState(missedInvite);
         void loadThreadState();
+      };
+      incomingCallTimeoutRef.current = setTimeout(async () => {
+        if (!isCurrent()) return;
+        incomingCallReconciliationEpochRef.current++;
+        const reconciliation = { owner: messageOwnerKey, promise: reconcile() };
+        incomingCallReconciliationRef.current = reconciliation;
+        try {
+          await reconciliation.promise;
+        } finally {
+          if (incomingCallReconciliationRef.current === reconciliation) incomingCallReconciliationRef.current = null;
+        }
       }, delayMs);
     };
     scheduleReconciliation(timeoutMs);
@@ -2045,7 +2127,7 @@ export default function ChillyChatThreadScreen() {
         incomingCallTimeoutRef.current = null;
       }
     };
-  }, [applyAcceptedIncomingInviteState, authority, captureCallOperation, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, threadId]);
+  }, [applyAcceptedIncomingInviteState, authority, captureCallOperation, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, messageOwnerKey, threadId]);
 
   useEffect(() => {
     if (!incomingCallInvite?.id) return undefined;

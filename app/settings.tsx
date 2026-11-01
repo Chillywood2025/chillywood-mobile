@@ -1,4 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ActivityIndicator, AppState, ImageBackground, Linking, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
@@ -545,6 +546,7 @@ export default function SettingsScreen() {
     router.replace("/(tabs)/profile");
   }, [router]);
   const params = useLocalSearchParams<{ section?: string }>();
+  const focused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { isLoading, isSignedIn, user, session, authority, authorityStatus } = useSession();
   const monetizationOwnerKey = !isLoading && isSignedIn && authorityStatus === "active"
@@ -592,6 +594,19 @@ export default function SettingsScreen() {
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [profileAppearanceSheetKind, setProfileAppearanceSheetKind] = useState<ProfileMediaKind | null>(null);
   const [profileAppearanceBusy, setProfileAppearanceBusy] = useState<ProfileMediaKind | null>(null);
+  const mediaRemovalIdentity = JSON.stringify([authority?.userId, authority?.accountId, authority?.sessionGeneration, authority?.state, authority?.restoreOnly, focused]);
+  const mediaRemovalScopeRef = useRef({ identity: mediaRemovalIdentity, pending: false, revision: 0 });
+  if (mediaRemovalScopeRef.current.identity !== mediaRemovalIdentity) mediaRemovalScopeRef.current = { identity: mediaRemovalIdentity, pending: false, revision: 0 };
+  const mediaRemovalScope = mediaRemovalScopeRef.current;
+  useEffect(() => () => {
+    if (mediaRemovalScope.pending) setProfileAppearanceBusy(null);
+  }, [mediaRemovalScope]);
+  useEffect(() => subscribeToAccountSessionAuthority(next => {
+    if (sameAccountSessionAuthority(authority, next)) return;
+    mediaRemovalScope.revision += 1;
+    // Retire removal UI immediately, but retain its latch until transport settles.
+    if (mediaRemovalScope.pending && mediaRemovalScopeRef.current === mediaRemovalScope && mountedRef.current) setProfileAppearanceBusy(null);
+  }), [authority, mediaRemovalScope]);
   const profileGalleryPending = useRef(false);
   const [profileImagePreview, setProfileImagePreview] = useState<{
     title: string;
@@ -1391,6 +1406,16 @@ export default function SettingsScreen() {
   const onRemoveProfileMedia = useCallback((kind: ProfileMediaKind) => {
     const imageUrl = kind === "avatar" ? activeProfilePhotoUrl : activeProfileBackgroundUrl;
     if (!imageUrl || profileAppearanceBusy) return;
+    const removalAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    if (!removalAuthority || removalAuthority.restoreOnly
+      || !sameAccountSessionAuthority(authority, removalAuthority)) return;
+    const removalRevision = mediaRemovalScope.revision;
+    const isCurrent = () => focused && currentAccountAction(removalAuthority)
+      && mediaRemovalScopeRef.current === mediaRemovalScope
+      && mediaRemovalScope.revision === removalRevision
+      && sameAccountSessionAuthority(removalAuthority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent()) return;
+    let consumed = false;
 
     setProfileAppearanceSheetKind(null);
     Alert.alert(
@@ -1399,31 +1424,42 @@ export default function SettingsScreen() {
         ? "Your Profile will return to the default avatar."
         : "Your Profile will return to the default background.",
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Cancel", style: "cancel", onPress: () => { consumed = true; } },
         {
           text: kind === "avatar" ? "Remove Photo" : "Remove Background",
           style: "destructive",
           onPress: () => {
+            if (consumed || mediaRemovalScope.pending || !isCurrent()) return;
+            consumed = true;
             void (async () => {
+              mediaRemovalScope.pending = true;
               setProfileAppearanceBusy(kind);
               try {
-                const nextProfile = await removeProfileMedia(kind);
+                const nextProfile = await removeProfileMedia(kind, { authority: removalAuthority, isCurrent });
+                if (!isCurrent()) return;
                 setMyProfile(nextProfile);
                 Alert.alert("Profile Appearance", kind === "avatar" ? "Profile photo removed." : "Profile background removed.");
               } catch (error) {
+                if (!isCurrent()) return;
                 Alert.alert(
                   "Profile Appearance",
                   getUserFacingErrorMessage(error, "Unable to remove this Profile image right now."),
                 );
               } finally {
-                setProfileAppearanceBusy(null);
+                if (isCurrent()) {
+                  mediaRemovalScope.pending = false;
+                  setProfileAppearanceBusy(null);
+                } else if (mediaRemovalScope.revision !== removalRevision) {
+                  // Authority retirement already cleared this operation's UI.
+                  mediaRemovalScope.pending = false;
+                }
               }
             })();
           },
         },
       ],
     );
-  }, [activeProfileBackgroundUrl, activeProfilePhotoUrl, profileAppearanceBusy]);
+  }, [activeProfileBackgroundUrl, activeProfilePhotoUrl, authority, currentAccountAction, focused, mediaRemovalScope, profileAppearanceBusy]);
 
   const onSelectProfileMediaFitMode = useCallback(async (kind: ProfileMediaKind, fitMode: ProfileAppearanceFitMode) => {
     if (profileAppearanceBusy) return;

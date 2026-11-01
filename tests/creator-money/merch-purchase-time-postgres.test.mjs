@@ -102,7 +102,9 @@ test('pre-policy orders remain historical after migration and do not acquire pur
   '20261031011531_merch_provider_dispute_observations.sql','20261031011906_merch_return_buyer_replies.sql',
   '20261031012501_merch_return_case_queues.sql','20261031012502_merch_reconciliation_driver.sql',
   '20261031033820_commerce_tax_readiness.sql','20261031033911_merch_tracking_correction_intake.sql',
-  '20261031034904_merch_tracking_reviewed_supersession.sql'];
+  '20261031034904_merch_tracking_reviewed_supersession.sql',
+  '20261101045810_merch_checkout_dispatch_provenance.sql',
+  '20261101045816_merch_reconciliation_bounded_drain.sql'];
  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:names});
  try{
   const id='e7330000-0000-4000-8000-000000000001';

@@ -193,6 +193,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             detachOperationalOwnership(nextAuthority, "account_deletion");
             lastAuthority = nextAuthority;
             lastSession = currentSession;
+            // Restoration uses this same exact-session snapshot; ordinary
+            // mutations still reject its restoreOnly authority.
+            publishAccountSessionAuthoritySnapshot(nextAuthority);
             setAuthority(nextAuthority); setSession(currentSession); setUser(null);
             setAuthorityStatus("restore_only");
             void clearRecoveryBinding();

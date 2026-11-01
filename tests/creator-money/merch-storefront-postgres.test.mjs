@@ -35,8 +35,8 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await assert.rejects(()=>save([id,'Stolen','',null,1000,2,'draft',product.updatedAt]),/(not_found|changed_reload)/);
     await assert.rejects(()=>one('select public.reserve_merch_checkout($1,1,$2)',[id,randomUUID()]),/permission denied/);
     await admin();
-    await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]),/sandbox_tester_required/);
-    await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,os,id,randomUUID()]),/current_session_required/);
+    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]),/sandbox_tester_required/);
+    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,os,id,randomUUID()]),/current_session_required/);
     await claim(buyer,bs);
     assert.equal((await one('select public.list_creator_merch_products($1)',[host])).products[0].checkoutAvailable,true);
     await admin();await db.query("update public.user_profiles set platform_access_visibility='private' where user_id=$1",[host]);
@@ -44,27 +44,27 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await admin();await db.query("update public.user_profiles set platform_access_visibility='public' where user_id=$1",[host]);
     await db.query('insert into public.channel_audience_blocks(channel_user_id,blocked_user_id,blocked_by_user_id) values($1,$2,$1)',[host,buyer]);
     await claim(buyer,bs);await assert.rejects(()=>one('select public.list_creator_merch_products($1)',[host]),/platform_unavailable/);
-    await admin();await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,id,randomUUID()]),/platform_unavailable/);
+    await admin();await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,id,randomUUID()]),/platform_unavailable/);
     await db.query('delete from public.channel_audience_blocks where channel_user_id=$1 and blocked_user_id=$2',[host,buyer]);
     await db.query("update public.wave1_legal_acceptances set invalidated_at=now() where user_id=$1 and capability='creator_money'",[host]);
     await claim(buyer,bs);assert.equal((await one('select public.list_creator_merch_products($1)',[host])).products[0].checkoutAvailable,false);
-    await admin();await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,id,randomUUID()]),/creator_not_ready/);
+    await admin();await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,id,randomUUID()]),/creator_not_ready/);
     await db.query("update public.wave1_legal_acceptances set invalidated_at=null where user_id=$1 and capability='creator_money'",[host]);
     await claim(buyer,bs);
     const attempt=randomUUID();
     await admin();
     const inventoryBefore=await one('select to_jsonb(p) from public.merch_products p where id=$1',[id]);
     await db.exec('set role service_role');
-    await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$untracked$$,1000,$$usd$$)',[buyer,bs,id,randomUUID()]),/declaration_changed/);
-    await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,999,$$usd$$)',[buyer,bs,id,randomUUID()]),/displayed_price_changed/);
-    await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$eur$$)',[buyer,bs,id,randomUUID()]),/displayed_price_changed/);
+    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$untracked$$,1000,$$usd$$)',[buyer,bs,id,randomUUID()]),/declaration_changed/);
+    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,999,$$usd$$)',[buyer,bs,id,randomUUID()]),/displayed_price_changed/);
+    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$eur$$)',[buyer,bs,id,randomUUID()]),/displayed_price_changed/);
     for(const args of ['$1,$2,$3,1,$4','$1,$2,$3,1,$4,null'])await assert.rejects(()=>one(`select public.reserve_merch_checkout_for_actor(${args})`,[buyer,bs,id,randomUUID()]),/permission denied/);
     await db.exec('reset role');
     assert.deepEqual(await one('select to_jsonb(p) from public.merch_products p where id=$1',[id]),inventoryBefore,'stale buyer declaration rolls back the whole inventory row');
     await claim(buyer,bs);
     const reserve=async(quantity=1,key=attempt)=>{
       await admin();
-      try { return await one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,$4,$5,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,id,quantity,key]); }
+      try { return await one('select public.reserve_merch_checkout_dispatch($1,$2,$3,$4,$5,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,id,quantity,key]); }
       finally { await claim(buyer,bs); }
     };
     const order=await reserve();assert.equal((await reserve()).id,order.id);
@@ -81,10 +81,10 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await assert.rejects(()=>reserve(2),/attempt_conflict/);
     await assert.rejects(()=>reserve(1,randomUUID()),/existing_pending_order/);
     await admin();await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[other]);
-    await assert.rejects(()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,2,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]),/sold_out/);
-    const otherOrder=await one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]);
+    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,2,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]),/sold_out/);
+    const otherOrder=await one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]);
     await claim(host,hs);const pageProduct=await save([randomUUID(),'Another product','Physical test only',null,1000,10,'published',null]);
-    await admin();const secondOrder=await one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,pageProduct.id,randomUUID()]);
+    await admin();const secondOrder=await one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,pageProduct.id,randomUUID()]);
     await claim(buyer,bs);
     assert.equal((await one("select public.list_my_merch_orders('buyer',null,1)")).orders.length,1);
     const page=await one("select public.list_my_merch_orders('buyer',null,1)");assert.ok(page.nextCursor);
@@ -137,7 +137,7 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await claim(buyer,bs);await assert.rejects(()=>reserve(),/unavailable/);
     for(let n=0;n<3;n++){
       await claim(host,hs);const another=await save([randomUUID(),`More stock ${n}`,'Physical test only',null,1000,10,'published',null]);
-      await admin();const create=()=>one('select public.reserve_merch_checkout_for_actor_with_tracking($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,another.id,randomUUID()]);
+      await admin();const create=()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,bs,another.id,randomUUID()]);
       if(n<2)await create();else await assert.rejects(create,/pending_order_limit/);
     }
     await admin();await db.query("update auth.sessions set not_after=now()-interval '1 second' where id=$1",[bs]);

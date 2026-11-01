@@ -97,6 +97,7 @@ async function mount(t, { active = false, providerActive = false } = {}) {
   };
   screens = Object.fromEntries(Object.entries(sources).map(([screen, code]) => {
     const mocks = { ...common,
+      '@react-navigation/native': { useIsFocused: () => state.route === screen },
       'expo-router': { useRouter: () => router, useLocalSearchParams: () => ({}),
         useFocusEffect(callback) { const focused = state.route === screen; React.useEffect(() => focused ? callback() : undefined, [callback, focused]); } },
       '../_lib/monetization': { ...h.monetary, readMonetizationSnapshot: options => {

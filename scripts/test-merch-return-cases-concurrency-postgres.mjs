@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {runMerchCheckoutDispatchRaces} from './lib/merch-checkout-dispatch-races.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset. Writes only a generated local clone. No remote URLs or provider calls.');process.exit(0);
@@ -55,7 +56,7 @@ try{
   const auth=(who='creator',role='authenticated')=>`set local role ${role};set local request.jwt.claims=${json({role,sub:actors[who].id,session_id:actors[who].session}).replace(/::jsonb$/u,'')};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const tx=(sql,role='service_role',who='creator')=>`begin;${auth(who,role)}select ${sql};commit;`;
   const rpc=(sql,role='service_role',who='creator')=>parsed(query(tx(sql,role,who)));
-  async function race(label,first,second,{error}={}){
+  async function race(label,first,second,{error,afterBlocked=''}={}){
     const holder=session(`begin;${first}select 'HOLDER_READY';`);
     await until(()=>holder.output().includes('HOLDER_READY'),`${label}: holder not ready`);
     const waiter=session(`begin;${second}commit;`);waiter.child.stdin.end();
@@ -67,7 +68,7 @@ try{
       where h.datname=current_database() and w.datname=current_database() and w.application_name=${lit(waiter.name)}`));
     assert.notEqual(evidence.holderPid,evidence.waiterPid);assert.ok(evidence.blockers.includes(evidence.holderPid));
     console.log(JSON.stringify({schedule:label,...evidence}));
-    holder.child.stdin.end('commit;\n');const a=await holder.done;assert.equal(a.code,0,a.stderr);
+    holder.child.stdin.end(afterBlocked+'commit;\n');const a=await holder.done;assert.equal(a.code,0,a.stderr);
     const b=await waiter.done;if(error){assert.notEqual(b.code,0);assert.match(b.stderr,error);}else assert.equal(b.code,0,b.stderr);
     console.log(`ok ${++checks} - ${label}`);return {first:parsed(a.stdout),second:parsed(b.stdout)};
   }
@@ -139,7 +140,9 @@ try{
   assert.equal(state.paymentStatus,'disputed');
   assert.equal(query('select count(*) from public.creator_earnings_ledger'),'0');
   assert.equal(checks,4);
-  console.log('PASS native: four PostgreSQL blocking-edge schedules, aggregate cases, exactly-once response, carrier/closure orderings, independent provider dispute. Synthetic source fixture only.');
+  await runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json});
+  assert.equal(checks,10);
+  console.log('PASS native: ten PostgreSQL blocking-edge schedules; cases, carrier/dispute orderings, duplicate checkout allocation, dispatch/abort races, once-only stock release and retained global-latch interoperation. Synthetic source fixture only.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop owned clone');}

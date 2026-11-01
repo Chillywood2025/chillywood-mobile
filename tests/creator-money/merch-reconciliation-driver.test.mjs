@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 function endpoint({claimed=true,configured=true,tracking=true,fail=false,count=1,malformed=false,project="https://synthetic.supabase.co"}={}){
- let handler;const calls=[],jobs=Array.from({length:count},()=>({order_id:randomUUID(),lease:randomUUID()}));
+ let handler;const runId=randomUUID(),calls=[],jobs=Array.from({length:count},()=>({order_id:randomUUID(),lease:randomUUID()}));
  const env={SUPABASE_URL:project,SUPABASE_SERVICE_ROLE_KEY:'service_synthetic',MERCH_TRACKING_WORKER_SECRET:tracking?'worker_synthetic':undefined};
  const runtime={exports:{},setTimeout,clearTimeout,AbortSignal,TextDecoder,fetch:async(url,opts)=>{
   calls.push({url,opts});assert.equal(opts.method,'POST');assert.equal(opts.redirect,'error');assert.ok(opts.signal);
@@ -14,7 +14,8 @@ function endpoint({claimed=true,configured=true,tracking=true,fail=false,count=1
  },Deno:{serve:f=>handler=f},require:name=>{
   if(name.startsWith('jsr:'))return{};
   if(name.endsWith('stripe-connect.ts'))return{readOptionalEnv:k=>env[k],createAdminClient:()=>({configured,client:{rpc:async(name,args)=>{
-   calls.push({name,args});if(name==='claim_merch_reconciliation_batch')return{data:{claimed,jobs:claimed?jobs:[]}};
+   calls.push({name,args});if(name==='claim_merch_reconciliation_batch')return{data:{claimed,runId,jobs:claimed?jobs:[]}};
+   if(name==='continue_merch_reconciliation_batch')return{data:{claimed:true,runId,jobs:[]}};
    assert.equal(name,'complete_merch_cost_refresh');return{data:{stale:false}};
   }}}),jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status})};throw Error(name);
  }};

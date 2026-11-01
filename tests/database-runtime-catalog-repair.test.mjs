@@ -60,8 +60,14 @@ const flexibleCommerceFiles = [
   "20261031204123_live_room_join_activity.sql",
   "20261031204321_atomic_chilly_chat_call_candidate.sql",
   "20261031205522_chat_meaningful_activity_and_call_reads.sql",
-];
+  '20261101045810_merch_checkout_dispatch_provenance.sql',
+  '20261101045816_merch_reconciliation_bounded_drain.sql'];
 const flexibleCommerceAddedFunctionIdentities = new Map([
+  ["public.reserve_merch_checkout_dispatch/9", "reserve_merch_checkout_dispatch(uuid,uuid,uuid,integer,uuid,uuid,text,integer,text)"],
+  ["private.assert_merch_checkout_actor/2", "private.assert_merch_checkout_actor(uuid,uuid)"],
+  ["public.transition_merch_checkout_dispatch/5", "transition_merch_checkout_dispatch(uuid,uuid,uuid,text,jsonb)"],
+  ["private.merch_reconciliation_backlog_health/0", "private.merch_reconciliation_backlog_health()"],
+  ["public.continue_merch_reconciliation_batch/1", "continue_merch_reconciliation_batch(uuid)"],
   ["public.read_my_notification_display_context_pre_live_join/1", "read_my_notification_display_context_pre_live_join(uuid[])"],
   ["public.claim_notification_activity_batch_pre_join_retirement/1", "claim_notification_activity_batch_pre_join_retirement(integer)"],
   ["public.start_chilly_chat_call/4", "start_chilly_chat_call(uuid,text,text,text)"],
@@ -845,7 +851,7 @@ test('commerce tax, automation, tracking and case successors retain explicit API
   const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false});
   try {
     const tables=['merch_dispute_observation_attempts','merch_dispute_observations','merch_return_cases','merch_return_case_events',
-      'merch_reconciliation_driver','merch_cost_refresh_jobs','auction_observer_control','auction_observer_jobs',
+      'merch_reconciliation_driver','merch_cost_refresh_jobs','merch_checkout_dispatch','auction_observer_control','auction_observer_jobs',
       'commerce_tax_qualifications','commerce_tax_checkout_bindings','merch_tracking_corrections',
       'merch_tracking_correction_declines','merch_tracking_supersessions','auction_automation_approvals',
       'auction_automation_controls','auction_automation_jobs','auction_automation_attempts',
@@ -867,6 +873,12 @@ test('commerce tax, automation, tracking and case successors retain explicit API
     assert.equal(sequenceGrants.length,18);
     assert.ok(sequenceGrants.every(row=>!row.allowed),'private dispute and automation ordering sequences have no API access');
     for(const [identity,allowed] of [
+      ['public.reserve_merch_checkout_for_actor_with_tracking(uuid,uuid,uuid,integer,uuid,uuid,text,integer,text)',null],
+      ['public.reserve_merch_checkout_dispatch(uuid,uuid,uuid,integer,uuid,uuid,text,integer,text)','service_role'],
+      ['public.transition_merch_checkout_dispatch(uuid,uuid,uuid,text,jsonb)','service_role'],
+      ['private.assert_merch_checkout_actor(uuid,uuid)',null],
+      ['private.merch_reconciliation_backlog_health()',null],
+      ['public.continue_merch_reconciliation_batch(uuid)','service_role'],
       ['public.prepare_creator_event_auction_platform_checkout(uuid,uuid,uuid,uuid)','service_role'],
       ['public.prepare_creator_room_auction_platform_checkout(uuid,uuid,uuid,uuid)','service_role'],
       ['public.record_merch_provider_cost_observation(uuid,jsonb)','service_role'],

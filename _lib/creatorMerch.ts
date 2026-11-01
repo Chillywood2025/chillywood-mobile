@@ -188,6 +188,10 @@ async function withMerchCheckoutDeadline<T>(run: (signal: AbortSignal) => Promis
   finally { if (timer !== undefined) clearTimeout(timer); }
 }
 
+export class MerchCheckoutAbortedError extends Error {
+  constructor(public readonly attemptId: string, message: string) { super(message); this.name = "MerchCheckoutAbortedError"; }
+}
+
 export async function launchMerchCheckout(input: { productId: string; quantity: number; attemptId: string; variantId?: string | null; trackingMode?: "tracked" | "untracked" | null; expectedUnitPriceMinor?: number; expectedCurrency?: string; isPresentationCurrent?: () => boolean }) {
   if (!input.productId || !input.attemptId || !Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 10) {
     throw new Error("Choose a product and a quantity from 1 to 10.");
@@ -202,11 +206,14 @@ export async function launchMerchCheckout(input: { productId: string; quantity: 
       body: JSON.stringify({ product_id: input.productId, quantity: input.quantity, attempt_id: input.attemptId, variant_id: input.variantId ?? null, tracking_mode: input.trackingMode ?? null, expected_unit_price_minor: input.expectedUnitPriceMinor ?? null, expected_currency: input.expectedCurrency ?? null }),
     });
     assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-    const payload = await response.json().catch(() => null) as { checkoutCreated?: boolean; orderId?: string; url?: string; message?: string } | null;
+    const payload = await response.json().catch(() => null) as { checkoutCreated?: boolean; orderId?: string; url?: string; message?: string; checkoutRetrySafe?: boolean; abortedAttemptId?: string } | null;
     return { ok: response.ok, payload };
   });
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   if (!ok || !payload?.checkoutCreated || !payload.orderId || !payload.url) {
+    if (payload?.checkoutCreated === false && payload.checkoutRetrySafe === true && payload.abortedAttemptId === input.attemptId) {
+      throw new MerchCheckoutAbortedError(input.attemptId, "Checkout did not start and its stock hold was released. Review the shop before trying again.");
+    }
     throw new Error(merchError(payload?.message || "Checkout was not confirmed. Check your orders before trying again."));
   }
   const url = new URL(payload.url);

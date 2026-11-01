@@ -29,6 +29,14 @@ function harness({reply,request,open,timers,rpcReply}={}) {
   return {api:context.exports,calls,opened};
 }
 const input={productId:'product',quantity:1,attemptId:'70000000-0000-4000-8000-000000000001'};
+test('only exact durable abort acknowledgement grants a new explicit checkout attempt',async()=>{
+ const reply={checkoutCreated:false,checkoutRetrySafe:true,abortedAttemptId:input.attemptId};
+ const h=harness({reply});await assert.rejects(h.api.launchMerchCheckout(input),e=>e instanceof h.api.MerchCheckoutAbortedError&&e.attemptId===input.attemptId);
+ assert.equal(h.calls.length,1);assert.equal(h.opened.length,0,'no automatic retry or browser launch');
+ for(const patch of [{abortedAttemptId:'other'},{checkoutRetrySafe:false},{checkoutCreated:true},{abortedAttemptId:undefined}]){
+  const bad=harness({reply:{...reply,...patch}});await assert.rejects(bad.api.launchMerchCheckout(input),e=>!(e instanceof bad.api.MerchCheckoutAbortedError));
+ }
+});
 test('production helper sends exact catalog, owner and paging arguments to bound RPC',async()=>{
   const h=harness();await h.api.readMerchProducts({creatorId:'creator',owner:true,cursor:'last'});
   assert.equal(h.calls[0].name,'list_creator_merch_products');assert.equal(h.calls[0].args.p_manage,true);

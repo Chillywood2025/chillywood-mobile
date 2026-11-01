@@ -59,7 +59,8 @@ const flexibleCommerceFiles = [
   "20261031204123_live_room_join_activity.sql",
   "20261031204321_atomic_chilly_chat_call_candidate.sql",
   "20261031205522_chat_meaningful_activity_and_call_reads.sql",
-];
+  '20261101045810_merch_checkout_dispatch_provenance.sql',
+  '20261101045816_merch_reconciliation_bounded_drain.sql'];
 
 // Reviewed disabled inspection/deleted-retention successor bundle. Keep this
 // inventory explicit so a missing or unexpected replay file still fails.

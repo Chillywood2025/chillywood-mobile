@@ -88,7 +88,7 @@ export async function mountChatAnswer(options = {}) {
   const mediaDeclaration = screen.body.statements.find((node) => ts.isVariableStatement(node) && node.getText(tree).includes("= useChatCallMediaSession({"));
   const mediaCall = mediaDeclaration.declarationList.declarations[0].initializer;
   const endedCallback = mediaCall.arguments[0].properties.find((node) => node.name?.getText(tree) === "onRoomEnded").initializer;
-  const readNames = new Set(["reconcileEndedCallState", "loadThreadState"]);
+  const readNames = new Set(["reconcileEndedCallState", "explicitThreadReadRef", "readThreadState", "loadThreadState"]);
   const panel = (() => {
     let found;
     const visit = node => { if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(tree) === "InRoomCommunicationPanel") found = node; ts.forEachChild(node, visit); };
@@ -133,7 +133,9 @@ export async function mountChatAnswer(options = {}) {
       const resolvedCallType = thread.activeCallType;
       const authority = { userId: currentUserId, accountId: currentUserId, sessionGeneration, state: "ACTIVE", restoreOnly: false };
       ${options.readMode ? `const messageIdParam = runtime.messageIdParam;
-      ${messageEntryDeclarations.map((node) => node.getText(tree)).join("\n")}` : ""}
+      ${messageEntryDeclarations.map((node) => node.getText(tree)).join("\n")}` : "const messageOwnerKey = JSON.stringify([currentUserId, sessionGeneration, threadId]); const messageEntryKey = messageOwnerKey;"}
+      const incomingCallReconciliationRef = useRef(null);
+      const incomingCallReconciliationEpochRef = useRef(0);
       const incomingCallInvite = runtime.incomingInvite === null ? null : runtime.invite;
       const outgoingCallInvite = runtime.terminalMode === "outgoing" && runtime.outgoingPresent !== false ? runtime.invite : null;
       ${screen.body.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => ["expiredIncomingCallPresentation", "incomingCallPresentationExpired", "presentedThread"].includes(declaration.name.getText(tree)))).map(node => node.getText(tree)).join("\n")}
@@ -257,6 +259,10 @@ export async function mountChatAnswer(options = {}) {
     endIosNativeCall: async (...args) => { runtime.nativeEnds ??= []; runtime.nativeEnds.push(args); return runtime.nativeEndResult ?? true; },
     releaseTrustedNativeCallSession: (id) => { runtime.released ??= []; runtime.released.push(id); },
     loadThreadState: async () => { runtime.loads += 1; },
+    getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: runtime.currentUserId, accountId: runtime.currentUserId,
+      sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }),
+    sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.accountId === b.accountId
+      && a.sessionGeneration === b.sessionGeneration && a.state === b.state && a.restoreOnly === b.restoreOnly,
     setError: (message) => { runtime.errors.push(message); },
     getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback,
     trackEvent: noop, logChatCall: noop, logChatThread: noop,
