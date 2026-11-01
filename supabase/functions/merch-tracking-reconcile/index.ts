@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createAdminClient, jsonResponse, readOptionalEnv} from "../_shared/stripe-connect.ts";
-import {hashTrackingBody, normalizeTracking, shippoRequest, type TrackingJob} from "../_shared/merch-tracking.ts";
+import {hashTrackingBody, normalizeTracking, readExistingShippoTracking, type TrackingJob} from "../_shared/merch-tracking.ts";
 
 async function bounded<T>(work: PromiseLike<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -30,25 +30,20 @@ Deno.serve(async (req: Request) => {
   let completed = 0;
   for (const job of claimed.data as TrackingJob[]) {
     if (job.environment !== environment) throw new Error("tracking_claim_environment_mismatch");
-    // Registration + GET + SQL acknowledgement have bounded aggregate time.
+    // Existing tracking GET + SQL acknowledgement have bounded aggregate time.
     // Untouched leases expire normally; a partial batch is never called complete.
     if (deadline - Date.now() < 25000) break;
-    let registered = job.registration_state === "registered";
     let facts: Record<string, unknown>;
     try {
-      if (job.registration_state === "pending") {
-        // Claim commits attempted before POST. Ambiguous results are not retried;
-        // authenticated polling remains operational without webhook registration.
-        try { await shippoRequest(job, token, true, undefined, environment); registered = true; } catch { /* GET reconciles independently */ }
-      }
-      facts = {...await normalizeTracking(await shippoRequest(job, token, false, undefined, environment))};
+      // Consume only: never register tracking, create shipments, or buy labels.
+      facts = {...await normalizeTracking(await readExistingShippoTracking(job, token, undefined, environment))};
     } catch {
       // Do not leak credentials, raw response bodies, or arbitrary provider errors.
       facts = {status: "UNKNOWN", carrier: job.carrier, tracking_number: job.tracking_number,
         test: environment === "sandbox", review_reason: "carrier_unavailable"};
     }
     const result = await bounded(admin.rpc("complete_merch_tracking_job", {p_assignment_id: job.id,
-      p_lease: job.lease, p_facts: facts, p_registered: registered}));
+      p_lease: job.lease, p_facts: facts, p_registered: false}));
     if (!result.error && result.data && result.data.stale !== true) completed++;
   }
   return jsonResponse(completed === claimed.data.length ? 200 : 503,

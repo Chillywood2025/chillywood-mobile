@@ -98,7 +98,8 @@ test('signed callback → durable inbox → scoped authenticated GET → real SQ
   const hint={event:'track_updated',data:snapshot};
   for(let i=0;i<2;i++)assert.equal((await sendSigned(webhook,hint,'shippo-auth-signature',env.MERCH_SHIPPO_WEBHOOK_SECRET)).status,200);
   assert.equal(await one('select count(*)::int from private.merch_tracking_inbox'),1);assert.equal((await projection()).returnWindowStatus,'awaiting_verified_delivery');
-  r=await run();assert.equal(r.status,200,await r.text());assert.deepEqual(network.map(x=>x.method),['POST','GET']);
+  r=await run();assert.equal(r.status,200,await r.text());assert.deepEqual(network.map(x=>x.method),['GET']);
+  assert.equal(await one('select registration_state from private.merch_tracking_jobs'),'pending','GET does not manufacture registered evidence');
   assert.ok(network.every(x=>x.account==='managed_fixture'));
   let p=await projection();assert.equal(p.returnWindowStatus,'review_required','unqualified return/dispute clearance still held');
   assert.ok(!p.netSettlementHoldReasons.includes('merch_tracking_review_required'));assert.ok(!p.netSettlementHoldReasons.includes('verified_purchase_required'));
@@ -120,6 +121,12 @@ test('signed callback → durable inbox → scoped authenticated GET → real SQ
   assert.equal((await one('select public.complete_merch_tracking_job($1,$2,$3,true)',[leased[0].id,leased[0].lease,JSON.stringify(facts)])).stale,true);
   assert.equal((await one('select public.complete_merch_tracking_job($1,null,$2,true)',[leased[0].id,JSON.stringify(facts)])).stale,true);
   await root();
+  assert.equal(await one('select registration_state from private.merch_tracking_jobs'),'pending','legacy p_registered=true cannot fabricate registration evidence');
+  for(const state of ['attempted','unknown','registered']) {
+   await db.query('update private.merch_tracking_jobs set registration_state=$1',[state]);
+   await due();await run();
+   assert.equal(await one('select registration_state from private.merch_tracking_jobs'),state,'historical registration evidence is preserved, not rewritten by GET');
+  }
   // Corroboration does not clear unrelated order-wide open cases.
   await db.query(`insert into private.merch_return_evidence(order_id,delivered_at,evidence_reference,delivery_state,return_state,dispute_state)
    values($1,$2,'test-open-return','verified','open','open')`,[order,iso(delivered)]);
@@ -148,7 +155,7 @@ test('signed callback → durable inbox → scoped authenticated GET → real SQ
   const newJob=pending.find(j=>j.order_id===other);assert.equal(newJob.registration_state,'pending');await root();
   await db.query("update private.merch_tracking_jobs set lease_until=clock_timestamp()-interval '1 second' where assignment_id=$1",[newJob.id]);
   await service();const reclaimed=await one('select public.claim_merch_tracking_jobs(5)');
-  assert.equal(reclaimed.find(j=>j.id===newJob.id).registration_state,'attempted','unknown-outcome registration never becomes pending again');await root();
+  assert.equal(reclaimed.find(j=>j.id===newJob.id).registration_state,'pending','read-only claims never imply a registration attempt');await root();
   await db.query("update public.merch_products set shipping_tracking_mode='untracked' where id=$1",[product]);
   const untracked=await make();await db.query("update public.merch_orders set payment_status='paid' where id=$1",[untracked]);
   await claim(creator,cs);await assert.rejects(one("select public.assign_merch_tracking($1,'usps','UNTRACKED1')",[untracked]),/not_available/);await root();

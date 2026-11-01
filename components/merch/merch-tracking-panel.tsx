@@ -63,6 +63,7 @@ function TrackingPanel({ orderId, manage, paymentStatus, onChanged }: MerchTrack
   const corroborated = tracking?.confidence === "corroborated";
   return <View style={styles.panel}>
     <Text accessibilityRole="header" style={styles.heading}>Shipment tracking</Text>
+    <Text style={styles.notice}>Chi&apos;llywood reads existing tracking updates; it does not register shipments or buy shipping or return labels. Sellers arrange shipping and return labels with their shipping provider.</Text>
     <Text style={styles.notice}>Sandbox preview — no physical shipment or payout is created here.</Text>
     {busy ? <ActivityIndicator accessibilityLabel="Loading shipment tracking" /> : null}
     {tracking ? <>
