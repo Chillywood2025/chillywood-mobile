@@ -1,0 +1,19 @@
+✔ bounded render pool successors have the exact catalog delta and private activation boundary (17599.207615ms)
+✔ November completion bundle has the exact reviewed added/replaced catalog signatures (16096.206434ms)
+✔ creator monetization has the exact declared catalog delta from the audit checkpoint (11635.335804ms)
+✔ physical merch successors have the exact declared catalog delta (11690.114101ms)
+✔ commerce tax, automation, tracking and case successors retain explicit API boundaries (15431.377931ms)
+✔ runtime catalog scope and idempotence, Studio held (17449.158078ms)
+✔ runtime catalog scope and idempotence, Studio included (17885.491636ms)
+✔ staff mutation repair with Studio held (20656.965435ms)
+ℹ 104 real-SQL assertions; SHA256 ca0cc25dc6feae53cb6c865cfd9c9c775ddab6b2af075f57b5c1f64ccc143b8f
+✔ staff mutation repair with Studio included (19759.267553ms)
+ℹ 104 real-SQL assertions; SHA256 ca0cc25dc6feae53cb6c865cfd9c9c775ddab6b2af075f57b5c1f64ccc143b8f
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 148596.81702
