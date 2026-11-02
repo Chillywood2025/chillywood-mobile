@@ -62,13 +62,22 @@ class GalleryPickerActivityTest {
   @Test fun finishingBetweenOldDestroyAndReplacementAttachFinishesReplacement() {
     val request = request("attach-race")
     val old = Robolectric.buildActivity(GalleryPickerActivity::class.java, intent(request.id)).create()
+    // Robolectric shares this queue across Activities; consume the original
+    // chooser so the replacement assertion detects only an actual relaunch.
+    assertNotNull(shadowOf(old.get()).nextStartedActivityForResult)
     val saved = Bundle(); old.saveInstanceState(saved).destroy()
     val dismissal = GalleryActivityRegistry.finish(request, false)
     assertFalse(dismissal.isDone)
     val replacement = Robolectric.buildActivity(GalleryPickerActivity::class.java, intent(request.id)).create(saved)
-    assertTrue(replacement.get().isFinishing)
-    assertNull(shadowOf(replacement.get()).nextStartedActivityForResult)
-    replacement.destroy(); assertTrue(dismissal.isDone)
+    try {
+      assertTrue(replacement.get().isFinishing)
+      assertNull(shadowOf(replacement.get()).nextStartedActivityForResult)
+      assertFalse(dismissal.isDone)
+    } finally {
+      replacement.destroy()
+    }
+    assertTrue(dismissal.isDone)
+    assertNull(GalleryActivityRegistry.get(request.id))
   }
 
   @Test fun retiringRequestDoesNotReleaseOpenChooserOrLetDifferentRequestTakeOwnership() {
