@@ -1,0 +1,23 @@
+{
+    "programs": [
+
+    ],
+    "stream_groups": [
+
+    ],
+    "streams": [
+        {
+            "codec_type": "video",
+            "start_time": "0.333008",
+            "nb_frames": "50"
+        },
+        {
+            "codec_type": "audio",
+            "start_time": "0.000000",
+            "nb_frames": "95"
+        }
+    ],
+    "format": {
+        "start_time": "0.000000"
+    }
+}
