@@ -1,0 +1,12 @@
+0-baseline threads=1 trial=1 cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825  -
+0-baseline threads=1 trial=2 cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825  -
+0-baseline threads=1 trial=3 cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825  -
+0-baseline threads=2 trial=1 cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825  -
+0-baseline threads=2 trial=2 cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825  -
+0-baseline threads=2 trial=3 cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825  -
+2-baseline threads=1 trial=1 9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083  -
+2-baseline threads=1 trial=2 9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083  -
+2-baseline threads=1 trial=3 9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083  -
+2-baseline threads=2 trial=1 9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083  -
+2-baseline threads=2 trial=2 9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083  -
+2-baseline threads=2 trial=3 9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083  -

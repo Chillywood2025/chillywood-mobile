@@ -1,9 +1,10 @@
 // Reviewed November 1 completion stack, returning-fee policy and consume-only tracking.
-// 49 base migrations plus separately reviewed live-discovery successors.
+// 49 base migrations plus separately reviewed live-discovery and render-pool successors.
 // Includes the narrow final public Owner identity boundary; no removed signatures.
 // Explicit identities, not a runtime whitelist generated from the schema under
 // test. Missing/unexpected functions and migrations must fail exact assertions.
 import {liveDiscoveryCompletionFiles,liveDiscoveryAddedFunctionIdentities,liveDiscoveryReplacedFunctionIdentities} from './live-discovery-migration-inventory.mjs';
+import {clipExportPoolFiles,clipExportPoolAddedFunctionIdentities} from './clip-export-pool-migration-inventory.mjs';
 // These successors require the held Studio readers/publication schema. Historical
 // pre-Studio replay must omit the exact files and added signatures together.
 export const appCompletionStudioDependentFiles = Object.freeze([
@@ -67,10 +68,12 @@ export const appCompletionFiles = Object.freeze([
   // Replaces only the already-reviewed claim/complete tracking bodies, preserving ABI and ACLs.
   "20261101215711_merch_tracking_consume_existing_only.sql",
   ...appCompletionStudioDependentFiles,
+  ...clipExportPoolFiles,
 ].sort());
 
 export const appCompletionAddedFunctionIdentities = new Map([
   ...appCompletionStudioDependentAddedFunctionIdentities,
+  ...clipExportPoolAddedFunctionIdentities,
   [
     "private.append_known_cost_allocation/0",
     "private.append_known_cost_allocation()"

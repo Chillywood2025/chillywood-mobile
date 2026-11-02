@@ -1,0 +1,16 @@
+✔ clip export queue uses full migration chain, exact owner/session, fenced worker and private drafts (15964.354398ms)
+✔ native Clip fixture uses real queue/producer/seal and atomic draft completion (16997.011892ms)
+✔ bounded pool full-chain SQL semantics, fences and 1000-request admission burst (not native contention) (37294.652791ms)
+✔ bounded Clip pool native runner rejects remote arguments and provides offline help (141.979522ms)
+✔ bounded Clip pool contention is mandatory after full migrations and existing pgTAP (2.717237ms)
+✔ pool gate rejects omission, optionality, swallowed failure, wrong target and wrong order (8.105273ms)
+✔ native pool proof observes actual lock edges and preserves production boundaries (2.202701ms)
+✔ pool pgTAP SQL preflight uses full schema; native PostgreSQL qualification remains mandatory (18593.242613ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 89804.425517

@@ -1,0 +1,38 @@
+{
+  "localFfmpeg": "7.1.5-0+deb13u1",
+  "hostedRevalidation": "pending",
+  "validation": {
+    "pass": 28,
+    "fail": 0,
+    "skipped": 0,
+    "durationMs": 63349.835898,
+    "matrixCases": 21,
+    "audioMaximumError": 0,
+    "lint": "pass",
+    "diffCheck": "pass"
+  },
+  "testedSourceSha256": {
+    "tests/helpers/clip-render-seek-fixtures.mjs": "019b72024516c9b12a24c117ac2316fe81b67e2bc4f689422740c72950838927",
+    "tests/clip-render-seek.test.mjs": "e4a0127c493434349d8d81a7fa3478726d6165084be4763c0308784dd9c2f621",
+    "tests/fixtures/clip-render-output-seek-baseline.mjs": "f7f1b2fa705f0aa518c58ff4ff18d80dd54917dc3e05c345431ac26d864cde67",
+    "scripts/lib/clip-render-core.mjs": "8cabad0a979e55247331df433017d0f6209fc2f20b26057b85973ff3d701a60b"
+  },
+  "evidenceSha256": {
+    "run.log": "8c6e5468763f72b35c54f72012b1cf8e611db976694baf168471b231ec5056fa",
+    "stages.json": "1e3841dc56f5b9474cb6319c747a7342439e973d8ad0155184dca41f2fd405f2",
+    "final-seek.tap": "d3fb50a79dff2485e5508f9c8d5ce756363f16b72d2c716c64762461aacd7e5c",
+    "README.md": "52a02ab5dd419bd0dff8b71958c2e87eb4b7c6ed5e849b60b0a4c4beeb9cbf27",
+    "receipt.json": "be0bb25b3e18302f2e8317cf09f58c42dea1dc9436c697cae77f21eb7b6f609b",
+    "redecode.log": "077dbd8e40f32fd33abc05fea0d63c2504cb24868a954dfe3debc91a38ac815f",
+    "stages.mjs": "9999884a94946edab55570d3dcc155cf80d96d02c7ab8b284ccb99c9748485d8",
+    "0-baseline-frames.json": "c7a1622b74fcdcacc4a18dbd76bbbeed4606fd4da5e7413feeeb1e29d67e3b29",
+    "command-equivalence.json": "950145e26d04b6c6ab9e9bed7fd9d2cae1085c82961d464771f305afc2f3652c",
+    "preencode.mjs": "169217b9f9cc179a266788691b70851b5bd1ced2762d28d6264ee01e36f8a3ff",
+    "control.mjs": "9eb303d720724d2cc3145b3fb0bafd4e43852b6f50f53a08a56c88f29d4ace16",
+    "preencode.json": "d0ac4d1f0ea8b6a2ef66a40efd7f9ba1307a2b3d54d2078dc6be3e80f8b722d1",
+    "commands.jsonl": "3f607f3dbaa176306d1124057a6920bd9aa646dbce82c025a97ae2616a64344c",
+    "reproducer.tar.gz": "69cfcbe317dfb623e73f34ee9fca004e3499b2aa95592b24f65f974ce5a6d041",
+    "2-baseline-frames.json": "c7a1622b74fcdcacc4a18dbd76bbbeed4606fd4da5e7413feeeb1e29d67e3b29",
+    "ffmpeg-wrapper.mjs": "d8adf5eac8b996a4116ba3908f4a3a7edc4590b5d9b2b4077588616d9381666d"
+  }
+}

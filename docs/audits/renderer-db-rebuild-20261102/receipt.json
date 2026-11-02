@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-02T14:42:25Z",
+  "scope": "Authorized restoration/reconstruction of renderer DB authority tests and mandatory native CI gate; not the lost original tree.",
+  "source": {
+    "localCommit": "4398c582da7faf002812eef42aa0fca375565a37",
+    "remoteCommit": "10557a780af878746dd087fe2ccd55ff6411de7e",
+    "tree": "66e8df3dde43994828b68512952816b8609aa617",
+    "remoteBranch": "fix/renderer-rebuild-db-20261102",
+    "remoteHeadAndTreeReadBack": true,
+    "baseLocal": "d8a7a7f828d721545fdfe8ff7c7979ec0a624640",
+    "baseRemote": "ed73d74dcf4684cc2b060bb834ee72eea14ef7c3"
+  },
+  "environment": {
+    "node": "v24.22.1",
+    "pglite": "0.5.4",
+    "dependencies": "Shared root npm ci --ignore-scripts from existing lockfile; no dependency edits.",
+    "heavyTestLock": "/tmp/renderer-heavy-tests.lock"
+  },
+  "focused": {
+    "command": "node --test --test-concurrency=1 tests/clip-export-database.test.mjs tests/clip-export-native-fixture.test.mjs tests/clip-export-pool-database.test.mjs tests/clip-export-pool-pgtap-preflight.test.mjs tests/clip-export-pool-native-runner-source.test.mjs",
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 89804.425517,
+    "log": "focused.log",
+    "sha256": "a316ffdaaabbb555b39c5d1eafebc51f4558493535fd528ce3cec61df1cbdea5",
+    "pgtapPreflightAssertions": 21,
+    "admissionBurst": {
+      "requests": 1000,
+      "distinctAdmittedJobs": 25,
+      "capacityRejections": 500,
+      "providerCalls": 0,
+      "actualMediaLoad": false
+    },
+    "contentionProof": false
+  },
+  "native": {
+    "command": "SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-clip-export-pool-concurrency-postgres.mjs",
+    "status": "blocked",
+    "reason": "spawnSync docker ENOENT",
+    "exitCode": 1,
+    "schedulesExecuted": 0,
+    "mandatoryHostedSchedules": 20,
+    "log": "native-attempt.log",
+    "sha256": "da9b35d7c590869b27a78c1174c8334ebc6c47b6e923bc6a0770dc1019a069a2"
+  },
+  "additionalChecks": {
+    "ownedEslint": "passed, --max-warnings 0",
+    "nodeSyntax": "passed",
+    "diffCheck": "passed",
+    "validationPlan": "conservative; product, sensitive, database, nativeRelease, autonomous and policy all selected"
+  },
+  "deployedMigration": {
+    "path": "supabase/migrations/20261101141646_creator_clip_export_jobs.sql",
+    "sha256": "1a10cdad08207afac96f39a7afc0a1152908f8c210a9b14c0b03adb3d941b9d5",
+    "unchanged": true
+  },
+  "boundaries": [
+    "PGlite and source guards are not native PostgreSQL contention proof.",
+    "Historical test counts were not reused as new validation.",
+    "Full integrated Required Validation and native hosted races remain mandatory.",
+    "No live database writes, providers, deployment, activation, credentials, paid provisioning, PR or main merge.",
+    "This receipt covers the DB branch only; root owns integration with separately rebuilt runtime, health, media and UI."
+  ]
+}

@@ -1,0 +1,201 @@
+TAP version 13
+# Subtest: decoded video mismatch diagnostics remain bounded without weakening exact byte equality
+ok 1 - decoded video mismatch diagnostics remain bounded without weakening exact byte equality
+  ---
+  duration_ms: 7.589865
+  type: 'test'
+  ...
+# Subtest: frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+ok 2 - frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+  ---
+  duration_ms: 7.157874
+  type: 'test'
+  ...
+# Subtest: hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+ok 3 - hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+  ---
+  duration_ms: 0.637912
+  type: 'test'
+  ...
+# Subtest: first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+ok 4 - first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+  ---
+  duration_ms: 0.998035
+  type: 'test'
+  ...
+# Subtest: pre-encode replay changes only reviewed output codec/container options
+ok 5 - pre-encode replay changes only reviewed output codec/container options
+  ---
+  duration_ms: 1.394322
+  type: 'test'
+  ...
+# Subtest: exact pre-encode comparison detects wrong trim and rotation without pixel tolerance
+ok 6 - exact pre-encode comparison detects wrong trim and rotation without pixel tolerance
+  ---
+  duration_ms: 1472.029008
+  type: 'test'
+  ...
+# Subtest: real-media matrix compares exact pre-lossy frames and actual export timing/audio against frozen baseline
+    # Subtest: zero
+    ok 1 - zero
+      ---
+      duration_ms: 1869.532007
+      type: 'test'
+      ...
+    # {"name":"zero","preEncodeVideoSha256":"3bc111212fc01ef1843455720cb3bc8b764ec69f91dd3f441c3c3984b4c5aeda","baselineDecodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: early-fractional
+    ok 2 - early-fractional
+      ---
+      duration_ms: 1674.744337
+      type: 'test'
+      ...
+    # {"name":"early-fractional","preEncodeVideoSha256":"5902b72609cf36f48d730203b9b88e166583c1e6c531344a2da8790a081c0926","baselineDecodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: integer
+    ok 3 - integer
+      ---
+      duration_ms: 1819.57449
+      type: 'test'
+      ...
+    # {"name":"integer","preEncodeVideoSha256":"1fb17c2654f7bfe2d48cb3bc9f98ca063eea196dc1b2433da7ad90142ba0689e","baselineDecodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: keyframe
+    ok 4 - keyframe
+      ---
+      duration_ms: 2201.39749
+      type: 'test'
+      ...
+    # {"name":"keyframe","preEncodeVideoSha256":"05a3d016b101bdea2b773dc3658cc7b675b2facdf33251ebd789fdfe80f83d8b","baselineDecodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: after-keyframe
+    ok 5 - after-keyframe
+      ---
+      duration_ms: 2303.956903
+      type: 'test'
+      ...
+    # {"name":"after-keyframe","preEncodeVideoSha256":"05a3d016b101bdea2b773dc3658cc7b675b2facdf33251ebd789fdfe80f83d8b","baselineDecodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: fractional-late
+    ok 6 - fractional-late
+      ---
+      duration_ms: 3235.077196
+      type: 'test'
+      ...
+    # {"name":"fractional-late","preEncodeVideoSha256":"2b49ff82c2742c623a00fbad0166438108507c1fff30400c399972924cb9a536","baselineDecodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: remainder
+    ok 7 - remainder
+      ---
+      duration_ms: 2943.931633
+      type: 'test'
+      ...
+    # {"name":"remainder","preEncodeVideoSha256":"d3af96e7e9e47de5c9b81e606870fafd644202c14d319fe53d60c7ccbc7ce6a4","baselineDecodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoBytes":2721600,"pcmBytes":180224,"maximumAudioError":0}
+    # Subtest: fit-watermark
+    ok 8 - fit-watermark
+      ---
+      duration_ms: 2931.465385
+      type: 'test'
+      ...
+    # {"name":"fit-watermark","preEncodeVideoSha256":"c06bd235096e3c3d7c43cc1d7ddf60148a4bf13fc5bc57d87ff7b3b7f8270aac","baselineDecodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoBytes":1620000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: center
+    ok 9 - center
+      ---
+      duration_ms: 2448.424082
+      type: 'test'
+      ...
+    # {"name":"center","preEncodeVideoSha256":"3f74d97626a7326b38e0e3044d7ecfafe9d632287e4b91eccb38f3a3896c7ea5","baselineDecodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: 24fps
+    ok 10 - 24fps
+      ---
+      duration_ms: 2082.409101
+      type: 'test'
+      ...
+    # {"name":"24fps","preEncodeVideoSha256":"1ede828781c8d6be0080773bb08bb6470b6c32a805958a5614d834bb49a9a00c","baselineDecodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: 25fps
+    ok 11 - 25fps
+      ---
+      duration_ms: 2058.054006
+      type: 'test'
+      ...
+    # {"name":"25fps","preEncodeVideoSha256":"b351f3c65e4c137c11dc9a4152b5295bc64b2d9c5f1d4db8671a3588d1a2dae6","baselineDecodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: ntsc
+    ok 12 - ntsc
+      ---
+      duration_ms: 2613.8144
+      type: 'test'
+      ...
+    # {"name":"ntsc","preEncodeVideoSha256":"b5b422747a7d7b9fae2cd1f082cb38ae4db9b466b6a1c2e2c14d4c808ad1d1e3","baselineDecodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: vfr
+    ok 13 - vfr
+      ---
+      duration_ms: 2168.798
+      type: 'test'
+      ...
+    # {"name":"vfr","preEncodeVideoSha256":"d4481d3446dff3414e67d0900d7ffd9086e23db75baba3c335c3bfc04c7354fb","baselineDecodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: sparse
+    ok 14 - sparse
+      ---
+      duration_ms: 1615.180421
+      type: 'test'
+      ...
+    # {"name":"sparse","preEncodeVideoSha256":"72325fefa9a579b5ca00e384d01417a1fa68b2a81074f007c82d1597578f15f5","baselineDecodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0}
+    # Subtest: no-audio
+    ok 15 - no-audio
+      ---
+      duration_ms: 1717.590109
+      type: 'test'
+      ...
+    # {"name":"no-audio","preEncodeVideoSha256":"c344d45be57aec7a281bfe071e08679bb65b1fcbb0b76d59c4bc8c959375db5b","baselineDecodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0}
+    # Subtest: positive-pts
+    ok 16 - positive-pts
+      ---
+      duration_ms: 2438.328629
+      type: 'test'
+      ...
+    # {"name":"positive-pts","preEncodeVideoSha256":"26e16d7e22e77364c6402342251ed11b28b4e4c69773f33d1d1a097863cda5e6","baselineDecodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: mov-delayed-audio
+    ok 17 - mov-delayed-audio
+      ---
+      duration_ms: 2499.655249
+      type: 'test'
+      ...
+    # {"name":"mov-delayed-audio","preEncodeVideoSha256":"c344d45be57aec7a281bfe071e08679bb65b1fcbb0b76d59c4bc8c959375db5b","baselineDecodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":178176,"maximumAudioError":0}
+    # Subtest: delayed-video
+    ok 18 - delayed-video
+      ---
+      duration_ms: 2263.235842
+      type: 'test'
+      ...
+    # {"name":"delayed-video","preEncodeVideoSha256":"e27f46b351314aba8578a766dcf084e8b70dbb8ffae85941b59cde21ca483b8e","baselineDecodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: webm-opus
+    ok 19 - webm-opus
+      ---
+      duration_ms: 2473.161634
+      type: 'test'
+      ...
+    # {"name":"webm-opus","preEncodeVideoSha256":"6c2416f2d2663ee0f4ace926100c09392cc4e30d308adcb72155f0f12b03677d","baselineDecodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: phone-rotation
+    ok 20 - phone-rotation
+      ---
+      duration_ms: 2395.249044
+      type: 'test'
+      ...
+    # {"name":"phone-rotation","preEncodeVideoSha256":"74103a52651a6d47531d7573a7446a7cf127f0dafd821fc55c2466b639ec98f7","baselineDecodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: negative-pts-fallback
+    ok 21 - negative-pts-fallback
+      ---
+      duration_ms: 3024.113072
+      type: 'test'
+      ...
+    # {"name":"negative-pts-fallback","preEncodeVideoSha256":"2843cc39ee5629056375ad4756d9e81bf621f745c5bd86d62fab94151fb9f844","baselineDecodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    1..21
+ok 7 - real-media matrix compares exact pre-lossy frames and actual export timing/audio against frozen baseline
+  ---
+  duration_ms: 61737.823511
+  type: 'test'
+  ...
+# {"evidence":"fresh rebuilt synthetic comparison, not recovered historical receipts","cases":[{"name":"zero","preEncodeVideoSha256":"3bc111212fc01ef1843455720cb3bc8b764ec69f91dd3f441c3c3984b4c5aeda","baselineDecodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"early-fractional","preEncodeVideoSha256":"5902b72609cf36f48d730203b9b88e166583c1e6c531344a2da8790a081c0926","baselineDecodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"integer","preEncodeVideoSha256":"1fb17c2654f7bfe2d48cb3bc9f98ca063eea196dc1b2433da7ad90142ba0689e","baselineDecodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"keyframe","preEncodeVideoSha256":"05a3d016b101bdea2b773dc3658cc7b675b2facdf33251ebd789fdfe80f83d8b","baselineDecodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"after-keyframe","preEncodeVideoSha256":"05a3d016b101bdea2b773dc3658cc7b675b2facdf33251ebd789fdfe80f83d8b","baselineDecodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"fractional-late","preEncodeVideoSha256":"2b49ff82c2742c623a00fbad0166438108507c1fff30400c399972924cb9a536","baselineDecodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"remainder","preEncodeVideoSha256":"d3af96e7e9e47de5c9b81e606870fafd644202c14d319fe53d60c7ccbc7ce6a4","baselineDecodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoBytes":2721600,"pcmBytes":180224,"maximumAudioError":0},{"name":"fit-watermark","preEncodeVideoSha256":"c06bd235096e3c3d7c43cc1d7ddf60148a4bf13fc5bc57d87ff7b3b7f8270aac","baselineDecodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoBytes":1620000,"pcmBytes":192512,"maximumAudioError":0},{"name":"center","preEncodeVideoSha256":"3f74d97626a7326b38e0e3044d7ecfafe9d632287e4b91eccb38f3a3896c7ea5","baselineDecodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"24fps","preEncodeVideoSha256":"1ede828781c8d6be0080773bb08bb6470b6c32a805958a5614d834bb49a9a00c","baselineDecodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"25fps","preEncodeVideoSha256":"b351f3c65e4c137c11dc9a4152b5295bc64b2d9c5f1d4db8671a3588d1a2dae6","baselineDecodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"ntsc","preEncodeVideoSha256":"b5b422747a7d7b9fae2cd1f082cb38ae4db9b466b6a1c2e2c14d4c808ad1d1e3","baselineDecodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"vfr","preEncodeVideoSha256":"d4481d3446dff3414e67d0900d7ffd9086e23db75baba3c335c3bfc04c7354fb","baselineDecodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"sparse","preEncodeVideoSha256":"72325fefa9a579b5ca00e384d01417a1fa68b2a81074f007c82d1597578f15f5","baselineDecodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"no-audio","preEncodeVideoSha256":"c344d45be57aec7a281bfe071e08679bb65b1fcbb0b76d59c4bc8c959375db5b","baselineDecodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"positive-pts","preEncodeVideoSha256":"26e16d7e22e77364c6402342251ed11b28b4e4c69773f33d1d1a097863cda5e6","baselineDecodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"mov-delayed-audio","preEncodeVideoSha256":"c344d45be57aec7a281bfe071e08679bb65b1fcbb0b76d59c4bc8c959375db5b","baselineDecodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":178176,"maximumAudioError":0},{"name":"delayed-video","preEncodeVideoSha256":"e27f46b351314aba8578a766dcf084e8b70dbb8ffae85941b59cde21ca483b8e","baselineDecodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"webm-opus","preEncodeVideoSha256":"6c2416f2d2663ee0f4ace926100c09392cc4e30d308adcb72155f0f12b03677d","baselineDecodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"phone-rotation","preEncodeVideoSha256":"74103a52651a6d47531d7573a7446a7cf127f0dafd821fc55c2466b639ec98f7","baselineDecodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"negative-pts-fallback","preEncodeVideoSha256":"2843cc39ee5629056375ad4756d9e81bf621f745c5bd86d62fab94151fb9f844","baselineDecodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}]}
+1..7
+# tests 28
+# suites 0
+# pass 28
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 63349.835898

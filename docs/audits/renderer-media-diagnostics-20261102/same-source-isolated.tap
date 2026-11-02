@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+ok 1 - frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+  ---
+  duration_ms: 6.761647
+  type: 'test'
+  ...
+# Subtest: hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+ok 2 - hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+  ---
+  duration_ms: 0.60323
+  type: 'test'
+  ...
+# Subtest: first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+ok 3 - first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+  ---
+  duration_ms: 1.245619
+  type: 'test'
+  ...
+# Subtest: rebuilt real-media matrix compares exact decoded frames and aligned audio against frozen baseline
+ok 4 - rebuilt real-media matrix compares exact decoded frames and aligned audio against frozen baseline
+  ---
+  duration_ms: 39724.463651
+  type: 'test'
+  ...
+# {"evidence":"fresh rebuilt synthetic comparison, not recovered historical receipts","cases":[{"name":"zero","decodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"early-fractional","decodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"integer","decodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"after-keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"fractional-late","decodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"remainder","decodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoBytes":2721600,"pcmBytes":180224,"maximumAudioError":0},{"name":"fit-watermark","decodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoBytes":1620000,"pcmBytes":192512,"maximumAudioError":0},{"name":"center","decodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"24fps","decodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"25fps","decodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"ntsc","decodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"vfr","decodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"sparse","decodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"no-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"positive-pts","decodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"mov-delayed-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":178176,"maximumAudioError":0},{"name":"delayed-video","decodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"webm-opus","decodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"phone-rotation","decodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"negative-pts-fallback","decodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}]}
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 39845.005281

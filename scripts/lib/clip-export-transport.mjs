@@ -54,8 +54,10 @@ export async function downloadClipSource({source,file,signer,supabaseUrl,service
   headers={apikey:serviceKey,Authorization:`Bearer ${serviceKey}`};
  } else url=await signer('GET',{provider,bucket,objectKey:key});
  let response;
- try{response=await fetcher(url,{headers,signal,redirect:'error',cache:'no-store'});}catch{fail('clip_source_download_failed');}
- if(response.status!==200||!response.body||response.headers.has('content-range')||![null,'identity'].includes(response.headers.get('content-encoding')))fail('clip_source_download_invalid');
+ try{response=await fetcher(url,{headers,signal,redirect:'error',cache:'no-store'});}catch{fail(signal?.aborted?'render_canceled':'clip_source_download_failed');}
+ if(response.status===401||response.status===403){await response.body?.cancel().catch(()=>{});fail('clip_source_auth_failed');}
+ if(response.status>=500||response.status===429){await response.body?.cancel().catch(()=>{});fail('clip_source_download_failed');}
+ if(response.status!==200||!response.body||response.headers.has('content-range')||![null,'identity'].includes(response.headers.get('content-encoding'))){await response.body?.cancel().catch(()=>{});fail('clip_source_download_invalid');}
  const expected=Number(source.file_size_bytes);
  const declared=response.headers.get('content-length');
  if(!Number.isSafeInteger(expected)||expected<1||expected>maxBytes||declared!==null&&Number(declared)!==expected)fail('clip_source_size_mismatch');
@@ -63,7 +65,8 @@ export async function downloadClipSource({source,file,signer,supabaseUrl,service
  const counter=new Transform({transform(chunk,_encoding,callback){total+=chunk.length;
   callback(total>expected?new Error('clip_source_size_exceeded'):null,chunk);}});
  try{await pipeline(Readable.fromWeb(response.body),counter,createWriteStream(file,{flags:'wx',mode:0o600}),{signal});}
- catch{fail(signal?.aborted?'render_canceled':'clip_source_download_failed');}
+ catch(error){fail(signal?.aborted?'render_canceled':['ENOSPC','EDQUOT'].includes(error?.code)?'clip_worker_disk_full':
+  ['EACCES','EPERM'].includes(error?.code)?'clip_worker_filesystem_denied':'clip_source_download_failed');}
  if(total!==expected)fail('clip_source_size_mismatch');
  return {sizeBytes:total};
 }

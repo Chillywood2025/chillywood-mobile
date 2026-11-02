@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+export async function seedClipExportWorker(db){
+ const worker=randomUUID(),workerSession=randomUUID();
+ await db.exec("update private.creator_clip_export_worker set enabled=true,last_heartbeat_at=clock_timestamp()");
+ await db.query("insert into private.creator_clip_export_workers(id,enabled,qualification_note) values($1,true,'Owned disposable SQL fixture only')",[worker]);
+ await db.query('select open_creator_clip_export_worker($1,$2)',[worker,workerSession]);
+ return {worker,workerSession};
+}
 // Extracted from the real Clip SQL test. Only owned disposable databases;
 // synthetic provider receipts do not claim physical scanner/provider proof.
 export async function seedPreparedClipExport(db){
@@ -15,14 +22,14 @@ export async function seedPreparedClipExport(db){
  await db.query("update videos set scan_status='clean',scan_provider='synthetic-fixture',scan_result='clean',scanned_at=now() where id=$1",[video]);
  await db.query("insert into creator_clip_edits(video_id,owner_user_id,clip_format,fit_mode) values($1,$2,'square_1_1','fill')",[video,owner]);
  const edit={clip_format:'square_1_1',fit_mode:'fill',trim_start_ms:null,trim_end_ms:null,brand_mark_enabled:false,brand_asset_id:null};
- await db.exec("update private.creator_clip_export_worker set enabled=true,last_heartbeat_at=clock_timestamp()");
+ const {worker,workerSession}=await seedClipExportWorker(db);
  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',sub:owner,session_id:session})]);
  await db.exec('set role authenticated');
  const requested=await scalar('select request_creator_clip_export($1,$2,$3)',[video,randomUUID(),JSON.stringify(edit)]);
  await db.exec('reset role');await service();
- const job=await scalar('select claim_creator_clip_export()');assert.equal(job.id,requested.id);
+ const job=await scalar('select claim_creator_clip_export($1,$2)',[worker,workerSession]);assert.equal(job.id,requested.id);
  const prefix=`${owner}/${job.output_video_id}/${job.lease}/`,key=`${prefix}export.mp4`;
- const producer=await scalar("select begin_secondary_media_producer('creator_video',$1,$2,$3,'cloudflare_r2','chillywood-media-origin',$4)",[video,job.lease,JSON.stringify(job.source_snapshot.sourceBinding),prefix]);
+ const producer=await scalar('select begin_creator_clip_export_output($1,$2)',[job.id,job.lease]);
  const digest='a'.repeat(64),inventory={inventorySha256:'b'.repeat(64),objectCount:1,objects:[{objectKey:key,kind:'render',sizeBytes:100,sha256:digest,dependencies:[]}]};
  await db.query('select reserve_secondary_media_objects($1,$2,$3)',[job.lease,producer.claimToken,JSON.stringify(inventory)]);
  const identity=await scalar('select begin_secondary_media_object_write($1,$2,$3)',[job.lease,producer.claimToken,key]);
@@ -30,5 +37,5 @@ export async function seedPreparedClipExport(db){
  await db.query('select record_secondary_media_object_receipt($1,$2,$3,$4,$5)',[job.lease,producer.claimToken,key,identity.writeToken,JSON.stringify(receipt)]);
  await db.query('select seal_secondary_media_producer($1,$2)',[job.lease,producer.claimToken]);
  const result={sha256:digest,sizeBytes:100,width:180,height:180,durationMs:1000,workerVersion:'clip-render-v1',mimeType:'video/mp4'};
- return {owner,session,video,job,key,result,identity};
+ return {owner,session,video,job,key,result,identity,worker,workerSession};
 }
