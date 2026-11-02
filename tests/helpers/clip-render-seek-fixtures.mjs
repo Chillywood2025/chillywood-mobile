@@ -48,6 +48,18 @@ async function decodedMedia(file, dir, name) {
   return { probe, stream, audioStream, video, audio };
 }
 
+export function assertDecodedVideoEqual(actual, expected, name) {
+  assert.equal(actual.length, expected.length, `${name}: decoded video byte count`);
+  if (!actual.equals(expected)) {
+    let offset = 0;
+    while (actual[offset] === expected[offset]) offset++;
+    // Never attach multi-megabyte Buffers to AssertionError.actual/expected:
+    // Node's test reporter serializes those values over its child-process IPC.
+    // The equality requirement is unchanged; only the failure payload is bounded.
+    assert.fail(`${name}: decoded video differs at byte ${offset}/${actual.length}; actual=${actual[offset]}, expected=${expected[offset]}`);
+  }
+}
+
 export async function compareSeekRenders(dir, name, inputPath, edit, watermarkPath = null) {
   const originalDigest = createHash('sha256').update(await readFile(inputPath)).digest('hex');
   const baselinePath = path.join(dir, `${name}-baseline.mp4`), candidatePath = path.join(dir, `${name}-candidate.mp4`);
@@ -55,7 +67,7 @@ export async function compareSeekRenders(dir, name, inputPath, edit, watermarkPa
   await renderClip({ inputPath, outputPath: candidatePath, edit, watermarkPath });
   const baseline = await decodedMedia(baselinePath, dir, `${name}-baseline`);
   const candidate = await decodedMedia(candidatePath, dir, `${name}-candidate`);
-  assert.deepEqual(candidate.video, baseline.video, `${name}: every decoded video byte`);
+  assertDecodedVideoEqual(candidate.video, baseline.video, name);
   for (const field of ['width', 'height', 'pix_fmt', 'r_frame_rate', 'time_base', 'start_time', 'duration', 'nb_frames']) {
     assert.equal(candidate.stream[field], baseline.stream[field], `${name}: video ${field}`);
   }
