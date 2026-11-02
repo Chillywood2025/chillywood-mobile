@@ -6,6 +6,7 @@ import {randomUUID} from 'node:crypto';
 import vm from 'node:vm';
 import {spawnSync} from 'node:child_process';
 import {assertDiscoveryHintPayload} from '../scripts/lib/discovery-native-hint-contract.mjs';
+import {createDiscoveryProofDiagnostics} from '../scripts/lib/discovery-native-proof-diagnostics.mjs';
 
 const command='node --experimental-websocket scripts/test-discovery-realtime-delivery.mjs';
 const script=fs.readFileSync('scripts/test-discovery-realtime-delivery.mjs','utf8');
@@ -16,6 +17,16 @@ function validate(source,workflowText) {
     'diagnostics.primary(error)','diagnostics.cleanup(label,error)','diagnostics.finish()',
     "if(kind==='host')retainedHost={id:created.user.id,email}",
     'id===retainedHost?.id&&await verifyRetainedDiscoveryHost(db,retainedHost,{email:retainedHost.email})',
+    "readFileSync('_lib/realtimeDisconnectBarrier.ts','utf8')",'observeRealtimeDisconnect(client.realtime)',
+    'clientRetirements.get(client)()', 'const deadline=performance.now()+8000',
+    'timeout(Math.max(0,deadline-performance.now())',
+    'await outsider.client.removeChannel(other.channel)',
+    "assert.equal(await client.removeChannel(channel),'ok'",
+    "assert.equal(await outsider.client.removeChannel(home.channel),'ok'",
+    "assert.equal(await outsider.client.removeChannel(other.channel),'ok'",
+    "assert.equal(await friend.client.removeChannel(circle.channel),'ok'",
+    "assert.equal(await o.client.removeChannel(o.channel),'ok'",
+    'outsider.client.realtime.getChannels().length,0', 'outsider.client.realtime.isConnected(),true',
     "query('show cron.launch_active_jobs'),'off'", "['127.0.0.1','localhost']",'com.supabase.cli.project',
     "admin.auth.admin.createUser",'auth.signInWithPassword','seedLiveRoomActor',"client.channel(topic",
     "event:'discovery:invalidate'",'discovery:v1:viewer:',"{denied:true}","receiptMs<3000",'inserted_at>=','pg_sleep(0.25)',
@@ -68,6 +79,21 @@ test('native flag supplies the actual SDK WebSocket transport, never Object or a
   `],{encoding:'utf8',timeout:10000});
   assert.equal(result.error,undefined);assert.equal(result.status,0,result.stderr);
 });
+test('anonymous denial probes allocate independent clients while authenticated last-channel reconnect remains mandatory',async()=>{
+  const start="for(const topic of ['discovery:v1:surface:home',`discovery:v1:viewer:${friend.id}`]){";
+  const from=script.indexOf(start);assert.ok(from>0);
+  const block=script.slice(from,script.indexOf('\n  }',from)+4);
+  const clients=[],calls=[];
+  await vm.runInNewContext(`(async()=>{${block}})()`,{clients,friend:{id:'synthetic-viewer'},
+    makeClient:()=>({}),subscribe:async(client,topic,options)=>{calls.push({client,topic,denied:options.denied});},
+  });
+  assert.equal(clients.length,2);assert.notEqual(clients[0],clients[1]);
+  assert.deepEqual(calls.map(call=>call.topic),['discovery:v1:surface:home','discovery:v1:viewer:synthetic-viewer']);
+  assert.ok(calls.every((call,index)=>call.denied===true&&call.client===clients[index]));
+  for(const boundary of ['await outsider.client.removeChannel(other.channel)','outsider.client.realtime.getChannels().length,0',
+    'outsider.client.realtime.isConnected(),true','clientRetirements.get(client)()','const deadline=performance.now()+8000'])
+    assert.throws(()=>validate(script.replaceAll(boundary,'REMOVED_BOUNDARY'),workflowSource),assert.AssertionError,boundary);
+});
 test('native proof qualifies exact managed transaction or wall-clock defaults without accepting arbitrary timestamps',()=>{
   const contract=script.slice(script.indexOf('assert.equal(managedClock.type'),script.indexOf('const lit='));
   assert.ok(contract.includes('managedClock.default'));
@@ -77,6 +103,32 @@ test('native proof qualifies exact managed transaction or wall-clock defaults wi
   for(const value of [null,'',"'2000-01-01'::timestamp without time zone",'arbitrary_clock()'])
     assert.throws(()=>run('timestamp without time zone',value),assert.AssertionError);
   assert.throws(()=>run('timestamp with time zone','now()'),assert.AssertionError);
+});
+test('actual runner cleanup rejects resolved non-ok removal without replacing its original primary failure',async()=>{
+  const from=script.indexOf('const cleanup=async(label,operation)=>{');assert.ok(from>0);
+  const body=script.slice(from,script.indexOf('for(const client of clients)',from));
+  for(const status of ['ok','timed out','error',undefined,'reject']){
+    for(const hasPrimary of [false,true]){
+      const logs=[],diagnostics=createDiscoveryProofDiagnostics(value=>logs.push(JSON.parse(value)));let attempts=0;
+      if(hasPrimary){diagnostics.phase('original mutation phase');diagnostics.primary(Error('private primary text'));}
+      const observers=[{channel:{},client:{removeChannel:async()=>{attempts++;if(status==='reject')throw Error('private removal text');return status;}}},
+        {channel:{},client:{removeChannel:async()=>{attempts++;return 'ok';}}}];
+      await vm.runInNewContext(`(async()=>{${body}})()`,{assert,diagnostics,observers});
+      assert.equal(attempts,2,'one failed cleanup does not suppress later cleanup');
+      if(hasPrimary||status!=='ok')assert.throws(()=>diagnostics.finish(),/proof and cleanup must both pass/);
+      else assert.doesNotThrow(()=>diagnostics.finish());
+      const failure=logs.find(value=>value.proof==='native discovery failure');
+      if(failure){assert.equal(failure.primary?.phase,hasPrimary?'original mutation phase':undefined);
+        assert.equal(failure.cleanup.length,status==='ok'?0:1);}
+      assert.doesNotMatch(JSON.stringify(logs),/private primary text|private removal text/);
+    }
+  }
+  for(const expression of ["assert.equal(await client.removeChannel(channel),'ok'",
+    "assert.equal(await outsider.client.removeChannel(home.channel),'ok'",
+    "assert.equal(await outsider.client.removeChannel(other.channel),'ok'",
+    "assert.equal(await friend.client.removeChannel(circle.channel),'ok'",
+    "assert.equal(await o.client.removeChannel(o.channel),'ok'"])
+    assert.throws(()=>validate(script.replaceAll(expression,'REMOVED_STATUS_CHECK'),workflowSource),assert.AssertionError,expression);
 });
 test('native proof source guard rejects removed privacy, primary timing and execution boundaries',()=>{
   for(const needle of ["query('show cron.launch_active_jobs'),'off'",'receiptMs<3000',"next_action:'remove'",'rolled-back publication',

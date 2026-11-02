@@ -88,7 +88,7 @@ function fixture({ actualUpdates = false, pushEnabled = false } = {}) {
         if (name === './discoveryRankingSignals') return load('_lib/discoveryRankingSignals.ts');
         if (name === './accountSessionAuthority') return { getCurrentAccountSessionAuthoritySnapshot: () => snapshot, sameAccountSessionAuthority: sameOwner,
           subscribeToAccountSessionAuthority: fn => { accountListeners.add(fn); return () => accountListeners.delete(fn); } };
-        if (name === './supabase') return { supabase: database };
+        if (name === './supabase') return { supabase: database, getRealtimeDisconnectBarrier: () => null };
         if (name === './channelAudience') return { readFollowedChannelUserIds: async () => [] };
         if (name === './friendGraph') return { readActiveFriendUserIds: async () => [] };
         if (name === './discoveryFeed') return load('_lib/discoveryFeed.ts');

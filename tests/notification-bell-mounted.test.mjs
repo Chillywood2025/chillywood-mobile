@@ -101,7 +101,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     process:{env:{EXPO_PUBLIC_LIVE_DISCOVERY_PUSH_ENABLED:'true'}},Math:{...Math,random:()=>0,floor:Math.floor},
     require:name=>{
       if(name==='react-native')return {AppState:appState};
-      if(name==='./supabase')return {supabase:realtime};
+      if(name==='./supabase')return {supabase:realtime,getRealtimeDisconnectBarrier:()=>null};
       if(name==='./notificationActivity')return invalidation;
       if(name==='./liveDiscoveryInvalidation')return discoveryFenceContext.exports;
       assert.equal(name,'./accountSessionAuthority');return {getCurrentAccountSessionAuthoritySnapshot:()=>session.authority,

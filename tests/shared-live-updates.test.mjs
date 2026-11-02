@@ -10,6 +10,7 @@ function fixture(push = true) {
   let authority = owner();
   let finishRemoval;
   let removalWait = null;
+  let transportWait = null, finishTransport;
   const channels = [], removed = [], timers = new Map(), accounts = new Set(), apps = new Set(), activities = new Set();
   const app = { currentState: 'active', addEventListener: (_, fn) => { apps.add(fn); return { remove: () => apps.delete(fn) }; } };
   const same = (a,b) => !!a && !!b && JSON.stringify(a) === JSON.stringify(b);
@@ -28,7 +29,7 @@ function fixture(push = true) {
         subscribeToAccountSessionAuthority: fn => { accounts.add(fn); return () => accounts.delete(fn); } };
       if(name === './notificationActivity') return { getNotificationActivityOwnerKey: a => JSON.stringify(a),
         subscribeToNotificationActivity: (_, fn) => { activities.add(fn); return () => activities.delete(fn); } };
-      if(name === './supabase') return { supabase: {
+      if(name === './supabase') return { getRealtimeDisconnectBarrier: () => transportWait, supabase: {
         channel(topic,options) { const ch = { topic,options,on: (_,filter,fn) => { ch.hint = fn; ch.filter = filter; return ch; }, subscribe: fn => { ch.status = fn; return ch; } }; channels.push(ch); return ch; },
         removeChannel: async ch => { removed.push(ch); if(removalWait) await removalWait; },
       } };
@@ -42,6 +43,10 @@ function fixture(push = true) {
     get removed() { return removed.filter(ch=>!ch.topic.startsWith('discovery:v1:viewer:')); }, allRemoved: removed,
     timers,accounts,apps,activities, interest: exports.getDiscoveryLiveUpdateInterest,
     holdRemoval() { removalWait = new Promise(resolve=>{finishRemoval=resolve;}); }, releaseRemoval() { finishRemoval();removalWait=null; },
+    holdTransport() { transportWait=new Promise(resolve=>{finishTransport=resolve;}); },
+    releaseTransport() { transportWait=null;finishTransport(); },
+    failTransport() { transportWait=Promise.reject(Error('unconfirmed close'));void transportWait.catch(()=>{}); },
+    confirmTransport() { transportWait=null; },
     subscribe: (callback,interest) => exports.subscribeToLiveUpdates(authority,'discovery',callback,interest),
     flush() { const pending = [...timers.keys()]; timers.clear(); pending.forEach(fn => fn()); },
     activity() { for(const fn of activities) fn(); },
@@ -80,6 +85,50 @@ test('replacement waits for old asynchronous removal before creating same-topic 
   const h=fixture();let a=0;h.holdRemoval();h.subscribe(()=>a++);const old=h.channels[0];h.account(owner('replacement'));const stop=h.subscribe(()=>a++);
   assert.equal(h.channels.length,1);old.hint();h.flush();assert.equal(a,0);h.releaseRemoval();await new Promise(resolve=>setImmediate(resolve));
   assert.equal(h.channels.length,2);h.channels[1].status('SUBSCRIBED');h.flush();assert.equal(a,1);stop();
+});
+test('resolved channel removal does not authorize replacement until actual transport teardown finishes',async()=>{
+  const h=fixture();h.subscribe(()=>{});h.holdTransport();h.state('background');h.state('active');
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(h.channels.length,1);
+  h.releaseTransport();await new Promise(resolve=>setImmediate(resolve));assert.equal(h.channels.length,2);
+});
+test('account and foreground retirement while waiting on native teardown cannot rejoin stale channels',async()=>{
+  for(const retire of [h=>h.account(null),h=>h.state('background')]){
+    const h=fixture();h.subscribe(()=>{});h.holdTransport();h.state('background');h.state('active');
+    await new Promise(resolve=>setImmediate(resolve));retire(h);h.releaseTransport();
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(h.channels.length,1);
+  }
+});
+test('mounted foreground reader retries late confirmed teardown without switching accounts',async()=>{
+  const h=fixture();h.failTransport();const stop=h.subscribe(()=>{});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(h.allChannels.length,0);
+  assert.deepEqual([...h.timers.values()],[1000,1000]);h.confirmTransport();h.flush();
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(h.allChannels.length,2);stop();
+});
+test('unconfirmed teardown has finite backed-off retries, renewed only by a fresh foreground generation',async()=>{
+  const h=fixture();h.failTransport();const stop=h.subscribe(()=>{});
+  for(const wait of [1000,2000,4000,8000,16000]){
+    await new Promise(resolve=>setImmediate(resolve));assert.deepEqual([...h.timers.values()],[wait,wait]);
+    assert.equal(h.allChannels.length,0);assert.equal(h.allRemoved.length,0);h.flush();
+  }
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(h.timers.size,0);
+  h.state('background');h.state('active');await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual([...h.timers.values()],[1000,1000]);stop();assert.equal(h.timers.size,0);
+});
+test('retired account, background or unmounted owner cancels recovery timers and stale queued callbacks',async()=>{
+  for(const retire of [(h)=>h.account(owner('replacement')),(h)=>h.state('background'),(_h,stop)=>stop()]){
+    const h=fixture();h.failTransport();const stop=h.subscribe(()=>{});
+    await new Promise(resolve=>setImmediate(resolve));const stale=[...h.timers.keys()];assert.equal(stale.length,2);
+    retire(h,stop);assert.equal(h.timers.size,0);h.confirmTransport();stale.forEach(callback=>callback());
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(h.allChannels.length,0);assert.equal(h.allRemoved.length,0);
+    stop();
+  }
+});
+test('old foreground retry callback cannot orphan a replacement generation recovery timer',async()=>{
+  const h=fixture();h.failTransport();const stop=h.subscribe(()=>{});
+  await new Promise(resolve=>setImmediate(resolve));const stale=[...h.timers.keys()];
+  h.state('background');h.state('active');await new Promise(resolve=>setImmediate(resolve));
+  const current=[...h.timers.keys()];assert.equal(current.length,2);stale.forEach(callback=>callback());
+  assert.deepEqual([...h.timers.keys()],current);stop();assert.equal(h.timers.size,0);
 });
 test('creator rails use one scoped public interest, not one channel per followed creator', () => {
   const h=fixture(),id='10000000-0000-4000-8000-000000000001';

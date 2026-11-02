@@ -1,6 +1,6 @@
 import { AppState } from 'react-native';
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from './accountSessionAuthority';
-import { supabase } from './supabase';
+import { supabase, getRealtimeDisconnectBarrier } from './supabase';
 import { getNotificationActivityOwnerKey, subscribeToNotificationActivity } from './notificationActivity';
 import { mergeDiscoveryInvalidations, parseDiscoveryInvalidation, recordDiscoveryInvalidation, type DiscoveryLiveInvalidation } from './liveDiscoveryInvalidation';
 export type { DiscoveryLiveInvalidation } from './liveDiscoveryInvalidation';
@@ -10,6 +10,7 @@ export type { DiscoveryLiveInvalidation } from './liveDiscoveryInvalidation';
 export const LIVE_DISCOVERY_PUSH_ENABLED = process.env.EXPO_PUBLIC_LIVE_DISCOVERY_PUSH_ENABLED === 'true';
 export const LIVE_UPDATE_COALESCE_MS = 100;
 export const MAX_DISCOVERY_LIVE_INTERESTS = 4;
+const DISCONNECT_RECOVERY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000] as const;
 export type LiveUpdateScope = 'discovery';
 export type DiscoveryLiveUpdateInterest = { surface: 'home' | 'profile' | 'channel' } | { creatorUserId: string } | { viewerUserId: string };
 export function getDiscoveryLiveUpdateInterest(options: { surface?: string; creatorUserId?: string; creatorUserIds?: string[]; ownerUserId?: string; channelUserId?: string }): DiscoveryLiveUpdateInterest {
@@ -61,6 +62,8 @@ function subscribeToInterest(authority: AccountSessionAuthorityBinding | null | 
     let retired = false;
     let generation = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
+    let recoveryAttempt = 0;
     let queuedInvalidation: DiscoveryLiveInvalidation | undefined;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let connecting = false;
@@ -88,6 +91,9 @@ function subscribeToInterest(authority: AccountSessionAuthorityBinding | null | 
       owned.connected = false;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
+      if (recoveryTimer !== undefined) clearTimeout(recoveryTimer);
+      recoveryTimer = undefined;
+      recoveryAttempt = 0;
       queuedInvalidation = undefined;
       const previous = channel;
       channel = null;
@@ -99,12 +105,13 @@ function subscribeToInterest(authority: AccountSessionAuthorityBinding | null | 
       }
     };
     const connect = () => {
-      if (!LIVE_DISCOVERY_PUSH_ENABLED || !current() || channel || connecting) return;
+      if (!LIVE_DISCOVERY_PUSH_ENABLED || !current() || channel || connecting || recoveryTimer !== undefined) return;
       const attempt = ++generation;
       connecting = true;
       const start = () => {
         if (attempt !== generation || !current()) return;
         connecting = false;
+        recoveryAttempt = 0;
         try {
         channel = supabase.channel(topic, { config: { private: true } });
         channel.on('broadcast', { event: 'discovery:invalidate' }, message => {
@@ -119,7 +126,27 @@ function subscribeToInterest(authority: AccountSessionAuthorityBinding | null | 
         });
         } catch { disconnect(); /* Periodic canonical reads still operate. */ }
       };
-      if (channelRetirement) void channelRetirement.then(start); else start();
+      const afterRetirement = () => {
+        if (attempt !== generation || !current()) return;
+        const transportRetirement = getRealtimeDisconnectBarrier();
+        if (channelRetirement || transportRetirement) {
+          void Promise.all([channelRetirement, transportRetirement]).then(afterRetirement, () => {
+            if (attempt !== generation || !current()) return;
+            connecting = false;
+            // A real SDK timeout can precede its late close callback. Retry only
+            // the read-only retirement proof, with a finite foreground budget;
+            // never force a disconnect or revive an old account/route owner.
+            const wait = DISCONNECT_RECOVERY_DELAYS_MS[recoveryAttempt++];
+            if (wait === undefined) return; // Canonical fallback remains active.
+            recoveryTimer = setTimeout(() => {
+              if (attempt !== generation || !current()) return;
+              recoveryTimer = undefined;
+              connect();
+            }, wait);
+          });
+        } else start();
+      };
+      afterRetirement();
     };
     const account = subscribeToAccountSessionAuthority(next => {
       if (!sameAccountSessionAuthority(authority, next)) owned.close();

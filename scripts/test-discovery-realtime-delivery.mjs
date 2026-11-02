@@ -9,6 +9,7 @@ import {readFileSync} from 'node:fs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createClient} from '@supabase/supabase-js';
+import ts from 'typescript';
 import {seedLiveRoomActor} from '../tests/helpers/live-room-authority-fixture.mjs';
 import {assertDiscoveryHintPayload} from './lib/discovery-native-hint-contract.mjs';
 import {createDiscoveryProofDiagnostics} from './lib/discovery-native-proof-diagnostics.mjs';
@@ -62,7 +63,17 @@ assert.ok(environment.ANON_KEY&&environment.SERVICE_ROLE_KEY,'local ephemeral CL
 const options={auth:{persistSession:false,autoRefreshToken:false},global:{fetch:(input,init)=>fetch(input,{...init,
   signal:init?.signal?AbortSignal.any([init.signal,AbortSignal.timeout(8000)]):AbortSignal.timeout(8000)})}};
 const admin=createClient(environment.API_URL,environment.SERVICE_ROLE_KEY,options);
-const makeClient=()=>createClient(environment.API_URL,environment.ANON_KEY,options);
+// Execute the same production retirement observer, not an SDK/transport double.
+const barrierSource=ts.transpileModule(readFileSync('_lib/realtimeDisconnectBarrier.ts','utf8'),{
+  compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022},
+}).outputText;
+const {observeRealtimeDisconnect}=await import(`data:text/javascript;base64,${Buffer.from(barrierSource).toString('base64')}`);
+const clientRetirements=new WeakMap();
+const makeClient=()=>{
+  const client=createClient(environment.API_URL,environment.ANON_KEY,options);
+  clientRetirements.set(client,observeRealtimeDisconnect(client.realtime));
+  return client;
+};
 const noError=(response,label)=>{diagnostics.phase(label);assert.equal(response.error,null,`${label}: ${response.error?.message??'unknown'}`);return response.data;};
 const friendship=(response,label)=>{
   const data=noError(response,label);
@@ -82,6 +93,11 @@ let roomCreated=false;
 const canonicalKeys=new Map();
 async function subscribe(client,topic,{denied=false}={}) {
   diagnostics.phase(`subscribe ${denied?'denied':'allowed'} ${topic.includes(':viewer:')?'viewer':'home'}`);
+  const deadline=performance.now()+8000;
+  await Promise.race([(async()=>{
+    let retirement;
+    while((retirement=clientRetirements.get(client)()))await retirement;
+  })(),timeout(Math.max(0,deadline-performance.now()),'SDK transport retirement')]);
   const channel=client.channel(topic,{config:{private:true,broadcast:{ack:true,self:false}}});
   const observer={client,channel,topic,messages:[],pending:null,error:null};observers.push(observer);
   let initialStatus=true;
@@ -102,9 +118,9 @@ async function subscribe(client,topic,{denied=false}={}) {
       if(denied)resolve(value);else reject(error??Error('channel authorization failed'));
     }
     else if(value==='TIMED_OUT'||value==='CLOSED')reject(error??Error(`subscription ${value}`));
-  })),timeout(8000,'private channel subscription')]);
+  })),timeout(Math.max(0,deadline-performance.now()),'private channel subscription')]);
   assert.equal(status,denied?'CHANNEL_ERROR':'SUBSCRIBED',`${topic}: exact receive-only RLS`);
-  if(denied)await client.removeChannel(channel);
+  if(denied)assert.equal(await client.removeChannel(channel),'ok','denied channel removal completes');
   return observer;
 }
 async function count(client,audience='public') {
@@ -196,11 +212,14 @@ try {
     token_sha256=encode(extensions.digest(repeat('n',32),'sha256'),'hex') where singleton`);
   const home=await subscribe(outsider.client,'discovery:v1:surface:home');
   const circle=await subscribe(friend.client,`discovery:v1:viewer:${friend.id}`);
-  const other=await subscribe(outsider.client,`discovery:v1:viewer:${outsider.id}`);
+  let other=await subscribe(outsider.client,`discovery:v1:viewer:${outsider.id}`);
   await subscribe(outsider.client,`discovery:v1:viewer:${friend.id}`,{denied:true});
-  const anonymous=makeClient();clients.push(anonymous);
-  await subscribe(anonymous,'discovery:v1:surface:home',{denied:true});
-  await subscribe(anonymous,`discovery:v1:viewer:${friend.id}`,{denied:true});
+  // Independent anonymous authorization probes must not accidentally measure
+  // reuse of a socket whose last denied channel is still tearing down.
+  for(const topic of ['discovery:v1:surface:home',`discovery:v1:viewer:${friend.id}`]){
+    const anonymous=makeClient();clients.push(anonymous);
+    await subscribe(anonymous,topic,{denied:true});
+  }
   const room=async()=>noError(await host.client.from('watch_party_rooms').select('*').eq('party_id',party).single(),'exact host room read');
   const settings=async(visibility,{publish=true,caption='Native discovery room'}={})=>{
     const r=await room();return noError(await host.client.rpc('set_watch_party_room_host_settings',{
@@ -244,11 +263,15 @@ try {
   await observed(home,'public restart listing',()=>settings('public'),()=>count(outsider.client),1);
   await observed(home,'host ends room',()=>host.client.from('watch_party_rooms').update({is_active:false}).eq('party_id',party)
     .then(r=>noError(r,'actual host end')),()=>count(outsider.client),0);
-  await outsider.client.removeChannel(home.channel);
+  assert.equal(await outsider.client.removeChannel(home.channel),'ok','reconnect home channel removal completes');
+  assert.equal(await outsider.client.removeChannel(other.channel),'ok','reconnect viewer channel removal completes');
+  assert.equal(outsider.client.realtime.getChannels().length,0,'authorized same-client reconnect removes its LAST channel');
   noError(await host.client.from('watch_party_rooms').update({is_active:true}).eq('party_id',party),'actual same-code restart');
   noError(await host.client.rpc('join_watch_party_room_session',{p_party_id:party,p_display_name:'Synthetic room host'}),'fresh restart join');
   await settings('public');
   const reconnected=await subscribe(outsider.client,'discovery:v1:surface:home');
+  assert.equal(outsider.client.realtime.isConnected(),true,'the same authenticated SDK client reopens its actual socket');
+  other=await subscribe(outsider.client,`discovery:v1:viewer:${outsider.id}`);
   assert.equal(await count(outsider.client),1,'reconnect read recovers current source without replaying a missed hint');
   await observed(reconnected,'post-reconnect Off',()=>settings('private'),()=>count(outsider.client),0);
   // An explicit local transport pause is the negative control. Without primary
@@ -268,7 +291,7 @@ try {
   assert.notEqual(sent,'ok','receive-only viewer channel cannot forge server invalidations');
   await delay(200);assert.equal(peerObserver.messages.length,before,'another real same-user socket received no forged message');
   await observed(circle,'Circle before viewer retirement',()=>settings('circle'),()=>count(friend.client,'circle'),1);
-  await friend.client.removeChannel(circle.channel);
+  assert.equal(await friend.client.removeChannel(circle.channel),'ok','retired viewer channel removal completes');
   query(`delete from auth.sessions where id=${lit(friend.session)}`);
   await subscribe(friend.client,`discovery:v1:viewer:${friend.id}`,{denied:true});
   assert.equal(await count(friend.client,'circle'),0,'revoked session cannot hydrate Circle data');
@@ -284,7 +307,7 @@ try {
     diagnostics.phase(`cleanup ${label}`);
     try{await operation();}catch(error){diagnostics.cleanup(label,error);}
   };
-  for(const o of observers)await cleanup('remove synthetic channel',()=>o.client.removeChannel(o.channel));
+  for(const o of observers)await cleanup('remove synthetic channel',async()=>assert.equal(await o.client.removeChannel(o.channel),'ok','synthetic channel removal completes'));
   for(const client of clients)await cleanup('sign out synthetic session',async()=>noError(await client.auth.signOut({scope:'local'}),'synthetic sign out'));
   if(roomCreated)await cleanup('delete synthetic room',()=>query(`delete from public.watch_party_rooms where party_id=${lit(party)}`));
   await cleanup('delete synthetic title',()=>query(`delete from public.titles where id=${lit(title)}`));

@@ -34,7 +34,7 @@ async function mount(t){
    require:name=>{
     if(name==='react')return React;if(name==='react-native')return native;if(name==='@expo/vector-icons/MaterialIcons')return()=>null;
     if(name.endsWith('/accountSessionAuthority'))return{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&JSON.stringify(a)===JSON.stringify(b),subscribeToAccountSessionAuthority:fn=>{listeners.add(fn);return()=>listeners.delete(fn);}};
-    if(name.endsWith('/supabase'))return{supabase:{channel(topic){const ch={topic,handlers:[],on(type,filter,fn){ch.handlers.push({type,filter,fn});return ch;},subscribe(fn){ch.status=fn;return ch;}};channels.push(ch);return ch;},async removeChannel(ch){ch.removed=true;}}};
+    if(name.endsWith('/supabase'))return{getRealtimeDisconnectBarrier:()=>null,supabase:{channel(topic){const ch={topic,handlers:[],on(type,filter,fn){ch.handlers.push({type,filter,fn});return ch;},subscribe(fn){ch.status=fn;return ch;}};channels.push(ch);return ch;},async removeChannel(ch){ch.removed=true;}}};
     if(name.endsWith('/notifications'))return{readNotificationListPage:(...args)=>{calls.push(args);return read(...args);}};
     if(name.includes('conversation-timestamp'))return{ConversationTimestamp:()=>null};
     if(name.endsWith('/discoveryFeed'))return{};
