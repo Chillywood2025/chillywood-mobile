@@ -1,0 +1,20 @@
+✔ color policy never guesses HDR metadata or claims Dolby Vision qualification (2.10869ms)
+✔ HDR capabilities must exist; missing filters fail clearly and cancellation propagates (0.604192ms)
+✔ real PQ/HLG neutral patches convert to referenced BT709 SDR; watermark stays SDR and original stays intact (4009.667135ms)
+✔ actual ffprobe refuses nested playlist and concat inputs despite a video filename (138.674448ms)
+✔ probe bounds reject invalid advertised dimensions/duration without allocating extreme frames (0.669159ms)
+✔ direct FFmpeg cancellation rejects after its child closes, not only before spawn (203.735859ms)
+✔ render plans reject invalid ranges, untrusted text, missing watermark and invalid probes (1.503056ms)
+✔ portrait rotation and fit produce even bounded dimensions without upscaling (0.581957ms)
+✔ anamorphic framing normalizes display aspect without upscaling or changing unspecified SAR (0.505372ms)
+✔ actual anamorphic fit/center, fill and autorotation preserve display proportions (6491.06488ms)
+✔ actual ffmpeg trims, crops, decodes, preserves original and never overwrites (740.349922ms)
+✔ actual watermark is composited into exported pixels (656.56935ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12424.009077

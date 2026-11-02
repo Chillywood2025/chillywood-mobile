@@ -15,6 +15,21 @@ const evidence=options=>syntheticClipHealthEvidence(now,options);
 const derive=raw=>deriveClipExportHealth({...raw,nowMs:now});
 const failed=(errorCode,jobId='job-fixture',workerId='worker-fixture')=>({workerId,jobId,observedAtMs:now,status:'failed',errorCode});
 
+test('retained HDR failures distinguish permanent unsupported input from an unqualified worker',()=>{
+ for(const code of ['hdr_dolby_vision_unqualified','hdr_color_metadata_unqualified']){
+  assert.equal(safeClipExportFailureCode(new Error(code)),code);
+  assert.equal(classifyClipExportFailure(code),'input_permanent');
+  const raw=evidence();raw.outcomes=[failed(code)];
+  assert.equal(derive(raw).classification,'healthy_saturated');
+  assert.equal(derive(raw).permanentInputFailures,1);
+ }
+ assert.equal(safeClipExportFailureCode(new Error('hdr_conversion_unavailable')),'hdr_conversion_unavailable');
+ assert.equal(classifyClipExportFailure('hdr_conversion_unavailable'),'worker_resource');
+ const raw=evidence();raw.outcomes=[failed('hdr_conversion_unavailable')];
+ assert.equal(derive(raw).classification,'isolated_worker_fault');
+ assert.equal(safeClipExportFailureCode(new Error('private HDR diagnostic URL')),'worker_failed');
+});
+
 test('safe failure taxonomy never infers poison media from generic FFmpeg failure or raw diagnostics',()=>{
  for(const code of ['media_process_failed','render_timeout','invalid_probe_json','anything private'])assert.equal(classifyClipExportFailure(code),'unknown');
  assert.equal(classifyClipExportFailure('invalid_source_probe'),'input_permanent');

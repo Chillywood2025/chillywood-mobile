@@ -1,6 +1,7 @@
 // Classification of measured runtime evidence only. This module performs no
 // probe, retry, provider operation, provisioning, or authorization decision.
 export const CLIP_EXPORT_FAILURE_CODES=Object.freeze({
+ hdr_dolby_vision_unqualified:'input_permanent',hdr_color_metadata_unqualified:'input_permanent',hdr_conversion_unavailable:'worker_resource',
  invalid_render_format:'input_permanent',invalid_trim_range:'input_permanent',invalid_watermark_choice:'input_permanent',
  invalid_source_probe:'input_permanent',trim_outside_source:'input_permanent',invalid_watermark_probe:'input_permanent',probe_output_limit:'input_permanent',
  render_canceled:'source_or_cancel',source_changed:'source_or_cancel',clip_export_stale_lease:'source_or_cancel',clip_export_source_changed:'source_or_cancel',

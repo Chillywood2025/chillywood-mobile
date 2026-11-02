@@ -1,0 +1,194 @@
+{
+  "evidenceKind": "fresh reconstruction validation; not recovered historical benchmark receipts",
+  "recordedAt": "2026-11-02T14:36:55.096190+00:00",
+  "baseCommit": "d8a7a7f828d721545fdfe8ff7c7979ec0a624640",
+  "healthDependencySourceCommit": "183344011a42033d389f7318f5afe6aff7be4ed3",
+  "runtimeSourceUnchanged": true,
+  "sourceBlobIds": {
+    "scripts/lib/clip-render-core.mjs": "141a33a963d1cf520208049b0c30dabdb04b875c",
+    "scripts/lib/clip-render-color.mjs": "be2e98d787a4dd9b41c295131b3e36e48d19dad8",
+    "scripts/lib/clip-export-health.mjs": "be4c6b953d8cea6c9055a8dae94163f2825cd6de",
+    "tests/fixtures/clip-render-output-seek-baseline.mjs": "9ef4992210911955cf1f975e3deaea4462b8fc96",
+    "tests/clip-render-core.test.mjs": "78adb75723d02c87f467268a740f4105ee188f8d",
+    "tests/clip-render-color.test.mjs": "60a49c951a99cdafd98c6a3a10b18fbdd679da88",
+    "tests/clip-render-seek.test.mjs": "85707a30d219460fa82593d39a41384c5b7b3e0f",
+    "tests/helpers/clip-render-seek-fixtures.mjs": "25b2efcb2623fc723a759dcb32b38e495d7acdfd"
+  },
+  "environment": {
+    "node": "v24.22.1",
+    "ffmpeg": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "qualification": "cloud local fixtures only; no Hetzner, real-phone or production qualification"
+  },
+  "runs": [
+    {
+      "command": "flock /tmp/renderer-heavy-tests.lock node --test --test-concurrency=1 tests/clip-render-core.test.mjs tests/clip-render-seek.test.mjs",
+      "log": "core-seek.log",
+      "passedGroups": 11,
+      "scope": "21 actual baseline/candidate media comparisons plus then-current core cases; before the subsequent two added bounds/cancel tests",
+      "logSha256": "782e9de820f054b441c5d775f67685864011894a4c7ac510fbb2ef57150620bb"
+    },
+    {
+      "command": "flock /tmp/renderer-heavy-tests.lock node --test --test-concurrency=1 tests/clip-render-core.test.mjs tests/clip-render-color.test.mjs",
+      "log": "core-color.log",
+      "passedGroups": 12,
+      "scope": "final core including actual in-flight cancellation and SAR rotation; four qualified PQ/HLG limited/full-range fixtures with reference colors, metadata, original immutability, gray watermark and missing-filter failure",
+      "logSha256": "4d888ec15216874be48d8a7f88d6a3f1f46e8048659168c7c861ef510a5b720f"
+    }
+  ],
+  "limits": [
+    "No representative benchmark rerun in this task.",
+    "No production transfer path or real phone/Dolby Vision qualification.",
+    "Tiny cancellation smoke is not sustained stress or arbitrary wrapper process-tree evidence.",
+    "Static source bounds do not prove maximum-envelope memory safety.",
+    "Exact-head aggregate Required Validation has not been run by this subtask."
+  ],
+  "seekCases": [
+    {
+      "name": "zero",
+      "decodedVideoSha256": "e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "early-fractional",
+      "decodedVideoSha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "integer",
+      "decodedVideoSha256": "378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "keyframe",
+      "decodedVideoSha256": "1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "after-keyframe",
+      "decodedVideoSha256": "1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "fractional-late",
+      "decodedVideoSha256": "f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "remainder",
+      "decodedVideoSha256": "9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd",
+      "decodedVideoBytes": 2721600,
+      "pcmBytes": 180224,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "fit-watermark",
+      "decodedVideoSha256": "0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2",
+      "decodedVideoBytes": 1620000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "center",
+      "decodedVideoSha256": "cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4",
+      "decodedVideoBytes": 5184000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "24fps",
+      "decodedVideoSha256": "8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "25fps",
+      "decodedVideoSha256": "10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "ntsc",
+      "decodedVideoSha256": "0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "vfr",
+      "decodedVideoSha256": "2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "sparse",
+      "decodedVideoSha256": "f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 0,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "no-audio",
+      "decodedVideoSha256": "9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 0,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "positive-pts",
+      "decodedVideoSha256": "585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "mov-delayed-audio",
+      "decodedVideoSha256": "9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 178176,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "delayed-video",
+      "decodedVideoSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "webm-opus",
+      "decodedVideoSha256": "032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "phone-rotation",
+      "decodedVideoSha256": "a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e",
+      "decodedVideoBytes": 5184000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    },
+    {
+      "name": "negative-pts-fallback",
+      "decodedVideoSha256": "a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e",
+      "decodedVideoBytes": 2916000,
+      "pcmBytes": 192512,
+      "maximumAudioError": 0
+    }
+  ]
+}
