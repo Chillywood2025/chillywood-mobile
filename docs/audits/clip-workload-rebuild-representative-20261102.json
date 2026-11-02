@@ -1,0 +1,2660 @@
+{
+  "tier": "representative",
+  "requested_budget": {
+    "cpu_count": 2,
+    "memory_mib": 1536,
+    "disk_mib": 4096,
+    "wall_seconds": 900
+  },
+  "fixtures": [
+    {
+      "id": "long-1080p",
+      "width": 1920,
+      "height": 1080,
+      "seconds": 600,
+      "codec": "h264",
+      "audio": "aac",
+      "vbr_maxrate_bps": null
+    },
+    {
+      "id": "phone-h264-4k",
+      "width": 3840,
+      "height": 2160,
+      "seconds": 12,
+      "codec": "h264",
+      "audio": "aac",
+      "rotation": 90,
+      "vfr": true
+    },
+    {
+      "id": "phone-hevc-vfr-4k",
+      "width": 3840,
+      "height": 2160,
+      "seconds": 12,
+      "codec": "hevc",
+      "audio": "aac",
+      "rotation": 90,
+      "vfr": true,
+      "pixel_format": "yuv420p10le"
+    },
+    {
+      "id": "large-lossless-h264",
+      "width": 1920,
+      "height": 1080,
+      "seconds": 10,
+      "codec": "h264",
+      "audio": "aac",
+      "content": "encoded temporal uniform noise; no padding",
+      "file_cap_bytes": 4831838208
+    }
+  ],
+  "not_qualified": [
+    "Actual Hetzner or other production hardware capacity",
+    "Sustained load, maximum concurrency, p95 latency or millions of users",
+    "Production queue/lease/pool disk admission and full worker lifecycle",
+    "Source download, malware scan, storage-provider upload or network transfer",
+    "Real creator media distribution, HDR/Dolby Vision or every codec/profile",
+    "150-minute whole-source export and full 5-GiB/16384-pixel cross-product"
+  ],
+  "product_input_limit_bytes": 5368709120,
+  "product_input_duration_seconds": 9000,
+  "export_scope": "short clips, not whole-source encoding",
+  "status": "passed_local_scope_only",
+  "started_utc": "2026-11-02T14:48:10Z",
+  "work_root": "/workspace/scratch/b54f0bc31372/renderer-workload-fresh-representative-retry-20261102",
+  "TMPDIR": "/workspace/scratch/b54f0bc31372/renderer-workload-fresh-representative-retry-20261102/tmp",
+  "source_sha256": {
+    "scripts/qualify-clip-render-workloads.py": "e562f8339d1a75e98921857410e64c1d63ed793f2e54f9a6b7632f8113b8d919",
+    "scripts/lib/clip-workload-supervisor.py": "8079219762a6a5b0714fd670f6b0908d14161a9a2304ce1711d3a52f149a8b3b",
+    "scripts/lib/clip-workload-media-wrapper.py": "d6abaaeee78de2e2520156a12f60b5c4e8f6fc64a4f5d1e9f29b856b390aaaec",
+    "scripts/lib/clip-render-workload-job.mjs": "9e76475e2b1e29bb393d02822ff0c6a1b88b9824d6c768dbc4989334557cfbc4",
+    "scripts/lib/clip-render-core.mjs": "0e511876f25ca8f2e57ebe9be7d519ac31c42842615107dafb5d72458cedd71e",
+    "scripts/lib/clip-render-color.mjs": "7bb1e70df1f4aada77518d9188a30eb69d815d917f6bee7d0ef78c316b5db85b"
+  },
+  "versions": {
+    "kernel": "6.18.57",
+    "python": "3.12.14",
+    "ffmpeg": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version 7.1.5-0+deb13u1 Copyright (c) 2007-2026 the FFmpeg developers",
+    "node": "v24.22.1"
+  },
+  "host_preflight": {
+    "memory_available_bytes": 9006637056,
+    "memory_total_bytes": 10451427328,
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "disk_free_bytes": 58700038144,
+    "disk_total_bytes": 67586535424,
+    "cgroup": {
+      "membership": "0::/",
+      "memory_max": null,
+      "memory_current": null,
+      "cpu_max": null,
+      "cpu_quota_cores": null,
+      "root_files_only": true,
+      "nested_effective_limit_unresolved": false,
+      "status": "quota_unknown_not_exposed"
+    },
+    "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+  },
+  "stages": [
+    {
+      "name": "generate-long-1080p",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 9004630016,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 58700034048,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 899.8327065639996,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 103.1384054770001,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 174882816,
+      "sampled_process_cpu_seconds": 186.61,
+      "scratch_logical_bytes_peak": 1172679879,
+      "scratch_allocated_bytes_peak": 1172684800,
+      "scratch_free_bytes_min": 57527345152,
+      "memory_available_bytes_min": 8705974272,
+      "sample_count": 1020,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "generate-long-1080p",
+          "queue_wait_seconds": 0.0008759610000197426,
+          "peak_sampled_rss_bytes": 174882816,
+          "sampled_cpu_seconds": 186.61000000000044,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 103.13702016799971,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 182.293389,
+          "exit_rusage_system_seconds": 4.420486,
+          "exit_rusage_maxrss_kib": 170784,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "probe-long-1080p",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8838311936,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57527341056,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 796.6925672009997,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.2051409670002613,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 42483712,
+      "sampled_process_cpu_seconds": 0.07,
+      "scratch_logical_bytes_peak": 1172687236,
+      "scratch_allocated_bytes_peak": 1172697088,
+      "scratch_free_bytes_min": 57527332864,
+      "memory_available_bytes_min": 8838311936,
+      "sample_count": 3,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "probe-long-1080p",
+          "queue_wait_seconds": 0.0002616149999994377,
+          "peak_sampled_rss_bytes": 42483712,
+          "sampled_cpu_seconds": 0.07,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.20396319000019503,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.0538,
+          "exit_rusage_system_seconds": 0.029535,
+          "exit_rusage_maxrss_kib": 42384,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "decode-long-1080p",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8870797312,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57527328768,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 796.4865124959997,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 28.115881884999908,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 70078464,
+      "sampled_process_cpu_seconds": 52.62,
+      "scratch_logical_bytes_peak": 1172690018,
+      "scratch_allocated_bytes_peak": 1172701184,
+      "scratch_free_bytes_min": 57527246848,
+      "memory_available_bytes_min": 8853782528,
+      "sample_count": 279,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "decode-long-1080p",
+          "queue_wait_seconds": 0.00039764899975125445,
+          "peak_sampled_rss_bytes": 70078464,
+          "sampled_cpu_seconds": 52.61999999999996,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 28.11505033200001,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 50.343241,
+          "exit_rusage_system_seconds": 2.413299,
+          "exit_rusage_maxrss_kib": 68436,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "generate-phone-h264-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8985194496,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57527320576,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 767.515463192,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 5.766288014000111,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 539553792,
+      "sampled_process_cpu_seconds": 10.5,
+      "scratch_logical_bytes_peak": 1245979489,
+      "scratch_allocated_bytes_peak": 1245995008,
+      "scratch_free_bytes_min": 57454030848,
+      "memory_available_bytes_min": 8448450560,
+      "sample_count": 58,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "generate-phone-h264-4k",
+          "queue_wait_seconds": 0.000279362000128458,
+          "peak_sampled_rss_bytes": 539553792,
+          "sampled_cpu_seconds": 10.499999999999996,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 5.76550594299988,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 10.418275,
+          "exit_rusage_system_seconds": 0.205433,
+          "exit_rusage_maxrss_kib": 526908,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "rotate-phone-h264-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8928432128,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57454030848,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 761.7482050159997,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.20501824999973906,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 37728256,
+      "sampled_process_cpu_seconds": 0.09,
+      "scratch_logical_bytes_peak": 1319268147,
+      "scratch_allocated_bytes_peak": 1319284736,
+      "scratch_free_bytes_min": 57380741120,
+      "memory_available_bytes_min": 8901206016,
+      "sample_count": 3,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "rotate-phone-h264-4k",
+          "queue_wait_seconds": 0.00031229099977281294,
+          "peak_sampled_rss_bytes": 37728256,
+          "sampled_cpu_seconds": 0.09,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.2041462950001005,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.08136399999999999,
+          "exit_rusage_system_seconds": 0.063854,
+          "exit_rusage_maxrss_kib": 56608,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "probe-phone-h264-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8924397568,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57454026752,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 761.5401744019996,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.10582072799979869,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 262144,
+      "sampled_process_cpu_seconds": 0.0,
+      "scratch_logical_bytes_peak": 1245989994,
+      "scratch_allocated_bytes_peak": 1246007296,
+      "scratch_free_bytes_min": 57454018560,
+      "memory_available_bytes_min": 8887734272,
+      "sample_count": 2,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "probe-phone-h264-4k",
+          "queue_wait_seconds": 0.00030828499984636437,
+          "peak_sampled_rss_bytes": 262144,
+          "sampled_cpu_seconds": 0.0,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.10466311199979828,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.064097,
+          "exit_rusage_system_seconds": 0.035193999999999996,
+          "exit_rusage_maxrss_kib": 56624,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "decode-phone-h264-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8887734272,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57454014464,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 761.432763115,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 2.733206777000305,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 159375360,
+      "sampled_process_cpu_seconds": 5.04,
+      "scratch_logical_bytes_peak": 1245992792,
+      "scratch_allocated_bytes_peak": 1246011392,
+      "scratch_free_bytes_min": 57454014464,
+      "memory_available_bytes_min": 8817639424,
+      "sample_count": 28,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "decode-phone-h264-4k",
+          "queue_wait_seconds": 0.0005066839999017247,
+          "peak_sampled_rss_bytes": 159375360,
+          "sampled_cpu_seconds": 5.040000000000002,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 2.732163163000223,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 4.967167,
+          "exit_rusage_system_seconds": 0.100626,
+          "exit_rusage_maxrss_kib": 155736,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "generate-phone-hevc-vfr-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8850915328,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57454010368,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 758.6283063839996,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 62.029271506999976,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 1077207040,
+      "sampled_process_cpu_seconds": 65.79,
+      "scratch_logical_bytes_peak": 1318692667,
+      "scratch_allocated_bytes_peak": 1318715392,
+      "scratch_free_bytes_min": 57381208064,
+      "memory_available_bytes_min": 7620816896,
+      "sample_count": 614,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "generate-phone-hevc-vfr-4k",
+          "queue_wait_seconds": 0.0005639649998556706,
+          "peak_sampled_rss_bytes": 1077207040,
+          "sampled_cpu_seconds": 65.79000000000002,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 62.028214858999945,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 62.622637,
+          "exit_rusage_system_seconds": 3.228116,
+          "exit_rusage_maxrss_kib": 1051960,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "rotate-phone-hevc-vfr-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8965881856,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57381208064,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 696.5977895679998,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.10382815499997378,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 131072,
+      "sampled_process_cpu_seconds": 0.0,
+      "scratch_logical_bytes_peak": 1391391748,
+      "scratch_allocated_bytes_peak": 1391415296,
+      "scratch_free_bytes_min": 57308508160,
+      "memory_available_bytes_min": 8950796288,
+      "sample_count": 2,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "rotate-phone-hevc-vfr-4k",
+          "queue_wait_seconds": 0.0002647399996931199,
+          "peak_sampled_rss_bytes": 131072,
+          "sampled_cpu_seconds": 0.0,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.10292891800008874,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.04494,
+          "exit_rusage_system_seconds": 0.053502,
+          "exit_rusage_maxrss_kib": 36772,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "probe-phone-hevc-vfr-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8958066688,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57381203968,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 696.4898449039997,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.1040490890000001,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 262144,
+      "sampled_process_cpu_seconds": 0.0,
+      "scratch_logical_bytes_peak": 1318703181,
+      "scratch_allocated_bytes_peak": 1318727680,
+      "scratch_free_bytes_min": 57381195776,
+      "memory_available_bytes_min": 8953008128,
+      "sample_count": 2,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "probe-phone-hevc-vfr-4k",
+          "queue_wait_seconds": 0.0005647719999615219,
+          "peak_sampled_rss_bytes": 262144,
+          "sampled_cpu_seconds": 0.0,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.10288464199993541,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.060779,
+          "exit_rusage_system_seconds": 0.017095,
+          "exit_rusage_maxrss_kib": 35304,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "decode-phone-hevc-vfr-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8953008128,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57381191680,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 696.3842346909996,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 6.875791728999957,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 211415040,
+      "sampled_process_cpu_seconds": 13.13,
+      "scratch_logical_bytes_peak": 1318705973,
+      "scratch_allocated_bytes_peak": 1318731776,
+      "scratch_free_bytes_min": 57381191680,
+      "memory_available_bytes_min": 8762912768,
+      "sample_count": 69,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "decode-phone-hevc-vfr-4k",
+          "queue_wait_seconds": 0.0002948650003418152,
+          "peak_sampled_rss_bytes": 211415040,
+          "sampled_cpu_seconds": 13.129999999999994,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 6.8749525229995925,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 13.104307,
+          "exit_rusage_system_seconds": 0.11663599999999999,
+          "exit_rusage_maxrss_kib": 206460,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "generate-large-lossless-h264",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8944971776,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57381187584,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 689.4486735569999,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 7.175436478999927,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 176205824,
+      "sampled_process_cpu_seconds": 12.12,
+      "scratch_logical_bytes_peak": 2464081206,
+      "scratch_allocated_bytes_peak": 2464112640,
+      "scratch_free_bytes_min": 56235810816,
+      "memory_available_bytes_min": 8697384960,
+      "sample_count": 72,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "generate-large-lossless-h264",
+          "queue_wait_seconds": 0.00030666200018458767,
+          "peak_sampled_rss_bytes": 176205824,
+          "sampled_cpu_seconds": 12.12,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 7.174566676999802,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 11.403742,
+          "exit_rusage_system_seconds": 0.748265,
+          "exit_rusage_maxrss_kib": 172076,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "probe-large-lossless-h264",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8843190272,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 56235810816,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 682.2716343309999,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.3060751769999115,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 45338624,
+      "sampled_process_cpu_seconds": 0.2,
+      "scratch_logical_bytes_peak": 2464088564,
+      "scratch_allocated_bytes_peak": 2464120832,
+      "scratch_free_bytes_min": 56235802624,
+      "memory_available_bytes_min": 8842489856,
+      "sample_count": 4,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "probe-large-lossless-h264",
+          "queue_wait_seconds": 0.00027984200005448656,
+          "peak_sampled_rss_bytes": 45338624,
+          "sampled_cpu_seconds": 0.2,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.3049528840001585,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.087214,
+          "exit_rusage_system_seconds": 0.16744399999999998,
+          "exit_rusage_maxrss_kib": 48628,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "decode-large-lossless-h264",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8842489856,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 56235798528,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 681.9634473599999,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 6.779193891999967,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 168845312,
+      "sampled_process_cpu_seconds": 12.75,
+      "scratch_logical_bytes_peak": 2464091375,
+      "scratch_allocated_bytes_peak": 2464124928,
+      "scratch_free_bytes_min": 56235798528,
+      "memory_available_bytes_min": 8769417216,
+      "sample_count": 68,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "decode-large-lossless-h264",
+          "queue_wait_seconds": 0.0004299180000089109,
+          "peak_sampled_rss_bytes": 168845312,
+          "sampled_cpu_seconds": 12.749999999999991,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 6.778280093999911,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 12.468724,
+          "exit_rusage_system_seconds": 0.363152,
+          "exit_rusage_maxrss_kib": 164888,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "generate-watermark",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8893255680,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 56235794432,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 674.3740538959996,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.10371103500028767,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 131072,
+      "sampled_process_cpu_seconds": 0.0,
+      "scratch_logical_bytes_peak": 2464095207,
+      "scratch_allocated_bytes_peak": 2464133120,
+      "scratch_free_bytes_min": 56235790336,
+      "memory_available_bytes_min": 8893255680,
+      "sample_count": 2,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "generate-watermark",
+          "queue_wait_seconds": 0.00028267700008655083,
+          "peak_sampled_rss_bytes": 131072,
+          "sampled_cpu_seconds": 0.0,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.10281988099995942,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.043393999999999995,
+          "exit_rusage_system_seconds": 0.024947999999999998,
+          "exit_rusage_maxrss_kib": 32896,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "serial",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8894099456,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 56235757568,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 674.2679878089998,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 45.259139168000274,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 1,
+      "peak_sampled_process_tree_rss_bytes": 455360512,
+      "sampled_process_cpu_seconds": 80.11,
+      "scratch_logical_bytes_peak": 2515033608,
+      "scratch_allocated_bytes_peak": 2515185664,
+      "scratch_free_bytes_min": 56184709120,
+      "memory_available_bytes_min": 7211757568,
+      "sample_count": 446,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "serial-long-1080p",
+          "queue_wait_seconds": 0.0003733230000761978,
+          "peak_sampled_rss_bytes": 423522304,
+          "sampled_cpu_seconds": 8.599999999999998,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 5.6720006020000255,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 8.656884999999999,
+          "exit_rusage_system_seconds": 0.6057319999999999,
+          "exit_rusage_maxrss_kib": 363236,
+          "observed_process_count": 11,
+          "status": "passed"
+        },
+        {
+          "id": "serial-phone-h264-4k",
+          "queue_wait_seconds": 5.773603883000305,
+          "peak_sampled_rss_bytes": 410673152,
+          "sampled_cpu_seconds": 8.88,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 5.486935238999649,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 8.457677,
+          "exit_rusage_system_seconds": 0.9027529999999999,
+          "exit_rusage_maxrss_kib": 350688,
+          "observed_process_count": 10,
+          "status": "passed"
+        },
+        {
+          "id": "serial-phone-hevc-vfr-4k",
+          "queue_wait_seconds": 11.361818273000154,
+          "peak_sampled_rss_bytes": 369856512,
+          "sampled_cpu_seconds": 17.39,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 9.457129110000096,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 17.395978,
+          "exit_rusage_system_seconds": 0.351915,
+          "exit_rusage_maxrss_kib": 311212,
+          "observed_process_count": 9,
+          "status": "passed"
+        },
+        {
+          "id": "serial-large-lossless-h264",
+          "queue_wait_seconds": 20.920347673999913,
+          "peak_sampled_rss_bytes": 455360512,
+          "sampled_cpu_seconds": 45.240000000000066,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 24.337843484000132,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 45.1093,
+          "exit_rusage_system_seconds": 0.8128529999999999,
+          "exit_rusage_maxrss_kib": 394456,
+          "observed_process_count": 11,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "concurrent",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8052088832,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 56184680448,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 629.0032364679996,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 41.91863550400012,
+      "max_active_jobs": 2,
+      "active_transcodes_peak": 2,
+      "peak_sampled_process_tree_rss_bytes": 815824896,
+      "sampled_process_cpu_seconds": 80.24,
+      "scratch_logical_bytes_peak": 2565983775,
+      "scratch_allocated_bytes_peak": 2566246400,
+      "scratch_free_bytes_min": 56133496832,
+      "memory_available_bytes_min": 7215644672,
+      "sample_count": 412,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "parallel-long-1080p",
+          "queue_wait_seconds": 0.00039840099998400547,
+          "peak_sampled_rss_bytes": 411398144,
+          "sampled_cpu_seconds": 10.02,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 11.242111527999896,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 9.778598,
+          "exit_rusage_system_seconds": 0.657675,
+          "exit_rusage_maxrss_kib": 351376,
+          "observed_process_count": 13,
+          "status": "passed"
+        },
+        {
+          "id": "parallel-phone-h264-4k",
+          "queue_wait_seconds": 0.002309702999809815,
+          "peak_sampled_rss_bytes": 409931776,
+          "sampled_cpu_seconds": 8.489999999999995,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 8.879772381000294,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 8.286223,
+          "exit_rusage_system_seconds": 0.510988,
+          "exit_rusage_maxrss_kib": 350320,
+          "observed_process_count": 11,
+          "status": "passed"
+        },
+        {
+          "id": "parallel-phone-hevc-vfr-4k",
+          "queue_wait_seconds": 8.984127281999918,
+          "peak_sampled_rss_bytes": 369623040,
+          "sampled_cpu_seconds": 16.98999999999999,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 14.811103846000151,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 16.918072,
+          "exit_rusage_system_seconds": 0.390227,
+          "exit_rusage_maxrss_kib": 310992,
+          "observed_process_count": 8,
+          "status": "passed"
+        },
+        {
+          "id": "parallel-large-lossless-h264",
+          "queue_wait_seconds": 11.344997494999916,
+          "peak_sampled_rss_bytes": 459177984,
+          "sampled_cpu_seconds": 44.74000000000013,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 30.572716910000054,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 44.544716,
+          "exit_rusage_system_seconds": 0.6455569999999999,
+          "exit_rusage_maxrss_kib": 398064,
+          "observed_process_count": 11,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "cancel-direct",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8921387008,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 56133476352,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 587.0779896489998,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.3098701090002578,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 1,
+      "peak_sampled_process_tree_rss_bytes": 62840832,
+      "sampled_process_cpu_seconds": 0.13,
+      "scratch_logical_bytes_peak": 2565999185,
+      "scratch_allocated_bytes_peak": 2566270976,
+      "scratch_free_bytes_min": 56133472256,
+      "memory_available_bytes_min": 8903823360,
+      "sample_count": 4,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "cancel-direct",
+          "queue_wait_seconds": 0.000776159999986703,
+          "peak_sampled_rss_bytes": 62840832,
+          "sampled_cpu_seconds": 0.13,
+          "cancel_signal_sent": true,
+          "cancel_signal_after_seconds": 0.2064529849999417,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.3081491440002537,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.160521,
+          "exit_rusage_system_seconds": 0.06575299999999999,
+          "exit_rusage_maxrss_kib": 42316,
+          "observed_process_count": 3,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "malformed-source",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8912240640,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 56133464064,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 586.7626326169998,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.20692244599968035,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 53411840,
+      "sampled_process_cpu_seconds": 0.09,
+      "scratch_logical_bytes_peak": 2566003854,
+      "scratch_allocated_bytes_peak": 2566287360,
+      "scratch_free_bytes_min": 56133451776,
+      "memory_available_bytes_min": 8907747328,
+      "sample_count": 3,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "malformed-source",
+          "queue_wait_seconds": 0.0005547159998968709,
+          "peak_sampled_rss_bytes": 53411840,
+          "sampled_cpu_seconds": 0.09000000000000001,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.2051488120000613,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.139984,
+          "exit_rusage_system_seconds": 0.041926,
+          "exit_rusage_maxrss_kib": 39872,
+          "observed_process_count": 3,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "actual_fixtures": [
+    {
+      "id": "long-1080p",
+      "duration_seconds": 600.0,
+      "video": {
+        "codec_name": "h264",
+        "profile": "Constrained Baseline",
+        "width": 1920,
+        "height": 1080,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "30/1",
+        "sample_aspect_ratio": "1:1"
+      },
+      "rotation": 0,
+      "audio": {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 1
+      },
+      "full_decode_passed": true,
+      "local_hash": {
+        "sha256": "a7f13661b23c2ae2236ef5eee20274da61775558f51eb3963cfc06a408ad3f0b",
+        "wall_seconds": 0.8535937149999882,
+        "cpu_seconds": 0.8532466839999999,
+        "bytes": 1172676072,
+        "scope": "local streaming read only, not provider transfer"
+      },
+      "local_hash_after": {
+        "sha256": "a7f13661b23c2ae2236ef5eee20274da61775558f51eb3963cfc06a408ad3f0b",
+        "wall_seconds": 0.8916330990000461,
+        "cpu_seconds": 0.8914776189999998,
+        "bytes": 1172676072,
+        "scope": "local streaming read only, not provider transfer"
+      }
+    },
+    {
+      "id": "phone-h264-4k",
+      "duration_seconds": 12.0,
+      "video": {
+        "codec_name": "h264",
+        "profile": "Constrained Baseline",
+        "width": 3840,
+        "height": 2160,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "45/2",
+        "sample_aspect_ratio": "1:1"
+      },
+      "rotation": 90,
+      "audio": {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 1
+      },
+      "full_decode_passed": true,
+      "local_hash": {
+        "sha256": "6f628ef356a35bf7dc74d9b1c03c7ffc14aa8ba70a05672c5cece31dfb42ac8e",
+        "wall_seconds": 0.06719177300010415,
+        "cpu_seconds": 0.06690300899999979,
+        "bytes": 73285852,
+        "scope": "local streaming read only, not provider transfer"
+      },
+      "local_hash_after": {
+        "sha256": "6f628ef356a35bf7dc74d9b1c03c7ffc14aa8ba70a05672c5cece31dfb42ac8e",
+        "wall_seconds": 0.05009643200037317,
+        "cpu_seconds": 0.05008864300000049,
+        "bytes": 73285852,
+        "scope": "local streaming read only, not provider transfer"
+      }
+    },
+    {
+      "id": "phone-hevc-vfr-4k",
+      "duration_seconds": 12.0,
+      "video": {
+        "codec_name": "hevc",
+        "profile": "Main 10",
+        "width": 3840,
+        "height": 2160,
+        "pix_fmt": "yuv420p10le",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "45/2",
+        "sample_aspect_ratio": "1:1"
+      },
+      "rotation": 90,
+      "audio": {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 1
+      },
+      "full_decode_passed": true,
+      "local_hash": {
+        "sha256": "76f0306fc73ce9d487934fab7f3dbcc0f810608cea6830b4030f6c10e233ebca",
+        "wall_seconds": 0.057306781000079354,
+        "cpu_seconds": 0.05708909400000017,
+        "bytes": 72696255,
+        "scope": "local streaming read only, not provider transfer"
+      },
+      "local_hash_after": {
+        "sha256": "76f0306fc73ce9d487934fab7f3dbcc0f810608cea6830b4030f6c10e233ebca",
+        "wall_seconds": 0.05104405999964001,
+        "cpu_seconds": 0.05100087699999989,
+        "bytes": 72696255,
+        "scope": "local streaming read only, not provider transfer"
+      }
+    },
+    {
+      "id": "large-lossless-h264",
+      "duration_seconds": 10.0,
+      "video": {
+        "codec_name": "h264",
+        "profile": "High 4:4:4 Predictive",
+        "width": 1920,
+        "height": 1080,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "30/1",
+        "sample_aspect_ratio": "1:1"
+      },
+      "rotation": 0,
+      "audio": {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 1
+      },
+      "full_decode_passed": true,
+      "local_hash": {
+        "sha256": "b77f0bc0cea3d63a636594b58231e26c9f35f1a72028e3fa4dfee4d5d16c4162",
+        "wall_seconds": 0.8068101199996818,
+        "cpu_seconds": 0.8063973849999999,
+        "bytes": 1145371590,
+        "scope": "local streaming read only, not provider transfer"
+      },
+      "local_hash_after": {
+        "sha256": "b77f0bc0cea3d63a636594b58231e26c9f35f1a72028e3fa4dfee4d5d16c4162",
+        "wall_seconds": 0.8270617009998205,
+        "cpu_seconds": 0.8258844540000005,
+        "bytes": 1145371590,
+        "scope": "local streaming read only, not provider transfer"
+      }
+    }
+  ],
+  "render_jobs": [
+    {
+      "id": "serial-long-1080p",
+      "edit": {
+        "clip_format": "square_1_1",
+        "fit_mode": "fit",
+        "trim_start_ms": 591500,
+        "trim_end_ms": 599500,
+        "brand_mark_enabled": true,
+        "brand_asset_id": "synthetic-mark"
+      },
+      "ok": true,
+      "output": {
+        "width": 1080,
+        "height": 1080,
+        "durationMs": 8000,
+        "sizeBytes": 1284432,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 5.573526557,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.0820563359998232,
+          "cpu_user_seconds": 0.051295999999999994,
+          "cpu_system_seconds": 0.020593999999999998,
+          "child_peak_rss_kib": 42384,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.07185265099997196,
+          "cpu_user_seconds": 0.040235,
+          "cpu_system_seconds": 0.021189,
+          "child_peak_rss_kib": 33152,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 4.639207305000127,
+          "cpu_user_seconds": 7.710496,
+          "cpu_system_seconds": 0.328709,
+          "child_peak_rss_kib": 363236,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 0.39896602499993605,
+          "cpu_user_seconds": 0.494587,
+          "cpu_system_seconds": 0.113621,
+          "child_peak_rss_kib": 61888,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "video_start_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.08201908999990337,
+          "cpu_user_seconds": 0.044206999999999996,
+          "cpu_system_seconds": 0.027989999999999998,
+          "child_peak_rss_kib": 42392,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.08189901500009,
+          "cpu_user_seconds": 0.048277999999999995,
+          "cpu_system_seconds": 0.027552,
+          "child_peak_rss_kib": 38912,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "serial-phone-h264-4k",
+      "edit": {
+        "clip_format": "vertical_9_16",
+        "fit_mode": "fill",
+        "trim_start_ms": 8500,
+        "trim_end_ms": 11500,
+        "brand_mark_enabled": false,
+        "brand_asset_id": null
+      },
+      "ok": true,
+      "output": {
+        "width": 606,
+        "height": 1080,
+        "durationMs": 3000,
+        "sizeBytes": 267573,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 5.398634383,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 4.761694188000092,
+          "cpu_user_seconds": 7.849139,
+          "cpu_system_seconds": 0.7465069999999999,
+          "child_peak_rss_kib": 350688,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "video_start_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.09283815299977505,
+          "cpu_user_seconds": 0.076071,
+          "cpu_system_seconds": 0.012438,
+          "child_peak_rss_kib": 56624,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.09214165200000934,
+          "cpu_user_seconds": 0.06512,
+          "cpu_system_seconds": 0.020166,
+          "child_peak_rss_kib": 56620,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 0.1745587630002774,
+          "cpu_user_seconds": 0.159136,
+          "cpu_system_seconds": 0.034552,
+          "child_peak_rss_kib": 51804,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.09188722800035976,
+          "cpu_user_seconds": 0.058703,
+          "cpu_system_seconds": 0.025901999999999998,
+          "child_peak_rss_kib": 37632,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "serial-phone-hevc-vfr-4k",
+      "edit": {
+        "clip_format": "vertical_9_16",
+        "fit_mode": "fill",
+        "trim_start_ms": 8500,
+        "trim_end_ms": 11500,
+        "brand_mark_enabled": false,
+        "brand_asset_id": null
+      },
+      "ok": true,
+      "output": {
+        "width": 606,
+        "height": 1080,
+        "durationMs": 3000,
+        "sizeBytes": 261431,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 9.362018807999998,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.09244816299997183,
+          "cpu_user_seconds": 0.049839999999999995,
+          "cpu_system_seconds": 0.03274,
+          "child_peak_rss_kib": 35300,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.09269209800004319,
+          "cpu_user_seconds": 0.050771,
+          "cpu_system_seconds": 0.030982,
+          "child_peak_rss_kib": 37632,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 8.833185288000095,
+          "cpu_user_seconds": 16.883007,
+          "cpu_system_seconds": 0.173434,
+          "child_peak_rss_kib": 311212,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 0.17345383599968045,
+          "cpu_user_seconds": 0.17233099999999998,
+          "cpu_system_seconds": 0.041173,
+          "child_peak_rss_kib": 51036,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "serial-large-lossless-h264",
+      "edit": {
+        "clip_format": "square_1_1",
+        "fit_mode": "fill",
+        "trim_start_ms": 6500,
+        "trim_end_ms": 9500,
+        "brand_mark_enabled": false,
+        "brand_asset_id": null
+      },
+      "ok": true,
+      "output": {
+        "width": 1080,
+        "height": 1080,
+        "durationMs": 3000,
+        "sizeBytes": 49112644,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 24.184370185,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.14329369699999006,
+          "cpu_user_seconds": 0.10385499999999999,
+          "cpu_system_seconds": 0.036093,
+          "child_peak_rss_kib": 41068,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 21.387661963000028,
+          "cpu_user_seconds": 40.428085,
+          "cpu_system_seconds": 0.5633429999999999,
+          "child_peak_rss_kib": 394456,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 2.2138643110001794,
+          "cpu_user_seconds": 4.078701,
+          "cpu_system_seconds": 0.07030499999999999,
+          "child_peak_rss_kib": 72712,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.12260603300001094,
+          "cpu_user_seconds": 0.092195,
+          "cpu_system_seconds": 0.020721,
+          "child_peak_rss_kib": 48628,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "video_start_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.12253750400032004,
+          "cpu_user_seconds": 0.09253499999999999,
+          "cpu_system_seconds": 0.027121,
+          "child_peak_rss_kib": 48628,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "parallel-long-1080p",
+      "edit": {
+        "clip_format": "square_1_1",
+        "fit_mode": "fit",
+        "trim_start_ms": 591500,
+        "trim_end_ms": 599500,
+        "brand_mark_enabled": true,
+        "brand_asset_id": "synthetic-mark"
+      },
+      "ok": true,
+      "output": {
+        "width": 1080,
+        "height": 1080,
+        "durationMs": 8000,
+        "sizeBytes": 1284432,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 11.026520026,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.08416939499966247,
+          "cpu_user_seconds": 0.059114999999999994,
+          "cpu_system_seconds": 0.023649999999999997,
+          "child_peak_rss_kib": 33152,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 0.9978772449999269,
+          "cpu_user_seconds": 0.670384,
+          "cpu_system_seconds": 0.057745,
+          "child_peak_rss_kib": 63664,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.18790616499973112,
+          "cpu_user_seconds": 0.079262,
+          "cpu_system_seconds": 0.019239,
+          "child_peak_rss_kib": 38912,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "video_start_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.11896312199996828,
+          "cpu_user_seconds": 0.064106,
+          "cpu_system_seconds": 0.040089,
+          "child_peak_rss_kib": 42384,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.10337294300006761,
+          "cpu_user_seconds": 0.059566999999999995,
+          "cpu_system_seconds": 0.031837,
+          "child_peak_rss_kib": 42384,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 9.103586103999987,
+          "cpu_user_seconds": 8.520359,
+          "cpu_system_seconds": 0.34499799999999997,
+          "child_peak_rss_kib": 351376,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "parallel-phone-h264-4k",
+      "edit": {
+        "clip_format": "vertical_9_16",
+        "fit_mode": "fill",
+        "trim_start_ms": 8500,
+        "trim_end_ms": 11500,
+        "brand_mark_enabled": false,
+        "brand_asset_id": null
+      },
+      "ok": true,
+      "output": {
+        "width": 606,
+        "height": 1080,
+        "durationMs": 3000,
+        "sizeBytes": 267573,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 8.70836569,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.18316191599978993,
+          "cpu_user_seconds": 0.060598,
+          "cpu_system_seconds": 0.029828,
+          "child_peak_rss_kib": 37632,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 7.673345319999953,
+          "cpu_user_seconds": 7.611074,
+          "cpu_system_seconds": 0.288997,
+          "child_peak_rss_kib": 350320,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "video_start_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.09401896200006377,
+          "cpu_user_seconds": 0.059042,
+          "cpu_system_seconds": 0.032191,
+          "child_peak_rss_kib": 56624,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 0.30807057599986365,
+          "cpu_user_seconds": 0.199454,
+          "cpu_system_seconds": 0.043526999999999996,
+          "child_peak_rss_kib": 53852,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.10360418599975674,
+          "cpu_user_seconds": 0.064007,
+          "cpu_system_seconds": 0.029449,
+          "child_peak_rss_kib": 56596,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "parallel-phone-hevc-vfr-4k",
+      "edit": {
+        "clip_format": "vertical_9_16",
+        "fit_mode": "fill",
+        "trim_start_ms": 8500,
+        "trim_end_ms": 11500,
+        "brand_mark_enabled": false,
+        "brand_asset_id": null
+      },
+      "ok": true,
+      "output": {
+        "width": 606,
+        "height": 1080,
+        "durationMs": 3000,
+        "sizeBytes": 261431,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 14.612367829999998,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.09542220499997711,
+          "cpu_user_seconds": 0.058313,
+          "cpu_system_seconds": 0.027212,
+          "child_peak_rss_kib": 37632,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.08531039200033774,
+          "cpu_user_seconds": 0.046571999999999995,
+          "cpu_system_seconds": 0.032607,
+          "child_peak_rss_kib": 35300,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 13.986293396999827,
+          "cpu_user_seconds": 16.373272,
+          "cpu_system_seconds": 0.220988,
+          "child_peak_rss_kib": 310992,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 0.246228525999868,
+          "cpu_user_seconds": 0.18356699999999998,
+          "cpu_system_seconds": 0.038515,
+          "child_peak_rss_kib": 54236,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "parallel-large-lossless-h264",
+      "edit": {
+        "clip_format": "square_1_1",
+        "fit_mode": "fill",
+        "trim_start_ms": 6500,
+        "trim_end_ms": 9500,
+        "brand_mark_enabled": false,
+        "brand_asset_id": null
+      },
+      "ok": true,
+      "output": {
+        "width": 1080,
+        "height": 1080,
+        "durationMs": 3000,
+        "sizeBytes": 49112644,
+        "mimeType": "video/mp4",
+        "workerVersion": "clip-render-v1"
+      },
+      "expectedError": null,
+      "render_elapsed_seconds": 30.349003580999998,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "full_decode",
+          "binary": "ffmpeg",
+          "wall_seconds": 2.116303785999662,
+          "cpu_user_seconds": 3.928383,
+          "cpu_system_seconds": 0.07037299999999999,
+          "child_peak_rss_kib": 73240,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "video_start_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.1700431499998558,
+          "cpu_user_seconds": 0.101564,
+          "cpu_system_seconds": 0.033157,
+          "child_peak_rss_kib": 48668,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "transcode",
+          "binary": "ffmpeg",
+          "wall_seconds": 27.547946282999874,
+          "cpu_user_seconds": 39.973623,
+          "cpu_system_seconds": 0.401589,
+          "child_peak_rss_kib": 398064,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.15980551600023318,
+          "cpu_user_seconds": 0.10674499999999999,
+          "cpu_system_seconds": 0.024624,
+          "child_peak_rss_kib": 48628,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        },
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.12263126799962265,
+          "cpu_user_seconds": 0.081106,
+          "cpu_system_seconds": 0.032955,
+          "child_peak_rss_kib": 41068,
+          "exit_code": 0,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    },
+    {
+      "id": "cancel-direct",
+      "edit": {
+        "clip_format": "square_1_1",
+        "fit_mode": "fill",
+        "trim_start_ms": 0,
+        "trim_end_ms": 30000,
+        "brand_mark_enabled": false,
+        "brand_asset_id": null
+      },
+      "ok": true,
+      "error": "render_canceled",
+      "expectedError": "render_canceled",
+      "render_elapsed_seconds": 0.13746302300000002,
+      "measurement": "direct_core_cancellation",
+      "phases": []
+    },
+    {
+      "id": "malformed-source",
+      "edit": {
+        "clip_format": "square_1_1",
+        "fit_mode": "fit",
+        "trim_start_ms": 591500,
+        "trim_end_ms": 599500,
+        "brand_mark_enabled": true,
+        "brand_asset_id": "synthetic-mark"
+      },
+      "ok": true,
+      "error": "media_process_failed",
+      "expectedError": "media_process_failed",
+      "render_elapsed_seconds": 0.11360822699999998,
+      "measurement": "local_core_with_phase_meter",
+      "phases": [
+        {
+          "phase": "metadata_probe",
+          "binary": "ffprobe",
+          "wall_seconds": 0.07200767200038172,
+          "cpu_user_seconds": 0.050263999999999996,
+          "cpu_system_seconds": 0.012227,
+          "child_peak_rss_kib": 32768,
+          "exit_code": 1,
+          "timed_out": false,
+          "interrupted": false
+        }
+      ]
+    }
+  ],
+  "unexecuted_local_jobs": [],
+  "elapsed_seconds": 315.2712120580004,
+  "generated_media_retained": false
+}
