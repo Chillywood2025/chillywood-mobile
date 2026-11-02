@@ -393,7 +393,9 @@ revoke all on function private.sandbox_cashout_auction_binding(uuid,uuid) from p
 create function private.sandbox_cashout_source(p_id uuid,p_qualification uuid) returns jsonb
 language plpgsql stable set search_path='' as $$
 declare m public.money_access_ledger_events; p public.provider_events; q private.sandbox_cashout_qualifications;
- net bigint; h text; auction_binding text;
+ product public.monetization_products; provider_product public.monetization_products; intent public.money_purchase_intents;
+ store_mapping public.monetization_product_store_mappings;
+ net bigint; h text; auction_binding text; tip_binding text; platform_bps integer;
 begin
  select * into m from public.money_access_ledger_events where id=p_id;
  select * into q from private.sandbox_cashout_qualifications where id=p_qualification;
@@ -416,11 +418,61 @@ begin
   auction_binding:=private.sandbox_cashout_auction_binding(m.id,q.id);
   if auction_binding is null then return null; end if;
  end if;
+ -- Native tips retain the existing no-app-commission contract. Ledger amount is
+ -- canonical buyer gross, not a pre-deducted creator share. A client metadata
+ -- label cannot select this exception: source, catalog, provider and consumed
+ -- intent must all agree on the immutable original purchase identity.
+ select * into product from public.monetization_products where id=m.product_id;
+ select * into provider_product from public.monetization_products where id=p.product_id;
+ select * into intent from public.money_purchase_intents where id::text=m.metadata->>'purchase_intent_id';
+ select * into store_mapping from public.monetization_product_store_mappings where id::text=intent.metadata->>'store_mapping_id';
+ platform_bps:=q.simulated_platform_bps;
+ if m.source_type='creator_tip' or product.product_type='creator_tip' or provider_product.product_type='creator_tip'
+  or intent.source_type='creator_tip' or intent.product_type='creator_tip' then
+  if m.source_type is distinct from 'creator_tip' or product.product_type is distinct from 'creator_tip'
+   or provider_product.product_type is distinct from 'creator_tip' or intent.product_type is distinct from 'creator_tip'
+   or intent.source_type is distinct from 'creator_tip' or product.id is null or intent.id is null
+   or p.product_id is distinct from m.product_id or intent.product_id is distinct from m.product_id
+   or p.provider not in ('revenuecat_app_store','revenuecat_google_play','google_play','revenuecat')
+   or intent.provider is distinct from p.provider
+   or p.metadata->>'purchase_intent_id' is distinct from m.metadata->>'purchase_intent_id'
+   or nullif(m.metadata->>'original_transaction_id','') is null
+   or p.metadata->>'original_transaction_id' is distinct from m.metadata->>'original_transaction_id'
+   or intent.provider_product_id is distinct from p.metadata->>'provider_product_id'
+   or intent.provider_product_id is distinct from m.metadata->>'provider_product_id'
+   or intent.status is distinct from 'consumed' or intent.environment is distinct from 'sandbox'
+   or intent.user_id is distinct from m.user_id or intent.creator_id is distinct from m.creator_id
+   or intent.source_id is distinct from m.source_id or m.source_id is distinct from m.creator_id
+   or intent.amount_minor is distinct from m.amount_minor or intent.currency is distinct from m.currency
+  then return null; end if;
+  -- iOS uses a conceptual internal_setup catalog plus a finite sandbox store
+  -- mapping; Android's existing native catalog directly binds the provider SKU.
+  if p.provider='revenuecat_app_store' then
+   if store_mapping.id is null or store_mapping.product_id is distinct from product.id
+    or store_mapping.concept is distinct from 'creator_tip' or store_mapping.platform is distinct from 'ios'
+    or store_mapping.provider is distinct from p.provider or store_mapping.environment is distinct from 'sandbox'
+    or store_mapping.provider_product_id is distinct from intent.provider_product_id
+    or p.metadata->>'store_mapping_id' is distinct from store_mapping.id::text
+   then return null; end if;
+  elsif product.provider is distinct from p.provider or product.environment is distinct from 'sandbox'
+   or product.provider_product_id is distinct from intent.provider_product_id then return null;
+  end if;
+  if not exists(select 1 from public.revenuecat_consumable_transaction_intents t
+   where t.provider=p.provider and t.original_transaction_id=p.metadata->>'original_transaction_id'
+    and t.purchase_intent_id=intent.id and t.binding_state='exact' and not t.terminal)
+  then return null; end if;
+  platform_bps:=0;
+  tip_binding:=jsonb_build_object('productId',product.id,'productType',product.product_type,'provider',product.provider,
+   'providerProductId',product.provider_product_id,'intentId',intent.id,'sourceType',intent.source_type,
+   'sourceId',intent.source_id,'buyerId',intent.user_id,'creatorId',intent.creator_id,'amountMinor',intent.amount_minor,
+   'currency',intent.currency,'environment',intent.environment,'storeMappingId',store_mapping.id,
+   'originalTransactionId',p.metadata->>'original_transaction_id')::text;
+ end if;
  net:=m.amount_minor::bigint-((m.amount_minor::bigint*q.simulated_tax_bps+9999)/10000)
- -((m.amount_minor::bigint*q.simulated_platform_bps+9999)/10000)
+ -((m.amount_minor::bigint*platform_bps+9999)/10000)
  -((m.amount_minor::bigint*q.simulated_provider_bps+9999)/10000)-q.simulated_provider_fixed_minor;
  if net<=0 or net>2147483647 then return null; end if;
- h:=md5(to_jsonb(m)::text||to_jsonb(p)::text||coalesce(auction_binding,''));
+ h:=md5(to_jsonb(m)::text||to_jsonb(p)::text||coalesce(auction_binding,'')||coalesce(tip_binding,''));
  return jsonb_build_object('netMinor',net,'sourceHash',h);
 end; $$;
 

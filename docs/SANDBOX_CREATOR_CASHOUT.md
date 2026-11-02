@@ -45,7 +45,13 @@ simulated settlement policy. Integer-cent deductions are rounded upward per
 component, and payout gross equals bank principal plus the accepted app fee and
 quoted provider cost exactly. Test return accounting releases principal and app
 fee while retaining that fixed simulated provider cost once, across all allocated
-sources. This is not actual-fee reconciliation or production tax evidence.
+sources. Canonically bound native creator tips preserve the existing zero app
+commission contract: only simulated tax/provider costs are deducted from their
+gross; the non-tip platform deduction policy is unchanged. The tip exception
+requires matching catalog, provider event, consumed purchase intent and source
+identity, never a client-supplied metadata label. Current offer availability and
+reference-price changes do not rewrite a consumed tip receipt. This is not actual-fee
+reconciliation or production tax evidence.
 
 Refunds, disputes and source identity/economic changes hold further dispatch,
 including after a prior return and re-reservation. Unknown dispatch stays GET-only.

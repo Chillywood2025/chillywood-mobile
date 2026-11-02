@@ -9,6 +9,9 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and room admission reserve sandbox sources and invalidate on refunds', {timeout:240000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
  const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
+ // Explicit simulated settlement: 5% tax + 20% platform (never on tips)
+ // + 3% provider + 2 minor units fixed. No fixture claims actual provider fees.
+ const simulatedNet=(amount,isTip=false)=>amount-Math.ceil(amount*.05)-(isTip?0:Math.ceil(amount*.2))-Math.ceil(amount*.03)-2;
  const hostSession='cd000000-0000-4000-8000-000000000001';
  const buyers=['cd000000-0000-4000-8000-000000000010','cd000000-0000-4000-8000-000000000020'];
  const sessions=['cd000000-0000-4000-8000-000000000011','cd000000-0000-4000-8000-000000000021'];
@@ -39,7 +42,7 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
    provider_fee_bps,provider_fee_fixed_minor,settlement_policy_version,simulated_tax_bps,simulated_platform_bps,simulated_provider_bps,simulated_provider_fixed_minor,
    manual_schedule_verified,exclusive_writer_verified,zero_additional_application_fee_verified,platform_fee_payer_verified,test_mode_verified,provider_evidence_reference,verified_at,expires_at)
    values($1,'acct_canonicalSandboxPlatform','acct_canonicalSandboxCreator','ba_canonicalSandboxDestination','scheduled','card',0,0,
-   'SYNTHETIC-CANONICAL-TEST-v1',0,1000,0,0,true,true,true,true,true,'SYNTHETIC DISPOSABLE TEST ONLY',now()-interval '1 minute',now()+interval '1 day') returning id`,[host]);
+   'SYNTHETIC-CANONICAL-TEST-tip-policy-v2',500,2000,300,2,true,true,true,true,true,'SYNTHETIC DISPOSABLE TEST ONLY',now()-interval '1 minute',now()+interval '1 day') returning id`,[host]);
   await claim(host,hostSession);
   const offer=await scalar("select public.set_creator_channel_subscription_offer('Sandbox cashout canonical monthly','Monthly','sandbox')");
   await service();
@@ -65,13 +68,13 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
    assert.equal(ledger.environment,'sandbox');assert.equal(ledger.payable_state,'not_payable');
    assert.equal(ledger.amount_minor,499);
    const source=await scalar('select private.sandbox_cashout_source($1,$2)',[purchased.ledgerEventId,qualification]);
-   assert.equal(source?.netMinor,449,`${platform} canonical output must satisfy the real source adapter (explicit fixture 10% deduction)`);
+   assert.equal(source?.netMinor,simulatedNet(499),`${platform} canonical subscription retains simulated platform, tax and provider deductions`);
    const duplicate=await process('INITIAL_PURCHASE');
    assert.equal(duplicate.ledgerEventId,purchased.ledgerEventId,'duplicate provider delivery must not create a second source');
    const renewed=await process('RENEWAL');
    assert.equal(renewed.status,'processed',JSON.stringify(renewed));
    assert.notEqual(renewed.ledgerEventId,purchased.ledgerEventId);
-   assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[renewed.ledgerEventId,qualification]))?.netMinor,449);
+   assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[renewed.ledgerEventId,qualification]))?.netMinor,simulatedNet(499));
    assert.equal((await process('RENEWAL')).ledgerEventId,renewed.ledgerEventId,'renewal replay must not earn twice');
    receipts.push({platform,purchased,renewed,process});
    // Existing Android tip catalog is 99 cents but creator tips require >=100;
@@ -87,8 +90,51 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
     [`canonical-tip-${platform}-${type}`,type,buyers[index],tip.providerProductId,tip.amountMinor,`canonical-tip-${platform}-original`]);
    const tipped=await tipProcess('NON_RENEWING_PURCHASE');
    assert.equal(tipped.status,'processed',JSON.stringify(tipped));
-   assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[tipped.ledgerEventId,qualification]))?.netMinor,
-    tip.amountMinor-Math.ceil(tip.amountMinor/10),'canonical one-time tip earns explicit simulated net');
+   const tipSource=await scalar('select private.sandbox_cashout_source($1,$2)',[tipped.ledgerEventId,qualification]);
+   const tipBinding=await scalar(`select jsonb_build_object('ledger',to_jsonb(m),'provider',to_jsonb(p),'product',to_jsonb(c),'intent',to_jsonb(i))
+    from public.money_access_ledger_events m join public.provider_events p on p.id=m.provider_event_id
+    left join public.monetization_products c on c.id=m.product_id left join public.money_purchase_intents i on i.id::text=m.metadata->>'purchase_intent_id' where m.id=$1`,[tipped.ledgerEventId]);
+   assert.equal(tipSource?.netMinor,simulatedNet(tip.amountMinor,true),`canonical tip waives only platform deduction, never simulated tax/provider costs: ${JSON.stringify(tipBinding)}`);
+   assert.equal(tipSource.netMinor,273,'299 gross tip minus 15 tax, 9 provider, 2 fixed; no 60 platform fee');
+   // Real-SQL negative control reproduces the original blanket platform fee in
+   // this disposable transaction, then restores the reviewed helper atomically.
+   const sourceDefinition=await scalar("select pg_get_functiondef('private.sandbox_cashout_source(uuid,uuid)'::regprocedure)");
+   const blanketPlatform=sourceDefinition.replace('platform_bps:=0;','platform_bps:=q.simulated_platform_bps;');
+   assert.notEqual(blanketPlatform,sourceDefinition,'negative control targets exact tip platform exemption');
+   await db.exec('begin');
+   try{
+    await db.exec(blanketPlatform);
+    const incorrect=await scalar('select private.sandbox_cashout_source($1,$2)',[tipped.ledgerEventId,qualification]);
+    assert.equal(incorrect?.netMinor,213,'old blanket formula incorrectly subtracts another60 from a299 tip');
+    assert.notEqual(incorrect.netMinor,tipSource.netMinor);
+   }finally{await db.exec('rollback');}
+   const tipLedger=(await db.query('select * from public.money_access_ledger_events where id=$1',[tipped.ledgerEventId])).rows[0];
+   // Future offer availability/pricing cannot rewrite the consumed receipt's
+   // original economics or revoke its historical no-commission tip identity.
+   await db.exec('begin');
+   try{
+    await db.query("update public.monetization_product_store_mappings set status='disabled',reference_price_minor=999 where id::text=$1",[tipBinding.intent.metadata.store_mapping_id]);
+    await db.query('update public.creator_tip_settings set min_amount_cents=500 where creator_id=$1',[host]);
+    const historical=await scalar('select private.sandbox_cashout_source($1,$2)',[tipLedger.id,qualification]);
+    assert.deepEqual(historical,tipSource,'unpublishing/repricing current offer preserves exact historical tip net and hash');
+   }finally{await db.exec('rollback');}
+
+   for(const [label,sql,args] of [
+    ['source kind',"update public.money_access_ledger_events set source_type='paid_content' where id=$1",[tipLedger.id]],
+    ['ledger product','update public.money_access_ledger_events set product_id=$2 where id=$1',[tipLedger.id,ledger.product_id]],
+    ['provider product','update public.provider_events set product_id=$2 where id=$1',[tipLedger.provider_event_id,ledger.product_id]],
+    ['provider rail',"update public.provider_events set provider='revenuecat_google_play' where id=$1",[tipLedger.provider_event_id]],
+    ['provider intent linkage',"update public.provider_events set metadata=jsonb_set(metadata,'{purchase_intent_id}',to_jsonb(gen_random_uuid()::text)) where id=$1",[tipLedger.provider_event_id]],
+    ['provider transaction linkage',"update public.provider_events set metadata=jsonb_set(metadata,'{original_transaction_id}','\"different-canonical-original\"'::jsonb) where id=$1",[tipLedger.provider_event_id]],
+   ]){
+    await db.exec('begin');
+    try{
+     await db.query(sql,args);
+     const changed=await scalar('select private.sandbox_cashout_source($1,$2)',[tipLedger.id,qualification]);
+     assert.ok(changed===null||changed.netMinor===simulatedNet(tip.amountMinor),`${label} mismatch cannot obtain tip waiver`);
+     assert.notEqual(changed?.sourceHash,tipSource.sourceHash,`${label} identity change invalidates original source hash`);
+    }finally{await db.exec('rollback');}
+   }
    assert.equal((await tipProcess('NON_RENEWING_PURCHASE')).ledgerEventId,tipped.ledgerEventId);
    receipts.push({platform,purchased:tipped,process:tipProcess});
   }
@@ -128,7 +174,18 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
    const purchased=await process('NON_RENEWING_PURCHASE');
    assert.equal(purchased.status,'processed',`${lane}: ${JSON.stringify(purchased)}`);
    assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[purchased.ledgerEventId,qualification]))?.netMinor,
-    intent.amountMinor-Math.ceil(intent.amountMinor/10),`${lane} canonical simulated source`);
+    simulatedNet(intent.amountMinor),`${lane} canonical source keeps 20% platform plus simulated tax/provider costs`);
+   if(lane==='paid_video'){
+    const before=await scalar('select private.sandbox_cashout_source($1,$2)',[purchased.ledgerEventId,qualification]);
+    assert.equal(before.netMinor,69,'99 paid content minus 5 tax, 20 platform, 3 provider, 2 fixed');
+    await db.exec('begin');
+    try{
+     await db.query(`update public.money_access_ledger_events set metadata=metadata||'{"is_tip":true,"platform_minor":0,"no_app_fee":true,"source_type":"creator_tip"}'::jsonb where id=$1`,[purchased.ledgerEventId]);
+     const forged=await scalar('select private.sandbox_cashout_source($1,$2)',[purchased.ledgerEventId,qualification]);
+     assert.equal(forged?.netMinor,before.netMinor,'client-like tip/no-fee metadata never waives paid-content platform fee');
+     assert.notEqual(forged.sourceHash,before.sourceHash,'changed source evidence invalidates old reservation hash');
+    }finally{await db.exec('rollback');}
+   }
    assert.equal((await process('NON_RENEWING_PURCHASE')).ledgerEventId,purchased.ledgerEventId);
    receipts.push({platform:`${platform}/${lane}`,purchased,process});
   }
@@ -146,7 +203,7 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
    [`canonical-live-stage-${kind}-${type}`,type,buyers[1],stageIntent.providerProductId,`canonical-live-stage-${kind}-original`]);
   const stagePaid=await stageProcess('NON_RENEWING_PURCHASE');
   assert.equal(stagePaid.status,'processed',JSON.stringify(stagePaid));
-  assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[stagePaid.ledgerEventId,qualification]))?.netMinor,89,'dedicated Live Stage access processor supplies its own earnings');
+  assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[stagePaid.ledgerEventId,qualification]))?.netMinor,simulatedNet(99),'dedicated Live Stage access retains platform/tax/provider deductions');
   assert.equal((await stageProcess('NON_RENEWING_PURCHASE')).duplicateProviderEvent,true);
   // The native seat pass proves eligibility only, not host approval, a speaking
   // role or the separately auctioned reserved stage-seat inventory claim.
