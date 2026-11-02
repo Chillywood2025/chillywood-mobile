@@ -50,8 +50,20 @@ test('event broadcast preparation executes full production SQL with exact host, 
     eq(broadcast.rights_status,'unknown_block_public_spectator');eq(broadcast.metadata.event_ticketed_approved,undefined);
     eq(await one('select count(*)::integer from public.creator_event_broadcast_ready_internal($1,$2,false)',[event,host.user_id]),0);
     await claim(host);await deny(()=>one("select public.manage_creator_event_lifecycle($1,'start',(select updated_at from public.creator_events where id=$1))",[event]),/event_verified_broadcast_required/);
-    for(const change of ["join_policy='open'","discovery_visibility='public'","content_access_rule='open'"]) {
-      await deny(()=>db.query(`update public.watch_party_rooms set ${change} where party_id=$1`,[prepared.roomId]),/event_broadcast_host_room_identity_required/);
+    const roomChanges=[['join_policy','open'],['discovery_visibility','public'],['content_access_rule','open']];
+    const changeRoom=(field,value)=>db.query(`update public.watch_party_rooms set ${field}=$2 where party_id=$1`,[prepared.roomId,value]);
+    // Raw host settings are now rejected by the versioned-write boundary before
+    // the event-identity trigger. Content access still reaches the event guard.
+    for(const [field,value] of roomChanges) {
+      await deny(()=>changeRoom(field,value),field==='content_access_rule'
+        ? /event_broadcast_host_room_identity_required/ : /room_versioned_host_settings_required/);
+    }
+    // The supported versioned host RPC must also reject each attempted escape
+    // from the private, locked event transport, even with exact current inputs.
+    for(const [join,visibility] of [['open','private'],['locked','public']]) {
+      await deny(()=>one('select public.set_watch_party_room_host_settings($1,$2,$3,$4,$5,$6,$7,$8,$9,true)',
+        [prepared.roomId,room.room_generation,room.host_settings_revision,host.session_id,join,visibility,
+          room.discovery_title,room.source_type,room.source_id]),/event_broadcast_host_room_identity_required/);
     }
     await deny(()=>db.query('select * from private.creator_event_broadcast_preparations'),/permission denied/);
     await deny(()=>db.query("update public.room_broadcast_sessions set rights_status='creator_owned',metadata='{\"event_ticketed_approved\":true}' where id=$1 returning id",[prepared.broadcastSessionId]).then(r=>{if(r.rows.length===0)throw new Error('no operator rows visible');}),/no operator rows visible|permission denied/);
@@ -60,9 +72,21 @@ test('event broadcast preparation executes full production SQL with exact host, 
     await isolate(async()=>{await service();await db.query("update public.room_broadcast_sessions set creator_event_id=null where id=$1",[prepared.broadcastSessionId]);await claim(host);await deny(prepare,/event_broadcast_source_binding_invalid/);});
     await isolate(async()=>{await service();await db.query('update public.watch_party_rooms set is_active=false where party_id=$1',[prepared.roomId]);await claim(host);eq((await prepare()).state,'room_closed');});
     await isolate(async()=>{await service();await db.query("update public.creator_events set status='canceled' where id=$1",[event]);await claim(host);await deny(prepare,/event_broadcast_event_closed/);});
-    // Negative control establishes that the immutable room assertion observes
-    // the new guard rather than an unrelated existing table policy.
-    await isolate(async()=>{await service();await db.exec('alter table public.watch_party_rooms disable trigger guard_creator_event_broadcast_room');await claim(host);await db.query("update public.watch_party_rooms set join_policy='open' where party_id=$1",[prepared.roomId]);eq(await one('select join_policy from public.watch_party_rooms where party_id=$1',[prepared.roomId]),'open');});
+    // Privileged disposable fixture writes isolate the event-identity trigger
+    // from the independent authenticated versioned-write boundary. Each same
+    // mutation is denied with the trigger intact and succeeds only after its
+    // removal inside a rolled-back negative control.
+    await service();
+    for(const [field,value] of roomChanges) {
+      await deny(()=>changeRoom(field,value),/event_broadcast_host_room_identity_required/);
+      await isolate(async()=>{
+        await db.exec('alter table public.watch_party_rooms disable trigger guard_creator_event_broadcast_room');
+        await changeRoom(field,value);
+        eq(await one(`select ${field} from public.watch_party_rooms where party_id=$1`,[prepared.roomId]),value);
+      });
+    }
+    eq((await db.query('select * from public.watch_party_rooms where party_id=$1',[prepared.roomId])).rows[0],room,
+      'denied writes and rolled-back negative controls preserve the exact prepared room');
     t.diagnostic(`${checks} assertions; real session/Premium receipt/room-membership SQL, synthetic provider input, no Egress or external operation`);
   } catch(error){error.message=`${step}: ${error.message}`;throw error;} finally {await db.close();}
 });
