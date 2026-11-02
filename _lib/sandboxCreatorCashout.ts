@@ -5,7 +5,10 @@ import { assertAccountBoundSupabaseMutationSubjectCurrent, captureAccountBoundSu
 import type { CreatorCashoutQuote, CreatorCashoutRecord } from "./creatorCashoutExecution";
 
 export type SandboxCashoutQuote = CreatorCashoutQuote & { environment: "test"; financialAuthority: false };
-export type SandboxCashoutRecord = CreatorCashoutRecord & { environment: "test"; financialAuthority: false; bankPaid: false; subject: AccountBoundSupabaseMutationSubject };
+export type SandboxCashoutRecord = CreatorCashoutRecord & {
+  environment: "test"; financialAuthority: false; bankPaid: false; subject: AccountBoundSupabaseMutationSubject;
+  recoveryAuthorityRequired?: boolean; qualificationStatus?: "expired_or_revoked" | "current";
+};
 const quotes = new WeakSet<object>(), records = new WeakSet<object>();
 const uuid = (v: unknown) => typeof v === "string" && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(v);
 const minor = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0 && Number(v) <= 2147483647;

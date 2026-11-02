@@ -9,6 +9,9 @@ import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 const snapshotKey = () => { const value = getCurrentAccountSessionAuthoritySnapshot(); return value && !value.restoreOnly ? JSON.stringify(value) : ""; };
 const money = (value: number | null) => value === null ? "Unverified" : `$${(value / 100).toFixed(2)}`;
+const authorityHeld = (row: SandboxCashoutRecord) => row.recoveryAuthorityRequired === true
+  || row.qualificationStatus === "expired_or_revoked"
+  || ["sandbox_recovery_authority_required", "sandbox_cashout_provider_qualification_required"].includes(row.ownerAction ?? "");
 export function SandboxCreatorCashoutPanel() {
   const key = useSyncExternalStore(subscribeToAccountSessionAuthority, snapshotKey, () => ""), focused = useIsFocused();
   const generation = useRef(0), active = useRef(false), latch = useRef(false);
@@ -28,6 +31,7 @@ export function SandboxCreatorCashoutPanel() {
     if (!key || !focused || !active.current || snapshotKey() !== key || latch.current) return;
     if (action === "submit" && (!state.quote || displayed.current !== state.quote)) return;
     if ((action === "advance" || action === "cancel") && (!row || !displayedRows.current.includes(row))) return;
+    if (action === "advance" && row && authorityHeld(row)) return;
     const ticket = ++generation.current, quote = displayed.current; latch.current = true;
     setState(old => ({...old, key, busy: true, notice: ""}));
     const current = () => active.current && generation.current === ticket && snapshotKey() === key;
@@ -70,8 +74,12 @@ export function SandboxCreatorCashoutPanel() {
     <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("history")}><Text style={{...title, paddingVertical: 10}}>{busy ? "Checking test request…" : "Refresh test payout history"}</Text></Pressable>
     {current?.rows.map(row => <View key={row.requestId} style={{gap: 5}}>
       <Text style={title}>{SANDBOX_CASHOUT_STATUS[row.status] ?? "Test payout under reconciliation — no real money"}</Text>
+      {row.recoveryAuthorityRequired === true || row.ownerAction === "sandbox_recovery_authority_required"
+        ? <Text accessibilityLiveRegion="polite" style={text}>Test funds remain held. The original provider qualification expired or was revoked. An authorized operator must verify fresh, recovery-only authority for this exact execution, test account and transfer. This does not authorize a new payout. Do not submit another request.</Text>
+        : authorityHeld(row) ? <Text accessibilityLiveRegion="polite" style={text}>Test payout is held because provider qualification expired or was revoked. An authorized operator must verify the test provider qualification before this request can advance. Qualification is not renewed automatically. Do not submit another payout.</Text> : null}
       <Text style={text}>TEST requested {money(row.grossMinor)} · Test payout {money(row.bankMinor)} · Observed test provider cost {money(row.observedProviderFeeMinor)}. Sandbox earning deductions remain simulated.</Text>
-      {!["canceled", "returned", "paid"].includes(row.status) ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("advance", row)}><Text style={{...title, paddingVertical: 10}}>{["prepared", "funded"].includes(row.status) ? "Continue provider test payout" : "Reconcile this test payout"}</Text></Pressable> : null}
+      {authorityHeld(row) ? <View><Text style={text}>Status refresh is read-only: it cannot dispatch a payout or return. Existing unknown provider attempts remain subject to reconciliation, not a replacement payout.</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("history")}><Text style={{...title, paddingVertical: 10}}>Refresh held test payout status</Text></Pressable></View>
+        : !["canceled", "returned", "paid"].includes(row.status) ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("advance", row)}><Text style={{...title, paddingVertical: 10}}>{["prepared", "funded"].includes(row.status) ? "Continue provider test payout" : "Reconcile this test payout"}</Text></Pressable> : null}
       {row.canCancel ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("cancel", row)}><Text style={{...title, paddingVertical: 10}}>Cancel test payout</Text></Pressable> : null}
     </View>)}
   </View>;
