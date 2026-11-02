@@ -59,7 +59,17 @@ function unavailableModule(label) {
 }
 
 async function loadChatSource(client, connection, { initializeAuthority = true } = {}) {
-  const bootstrap = { supabase: client, SUPABASE_URL: connection.apiUrl, SUPABASE_ANON_KEY: connection.anonKey };
+  const bootstrap = { supabase: client, SUPABASE_URL: connection.apiUrl, SUPABASE_ANON_KEY: connection.anonKey,
+    // Subscription transport is outside this local database fixture. Load its
+    // complete production graph, but fail rather than fabricate ready teardown.
+    getRealtimeDisconnectBarrier: () => { throw new Error('out-of-scope root realtime subscription'); },
+  };
+  const rootRealtimeSource = loadSource('_lib/rootRealtimeLifecycle.ts', { './supabase': bootstrap });
+  // Reject invocation at the import boundary: production recovery intentionally
+  // catches setup errors, so a throwing barrier alone is not a harness failure.
+  const rootRealtime = new Proxy(rootRealtimeSource, { get(_target, name) {
+    throw new Error(`out-of-scope root realtime subscription: ${String(name)}`);
+  } });
   const deadlines = loadSource("_lib/entitlementAuthority.ts", {});
   const authority = loadSource("_lib/accountSessionAuthority.ts", {
     "./supabase": bootstrap, "./entitlementAuthority": deadlines,
@@ -81,6 +91,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
   const calls = loadSource("_lib/chillyChatCalls.ts", {
     "./chatActivity": loadSource("_lib/chatActivity.ts", {}),
     "./supabase": bootstrap, "./accountSessionAuthority": authority,
+    "./rootRealtimeLifecycle": rootRealtime,
     "./accountBoundSupabaseMutation": mutation,
     "./chillyChatCallDispatchSchema": loadSource("_lib/chillyChatCallDispatchSchema.ts", {}),
   });
@@ -94,6 +105,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
   const notificationActivity = loadSource("_lib/notificationActivity.ts", {
     "./accountSessionAuthority": authority,
     "./supabase": bootstrap,
+    "./rootRealtimeLifecycle": rootRealtime,
     // Inbox lifecycle subscriptions are outside this messaging/call fixture.
     // Load their actual module graph, and fail if this harness invokes them.
     "react-native": { AppState: unavailableModule("notification lifecycle") },

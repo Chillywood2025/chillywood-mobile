@@ -5,9 +5,21 @@ import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 const binding = (sessionGeneration = 'session-a', userId = 'account-a') => ({
   userId, accountId: userId, sessionGeneration, state: 'ACTIVE', restoreOnly: false,
 });
+const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 function harness() {
   let authority = binding();
   const lifecycle = new Set(), authorities = new Set(), channels = [];
+  const bootstrap = { getRealtimeDisconnectBarrier: () => null, supabase: {
+    channel(name) {
+      const channel = { name, handlers: [], removed: false,
+        on(kind, filter, callback) { channel.handlers.push({ kind, filter, callback }); return channel; },
+        subscribe(callback) { channel.status = callback; return channel; },
+      };
+      channels.push(channel); return channel;
+    },
+    async removeChannel(channel) { channel.removed = true; },
+  } };
+  const rootRealtime = loadStubbed('_lib/rootRealtimeLifecycle.ts', { './supabase': bootstrap });
   const api = loadStubbed('_lib/notificationActivity.ts', {
     'react-native': { AppState: { currentState: 'active', addEventListener(_name, callback) {
       lifecycle.add(callback); return { remove: () => lifecycle.delete(callback) };
@@ -16,16 +28,8 @@ function harness() {
       getCurrentAccountSessionAuthoritySnapshot: () => authority,
       subscribeToAccountSessionAuthority(callback) { authorities.add(callback); return () => authorities.delete(callback); },
     },
-    './supabase': { supabase: {
-      channel(name) {
-        const channel = { name, handlers: [], removed: false,
-          on(kind, filter, callback) { channel.handlers.push({ kind, filter, callback }); return channel; },
-          subscribe(callback) { channel.status = callback; return channel; },
-        };
-        channels.push(channel); return channel;
-      },
-      async removeChannel(channel) { channel.removed = true; },
-    } },
+    './supabase': bootstrap,
+    './rootRealtimeLifecycle': rootRealtime,
   });
   return { api, channels, lifecycle, authorities, get authority() { return authority; },
     app(state) { lifecycle.forEach(callback => callback(state)); },
@@ -57,14 +61,16 @@ test('notification consumers refcount one recipient-filtered RLS transport', () 
   listen();
 });
 
-test('foreground reconnect uses unique channels and fences retired callbacks', () => {
+test('foreground reconnect uses unique channels and fences retired callbacks', async () => {
   const h = harness(); let hints = 0;
   const owner = h.api.getNotificationActivityOwnerKey(h.authority);
   const listen = h.api.subscribeToNotificationActivity(owner, () => hints++);
   const stop = h.api.subscribeToNotificationActivityChanges(h.authority);
   h.app('background'); assert.equal(h.channels[0].removed, true);
   h.row(0); h.channels[0].status('SUBSCRIBED'); assert.equal(hints, 0);
-  h.app('active'); h.app('active'); assert.equal(h.channels.length, 2);
+  h.app('active'); h.app('active');
+  assert.equal(h.channels.length, 1, 'replacement waits for owned retirement');
+  await settle(); assert.equal(h.channels.length, 2);
   assert.notEqual(h.channels[0].name, h.channels[1].name);
   h.row(0); h.channels[0].status('SUBSCRIBED'); assert.equal(hints, 0);
   h.channels[1].status('SUBSCRIBED'); assert.equal(hints, 1);
@@ -73,17 +79,20 @@ test('foreground reconnect uses unique channels and fences retired callbacks', (
   h.row(1); h.channels[1].status('SUBSCRIBED'); assert.equal(hints, 1);
   h.app('background'); h.app('active'); assert.equal(h.channels.length, 2);
   const replacement = h.api.subscribeToNotificationActivityChanges(h.authority);
+  await settle();
   assert.equal(h.channels.length, 3);
   stop(); replacement(); listen();
 });
 
-test('restored exact authority does not reuse a retired transport with outstanding holders', () => {
+test('restored exact authority does not reuse a retired transport with outstanding holders', async () => {
   const h = harness();
   const first = h.api.subscribeToNotificationActivityChanges(h.authority);
   const second = h.api.subscribeToNotificationActivityChanges(h.authority);
   h.replace(null); assert.equal(h.channels[0].removed, true);
   h.replace(binding());
   const replacement = h.api.subscribeToNotificationActivityChanges(h.authority);
+  assert.equal(h.channels.length, 1, 'restored authority cannot bypass pending removal');
+  await settle();
   assert.equal(h.channels.length, 2, 'A to null to A starts a new live channel before old refs settle');
   first(); second();
   assert.equal(h.channels[1].removed, false, 'retired cleanup cannot dispose replacement transport');

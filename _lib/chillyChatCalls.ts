@@ -8,11 +8,13 @@ import {
 } from "./chillyChatCallDispatchSchema";
 
 import { supabase } from "./supabase";
+import { retireRootRealtimeChannel, startAfterRootRealtimeRetirement } from "./rootRealtimeLifecycle";
 import { compareChatActivityTimestamps } from "./chatActivity";
 import {
   getCurrentAccountSessionAuthoritySnapshot,
   readCurrentAccountSessionAuthority,
   sameAccountSessionAuthority,
+  subscribeToAccountSessionAuthority,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
 import {
@@ -557,28 +559,42 @@ export function subscribeToIncomingChillyChatCallInvites(
   onChange: () => void,
 ) {
   const normalizedCalleeUserId = toText(calleeUserId);
-  if (!normalizedCalleeUserId) return () => {};
-
-  let channel: RealtimeChannel | null = supabase
-    .channel(`chat-call-invites-callee-${normalizedCalleeUserId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: CHAT_CALL_INVITES_TABLE,
-        filter: `callee_user_id=eq.${normalizedCalleeUserId}`,
-      },
-      () => onChange(),
-    )
-    .subscribe();
-
-  return () => {
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!normalizedCalleeUserId || !authority || authority.restoreOnly
+    || authority.userId !== normalizedCalleeUserId || authority.accountId !== normalizedCalleeUserId) return () => {};
+  let active = true;
+  let channel: RealtimeChannel | null = null;
+  let cancelConnection: (() => void) | null = null;
+  let stopAuthority = () => {};
+  const current = () => active && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+  const dispose = () => {
+    if (!active) return;
+    active = false;
+    cancelConnection?.();
+    stopAuthority();
     if (channel) {
-      supabase.removeChannel(channel);
+      void retireRootRealtimeChannel(channel);
       channel = null;
     }
   };
+  stopAuthority = subscribeToAccountSessionAuthority(() => { if (!current()) dispose(); });
+  // Remains subscribed in background as before. A root/account replacement,
+  // unlike an ordinary foreground cycle, must wait for its old socket to close.
+  cancelConnection = startAfterRootRealtimeRetirement(current, () => {
+    try {
+      channel = supabase.channel(`chat-call-invites-callee-${normalizedCalleeUserId}`);
+      channel.on("postgres_changes", {
+        event: "*", schema: "public", table: CHAT_CALL_INVITES_TABLE,
+        filter: `callee_user_id=eq.${normalizedCalleeUserId}`,
+      }, () => { if (current()) onChange(); })
+        .subscribe();
+    } catch (error) {
+      if (channel) void retireRootRealtimeChannel(channel);
+      channel = null;
+      throw error;
+    }
+  });
+  return dispose;
 }
 
 export function subscribeToChillyChatCallInvite(

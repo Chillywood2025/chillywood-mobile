@@ -5,6 +5,7 @@ import {
 } from "./accountSessionAuthority";
 import { AppState } from "react-native";
 import { supabase } from "./supabase";
+import { retireRootRealtimeChannel, startAfterRootRealtimeRetirement } from "./rootRealtimeLifecycle";
 
 export type NotificationActivityReason = "hint" | "confirmed";
 const listeners = new Set<{ ownerKey: string; listener: (reason: NotificationActivityReason) => void }>();
@@ -48,14 +49,17 @@ export function subscribeToNotificationActivityChanges(authority?: AccountSessio
     let generation = 0;
     let foreground = AppState.currentState === "active";
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelConnection: (() => void) | null = null;
     const detach = () => {
       generation += 1;
+      cancelConnection?.();
+      cancelConnection = null;
       const previous = channel;
       channel = null;
-      if (previous) void supabase.removeChannel(previous).catch(() => {});
+      if (previous) void retireRootRealtimeChannel(previous);
     };
     const connect = () => {
-      if (!active || !foreground || channel || ownerKey !== getCurrentNotificationActivityOwnerKey()) return;
+      if (!active || !foreground || channel || cancelConnection || ownerKey !== getCurrentNotificationActivityOwnerKey()) return;
       const connectedGeneration = ++generation;
       const ownsSubscription = () => active && foreground && generation === connectedGeneration
         && ownerKey === getCurrentNotificationActivityOwnerKey();
@@ -64,12 +68,20 @@ export function subscribeToNotificationActivityChanges(authority?: AccountSessio
       };
       // Existing RLS remains the authority. Never request DELETE: its CDC row
       // does not carry the same recipient authorization as INSERT/UPDATE.
-      channel = supabase.channel(`notification-activity-${++channelSequence}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, onChange)
-        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, onChange)
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED" && ownsSubscription()) invalidateNotificationActivity(ownerKey);
-        });
+      cancelConnection = startAfterRootRealtimeRetirement(ownsSubscription, () => {
+        try {
+          channel = supabase.channel(`notification-activity-${++channelSequence}`);
+          channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, onChange)
+            .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, onChange)
+            .subscribe((status) => {
+              if (status === "SUBSCRIBED" && ownsSubscription()) invalidateNotificationActivity(ownerKey);
+            });
+        } catch (error) {
+          if (channel) void retireRootRealtimeChannel(channel);
+          channel = null;
+          throw error;
+        }
+      });
     };
     const lifecycle = AppState.addEventListener("change", state => {
       foreground = state === "active";
