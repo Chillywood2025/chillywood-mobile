@@ -73,6 +73,8 @@ export const appCompletionFiles = Object.freeze([
 ].sort());
 
 export const appCompletionAddedFunctionIdentities = new Map([
+  ['private.sandbox_cashout_recovery_admission/0','private.sandbox_cashout_recovery_admission()'],
+  ['private.sandbox_cashout_recovery_current/2','private.sandbox_cashout_recovery_current(uuid,text)'],
   ['private.sandbox_cashout_subject_current/2','private.sandbox_cashout_subject_current(uuid,uuid)'],
   ['private.sandbox_cashout_current_user/0','private.sandbox_cashout_current_user()'],
   ['private.lock_sandbox_cashout_creator/1','private.lock_sandbox_cashout_creator(uuid)'],

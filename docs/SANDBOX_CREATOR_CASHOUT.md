@@ -41,10 +41,34 @@ sources. This is not actual-fee reconciliation or production tax evidence.
 
 Refunds, disputes and source identity/economic changes hold further dispatch,
 including after a prior return and re-reservation. Unknown dispatch stays GET-only.
-An expired or revoked test qualification blocks new provider writes, including
-return dispatch; existing-object GET reconciliation remains possible. No implicit
-renewal or generic retry grants new dispatch authority. Recovery requiring a fresh
-qualification must be reviewed independently rather than editing an old receipt.
+An expired or revoked test qualification blocks new provider writes; existing-object
+GET reconciliation remains possible. A separate, independently reviewed recovery-only
+authority can permit one still-unclaimed return, never new funding or bank payout.
+No implicit renewal or generic retry grants new dispatch authority.
+
+### Recovery-only operator handoff
+
+Only the authorized database owner, through the reviewed production-change tool,
+can append `private.sandbox_cashout_recovery_authorities`. API users and service
+roles have no write grant; no authority is seeded by this migration. The operator
+must first retain sanitized authenticated test-provider read evidence: exact
+platform and connected-account IDs, original transfer/amount/USD/test mode,
+remaining unreversed principal, and the confirmed bank-return proof for a failed
+payout (or durable cancellation before any bank dispatch). No real account or
+real-money evidence is acceptable. Qualification is not an instruction to perform
+a provider mutation.
+
+The reviewed packet binds the existing execution, exact original transfer and
+`reversal` or `funding_return` stage; it includes an evidence reference/hash,
+verification within five minutes and expiry no later than one hour afterwards.
+It must establish zero prior returns and exactly the original principal recoverable.
+Partial or ambiguous prior returns stay held for investigation, not guessed refunds.
+The database rejects wrong bindings, excess amounts, stale evidence and any unknown
+or already-claimed stage. The actual test engine re-reads the original transfer
+before reversal and rejects partial/prior reversal. The claim records the exact
+recovery authority used and keeps original economics/policy unchanged. Append-only
+revocation shares the dispatch locks. An expired/revoked recovery authority cannot
+authorize a write, and an unknown attempt remains GET-only forever.
 
 Local full-schema tests exercise real Apple/Google subscription processors and
 the real Stripe merchandise lifecycle processor with synthetic provider inputs.

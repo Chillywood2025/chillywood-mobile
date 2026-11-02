@@ -34,3 +34,20 @@ test('same production engine performs isolated test transfer then test payout wi
  assert.notEqual(writes[0].options.headers['Idempotency-Key'],writes[1].options.headers['Idempotency-Key']);
  const count=calls.length;await assert.rejects(run(c.requestId,store,'rk_live_fixture',transport),/credential_mode_mismatch/);assert.equal(calls.length,count);
 });
+
+test('test return recovery rechecks remaining original transfer before its sole reversal claim',async()=>{
+ const run=runtime.exports.runCreatorCashout;
+ for(const reversed of [0,1,10000]){
+  let claims=0,writes=0;
+  const context={...c,phase:'return_confirmed',transferId:'tr_recovery'};
+  const store={read:async()=>context,claim:async()=>{claims++;return {claimed:true,token:'a0000000-0000-4000-8000-000000000003'};},observe:async()=>({status:'returned'})};
+  const transport=async(url,options)=>{
+   if(url.endsWith('/v1/account'))return Response.json({object:'account',id:c.platformAccountId});
+   if(options.method==='GET')return Response.json({object:'transfer',id:'tr_recovery',livemode:false,amount:10000,currency:'usd',destination:c.accountId,metadata,amount_reversed:reversed,reversed:reversed===10000});
+   writes++;assert.equal(options.body.get('amount'),'10000');assert.equal(claims,1);
+   return Response.json({object:'transfer_reversal',id:'trr_recovery',transfer:'tr_recovery',amount:10000,currency:'usd',metadata});
+  };
+  if(reversed===0){assert.equal((await run(c.requestId,store,'rk_test_fixture',transport)).status,'returned');assert.equal(writes,1);}
+  else {await assert.rejects(run(c.requestId,store,'rk_test_fixture',transport),/test_return_remaining_amount_unqualified/);assert.equal(claims,0);assert.equal(writes,0);}
+ }
+});

@@ -215,6 +215,13 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
   if (!["prepared", "funded", "return_confirmed"].includes(c.phase)) return { status: c.phase };
   if (reconcileOnly) return { status: c.phase };
   const stage = c.phase === "prepared" ? "funding" : c.phase === "funded" ? "payout" : "reversal";
+  // Recovery-only sandbox authority never authorizes more than the exact
+  // unreversed original test transfer. Partial/operator returns stay held.
+  if (stage === "reversal" && c.environment === "test") {
+    if (!c.transferId) fail("funding_reference_required");
+    const currentTransfer = normalizeCashoutTransfer(await call(`/v1/transfers/${c.transferId}`, null), c);
+    if (currentTransfer.reversedMinor !== 0 || currentTransfer.fullyReversed) fail("test_return_remaining_amount_unqualified");
+  }
   // Recheck mutable provider capabilities immediately before every new write.
   // Returning exact previously funded principal does not depend on a still-
   // present external bank destination or the creator keeping a login active.

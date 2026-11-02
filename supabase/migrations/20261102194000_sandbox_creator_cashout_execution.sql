@@ -47,6 +47,27 @@ create table private.sandbox_cashout_executions (
  created_at timestamptz not null default clock_timestamp(),
  unique(creator_id,operation_id), check(bank_minor+app_fee_minor+expected_provider_fee_minor=gross_minor)
 );
+-- Fresh independent evidence may authorize ONLY a still-unclaimed return of
+-- an existing test transfer. Original payout authority/economics never renew.
+create table private.sandbox_cashout_recovery_authorities (
+ id uuid primary key default gen_random_uuid(), execution_id uuid not null references private.sandbox_cashout_executions(id),
+ stage text not null check(stage in ('reversal','funding_return')),
+ platform_account_id text not null, account_id text not null, transfer_id text not null,
+ environment text not null check(environment='test'), currency text not null check(currency='usd'),
+ original_transfer_minor integer not null check(original_transfer_minor>0),
+ prior_returned_minor integer not null check(prior_returned_minor>=0),
+ recoverable_minor integer not null check(recoverable_minor>0),
+ provider_evidence_reference text not null check(length(btrim(provider_evidence_reference)) between 1 and 500),
+ provider_evidence_sha256 text not null check(provider_evidence_sha256 ~ '^[a-f0-9]{64}$'),
+ verified_at timestamptz not null, expires_at timestamptz not null,
+ check(recoverable_minor::bigint+prior_returned_minor<=original_transfer_minor::bigint),
+ check(expires_at>verified_at and expires_at<=verified_at+interval '1 hour')
+);
+alter table private.sandbox_cashout_executions add column recovery_authority_id uuid references private.sandbox_cashout_recovery_authorities(id);
+create table private.sandbox_cashout_recovery_revocations (
+ authority_id uuid primary key references private.sandbox_cashout_recovery_authorities(id),
+ revoked_at timestamptz not null default clock_timestamp()
+);
 create table private.sandbox_cashout_allocations (
  execution_id uuid not null references private.sandbox_cashout_executions(id),
  money_ledger_id uuid not null references public.money_access_ledger_events(id),
@@ -119,6 +140,44 @@ begin
 end; $$;
 create trigger sandbox_cashout_revoke_admission before insert on private.sandbox_cashout_revocations
  for each row execute function private.sandbox_cashout_revoke_admission();
+create function private.sandbox_cashout_recovery_admission() returns trigger
+language plpgsql set search_path='' as $$
+declare e private.sandbox_cashout_executions; q private.sandbox_cashout_qualifications; target uuid;
+begin
+ if tg_table_name='sandbox_cashout_recovery_revocations' then
+  select execution_id into target from private.sandbox_cashout_recovery_authorities where id=new.authority_id;
+ else target:=new.execution_id; end if;
+ select * into e from private.sandbox_cashout_executions where id=target;
+ if e.id is null then raise exception 'sandbox_recovery_execution_required'; end if;
+ perform private.lock_sandbox_cashout_creator(e.creator_id);
+ select * into e from private.sandbox_cashout_executions where id=target for update;
+ if tg_table_name='sandbox_cashout_recovery_revocations' then return new; end if;
+ select * into q from private.sandbox_cashout_qualifications where id=e.qualification_id;
+ if not ((new.stage='reversal' and e.phase='return_confirmed' and e.returned_minor=e.bank_minor)
+  or (new.stage='funding_return' and e.phase='funding_return_pending' and e.payout_id is null))
+  or e.transfer_id is null or new.transfer_id is distinct from e.transfer_id
+  or new.account_id is distinct from q.account_id or new.platform_account_id is distinct from q.platform_account_id
+  or new.original_transfer_minor<>e.bank_minor or new.prior_returned_minor<>0 or new.recoverable_minor<>e.bank_minor
+  or new.verified_at>clock_timestamp() or new.verified_at<clock_timestamp()-interval '5 minutes' or new.expires_at<=clock_timestamp()
+ then raise exception 'sandbox_recovery_binding_invalid'; end if;
+ return new;
+end; $$;
+create trigger sandbox_cashout_recovery_admission before insert on private.sandbox_cashout_recovery_authorities
+ for each row execute function private.sandbox_cashout_recovery_admission();
+create trigger sandbox_cashout_recovery_revoke_admission before insert on private.sandbox_cashout_recovery_revocations
+ for each row execute function private.sandbox_cashout_recovery_admission();
+create function private.sandbox_cashout_recovery_current(p_execution uuid,p_stage text) returns uuid
+language sql stable set search_path='' as $$
+ select a.id from private.sandbox_cashout_recovery_authorities a
+ join private.sandbox_cashout_executions e on e.id=a.execution_id
+ join private.sandbox_cashout_qualifications q on q.id=e.qualification_id
+ where e.id=p_execution and a.stage=p_stage and a.environment='test' and a.currency='usd'
+ and a.transfer_id=e.transfer_id and a.account_id=q.account_id and a.platform_account_id=q.platform_account_id
+ and a.original_transfer_minor=e.bank_minor and a.prior_returned_minor=0 and a.recoverable_minor=e.bank_minor
+ and a.verified_at<=clock_timestamp() and a.expires_at>clock_timestamp()
+ and not exists(select 1 from private.sandbox_cashout_recovery_revocations r where r.authority_id=a.id)
+ order by a.verified_at desc,a.id desc limit 1;
+$$;
 create function public.request_sandbox_creator_cashout(p_amount_minor integer,p_payout_type text,p_qualification_id uuid,p_operation_id uuid,
  p_expected_app_fee_minor integer,p_expected_provider_fee_minor integer,p_expected_bank_minor integer) returns jsonb
 language plpgsql security definer set search_path='' as $$
@@ -189,7 +248,7 @@ begin
 end; $$;
 create function public.claim_sandbox_creator_cashout_dispatch(p_request_id uuid,p_stage text) returns jsonb
 language plpgsql security definer set search_path='' as $$
-declare e private.sandbox_cashout_executions; q private.sandbox_cashout_qualifications; tok uuid:=gen_random_uuid();
+declare e private.sandbox_cashout_executions; q private.sandbox_cashout_qualifications; tok uuid:=gen_random_uuid(); recovery uuid;
 begin
  select * into e from private.sandbox_cashout_executions where id=p_request_id;
  if e.id is null then raise exception 'sandbox_cashout_not_found'; end if;
@@ -204,11 +263,15 @@ begin
   order by key for share;
  if not private.sandbox_cashout_enabled() then raise exception 'sandbox_payout_execution_disabled'; end if;
  select * into q from private.sandbox_cashout_qualifications where id=e.qualification_id;
- if q.verified_at>clock_timestamp() or q.expires_at<=clock_timestamp()
- or exists(select 1 from private.sandbox_cashout_revocations where qualification_id=q.id)
- or not exists(select 1 from public.creator_payout_accounts a where a.creator_user_id=e.creator_id::text
+ if not exists(select 1 from public.creator_payout_accounts a where a.creator_user_id=e.creator_id::text
   and a.provider='stripe_connect' and a.provider_environment='test' and a.provider_account_id=q.account_id)
  then raise exception 'sandbox_cashout_provider_qualification_required'; end if;
+ if q.verified_at>clock_timestamp() or q.expires_at<=clock_timestamp()
+ or exists(select 1 from private.sandbox_cashout_revocations where qualification_id=q.id) then
+  if p_stage not in ('reversal','funding_return') then raise exception 'sandbox_cashout_provider_qualification_required'; end if;
+  recovery:=private.sandbox_cashout_recovery_current(e.id,p_stage);
+  if recovery is null then raise exception 'sandbox_recovery_authority_required'; end if;
+ end if;
  if p_stage in ('funding','payout') then
   -- Freeze every current subject/cohort authority row until the durable claim
   -- commits. Revocation that committed first is re-read after these waits.
@@ -225,7 +288,8 @@ begin
   then raise exception 'sandbox_source_reconciliation_required'; end if;
  end if;
  update private.sandbox_cashout_executions set phase=case p_stage when 'funding' then 'funding_unknown' when 'payout' then 'payout_unknown'
- when 'funding_return' then 'funding_return_unknown' else 'reversal_unknown' end,dispatch_token=tok,dispatched_at=clock_timestamp() where id=e.id;
+ when 'funding_return' then 'funding_return_unknown' else 'reversal_unknown' end,dispatch_token=tok,dispatched_at=clock_timestamp(),
+ recovery_authority_id=coalesce(recovery,recovery_authority_id) where id=e.id;
  return jsonb_build_object('claimed',true,'token',tok);
 end; $$;
 create function public.cancel_undispatched_sandbox_creator_cashout(p_request_id uuid) returns jsonb
@@ -452,7 +516,18 @@ language sql stable set search_path='' as $$
  'settlementPolicyVersion',q.settlement_policy_version,'bankPaid',false,'providerTestPaid',e.phase='paid',
  'returnedToPlatform',e.phase='returned','canRetry',false,'canCancel',e.phase in ('prepared','funded'),
  'fundingReturnHeld',e.phase in ('funding_return_pending','funding_return_unknown'),
- 'sourceHeld',e.source_hold,'ownerAction',case when e.source_hold then 'sandbox_source_reconciliation_required' else null end)
+ 'sourceHeld',e.source_hold,
+ 'qualificationStatus',case when q.expires_at<=clock_timestamp() or exists(select 1 from private.sandbox_cashout_revocations where qualification_id=q.id) then 'expired_or_revoked' else 'current' end,
+ 'recoveryAuthorityRequired',e.phase in ('return_confirmed','funding_return_pending')
+  and (q.expires_at<=clock_timestamp() or exists(select 1 from private.sandbox_cashout_revocations where qualification_id=q.id))
+  and private.sandbox_cashout_recovery_current(e.id,case when e.phase='return_confirmed' then 'reversal' else 'funding_return' end) is null,
+ 'ownerAction',case when e.phase in ('return_confirmed','funding_return_pending')
+  and (q.expires_at<=clock_timestamp() or exists(select 1 from private.sandbox_cashout_revocations where qualification_id=q.id))
+  and private.sandbox_cashout_recovery_current(e.id,case when e.phase='return_confirmed' then 'reversal' else 'funding_return' end) is null
+  then 'sandbox_recovery_authority_required'
+  when e.source_hold then 'sandbox_source_reconciliation_required'
+  when e.phase in ('prepared','funded') and (q.expires_at<=clock_timestamp() or exists(select 1 from private.sandbox_cashout_revocations where qualification_id=q.id))
+  then 'sandbox_cashout_provider_qualification_required' else null end)
  from private.sandbox_cashout_executions e join private.sandbox_cashout_qualifications q on q.id=e.qualification_id where e.id=p_id;
 $$;
 create function public.get_my_sandbox_creator_cashout_execution(p_request_id uuid) returns jsonb
@@ -508,16 +583,16 @@ begin
 end; $$;
 
 do $$ declare t text; r record; begin
- foreach t in array array['sandbox_cashout_control','sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_executions','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting','sandbox_cashout_merch_allocations','sandbox_cashout_merch_simulated_returns'] loop
+ foreach t in array array['sandbox_cashout_control','sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_executions','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting','sandbox_cashout_merch_allocations','sandbox_cashout_merch_simulated_returns','sandbox_cashout_recovery_authorities','sandbox_cashout_recovery_revocations'] loop
   execute format('alter table private.%I enable row level security',t);
   execute format('alter table private.%I force row level security',t);
   execute format('revoke all on private.%I from public,anon,authenticated,service_role',t);
  end loop;
- foreach t in array array['sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting','sandbox_cashout_merch_allocations','sandbox_cashout_merch_simulated_returns'] loop
+ foreach t in array array['sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting','sandbox_cashout_merch_allocations','sandbox_cashout_merch_simulated_returns','sandbox_cashout_recovery_authorities','sandbox_cashout_recovery_revocations'] loop
   execute format('create trigger %I before update or delete on private.%I for each row execute function private.guard_event_ticket_terms_immutable()',t||'_immutable',t);
  end loop;
  for r in select p.oid::regprocedure as identity,n.nspname,p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
- where (n.nspname='private' and p.proname in ('sandbox_cashout_subject_current','sandbox_cashout_current_user','sandbox_cashout_enabled','sandbox_cashout_source','sandbox_cashout_merch_source','sandbox_cashout_summary','lock_sandbox_cashout_creator','sandbox_cashout_revoke_admission','hold_sandbox_cashout_changed_source','hold_sandbox_cashout_changed_merch'))
+ where (n.nspname='private' and p.proname in ('sandbox_cashout_subject_current','sandbox_cashout_current_user','sandbox_cashout_enabled','sandbox_cashout_source','sandbox_cashout_merch_source','sandbox_cashout_summary','lock_sandbox_cashout_creator','sandbox_cashout_revoke_admission','hold_sandbox_cashout_changed_source','hold_sandbox_cashout_changed_merch','sandbox_cashout_recovery_admission','sandbox_cashout_recovery_current'))
  or (n.nspname='public' and p.proname in ('get_my_sandbox_creator_cashout_execution','list_my_sandbox_creator_cashout_executions','preview_sandbox_creator_cashout','request_sandbox_creator_cashout','cancel_undispatched_sandbox_creator_cashout','get_sandbox_creator_cashout_execution_context','claim_sandbox_creator_cashout_dispatch','record_sandbox_creator_cashout_observation')) loop
   execute format('revoke all on function %s from public,anon,authenticated,service_role',r.identity);
   if r.nspname='public' then

@@ -118,6 +118,39 @@ test('sandbox cashout uses provider-backed test sources without opening live mon
   const canceledFunded=await user('select public.cancel_undispatched_sandbox_creator_cashout($1)',[requestAfterCancel.requestId]);
   assert.equal(canceledFunded.status,'funding_return_pending');assert.equal(canceledFunded.bankPaid,false);
   assert.equal((await claim2('payout')).claimed,false,'funded cancellation forever fences bank dispatch');
+  // Recovery is separately qualified, not an implicit renewal of payout
+  // authority. All mutations here are confined to this disposable transaction.
+  await db.exec('begin');
+  await db.query('insert into private.sandbox_cashout_revocations(qualification_id) values($1)',[q2]);
+  const heldRecovery=await user('select public.get_my_sandbox_creator_cashout_execution($1)',[requestAfterCancel.requestId]);
+  assert.equal(heldRecovery.ownerAction,'sandbox_recovery_authority_required');assert.equal(heldRecovery.recoveryAuthorityRequired,true);
+  const recoveryInsert=(patch={})=>scalar(`insert into private.sandbox_cashout_recovery_authorities(execution_id,stage,platform_account_id,account_id,transfer_id,environment,currency,
+   original_transfer_minor,prior_returned_minor,recoverable_minor,provider_evidence_reference,provider_evidence_sha256,verified_at,expires_at)
+   values($1,$2,$3,$4,$5,$6,'usd',8991,$7,$8,'SYNTHETIC independently read test transfer',repeat('a',64),clock_timestamp(),clock_timestamp()+$9::interval) returning id`,
+   [requestAfterCancel.requestId,patch.stage??'funding_return',patch.platform??context.platformAccountId,patch.account??context.accountId,
+    patch.transfer??'tr_sandboxFunding2',patch.environment??'test',patch.prior??0,patch.amount??8991,patch.ttl??'30 minutes']);
+  for(const role of ['anon','authenticated','service_role'])for(const table of ['sandbox_cashout_recovery_authorities','sandbox_cashout_recovery_revocations'])
+   assert.equal(await scalar('select has_table_privilege($1,$2,\'INSERT\')',[role,`private.${table}`]),false,'recovery grants require separately authorized database-owner operation');
+  const rejected=async(action,pattern)=>{await db.exec('savepoint rejection');await assert.rejects(action,pattern);await db.exec('rollback to savepoint rejection');};
+  const recoveryClaim=()=>scalar("select public.claim_sandbox_creator_cashout_dispatch($1,'funding_return')",[requestAfterCancel.requestId]);
+  await rejected(recoveryClaim,/sandbox_recovery_authority_required/);
+  for(const patch of [{account:'acct_wrong'},{platform:'acct_wrong'},{transfer:'tr_wrong'},{stage:'funding'},{prior:1},{amount:8992},{ttl:'-1 second'}])
+   await rejected(()=>recoveryInsert(patch),/sandbox_recovery_binding_invalid/);
+  await rejected(()=>recoveryInsert({environment:'live'}),/check constraint/);
+  await db.exec('savepoint expiry');await recoveryInsert({ttl:'1 second'});await new Promise(resolve=>setTimeout(resolve,1100));
+  await assert.rejects(recoveryClaim,/sandbox_recovery_authority_required/);await db.exec('rollback to savepoint expiry');
+  const recovery=await recoveryInsert();
+  await rejected(()=>db.query("update private.sandbox_cashout_recovery_authorities set expires_at=expires_at+interval '1 minute' where id=$1",[recovery]),/immutable/);
+  await db.exec('savepoint recovery_revoked');await db.query('insert into private.sandbox_cashout_recovery_revocations(authority_id) values($1)',[recovery]);
+  await assert.rejects(recoveryClaim,/sandbox_recovery_authority_required/);await db.exec('rollback to savepoint recovery_revoked');
+  assert.equal((await claim2('funding_return')).claimed,true);
+  assert.equal(await scalar('select recovery_authority_id from private.sandbox_cashout_executions where id=$1',[requestAfterCancel.requestId]),recovery);
+  assert.equal((await claim2('funding_return')).claimed,false,'recovery cannot reset or repeat an unknown claim');
+  assert.equal((await claim2('payout')).claimed,false,'recovery cannot dispatch a canceled payout');
+  await rejected(()=>recoveryInsert(),/sandbox_recovery_binding_invalid/);
+  assert.equal(await scalar('select qualification_id from private.sandbox_cashout_executions where id=$1',[requestAfterCancel.requestId]),q2,'original qualification/policy remains bound');
+  await db.exec('rollback');
+  assert.equal((await rpc('select public.get_sandbox_creator_cashout_execution_context($1)',[requestAfterCancel.requestId])).phase,'funding_return_pending');
   const return2=await claim2('funding_return');assert.equal(return2.claimed,true);assert.equal((await claim2('funding_return')).claimed,false);
   const fundingReturn={kind:'funding_return',objectId:'trr_sandboxFundingReturn2',transferId:'tr_sandboxFunding2',amountMinor:8991,
    accountId:context.accountId,platformAccountId:context.platformAccountId,environment:'test',
