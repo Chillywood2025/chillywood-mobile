@@ -14,6 +14,7 @@ import { createClient } from "@supabase/supabase-js";
 import { normalizeCommunicationRoomIdentifier } from "../_lib/communicationRoomIdentifier.mjs";
 import { buildLegacyPairedBrowserBundle } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
 import { waitForLegacyBrowserReceivedSilence } from "../tests/assurance/helpers/legacy-browser-silence-wait.mjs";
+import { collectLegacyFailureTransportDiagnostics } from "../tests/assurance/helpers/legacy-failure-transport-diagnostics.mjs";
 
 const secrets = new Set();
 const redact = (input) => {
@@ -134,7 +135,9 @@ async function main() {
       if (predicate(state)) return state;
       await pause(100);
     }
-    state.transportDiagnostics = await page.evaluate(() => window.__pairedCall.transportDiagnostics());
+    state.transportDiagnostics = await collectLegacyFailureTransportDiagnostics(
+      () => page.evaluate(() => window.__pairedCall.transportDiagnostics()),
+    );
     // Separate records preserve the complete chronology without a single
     // oversized error line burying the current endpoint evidence. Synthetic
     // fixture identities only; no SDP, candidate strings, or raw wire frames.

@@ -1,6 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { summarizeLegacyBrowserFailure, summarizeLegacyIceConfiguration } from "./assurance/helpers/legacy-paired-browser-harness.mjs";
+import { collectLegacyFailureTransportDiagnostics } from "./assurance/helpers/legacy-failure-transport-diagnostics.mjs";
+
+test("failure-only transport collection returns native evidence without modification", async () => {
+  const evidence = [{ peerId: 4, localCandidates: 2, remoteCandidates: 0 }];
+  assert.equal(await collectLegacyFailureTransportDiagnostics(() => evidence), evidence);
+});
+
+test("closed page and synchronous diagnostic failures use fixed sanitized fallbacks", async () => {
+  for (const collect of [() => { throw new Error("private URL and credential"); },
+    () => Promise.reject(new Error("private browser error"))]) {
+    assert.deepEqual(await collectLegacyFailureTransportDiagnostics(collect), {
+      error: "transport diagnostics unavailable",
+    });
+  }
+});
+
+test("stuck getStats is bounded and cannot replace the original failure label", async () => {
+  const label = "fresh accepted room must receive media";
+  const diagnostics = await collectLegacyFailureTransportDiagnostics(() => new Promise(() => {}), 5);
+  assert.deepEqual(diagnostics, { error: "transport diagnostics deadline exceeded" });
+  assert.throws(() => { throw new Error(`${label}: ${JSON.stringify(diagnostics)}`); },
+    /^Error: fresh accepted room must receive media:/);
+});
 
 test("ICE diagnostics retain policy and scheme counts without server URLs or credentials", () => {
   const configuration = { iceTransportPolicy: "relay", iceServers: [
@@ -17,6 +40,7 @@ test("ICE diagnostics retain policy and scheme counts without server URLs or cre
   });
   assert.equal(JSON.stringify(summarizeLegacyIceConfiguration(configuration)).includes("private"), false);
   assert.equal(JSON.stringify(summarizeLegacyIceConfiguration(configuration)).includes("secret"), false);
+  assert.equal(summarizeLegacyIceConfiguration({ iceServers: [null] }).schemes.other, 1);
 });
 
 test("failure diagnostics put current peer and received-media proof before bounded historical events", () => {

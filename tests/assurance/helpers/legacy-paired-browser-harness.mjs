@@ -15,7 +15,7 @@ export function summarizeLegacyIceConfiguration(configuration = {}) {
   const servers = Array.isArray(configuration.iceServers) ? configuration.iceServers : [];
   const schemes = { stun: 0, stuns: 0, turn: 0, turns: 0, other: 0 };
   for (const server of servers) {
-    for (const url of Array.isArray(server.urls) ? server.urls : [server.urls]) {
+    for (const url of Array.isArray(server?.urls) ? server.urls : [server?.urls]) {
       const scheme = typeof url === "string" ? url.split(":", 1)[0].toLowerCase() : "other";
       schemes[["stun", "stuns", "turn", "turns"].includes(scheme) ? scheme : "other"] += 1;
     }
