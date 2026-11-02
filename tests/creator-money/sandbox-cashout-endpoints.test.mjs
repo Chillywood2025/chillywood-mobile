@@ -60,3 +60,11 @@ test('isolated signed test webhook only reconciles and rejects live/account/exec
  const live=endpoint('sandbox-creator-cashout-webhook',{context:{environment:'live',executionId:'execution',accountId:'acct_creator'},run});
  assert.equal((await live.handler(request(event))).status,503);assert.equal(runs,1);
 });
+
+test('both sandbox Edge entry points are included in required Deno typechecking',()=>{
+ const workflow=fs.readFileSync('.github/workflows/required-validation.yml','utf8');
+ const line=workflow.split('\n').find(value=>value.includes('deno check')&&value.includes('creator-cashout-driver/index.ts'));
+ assert.ok(line,'existing required cashout Deno gate must remain');
+ for(const name of ['sandbox-creator-cashout','sandbox-creator-cashout-webhook'])
+  assert.ok(line.includes(`supabase/functions/${name}/index.ts`),`${name} must use actual Deno typecheck`);
+});
