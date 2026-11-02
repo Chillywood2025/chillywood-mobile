@@ -108,6 +108,7 @@ const recordedV17Source = {
 };
 // Retained V18 source cohort before Gallery and Expo picker native changes.
 // This is a Git-input identity, not a new signed-build or installation receipt.
+const heldPickerSource = "4f2d14635945c45650ea36b68313b90fd2fa1b73";
 const recordedV18Source = {
   sha: "daa63e320bcb6e4e5ed059d793af02a5af93d809",
   tree: "ead50a10f9739a5f9964c260011d63f9c280c2dc",
@@ -321,8 +322,8 @@ test("Undici tooling repair uses prospective v17 without rewriting the v16 sourc
   assert.notEqual(currentReason, recordedReason);
 });
 
-test("external-link native inputs use prospective v18 and preserve the v17 source cohort", () => {
-  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+test("recorded external-link v18 preserves the v17 source cohort", () => {
+  const generation = JSON.parse(git(repo, "show", `${recordedV18Source.sha}:config/release/internal-native-generation.json`));
   const recorded = JSON.parse(git(repo, "show", `${recordedV17Source.sha}:config/release/internal-native-generation.json`));
   assert.equal(generation.generation, "internal-native-v18");
   assert.equal(generation.supersedes.generation, recorded.generation);
@@ -347,11 +348,33 @@ test("retained v18 cohort digests remain bound to their historical native inputs
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
   const recorded = JSON.parse(git(repo, "show", `${recordedV18Source.sha}:config/release/internal-native-generation.json`));
   assert.equal(recorded.generation, "internal-native-v18");
-  assert.deepEqual(generation, recorded, "held picker source must not relabel V18 or advance release authority");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  for (const platform of ["android", "ios"]) assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
   for (const platform of ["android", "ios"]) {
     assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
       repositoryRoot: repo, platform, sourceSha: recordedV18Source.sha, sourceTree: recordedV18Source.tree,
     }).digest);
+  }
+});
+
+test("prospective v19 binds complete picker inputs and preserves all v18 delivery restrictions", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV18Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v19");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+  assert.deepEqual(generation.channels, recorded.channels);
+  const { reason: currentReason, ...currentPolicy } = generation.policy;
+  const { reason: oldReason, ...oldPolicy } = recorded.policy;
+  assert.deepEqual(currentPolicy, oldPolicy, "new cohort does not expand release authority");
+  assert.notEqual(currentReason, oldReason);
+  for (const platform of ["android", "ios"]) {
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v19`);
+    assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
+    assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    const snapshot = nativeSourceSnapshot({ repositoryRoot: repo, platform, sourceSha: git(repo, "rev-parse", "HEAD") });
+    assert.equal(generation.nativeCompatibility[`${platform}Digest`], snapshot.digest);
+    assert.notEqual(snapshot.digest, recorded.nativeCompatibility[`${platform}Digest`]);
   }
 });
 
@@ -525,7 +548,7 @@ function copyCanonicalNativeInputs(root, sourceSha) {
 
 test("held picker candidate preserves complete canonical inputs without rewriting the v18 cohort", (t) => {
   const { root } = fixture(t);
-  const snapshots = copyCanonicalNativeInputs(root, git(repo, "rev-parse", "HEAD"));
+  const snapshots = copyCanonicalNativeInputs(root, heldPickerSource);
   const generation = JSON.parse(fs.readFileSync(path.join(root, "config/release/internal-native-generation.json"), "utf8"));
   const candidate = commit(root);
   for (const platform of ["android", "ios"]) {
@@ -546,7 +569,7 @@ for (const platform of ["android", "ios"]) {
     const oldBinary = commit(root);
     assert.equal(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: oldBinary.sha }).digest,
       retained[platform].digest, "negative control starts from the exact canonical V18 inputs");
-    const current = copyCanonicalNativeInputs(root, git(repo, "rev-parse", "HEAD"));
+    const current = copyCanonicalNativeInputs(root, heldPickerSource);
     const candidate = commit(root);
     assert.equal(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: candidate.sha }).digest,
       current[platform].digest, "test the actual held candidate, not an arbitrary native mutation");
@@ -559,6 +582,16 @@ for (const platform of ["android", "ios"]) {
     assert.match(hypotheticalMatchingReceipt.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
     assert.doesNotMatch(hypotheticalMatchingReceipt.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
     assert.deepEqual(hypotheticalMatchingReceipt.calls, [], "even matching native source cannot repurpose V18");
+    copyCanonicalNativeInputs(root, git(repo, "rev-parse", "HEAD"));
+    const successor = commit(root);
+    const oldBinaryOnSuccessor = publish(platform, oldBinary);
+    assert.notEqual(oldBinaryOnSuccessor.status, 0);
+    assert.match(oldBinaryOnSuccessor.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinaryOnSuccessor.calls, [], "new runtime does not make an old binary compatible");
+    const matchingSuccessor = publish(platform, successor);
+    assert.equal(matchingSuccessor.status, 0, matchingSuccessor.stderr);
+    assert.ok(matchingSuccessor.calls.some((call) => call[0] === "eas-cli" && call[1] === "update"),
+      "only a matching successor reaches the isolated synthetic publisher, never a real provider");
   });
 }
 

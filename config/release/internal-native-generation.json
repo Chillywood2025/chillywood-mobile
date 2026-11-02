@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v18",
+  "generation": "internal-native-v19",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v18",
-    "ios": "1.0.0-ios-production-v18"
+    "android": "1.0.0-android-production-v19",
+    "ios": "1.0.0-ios-production-v19"
   },
   "supersedes": {
-    "generation": "internal-native-v17",
-    "androidRuntimeVersion": "1.0.0-android-production-v17",
-    "iosRuntimeVersion": "1.0.0-ios-production-v17",
-    "androidCompatibilityDigest": "28e24d43df2d6c787874d3e7e4854017f74bab5a0311504f548cedebf982b623",
-    "iosCompatibilityDigest": "bc52288a220e86ed22d7ce0b4f30a99e68969b1f8545450fab6968c7fe8658cf"
+    "generation": "internal-native-v18",
+    "androidRuntimeVersion": "1.0.0-android-production-v18",
+    "iosRuntimeVersion": "1.0.0-ios-production-v18",
+    "androidCompatibilityDigest": "aa0a83a683ae83cea39d964ea43688faf0d20a725dd5f18fb7b94ded1eea4243",
+    "iosCompatibilityDigest": "7b709e9e43fc8bface36ae2009e5b2e635bf7d522cbc1e909fffbe2153ef05c6"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "aa0a83a683ae83cea39d964ea43688faf0d20a725dd5f18fb7b94ded1eea4243",
-    "iosDigest": "7b709e9e43fc8bface36ae2009e5b2e635bf7d522cbc1e909fffbe2153ef05c6"
+    "androidDigest": "807f1ba7007f93f6c05efab66055fd3eb6471c3d85116e7028b6e22a049572f7",
+    "iosDigest": "9c078431f4b69a8d2f39877e34685d00539268cd4c445b32fcec1f53ae31b908"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V18 is a prospective source cohort for the Android Google Play external-content-link Expo module and shared Billing 8.2.1 dependency. V17 runtimes, signed artifacts and compatibility digests remain immutable; an OTA cannot add the Android bridge. Both platform identities advance because the unchanged conservative native-input contract includes shared module metadata. No new iOS external-payment native capability is asserted. Existing camera, notification, diagnostics, privacy and app-owned update safeguards remain intact. Android requires actual Debug/Release Kotlin and Java compilation, resolved RevenueCat/Billing compatibility and physical license-tester qualification before native delivery. Google enrollment, reporting and financial readiness remain separate fail-closed gates. Source checks are not signed-build, installation, provider or physical-device proof. Held Android106 remains barred. Future delivery requires separate authorization and fresh matching signed binaries, limited to Google Play internal and TestFlight Chillywood Internal. No build, submission, deployment, payment activation, OTA or public-release authority is granted."
+    "reason": "V19 is a prospective source cohort for the Android native Gallery picker, Android Expo picker result-retention repair and iOS picker dismissal repair. V18 runtimes, signed artifacts and canonical compatibility digests remain immutable. Existing internal channels, tester audiences, app-owned activation, production generation and held Android106 restrictions are unchanged. Fresh matching signed binaries and platform-specific native and physical qualification are required; this metadata grants no build, deployment, submission, OTA, public release or payment activation authority. Provider identity, sandbox financial qualification, billing capability and production readiness remain separate gates."
   }
 }
