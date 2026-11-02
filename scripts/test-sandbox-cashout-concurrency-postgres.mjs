@@ -3,7 +3,7 @@
 // synthetic evidence, no provider traffic or changes to the source database.
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
@@ -52,13 +52,14 @@ try{
  const request=(a,operation=randomUUID())=>`select public.request_sandbox_creator_cashout(9200,'instant',${lit(a.qualification)},${lit(operation)},184,25,8991);`;
  // Separate authenticated connections, real source-domain locks, and observed
  // pg_blocking_pids barriers: elapsed time alone is never concurrency evidence.
+ let schedules=0;
  async function race(first,second,outcome='commit'){
   const h=start(`begin;${first}select 'HOLDING';`);
   await until(()=>h.output().includes('HOLDING'),'first operation did not reach lock barrier');
   const w=start(`begin;${second}commit;`);w.child.stdin.end();
   await until(()=>blocked(h,w),'second operation did not block on the real transaction');
   h.child.stdin.end(`${outcome};\n`);const held=await h.done;assert.equal(held.code,0,held.stderr);
-  return {held,waited:await w.done};
+  const waited=await w.done;schedules++;return {held,waited};
  }
  const passed=r=>assert.equal(r.code,0,r.stderr);
  const failed=(r,error)=>{assert.notEqual(r.code,0);assert.match(r.stderr,error);};
@@ -97,6 +98,33 @@ try{
   }
   a.production=production();return a;
  }
+ // Physical earnings use the real order/tax binding and canonical webhook
+ // processor. Never create a digital provider event or money ledger for merch.
+ function seedMerch(a){
+  const buyer=randomUUID(),product=randomUUID(),id=randomUUID(),suffix=id.replaceAll('-','');
+  const digitalCounts=()=>query('select (select count(*) from public.provider_events)||\':\'||(select count(*) from public.money_access_ledger_events);');
+  const before=digitalCounts();
+  query(`insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values(${lit(buyer)},${lit(buyer+'@example.test')},now(),false,false);
+   insert into public.merch_products(id,display_name,product_key,provider,status,environment,price_minor,currency,inventory_status,shipping_tracking_mode)
+   values(${lit(product)},'Synthetic native physical merch',${lit('native_'+suffix)},'stripe_physical_goods','sandbox','sandbox',1000,'usd','in_stock','tracked');
+   insert into private.commerce_tax_qualifications(feature,product_id,account_id,environment,permitted_scope,platform_scope,
+    professional_basis_reference,coverage_evidence_reference,full_permitted_scope_reviewed,collection_mode,liability_type,tax_code,tax_behavior,
+    registration_evidence_reference,provider_settings_evidence_reference,provider_product_evidence_reference,enabled,provider_verified_at,provider_expires_at,expires_at)
+   values('physical_merch',${lit(product)},'acct_sandboxPlatform','sandbox','US_all_destinations','all_supported_platforms',
+    'SYNTHETIC TEST ONLY','SYNTHETIC TEST ONLY',true,'automatic','self','txcd_99999999','inclusive','SYNTHETIC TEST ONLY',
+    'SYNTHETIC TEST ONLY','SYNTHETIC TEST ONLY',true,now(),now()+interval '1 hour',now()+interval '1 hour');
+   insert into public.merch_orders(id,buyer_id,creator_id,product_id,provider,environment,order_status,fulfillment_status,payment_status,
+    amount_subtotal_minor,amount_total_minor,currency,stripe_checkout_session_id,stripe_payment_intent_id)
+   values(${lit(id)},${lit(buyer)},${lit(a.creator)},${lit(product)},'stripe_physical_goods','sandbox','pending','not_started','pending',1000,1000,'usd',${lit('cs_test_'+suffix)},${lit('pi_'+suffix)});`);
+  assert.equal(run(a,'service_role',`select public.bind_commerce_tax_checkout_policy('physical_merch',${lit(id)},${lit(product)},'acct_sandboxPlatform','sandbox','US_all_destinations');`).ready,true);
+  const facts={event_livemode:false,object_livemode:false,object_id:'cs_test_'+suffix,object_type:'checkout.session',payment_intent_id:'pi_'+suffix,
+   metadata_order_id:id,metadata_buyer_id:buyer,client_reference_id:id,mode:'payment',status:'complete',payment_status:'paid',amount_minor:1000,currency:'usd'};
+  const webhook=(type,body)=>`select public.process_stripe_merch_webhook_lifecycle(${lit('evt_'+randomUUID().replaceAll('-',''))},${lit(type)},${lit(createHash('sha256').update(JSON.stringify(body)).digest('hex'))},${lit(JSON.stringify(body))}::jsonb);`;
+  assert.equal(run(a,'service_role',webhook('checkout.session.completed',facts)).reason,'payment_confirmed');
+  assert.equal(parse(query(`select private.sandbox_cashout_merch_source(${lit(id)},${lit(a.qualification)});`)).netMinor,900);
+  assert.equal(digitalCounts(),before,'physical sale must not fabricate digital accounting');
+  return {id,refund:()=>webhook('charge.refunded',{...facts,object_type:'charge',object_id:'ch_'+suffix,refunded_amount_minor:1000,refunded:true}),assertNoDigital:()=>assert.equal(digitalCounts(),before)};
+ }
  function invariants(a){
   assert.equal(production(),a.production,'sandbox operations changed production accounting');
   assert.equal(query(`select count(*) from public.platform_money_kill_switches where key in ('live_money_enabled','payouts_enabled','cashout_enabled') and state='off';`),'3');
@@ -120,6 +148,30 @@ try{
   assert.equal(query(`select count(*) from private.sandbox_cashout_executions where creator_id=${lit(a.creator)};`),'1');
   assert.equal(query(`select count(*)||':'||sum(amount_minor) from private.sandbox_cashout_allocations where execution_id in(select id from private.sandbox_cashout_executions where creator_id=${lit(a.creator)});`),'2:9200');
   invariants(a);
+ }
+ const mixedRequest=a=>`select public.request_sandbox_creator_cashout(10000,'instant',${lit(a.qualification)},${lit(randomUUID())},200,25,9775);`;
+ // Both requests share one creator: the mixed request needs 9299 digital plus
+ // 701 physical units, while the competing 9200 request is digital-only.
+ for(const first of ['mixed','digital']){
+  const a=await seed(),merch=seedMerch(a);
+  const {waited}=await race(auth('authenticated',a)+(first==='mixed'?mixedRequest(a):request(a)),auth('authenticated',a)+(first==='mixed'?request(a):mixedRequest(a)));
+  failed(waited,/sandbox_cashout_already_pending/);
+  assert.equal(query(`select count(*) from private.sandbox_cashout_executions where creator_id=${lit(a.creator)};`),'1');
+  assert.equal(query(`select sum(amount_minor) from private.sandbox_cashout_allocations where execution_id in(select id from private.sandbox_cashout_executions where creator_id=${lit(a.creator)});`),first==='mixed'?'9299':'9200');
+  assert.equal(query(`select coalesce(sum(amount_minor),0) from private.sandbox_cashout_merch_allocations where order_id=${lit(merch.id)};`),first==='mixed'?'701':'0');
+  merch.assertNoDigital();invariants(a);
+ }
+ // Canonical physical refund owns the order row before claim arrives. Its
+ // commit fences funding; rollback preserves both domains and admits once.
+ for(const outcome of ['commit','rollback']){
+  const a=await seed(),merch=seedMerch(a),id=run(a,'authenticated',mixedRequest(a)).requestId;
+  const {held,waited}=await race(auth('service_role',a)+merch.refund(),auth('service_role',a)+claim(id),outcome);
+  assert.equal(parse(held.stdout.split('HOLDING')[0]).reason,'full_refund_recorded');
+  if(outcome==='commit'){failed(waited,/sandbox_source_reconciliation_required/);assert.equal(phase(id),'prepared');}
+  else {passed(waited);assert.equal(parse(waited.stdout).claimed,true);assert.equal(phase(id),'funding_unknown');}
+  assert.equal(query(`select count(*) from private.sandbox_cashout_merch_simulated_returns where execution_id=${lit(id)};`),'0');
+  assert.equal(query(`select sum(amount_minor) from private.sandbox_cashout_merch_allocations where execution_id=${lit(id)};`),'701');
+  merch.assertNoDigital();invariants(a);
  }
  // Committed refunds/revocations deny dispatch; rolled-back changes cannot
  // poison the source or leave durable dispatch state after a rolled-back claim.
@@ -184,7 +236,8 @@ try{
   invariants(a);
  }
  restore.assertSourceUnchanged();
- console.log('PASS native sandbox cashout: actual duplicate/multi-allocation contention, refund/revocation/subject/control barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
+ assert.equal(schedules,25,'all real-lock schedules executed');
+ console.log('PASS native sandbox cashout: 25 actual-lock schedules including mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
 }finally{
  for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end();s.child.kill('SIGTERM');}
  await Promise.allSettled(sessions.map(s=>s.done));

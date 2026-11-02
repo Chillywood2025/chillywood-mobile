@@ -19,7 +19,7 @@ test('sandbox contention executes in mandatory Database native proofs without re
  for(const name of ['cashout-execution','sandbox-cashout'])assert.ok(native.includes(`SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-${name}-concurrency-postgres.mjs`));
 });
 test('native runner retains real blocking and disposable-source boundaries',()=>{
- for(const marker of ['pg_blocking_pids',"['refund','revocation']","['session','tester','control']","['commit','rollback']",'sameOperation',"['cancel','payout']",'2:9175:25','9274','sandbox_terminal_observation_conflict','production(),a.production','restore.assertSourceUnchanged()',"'--force',database"])
+ for(const marker of ['pg_blocking_pids',"['refund','revocation']","['session','tester','control']","['commit','rollback']",'sameOperation',"['cancel','payout']",'2:9175:25','9274','sandbox_terminal_observation_conflict','production(),a.production','restore.assertSourceUnchanged()',"'--force',database",'assert.equal(schedules,25,',"['mixed','digital']",'bind_commerce_tax_checkout_policy','process_stripe_merch_webhook_lifecycle','full_refund_recorded','merch.assertNoDigital()'])
   assert.ok(source.includes(marker),marker);
  assert.doesNotMatch(source,/disable trigger|session_replication_role|create or replace function|fetch\(/iu);
 });
