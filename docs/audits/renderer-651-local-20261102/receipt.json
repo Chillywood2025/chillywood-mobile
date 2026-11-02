@@ -1,0 +1,59 @@
+{
+  "testedRemoteCommit": "773ef47b00138a328f6fc9155438fff7464eede3",
+  "testedTree": "db67dd2d1aeadf86a18d4aeafedd9fb3f4c6415a",
+  "testedLocalCommit": "a557163c5f6ce8a6d404add62ea3cc428c7e4386",
+  "originalIntegratedSource": "50f5794b0c6914f880a204e0f8e6a94daace2a5e",
+  "commands": {
+    "focused": "flock /tmp/renderer-heavy-tests.lock node --test --test-reporter=tap --test-concurrency=1 tests/clip-export-*.test.mjs tests/clip-render-*.test.mjs tests/clip-workload-supervisor.test.mjs",
+    "negativeControl": "node --test --test-reporter=tap --test-name-pattern='^decoded video mismatch diagnostics remain bounded without weakening exact byte equality$' tests/clip-render-seek.test.mjs"
+  },
+  "distinctRuns": [
+    {
+      "run": "original focused spec reporter",
+      "passed": 153,
+      "failed": 1,
+      "log": "../renderer-media-diagnostics-20261102/original-focused-failure.log",
+      "cause": "unproven: generic file-level test failed, no signal/exitCode retained",
+      "sha256": "f7be416fa07c4310e7d73f16f1472e8886b3d9afc45d9cee31f4185572b6e4a3"
+    },
+    {
+      "run": "unchanged-root isolated seek TAP",
+      "passed": 4,
+      "failed": 0,
+      "log": "../renderer-media-diagnostics-20261102/same-source-isolated.tap",
+      "sha256": "73ad4eac46d8d52f98a125f07077c2c92d20e8aea454fdba026a37a8998f71a6"
+    },
+    {
+      "run": "unchanged-root exact combined TAP",
+      "passed": 154,
+      "failed": 0,
+      "log": "unchanged-root-focused.tap",
+      "headBeforeAndAfter": "50f5794b0c6914f880a204e0f8e6a94daace2a5e",
+      "sha256": "3364bd61448736ae8153013b498aaaf5e6050901f9a955f5a3476dd03f3dd019"
+    },
+    {
+      "run": "published diagnostic checkpoint combined TAP",
+      "passed": 174,
+      "failed": 2,
+      "log": "diagnostic-checkpoint-focused.tap.gz",
+      "actualFailure": "delayed-video decoded byte1706740/2916000: actual106 expected107; parent also fails20/21 completed receipts",
+      "interpretation": "Real intermittent pixel comparison failure exposed by bounded diagnostics. Original spec failure could have lost a large Buffer assertion, but that original cause is not proven.",
+      "sha256": "ba61eff5156b880e60b8cf89755c15193ba142224302ff8d55ce3ddd0a77a2c5",
+      "uncompressedSha256": "0959321ecfddbfed1c21529bc0eff77220c09a4273205b92706d9162cd21f4e8",
+      "encoding": "gzip preserves exact TAP whitespace and bytes"
+    },
+    {
+      "run": "bounded negative control",
+      "passed": 1,
+      "failed": 0,
+      "log": "bounded-negative-control.tap",
+      "sha256": "7fc8e9c786c9b0736a20aff5c252a55a7b36c0d8ddfb4c5a4a285a5a32a2d8b4"
+    }
+  ],
+  "status": "NOT READY: diagnosed intermittent delayed-video pixel mismatch remains under investigation; no tolerance/deadline changes",
+  "limitations": [
+    "No OOM or signal cause established; current cgroup files unavailable.",
+    "Subsequent passing runs do not invalidate earlier failed runs.",
+    "No claim of production, Hetzner or genuine Dolby Vision qualification."
+  ]
+}

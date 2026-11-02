@@ -1,0 +1,935 @@
+TAP version 13
+# Subtest: CLI default OFF and --help load neither adapter nor credentials nor network
+ok 1 - CLI default OFF and --help load neither adapter nor credentials nor network
+  ---
+  duration_ms: 215.07162
+  type: 'test'
+  ...
+# Subtest: collector composes bound DB inventory, actual outcome timing and qualified raw samples, never caller healthy/capacity flags
+ok 2 - collector composes bound DB inventory, actual outcome timing and qualified raw samples, never caller healthy/capacity flags
+  ---
+  duration_ms: 4.028154
+  type: 'test'
+  ...
+# Subtest: default dry-run advances only ephemeral recommendations and never writes ledger or loads provider
+ok 3 - default dry-run advances only ephemeral recommendations and never writes ledger or loads provider
+  ---
+  duration_ms: 2.627773
+  type: 'test'
+  ...
+# Subtest: current binding, worker gate, bounded snapshot and unknown telemetry all fail closed before provider factory
+ok 4 - current binding, worker gate, bounded snapshot and unknown telemetry all fail closed before provider factory
+  ---
+  duration_ms: 1.993977
+  type: 'test'
+  ...
+# Subtest: actual 31-second composed polls refresh observations before consuming real planner growth and idle hysteresis
+ok 5 - actual 31-second composed polls refresh observations before consuming real planner growth and idle hysteresis
+  ---
+  duration_ms: 15.311619
+  type: 'test'
+  ...
+# Subtest: one tick bounds failed physical observation attempts and never creates from unknown observations
+ok 6 - one tick bounds failed physical observation attempts and never creates from unknown observations
+  ---
+  duration_ms: 15.05349
+  type: 'test'
+  ...
+# Subtest: fresh disable during observation prevents the follow-on mutation and preserves genuine metric timestamps
+ok 7 - fresh disable during observation prevents the follow-on mutation and preserves genuine metric timestamps
+  ---
+  duration_ms: 1.780465
+  type: 'test'
+  ...
+# Subtest: expired structurally valid approval reconciles original scope read-only but cannot mutate infrastructure
+ok 8 - expired structurally valid approval reconciles original scope read-only but cannot mutate infrastructure
+  ---
+  duration_ms: 4.815522
+  type: 'test'
+  ...
+# Subtest: stale host envelopes, inconsistent nested clocks and unproven memory qualifications never become fresh
+ok 9 - stale host envelopes, inconsistent nested clocks and unproven memory qualifications never become fresh
+  ---
+  duration_ms: 1.581304
+  type: 'test'
+  ...
+# Subtest: composed execution uses durable adapter, preserves reservations across restart and does not repeat startup create
+ok 10 - composed execution uses durable adapter, preserves reservations across restart and does not repeat startup create
+  ---
+  duration_ms: 1.368424
+  type: 'test'
+  ...
+# Subtest: startup limits survive profile sanitation and missing qualification never becomes trusted isolated RAM
+ok 11 - startup limits survive profile sanitation and missing qualification never becomes trusted isolated RAM
+  ---
+  duration_ms: 1.31014
+  type: 'test'
+  ...
+# Subtest: collector retains independent stale disk age despite fresh envelope, CPU, RAM and progress
+ok 12 - collector retains independent stale disk age despite fresh envelope, CPU, RAM and progress
+  ---
+  duration_ms: 0.428086
+  type: 'test'
+  ...
+# Subtest: collector uses qualified effective ancestor headroom, not spare leaf RAM, and rejects unknown hierarchy
+ok 13 - collector uses qualified effective ancestor headroom, not spare leaf RAM, and rejects unknown hierarchy
+  ---
+  duration_ms: 1.373456
+  type: 'test'
+  ...
+# Subtest: unknown effective memory and stale disk still permit fresh five-sample idle draining
+ok 14 - unknown effective memory and stale disk still permit fresh five-sample idle draining
+  ---
+  duration_ms: 4.387346
+  type: 'test'
+  ...
+# Subtest: collector SQL executes against the actual full migration fixture (not native contention)
+ok 15 - collector SQL executes against the actual full migration fixture (not native contention)
+  ---
+  duration_ms: 17778.476946
+  type: 'test'
+  ...
+# Subtest: clip export queue uses full migration chain, exact owner/session, fenced worker and private drafts
+ok 16 - clip export queue uses full migration chain, exact owner/session, fenced worker and private drafts
+  ---
+  duration_ms: 17651.894902
+  type: 'test'
+  ...
+# Subtest: retained HDR failures distinguish permanent unsupported input from an unqualified worker
+ok 17 - retained HDR failures distinguish permanent unsupported input from an unqualified worker
+  ---
+  duration_ms: 2.320219
+  type: 'test'
+  ...
+# Subtest: safe failure taxonomy never infers poison media from generic FFmpeg failure or raw diagnostics
+ok 18 - safe failure taxonomy never infers poison media from generic FFmpeg failure or raw diagnostics
+  ---
+  duration_ms: 0.162345
+  type: 'test'
+  ...
+# Subtest: health requires fresh timestamped inventory, worker resources/progress and all read-only dependencies
+ok 19 - health requires fresh timestamped inventory, worker resources/progress and all read-only dependencies
+  ---
+  duration_ms: 0.544851
+  type: 'test'
+  ...
+# Subtest: known input rejection and source/cancel outcomes do not masquerade as systemic failures
+ok 20 - known input rejection and source/cancel outcomes do not masquerade as systemic failures
+  ---
+  duration_ms: 1.048591
+  type: 'test'
+  ...
+# Subtest: typed dependency failures, read-only probe errors and unknown output each stop unsafe growth
+ok 21 - typed dependency failures, read-only probe errors and unknown output each stop unsafe growth
+  ---
+  duration_ms: 0.973599
+  type: 'test'
+  ...
+# Subtest: isolated measured faults are distinguished from fleet failures and unavailable measurements
+ok 22 - isolated measured faults are distinguished from fleet failures and unavailable measurements
+  ---
+  duration_ms: 0.531532
+  type: 'test'
+  ...
+# Subtest: long rendering is not falsely called stalled or progressing from heartbeats/shared-host CPU
+ok 23 - long rendering is not falsely called stalled or progressing from heartbeats/shared-host CPU
+  ---
+  duration_ms: 0.285851
+  type: 'test'
+  ...
+# Subtest: throughput is measured only from deduplicated completed outcomes with valid elapsed duration
+ok 24 - throughput is measured only from deduplicated completed outcomes with valid elapsed duration
+  ---
+  duration_ms: 0.177518
+  type: 'test'
+  ...
+# Subtest: fresh CPU/RAM/progress cannot refresh cached or unavailable disk evidence
+ok 25 - fresh CPU/RAM/progress cannot refresh cached or unavailable disk evidence
+  ---
+  duration_ms: 0.328706
+  type: 'test'
+  ...
+# Subtest: leaf-only or unknown memory hierarchy never claims healthy effective capacity
+ok 26 - leaf-only or unknown memory hierarchy never claims healthy effective capacity
+  ---
+  duration_ms: 0.348696
+  type: 'test'
+  ...
+# Subtest: tight ancestor and sibling consumption override apparently spare leaf memory
+ok 27 - tight ancestor and sibling consumption override apparently spare leaf memory
+  ---
+  duration_ms: 0.228094
+  type: 'test'
+  ...
+# Subtest: real local HTTP auth/storage failures flow through transport, classifier and default controller without spending
+ok 28 - real local HTTP auth/storage failures flow through transport, classifier and default controller without spending
+  ---
+  duration_ms: 41.240529
+  type: 'test'
+  ...
+# Subtest: native Clip fixture uses real queue/producer/seal and atomic draft completion
+ok 29 - native Clip fixture uses real queue/producer/seal and atomic draft completion
+  ---
+  duration_ms: 17434.454216
+  type: 'test'
+  ...
+# Subtest: mounted export uses saved exact edit, coalesces taps, cancels and reviews only a ready output
+ok 30 - mounted export uses saved exact edit, coalesces taps, cancels and reviews only a ready output
+  ---
+  duration_ms: 968.290693
+  type: 'test'
+  ...
+# Subtest: mounted lost enqueue response retries same UUID and does not claim success
+ok 31 - mounted lost enqueue response retries same UUID and does not claim success
+  ---
+  duration_ms: 691.148834
+  type: 'test'
+  ...
+# Subtest: mounted source edits disable export until saved and owner replacement discards a late export result
+ok 32 - mounted source edits disable export until saved and owner replacement discards a late export result
+  ---
+  duration_ms: 825.765214
+  type: 'test'
+  ...
+# Subtest: mounted changed saved edit receives a new operation ID after an unknown enqueue outcome
+ok 33 - mounted changed saved edit receives a new operation ID after an unknown enqueue outcome
+  ---
+  duration_ms: 707.106629
+  type: 'test'
+  ...
+# Subtest: production trim validation accepts seconds and rejects invalid or reversed ranges
+ok 34 - production trim validation accepts seconds and rejects invalid or reversed ranges
+  ---
+  duration_ms: 18.396903
+  type: 'test'
+  ...
+# Subtest: background and resume cannot freshen an old in-flight status response
+ok 35 - background and resume cannot freshen an old in-flight status response
+  ---
+  duration_ms: 985.537676
+  type: 'test'
+  ...
+# Subtest: admission rejection clip_export_capacity_exhausted does not enqueue or auto-retry
+ok 36 - admission rejection clip_export_capacity_exhausted does not enqueue or auto-retry
+  ---
+  duration_ms: 656.787031
+  type: 'test'
+  ...
+# Subtest: admission rejection clip_export_admission_paused does not enqueue or auto-retry
+ok 37 - admission rejection clip_export_admission_paused does not enqueue or auto-retry
+  ---
+  duration_ms: 655.653217
+  type: 'test'
+  ...
+# Subtest: technical delay is distinct from demand and terminal output wins over health
+ok 38 - technical delay is distinct from demand and terminal output wins over health
+  ---
+  duration_ms: 718.981942
+  type: 'test'
+  ...
+# Subtest: safe HDR failure hdr_dolby_vision_unqualified preserves the original and does not automatically retry
+ok 39 - safe HDR failure hdr_dolby_vision_unqualified preserves the original and does not automatically retry
+  ---
+  duration_ms: 614.487439
+  type: 'test'
+  ...
+# Subtest: safe HDR failure hdr_color_metadata_unqualified preserves the original and does not automatically retry
+ok 40 - safe HDR failure hdr_color_metadata_unqualified preserves the original and does not automatically retry
+  ---
+  duration_ms: 600.733163
+  type: 'test'
+  ...
+# Subtest: safe HDR failure hdr_conversion_unavailable preserves the original and does not automatically retry
+ok 41 - safe HDR failure hdr_conversion_unavailable preserves the original and does not automatically retry
+  ---
+  duration_ms: 611.948144
+  type: 'test'
+  ...
+# Subtest: a deleted exported draft offers a new export rather than a broken review action
+ok 42 - a deleted exported draft offers a new export rather than a broken review action
+  ---
+  duration_ms: 610.10394
+  type: 'test'
+  ...
+# Subtest: a delayed empty poll cannot erase a newly accepted export
+ok 43 - a delayed empty poll cannot erase a newly accepted export
+  ---
+  duration_ms: 645.954541
+  type: 'test'
+  ...
+# Subtest: a status read started before cancel cannot overwrite the confirmed cancellation
+ok 44 - a status read started before cancel cannot overwrite the confirmed cancellation
+  ---
+  duration_ms: 632.928372
+  type: 'test'
+  ...
+# Subtest: a pre-cancel poll cannot replace a subsequent newly accepted job
+ok 45 - a pre-cancel poll cannot replace a subsequent newly accepted job
+  ---
+  duration_ms: 668.876938
+  type: 'test'
+  ...
+# Subtest: leaving and reopening the editor rejects the old editor status response
+ok 46 - leaving and reopening the editor rejects the old editor status response
+  ---
+  duration_ms: 737.192061
+  type: 'test'
+  ...
+# Subtest: bounded pool full-chain SQL semantics, fences and 1000-request admission burst (not native contention)
+ok 47 - bounded pool full-chain SQL semantics, fences and 1000-request admission burst (not native contention)
+  ---
+  duration_ms: 34577.550453
+  type: 'test'
+  ...
+# Subtest: bounded Clip pool native runner rejects remote arguments and provides offline help
+ok 48 - bounded Clip pool native runner rejects remote arguments and provides offline help
+  ---
+  duration_ms: 133.219191
+  type: 'test'
+  ...
+# Subtest: bounded Clip pool contention is mandatory after full migrations and existing pgTAP
+ok 49 - bounded Clip pool contention is mandatory after full migrations and existing pgTAP
+  ---
+  duration_ms: 3.792719
+  type: 'test'
+  ...
+# Subtest: pool gate rejects omission, optionality, swallowed failure, wrong target and wrong order
+ok 50 - pool gate rejects omission, optionality, swallowed failure, wrong target and wrong order
+  ---
+  duration_ms: 8.91984
+  type: 'test'
+  ...
+# Subtest: native pool proof observes actual lock edges and preserves production boundaries
+ok 51 - native pool proof observes actual lock edges and preserves production boundaries
+  ---
+  duration_ms: 1.023764
+  type: 'test'
+  ...
+# Subtest: pool pgTAP SQL preflight uses full schema; native PostgreSQL qualification remains mandatory
+ok 52 - pool pgTAP SQL preflight uses full schema; native PostgreSQL qualification remains mandatory
+  ---
+  duration_ms: 17306.890274
+  type: 'test'
+  ...
+# Subtest: a saturated worker refreshes disk telemetry and failed samples do not replay old headroom
+ok 53 - a saturated worker refreshes disk telemetry and failed samples do not replay old headroom
+  ---
+  duration_ms: 24.473965
+  type: 'test'
+  ...
+# Subtest: OFF and invalid configuration cannot claim; DB capacity is bounded and never a client RPC argument
+ok 54 - OFF and invalid configuration cannot claim; DB capacity is bounded and never a client RPC argument
+  ---
+  duration_ms: 1.9634
+  type: 'test'
+  ...
+# Subtest: concurrent jobs never exceed DB-owned capacity and SIGTERM drain finishes accepted work
+ok 55 - concurrent jobs never exceed DB-owned capacity and SIGTERM drain finishes accepted work
+  ---
+  duration_ms: 22.011753
+  type: 'test'
+  ...
+# Subtest: 1000 synthetic jobs complete at default-one and approved-four capacity without provider calls or overshoot
+ok 56 - 1000 synthetic jobs complete at default-one and approved-four capacity without provider calls or overshoot
+  ---
+  duration_ms: 117.442297
+  type: 'test'
+  ...
+# Subtest: capacity reduction is nonpreemptive and new claims wait below the reduced cap
+ok 57 - capacity reduction is nonpreemptive and new claims wait below the reduced cap
+  ---
+  duration_ms: 55.033537
+  type: 'test'
+  ...
+# Subtest: 11 GiB-per-possible-slot admission guard is fail closed and does not reject or truncate a queued product job
+ok 58 - 11 GiB-per-possible-slot admission guard is fail closed and does not reject or truncate a queued product job
+  ---
+  duration_ms: 1.570428
+  type: 'test'
+  ...
+# Subtest: SIGTERM during an in-flight claim drains the accepted response instead of discarding the job
+ok 59 - SIGTERM during an in-flight claim drains the accepted response instead of discarding the job
+  ---
+  duration_ms: 2.042711
+  type: 'test'
+  ...
+# Subtest: SIGTERM during disk collection makes no new claim
+ok 60 - SIGTERM during disk collection makes no new claim
+  ---
+  duration_ms: 0.422917
+  type: 'test'
+  ...
+# Subtest: lost worker heartbeat aborts all local jobs, preserves typed auth evidence, and never retries a claim or job
+ok 61 - lost worker heartbeat aborts all local jobs, preserves typed auth evidence, and never retries a claim or job
+  ---
+  duration_ms: 10.793146
+  type: 'test'
+  ...
+# Subtest: mismatched claim identity stops without executing media and is not fabricated as an auth outage
+ok 62 - mismatched claim identity stops without executing media and is not fabricated as an auth outage
+  ---
+  duration_ms: 0.568758
+  type: 'test'
+  ...
+# Subtest: job progress is genuine stage evidence; heartbeat and fresh envelope cannot refresh an old cgroup sample
+ok 63 - job progress is genuine stage evidence; heartbeat and fresh envelope cannot refresh an old cgroup sample
+  ---
+  duration_ms: 21.466916
+  type: 'test'
+  ...
+# Subtest: progress, outcome and stopped envelopes cannot freshen cached disk evidence
+ok 64 - progress, outcome and stopped envelopes cannot freshen cached disk evidence
+  ---
+  duration_ms: 27.285099
+  type: 'test'
+  ...
+# Subtest: SIGINT aborts accepted jobs and an uncertain close is reported without reopening identity
+ok 65 - SIGINT aborts accepted jobs and an uncertain close is reported without reopening identity
+  ---
+  duration_ms: 2.312607
+  type: 'test'
+  ...
+# Subtest: worker CLI is offline by default and help, requires activation/identity, and reports missing configuration without secrets
+ok 66 - worker CLI is offline by default and help, requires activation/identity, and reports missing configuration without secrets
+  ---
+  duration_ms: 186.812966
+  type: 'test'
+  ...
+# Subtest: source units preserve exclusive supported modes and mixed bounded drain, never unsafe stop helper or forced unlock
+ok 67 - source units preserve exclusive supported modes and mixed bounded drain, never unsafe stop helper or forced unlock
+  ---
+  duration_ms: 4.32797
+  type: 'test'
+  ...
+# Subtest: controller defaults OFF; planning and missing durable/provider authority cannot execute
+ok 68 - controller defaults OFF; planning and missing durable/provider authority cannot execute
+  ---
+  duration_ms: 3.073895
+  type: 'test'
+  ...
+# Subtest: invalid budgets, provider scope, inventory and stale quotes cannot buy resources
+ok 69 - invalid budgets, provider scope, inventory and stale quotes cannot buy resources
+  ---
+  duration_ms: 3.468619
+  type: 'test'
+  ...
+# Subtest: two controllers serialize maximum-cost reservation before dispatch and never duplicate create
+ok 70 - two controllers serialize maximum-cost reservation before dispatch and never duplicate create
+  ---
+  duration_ms: 1.305157
+  type: 'test'
+  ...
+# Subtest: lost create responses survive restart; settled owned absence is required to release capacity
+ok 71 - lost create responses survive restart; settled owned absence is required to release capacity
+  ---
+  duration_ms: 3.925547
+  type: 'test'
+  ...
+# Subtest: expired operation lease fences late create response behind canonical reconciliation
+ok 72 - expired operation lease fences late create response behind canonical reconciliation
+  ---
+  duration_ms: 0.597231
+  type: 'test'
+  ...
+# Subtest: approved worker count and full reserved hourly estimate are hard controller ceilings
+ok 73 - approved worker count and full reserved hourly estimate are hard controller ceilings
+  ---
+  duration_ms: 1.735046
+  type: 'test'
+  ...
+# Subtest: drain preserves busy work and delete needs stopped, disabled, zero-active fresh receipt
+ok 74 - drain preserves busy work and delete needs stopped, disabled, zero-active fresh receipt
+  ---
+  duration_ms: 2.500089
+  type: 'test'
+  ...
+# Subtest: unconfirmed drain retries only after observation and unknown delete only reconciles
+ok 75 - unconfirmed drain retries only after observation and unknown delete only reconciles
+  ---
+  duration_ms: 3.098275
+  type: 'test'
+  ...
+# Subtest: ownership and complete billable asset absence bind creation and deletion evidence
+ok 76 - ownership and complete billable asset absence bind creation and deletion evidence
+  ---
+  duration_ms: 1.201661
+  type: 'test'
+  ...
+# Subtest: systemic failures persist circuit and incident identity across restart; healthy flags cannot bypass it
+ok 77 - systemic failures persist circuit and incident identity across restart; healthy flags cannot bypass it
+  ---
+  duration_ms: 1.329985
+  type: 'test'
+  ...
+# Subtest: recovery probes are persisted and bounded even when every read-only attempt fails
+ok 78 - recovery probes are persisted and bounded even when every read-only attempt fails
+  ---
+  duration_ms: 0.568957
+  type: 'test'
+  ...
+# Subtest: unknown raw telemetry, fake healthy flags, and inventory mismatch never authorize capacity
+ok 79 - unknown raw telemetry, fake healthy flags, and inventory mismatch never authorize capacity
+  ---
+  duration_ms: 0.629409
+  type: 'test'
+  ...
+# Subtest: bounded startup failure cannot rearm through restart, absence or rolling-window expiry
+ok 80 - bounded startup failure cannot rearm through restart, absence or rolling-window expiry
+  ---
+  duration_ms: 0.434374
+  type: 'test'
+  ...
+# Subtest: never-ready startup may retire on idle intent or timeout but never rearms qualification
+ok 81 - never-ready startup may retire on idle intent or timeout but never rearms qualification
+  ---
+  duration_ms: 1.422946
+  type: 'test'
+  ...
+# Subtest: fresh idle hold cannot replay high target; returning demand cannot replay old low target
+ok 82 - fresh idle hold cannot replay high target; returning demand cannot replay old low target
+  ---
+  duration_ms: 3.086463
+  type: 'test'
+  ...
+# Subtest: all32 stale resources observe concurrently once; no one-host cadence starvation
+ok 83 - all32 stale resources observe concurrently once; no one-host cadence starvation
+  ---
+  duration_ms: 35.994097
+  type: 'test'
+  ...
+# Subtest: observation-only preflight preserves real planner samples and recommendations at31-second cadence
+ok 84 - observation-only preflight preserves real planner samples and recommendations at31-second cadence
+  ---
+  duration_ms: 3.003408
+  type: 'test'
+  ...
+# Subtest: newer idle observation after preflight cancels old growth and duplicate telemetry does not count twice
+ok 85 - newer idle observation after preflight cancels old growth and duplicate telemetry does not count twice
+  ---
+  duration_ms: 3.325293
+  type: 'test'
+  ...
+# Subtest: successful exact-worker qualification and verified retirement rearm startup under rolling caps
+ok 86 - successful exact-worker qualification and verified retirement rearm startup under rolling caps
+  ---
+  duration_ms: 1.999995
+  type: 'test'
+  ...
+# Subtest: unknown deletion retains successful qualification lock and reservation
+ok 87 - unknown deletion retains successful qualification lock and reservation
+  ---
+  duration_ms: 1.218877
+  type: 'test'
+  ...
+# Subtest: expired approval permits original-scope reconciliation, not create/drain/delete or billing-stop claims
+ok 88 - expired approval permits original-scope reconciliation, not create/drain/delete or billing-stop claims
+  ---
+  duration_ms: 0.647346
+  type: 'test'
+  ...
+# Subtest: fresh clocks after capability/provider awaits reject stale authority and late outcomes
+ok 89 - fresh clocks after capability/provider awaits reject stale authority and late outcomes
+  ---
+  duration_ms: 0.436238
+  type: 'test'
+  ...
+# Subtest: zero-worker admission readiness requires live qualification and an unused startup allowance
+ok 90 - zero-worker admission readiness requires live qualification and an unused startup allowance
+  ---
+  duration_ms: 0.534185
+  type: 'test'
+  ...
+# Subtest: one approved isolated-worker replacement drains before probing and cannot loop replacements
+ok 91 - one approved isolated-worker replacement drains before probing and cannot loop replacements
+  ---
+  duration_ms: 1.683278
+  type: 'test'
+  ...
+# Subtest: crash loops never trigger an approved worker replacement or extra paid capacity
+ok 92 - crash loops never trigger an approved worker replacement or extra paid capacity
+  ---
+  duration_ms: 0.808339
+  type: 'test'
+  ...
+# Subtest: slow observation batch is token-fenced against a concurrent newer batch after lease expiry
+ok 93 - slow observation batch is token-fenced against a concurrent newer batch after lease expiry
+  ---
+  duration_ms: 1.35946
+  type: 'test'
+  ...
+# Subtest: empty durable state starts without capacity, health or admission authority
+ok 94 - empty durable state starts without capacity, health or admission authority
+  ---
+  duration_ms: 1.670609
+  type: 'test'
+  ...
+# Subtest: first-row insertion is advisory-locked and state/health writes commit atomically before return
+ok 95 - first-row insertion is advisory-locked and state/health writes commit atomically before return
+  ---
+  duration_ms: 1.389365
+  type: 'test'
+  ...
+# Subtest: callback failures and asynchronous callbacks roll back and release without publishing state
+ok 96 - callback failures and asynchronous callbacks roll back and release without publishing state
+  ---
+  duration_ms: 0.490499
+  type: 'test'
+  ...
+# Subtest: failed commit rolls back, releases and surfaces uncertainty rather than pretending dispatch is safe
+ok 97 - failed commit rolls back, releases and surfaces uncertainty rather than pretending dispatch is safe
+  ---
+  duration_ms: 0.436779
+  type: 'test'
+  ...
+# Subtest: ledger rejects invalid pool keys; unknown health or invalid timestamps are never freshened
+ok 98 - ledger rejects invalid pool keys; unknown health or invalid timestamps are never freshened
+  ---
+  duration_ms: 0.476969
+  type: 'test'
+  ...
+# Subtest: planning is explicitly OFF and never grants execution or a billing guarantee
+ok 99 - planning is explicitly OFF and never grants execution or a billing guarantee
+  ---
+  duration_ms: 1.696147
+  type: 'test'
+  ...
+# Subtest: invalid budgets, concurrency, timestamps and missing queue evidence fail closed
+ok 100 - invalid budgets, concurrency, timestamps and missing queue evidence fail closed
+  ---
+  duration_ms: 0.510289
+  type: 'test'
+  ...
+# Subtest: distinct healthy saturated samples, cooldown and global/cost ceilings bound growth
+ok 101 - distinct healthy saturated samples, cooldown and global/cost ceilings bound growth
+  ---
+  duration_ms: 0.261584
+  type: 'test'
+  ...
+# Subtest: five quiet observations retire capacity even with broken processing and no throughput/RAM
+ok 102 - five quiet observations retire capacity even with broken processing and no throughput/RAM
+  ---
+  duration_ms: 0.233843
+  type: 'test'
+  ...
+# Subtest: reduced approved cap permits drain without waiting for success but unknown active jobs do not invent idle
+ok 103 - reduced approved cap permits drain without waiting for success but unknown active jobs do not invent idle
+  ---
+  duration_ms: 0.155104
+  type: 'test'
+  ...
+# Subtest: dependency, worker faults, unknown health and absent measured memory never authorize growth
+ok 104 - dependency, worker faults, unknown health and absent measured memory never authorize growth
+  ---
+  duration_ms: 0.259581
+  type: 'test'
+  ...
+# Subtest: poison/cancellation counts do not represent systemic render failure, but unclassified failures block
+ok 105 - poison/cancellation counts do not represent systemic render failure, but unclassified failures block
+  ---
+  duration_ms: 0.142946
+  type: 'test'
+  ...
+# Subtest: fresh throughput baseline survives a quiet completion window and is profile/concurrency/time bound
+ok 106 - fresh throughput baseline survives a quiet completion window and is profile/concurrency/time bound
+  ---
+  duration_ms: 0.600725
+  type: 'test'
+  ...
+# Subtest: heartbeats and baseline alone do not imply actual progress or saturation
+ok 107 - heartbeats and baseline alone do not imply actual progress or saturation
+  ---
+  duration_ms: 0.18579
+  type: 'test'
+  ...
+# Subtest: cold start is a single explicit bounded probe without invented throughput or memory
+ok 108 - cold start is a single explicit bounded probe without invented throughput or memory
+  ---
+  duration_ms: 0.273392
+  type: 'test'
+  ...
+# Subtest: invalid or future persisted planning state cannot fast-forward hysteresis
+ok 109 - invalid or future persisted planning state cannot fast-forward hysteresis
+  ---
+  duration_ms: 0.170857
+  type: 'test'
+  ...
+# Subtest: growth needs qualified effective hierarchy while idle drain does not require healthy resource telemetry
+ok 110 - growth needs qualified effective hierarchy while idle drain does not require healthy resource telemetry
+  ---
+  duration_ms: 0.468666
+  type: 'test'
+  ...
+# Subtest: origin signer binds create-only headers and refuses identity/provider/method changes
+ok 111 - origin signer binds create-only headers and refuses identity/provider/method changes
+  ---
+  duration_ms: 3.258823
+  type: 'test'
+  ...
+# Subtest: actual streamed HTTP upload/readback verifies all bytes, no overwrite and no retry after unknown outcome
+ok 112 - actual streamed HTTP upload/readback verifies all bytes, no overwrite and no retry after unknown outcome
+  ---
+  duration_ms: 3133.140633
+  type: 'test'
+  ...
+# Subtest: source download streams an exact full object and rejects truncation/size disagreement
+ok 113 - source download streams an exact full object and rejects truncation/size disagreement
+  ---
+  duration_ms: 6.162608
+  type: 'test'
+  ...
+# Subtest: whole-worker cgroup observations preserve actual timestamp, lifetime peak, OOM and descendant CPU without asserting isolation
+ok 114 - whole-worker cgroup observations preserve actual timestamp, lifetime peak, OOM and descendant CPU without asserting isolation
+  ---
+  duration_ms: 3.59458
+  type: 'test'
+  ...
+# Subtest: non-Linux, v1, ambiguous and unsafe memberships fail closed without reading another cgroup
+ok 115 - non-Linux, v1, ambiguous and unsafe memberships fail closed without reading another cgroup
+  ---
+  duration_ms: 0.781118
+  type: 'test'
+  ...
+# Subtest: symlinked or replaced directories and changing membership never produce an observation
+ok 116 - symlinked or replaced directories and changing membership never produce an observation
+  ---
+  duration_ms: 0.873678
+  type: 'test'
+  ...
+# Subtest: unlimited/missing/malformed measurements remain null, never guessed headroom or zero OOM/CPU
+ok 117 - unlimited/missing/malformed measurements remain null, never guessed headroom or zero OOM/CPU
+  ---
+  duration_ms: 3.009818
+  type: 'test'
+  ...
+# Subtest: oversized proc observation is bounded and descriptor is closed
+ok 118 - oversized proc observation is bounded and descriptor is closed
+  ---
+  duration_ms: 0.470029
+  type: 'test'
+  ...
+# Subtest: a roomy leaf under a tighter busy parent cannot advertise effective headroom or host capacity, even at a namespaced root
+ok 119 - a roomy leaf under a tighter busy parent cannot advertise effective headroom or host capacity, even at a namespaced root
+  ---
+  duration_ms: 0.708438
+  type: 'test'
+  ...
+# Subtest: production worker downloads, actually renders, streams verified output, seals and finishes in order
+ok 120 - production worker downloads, actually renders, streams verified output, seals and finishes in order
+  ---
+  duration_ms: 690.305751
+  type: 'test'
+  ...
+# Subtest: unknown PUT is terminal locally, retains reconciliation evidence, and never repeats upload or publishes
+ok 121 - unknown PUT is terminal locally, retains reconciliation evidence, and never repeats upload or publishes
+  ---
+  duration_ms: 7.864488
+  type: 'test'
+  ...
+# Subtest: source authority lost after rendering cannot start an output producer or PUT
+ok 122 - source authority lost after rendering cannot start an output producer or PUT
+  ---
+  duration_ms: 2.638713
+  type: 'test'
+  ...
+# Subtest: a real job heartbeat transport outage is not mislabeled cancellation and does not retry the job
+ok 123 - a real job heartbeat transport outage is not mislabeled cancellation and does not retry the job
+  ---
+  duration_ms: 7.936177
+  type: 'test'
+  ...
+# Subtest: retired lease never downloads or publishes; disabled/empty queue performs no work
+ok 124 - retired lease never downloads or publishes; disabled/empty queue performs no work
+  ---
+  duration_ms: 0.461135
+  type: 'test'
+  ...
+# Subtest: color policy never guesses HDR metadata or claims Dolby Vision qualification
+ok 125 - color policy never guesses HDR metadata or claims Dolby Vision qualification
+  ---
+  duration_ms: 2.766601
+  type: 'test'
+  ...
+# Subtest: HDR capabilities must exist; missing filters fail clearly and cancellation propagates
+ok 126 - HDR capabilities must exist; missing filters fail clearly and cancellation propagates
+  ---
+  duration_ms: 0.684863
+  type: 'test'
+  ...
+# Subtest: real PQ/HLG neutral patches convert to referenced BT709 SDR; watermark stays SDR and original stays intact
+ok 127 - real PQ/HLG neutral patches convert to referenced BT709 SDR; watermark stays SDR and original stays intact
+  ---
+  duration_ms: 4424.887826
+  type: 'test'
+  ...
+# Subtest: actual ffprobe refuses nested playlist and concat inputs despite a video filename
+ok 128 - actual ffprobe refuses nested playlist and concat inputs despite a video filename
+  ---
+  duration_ms: 155.41168
+  type: 'test'
+  ...
+# Subtest: probe bounds reject invalid advertised dimensions/duration without allocating extreme frames
+ok 129 - probe bounds reject invalid advertised dimensions/duration without allocating extreme frames
+  ---
+  duration_ms: 1.108822
+  type: 'test'
+  ...
+# Subtest: direct FFmpeg cancellation rejects after its child closes, not only before spawn
+ok 130 - direct FFmpeg cancellation rejects after its child closes, not only before spawn
+  ---
+  duration_ms: 205.29259
+  type: 'test'
+  ...
+# Subtest: render plans reject invalid ranges, untrusted text, missing watermark and invalid probes
+ok 131 - render plans reject invalid ranges, untrusted text, missing watermark and invalid probes
+  ---
+  duration_ms: 2.730006
+  type: 'test'
+  ...
+# Subtest: portrait rotation and fit produce even bounded dimensions without upscaling
+ok 132 - portrait rotation and fit produce even bounded dimensions without upscaling
+  ---
+  duration_ms: 0.6368
+  type: 'test'
+  ...
+# Subtest: anamorphic framing normalizes display aspect without upscaling or changing unspecified SAR
+ok 133 - anamorphic framing normalizes display aspect without upscaling or changing unspecified SAR
+  ---
+  duration_ms: 0.48411
+  type: 'test'
+  ...
+# Subtest: actual anamorphic fit/center, fill and autorotation preserve display proportions
+ok 134 - actual anamorphic fit/center, fill and autorotation preserve display proportions
+  ---
+  duration_ms: 6828.438616
+  type: 'test'
+  ...
+# Subtest: actual ffmpeg trims, crops, decodes, preserves original and never overwrites
+ok 135 - actual ffmpeg trims, crops, decodes, preserves original and never overwrites
+  ---
+  duration_ms: 712.982079
+  type: 'test'
+  ...
+# Subtest: actual watermark is composited into exported pixels
+ok 136 - actual watermark is composited into exported pixels
+  ---
+  duration_ms: 745.690399
+  type: 'test'
+  ...
+# Subtest: frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+ok 137 - frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+  ---
+  duration_ms: 8.018661
+  type: 'test'
+  ...
+# Subtest: hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+ok 138 - hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+  ---
+  duration_ms: 0.526804
+  type: 'test'
+  ...
+# Subtest: first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+ok 139 - first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+  ---
+  duration_ms: 1.225989
+  type: 'test'
+  ...
+# Subtest: rebuilt real-media matrix compares exact decoded frames and aligned audio against frozen baseline
+ok 140 - rebuilt real-media matrix compares exact decoded frames and aligned audio against frozen baseline
+  ---
+  duration_ms: 43635.637193
+  type: 'test'
+  ...
+# {"evidence":"fresh rebuilt synthetic comparison, not recovered historical receipts","cases":[{"name":"zero","decodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"early-fractional","decodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"integer","decodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"after-keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"fractional-late","decodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"remainder","decodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoBytes":2721600,"pcmBytes":180224,"maximumAudioError":0},{"name":"fit-watermark","decodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoBytes":1620000,"pcmBytes":192512,"maximumAudioError":0},{"name":"center","decodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"24fps","decodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"25fps","decodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"ntsc","decodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"vfr","decodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"sparse","decodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"no-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"positive-pts","decodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"mov-delayed-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":178176,"maximumAudioError":0},{"name":"delayed-video","decodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"webm-opus","decodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"phone-rotation","decodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"negative-pts-fallback","decodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}]}
+# Subtest: workload tiers preserve product maxima and generate valid media rather than fake file padding
+ok 141 - workload tiers preserve product maxima and generate valid media rather than fake file padding
+  ---
+  duration_ms: 58.64526
+  type: 'test'
+  ...
+# Subtest: CLI cannot generate media without explicit budgets and execute; underfunded maximum refuses
+ok 142 - CLI cannot generate media without explicit budgets and execute; underfunded maximum refuses
+  ---
+  duration_ms: 96.792307
+  type: 'test'
+  ...
+# Subtest: plan-only path never creates media even with sufficient mocked resources
+ok 143 - plan-only path never creates media even with sufficient mocked resources
+  ---
+  duration_ms: 54.057688
+  type: 'test'
+  ...
+# Subtest: phase meter has its own deadline and reaps its child instead of leaving a hanging shim
+ok 144 - phase meter has its own deadline and reaps its child instead of leaving a hanging shim
+  ---
+  duration_ms: 171.050996
+  type: 'test'
+  ...
+# Subtest: fixture rotation helper creates real MP4 display-matrix side data
+ok 145 - fixture rotation helper creates real MP4 display-matrix side data
+  ---
+  duration_ms: 296.258354
+  type: 'test'
+  ...
+# Subtest: workload budget requires explicit CPU, memory, disk and deadline with reserves
+ok 146 - workload budget requires explicit CPU, memory, disk and deadline with reserves
+  ---
+  duration_ms: 45.416042
+  type: 'test'
+  ...
+# Subtest: real local jobs obey concurrency and affinity while reporting queue wait
+ok 147 - real local jobs obey concurrency and affinity while reporting queue wait
+  ---
+  duration_ms: 974.992119
+  type: 'test'
+  ...
+# Subtest: completed empty groups are retired before a later launch failure and PID reuse
+ok 148 - completed empty groups are retired before a later launch failure and PID reuse
+  ---
+  duration_ms: 260.206366
+  type: 'test'
+  ...
+# Subtest: root cgroup files cannot qualify a nested worker effective limit
+ok 149 - root cgroup files cannot qualify a nested worker effective limit
+  ---
+  duration_ms: 36.251503
+  type: 'test'
+  ...
+# Subtest: unexpected failure stops queued admission; an explicitly expected failure is retained
+ok 150 - unexpected failure stops queued admission; an explicitly expected failure is retained
+  ---
+  duration_ms: 281.332748
+  type: 'test'
+  ...
+# Subtest: deadline kills and reaps the owned process tree
+ok 151 - deadline kills and reaps the owned process tree
+  ---
+  duration_ms: 1090.984235
+  type: 'test'
+  ...
+# Subtest: sampled memory and actual scratch bytes independently stop bounded test jobs
+ok 152 - sampled memory and actual scratch bytes independently stop bounded test jobs
+  ---
+  duration_ms: 404.313673
+  type: 'test'
+  ...
+# Subtest: a root exiting with a live child fails rather than crediting supervisor cleanup
+ok 153 - a root exiting with a live child fails rather than crediting supervisor cleanup
+  ---
+  duration_ms: 181.186382
+  type: 'test'
+  ...
+# Subtest: cancellation waits for actual tiny FFmpeg transcode and distinguishes clean child retirement
+ok 154 - cancellation waits for actual tiny FFmpeg transcode and distinguishes clean child retirement
+  ---
+  duration_ms: 251.999493
+  type: 'test'
+  ...
+1..154
+# tests 154
+# suites 0
+# pass 154
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 184826.01086
