@@ -1,0 +1,12 @@
+Additional recovery archive SHA-256: 931e60a013ed8dc1bb2aaa31ae98c942032136c2dbe39df7eff0d134d5a8f809
+
+Documentation-only recovery bundle, not installed runtime code or a complete validated candidate.
+
+Includes: exact pre-disk-fix pool runtime (original SHA-256 eabe51fab1ef24dbe8a57eac0de8e6b19213233de4c98edf424bd112abaefc4b); exact health/planner/ledger/controller sources matching original complete SHA-256 identities; full pool migration before/after lifecycle repair matching independently retained Git blob prefixes6b763a671 and46b61ac8e; exact retained UI/disk/HDR-safe-error edit requests and lifecycle/test hunks; orchestration recovery provenance; an explicitly quarantined EARLIER workload supervisor revision which lacks final PID-reuse/nested-cgroup hardening.
+
+Controller SHA-256 d8230060273b23f94fc3c10bf0acb6e5326f22875ed44b53220758eefbd58f53.
+Health SHA-2566219936e98e434790900f6f060849ef9abce7d884b3ec46d5641bd0ba8b76e5c.
+Planner SHA-256476f916f134d5f46b7c61d311b02de2dbccb31908e7822dd9c02429c125751ca.
+Ledger SHA-25637e83b7109505a2c01fc481b70ff4536d0dfd45c6565999331902c900931ac3a.
+
+No tests or workloads rerun. Raw workload receipts remain missing. Patch bodies retain historical paths and dependencies; do not apply blindly to protected main. No production/provider actions or new implementation authority inferred.
