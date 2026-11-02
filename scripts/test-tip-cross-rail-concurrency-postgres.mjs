@@ -23,6 +23,7 @@ const args=(db=database)=>['exec','-i',container,'psql','-X','-q','-A','-t','-v'
 const docker=(a,input,encoding='utf8')=>spawnSync('docker',a,{encoding,input,maxBuffer:256*1024*1024,timeout:120000});
 const success=(r,label)=>{assert.equal(r.status,0,`${label}: ${r.error?.message??r.stderr??''}`);return r.stdout;};
 const query=(sql,db)=>success(docker(args(db),`set statement_timeout='20s';set time zone 'UTC';${sql}`),'fixture query').trim();
+const accessGrantsSnapshotSql="select jsonb_build_object('count',count(*),'digest',encode(extensions.digest(coalesce(jsonb_agg(to_jsonb(g) order by g.id),'[]'::jsonb)::text,'sha256'),'hex'))::text from public.access_grants g";
 const admin=(a,input,encoding='utf8')=>docker(['exec',...(input===undefined?[]:['-i']),container,'sh','-lc',
   'PGPASSWORD="$POSTGRES_PASSWORD" exec "$@"','tip-action-fixture-admin',...a],input,encoding);
 const sessions=[];
@@ -48,6 +49,9 @@ try{
     '--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
   success(dump,'read-only local source export');
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore clone');
+  // Preserve protected synthetic Premium authority inherited from earlier
+  // native proofs, including every column, rather than assuming an empty reset.
+  const baselineAccessGrants=query(accessGrantsSnapshotSql);
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority'])
     query(readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
@@ -134,7 +138,9 @@ try{
   const denied=docker(args(),call(who,invalid.sql,invalid.role));
   assert.notEqual(denied.status,0);assert.match(denied.stderr,/tip_buyer_authority_required/);
   verify(who,action,null,tip,'stripe_connect');
-  assert.equal(query('select count(*) from public.access_grants'),'0','tip attempts never grant content access');
+  assert.ok(query(accessGrantsSnapshotSql)===baselineAccessGrants,'tip attempts never add, remove or modify access grants');
+  assert.equal(query('select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors)'),
+    '0','tip fixture actors never gain content access from attempts');
   assert.equal(checks,9);
   console.log('Tip actions: 9 observed native PostgreSQL advisory-lock races plus invalid-session rejection; synthetic providers only.');
 }finally{
