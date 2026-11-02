@@ -1,0 +1,218 @@
+{
+  "purpose": "Fixed ten baseline/candidate pairs, no retry-until-pass; all raw media retained",
+  "sourceSha256": "52e9c9ff8b47ec86e1b310efe576813a805af2d43d9095245974c55758b509bf",
+  "outputs": [
+    {
+      "pair": 0,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 0,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 1,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 1,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 2,
+      "kind": "baseline",
+      "sha256": "9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083",
+      "count": 11310,
+      "first": 2212900,
+      "max": 31,
+      "frames": [
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59
+      ]
+    },
+    {
+      "pair": 2,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 3,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 3,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 4,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 4,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 5,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 5,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 6,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 6,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 7,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 7,
+      "kind": "candidate",
+      "sha256": "9e09fe305faa3ef511ff7deff004c21a80a964643a15cb98e046c7abfc450083",
+      "count": 11310,
+      "first": 2212900,
+      "max": 31,
+      "frames": [
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59
+      ]
+    },
+    {
+      "pair": 8,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 8,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 9,
+      "kind": "baseline",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    },
+    {
+      "pair": 9,
+      "kind": "candidate",
+      "sha256": "cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825",
+      "count": 0,
+      "first": null,
+      "max": 0,
+      "frames": []
+    }
+  ]
+}

@@ -38,9 +38,21 @@ flock /tmp/renderer-heavy-tests.lock node --test --test-concurrency=1 \
 
 The frozen baseline is the recovered pre-optimization renderer, Git blob
 `9ef4992210911955cf1f975e3deaea4462b8fc96`; its SHA256 is pinned in the test.
-Each comparison invokes both actual render flows, including their output probe
-and complete integrity decode, then compares every decoded video byte, frame
-count, stream timestamps/durations, aligned PCM sample count and final duration.
+Each comparison invokes both actual render flows unchanged, including their
+output probe and complete integrity decode. A transparent exec wrapper records
+the real encode argv without changing options, environment or exit semantics.
+An allowlisted replay changes only libx264/preset/CRF/MP4 muxer output options
+to rawvideo/NUT. Every pre-lossy video byte is compared exactly; input seek,
+decode, crop/rotation, filter/fps, trim and mapping remain unchanged. Deliberate
+wrong-trim and rotation controls must fail this exact comparison.
+
+Actual lossy exports separately retain exact decoded byte counts, frame counts,
+stream timestamps/durations, aligned PCM sample counts and final duration.
+Their decoded video hashes are diagnostic, not an equality requirement: fixed
+controls showed baseline-vs-baseline libx264 nondeterminism, reproduced by
+encoding one identical raw frame file without seeking or filters. See
+`audits/renderer-encoder-determinism-20261102/`. This corrects the proof layer,
+not production encoder settings or a pixel tolerance.
 Aligned audio may differ by at most two signed16-bit quantization units, never
 by a timing offset. Source bytes must remain unchanged.
 
@@ -50,8 +62,9 @@ fractional/late/remainder cuts; keyframe and immediately-after-keyframe cuts;
 positive PTS, delayed video and negative-PTS edit-list fallback; WebM/Opus
 fallback; Fit/Center, burned watermark and phone-style90-degree rotation.
 These are actual FFmpeg operations on generated media, not real phone captures.
-Each successful run emits per-case decoded-video hashes/audio error as fresh
-test diagnostics. Temporary source/output/raw files are cleaned afterward.
+Each successful run emits exact pre-lossy and both lossy decoded-video hashes
+plus audio error as fresh diagnostics. Synthetic media is cleaned after success;
+failed matrix media is retained at the reported temporary path for diagnosis.
 
 Core tests separately cover immutable output, watermark pixels, input rejection,
 and non-square sample aspect ratios with both directions of rotation. The SAR

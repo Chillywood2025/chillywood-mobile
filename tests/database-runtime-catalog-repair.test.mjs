@@ -12,6 +12,7 @@ import {profileFeedFiles, profileFeedFunctions, assertProfileFeedInventory} from
 import {discoveryInvalidationFiles, discoveryInvalidationFunctions, assertDiscoveryInvalidationInventory} from './helpers/discovery-invalidation-runtime-inventory.mjs';
 import {appCompletionFiles,appCompletionAddedFunctionIdentities,appCompletionReplacedFunctionIdentities,appCompletionRemovedFunctionIdentities,
   appCompletionStudioDependentFiles,appCompletionStudioDependentAddedFunctionIdentities} from './helpers/app-completion-migration-inventory.mjs';
+import {clipExportPoolFiles,clipExportPoolAddedFunctionIdentities,clipExportPoolReplacedFunctionIdentities} from './helpers/clip-export-pool-migration-inventory.mjs';
 
 // Explicit reviewed successors: excluded from historical delta checkpoints,
 // required in full-chain repair qualification alongside their real prerequisites.
@@ -783,6 +784,55 @@ const queries={
   policies:`select * from pg_policies where schemaname in ${schemas} order by schemaname,tablename,policyname`,
 };
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
+
+test('bounded render pool successors have the exact catalog delta and private activation boundary', {timeout:180_000}, async()=>{
+  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:clipExportPoolFiles});
+  try{
+    assert.deepEqual(replayReport.excludedMigrations,[...clipExportPoolFiles]);
+    assert.ok(replayReport.files.includes('20261101141646_creator_clip_export_jobs.sql'),'original durable queue is the real prerequisite');
+    const before=(await db.query(queries.functions)).rows;
+    await db.exec('update private.creator_clip_export_worker set enabled=true,last_heartbeat_at=clock_timestamp() where singleton');
+    for(const file of clipExportPoolFiles)await db.exec(fs.readFileSync(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8'));
+    const after=(await db.query(queries.functions)).rows;
+    const previous=new Map(before.map(fn=>[fn.identity,fn])),current=new Map(after.map(fn=>[fn.identity,fn]));
+    const identities=rows=>rows.map(fn=>[fn.key,fn.identity]).sort();
+    const added=after.filter(fn=>!previous.has(fn.identity));
+    assert.deepEqual(identities(added),[...clipExportPoolAddedFunctionIdentities].sort(),'exactly nine reviewed signatures are added');
+    assert.deepEqual(identities(before.filter(fn=>!current.has(fn.identity))),[],'legacy signatures are retained');
+    assert.deepEqual(identities(after.filter(fn=>previous.has(fn.identity)&&fn.definition!==previous.get(fn.identity).definition)),
+      [...clipExportPoolReplacedFunctionIdentities].sort(),'exactly six existing queue bodies change');
+    for(const fn of after.filter(fn=>previous.has(fn.identity))){
+      const {definition:oldDefinition,provolatile:oldVolatility,...oldContract}=previous.get(fn.identity);
+      const {definition:newDefinition,provolatile:newVolatility,...newContract}=fn;
+      assert.deepEqual(newContract,oldContract,`${fn.identity}: OID, ABI, owner, ACL and security flags are preserved`);
+      if(fn.key==='private.clip_export_safe_status/1'){
+        assert.equal(oldVolatility,'i');assert.equal(newVolatility,'v','status now reads current session/output/controller truth');
+      }else assert.equal(newVolatility,oldVolatility,`${fn.identity}: unrelated volatility is preserved`);
+      if(!clipExportPoolReplacedFunctionIdentities.some(([key])=>key===fn.key))assert.equal(newDefinition,oldDefinition);
+    }
+    for(const fn of added){
+      const grants=(await db.query(`select role,has_function_privilege(role,$1::oid,'EXECUTE') allowed
+        from unnest(array['anon','authenticated','service_role']) role`,[fn.oid])).rows;
+      assert.deepEqual(grants,['anon','authenticated','service_role'].map(role=>({role,allowed:fn.key.startsWith('public.')&&role==='service_role'})),
+        `${fn.identity}: only public worker RPCs allow service_role; helpers have no API execution`);
+      assert.deepEqual(fn.proconfig,['search_path=""'],`${fn.identity}: fixed empty search path`);
+    }
+    const tables=['creator_clip_export_workers','creator_clip_export_worker_sessions','creator_clip_export_fairness','creator_clip_scale_ledger'];
+    const rows=(await db.query(`select c.relname,c.relrowsecurity,c.relforcerowsecurity,
+      exists(select 1 from unnest(array['anon','authenticated','service_role']) r(role)
+        cross join unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p(privilege)
+        where has_table_privilege(r.role,c.oid,p.privilege)) api_access
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='private' and c.relname=any($1::text[]) order by c.relname`,[tables])).rows;
+    assert.deepEqual(rows,tables.sort().map(relname=>({relname,relrowsecurity:true,relforcerowsecurity:true,api_access:false})));
+    assert.deepEqual((await db.query(`select enabled,max_active_jobs,scale_zero_admission_enabled,controller_admission_ready,
+      (select count(*)::int from private.creator_clip_export_workers) workers,
+      (select count(*)::int from private.creator_clip_scale_ledger) ledgers
+      from private.creator_clip_export_worker where singleton`)).rows,
+    [{enabled:false,max_active_jobs:1,scale_zero_admission_enabled:false,controller_admission_ready:false,workers:0,ledgers:0}],
+    'even a previously enabled singleton is held OFF; the migration never admits scale-to-zero, registers a worker or starts a controller');
+  }finally{await db.close();}
+});
 
 test('November completion bundle has the exact reviewed added/replaced catalog signatures', {timeout:180_000}, async()=>{
   const completionOnDisk=fs.readdirSync(new URL('../supabase/migrations/',import.meta.url))
