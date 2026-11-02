@@ -144,3 +144,52 @@ No reconstructed historical receipt is valid.
   Generated media was cleaned up. This is a fixture-generation defect, not a
   production render failure. The corrected helper uses an input display-matrix
   override and has a tiny real-MP4 regression; assertions were not relaxed.
+
+- `audits/clip-workload-rebuild-representative-20261102.json`: corrected fresh
+  representative run, **passed local scope only**, started 2026-11-02 14:48:10
+  UTC and completed in 315.27 seconds. Source hashes in the receipt match the
+  measured source checkpoint (local `2da8c1b2`, remote `54005b71`). FFmpeg/ffprobe
+  7.1.5, Node 24.22.1, Python 3.12.14, Linux 6.18.57; 2-CPU affinity,
+  1536 MiB sampled RSS budget, 4096 MiB scratch budget, 900-second deadline.
+  Preflight observed 9,006,637,056 bytes available RAM and 58,700,038,144 bytes
+  free workspace disk; effective cgroup quotas were unavailable/unknown.
+
+| Actual synthetic input | Duration | Exact bytes | Export, each serial and concurrent |
+| --- | ---: | ---: | --- |
+| 1920×1080 H.264, 30 fps, AAC | 600 s | 1,172,676,072 | 8 s, 1080×1080, fit + watermark |
+| 3840×2160 H.264, VFR, 90° rotation, AAC | 12 s | 73,285,852 | 3 s, 606×1080 |
+| 3840×2160 HEVC Main10, VFR, 90° rotation, AAC | 12 s | 72,696,255 | 3 s, 606×1080 |
+| 1920×1080 lossless H.264 temporal noise, AAC | 10 s | 1,145,371,590 | 3 s, 1080×1080 |
+
+All four sources passed full decode, local hash and post-render immutable rehash.
+All eight exports passed the production core's probe and full-decode validation.
+
+| Measured local render batch | Wall time | Sampled process CPU | Sampled aggregate process-tree RSS |
+| --- | ---: | ---: | ---: |
+| Four serial jobs | 45.26 s | 80.11 CPU-s | 434.27 MiB |
+| Same four edits, two-job queue | 41.92 s | 80.24 CPU-s | 778.03 MiB |
+
+Two actual FFmpeg transcodes overlapped. Third/fourth queue waits were 8.98 s
+and 11.34 s. Individual validated core elapsed times (serial → concurrent) were
+5.57 → 11.03 s, 5.40 → 8.71 s, 9.36 → 14.61 s and 24.18 → 30.35 s. This single
+warm/local sample does **not** establish throughput scaling, lower CPU cost or
+capacity: concurrency increased individual latency and nearly doubled sampled
+RSS; sampled CPU work was essentially unchanged. Per-phase CPU and child peak
+RSS are retained in the raw JSON rather than inferred from this table.
+
+Scratch allocated high-water was 2,566,287,360 bytes (about 2.39 GiB). Synthetic
+HEVC generation—not production rendering—peaked at 1,077,207,040 sampled bytes
+(about 1027 MiB) and took 62.03 s with the disclosed low-buffer generator.
+
+Direct cancellation observed a transcode and signaled the Node worker at
+0.206 s after launch; the worker exited at 0.308 s with `render_canceled`.
+Malformed source returned `media_process_failed` after its metadata probe,
+without a transcode. Both retired without supervisor cleanup or surviving
+descendants. Cancellation was an **early-start** observation, not a sustained
+mid-render/transfer cancellation test. No requested local stage remained
+unexecuted in this successful run. Generated media was removed afterward.
+
+**Still NOT RUN:** maximum tier, 150-minute full-source encoding, near-5-GiB input,
+maximum-resolution cross-products, sustained/high-concurrency load, actual host
+capacity and every production/provider path listed above. The prior failed
+fixture receipt remains failed; this successful retry does not rewrite it.
