@@ -56,11 +56,32 @@ sustained throughput, doubled capacity, or equivalence to two provider vCPUs.
 Early-start direct cancellation and malformed-input failure passed without
 surviving descendants or credited supervisor cleanup. Source bytes were rehashed.
 
-All six measured source hashes match the integrated checkout. The earlier
-rotation-fixture failure remains separately preserved; the corrected run does
-not erase it. Lost pre-recovery raw receipts were not recreated as measurements.
+All six measured source hashes matched the pre-correction integrated checkout.
+The subsequent delayed-timeline guard narrows seek eligibility; the workload
+receipt retains its original measured-source hashes and is not retroactively
+claimed as a measurement of that later revision. The earlier rotation-fixture
+failure remains separately preserved. Lost pre-recovery raw receipts were not
+recreated as measurements.
 See the [workload runbook](../CLIP_RENDER_WORKLOAD_QUALIFICATION.md) for scope,
 budgets, sampling limitations and reproduction instructions.
+
+### Delayed-timeline correction
+
+Improved bounded diagnostics exposed an intermittent optimized-seek mismatch
+for a video starting at 0.333008 seconds while audio/container start at zero.
+Controlled experiments used identical input bytes: ten baseline renders were
+stable, while one of ten optimized candidates differed in frames 35–59. The
+internal FFmpeg cause was not proven. The earlier opaque test-file exit is
+preserved separately, not retroactively assigned a definite cause.
+
+Optimization now requires explicit zero video/container/audio starts; unknown
+or nonzero anchors retain the original output-only seek. Accepted inputs and
+pixel/audio assertions are unchanged. Six repeated comparisons of the retained
+fresh failing source then matched exactly. The corrected source also passed
+all 21 media cases and one complete focused run (176/176, no skipped cases).
+Those are local checks, not a substitute for final exact-head hosted validation.
+The [immutable evidence checkpoint](https://github.com/Chillywood2025/chillywood-mobile/tree/b36d3e9a4fcffe8289c1bd60d7c40a604ab38836/docs/audits/renderer-delayed-timeline-20261102)
+contains the fresh reproducer, failure/control records and post-fix receipts.
 
 ## Remaining production blockers
 

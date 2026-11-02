@@ -193,3 +193,14 @@ unexecuted in this successful run. Generated media was removed afterward.
 maximum-resolution cross-products, sustained/high-concurrency load, actual host
 capacity and every production/provider path listed above. The prior failed
 fixture receipt remains failed; this successful retry does not rewrite it.
+
+### Later seek-eligibility correction
+
+After this measured workload, an independent delayed-video comparison exposed
+an intermittent difference. The renderer subsequently restricted input seeking
+to explicit zero video/container/audio starts, retaining legacy seeking for
+unknown or nonzero starts without rejecting those inputs. The receipt above
+remains bound to its recorded pre-correction source; it is not a new throughput
+measurement for the corrected revision. Exact retained-input repetitions and
+the full media/focused regression suite separately qualified the correction.
+Production hardware and maximum-capacity qualification remain outstanding.

@@ -1,5 +1,10 @@
 # Renderer reconstruction checkpoint
 
+This manifest records the initial recovered-byte checkpoint, not the current
+source tree. Subsequent reconstruction and corrections are tracked in the
+renderer readiness audit and exact-head PR validation; the hashes below remain
+historical evidence of the initial restoration.
+
 Owner authorized reconstruction of missing pieces on November2 at14:23UTC. This initial checkpoint restores retained source bytes only; it is not a complete implementation or a validated release. Missing tests, worker resource module/CLI integration, UI follow-ups, HDR-safe error propagation, policy inventory and workload tooling remain under reconstruction. Prior historical test reports are not fresh qualification.
 
 Paid scaling, purchases, provider/security changes, deployment, builds and OTA remain held. Each completed checkpoint must be remotely persisted and read back.
