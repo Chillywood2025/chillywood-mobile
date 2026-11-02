@@ -30,6 +30,7 @@ export type WatchPartyLiveKitAuthorityDecision = WatchPartyLiveKitAuthority | {
     | "exact_live_pass_authority_required"
     | "exact_live_access_authority_required"
     | "paid_room_host_creator_authority_required"
+    | "circle_live_authority_required"
     | "room_viewer_authority_required"
     | "viewer_session_authority_invalid"
     | "viewer_authority_invalid";
@@ -51,6 +52,7 @@ const DENIED_REASONS = new Set<Extract<WatchPartyLiveKitAuthorityDecision, { all
   "exact_live_pass_authority_required",
   "exact_live_access_authority_required",
   "paid_room_host_creator_authority_required",
+  "circle_live_authority_required",
   "room_viewer_authority_required",
   "viewer_session_authority_invalid",
   "viewer_authority_invalid",

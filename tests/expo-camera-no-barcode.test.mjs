@@ -32,7 +32,7 @@ function fixture(t, version = patch.SDK_VERSION) {
   fs.mkdirSync(sdk, { recursive: true });
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({
     name: "camera-source-build-fixture",
-    expo: { autolinking: { android: { buildFromSource: ["^expo-camera$"] } } },
+    expo: { autolinking: { android: { buildFromSource: ["^expo-camera$", "^expo-image-picker$"] } } },
   }));
   fs.writeFileSync(path.join(sdk, "package.json"), JSON.stringify({ name: "expo-camera", version }));
   for (const [name, source] of original) {
@@ -206,7 +206,7 @@ test("production Android autolinking resolves the exact patched Expo Camera sour
   const resolved = JSON.parse(execFileSync(process.execPath, [cli, "resolve", "--platform", "android", "--json", "--project-root", projectRoot], {
     cwd: projectRoot, encoding: "utf8", maxBuffer: 4 * 1024 * 1024,
   }));
-  assert.deepEqual(resolved.configuration.buildFromSource, ["^expo-camera$"]);
+  assert.deepEqual(resolved.configuration.buildFromSource, ["^expo-camera$", "^expo-image-picker$"]);
   const cameras = resolved.modules.filter(({ packageName }) => packageName === "expo-camera");
   assert.equal(cameras.length, 1);
   assert.equal(cameras[0].packageVersion, patch.SDK_VERSION);
@@ -237,7 +237,7 @@ test("missing, misplaced and wrong source-build pins fail before any source writ
     {},
     { autolinking: { buildFromSource: ["^expo-camera$"] } },
     { autolinking: { ios: { buildFromSource: ["^expo-camera$"] } } },
-    ...[undefined, [], "^expo-camera$", ["expo-camera"], ["^expo_camera$"], ["^expo-camera.*$"], [".*"], ["^expo-camera$", ".*"]]
+    ...[undefined, [], "^expo-camera$", ["^expo-camera$"], ["expo-camera"], ["^expo_camera$"], ["^expo-camera.*$"], [".*"], ["^expo-camera$", ".*"]]
       .map(buildFromSource => ({ autolinking: { android: { buildFromSource } } })),
   ]) {
     fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "camera-source-build-fixture", expo }));

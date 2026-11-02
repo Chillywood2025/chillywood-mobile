@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createDatabase } from './helpers/database-runtime-authority-fixture.mjs';
+import { seedLiveRoomActor } from './helpers/live-room-authority-fixture.mjs';
 
 test('canonical scoped discovery outbox: authority, producer, atomic dispatch, retries and deadlines', { timeout: 120_000 }, async () => {
   let databaseFactory;
@@ -12,6 +13,7 @@ test('canonical scoped discovery outbox: authority, producer, atomic dispatch, r
   }
   const { db } = await createDatabase({ includeHeldStudio: true, applyRepair: true, databaseFactory });
   const owner = '9d280000-0000-4000-8000-000000000001';
+  const session = '9d280001-0000-4000-8000-000000000001';
   const item = '9d280000-0000-4000-8000-000000000002';
   const event = '9d280000-0000-4000-8000-000000000003';
   const scalar = async sql => Object.values((await db.query(sql)).rows[0])[0];
@@ -38,11 +40,14 @@ test('canonical scoped discovery outbox: authority, producer, atomic dispatch, r
     assert.equal((await flush()).enabled, false, 'dispatch defaults off');
     assert.equal(await scalar(`select collecting from private.discovery_invalidation_worker_config`), false);
     await db.query(`insert into auth.users(id,is_anonymous,is_sso_user) values($1,false,false)`, [owner]);
+    await seedLiveRoomActor(db,{id:owner,session},{premium:false});
     await db.query(`insert into public.discovery_feed_items(id,item_type,source_type,owner_user_id,channel_user_id,
       visibility,rights_status,is_publicly_discoverable,discovery_surface,title)
       values($1,'manual_foundation','manual_foundation',$2,$2,'public','creator_owned',true,'home_profile_channel','Public listing')`, [item, owner]);
     assert.equal(await scalar('select count(*)::int from private.discovery_invalidation_outbox'), 0, 'collection defaults off');
-    await db.exec(`update private.discovery_invalidation_worker_config set collecting=true,enabled=true,
+    // This suite exercises the retained worker fallback, independently of the
+    // immediate primary path covered by discovery-primary-delivery-database.
+    await db.exec(`update private.discovery_invalidation_worker_config set collecting=true,enabled=true,primary_delivery_enabled=false,
       token_sha256=encode(extensions.digest(repeat('t',32),'sha256'),'hex')`);
     assert.equal(await scalar(`select public.authorize_discovery_invalidation_worker(repeat('x',32))`), false);
     assert.equal(await scalar(`select public.authorize_discovery_invalidation_worker(repeat('t',32))`), true);
@@ -51,7 +56,7 @@ test('canonical scoped discovery outbox: authority, producer, atomic dispatch, r
     await db.query(`update public.discovery_feed_items set title='Changed again' where id=$1`, [item]);
     const result = await flush();
     assert.equal(result.completed, 8); assert.equal(result.topics, 4, 'same-scope records coalesce');
-    assert.equal(await scalar(`select bool_and(payload-'id'='{}'::jsonb and payload->>'id' ~ '^[0-9a-f-]{36}$' and event='discovery:invalidate' and private) from realtime.fixture_outbox`), true, 'only opaque delivery id in private hints');
+    assert.equal(await scalar(`select bool_and(payload-'id'-'keys'='{}'::jsonb and payload->>'id' ~ '^[0-9a-f-]{36}$' and jsonb_array_length(payload->'keys') between 1 and 256 and event='discovery:invalidate' and private) from realtime.fixture_outbox`), true, 'only opaque delivery and affected-source keys in private hints');
     assert.equal((await flush()).claimed, 0, 'completed work not repeated');
     await db.exec(`insert into realtime.messages(payload,event,topic,private,extension,inserted_at)
       select '{}'::jsonb,'other','unrelated-'||n,true,'broadcast',timezone('utc',clock_timestamp())-interval '1 day'
@@ -144,7 +149,7 @@ test('canonical scoped discovery outbox: authority, producer, atomic dispatch, r
       assert.equal(await scalar(`select has_function_privilege('${role}','public.authorize_discovery_invalidation_worker(text)','execute')`), false);
       assert.equal(await scalar(`select has_table_privilege('${role}','private.discovery_invalidation_outbox','select')`), false);
     }
-    await db.query(`select set_config('request.jwt.claims',$1,false)`, [JSON.stringify({role:'authenticated',sub:owner})]);
+    await db.query(`select set_config('request.jwt.claims',$1,false)`, [JSON.stringify({role:'authenticated',sub:owner,session_id:session})]);
     assert.equal(await scalar(`select public.can_receive_discovery_invalidation('discovery:v1:surface:home')`), true);
     assert.equal(await scalar(`select public.can_receive_discovery_invalidation('discovery:v1:surface:circle')`), false);
     assert.equal(await scalar(`select public.can_receive_discovery_invalidation('comm-room-arbitrary')`), false);

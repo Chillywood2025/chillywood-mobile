@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
 
-const owner = (generation = 'one') => ({ userId: 'a', accountId: 'a', sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false });
+const viewer = '10000000-0000-4000-8000-000000000001';
+const owner = (generation = 'one') => ({ userId: viewer, accountId: viewer, sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false });
 function fixture(push = true) {
   let authority = owner();
   let finishRemoval;
@@ -17,6 +18,11 @@ function fixture(push = true) {
     exports, process: { env: { EXPO_PUBLIC_LIVE_DISCOVERY_PUSH_ENABLED: String(push) } }, Math: { ...Math, random: () => 0, floor: Math.floor },
     setTimeout: (fn, ms) => { timers.set(fn,ms); return fn; }, clearTimeout: fn => timers.delete(fn),
     require(name) {
+      if(name === './liveDiscoveryInvalidation') {
+        const result = { exports: {} };
+        vm.runInNewContext(ts.transpileModule(fs.readFileSync('_lib/liveDiscoveryInvalidation.ts','utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, result);
+        return result.exports;
+      }
       if(name === 'react-native') return { AppState: app };
       if(name === './accountSessionAuthority') return { getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority: same,
         subscribeToAccountSessionAuthority: fn => { accounts.add(fn); return () => accounts.delete(fn); } };
@@ -29,7 +35,12 @@ function fixture(push = true) {
       throw Error(name);
     },
   });
-  return { channels,removed,timers,accounts,apps,activities, interest: exports.getDiscoveryLiveUpdateInterest,
+  // Existing lifecycle assertions address the public scope. The independent
+  // shared own-viewer transport is asserted explicitly below, not hidden in a
+  // per-creator subscription count.
+  return { get channels() { return channels.filter(ch=>!ch.topic.startsWith('discovery:v1:viewer:')); }, allChannels: channels,
+    get removed() { return removed.filter(ch=>!ch.topic.startsWith('discovery:v1:viewer:')); }, allRemoved: removed,
+    timers,accounts,apps,activities, interest: exports.getDiscoveryLiveUpdateInterest,
     holdRemoval() { removalWait = new Promise(resolve=>{finishRemoval=resolve;}); }, releaseRemoval() { finishRemoval();removalWait=null; },
     subscribe: (callback,interest) => exports.subscribeToLiveUpdates(authority,'discovery',callback,interest),
     flush() { const pending = [...timers.keys()]; timers.clear(); pending.forEach(fn => fn()); },
@@ -84,5 +95,29 @@ test('100listeners and1000hint burst share one transport and one bounded deliver
 });
 test('interest count is bounded even if a screen mounts many distinct creator rails', () => {
   const h=fixture();const stops=Array.from({length:100},(_,i)=>h.subscribe(()=>{}, {creatorUserId:`10000000-0000-4000-8000-${String(i).padStart(12,'0')}`}));
-  assert.equal(h.channels.length,4);stops.forEach(stop=>stop());assert.equal(h.activities.size,0);
+  assert.equal(h.channels.length,4);assert.equal(h.allChannels.length,5);stops.forEach(stop=>stop());assert.equal(h.activities.size,0);
+});
+test('all interests share one exact-own viewer channel, including consumers beyond the public-interest cap', () => {
+  const h=fixture();let delivered=0;
+  const stops=Array.from({length:100},(_,i)=>h.subscribe(()=>delivered++,{creatorUserId:`20000000-0000-4000-8000-${String(i).padStart(12,'0')}`}));
+  const privateChannels=h.allChannels.filter(ch=>ch.topic.startsWith('discovery:v1:viewer:'));
+  assert.equal(privateChannels.length,1);assert.equal(privateChannels[0].topic,`discovery:v1:viewer:${viewer}`);
+  assert.equal(privateChannels[0].options.config.private,true);
+  for(let i=0;i<1000;i++)privateChannels[0].hint({payload:{id:'opaque'}});
+  assert.equal(h.timers.size,1);assert.deepEqual([...h.timers.values()],[100]);h.flush();assert.equal(delivered,100);
+  const before=h.allChannels.length;h.subscribe(()=>{}, {viewerUserId:'30000000-0000-4000-8000-000000000003'});
+  assert.equal(h.allChannels.length,before,'caller cannot select another viewer topic');
+  h.account(owner('replacement'));privateChannels[0].hint();h.flush();assert.equal(delivered,100,'retired private callbacks cannot reconcile replacement account');
+  stops.forEach(stop=>stop());assert.equal(h.accounts.size,0);assert.equal(h.apps.size,0);
+});
+test('scoped opaque keys coalesce without payload metadata; malformed and overflowing input fails closed', () => {
+  const h=fixture(),received=[];h.subscribe(value=>received.push(value));
+  const a='a0000000-0000-4000-8000-000000000001',b='b0000000-0000-4000-8000-000000000002';
+  h.channels[0].hint({payload:{id:'random',keys:[a],title:'must not pass through'}});
+  h.channels[0].hint({payload:{id:'random2',keys:[a,b]}});h.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(received.pop())),{keys:[a,b]});
+  h.channels[0].hint({payload:{keys:['not-an-opaque-uuid']}});h.flush();assert.equal(received.pop().keys,null);
+  for(let i=0;i<257;i++)h.channels[0].hint({payload:{keys:[`10000000-0000-4000-8000-${String(i).padStart(12,'0')}`]}});
+  h.flush();assert.equal(received.pop().keys,null);
+  h.activity();h.flush();assert.equal(received.pop().keys.length,0,'secondary CDC is a wakeup, not a fabricated whole-world privacy change');
 });

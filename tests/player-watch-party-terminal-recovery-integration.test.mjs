@@ -73,6 +73,16 @@ function harness(t) {
       const id = url.searchParams.get('id')?.replace(/^eq\./, '') ?? TITLE;
       return json({ id, is_published: true, status: 'published' });
     }
+    if (url.pathname.endsWith('/rpc/resolve_watch_party_room_entry')) {
+      assert.equal(method, 'POST');
+      const input = JSON.parse(init.body);
+      assert.equal(typeof input.p_party_id, 'string');
+      const bound = state.tokenOwners.get(request.authorization?.replace(/^Bearer /, ''));
+      assert.equal(input.p_session_generation, bound?.sessionGeneration, 'entry fallback is exact-session bound');
+      // These denied/unavailable fixtures expose no alternate entry preview.
+      // This read never creates, publishes, joins or heartbeats a room.
+      return json([]);
+    }
     assert.ok(url.pathname.endsWith('/watch_party_rooms'), `Unexpected endpoint ${url.pathname}`);
     if (method === 'POST') {
       const payload = JSON.parse(init.body);
@@ -125,6 +135,7 @@ function harness(t) {
       },
     },
     '@react-native-async-storage/async-storage': {},
+    '@supabase/supabase-js': { createClient: (url, key, options) => createClient(url, key, { ...options, global: { ...options.global, fetch } }) },
     './supabase': { supabase, SUPABASE_URL: 'https://party-recovery.invalid', SUPABASE_ANON_KEY: 'fixture-anon-key' },
     './logger': { debugLog: noop, reportRuntimeError: noop },
     './analytics': { trackEvent: (...args) => state.events.push(args) },
@@ -152,6 +163,7 @@ function harness(t) {
   };
   const actual = new Map([
     ['./watchParty', '_lib/watchParty.ts'],
+    ['./watchPartyHostSettings', '_lib/watchPartyHostSettings.ts'],
     ['./accountSessionAuthority', '_lib/accountSessionAuthority.ts'],
     ['./accountBoundSupabaseMutation', '_lib/accountBoundSupabaseMutation.ts'],
     ['./accountBoundSupabaseRpc.mjs', '_lib/accountBoundSupabaseRpc.mjs'],
@@ -196,7 +208,7 @@ function harness(t) {
     // recorded boundary too, so a swallowed mutation assertion cannot pass.
     for (const { method, url } of state.requests) {
       assert.ok((method === 'GET' && ['/rest/v1/titles', '/rest/v1/watch_party_rooms'].includes(url.pathname))
-        || (method === 'POST' && ['/rest/v1/watch_party_rooms', '/rest/v1/rpc/wave1_session_authority_readback'].includes(url.pathname)),
+        || (method === 'POST' && ['/rest/v1/watch_party_rooms', '/rest/v1/rpc/wave1_session_authority_readback', '/rest/v1/rpc/resolve_watch_party_room_entry'].includes(url.pathname)),
       `Player recovery must not issue unexpected reads or side effects: ${method} ${url.pathname}`);
     }
   });

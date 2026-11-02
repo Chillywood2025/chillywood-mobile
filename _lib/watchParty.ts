@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import { createClient } from "@supabase/supabase-js";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { runKeyedSingleFlight } from "./actionSingleFlight.mjs";
@@ -49,9 +50,10 @@ import {
   readSocialAttachmentsForSurfaces,
   type SocialAttachment,
 } from "./socialAttachments";
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
 import { AccountBoundSupabaseMutationError, assertAccountBoundSupabaseMutationSubjectCurrent, captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runExactSessionAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import { readUserProfile } from "./userData";
+import { setWatchPartyHostSettings } from "./watchPartyHostSettings";
 export {
   PARTY_SEAT_REQUEST_MESSAGE_PREFIX,
   PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS,
@@ -75,8 +77,13 @@ export type WatchPartyState = {
   sourceType: WatchPartyContentSourceType | null;
   sourceId: string | null;
   discoveryVisibility: WatchPartyDiscoveryVisibility;
+  /** Undefined on older servers: never guess paused listing authority. */
+  discoveryPaused?: boolean | null;
   discoveryTitle: string | null;
   discoveryStartedAt: string | null;
+  /** Missing until the server supports revision-bound host settings. */
+  roomGeneration?: string | null;
+  hostSettingsRevision?: number | null;
   hostUserId: string;
   playbackPositionMillis: number;
   playbackState: WatchPartyPlaybackState;
@@ -200,6 +207,7 @@ type WatchPartyRoomCreateOptions = {
   contentAccessRule?: ContentAccessRule;
   capturePolicy?: CapturePolicy;
   discoveryVisibility?: WatchPartyDiscoveryVisibility;
+  discoveryPaused?: boolean;
   discoveryTitle?: string | null;
 };
 
@@ -209,6 +217,7 @@ type SetPartyRoomPoliciesOptions = {
   contentAccessRule?: ContentAccessRule;
   capturePolicy?: CapturePolicy;
   discoveryVisibility?: WatchPartyDiscoveryVisibility;
+  discoveryPaused?: boolean;
   discoveryTitle?: string | null;
 };
 
@@ -313,8 +322,11 @@ type PartyRoomFullRow = PartyRoomBaseRow & Pick<
   "join_policy" | "reactions_policy" | "content_access_rule" | "capture_policy" | "last_activity_at"
 > & {
   discovery_visibility?: string | null;
+  discovery_paused?: boolean | null;
   discovery_title?: string | null;
   discovery_started_at?: string | null;
+  room_generation?: string | null;
+  host_settings_revision?: number | null;
 };
 
 export type PartyRoomRow = PartyRoomLegacyBaseRow | PartyRoomBaseRow | PartyRoomFullRow;
@@ -348,6 +360,7 @@ const PARTY_ROOMS_BASE_SELECT =
   `${PARTY_ROOMS_LEGACY_BASE_SELECT},source_type,source_id`;
 const PARTY_ROOMS_POLICY_SELECT =
   `${PARTY_ROOMS_BASE_SELECT},join_policy,reactions_policy,content_access_rule,capture_policy,last_activity_at,discovery_visibility,discovery_title,discovery_started_at`;
+const PARTY_ROOMS_HOST_SETTINGS_SELECT = `${PARTY_ROOMS_POLICY_SELECT},room_generation,host_settings_revision,discovery_paused`;
 const PARTY_ROOM_MEMBERSHIP_SELECT =
   "party_id,user_id,role,stage_role,can_speak,is_muted,host_muted,self_muted,membership_state,camera_enabled,mic_enabled,display_name,avatar_url,camera_preview_url,joined_at,last_seen_at,left_at,updated_at";
 
@@ -790,8 +803,12 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
     sourceType,
     sourceId,
     discoveryVisibility,
+    discoveryPaused: "discovery_paused" in row && typeof row.discovery_paused === "boolean" ? row.discovery_paused : null,
     discoveryTitle,
     discoveryStartedAt,
+    roomGeneration: "room_generation" in row && typeof row.room_generation === "string" ? row.room_generation : null,
+    hostSettingsRevision: "host_settings_revision" in row && Number.isSafeInteger(row.host_settings_revision)
+      && Number(row.host_settings_revision) >= 0 ? Number(row.host_settings_revision) : null,
     playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
     playbackState: row.playback_state === "playing" ? "playing" : "paused",
     joinPolicy: normalizeJoinPolicy(joinPolicy),
@@ -879,12 +896,20 @@ async function fetchPartyRoomRow(lookupPartyId: string): Promise<PartyRoomRow | 
   const normalizedPartyId = String(lookupPartyId ?? "").trim().toUpperCase();
   if (!normalizedPartyId) return null;
 
-  const query = await supabase
+  let query = await supabase
     .from(PARTY_ROOMS_TABLE)
-    .select(PARTY_ROOMS_POLICY_SELECT)
+    .select(PARTY_ROOMS_HOST_SETTINGS_SELECT)
     .eq("party_id", normalizedPartyId)
     .returns<PartyRoomFullRow>()
     .maybeSingle();
+
+  // Older servers may still serve the room, but cannot expose editable host
+  // settings without generation/revision authority. Never guess that authority.
+  if (query.error && (isMissingColumnError(query.error, "room_generation")
+    || isMissingColumnError(query.error, "host_settings_revision") || isMissingColumnError(query.error, "discovery_paused"))) {
+    query = await supabase.from(PARTY_ROOMS_TABLE).select(PARTY_ROOMS_POLICY_SELECT)
+      .eq("party_id", normalizedPartyId).returns<PartyRoomFullRow>().maybeSingle();
+  }
 
   if (!query.error && query.data) return query.data;
 
@@ -905,7 +930,17 @@ async function fetchPartyRoomRow(lookupPartyId: string): Promise<PartyRoomRow | 
     if (!fallback.error && fallback.data) return fallback.data;
   }
 
-  return null;
+  // Exact room links/codes are not directory queries. The server may return a
+  // scoped entry preview even when the room is intentionally absent from RLS
+  // listings; it independently checks current account, blocks and Circle.
+  try {
+    const subject = await captureAccountBoundSupabaseMutationSubject();
+    const { data, error } = await invokeAccountBoundSupabaseMutationRpc<PartyRoomFullRow[]>(subject,
+      "resolve_watch_party_room_entry", { p_party_id: normalizedPartyId,
+        p_session_generation: subject.authority.sessionGeneration });
+    const row = !error && Array.isArray(data) && data.length === 1 ? data[0] : null;
+    return row?.party_id === normalizedPartyId ? row : null;
+  } catch { return null; }
 }
 
 async function fetchPartyMembershipRow(partyId: string, userId: string): Promise<PartyMembershipRow | null> {
@@ -1013,6 +1048,7 @@ const getPartyRoomCreateFlightKey = (
   options?.contentAccessRule ?? "",
   options?.capturePolicy ?? "",
   options?.discoveryVisibility ?? "",
+  options?.discoveryPaused ?? false,
   String(options?.discoveryTitle ?? "").trim(),
 ]);
 
@@ -1178,7 +1214,7 @@ async function createPartyRoomOnce(
             : isSpectatorPlaybackRoom
               ? spectatorPlaybackSourceId
               : (safeTitleId ?? null);
-          const payload: PartyRoomInsert = {
+          const payload: PartyRoomInsert & { discovery_paused: boolean } = {
             party_id: generatedPartyId,
             room_type: requestedRoomType,
             host_user_id: safeHostUserId,
@@ -1195,6 +1231,7 @@ async function createPartyRoomOnce(
             discovery_visibility: requestedRoomType === "live"
               ? normalizeWatchPartyDiscoveryVisibility(options?.discoveryVisibility)
               : "private",
+            discovery_paused: options?.discoveryPaused === true,
             discovery_title: requestedRoomType === "live"
               ? String(options?.discoveryTitle ?? "").trim() || null
               : null,
@@ -1210,7 +1247,7 @@ async function createPartyRoomOnce(
             .from(PARTY_ROOMS_TABLE)
             .insert(payload)
             .setHeader("Authorization", `Bearer ${subject.accessToken}`)
-            .select(PARTY_ROOMS_POLICY_SELECT)
+            .select(PARTY_ROOMS_HOST_SETTINGS_SELECT)
             .returns<PartyRoomFullRow[]>()
             .single();
           // A dispatched mutation is not canceled by a later account change.
@@ -1648,15 +1685,34 @@ export async function leavePartyRoomSession(options: MembershipUpsertOptions): P
 export async function setPartyRoomPolicies(
   partyId: string,
   policies: SetPartyRoomPoliciesOptions,
+  expectedRoom?: WatchPartyState,
 ): Promise<WatchPartyState | null> {
   const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
+  const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
   const writableUserId = await getWritablePartyUserId();
   if (!normalizedPartyId || !writableUserId) return null;
-  const room = await getPartyRoom(normalizedPartyId).catch(() => null);
+  let room = await getPartyRoom(normalizedPartyId).catch(() => null);
   if (!room) return null;
   const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
   if (!premiumAccess?.allowed) return null;
   const creatorPermissions = await readCreatorPermissions(writableUserId).catch(() => null);
+
+  if (policies.joinPolicy || policies.discoveryVisibility || policies.discoveryTitle !== undefined || policies.discoveryPaused !== undefined) {
+    const authority = initiatingAuthority;
+    if (!authority || room.hostUserId !== authority.userId
+      || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) return null;
+    const expected = expectedRoom ?? room;
+    if (expected.partyId !== normalizedPartyId || expected.hostUserId !== authority.userId) return null;
+    const result = await setWatchPartyHostSettings(expected, {
+      joinPolicy: policies.joinPolicy ?? expected.joinPolicy,
+      discoveryVisibility: policies.discoveryVisibility ?? expected.discoveryVisibility,
+      discoveryPaused: policies.discoveryPaused ?? expected.discoveryPaused ?? undefined,
+      discoveryTitle: policies.discoveryTitle !== undefined ? policies.discoveryTitle : expected.discoveryTitle,
+    }, authority, () => sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()), { publish: false });
+    if (!result) return null;
+    room = result.room;
+    if (!policies.reactionsPolicy && !policies.contentAccessRule && !policies.capturePolicy) return room;
+  }
 
   const now = new Date().toISOString();
   const updates: PartyRoomUpdate = {
@@ -1664,7 +1720,6 @@ export async function setPartyRoomPolicies(
     last_activity_at: now,
   };
 
-  if (policies.joinPolicy) updates.join_policy = normalizeJoinPolicy(policies.joinPolicy);
   if (policies.reactionsPolicy) updates.reactions_policy = normalizeReactionsPolicy(policies.reactionsPolicy);
   if (policies.contentAccessRule) {
     updates.content_access_rule = normalizeContentAccessRule(
@@ -1672,19 +1727,13 @@ export async function setPartyRoomPolicies(
     );
   }
   if (policies.capturePolicy) updates.capture_policy = normalizeCapturePolicy(policies.capturePolicy);
-  if (policies.discoveryVisibility && room.roomType === "live") {
-    updates.discovery_visibility = normalizeWatchPartyDiscoveryVisibility(policies.discoveryVisibility);
-  }
-  if (policies.discoveryTitle !== undefined && room.roomType === "live") {
-    updates.discovery_title = String(policies.discoveryTitle ?? "").trim() || null;
-  }
 
   const { data, error } = await supabase
     .from(PARTY_ROOMS_TABLE)
     .update(updates)
     .eq("party_id", normalizedPartyId)
     .eq("host_user_id", writableUserId)
-    .select(PARTY_ROOMS_POLICY_SELECT)
+    .select(PARTY_ROOMS_HOST_SETTINGS_SELECT)
     .returns<PartyRoomFullRow>()
     .single();
 
@@ -1780,7 +1829,11 @@ export async function refreshOwnedPartyRoomForStart(
   query = expectedRoom.titleId === null
     ? query.is("title_id", null)
     : query.eq("title_id", expectedRoom.titleId);
-  const { data, error } = await query.select(PARTY_ROOMS_POLICY_SELECT)
+  if (expectedRoom.roomGeneration && Number.isSafeInteger(expectedRoom.hostSettingsRevision)) {
+    query = query.eq("room_generation", expectedRoom.roomGeneration)
+      .eq("host_settings_revision", Number(expectedRoom.hostSettingsRevision));
+  }
+  const { data, error } = await query.select(PARTY_ROOMS_HOST_SETTINGS_SELECT)
     .returns<PartyRoomFullRow[]>().maybeSingle();
   if (!current()) return null;
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
@@ -1789,6 +1842,9 @@ export async function refreshOwnedPartyRoomForStart(
     || data.room_type !== expectedRoom.roomType || data.title_id !== expectedRoom.titleId
     || data.source_type !== expectedRoom.sourceType || data.source_id !== expectedRoom.sourceId
     || data.discovery_visibility !== expectedRoom.discoveryVisibility
+    || data.discovery_paused !== expectedRoom.discoveryPaused
+    || (expectedRoom.roomGeneration && (data.room_generation !== expectedRoom.roomGeneration
+      || data.host_settings_revision !== expectedRoom.hostSettingsRevision))
     || (data.discovery_title ?? null) !== expectedRoom.discoveryTitle
     || toTimeMillis(data.last_activity_at) !== toTimeMillis(refreshedAt)) return null;
   const room = rowToState(data);
@@ -1797,7 +1853,7 @@ export async function refreshOwnedPartyRoomForStart(
 
 async function writePartyRoomDiscovery(
   expectedRoom: WatchPartyState,
-  policies?: Pick<SetPartyRoomPoliciesOptions, "discoveryVisibility" | "discoveryTitle">,
+  policies?: Pick<SetPartyRoomPoliciesOptions, "discoveryVisibility" | "discoveryTitle" | "discoveryPaused">,
 ): Promise<{ room: WatchPartyState; result: PartyRoomDiscoveryResult } | null> {
   const subject = await captureAccountBoundSupabaseMutationSubject();
   const room = policies
@@ -1807,37 +1863,42 @@ async function writePartyRoomDiscovery(
     || room.partyId !== expectedRoom.partyId || room.hostUserId !== expectedRoom.hostUserId
     || room.sourceType !== expectedRoom.sourceType || room.sourceId !== expectedRoom.sourceId
     || (!policies && (room.discoveryVisibility !== expectedRoom.discoveryVisibility || room.discoveryTitle !== expectedRoom.discoveryTitle))
+    || (expectedRoom.roomGeneration && (room.roomGeneration !== expectedRoom.roomGeneration
+      || room.hostSettingsRevision !== expectedRoom.hostSettingsRevision))
+    || (expectedRoom.startedAt && room.startedAt !== expectedRoom.startedAt)
     || !room.sourceId || !room.sourceType || room.sourceType === "spectator_playback") return null;
   const visibility = policies?.discoveryVisibility ?? room.discoveryVisibility;
   const title = (policies?.discoveryTitle !== undefined ? policies.discoveryTitle ?? "" : room.discoveryTitle ?? "").trim() || null;
-  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<PartyRoomDiscoveryResult>(subject,
-    policies ? "set_party_room_discovery" : "publish_party_room_discovery", {
-      p_party_id: room.partyId,
-      p_expected_source_type: room.sourceType,
-      p_expected_source_id: room.sourceId,
-      p_session_generation: subject.authority.sessionGeneration,
-      ...(policies ? { p_visibility: visibility, p_title: title } : {}),
-    });
-  if (error || !data || data.partyId !== room.partyId || data.sourceType !== room.sourceType
-    || data.sourceId !== room.sourceId || data.visibility !== visibility || data.title !== title
-    || typeof data.published !== "boolean"
-    || (data.published && (!data.startedAt || !data.projectionId || visibility === "private"))) return null;
-  return { room: { ...room, discoveryVisibility: data.visibility, discoveryTitle: data.title }, result: data };
+  const saved = await setWatchPartyHostSettings(room, { joinPolicy: room.joinPolicy,
+    discoveryVisibility: visibility, discoveryTitle: title, discoveryPaused: policies?.discoveryPaused ?? room.discoveryPaused ?? undefined }, subject.authority, () => true,
+    { publish: !policies, preparation: !!policies });
+  return saved ? { room: saved.room, result: { partyId: room.partyId, sourceType: room.sourceType,
+    sourceId: room.sourceId, visibility: saved.room.discoveryVisibility, title: saved.room.discoveryTitle,
+    published: saved.published, startedAt: saved.room.discoveryStartedAt, projectionId: saved.projectionId } } : null;
 }
 
 // The server owns source/audience/session validation. Saving a prepared room
 // cannot publish it; publication additionally requires its joined host.
 export async function setPartyRoomDiscoverySettings(
   partyId: string,
-  policies: Pick<SetPartyRoomPoliciesOptions, "discoveryVisibility" | "discoveryTitle">,
+  policies: Pick<SetPartyRoomPoliciesOptions, "discoveryVisibility" | "discoveryTitle" | "discoveryPaused">,
   expectedRoom: WatchPartyState,
 ): Promise<WatchPartyState | null> {
   if (partyId !== expectedRoom.partyId) return null;
   return (await writePartyRoomDiscovery(expectedRoom, policies))?.room ?? null;
 }
 
-export async function publishPartyRoomDiscovery(expectedRoom: WatchPartyState): Promise<PartyRoomDiscoveryResult | null> {
-  return (await writePartyRoomDiscovery(expectedRoom))?.result ?? null;
+export async function publishPartyRoomDiscovery(expectedRoom: WatchPartyState, isCurrent: () => boolean = () => true): Promise<PartyRoomDiscoveryResult | null> {
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!authority || expectedRoom.roomType !== "title" || !expectedRoom.sourceType || !expectedRoom.sourceId) return null;
+  const result = await setWatchPartyHostSettings(expectedRoom, {
+    joinPolicy: expectedRoom.joinPolicy, discoveryVisibility: expectedRoom.discoveryVisibility,
+    discoveryPaused: expectedRoom.discoveryPaused ?? undefined,
+    discoveryTitle: expectedRoom.discoveryTitle,
+  }, authority, isCurrent);
+  return result ? { partyId: expectedRoom.partyId, sourceType: expectedRoom.sourceType, sourceId: expectedRoom.sourceId,
+    visibility: result.room.discoveryVisibility, title: result.room.discoveryTitle, published: result.published,
+    startedAt: result.room.discoveryStartedAt, projectionId: result.projectionId } : null;
 }
 
 export async function setPartyParticipantState(
@@ -2006,7 +2067,7 @@ export async function sendPartyMessage(
   userId: string,
   kind: WatchPartyMessage["kind"],
   body: string,
-  options?: { username?: string },
+  options?: { username?: string; mutationSubject?: AccountBoundSupabaseMutationSubject; isCurrent?: () => boolean },
 ): Promise<boolean> {
   return !!(await sendPartyMessageRecord(partyId, userId, kind, body, options));
 }
@@ -2016,16 +2077,28 @@ export async function sendPartyMessageRecord(
   userId: string,
   kind: WatchPartyMessage["kind"],
   body: string,
-  options?: { username?: string },
+  options?: { username?: string; mutationSubject?: AccountBoundSupabaseMutationSubject; isCurrent?: () => boolean },
 ): Promise<WatchPartyMessage | null> {
   const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
-  const writableUserId = await resolveWritableUserId(userId);
-  if (!normalizedPartyId || !writableUserId) return null;
+  if (!normalizedPartyId) return null;
 
   const safeBody = String(body ?? "").trim();
   if (!safeBody) return null;
 
   try {
+    const subject = options?.mutationSubject ?? await captureAccountBoundSupabaseMutationSubject(userId);
+    const assertCurrent = () => {
+      assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+      if ((userId && userId !== subject.authority.userId) || (options?.isCurrent && !options.isCurrent())) {
+        throw new AccountBoundSupabaseMutationError();
+      }
+    };
+    assertCurrent();
+    const writableUserId = subject.authority.userId;
+    const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+    });
     const payload: WatchPartyMessageInsert = {
       party_id: normalizedPartyId,
       user_id: writableUserId,
@@ -2034,13 +2107,16 @@ export async function sendPartyMessageRecord(
       created_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
+    assertCurrent();
+    const { data, error } = await client
       .from(WATCH_PARTY_MESSAGES_TABLE)
       .insert(payload)
       .select("id,party_id,user_id,username,text,created_at")
       .single();
     const created = data as unknown as WatchPartyMessageRow | null;
     if (error || !created) return null;
+    assertCurrent();
+    if (String(created.user_id ?? "") !== writableUserId || String(created.party_id ?? "") !== normalizedPartyId) return null;
 
     return {
       id: String(created.id ?? ""),
@@ -2057,14 +2133,25 @@ export async function sendPartyMessageRecord(
   }
 }
 
-export async function deletePartyMessage(messageId: string): Promise<void> {
+export async function deletePartyMessage(
+  messageId: string,
+  options?: { mutationSubject?: AccountBoundSupabaseMutationSubject },
+): Promise<void> {
   const normalizedMessageId = String(messageId ?? "").trim();
   if (!normalizedMessageId) return;
 
-  const { error } = await supabase
+  // Attachment compensation may run after retirement, but must retain the
+  // initiating credential. A fresh delete captures its own current intent.
+  const subject = options?.mutationSubject ?? await captureAccountBoundSupabaseMutationSubject();
+  const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+  });
+  const { error } = await client
     .from(WATCH_PARTY_MESSAGES_TABLE)
     .delete()
-    .eq("id", normalizedMessageId);
+    .eq("id", normalizedMessageId)
+    .eq("user_id", subject.authority.userId);
 
   if (error) throw error;
 }

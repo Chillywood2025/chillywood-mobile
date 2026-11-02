@@ -33,7 +33,7 @@ export async function readOwnProfileFeedHead(signal?: AbortSignal): Promise<Prof
 
 /** One indexed relationship page + batch hydration, never one content request per followed person. */
 export async function readOwnProfileFeedPage(
-  options: { limit?: number; cursor?: string | null } = {},
+  options: { limit?: number; cursor?: string | null; includeDiscovery?: boolean } = {},
 ): Promise<ProfileFeedPage<ProfileSocialFeedItem> & { head: ProfileFeedHead | null }> {
   const authority = getCurrentAccountSessionAuthoritySnapshot();
   if (!authority || authority.restoreOnly) throw new Error("Sign in to read your feed.");
@@ -64,7 +64,7 @@ export async function readOwnProfileFeedPage(
     readCreatorVideosByIds(rows.filter(row => row.source_type === "creator_video").map(row => row.source_id), { limit, includeRenditionStatuses: false, throwOnUnavailable: true }),
     actors.length ? supabase.from("user_profiles").select("user_id,display_name,username,avatar_url,profile_avatar_media_status").in("user_id", actors).returns<ActorRow[]>() : Promise.resolve({ data: [], error: null }),
     // Real public discovery, independent of the viewer's relationship list. Never fabricate trending signals.
-    cursor ? Promise.resolve(null) : readPublicDiscoveryFeedItems({ surface: "profile", limit: 8 })
+    cursor || options.includeDiscovery === false ? Promise.resolve(null) : readPublicDiscoveryFeedItems({ surface: "profile", limit: 8 })
       .then(items => ({ items: rankDiscoveryFeedItems(items) })),
   ]);
   current();

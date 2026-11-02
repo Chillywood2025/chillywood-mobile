@@ -83,14 +83,15 @@ test('missing legacy mocked count, zero, and negative counts expose no action', 
   }
 });
 
-test('all live discovery surfaces wire the affordance to their canonical reload', () => {
-  for (const [file, feed] of [
-    ['app/(tabs)/index.tsx', 'liveDiscovery'],
-    ['app/(tabs)/explore.tsx', 'liveDiscovery'],
-    ['app/(tabs)/live.tsx', 'discovery'],
-    ['components/live/platform-live-now.tsx', 'feed'],
+test('live discovery surfaces no longer require the legacy manual new-items affordance', () => {
+  for (const file of [
+    'app/(tabs)/index.tsx',
+    'app/(tabs)/explore.tsx',
+    'app/(tabs)/live.tsx',
+    'components/live/platform-live-now.tsx',
   ]) {
     const source = fs.readFileSync(file, 'utf8');
-    assert.ok(source.includes(`<NewLiveStreamsButton pendingItemCount={${feed}.pendingItemCount} onRefresh={${feed}.reload} />`), file);
+    assert.ok(source.includes('useLiveDiscoveryFeed'), file);
+    assert.ok(!source.includes('<NewLiveStreamsButton'), file);
   }
 });

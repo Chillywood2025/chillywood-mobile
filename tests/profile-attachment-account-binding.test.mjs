@@ -3,9 +3,11 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import test from 'node:test';
+import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 const ts = createRequire(import.meta.url)('typescript');
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 function harness(stage, failed = false, realStorage = false) {
+  let scopeCurrent = true;
   let current = { userId: 'A', sessionGeneration: 'one' };
   const subject = { authority: { ...current }, accessToken: 'token-A-one' };
   const entered = deferred(), held = deferred(), uploads = [], writes = [], deletes = [], warnings = [], committed = new Map(), requests = [];
@@ -44,12 +46,15 @@ function harness(stage, failed = false, realStorage = false) {
   };
   if (realStorage) {
     const load = (file, dependencies, globals = {}) => {
-      const context = { exports: {}, Error, ...globals, require: name => { assert.ok(name in dependencies, name); return dependencies[name]; } };
+      const context = { exports: {}, Error, ...globals, require: name => {
+        if (name === './prepareMediaUploadCopy') return load('_lib/prepareMediaUploadCopy.ts', dependencies);
+        assert.ok(name in dependencies, name); return dependencies[name]; } };
       vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, context);
       return context.exports;
     };
     let objectKey;
     mocks['./mediaStorage'] = load('_lib/mediaStorage.ts', {
+      './mediaPickerResources': loadStubbed('_lib/mediaPickerResources.ts'),
       'expo-file-system': { File: class {} },
       'expo-file-system/legacy': { FileSystemUploadType: { BINARY_CONTENT: 0 },
         uploadAsync: async () => { requests.push({ action: 'put' }); await pause('native-put'); return { status: 200 }; },
@@ -70,8 +75,9 @@ function harness(stage, failed = false, realStorage = false) {
   const context = { exports: {}, console: { warn: value => warnings.push(value) }, require: name => { assert.ok(name in mocks, name); return mocks[name]; } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('_lib/socialAttachments.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, context);
   return { uploads, writes, deletes, warnings, committed, requests, api: context.exports, entered: entered.promise, release: held.resolve,
+    retireScope: () => { scopeCurrent = false; },
     switch: generation => { current = generation ? { userId: 'A', sessionGeneration: 'two' } : { userId: 'B', sessionGeneration: 'one' }; },
-    run: (surfaceType = 'profile_post') => context.exports.createSocialAttachmentForSurface({ surfaceType, surfaceId: 'parent-A', file: { uri: 'file:///fixture.pdf', name: 'fixture.pdf', size: 10 }, ...(surfaceType === 'chat_message' ? {} : { mutationSubject: subject }) }),
+    run: (surfaceType = 'profile_post') => context.exports.createSocialAttachmentForSurface({ surfaceType, surfaceId: 'parent-A', file: { uri: 'file:///fixture.pdf', name: 'fixture.pdf', size: 10 }, isCurrent: () => scopeCurrent, ...(surfaceType === 'chat_message' ? {} : { mutationSubject: subject }) }),
     state: () => ({ cleanups, sharedReads }) };
 }
 for (const generation of [false, true]) {
@@ -91,6 +97,15 @@ for (const generation of [false, true]) {
     assert.equal(h.deletes.length, 0, 'do not destroy a committed attachment on stale acknowledgement');
   });
 }
+for (const surface of ['creator_video_comment', 'chat_message', 'watch_party_room_message']) {
+  test(`real uploader ${surface} scope retired during PUT never verifies or saves`, async () => {
+    const h = harness('native-put', false, true), pending = h.run(surface);
+    await h.entered; h.retireScope(); h.release(); await assert.rejects(pending);
+    assert.deepEqual(h.requests.map(r => r.action), ['create_upload_url', 'put']);
+    assert.equal(h.requests[0].token, 'Bearer token-A-one'); assert.equal(h.writes.length, 0);
+    assert.equal(h.state().cleanups, 1); assert.equal(h.state().sharedReads, 0);
+  });
+}
 test('failed row uses original-token rollback even after account replacement', async () => {
   const h = harness('row', true); const pending = h.run('profile_post_comment'); await h.entered; h.switch(false); h.release();
   await assert.rejects(pending); assert.equal(h.deletes[0].accessToken, 'token-A-one'); assert.equal(h.writes[0].token, 'Bearer token-A-one');
@@ -99,12 +114,12 @@ for (const mode of ['lost-response', 'throw-response']) test(`committed insert w
   const h = harness('row', mode); const pending = h.run(); await h.entered; h.release();
   await assert.rejects(pending, h.api.isSocialAttachmentOutcomeAmbiguous); assert.equal(h.writes.length, 1); assert.equal(h.deletes.length, 0);
   assert.equal(h.committed.size, 1);
-  assert.deepEqual(h.warnings, ['Profile attachment save outcome could not be confirmed; upload retained.']);
+  assert.deepEqual(h.warnings, ['Attachment save outcome could not be confirmed; upload retained.']);
 });
 test('rollback failure is observable without logging private provider details', async () => {
   const h = harness(undefined, 'cleanup'); await assert.rejects(h.run());
   assert.equal(h.deletes.length, 1);
-  assert.deepEqual(h.warnings, ['Profile attachment upload cleanup could not be confirmed.']);
+  assert.deepEqual(h.warnings, ['Attachment upload cleanup could not be confirmed.']);
 });
 test('successful profile attachment acknowledges initiating owner', async () => {
   const h = harness(); const result = await h.run(); assert.equal(result.ownerUserId, 'A'); assert.equal(result.scanStatus, 'pending_scan');
@@ -114,9 +129,9 @@ test('stale initiating subject is rejected before normalization or shared sessio
   const h = harness(); h.switch(false); await assert.rejects(h.run());
   assert.equal(h.uploads.length, 0); assert.equal(h.writes.length, 0); assert.equal(h.state().sharedReads, 0);
 });
-test('unrelated chat attachment retains existing shared-client behavior', async () => {
+test('direct chat attachment captures an exact subject rather than using the shared client', async () => {
   const h = harness(); const result = await h.run('chat_message'); assert.equal(result.ownerUserId, 'A');
-  assert.equal(h.uploads[0].accessToken, undefined); assert.equal(h.writes[0].token, 'shared'); assert.equal(h.state().sharedReads, 1);
+  assert.equal(h.uploads[0].accessToken, 'token-A-one'); assert.equal(h.writes[0].token, 'Bearer token-A-one'); assert.equal(h.state().sharedReads, 0);
 });
 test('strict profile reads reject unavailable attachment data while legacy callers retain fallback', async () => {
   const h = harness(undefined, true);

@@ -58,19 +58,48 @@ export function createImageManipulatorRuntimeLoader(input) {
 }
 
 export async function runImageManipulatorConversion(input) {
-  let context = null;
-  let renderedImage = null;
-  try {
-    context = input.runtime.ImageManipulator.manipulate(input.sourceUri);
-    renderedImage = await input.withTimeout(context.renderAsync());
-    return await input.withTimeout(renderedImage.saveAsync({
-      compress: input.compress,
-      format: input.format,
-    }));
-  } finally {
-    renderedImage?.release();
-    context?.release();
-  }
+  return new Promise((resolve, reject) => {
+    // The caller still receives each stage's timeout promptly. The raw worker
+    // retains the source/context until native actually settles, and does not
+    // start the next stage after a timed-out render.
+    const convert = async () => {
+      let context = null;
+      let renderedImage = null;
+      try {
+        context = input.runtime.ImageManipulator.manipulate(input.sourceUri);
+        const render = context.renderAsync();
+        try {
+          renderedImage = await input.withTimeout(render);
+        } catch (error) {
+          reject(error);
+          renderedImage = await Promise.resolve(render).catch(() => null);
+          return;
+        }
+        const save = renderedImage.saveAsync({ compress: input.compress, format: input.format });
+        try {
+          resolve(await input.withTimeout(save));
+        } catch (error) {
+          reject(error);
+          const abandonedOutput = await Promise.resolve(save).catch(() => null);
+          if (abandonedOutput) await input.discardOutput?.(abandonedOutput);
+        }
+      } catch (error) {
+        reject(error);
+      } finally {
+        // Cleanup failures must not hide a native/timeout error or prevent the
+        // other handle from releasing. Both handles remain live during raw IO.
+        try { renderedImage?.release(); } catch { /* Best-effort native cleanup. */ }
+        try { context?.release(); } catch { /* Best-effort native cleanup. */ }
+      }
+    };
+    try {
+      const work = input.withRead ? input.withRead(convert) : convert();
+      // Observe late failures without creating an unhandled rejecting finally.
+      void Promise.resolve(work).catch(reject);
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 export function createIdempotentCleanup(cleanup) {

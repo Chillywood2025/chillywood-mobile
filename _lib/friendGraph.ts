@@ -97,10 +97,13 @@ const assertFriendReadActive = (signal?: AbortSignal) => {
   error.name = "AbortError";
   throw error;
 };
-async function settleFriendReads<T>(reads: PromiseLike<T>[]): Promise<T[]> {
+async function settleFriendReads<T>(reads: PromiseLike<T>[], signal?: AbortSignal): Promise<T[]> {
   const outcomes = await Promise.allSettled(reads);
+  assertFriendReadActive(signal);
   const failure = outcomes.find(result => result.status === "rejected");
-  if (failure?.status === "rejected") throw failure.reason;
+  if (failure?.status === "rejected") {
+    throw new UserFacingError("circle_action", "Chi'lly Circle could not load right now.");
+  }
   return outcomes.map(result => (result as PromiseFulfilledResult<T>).value);
 }
 
@@ -207,7 +210,7 @@ async function readChillyCircleBlockOverride(
   ] = await settleFriendReads([
     otherQuery.returns<ChannelAudienceBlockRow>().maybeSingle(),
     viewerQuery.returns<ChannelAudienceBlockRow>().maybeSingle(),
-  ]);
+  ], signal);
   assertFriendReadActive(signal);
 
   if (blockedByOtherError || blockedByViewerError) return false;
@@ -639,7 +642,7 @@ export async function readActiveFriendUserIds(options: { signal?: AbortSignal; e
   ] = await settleFriendReads([
     lowQuery.returns<FriendRelationshipRow[]>(),
     highQuery.returns<FriendRelationshipRow[]>(),
-  ]);
+  ], signal);
   assertFriendReadActive(signal);
 
   if (lowError || highError) {

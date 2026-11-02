@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDatabase } from './helpers/database-runtime-authority-fixture.mjs';
+import { seedLiveRoomActor } from './helpers/live-room-authority-fixture.mjs';
 
 test('per-person preferences and confirmed join notices enforce opt-in, identity, current audience and session', { timeout: 180000 }, async () => {
   const { db } = await createDatabase({ includeHeldStudio: true, applyRepair: true, repairInMigrationOrder: true, implicitApiGrants: false });
@@ -12,6 +13,10 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
   const read = async () => (await one('select public.read_person_notification_preferences($1) value', [actor])).value;
   const save = async (live, party, joined, revision) => (await one('select public.set_person_notification_preferences($1,$2,$3,$4,$5) value', [actor, live, party, joined, revision])).value;
   const notices = async () => { await as(0); await db.exec('set role service_role'); const result = (await db.query("select e.*,pg_temp.resolve_join_fixture(e.id) plan from public.notification_activity_events e where event_kind='live_room_member_joined' order by recipient_user_id,created_at")).rows; await as(0); return result; };
+  const publish = async party => {
+    await as(0); const r=await one('select room_generation,host_settings_revision from public.watch_party_rooms where party_id=$1',[party]);
+    assert.equal((await one('select public.publish_live_stage_discovery_current($1,$2,$3,$4,$5) value',[party,host,session(1),r.room_generation,r.host_settings_revision])).value,true);
+  };
   try {
     await as(0);
     // Test-only invocation bridge retains the real worker's configured role;
@@ -27,6 +32,7 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
         select $1::uuid,public.wave1_sha256($1::text),document_key,version,market,'member',capability,$2,'service_reconciliation'
         from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='account'`, [user(n), session(n)]);
     }
+    await seedLiveRoomActor(db,{id:host,session:session(1)});
     await db.query(`insert into public.user_friendships(user_low_id,user_high_id,requested_by_user_id,status,responded_at,actioned_by_user_id)
       values($1,$2,$1,'active',now(),$1)`, [actor, friend]);
     await db.query('insert into public.channel_followers(channel_user_id,follower_user_id) values($1,$2)', [actor, follower]);
@@ -44,8 +50,10 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
     await as(0);
     await db.query(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,is_active,join_policy,content_access_rule,discovery_visibility,discovery_title,created_at,started_at,discovery_started_at)
       values('PERSON-JOIN',$1,'live',true,'open','open','public','Exact Room',now()-interval '1 minute',now()-interval '1 minute',now()-interval '1 minute')`, [host]);
-    for (const [id, role] of [[host, 'host'], [actor, 'viewer']]) await db.query(`insert into public.watch_party_room_memberships(party_id,user_id,role,stage_role,can_speak,membership_state,joined_at,last_seen_at,mic_enabled,camera_enabled,display_name)
-      values('PERSON-JOIN',$1,$2,$3,$4,'active',now()-interval '11 seconds',now()-interval '2 seconds',false,false,'Exact Member') on conflict(party_id,user_id) do nothing`, [id, role, role === 'host' ? 'host' : 'listener', role === 'host']);
+    await as(1); await db.exec("select public.join_watch_party_room_session('PERSON-JOIN','Exact Host')");
+    await publish('PERSON-JOIN');
+    await as(2); await db.exec("select public.join_watch_party_room_session('PERSON-JOIN','Exact Member')");
+    await new Promise(resolve=>setTimeout(resolve,11000));
     assert.equal((await notices()).length, 0, 'insert alone is not confirmed attendance');
     await as(0);
     await db.exec(`create function pg_temp.reject_join_enqueue() returns trigger language plpgsql as $$
@@ -123,7 +131,8 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
     assert.deepEqual((await notices()).filter(n => n.plan.eligible).map(n => n.recipient_user_id), [host, friend], 'authorized private-room member and accepted Circle can receive private-profile attendance; host uses authorized roster');
     await as(3);
     display = (await one('select public.read_my_notification_display_context($1) value', [[materialized.id]])).value;
-    assert.equal(display.items[0].creatorName, 'Exact Member (@member_2)');
+    assert.equal(display.items[0].resolution, 'unavailable', 'current renewed eligibility cannot resurrect a terminally withdrawn attendance receipt');
+    assert.equal(display.items[0].creatorName, null); assert.equal(display.items[0].targetTitle, null);
     await as(0); await db.query("update public.user_profiles set profile_access_visibility='public' where user_id=$1", [actor]);
     await db.query("delete from public.watch_party_room_memberships where party_id='PERSON-JOIN' and user_id=$1", [friend]);
     await db.query('insert into public.channel_audience_blocks(channel_user_id,blocked_user_id,blocked_by_user_id) values($1,$2,$1)', [host, actor]);
@@ -135,6 +144,9 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
     await db.exec("update public.watch_party_rooms set notification_join_generation=gen_random_uuid(),notification_join_started_at=now()-interval '1 year' where party_id='PERSON-JOIN'");
     assert.deepEqual(await one("select notification_join_generation,notification_join_started_at from public.watch_party_rooms where party_id='PERSON-JOIN'"), ended, 'server trigger ignores caller-supplied generation and cutoff');
     await db.exec("update public.watch_party_rooms set is_active=true,started_at=now() where party_id='PERSON-JOIN'");
+    await as(1); await db.exec("select public.join_watch_party_room_session('PERSON-JOIN','Exact Host')");
+    // The restarted room deliberately remains private: authorized host/member
+    // attendance is separate from public discovery publication.
     await as(2); await db.exec("select public.heartbeat_watch_party_room_session('PERSON-JOIN','active',false,false)");
     assert.equal((await notices()).length, 2, 'fresh old membership after restart is not a new attendance event');
     await as(0);
@@ -152,8 +164,10 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
     await db.query('update public.person_notification_preferences set joined_live_enabled=false where actor_user_id=$1', [actor]);
     await db.query(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,is_active,join_policy,content_access_rule,discovery_visibility,created_at,started_at,discovery_started_at)
       values('PERSON-NO-AUDIENCE',$1,'live',true,'open','open','public',now()-interval '1 minute',now()-interval '1 minute',now()-interval '1 minute')`, [host]);
-    for (const [id, role] of [[host, 'host'], [actor, 'viewer']]) await db.query(`insert into public.watch_party_room_memberships(party_id,user_id,role,stage_role,can_speak,membership_state,joined_at,last_seen_at,mic_enabled,camera_enabled)
-      values('PERSON-NO-AUDIENCE',$1,$2,$3,$4,'active',now()-interval '11 seconds',now()-interval '2 seconds',false,false) on conflict(party_id,user_id) do nothing`, [id, role, role === 'host' ? 'host' : 'listener', role === 'host']);
+    await as(1); await db.exec("select public.join_watch_party_room_session('PERSON-NO-AUDIENCE','Exact Host')");
+    await publish('PERSON-NO-AUDIENCE');
+    await as(2); await db.exec("select public.join_watch_party_room_session('PERSON-NO-AUDIENCE','Exact Member')");
+    await new Promise(resolve=>setTimeout(resolve,11000));
     await as(2); await db.exec("select public.heartbeat_watch_party_room_session('PERSON-NO-AUDIENCE','active',false,false)");
     await as(0);
     assert.equal((await one('select count(*)::int n from private.live_room_join_qualifications')).n, 3, 'zero-recipient attendance is still consumed');
@@ -182,7 +196,9 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
       values('PERSON-PARTY',$1,'ed312000-0000-4000-8000-000000000001','platform_title','ed312000-0000-4000-8000-000000000001','title','premium')`, [host]);
     await db.query("select public.set_party_room_discovery('PERSON-PARTY','public','Exact Party','platform_title','ed312000-0000-4000-8000-000000000001',$1)", [session(1)]);
     await db.exec("select public.join_watch_party_room_session('PERSON-PARTY')");
-    await db.query("select public.publish_party_room_discovery('PERSON-PARTY','platform_title','ed312000-0000-4000-8000-000000000001',$1)", [session(1)]);
+    const partySetting=await one("select room_generation,host_settings_revision,discovery_title from public.watch_party_rooms where party_id='PERSON-PARTY'");
+    await db.query("select public.set_watch_party_room_host_settings('PERSON-PARTY',$1,$2,$3,'open','public',$4,'platform_title','ed312000-0000-4000-8000-000000000001',true)",
+      [partySetting.room_generation,partySetting.host_settings_revision,session(1),partySetting.discovery_title]);
     const allowed = async () => { await as(0); await db.exec('set role service_role'); const result = await one("select pg_temp.join_recipient_fixture('PERSON-PARTY',$1,$2) value", [actor, friend]); await as(0); return result.value; };
     assert.equal(await allowed(), false, 'public Party metadata does not bypass missing recipient entitlement');
     await premium(3);
@@ -224,7 +240,8 @@ test('per-person preferences and confirmed join notices enforce opt-in, identity
     await db.query('select public.set_person_notification_preferences($1,null,null,true,0)', [follower]);
     for (const visibility of ['circle', 'private']) {
       await as(1);
-      await db.query("select public.set_party_room_discovery('PERSON-PARTY',$1,'Exact Party','platform_title','ed312000-0000-4000-8000-000000000001',$2)", [visibility, session(1)]);
+      const setting=await one("select room_generation,host_settings_revision from public.watch_party_rooms where party_id='PERSON-PARTY'");
+      await db.query("select public.set_watch_party_room_host_settings('PERSON-PARTY',$1,$2,$3,'open',$4,'Exact Party','platform_title','ed312000-0000-4000-8000-000000000001')", [setting.room_generation,setting.host_settings_revision,session(1),visibility]);
       assert.equal(await sweep(), 1, `${visibility} visibility preserves the existing active qualification`);
       await as(4); await db.exec("select public.heartbeat_watch_party_room_session('PERSON-PARTY','active',false,false)");
       assert.equal((await notices()).length, 4, `${visibility} transition does not replay attendance to a late host opt-in`);

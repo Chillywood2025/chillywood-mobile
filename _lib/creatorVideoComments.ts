@@ -1,12 +1,20 @@
-import type { Tables, TablesInsert } from "../supabase/database.types";
+import { createClient } from "@supabase/supabase-js";
+import type { Database, Tables, TablesInsert } from "../supabase/database.types";
+import {
+  assertAccountBoundSupabaseMutationSubjectCurrent,
+  captureAccountBoundSupabaseMutationSubject,
+  type AccountBoundSupabaseMutationSubject,
+} from "./accountBoundSupabaseMutation";
 
 import {
   createSocialAttachmentForSurface,
+  isSocialAttachmentOutcomeAmbiguous,
   readSocialAttachmentsForSurfaces,
   type SocialAttachment,
   type SocialAttachmentFile,
 } from "./socialAttachments";
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
+import { UserFacingError } from "./userFacingErrors";
 
 export const CREATOR_VIDEO_COMMENTS_TABLE = "creator_video_comments";
 export const CREATOR_VIDEO_COMMENT_BODY_LIMIT = 500;
@@ -55,20 +63,11 @@ const normalizeLimit = (value: unknown, fallback = 24) => {
   return Math.max(1, Math.min(50, Math.floor(parsed)));
 };
 
-async function getRequiredUserId() {
-  const { data, error } = await supabase.auth.getSession();
-  const userId = normalizeText(data.session?.user?.id);
-  if (error || !userId) {
-    throw new Error("Sign in before commenting.");
-  }
-  return userId;
-}
-
-async function readAuthorProfiles(userIds: string[]) {
+async function readAuthorProfiles(userIds: string[], client = supabase) {
   const normalizedIds = Array.from(new Set(userIds.map(normalizeText).filter(Boolean)));
   if (!normalizedIds.length) return new Map<string, UserProfileRow>();
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from("user_profiles")
     .select("user_id,display_name,username,avatar_url")
     .in("user_id", normalizedIds)
@@ -143,8 +142,24 @@ export async function createCreatorVideoComment(input: {
   body: string;
   parentCommentId?: string | null;
   attachmentFile?: SocialAttachmentFile | null;
+  mutationSubject?: AccountBoundSupabaseMutationSubject;
+  isCurrent?: () => boolean;
 }): Promise<CreatorVideoComment> {
-  const userId = await getRequiredUserId();
+  // Preserve picker/user-intent ownership across the parent insert, author
+  // lookup and upload. A replacement session must never become the author.
+  const subject = input.mutationSubject ?? await captureAccountBoundSupabaseMutationSubject();
+  const assertCurrent = () => {
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (input.isCurrent && !input.isCurrent()) {
+      throw new UserFacingError("attachment_action", "This comment is no longer open. Please try again.");
+    }
+  };
+  assertCurrent();
+  const userId = subject.authority.userId;
+  const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+  });
   const videoId = normalizeText(input.videoId);
   const body = normalizeText(input.body);
   if (!videoId) throw new Error("Missing creator video.");
@@ -162,7 +177,8 @@ export async function createCreatorVideoComment(input: {
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  assertCurrent();
+  const { data, error } = await client
     .from(CREATOR_VIDEO_COMMENTS_TABLE)
     .insert(payload)
     .select(CREATOR_VIDEO_COMMENT_SELECT)
@@ -171,25 +187,45 @@ export async function createCreatorVideoComment(input: {
 
   const created = data as CreatorVideoCommentRow | null;
   if (error || !created) throw error ?? new Error("Unable to post this comment right now.");
+  assertCurrent();
+  if (normalizeText(created.user_id) !== userId || normalizeText(created.video_id) !== videoId) {
+    throw new Error("Unable to confirm the posted comment.");
+  }
 
-  const authors = await readAuthorProfiles([created.user_id]);
+  const authors = await readAuthorProfiles([created.user_id], client);
+  assertCurrent();
   const comment = parseCreatorVideoComment(created, authors);
   if (!input.attachmentFile) return comment;
 
+  let attachment: SocialAttachment;
   try {
-    const attachment = await createSocialAttachmentForSurface({
+    assertCurrent();
+    attachment = await createSocialAttachmentForSurface({
       surfaceType: "creator_video_comment",
       surfaceId: comment.id,
       file: input.attachmentFile,
+      mutationSubject: subject,
+      isCurrent: input.isCurrent,
     });
-    return {
-      ...comment,
-      attachments: [attachment],
-    };
   } catch (attachmentError) {
-    await deleteCreatorVideoComment(comment.id).catch(() => undefined);
+    if (isSocialAttachmentOutcomeAmbiguous(attachmentError)) {
+      throw new UserFacingError("attachment_parent_saved", "Your comment was saved, but its attachment could not be confirmed. Refresh before retrying.");
+    }
+    // Compensation belongs to the initiating account, even after retirement.
+    // Never delete a potentially committed attachment's parent or adopt the
+    // shared client's replacement session for cleanup.
+    try {
+      const rollback = await client.from(CREATOR_VIDEO_COMMENTS_TABLE).delete()
+        .eq("id", comment.id).eq("user_id", userId).eq("video_id", videoId);
+      if (rollback.error) throw rollback.error;
+    } catch {
+      throw new UserFacingError("attachment_parent_saved", "Your comment was saved, but its attachment failed. Refresh before retrying.");
+    }
     throw attachmentError;
   }
+  // A committed attachment is not rolled back just because its view retired.
+  assertCurrent();
+  return { ...comment, attachments: [attachment] };
 }
 
 export async function deleteCreatorVideoComment(commentId: string): Promise<void> {

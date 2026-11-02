@@ -60,12 +60,12 @@ function textOf(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   return textOf(node.props?.children);
 }
-async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBell = false, notificationOverride = {} } = {}) {
+async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBell = false, withSharedUpdates = false, initialSession = null, notificationOverride = {} } = {}) {
   const captures = new Map(); const routes = []; const results = []; let writes = 0; let summaryReads = 0; let pageReads = 0; let markCalls = 0;
   let activeOutcome = outcome;
   let markResultGate = null;
   let backendCount = 1; let durableRead = outcome === 'noop'; let durableDismissed = outcome === 'noop';
-  let session = activeSession();
+  let session = initialSession ?? activeSession();
   const received = new Set(); const allReceived = []; const activations = new Set();
   const authorityListeners = new Set();
   const focusEffects = new Set(); let focused = true;
@@ -93,6 +93,22 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   } };
   vm.runInNewContext(compiledInvalidation, invalidationContext);
   const invalidation = invalidationContext.exports;
+  const discoveryFenceContext={exports:{}};
+  vm.runInNewContext(compile(readSource('_lib/liveDiscoveryInvalidation.ts')),discoveryFenceContext);
+  const liveActivityContext={exports:{},require:()=>discoveryFenceContext.exports};
+  vm.runInNewContext(compile(readSource('_lib/liveNotificationActivity.ts')),liveActivityContext);
+  const sharedContext={exports:{},Date:ClockDate,setTimeout:fakeSetTimeout,clearTimeout:fakeClearTimeout,
+    process:{env:{EXPO_PUBLIC_LIVE_DISCOVERY_PUSH_ENABLED:'true'}},Math:{...Math,random:()=>0,floor:Math.floor},
+    require:name=>{
+      if(name==='react-native')return {AppState:appState};
+      if(name==='./supabase')return {supabase:realtime};
+      if(name==='./notificationActivity')return invalidation;
+      if(name==='./liveDiscoveryInvalidation')return discoveryFenceContext.exports;
+      assert.equal(name,'./accountSessionAuthority');return {getCurrentAccountSessionAuthoritySnapshot:()=>session.authority,
+        sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&JSON.stringify(a)===JSON.stringify(b),
+        subscribeToAccountSessionAuthority:callback=>{authorityListeners.add(callback);return()=>authorityListeners.delete(callback);}};
+    }};
+  if(withSharedUpdates)vm.runInNewContext(compile(readSource('_lib/sharedLiveUpdates.ts')),sharedContext);
   const row = { ...notification, ...notificationOverride };
   let pageReader = async () => ({ status: 'resolved', items: row.isDismissed ? [] : [{ ...row }], nextCursor: null });
   let importantReader = async () => [];
@@ -180,6 +196,9 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     '../../_lib/session': { useSession: () => session },
     '../../_lib/notificationActivity': invalidation,
     '../../_lib/notificationHintBudget': budgetContext.exports,
+    '../../_lib/liveDiscoveryInvalidation': discoveryFenceContext.exports,
+    '../../_lib/liveNotificationActivity': liveActivityContext.exports,
+    '../../_lib/sharedLiveUpdates': withSharedUpdates?sharedContext.exports:{subscribeToLiveUpdates:()=>()=>{}},
     '../ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: () => null },
   };
   const context = { exports: {}, require: name => { assert.ok(name in deps, `unexpected import ${name}`); return deps[name]; }, Date: ClockDate, console,
@@ -216,6 +235,12 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     snapshot,
     unmount,
     channels,
+    liveCoalesceMs:sharedContext.exports.LIVE_UPDATE_COALESCE_MS,
+    async liveHint(count=1,channel=channels.findLast(c=>!c.removed&&c.name==='discovery:v1:surface:home'),keys=null) { await React.act(async()=>{
+      assert.ok(channel);for(let i=0;i<count;i++)for(const handler of channel.handlers)if(handler.type==='broadcast')
+        handler.callback({payload:keys?{id:'opaque',keys}:{ignored_private_title:'must never render',unreadCount:999}});
+      await settle();
+    }); },
     async database(event, record, index = channels.length - 1) { await React.act(async () => {
       const channel = channels[index]; assert.ok(channel, 'the actual root owns a database subscription');
       for (const handler of channel.handlers) if (handler.filter.event === event) handler.callback({ new: record });
@@ -315,6 +340,56 @@ test('actual mounted bell passes backed chat context through the real shared rou
   await h.openTray(); await h.openRow();
   assert.deepEqual(h.snapshot().routePaths, [`/chat/${threadId}?messageId=${messageId}`]);
   assert.equal(h.snapshot().durableRead, true);
+});
+for(const state of ['ended','unavailable']) test(`mounted live ${state} notice cannot navigate, including a retained press callback`,async t=>{
+ const h=await mount(t,'completed',{notificationOverride:{notificationType:'followed_creator_live',title:state==='ended'?'Live ended':'Live notification',
+  body:state==='ended'?'This live session has ended.':'Current availability could not be confirmed.',
+  deepLink:'/watch-party/live-stage/ROOM',target:{entityId:'ROOM',context:{live_discovery_state:state}},isExpired:state==='ended'}});
+ await h.openTray();assert.equal(h.snapshot().rowDisabled,true);
+ assert.match(h.snapshot().trayText,state==='ended'?/Ended/:/Availability unconfirmed/);
+ await h.openRow();assert.equal(h.snapshot().routes,0,'even stale/programmatic callback cannot navigate an ended or unverified live row');
+});
+test('focused live tray rechecks privacy without a row CDC event and expires cached labels before an unavailable read',async t=>{
+ const h=await mount(t,'completed',{notificationOverride:{notificationType:'followed_creator_live',title:'Previously Public Host is live',body:'Previously public room',
+  deepLink:'/watch-party/live-stage/ROOM',target:{entityId:'ROOM',context:{live_discovery_state:'live'}}}});
+ await h.openTray();assert.match(h.snapshot().trayText,/Previously Public Host/);
+ h.setPageReader(async()=>({status:'unavailable',items:[],nextCursor:null}));
+ await h.advance(30000);assert.doesNotMatch(h.snapshot().trayText,/Previously Public Host|Previously public room/);
+ assert.equal(h.snapshot().rowDisabled,true);
+ assert.equal(h.snapshot().label,'Notifications','stale exact count is hidden until its audience is revalidated');
+ h.setCount(0);h.setPageReader(async()=>({status:'resolved',items:[],nextCursor:null}));
+ await h.advance(30000);assert.equal(h.snapshot().label,'Notifications');assert.equal(h.snapshot().rowLabels.length,0);
+ const reads=h.snapshot().pageReads;await h.focus(false);await h.advance(90000);assert.equal(h.snapshot().pageReads,reads,'blur stops periodic reads');
+});
+test('unopened focused bell rechecks old attendance not represented by recent categories',async t=>{
+ const h=await mount(t,'completed');
+ h.setSummaryReader(async()=>({...summary(2),hasLiveActivity:true}));await h.foreground();
+ assert.equal(h.snapshot().label,'2 unread notifications');const reads=h.snapshot().summaryReads;
+ h.setSummaryReader(async()=>{throw new Error('current audience unavailable');});
+ await h.advance(30000);assert.equal(h.snapshot().summaryReads,reads+1);assert.equal(h.snapshot().label,'Notifications');
+});
+for(const scope of ['surface:home','viewer:10000000-0000-4000-8000-000000000001'])test(`actual shared ${scope} invalidation expires open inbox names/count and coalesces bursts without overlapping reads`,async t=>{
+ const h=await mount(t,'completed',{withSharedUpdates:true,initialSession:activeSession('10000000-0000-4000-8000-000000000001'),notificationOverride:{notificationType:'followed_creator_live',title:'Previously Public Host is live',
+  body:'Previously public room',deepLink:'/watch-party/live-stage/ROOM',target:{entityId:'ROOM',context:{live_discovery_state:'live'}}}});
+ assert.ok(h.liveCoalesceMs<=200,'primary invalidation is subsecond, not the30second fallback');
+ const channel=h.channels.find(c=>c.name===`discovery:v1:${scope}`);assert.ok(channel);
+ await h.openTray();assert.match(h.snapshot().trayText,/Previously Public Host/);
+ const page=deferred();h.setPageReader(()=>page.promise);h.setSummaryReader(async()=>({...summary(0),hasLiveActivity:false}));
+ const before=h.snapshot().pageReads;await h.liveHint(1000,channel);await h.advance(h.liveCoalesceMs);
+ assert.equal(h.snapshot().pageReads,before+1);assert.doesNotMatch(h.snapshot().trayText,/Previously Public Host|Previously public room|must never render/);
+ assert.equal(h.snapshot().label,'Notifications');assert.equal(h.snapshot().rowDisabled,true);
+ await h.liveHint(1000,channel);await h.advance(h.liveCoalesceMs);assert.equal(h.snapshot().pageReads,before+1,'actual in-flight source retains ownership');
+ h.setPageReader(async()=>({status:'resolved',items:[],nextCursor:null}));await h.resolve(page,{status:'resolved',items:[],nextCursor:null});
+ assert.ok(h.snapshot().pageReads<=before+2,'at most one trailing canonical refresh');assert.equal(h.snapshot().rowLabels.length,0);
+ await h.focus(false);const reads=h.snapshot().summaryReads;
+ await h.liveHint(1000,channel);await h.advance(30000);assert.equal(h.snapshot().summaryReads,reads,'removed shared callback cannot revive blurred inbox');
+});
+test('mounted bells reuse the shared discovery transport instead of opening one channel per inbox',async t=>{
+ const h=await mount(t,'completed',{withSharedUpdates:true,withPeerBell:true,initialSession:activeSession('10000000-0000-4000-8000-000000000001')});
+ assert.equal(h.channels.filter(c=>c.name==='discovery:v1:surface:home').length,1);
+ assert.equal(h.channels.filter(c=>c.name==='discovery:v1:viewer:10000000-0000-4000-8000-000000000001').length,1);
+ const names=h.channels.map(c=>c.name);assert.equal(new Set(names).size,names.length);
+ await h.unmount();assert.ok(h.channels.every(c=>c.removed));
 });
 
 test('live badge uses the actual root receipt before toast filtering and foreground activation', async t => {
@@ -655,3 +730,64 @@ for (const [root,kind] of [['event','event'],['watch-party','party_admission'],[
   assert.equal(url.searchParams.get('auctionExpiresAt'),expires);
  });
 }
+
+const hintA='20000000-0000-4000-8000-000000000001',hintB='20000000-0000-4000-8000-000000000002',unrelatedHint='30000000-0000-4000-8000-000000000001';
+const liveSummary=(count,keys=[hintA],complete=true)=>({...summary(count),hasLiveActivity:count>0,liveHintKeys:keys,liveHintKeysComplete:complete});
+test('collapsed Bell count converges during continuous unrelated keyed hints using the complete canonical footprint',async t=>{
+ const h=await mount(t,'completed',{withSharedUpdates:true,initialSession:activeSession('10000000-0000-4000-8000-000000000001')});
+ h.setSummaryReader(async()=>liveSummary(1));await h.foreground();let pending=[];
+ h.setSummaryReader(()=>{const gate=deferred();pending.push(gate);return gate.promise;});let completed=0;
+ for(let tick=0;tick<30;tick++){
+  await h.liveHint(10,undefined,[unrelatedHint]);await h.advance(100);
+  assert.notEqual(h.snapshot().label,'Notifications','unrelated global keys cannot blank a complete known aggregate');
+  if(tick%5===4&&pending.length){completed++;await h.resolve(pending.shift(),liveSummary(completed+1));
+   assert.equal(h.snapshot().label,`${completed+1} unread notifications`);}
+ }
+ assert.equal(completed,6);
+});
+test('collapsed Bell union footprint fences an old withdrawn count and a newly counted unknown notice without blocking later canonical truth',async t=>{
+ const h=await mount(t,'completed',{withSharedUpdates:true,initialSession:activeSession('10000000-0000-4000-8000-000000000001')});
+ h.setSummaryReader(async()=>liveSummary(1));await h.foreground();
+ let old=deferred(),next=deferred();h.setSummaryReader(()=>old.promise);
+ await h.liveHint(1,undefined,[unrelatedHint]);await h.advance(100);
+ await h.liveHint(1,undefined,[hintA]);await h.advance(600);assert.equal(h.snapshot().label,'Notifications');
+ h.setSummaryReader(()=>next.promise);await h.resolve(old,liveSummary(1));
+ assert.equal(h.snapshot().label,'Notifications','pre-withdrawal snapshot cannot restore the old count');
+ await h.resolve(next,liveSummary(0,[]));assert.equal(h.snapshot().label,'Notifications');
+ // A new unknown source can only delay increment: its key is present in the
+ // returned complete footprint even though absent from the previous count.
+ h.setSummaryReader(async()=>liveSummary(1));await h.foreground();old=deferred();next=deferred();h.setSummaryReader(()=>old.promise);
+ await h.liveHint(1,undefined,[unrelatedHint]);await h.advance(600);
+ await h.liveHint(1,undefined,[hintB]);await h.advance(600);
+ h.setSummaryReader(()=>next.promise);await h.resolve(old,liveSummary(2,[hintA,hintB]));
+ assert.equal(h.snapshot().label,'Notifications','returned new-source key fences the increment');
+ await h.resolve(next,liveSummary(2,[hintA,hintB]));assert.equal(h.snapshot().label,'2 unread notifications');
+});
+for(const complete of [false,undefined])test(`collapsed Bell incomplete footprint ${complete} conservatively masks hints`,async t=>{
+ const h=await mount(t,'completed',{withSharedUpdates:true,initialSession:activeSession('10000000-0000-4000-8000-000000000001')});
+ h.setSummaryReader(async()=>({...liveSummary(1),liveHintKeysComplete:complete}));await h.foreground();const gate=deferred();h.setSummaryReader(()=>gate.promise);
+ await h.liveHint(1,undefined,[unrelatedHint]);await h.advance(100);assert.equal(h.snapshot().label,'Notifications');
+});
+
+test('raw authoritative key fences a pre-hint unread response inside the shared callback window',async t=>{
+ const h=await mount(t,'completed',{withSharedUpdates:true,initialSession:activeSession('10000000-0000-4000-8000-000000000001')});
+ h.setSummaryReader(async()=>liveSummary(1));await h.foreground();const old=deferred();h.setSummaryReader(()=>old.promise);
+ await h.liveHint(1,undefined,[unrelatedHint]);await h.advance(100);
+ await h.liveHint(1,undefined,[hintA]);await h.resolve(old,liveSummary(1));
+ assert.equal(h.snapshot().label,'Notifications','raw shared receipt, not delayed callback, fences affected count restoration');
+});
+const sensitiveLiveRow={notificationType:'followed_creator_live',title:'Current private-sensitive creator',body:'Current private-sensitive room',
+ deepLink:'/watch-party/live-stage/ROOM',target:{entityId:'ROOM',context:{live_discovery_state:'live',discovery_hint_key:hintA}}};
+for(const retirement of ['focus','background'])test(`Bell ${retirement} retirement expires labels before return and denies a captured old live action`,async t=>{
+ const h=await mount(t,'completed',{notificationOverride:sensitiveLiveRow});await h.openTray();const retained=await h.captureRowAction('open');
+ const pending=deferred();h.setPageReader(()=>pending.promise);
+ if(retirement==='focus'){await h.focus(false);await h.focus(true);}else{await h.appState('background');await h.appState('active');}
+ assert.doesNotMatch(h.snapshot().trayText,/Current private-sensitive/);assert.equal(h.snapshot().label,'Notifications');
+ const before=h.snapshot().markCalls;await retained();assert.equal(h.snapshot().markCalls,before);assert.equal(h.snapshot().routes,0);
+});
+test('a completed mark-read cannot route a live invitation after an affected raw hint, even before its coalesced callback',async t=>{
+ const h=await mount(t,'completed',{withSharedUpdates:true,initialSession:activeSession('10000000-0000-4000-8000-000000000001'),notificationOverride:sensitiveLiveRow});
+ await h.openTray();const held=deferred();h.setMarkResultGate(held.promise);await h.openRow();assert.equal(h.snapshot().durableRead,true);
+ await h.liveHint(1,undefined,[hintA]);await h.resolve(held);
+ assert.equal(h.snapshot().routes,0,'durable mark-read success does not preserve an expired invitation');
+});

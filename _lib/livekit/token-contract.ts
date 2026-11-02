@@ -439,13 +439,17 @@ const waitForDiscoveryRetry = (delay: number, signal: AbortSignal) => new Promis
 
 export async function markLiveStageRoomConnectedForDiscovery(
   roomNameValue: string,
-  options: { authority: AccountSessionAuthorityBinding; signal: AbortSignal },
+  options: { authority: AccountSessionAuthorityBinding; signal: AbortSignal; roomGeneration: string; settingsRevision: number },
 ): Promise<LiveDiscoveryPublicationResult> {
   const config = getRuntimeLiveKitConfig();
   const roomName = String(roomNameValue ?? "").trim().toUpperCase();
   if (!roomName || !isLiveKitRuntimeConfigured()) return { status: "failed", reason: "not_configured", retryable: false };
   const expected = options.authority;
   if (!expected || expected.restoreOnly) return { status: "failed", reason: "session_changed", retryable: false };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(options.roomGeneration)
+    || !Number.isSafeInteger(options.settingsRevision) || options.settingsRevision < 0) {
+    return { status: "failed", reason: "not_eligible", retryable: false };
+  }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (options.signal.aborted) return { status: "cancelled" };
@@ -475,15 +479,19 @@ export async function markLiveStageRoomConnectedForDiscovery(
           action: "mark-room-live",
           surface: "live-stage",
           roomName,
+          roomGeneration: options.roomGeneration,
+          settingsRevision: options.settingsRevision,
         }),
       }), controller.signal);
       const payload = await awaitDiscoveryOperation(() => response.json(), controller.signal).catch(error => {
         if (controller.signal.aborted) throw error;
         return null;
-      }) as { published?: unknown; roomName?: unknown; error?: unknown } | null;
+      }) as { published?: unknown; roomName?: unknown; roomGeneration?: unknown; settingsRevision?: unknown; discoveryPaused?: unknown; error?: unknown } | null;
       if (!sameAccountSessionAuthority(expected, await current())) return { status: "failed", reason: "session_changed", retryable: false };
       if (response.ok) {
         return payload?.published === true && payload.roomName === roomName
+          && payload.roomGeneration === options.roomGeneration && payload.settingsRevision === options.settingsRevision
+          && payload.discoveryPaused === false
           ? { status: "published" }
           : { status: "failed", reason: "invalid_response", retryable: true };
       }

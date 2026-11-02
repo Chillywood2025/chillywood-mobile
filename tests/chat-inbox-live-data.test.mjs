@@ -356,3 +356,21 @@ test("friend refresh cancellation stops the remaining per-friend block loop", as
   await assert.rejects(friendGraph.readActiveFriendUserIds({ signal: controller.signal, expectedUserId: "viewer" }), /retired/);
   assert.equal(blockReads, 2, "one pair is issued together; no subsequent friend begins after abort");
 });
+
+test("friend refresh waits for sibling settlement then returns only a static customer-safe rejection", async () => {
+  const held = deferred(); let reads = 0, settled = false;
+  class UserFacingError extends Error { constructor(_code, message) { super(message); } }
+  const friendGraph = loadStubbed("_lib/friendGraph.ts", {
+    "./userFacingErrors": { UserFacingError },
+    "./supabase": { supabase: {
+      auth: { getSession: async () => ({ data: { session: { user: { id: "viewer" } } } }) },
+      from() { return { select() { return this; }, eq() { return this; },
+        returns() { return ++reads === 1 ? Promise.reject(new Error("private provider details")) : held.promise; } }; },
+    } },
+  });
+  const pending = friendGraph.readActiveFriendUserIds({ expectedUserId: "viewer" }).finally(() => { settled = true; });
+  for (let i = 0; i < 15; i++) await Promise.resolve();
+  assert.equal(reads, 2); assert.equal(settled, false);
+  held.resolve({ data: [], error: null });
+  await assert.rejects(pending, error => error instanceof UserFacingError && error.message === "Chi'lly Circle could not load right now.");
+});

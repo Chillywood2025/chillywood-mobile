@@ -4,6 +4,7 @@ import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 import { makeFixture, ids, sessionId, read, sqlFunction, sqlPolicy } from './helpers/studio-authority-fixture.mjs';
 import { installByteReceiptFixture } from './helpers/media-scan-byte-receipt-fixture.mjs';
 import { applyBrandMigrationStatements } from './helpers/apply-brand-migration-statements.mjs';
+import { createMediaPickerModules } from './helpers/media-picker-modules.mjs';
 
 const bucket = 'platform-brand-assets';
 const authorityMigration = 'supabase/migrations/202608250002_whole_app_media_authority_closure.sql';
@@ -293,10 +294,18 @@ test('HEIC upload registers JPEG bytes once and retains original source identity
 });
 
 test('gallery URI-only WebP metadata remains WebP through registered Brand upload', async t => {
-  const picker = loadStubbed(`${process.env.STUDIO_SOURCE_ROOT || process.cwd()}/_lib/deviceImagePicker.ts`, {
+  const loadPicker = createMediaPickerModules({
+    'react-native': { Platform: { OS: 'web' } },
+    'expo-modules-core': { requireOptionalNativeModule: () => null },
+    accountSessionAuthority: {
+      getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: 'owner', accountId: 'owner', state: 'ACTIVE', sessionGeneration: 'one', restoreOnly: false }),
+      sameAccountSessionAuthority: (a, b) => a?.userId === b?.userId && a?.sessionGeneration === b?.sessionGeneration,
+      subscribeToAccountSessionAuthority: () => () => {},
+    },
     'expo-image-picker': { UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
       launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'file:///photo.webp' }] }) },
   });
+  const picker = loadPicker('_lib/deviceImagePicker.ts');
   const file = await picker.pickDeviceImage('photos'), h = await fixture(t), attempt = {};
   await h.run(attempt, { file });
   assert.equal(attempt.payload.mime_type, 'image/webp'); assert.ok(h.state.objectKey.endsWith('.webp'));

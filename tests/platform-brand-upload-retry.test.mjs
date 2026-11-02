@@ -14,6 +14,10 @@ function fixture(options = {}) {
   const file = { uri: 'file:///selected.png', name: 'selected.png', mimeType: 'image/png', size: 79 };
   const context = {
     user: { id: 'owner' }, brandUploadAttemptRef: attemptRef, brandUploadInFlightRef: inFlightRef,
+    brandProfileSaveInFlightRef: { current: false }, brandSaving: false,
+    studioMediaTargetRef: { current: 'brand:avatar' },
+    setBrandUploadFile: () => {}, formatPlatformBrandAssetTypeLabel: value => value,
+    pickMedia: options => options.pick('photos'),
     replayActionsMountedRef: mountedRef,
     getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
     setBrandBusyAssetType: value => { state.busy = value; }, setBrandNotice: value => { state.notice = value; },
@@ -92,13 +96,21 @@ for (const stage of ['picker', 'upload']) {
   }
 }
 
-for (const options of [{ preUploadFailure: true }, { cancel: true }, { invalid: true }]) {
+for (const options of [{ cancel: true }, { invalid: true }]) {
   test(`Pre-registration interruption clears retry identity and busy state: ${JSON.stringify(options)}`, async () => {
     const h = fixture(options); await h.pickPlatformBrandAsset('avatar');
     assert.equal(h.attemptRef.current, null); assert.equal(h.inFlightRef.current, false);
     assert.equal(h.state.busy, null); assert.equal(h.state.saves.length, 0);
   });
 }
+
+test('Pre-registration upload failure keeps exact selection available for retry', async () => {
+  const h = fixture({ preUploadFailure: true }); await h.pickPlatformBrandAsset('avatar');
+  assert.ok(h.attemptRef.current?.file); assert.equal(h.inFlightRef.current, false);
+  await h.pickPlatformBrandAsset('avatar');
+  assert.equal(h.state.picks, 1); assert.equal(h.state.uploads.length, 2);
+  assert.equal(h.state.uploads[0].file, h.state.uploads[1].file);
+});
 
 test('New session cannot reuse the previous session upload attempt', async () => {
   let calls = 0;

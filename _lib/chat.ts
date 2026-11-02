@@ -1,4 +1,5 @@
-import type { Tables, TablesInsert } from "../supabase/database.types";
+import { createClient } from "@supabase/supabase-js";
+import type { Database, Tables, TablesInsert } from "../supabase/database.types";
 
 import {
   prepareChatCallRoomCandidate,
@@ -20,11 +21,12 @@ import {
 } from "./chillyChatCalls";
 import {
   createSocialAttachmentForSurface,
+  isSocialAttachmentOutcomeAmbiguous,
   readSocialAttachmentsForSurfaces,
   type SocialAttachment,
   type SocialAttachmentFile,
 } from "./socialAttachments";
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
 import { normalizePeopleSearchQuery } from "./peopleSearchNormalization";
 import { getWritablePartyUserId } from "./watchParty";
 import {
@@ -34,7 +36,9 @@ import {
 } from "./accountSessionAuthority";
 import {
   captureAccountBoundSupabaseMutationSubject,
+  assertAccountBoundSupabaseMutationSubjectCurrent,
   invokeAccountBoundSupabaseMutationRpc,
+  type AccountBoundSupabaseMutationSubject,
 } from "./accountBoundSupabaseMutation";
 import {
   resolveChatThreadCallReconciliation,
@@ -884,8 +888,21 @@ export async function sendChatMessage(
   threadId: string,
   body: string,
   attachmentFile?: SocialAttachmentFile | null,
+  options: { mutationSubject?: AccountBoundSupabaseMutationSubject; isCurrent?: () => boolean } = {},
 ): Promise<ChatMessage> {
-  const currentUserId = await getRequiredChatUserId();
+  const subject = options.mutationSubject ?? await captureAccountBoundSupabaseMutationSubject();
+  const assertCurrent = () => {
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (options.isCurrent && !options.isCurrent()) {
+      throw new UserFacingError("chat_action", "This conversation is no longer open. Please try again.");
+    }
+  };
+  assertCurrent();
+  const currentUserId = subject.authority.userId;
+  const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+  });
   const normalizedThreadId = toText(threadId);
   const trimmedBody = toText(body);
   const hasAttachment = !!attachmentFile;
@@ -893,8 +910,9 @@ export async function sendChatMessage(
   if (!normalizedThreadId || !bodyForInsert) {
     throw new UserFacingError("chat_action", "Message text is required.");
   }
-  const thread = await getChatThread(normalizedThreadId);
-  if (!thread?.currentMember) {
+  const thread = await getChatThread(normalizedThreadId, { reconcileCallState: false });
+  assertCurrent();
+  if (thread?.threadId !== normalizedThreadId || thread.currentMember?.userId !== currentUserId) {
     throw new UserFacingError("chat_action", "This Chi'lly Chat thread is unavailable.");
   }
 
@@ -905,7 +923,8 @@ export async function sendChatMessage(
     hasAttachment,
   });
 
-  const { data, error } = await supabase
+  assertCurrent();
+  const { data, error } = await client
     .from(CHAT_MESSAGES_TABLE)
     .insert({
       thread_id: normalizedThreadId,
@@ -926,8 +945,9 @@ export async function sendChatMessage(
     throw error ?? new Error("Failed to send Chi'lly Chat message.");
   }
 
+  assertCurrent();
   const message = parseChatMessage(data);
-  if (!message) {
+  if (!message || message.threadId !== normalizedThreadId || message.senderUserId !== currentUserId) {
     logChatInvite("send_message_parse_failed", {
       currentUserId,
       threadId: normalizedThreadId,
@@ -936,25 +956,36 @@ export async function sendChatMessage(
   }
 
   if (attachmentFile) {
+    let attachment: SocialAttachment;
     try {
-      const attachment = await createSocialAttachmentForSurface({
+      assertCurrent();
+      attachment = await createSocialAttachmentForSurface({
         surfaceType: "chat_message",
         surfaceId: message.id,
         file: attachmentFile,
+        mutationSubject: subject,
+        isCurrent: options.isCurrent,
       });
-      message.attachments = [attachment];
     } catch (attachmentError) {
+      if (isSocialAttachmentOutcomeAmbiguous(attachmentError)) {
+        throw new UserFacingError("attachment_parent_saved", "Your message was saved, but its attachment could not be confirmed. Refresh before retrying.");
+      }
       try {
-        await supabase
+        const rollback = await client
           .from(CHAT_MESSAGES_TABLE)
           .delete()
           .eq("id", message.id)
-          .eq("sender_user_id", currentUserId);
+          .eq("sender_user_id", currentUserId)
+          .eq("thread_id", normalizedThreadId);
+        if (rollback.error) throw rollback.error;
       } catch {
-        // The visible error should stay about the attachment failure.
+        throw new UserFacingError("attachment_parent_saved", "Your message was saved, but its attachment failed. Refresh before retrying.");
       }
       throw attachmentError;
     }
+    // Once the child committed, a retired UI must not delete its parent.
+    assertCurrent();
+    message.attachments = [attachment];
   }
 
   logChatInvite("send_message_success", {

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "helper": {
+    "path": "ios/ChillywoodPickerDismissal.swift",
+    "sha256": "ee4bb353fb9e38f57ce56b856bff5756a391b6d78bac30b9778f48e709254ee6"
+  },
+  "packages": [
+    {
+      "name": "expo-image-picker",
+      "version": "17.0.11",
+      "integrity": "sha512-/apkoyukDvsCHHb9fzP+F34A1uQqSzUtYH/2P/xJACNEwq+mwEXjXvVU8bzlJq6ih0Qo1+tpVivIa7B9kYSwOQ==",
+      "files": [
+        {
+          "path": "ios/ImagePickerHandler.swift",
+          "originalSha256": "7c6dbec566169d4ee7731ce3134db9156fd368c6bf98f4949a08554a990b5ead",
+          "patchedSha256": "3bb6bbcb67aa990eecd439b787889c11abaddd1b0954ad2ddc1f8e166ad0a1f2",
+          "changes": [
+            {
+              "offset": 1319,
+              "before": "  private let hideStatusBarWhenPresented: Bool",
+              "after": "  private let hideStatusBarWhenPresented: Bool\n  private let dismissal = ChillywoodPickerDismissal()"
+            },
+            {
+              "offset": 2420,
+              "before": "    handlePickedMedia(mediaInfo: info)\n    picker.dismiss(animated: true)",
+              "after": "    dismissal.finish(picker) { self.handlePickedMedia(mediaInfo: info) }"
+            },
+            {
+              "offset": 2574,
+              "before": "    handlePickingCancellation()\n    picker.dismiss(animated: true)",
+              "after": "    dismissal.finish(picker) { self.handlePickingCancellation() }"
+            },
+            {
+              "offset": 2785,
+              "before": "    // The PHPickerViewController returns empty collection when canceled\n    if results.isEmpty {\n      handlePickingCancellation()\n    } else {\n      handlePickedMedia(selection: results)\n    }\n    picker.dismiss(animated: true)",
+              "after": "    dismissal.finish(picker) {\n      // The PHPickerViewController returns empty collection when canceled\n      if results.isEmpty {\n        self.handlePickingCancellation()\n      } else {\n        self.handlePickedMedia(selection: results)\n      }\n    }"
+            },
+            {
+              "offset": 3169,
+              "before": "    handlePickingCancellation()\n  }\n\n  // MARK: - UINavigationControllerDelegate",
+              "after": "    dismissal.didDismiss { self.handlePickingCancellation() }\n  }\n\n  // MARK: - UINavigationControllerDelegate"
+            }
+          ]
+        },
+        {
+          "path": "ios/ExpoImagePicker.podspec",
+          "originalSha256": "9b8840eb6271115621d12e5c3eb9d679f0081fcdf5b44ba1eb5c3aebec94c6ed",
+          "patchedSha256": "d6a95853eb94872eb94d33bf25a7d5e2126d66f9acf0c63693d56c061f38526a",
+          "changes": [
+            {
+              "offset": 746,
+              "before": "  if !$ExpoUseSources&.include?(package['name']) && ENV['EXPO_USE_SOURCE'].to_i == 0 && File.exist?(\"#{s.name}.xcframework\") && Gem::Version.new(Pod::VERSION) >= Gem::Version.new('1.10.0')\n    s.source_files = \"**/*.h\"\n    s.vendored_frameworks = \"#{s.name}.xcframework\"\n  else\n    s.source_files = \"**/*.{h,m,swift}\"\n  end\n",
+              "after": "  # Compile the maintained dismissal barrier; never use an unpatched XCFramework.\n  s.source_files = \"**/*.{h,m,swift}\"\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "expo-document-picker",
+      "version": "14.0.8",
+      "integrity": "sha512-3tyQKpPqWWFlI8p9RiMX1+T1Zge5mEKeBuXWp1h8PEItFMUDSiOJbQ112sfdC6Hxt8wSxreV9bCRl/NgBdt+fA==",
+      "files": [
+        {
+          "path": "ios/DocumentPickingDelegate.swift",
+          "originalSha256": "52b913465140e2b8f5b16ae9bc9b9407262874d6a7f2e682221ffed144603f4c",
+          "patchedSha256": "3f71d433c1b3b33917328fd5dbcf3b313dad9405088692e7f66222eb4d6b4bc3",
+          "changes": [
+            {
+              "offset": 233,
+              "before": "  private let resultHandler: PickingResultHandler",
+              "after": "  private let resultHandler: PickingResultHandler\n  private let dismissal = ChillywoodPickerDismissal()"
+            },
+            {
+              "offset": 476,
+              "before": "    self.resultHandler.didPickDocumentsAt(urls: urls)",
+              "after": "    dismissal.finish(controller) { self.resultHandler.didPickDocumentsAt(urls: urls) }"
+            },
+            {
+              "offset": 535,
+              "before": "  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {\n    self.resultHandler.didCancelPicking()",
+              "after": "  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {\n    dismissal.finish(controller) { self.resultHandler.didCancelPicking() }"
+            },
+            {
+              "offset": 664,
+              "before": "  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {\n    self.resultHandler.didCancelPicking()",
+              "after": "  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {\n    dismissal.didDismiss { self.resultHandler.didCancelPicking() }"
+            }
+          ]
+        },
+        {
+          "path": "ios/ExpoDocumentPicker.podspec",
+          "originalSha256": "d4e11dd0382559aef7f0575cf7be93713591f9cd582fff85223b09da8e75aab2",
+          "patchedSha256": "b9850cf7521acf9902b9220434e8f41831a25f7d348d25f6a10aa5b3e6d00b79",
+          "changes": [
+            {
+              "offset": 749,
+              "before": "  if !$ExpoUseSources&.include?(package['name']) && ENV['EXPO_USE_SOURCE'].to_i == 0 && File.exist?(\"#{s.name}.xcframework\") && Gem::Version.new(Pod::VERSION) >= Gem::Version.new('1.10.0')\n    s.source_files = \"**/*.h\"\n    s.vendored_frameworks = \"#{s.name}.xcframework\"\n  else\n    s.source_files = \"**/*.{h,m,swift}\"\n  end\n",
+              "after": "  # Compile the maintained dismissal barrier; never use an unpatched XCFramework.\n  s.source_files = \"**/*.{h,m,swift}\"\n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,8 @@ Checked November 1, 2026. This distinguishes source implementation, deployed
 configuration, external qualification and activation. A passing checklist is
 not permission to move money. Public release and device testing are separate.
 
+Latest checkpoint: [operational items 1–9](APP_OPERATIONAL_READINESS_20261101.md).
+
 ## 7. Low-cost lawful tax and live Stripe readiness
 
 ### Sales-type responsibility matrix
@@ -74,19 +76,14 @@ returned an empty, complete list. Threshold monitoring returned empty locations
 and `computed_at=null`: no computation timestamp or freshness information was
 returned, and this is not a legal no-registration determination.
 
-The live standard platform account reports charges/payouts enabled and card
-payments/transfers active. At 15:16, currently-due/past-due fields and errors were
-empty and business-model support was pending. **Fresh authenticated account
-read at 16:04 UTC supersedes that requirement status:** charges/payouts and
-details-submitted remain enabled; `pending_verification` is empty, so the earlier
-business-model pending item is resolved. A representative identity-document
-live-capture requirement is now listed as currently due, past due and eventually
-due. `disabled_reason` is null, errors and future requirements are empty. The
-owner must complete the current secure Stripe verification prompt directly;
-no documents or personal identifiers are collected through this task. Platform payouts
-are daily with a two-day delay; this is **not** a creator payout policy. The
-complete connected-account list is empty. Both v1 webhook endpoints and v2 event
-destinations returned empty complete lists. Live Checkout Sessions and balance
+**Fresh authenticated live read at 22:50 UTC supersedes earlier verification
+observations:** platform charges/payouts and details-submitted are enabled;
+currently-due, past-due, pending-verification and error lists are empty. No
+additional identity submission is currently requested by this evidence. App
+money and payout controls remain OFF. The complete connected-account list is
+still empty. The earlier platform payout schedule is not a creator payout
+policy. Fresh 22:54 UTC reads also show both v1 webhook endpoints and v2 event
+destinations empty with no next page. At the earlier audit, live Checkout Sessions and balance
 transactions also returned empty complete lists. No actual live checkout,
 refund, fee, payout-destination or delivery sample was available to qualify.
 
@@ -105,7 +102,7 @@ changed. Remaining prerequisites are exact legal/product classification and
 required registration, confirmation of intended pay-as-you-go plan, correctly
 scoped live event delivery and safely installed signing secret, connected creator
 onboarding/fee-payer/manual-payout qualification, and actual provider evidence.
-Pending verification should be followed in Stripe, not replaced by submitting
+Any future verification requirement should be followed in Stripe, not by submitting
 identity documents through chat. Results only use information available to
 Stripe. Always review with a qualified tax professional before taking action.
 
@@ -160,8 +157,9 @@ published per-tracking price as an agreed marketplace contract.
    requires Shippo's solutions team. Their current guide allows up to10 business
    days. Never replace signatures with unsigned callbacks for convenience.
 2. Reuse existing carrier+tracking numbers; immutable order assignment and
-   reviewed corrections remain authoritative. Register each number at most
-   once. Unknown registration outcomes are reconciled by GET, not retried POSTs.
+   reviewed corrections remain authoritative. The consume-only repair removes
+   outbound registration capability entirely. Historical registration fields
+   remain evidence, not a requirement or an inferred successful action.
 3. Bind credential mode, provider account, order environment, carrier and number.
    Callbacks are durable wake-up hints, not delivery authority. Authenticated GET
    and destination/time corroboration must succeed before delivery evidence.
@@ -179,7 +177,7 @@ published per-tracking price as an agreed marketplace contract.
 The transport helper, worker and database now accept explicit production mode
 with an exact matching qualified merchant account and live-key prefix, tested
 without provider traffic. This is **not an activated live pipeline**: no live
-qualification, account or credential is seeded. Registration and GET bodies have shared bounded deadlines, the
+qualification, account or credential is seeded. GET response bodies have shared bounded deadlines, the
 worker stops admitting work before its aggregate budget expires, and stale
 lease completions no longer inflate its success count. Live activation requires
 independent provider/account qualification and the canonical verified live
@@ -196,8 +194,11 @@ purchase evidence, not merely supplying a live key.
 2. The current driver is bounded to3 concurrent jobs,30/run,100 seconds and64
    Stripe GETs/order. Measure actual mixed healthy/slow/throttled/failed orders;
    test missing pages and histories above64 reads. Never report720/6h as proven
-   capacity or clear an incomplete snapshot. Resumable snapshots need a separate
-   provider-consistent implementation before qualifying such histories.
+   capacity or clear an incomplete snapshot. Source now implements checkpointed
+   large-history reads, exact-context resume and snapshot revalidation, with a
+   2,000-refund fixture exceeding the per-run budget. Actual provider history,
+   demand and timing still require qualification; fixture throughput is not
+   production capacity.
 3. Database triggers record actual run admissions and first terminal exact-lease
    acknowledgements, including incomplete outcomes. The owner-only health RPC
    reads these records and current backlog/tracking qualification. Forged
@@ -224,9 +225,13 @@ account rows,0 assignments; driver disabled. No backlog cleanup is implied.
 
 ## Deployment and rollback
 
-Apply the forward observability migration before publishing the owner panel.
+The original 48-migration completion batch is deployed (573 total history rows).
+The consume-only tracking repair is a separate pending rollout, not part of
+that history yet. Apply its forward migration and exact GET-only closure under
+dormant tracking dispatch before any tracking activation.
 Verify private tables have no API-role grants and only the exact-session Owner
-RPC is exposed. Do not enable the dormant driver or change cron. Test with
+RPC is exposed. The independent owner-health cron is deployed; preserve it and
+do not enable the dormant financial driver. Test with
 synthetic local records, not fabricated production qualifications. Runtime
 rollback may hide the panel while leaving append-only operational records;
 never delete evidence or reverse deployed migration history. Final source must

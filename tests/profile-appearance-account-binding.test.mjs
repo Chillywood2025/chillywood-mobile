@@ -3,13 +3,16 @@ import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import vm from 'node:vm';
 import test from 'node:test';
+import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 
 const require = createRequire(import.meta.url), ts = require('typescript');
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return {promise, resolve}; };
 const authority = (userId = 'A', sessionGeneration = 'one') => ({userId, accountId:userId, sessionGeneration, state:'ACTIVE', restoreOnly:false});
 function load(file, mocks, globals = {}, transform = source => source) {
   const context = {exports:{}, console, setTimeout, clearTimeout, ...globals,
-    require:name => { assert.ok(name in mocks, `unmodeled dependency ${name}`); return mocks[name]; }};
+    require:name => {
+      if (name === './prepareMediaUploadCopy') return load('_lib/prepareMediaUploadCopy.ts', mocks);
+      assert.ok(name in mocks, `unmodeled dependency ${name}`); return mocks[name]; }};
   vm.runInNewContext(ts.transpileModule(transform(fs.readFileSync(file, 'utf8')), {
     compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}, fileName:file,
   }).outputText, context, {filename:file});
@@ -90,6 +93,8 @@ function harness({legacyCacheWrite = false, realSdk = false} = {}) {
     './usernameHandles':{normalizeUsernameHandle:normalize,formatUsernameHandle:normalize},
   });
   const media = load('_lib/profileMedia.ts', {
+    './mediaPickerResources': loadStubbed('_lib/mediaPickerResources.ts'),
+    './deviceImagePicker': { pickDeviceImage: async () => { throw new Error('Appearance mutation must not launch a picker.'); } },
     './accountSessionAuthority':{sameAccountSessionAuthority:(a,b) => JSON.stringify(a)===JSON.stringify(b)},
     'expo-file-system':{File:class {}},
     'expo-file-system/legacy':{uploadAsync:async () => ({status:200}),FileSystemUploadType:{BINARY_CONTENT:0},getInfoAsync:async () => ({exists:true,size:10})},

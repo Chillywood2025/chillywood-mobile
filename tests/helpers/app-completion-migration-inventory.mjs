@@ -1,7 +1,20 @@
 // Reviewed November 1 completion stack, returning-fee policy and consume-only tracking.
-// 49 migrations; 192 added, 94 replaced, zero removed function signatures.
+// 49 base migrations plus separately reviewed live-discovery successors.
+// Includes the narrow final public Owner identity boundary; no removed signatures.
 // Explicit identities, not a runtime whitelist generated from the schema under
 // test. Missing/unexpected functions and migrations must fail exact assertions.
+import {liveDiscoveryCompletionFiles,liveDiscoveryAddedFunctionIdentities,liveDiscoveryReplacedFunctionIdentities} from './live-discovery-migration-inventory.mjs';
+// These successors require the held Studio readers/publication schema. Historical
+// pre-Studio replay must omit the exact files and added signatures together.
+export const appCompletionStudioDependentFiles = Object.freeze([
+  '20261101201430_owner_public_identity_boundary.sql',
+  ...liveDiscoveryCompletionFiles,
+].sort());
+export const appCompletionStudioDependentAddedFunctionIdentities = new Map([
+  ['public.read_public_channel_profile_pre_owner_boundary/1', 'read_public_channel_profile_pre_owner_boundary(text)'],
+  ['public.read_public_platform_identity_pre_owner_boundary/1', 'read_public_platform_identity_pre_owner_boundary(text)'],
+  ...liveDiscoveryAddedFunctionIdentities,
+]);
 export const appCompletionFiles = Object.freeze([
   "20261101141441_secondary_media_producer_registry.sql",
   "20261101141605_merch_reconciliation_observability.sql",
@@ -52,10 +65,12 @@ export const appCompletionFiles = Object.freeze([
   "20261101172219_merch_publication_current_legal_fence.sql",
   "20261101180001_creator_cashout_returning_fee_adjustments.sql",
   // Replaces only the already-reviewed claim/complete tracking bodies, preserving ABI and ACLs.
-  "20261101215711_merch_tracking_consume_existing_only.sql"
-]);
+  "20261101215711_merch_tracking_consume_existing_only.sql",
+  ...appCompletionStudioDependentFiles,
+].sort());
 
 export const appCompletionAddedFunctionIdentities = new Map([
+  ...appCompletionStudioDependentAddedFunctionIdentities,
   [
     "private.append_known_cost_allocation/0",
     "private.append_known_cost_allocation()"
@@ -827,6 +842,9 @@ export const appCompletionAddedFunctionIdentities = new Map([
 ]);
 
 export const appCompletionReplacedFunctionIdentities = new Map([
+  ["public.read_public_channel_profile/1", "read_public_channel_profile(text)"],
+  ["public.read_public_platform_identity/1", "read_public_platform_identity(text)"],
+  ...liveDiscoveryReplacedFunctionIdentities,
   [
     "private.auction_automation_approval_valid/1",
     "private.auction_automation_approval_valid(private.auction_automation_approvals)"

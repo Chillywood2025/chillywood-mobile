@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "featureManifest": "media-upload-image-manipulation",
+  "nativeAdapter": "_lib/deviceAttachmentPicker.ts",
+  "nativeCalls": { "getDocumentAsync": 1, "launchCameraAsync": 1, "launchImageLibraryAsync": 1 },
+  "boundaries": {
+    "platforms": ["android", "ios"],
+    "sessionStates": ["active", "signed-out evidence reporter", "account replacement", "same-account new session", "restore-only", "unmounted"],
+    "failures": ["cancel", "permission denied", "missing native module", "cloud import failure", "unsupported MIME", "oversize", "missing metadata", "stale result/error"],
+    "accessibility": "One labeled entry; shared accessible source sheet with Cancel and native dismissal.",
+    "preserved": ["caller-specific MIME/size/count limits", "explicit save/publish", "server upload authority", "scan/moderation/privacy", "existing upload retry identity"],
+    "providersUnchanged": ["OS photo picker", "OS Files providers", "existing media storage and scanner"],
+    "rollback": "Revert source changes; never publish OTA or a native binary through this source task.",
+    "deviceOnlyPending": {
+      "android": "Gallery-app ACTION_PICK is implemented behind optional-native capability and installed-handler checks; V18 hides it. It is not a device-only guarantee: Google may be the only installed handler, and Expo ImagePicker17.0.11 does not expose EXTRA_LOCAL_ONLY. New binaries, hosted native compilation and installed-device qualification remain held.",
+      "ios": "The shared sheet and exact-version native dismissal-completion patch are implemented; PHPicker/iCloud import and actual onDismiss sequencing still require hosted native compilation and installed iOS testing. No inline local grid or physical-device proof is claimed. New binaries remain held.",
+      "goldenCases": ["Android/iOS local photo and album", "camera allowed/denied", "Files supported formats", "iCloud/cloud item available/unavailable", "cancel", "background and resume", "account/target switch", "large/corrupt input"]
+    }
+  },
+  "callers": [
+    { "file": "app/channel-settings.tsx", "requests": ["pickCreatorVideo", "onPickClipCoverFile", "pickPlatformBrandAsset"], "surfaces": ["Studio video", "Clip video", "Clip cover", "Platform hero image", "hero video", "background", "avatar", "logo", "watermark"], "reason": "Video library can import a compatible rendition; Files preserves original video selection. Shared exact editor/session guards and explicit Save remain mandatory." },
+    { "file": "app/profile/[userId].tsx", "requests": ["attachProfilePostFile", "attachProfilePostCommentFile", "onChooseProfileMedia"], "surfaces": ["Profile post", "Profile comment", "avatar", "background"], "reason": "Appearance review/save remains explicit; post/comment attachment formats remain surface-specific." },
+    { "file": "app/settings.tsx", "requests": ["onChooseProfileMedia"], "surfaces": ["Settings avatar", "Settings background"], "reason": "Appearance Modal is dismissed before the shared source sheet; review/save is retained." },
+    { "file": "components/merch/merch-screens.tsx", "requests": ["choosePhoto"], "surfaces": ["Shop new product", "Shop edit product"], "reason": "Gallery/Files and Advanced image link share one entry. Staging, scanner, explicit Use/Save/Publish and retry identity are unchanged." },
+    { "file": "app/chat/[threadId].tsx", "requests": ["handlePickAttachment"], "surfaces": ["Chat message"], "reason": "Original account/session + thread attachment subject is retained through Send." },
+    { "file": "app/player/[id].tsx", "requests": ["onPickCreatorVideoCommentAttachment"], "surfaces": ["Creator-video comment"], "reason": "Selection is bound to original account/session, video route and reply target." },
+    { "file": "app/watch-party/[partyId].tsx", "requests": ["onPickPartyRoomCommentAttachment"], "surfaces": ["Party room comment"], "reason": "Parent message and attachment receive the original mutation subject and current room scope." },
+    { "file": "app/watch-party/live-stage/[partyId].tsx", "requests": ["onPickHybridCommentAttachment"], "surfaces": ["Live Stage comment"], "reason": "Parent message and attachment receive the original mutation subject and current room scope." },
+    { "file": "app/copyright-report.tsx", "requests": ["pickAttachments"], "surfaces": ["Copyright report evidence"], "reason": "Public reporting permits anonymous choice. Multi-evidence gallery/camera/Files retains six-file and original evidence MIME/size limits." },
+    { "file": "app/counter-notice.tsx", "requests": ["pickAttachments"], "surfaces": ["Counter-notice evidence"], "reason": "Multi-evidence retains six-file and original evidence MIME/size limits, bound to current case/account." },
+    { "file": "app/admin.tsx", "requests": ["submitRachiProfileImage"], "surfaces": ["Official Rachi avatar"], "reason": "Restricted official target and exact current Owner/Admin operator authority remain mandatory." }
+  ],
+  "wrappers": [
+    { "file": "_lib/deviceImagePicker.ts", "reason": "Typed single-image adapter with caller-compatible MIME list." },
+    { "file": "_lib/deviceVideoPicker.ts", "reason": "Typed single-video adapter; no direct screen SDK launch." },
+    { "file": "_lib/socialAttachmentPicker.ts", "reason": "Preserves social MIME/size validation and truthful missing metadata." },
+    { "file": "_lib/profileMedia.ts", "reason": "Profile appearance helper; caller still reviews and explicitly saves." },
+    { "file": "_lib/merchProductPhotos.ts", "reason": "Shop helper preserves staged-photo scanner and upload retry contract." },
+    { "file": "_lib/officialRachi.ts", "reason": "Restricted official avatar wrapper preserves exact operator authority and audited target." }
+  ]
+}

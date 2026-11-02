@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { loadPickedMediaResources } from './helpers/picked-media-resources-host.mjs';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -96,7 +97,7 @@ function pickerCallback(file, context) {
   const exports = {};
   vm.runInNewContext(ts.transpileModule(`export const choose = ${callback}`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText, { exports, ...context });
+  }).outputText, { exports, ...loadPickedMediaResources(), ...context });
   return exports.choose;
 }
 for (const file of ['app/profile/[userId].tsx', 'app/settings.tsx']) {
@@ -107,13 +108,17 @@ for (const file of ['app/profile/[userId].tsx', 'app/settings.tsx']) {
       const authority = { userId: 'owner', accountId: 'owner', sessionGeneration: 'one', restoreOnly: false, state: 'ACTIVE' };
       let current = { ...authority };
       const mounted = { current: true }, pending = { current: false }, reviews = [], alerts = [];
+      const mediaRemovalScope = { revision: 0 };
       const context = {
         isSelfProfile: true, userId: 'owner', profileAppearanceBusy: null, profileGalleryPending: pending,
+        profileMediaReview: null, profileReviewRevision: { current: 0 },
+        focused: true, mediaRemovalScope, mediaRemovalScopeRef: { current: mediaRemovalScope },
+        pickMedia: ({ pick }) => pick('photos', 'picker-operation'),
         authority, getCurrentAccountSessionAuthoritySnapshot: () => current,
         sameAccountSessionAuthority: (a, b) => JSON.stringify(a) === JSON.stringify(b),
         profileGalleryMounted: mounted, mountedRef: mounted, isSocialIdentityCurrent: () => outcome !== 'route changed before launch',
         setProfilePhotoSheetVisible: noop, setProfileBackgroundSheetVisible: noop, setProfileAppearanceSheetKind: noop,
-        pickProfileMediaImage: () => { calls++; return result; },
+        pickProfileMediaImage: (_kind, source, operation) => { assert.equal(source, 'photos'); assert.equal(operation, 'picker-operation'); calls++; return result; },
         setProfileMediaReview: review => reviews.push(review),
         profile: { profileAvatarFitMode: 'fit' }, myProfile: { profileAvatarFitMode: 'fit' },
         Alert: { alert: (...args) => alerts.push(args) }, getUserFacingErrorMessage: error => error.message,

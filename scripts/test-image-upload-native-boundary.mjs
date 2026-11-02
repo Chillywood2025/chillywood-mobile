@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import ts from "typescript";
+import { createMediaPickerModules } from "../tests/helpers/media-picker-modules.mjs";
 
 import {
   IMAGE_MANIPULATOR_NATIVE_MODULE_NAME,
@@ -182,8 +183,31 @@ const profilePicker = read("_lib/profileMedia.ts");
 const socialPicker = read("_lib/socialAttachmentPicker.ts");
 assert.match(profileMedia, /normalizeImageUploadFile\(file\)/u);
 assert.match(socialAttachments, /normalizeImageUploadFile\(input\.file\)/u);
-assert.match(profilePicker, /if \(result\.canceled\) return null/u, "profile picker cancellation must not start normalization or upload");
-assert.match(socialPicker, /if \(result\.canceled\) return null/u, "social picker cancellation must not start normalization or upload");
+assert.match(profilePicker, /return pickDeviceImage\(source, operation/u, "profile picker must delegate to the shared selected-item adapter");
+assert.match(socialPicker, /await pickDeviceAttachments\(source,/u, "social picker must use the same native boundary");
+assert.match(socialPicker, /if \(!files\) return null/u, "social cancellation must stop before validation/upload");
+const nativePicker = read("_lib/deviceAttachmentPicker.ts");
+assert.doesNotMatch(nativePicker, /normalizeImageUploadFile|uploadAsync|createSocialAttachmentForSurface/u,
+  "the shared picker must select only, never normalize/upload on cancellation");
+// Exercise the actual adapters instead of requiring obsolete duplicated SDK
+// cancellation branches in every wrapper. Only native SDK boundaries are fake.
+const canceled = async () => ({ canceled: true, assets: null });
+const pickerModules = createMediaPickerModules({
+  "expo-image-picker": {
+    UIImagePickerPreferredAssetRepresentationMode: { Compatible: "compatible" },
+    launchImageLibraryAsync: canceled, launchCameraAsync: canceled,
+    requestCameraPermissionsAsync: async () => ({ granted: true }),
+  },
+  "expo-document-picker": { getDocumentAsync: canceled },
+  socialAttachments: {
+    getSocialAttachmentPickerTypes: () => ["image/png"],
+    getSocialAttachmentValidationMessage: () => assert.fail("cancellation must not validate or upload a file"),
+  },
+});
+for (const source of ["photos", "camera", "files"]) {
+  assert.equal(await pickerModules("_lib/deviceImagePicker.ts").pickDeviceImage(source), null);
+  assert.equal(await pickerModules("_lib/socialAttachmentPicker.ts").pickSocialAttachmentFile("images", source), null);
+}
 for (const pathName of [
   "_lib/chat.ts",
   "_lib/profilePosts.ts",

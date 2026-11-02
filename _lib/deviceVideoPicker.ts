@@ -1,19 +1,10 @@
 import type { CreatorVideoFile } from "./creatorVideos";
 import type { DeviceImageSource } from "./deviceImagePicker";
+import { pickDeviceAttachments } from "./deviceAttachmentPicker";
+import type { MediaPickerOperation } from "./mediaPickerCoordinator";
 
 /** System media picker grants access only to the selected video. */
-export async function pickDeviceVideo(source: DeviceImageSource): Promise<CreatorVideoFile | null> {
-  if (source === "files") {
-    const picker = await import("expo-document-picker");
-    const result = await picker.getDocumentAsync({ type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"], copyToCacheDirectory: true, multiple: false });
-    if (result.canceled) return null;
-    const asset = result.assets[0];
-    return asset ? { uri: asset.uri, name: asset.name, mimeType: asset.mimeType, size: asset.size } : null;
-  }
-  const picker = await import("expo-image-picker");
-  const result = await picker.launchImageLibraryAsync({ mediaTypes: ["videos"], allowsEditing: false, allowsMultipleSelection: false,
-    preferredAssetRepresentationMode: picker.UIImagePickerPreferredAssetRepresentationMode.Compatible });
-  if (result.canceled) return null;
-  const asset = result.assets[0];
-  return asset ? { uri: asset.uri, name: asset.fileName ?? asset.uri.split("/").pop(), mimeType: asset.mimeType, size: asset.fileSize } : null;
+export async function pickDeviceVideo(source: DeviceImageSource, operation?: MediaPickerOperation, options?: { maximumBytes?: number }): Promise<CreatorVideoFile | null> {
+  const files = await pickDeviceAttachments(source, { mimeTypes: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"], mediaKind: "video", operation, maximumBytes: options?.maximumBytes });
+  return files?.[0] ?? null;
 }

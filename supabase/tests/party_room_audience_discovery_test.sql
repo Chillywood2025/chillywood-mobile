@@ -11,6 +11,24 @@ begin
   perform set_config('request.jwt.claim.role','authenticated',true);
   perform set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',pg_temp.party_user(n),'session_id',pg_temp.party_session(n))::text,true);
 end $$;
+-- Fixture adapters fetch current expected values, then execute the actual
+-- versioned public RPC. No production authority function is replaced.
+create function pg_temp.set_current_party_discovery(p_party text,p_visibility text,p_title text,p_type text,p_source text,p_session text)
+returns jsonb language plpgsql as $$
+declare r public.watch_party_rooms;
+begin
+  select * into r from public.watch_party_rooms where party_id=p_party;
+  return public.set_watch_party_room_host_settings(p_party,r.room_generation,r.host_settings_revision,p_session,
+    coalesce(r.join_policy,'open'),p_visibility,p_title,p_type,p_source,true,false,p_visibility='private');
+end $$;
+create function pg_temp.publish_current_party_discovery(p_party text,p_type text,p_source text,p_session text)
+returns jsonb language plpgsql as $$
+declare r public.watch_party_rooms;
+begin
+  select * into r from public.watch_party_rooms where party_id=p_party;
+  return public.set_watch_party_room_host_settings(p_party,r.room_generation,r.host_settings_revision,p_session,
+    coalesce(r.join_policy,'open'),r.discovery_visibility,r.discovery_title,p_type,p_source,true,false,r.discovery_paused);
+end $$;
 insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
   select pg_temp.party_user(n),false,false,now() from generate_series(1,5) n;
 insert into auth.sessions(id,user_id,not_after)
@@ -53,15 +71,15 @@ select lives_ok($$insert into public.watch_party_rooms(party_id,host_user_id,tit
 select is((select discovery_visibility from public.watch_party_rooms where party_id='PARTY-AUDIENCE-01'),'private','new ordinary room defaults private');
 select ok(has_function_privilege('service_role','public.can_read_circle_spectator_feed_item(uuid,text)','EXECUTE'),'Circle wrapper preserves existing service RPC permission');
 select ok(not has_function_privilege('anon','public.can_read_circle_spectator_feed_item(uuid,text)','EXECUTE'),'Circle compatibility does not grant anonymous RPC access');
-select is(public.set_party_room_discovery('PARTY-AUDIENCE-01','public','Exact party title','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','false','prepared public selection is not publication');
-select throws_ok($$select public.publish_party_room_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)$$,
-  'party_room_joined_host_required','preparation/navigation without actual joined host cannot publish');
-select throws_ok($$select public.publish_party_room_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000002',pg_temp.party_session(1)::text)$$,
+select is(pg_temp.set_current_party_discovery('PARTY-AUDIENCE-01','public','Exact party title','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','false','prepared public selection is not publication');
+select is(pg_temp.publish_current_party_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published',
+  'false','preparation/navigation without actual joined host cannot publish');
+select throws_ok($$select pg_temp.publish_current_party_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000002',pg_temp.party_session(1)::text)$$,
   'party_room_source_changed','stale source intent cannot publish');
-select throws_ok($$select public.publish_party_room_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(2)::text)$$,
-  'party_room_current_session_required','another session generation is rejected');
+select throws_ok($$select pg_temp.publish_current_party_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(2)::text)$$,
+  'room_current_session_required','another session generation is rejected');
 select lives_ok($$select public.join_watch_party_room_session('PARTY-AUDIENCE-01')$$,'actual current host joins with normal RPC');
-select is(public.publish_party_room_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','explicit host start after actual join publishes metadata');
+select is(pg_temp.publish_current_party_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','explicit host start after actual join publishes metadata');
 reset role;
 select is((select count(*)::integer from public.discovery_feed_items where source_type='party_room' and source_id='PARTY-AUDIENCE-01' and is_publicly_discoverable),1,'one canonical public row');
 select ok((select rights_status='metadata_only' and not is_spectator_enabled and not is_spectator_playback_enabled and not allow_spectator_view
@@ -76,19 +94,19 @@ select ok((select private.resolve_discovery_notification_activity(e)->>'target_e
   'notification resolves exact existing canonical guarded destination');
 select pg_temp.party_login(1);
 set local role authenticated;
-select is(public.publish_party_room_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','same exact publication retry is successful');
+select is(pg_temp.publish_current_party_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','same exact publication retry is successful');
 reset role;
 select is((select count(*)::integer from public.notification_activity_events where context->>'sourceType'='party_room'),2,'retries do not resend or duplicate recipient events');
 select pg_temp.party_login(3);
 set local role authenticated;
 select is((select count(*)::integer from public.discovery_feed_items where source_type='party_room' and source_id='PARTY-AUDIENCE-01'),1,'ordinary unrelated authenticated viewer can read public metadata via RLS');
-select throws_ok($$select public.set_party_room_discovery('PARTY-AUDIENCE-01','private',null,'platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(3)::text)$$,
-  'party_room_host_required','viewer cannot change owner audience');
+select throws_ok($$select pg_temp.set_current_party_discovery('PARTY-AUDIENCE-01','private',null,'platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(3)::text)$$,
+  'room_exact_host_required','viewer cannot change owner audience');
 select lives_ok($$select public.join_watch_party_room_session('PARTY-AUDIENCE-01')$$,'public viewer with current Premium uses normal join');
 reset role;
 select pg_temp.party_login(1);
 set local role authenticated;
-select is(public.set_party_room_discovery('PARTY-AUDIENCE-01','circle','Circle party','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','host switches started room to Circle');
+select is(pg_temp.set_current_party_discovery('PARTY-AUDIENCE-01','circle','Circle party','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','host switches started room to Circle');
 reset role;
 select is((select count(*)::integer from public.discovery_feed_items where source_type='party_room' and is_publicly_discoverable),0,'Circle switch immediately removes public projection');
 select pg_temp.party_login(3);
@@ -121,14 +139,14 @@ select ok(not public.can_read_circle_spectator_feed_item((select id from public.
 reset role;
 select pg_temp.party_login(1);
 set local role authenticated;
-select is(public.set_party_room_discovery('PARTY-AUDIENCE-01','private',null,'platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','false','private hides started room normally');
+select is(pg_temp.set_current_party_discovery('PARTY-AUDIENCE-01','private',null,'platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','false','private hides started room normally');
 reset role;
 select is((select count(*)::integer from public.circle_spectator_feed_items where source_type='party_room' and status='active'),0,'private switch immediately hides Circle row');
 select ok(not exists(select 1 from public.notification_activity_events e where context->>'sourceType'='party_room'
   and private.resolve_discovery_notification_activity(e)->>'eligible'='true'),'queued stale public/Circle notifications cannot deliver after private');
 select pg_temp.party_login(1);
 set local role authenticated;
-select is(public.set_party_room_discovery('PARTY-AUDIENCE-01','public','Restored','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','same real start may be reshown after explicit audience save');
+select is(pg_temp.set_current_party_discovery('PARTY-AUDIENCE-01','public','Restored','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','same real start may be reshown after explicit audience save');
 reset role;
 savepoint stale_session;
 update auth.sessions set not_after=now()-interval '1 second' where id=pg_temp.party_session(1);
@@ -171,7 +189,7 @@ rollback to anonymous_metadata;
 savepoint circle_removed;
 select pg_temp.party_login(1);
 set local role authenticated;
-select public.set_party_room_discovery('PARTY-AUDIENCE-01','circle','Current Circle','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text);
+select pg_temp.set_current_party_discovery('PARTY-AUDIENCE-01','circle','Current Circle','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text);
 reset role;
 delete from public.user_friendships where user_low_id=pg_temp.party_user(1)::text and user_high_id=pg_temp.party_user(2)::text;
 select pg_temp.party_login(2);
@@ -280,9 +298,9 @@ select pg_temp.party_login(1);
 set local role authenticated;
 select lives_ok($$insert into public.watch_party_rooms(party_id,host_user_id,source_type,source_id,room_type,content_access_rule)
   values('PARTY-CREATOR-01',auth.uid(),'creator_video','ac110004-0000-4000-8000-000000000001','title','premium')$$,'public creator content prepares a normal private Party Room');
-select is(public.set_party_room_discovery('PARTY-CREATOR-01','circle','Creator Circle','creator_video','ac110004-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','false','Circle creator source remains unlisted before real Start');
+select is(pg_temp.set_current_party_discovery('PARTY-CREATOR-01','circle','Creator Circle','creator_video','ac110004-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','false','Circle creator source remains unlisted before real Start');
 select lives_ok($$select public.join_watch_party_room_session('PARTY-CREATOR-01')$$,'creator host enters via actual normal join');
-select is(public.publish_party_room_discovery('PARTY-CREATOR-01','creator_video','ac110004-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','public creator source can have a Circle-limited Party Room');
+select is(pg_temp.publish_current_party_discovery('PARTY-CREATOR-01','creator_video','ac110004-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','true','public creator source can have a Circle-limited Party Room');
 reset role;
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
@@ -290,7 +308,7 @@ update public.videos set visibility='circle' where id='ac110004-0000-4000-8000-0
 select ok(not private.party_room_publication_current('PARTY-CREATOR-01'),'changing video itself to Circle retires public-source metadata capability');
 select pg_temp.party_login(1);
 set local role authenticated;
-select throws_ok($$select public.set_party_room_discovery('PARTY-CREATOR-01','circle','Not a public source','creator_video','ac110004-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)$$,
+select throws_ok($$select pg_temp.set_current_party_discovery('PARTY-CREATOR-01','circle','Not a public source','creator_video','ac110004-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)$$,
   'party_room_source_authority_required','Circle Party choice cannot silently republish a Circle/private creator video');
 reset role;
 select is((select visibility from public.videos where id='ac110004-0000-4000-8000-000000000001'),'circle','source visibility remains unchanged by failed audience request');

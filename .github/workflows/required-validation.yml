@@ -204,6 +204,9 @@ jobs:
           # Keep every cron row and source fingerprint intact during native proofs.
           node scripts/with-local-ci-cron-paused.mjs <<'NATIVE_PROOFS'
           supabase test db
+          node --test tests/live-room-native-runner-source.test.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-live-room-host-settings-concurrency.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-room-live-start-dedup-concurrency.mjs
           node --test tests/auction-transfer-native-runner-source.test.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-subscription-bindings-native-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-event-auction-concurrency-postgres.mjs
@@ -268,6 +271,8 @@ jobs:
           npm run test:chat-message-call-lifecycle-http
           node scripts/test-chilly-chat-real-peer-http.mjs
           npm run test:communication-room-realtime-delivery
+          node --test tests/discovery-realtime-native-source.test.mjs
+          node scripts/test-discovery-realtime-delivery.mjs
           npm run test:revenuecat-premium-quarantine-concurrency
           npm run test:cognitive-net-acl-guard-concurrency
           npm run test:cognitive-db-concurrency
@@ -337,6 +342,10 @@ jobs:
           node scripts/compile-google-play-external-content-links.mjs
       - name: Execute actual Swift audio routing, observers, and JS call ownership
         run: node scripts/test-ios-native-call-audio.mjs
+      - name: Verify iOS picker dismissal ordering and compile real UIKit delegates
+        run: |
+          node --test tests/ios-picker-dismissal.test.mjs
+          node scripts/test-ios-picker-dismissal.mjs
       - name: Verify outgoing camera lifecycle and controls
         run: |
           node --test tests/live-camera-effects.test.mjs tests/live-camera-effects-mounted.test.mjs tests/live-camera-controls.test.mjs tests/live-camera-switch-sdk.test.mjs tests/webrtc-camera-effect-ownership.test.mjs tests/livekit-ios-static-framework-compatibility.test.mjs

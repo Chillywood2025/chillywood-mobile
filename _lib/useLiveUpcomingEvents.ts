@@ -5,9 +5,10 @@ import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority 
 import { readPublicUpcomingEventSummaries, type CreatorEventSummary, type PublicUpcomingEventReadOptions } from './liveEvents';
 import { useSession } from './session';
 import { getDiscoveryLiveUpdateInterest, subscribeToLiveUpdates } from './sharedLiveUpdates';
+import { createDiscoveryReadFence, type DiscoveryLiveInvalidation } from './liveDiscoveryInvalidation';
 
 export const LIVE_UPCOMING_REFRESH_MS = 30_000;
-export const LIVE_UPCOMING_HINT_MIN_MS = 10_000;
+export const LIVE_UPCOMING_HINT_MIN_MS = 500;
 export const LIVE_UPCOMING_READ_TIMEOUT_MS = 12_000;
 export type LiveUpcomingEventsOptions = Omit<PublicUpcomingEventReadOptions, 'signal'> & { enabled?: boolean };
 const empty = () => ({ items: [] as CreatorEventSummary[], ready: false });
@@ -33,6 +34,7 @@ export function useLiveUpcomingEvents(options: LiveUpcomingEventsOptions = {}) {
     let dueAt = Infinity;
     let lastStarted = -Infinity;
     let hinted = false;
+    const readFence = createDiscoveryReadFence();
     let unsubscribe: (() => void) | null = null;
     const guest = authorityStatus === 'signed_out' && authority === null;
     const enabled = settings.enabled !== false && focused
@@ -57,6 +59,7 @@ export function useLiveUpcomingEvents(options: LiveUpcomingEventsOptions = {}) {
       if (pending) { if (!manual) arm(); return pending; }
       if (!manual && Date.now() < lastStarted + (hinted ? LIVE_UPCOMING_HINT_MIN_MS : LIVE_UPCOMING_REFRESH_MS)) { arm(); return Promise.resolve(); }
       cancelTimer(); lastStarted = Date.now(); hinted = false;
+      readFence.begin();
       const request = ++sequence;
       const ownedController = new AbortController();
       controller = ownedController;
@@ -72,7 +75,7 @@ export function useLiveUpcomingEvents(options: LiveUpcomingEventsOptions = {}) {
             readPublicUpcomingEventSummaries({ ...settings, signal: ownedController.signal }),
             aborted,
           ]);
-          if (current() && request === sequence) setState({ lifetime, items, ready: true, loading: false, error: null });
+          if (current() && request === sequence && !readFence.full()) setState({ lifetime, items: items.filter(readFence.allows), ready: true, loading: false, error: null });
         } catch {
           ownedController.abort();
           if (current() && request === sequence) setState({ ...empty(), lifetime, loading: false, error: 'Upcoming events could not refresh. Please try again.' });
@@ -85,7 +88,19 @@ export function useLiveUpcomingEvents(options: LiveUpcomingEventsOptions = {}) {
       return pending;
     };
     const connect = () => {
-      if (current() && authority && !unsubscribe) unsubscribe = subscribeToLiveUpdates(authority, 'discovery', () => { void run(false, true); },
+      if (current() && authority && !unsubscribe) unsubscribe = subscribeToLiveUpdates(authority, 'discovery', (invalidation?: DiscoveryLiveInvalidation) => {
+        if (!current()) return;
+        if (pending) readFence.invalidate(invalidation);
+        if (invalidation?.keys?.length) {
+          const visibleFence = createDiscoveryReadFence(); visibleFence.invalidate(invalidation);
+          setState(old => {
+            if (old.lifetime !== lifetime) return old;
+            const items = old.items.filter(visibleFence.allows);
+            return items.length === old.items.length ? old : { ...old, items };
+          });
+        }
+        void run(false, true);
+      },
         getDiscoveryLiveUpdateInterest({ creatorUserIds: settings.hostUserIds }));
     };
     const owned = { lifetime, run: () => run(true) };

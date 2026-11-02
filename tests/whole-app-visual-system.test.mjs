@@ -134,7 +134,8 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.studio, /titleOverlayPosition === option\.id \? <ChillywoodPrimaryActionFill radius=\{999\} \/> : null/);
   assert.match(sources.studio, /templatePreset === option\.id \? <ChillywoodPrimaryActionFill radius=\{14\} \/> : null/);
   assert.match(sources.studio, /creatorContentPanel:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
-  assert.match(sources.studio, /creator-upload-source-gallery-button[\s\S]+<ChillywoodPrimaryActionFill radius=\{16\} \/>/);
+  assert.match(sources.studio, /clip-studio-choose-full-video-button[\s\S]+<ChillywoodPrimaryActionFill radius=\{12\} \/>/);
+  assert.match(sources.studio, /\{mediaPickerSheet\}/);
   assert.match(sources.studio, /studioTabButtonActive:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder/);
   assert.match(sources.studio, /studioHeaderCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
   assert.match(sources.partyRoom, /watch-party-open-shared-player-button[\s\S]+<ChillywoodPrimaryActionFill opacity=\{watchPartyLiveOpening \? 0\.58 : 1\} radius=\{16\} \/>/);
@@ -221,7 +222,8 @@ test("Watch-Party setup guidance is useful human copy without changing room auth
 
   assert.match(sources.watchParty, /getJoinPolicyCopy|activeRoomContext\?\.joinPolicy/);
   assert.match(sources.watchParty, /Party Room Pass/);
-  assert.match(sources.liveStage, /onToggleLiveRoomLock/);
+  assert.match(sources.liveStage, /<RoomPrivacyDiscoveryControls room=\{room\}/);
+  assert.match(sources.liveStage, /onReadback=\{next => setRoom\(current => applyWatchPartyHostSettingsReadback\(current, next\)\)\}/);
   assert.match(sources.liveStage, /onToggleLiveRoomReactions/);
   assert.match(sources.liveStage, /onToggleLiveRoomCapture/);
   assert.match(sources.liveStage, /testID="live-room-enter-stage-button"/);
@@ -251,7 +253,7 @@ test("presentation primitives do not gain auth, call, provider, or database auth
   for (const marker of [
     'onPress={() => void handleStartCall("voice")}',
     'onPress={() => void handleStartCall("video")}',
-    "sendChatMessage(threadId, trimmedDraft, selectedAttachment)",
+    "sendChatMessage(threadId, trimmedDraft, selectedAttachment, {",
   ]) assert.ok(sources.thread.includes(marker), `Chat behavior marker changed: ${marker}`);
 });
 

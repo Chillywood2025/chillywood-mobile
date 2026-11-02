@@ -18,6 +18,8 @@ export const heldStudioVersion = '20261015073423';
 // are deployed with it. Replay either the entire bundle or the pre-Studio state.
 export const heldStudioBundleVersions = Object.freeze([
   heldStudioVersion, '20261019020049', '20261019020052',
+  '20261101201430', // Final Platform identity wrapper depends on the held Studio reader.
+  '20261101194927', '20261101194952', '20261101202330', '20261101204701', '20261101204816', '20261101210306', '20261101211908', '20261101214821',
 ]);
 // Post-monetization physical storefront successors, in dependency order. A
 // historical pre-monetization checkpoint must explicitly exclude this bundle

@@ -21,6 +21,11 @@ const MAPPING = {
   'person.crop.circle.fill': 'person',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'photo.on.rectangle': 'photo-library',
+  'camera': 'photo-camera',
+  'folder': 'folder-open',
+  'video': 'videocam',
+  'xmark': 'close',
 } as IconMapping;
 
 /**

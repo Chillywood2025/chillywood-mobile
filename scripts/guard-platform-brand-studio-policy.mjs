@@ -195,8 +195,11 @@ assertIncludes(cleanupMigration, `cleanup_reason is not null`, "cleanup reason f
 assertIncludes(docs, "Cleanup must be service-role/admin-only", "cleanup docs service-role rule");
 assertIncludes(docs, "never delete currently published assets", "cleanup docs published rule");
 
-assertIncludes(channelSettings, `brand-hero-reel-gallery-button`, "Hero Reel gallery selection");
-assertIncludes(channelSettings, `pickPlatformBrandAsset("watermark")`, "watermark gallery selection");
+assertIncludes(channelSettings, `brand-hero-reel-picker-button`, "Hero Reel shared-picker entry");
+assertIncludes(channelSettings, `pickPlatformBrandAsset("watermark")`, "watermark shared-picker entry");
+assertIncludes(channelSettings, `useMediaPicker(studioMediaTargetKey)`, "account/target-bound shared media selection");
+assertIncludes(channelSettings, `{mediaPickerSheet}`, "shared media source sheet");
+assertNotIncludes(channelSettings, `pickPlatformBrandAsset("hero_video", "files")`, "Hero Reel must not expose separate source buttons");
 assertIncludes(channelSettings, `Existing video files are unchanged.`, "watermark export-only scope");
 assertIncludes(docs, "Current support is Level 1", "cropper level doc");
 assertIncludes(docs, "Do not claim drag crop", "cropper no-fake doc");

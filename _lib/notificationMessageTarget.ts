@@ -14,6 +14,11 @@ export type NotificationMessageTarget = {
 
 /** Message IDs select presentation within a thread; they never grant access. */
 export function resolveNotificationMessagePath(value: unknown, target?: NotificationMessageTarget) {
+  if (typeof target?.notificationType === "string" && ["followed_creator_live", "circle_friend_live", "live_room_member_joined"].includes(target.notificationType)
+    && target.targetContext && typeof target.targetContext === "object" && !Array.isArray(target.targetContext)) {
+    const state = (target.targetContext as Record<string, unknown>).live_discovery_state;
+    if (state === "ended" || state === "unavailable") return null;
+  }
   const route = resolveApplicationRoute(value);
   if (!route) return route;
   if (typeof target?.notificationType === "string" && ["auction_outbid", "auction_won", "auction_creator_award", "auction_checkout_deadline", "auction_payment_deadline"].includes(target.notificationType)) {

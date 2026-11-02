@@ -40,6 +40,8 @@ type TokenRequestPayload = {
   mediaProvider?: unknown;
   surface?: unknown;
   roomName?: unknown;
+  roomGeneration?: unknown;
+  settingsRevision?: unknown;
   role?: unknown;
   participantRole?: unknown;
   participantIdentity?: unknown;
@@ -88,6 +90,9 @@ type ResolvedRoomRecord =
       roomName: string;
       hostUserId: string;
       roomType: string | null;
+      roomGeneration: string;
+      settingsRevision: number;
+      discoveryPaused: boolean | null;
       contentAccessRule: string;
       isActive: boolean;
       startedAt: string | null;
@@ -772,7 +777,7 @@ async function resolveTargetRoom(
 
   const watchPartyRoom = await adminClient
     .from("watch_party_rooms")
-    .select("party_id,host_user_id,room_type,content_access_rule,is_active,started_at,updated_at,last_activity_at")
+    .select("party_id,host_user_id,room_type,content_access_rule,is_active,started_at,updated_at,last_activity_at,room_generation,host_settings_revision,discovery_paused")
     .eq("party_id", roomName)
     .maybeSingle();
 
@@ -783,6 +788,9 @@ async function resolveTargetRoom(
     roomName: sanitizeText(watchPartyRoom.data.party_id),
     hostUserId: sanitizeText(watchPartyRoom.data.host_user_id),
     roomType: sanitizeText(watchPartyRoom.data.room_type) || null,
+    roomGeneration: sanitizeText(watchPartyRoom.data.room_generation),
+    settingsRevision: Number(watchPartyRoom.data.host_settings_revision),
+    discoveryPaused: typeof watchPartyRoom.data.discovery_paused === "boolean" ? watchPartyRoom.data.discovery_paused : null,
     // Unknown/malformed authoritative room policy is carried to the exact DB
     // resolver and fails closed; it must never be projected as `open`.
     contentAccessRule: sanitizeText(watchPartyRoom.data.content_access_rule).toLowerCase(),
@@ -1292,6 +1300,26 @@ Deno.serve(async (req): Promise<Response> => {
         });
       }
 
+      // Freeze the host's acknowledged settings before the network wait. The
+      // database repeats this compare under its room lock after confirmation.
+      // A listing pause does not change admission or media grants. Check it
+      // only in this publication action, and fail closed on an unknown column.
+      if (room.discoveryPaused !== false) {
+        return await auditAndJson(409, {
+          error: "live_discovery_paused",
+          message: "Live discovery is paused. Room entry and media access are unchanged.",
+        }, { action, room, roomName, surface });
+      }
+
+      if (!room.roomGeneration || sanitizeText(payload.roomGeneration) !== room.roomGeneration
+        || !Number.isSafeInteger(payload.settingsRevision) || Number(payload.settingsRevision) < 0
+        || payload.settingsRevision !== room.settingsRevision) {
+        return await auditAndJson(409, {
+          error: "live_discovery_settings_changed",
+          message: "Room settings changed. Refresh before publishing discovery.",
+        }, { action, room, roomName, surface });
+      }
+
       const assignmentEndpoint = await fetchExistingLiveKitAssignmentEndpoint(adminClient, room.roomName);
       if (!assignmentEndpoint?.apiUrl) {
         return await auditAndJson(409, {
@@ -1312,9 +1340,16 @@ Deno.serve(async (req): Promise<Response> => {
           livekitApiSecret,
         );
         const participants = await roomService.listParticipants(room.roomName);
-        const exactHostIsConnected = participants.some((participant) => (
-          sanitizeText(participant.identity) === userId
-        ));
+        const exactHostIsConnected = participants.some((participant) => {
+          if (sanitizeText(participant.identity) !== userId
+            || readLiveKitParticipantSessionGeneration(participant.metadata, {
+              participantIdentity: userId, roomName: room.roomName,
+            }) !== authResult.sessionGeneration) return false;
+          try {
+            const metadata = JSON.parse(participant.metadata || "{}");
+            return metadata.roomGeneration === room.roomGeneration;
+          } catch { return false; }
+        });
         if (!exactHostIsConnected) {
           return await auditAndJson(409, {
             error: "live_discovery_provider_host_unconfirmed",
@@ -1339,9 +1374,12 @@ Deno.serve(async (req): Promise<Response> => {
         });
       }
 
-      const publication = await adminClient.rpc("publish_live_stage_discovery", {
+      const publication = await adminClient.rpc("publish_live_stage_discovery_current", {
         p_actor_user_id: userId,
         p_party_id: room.roomName,
+        p_session_generation: authResult.sessionGeneration,
+        p_expected_room_generation: room.roomGeneration,
+        p_expected_settings_revision: room.settingsRevision,
       });
       if (publication.error || publication.data !== true) {
         return await auditAndJson(409, {
@@ -1358,6 +1396,9 @@ Deno.serve(async (req): Promise<Response> => {
       return await auditAndJson(200, {
         published: true,
         roomName: room.roomName,
+        roomGeneration: room.roomGeneration,
+        settingsRevision: room.settingsRevision,
+        discoveryPaused: false,
       }, {
         action,
         canPublish: true,
@@ -1513,6 +1554,7 @@ Deno.serve(async (req): Promise<Response> => {
       metadata: {
         roomKind: room.kind,
         roomType: room.kind === "watch-party" ? room.roomType : null,
+        roomGeneration: room.kind === "watch-party" ? room.roomGeneration : null,
         surface,
       },
       requestedRegion: sanitizeText(tokenMetadata.requestedRegion ?? tokenMetadata.region) || null,
@@ -1568,6 +1610,7 @@ Deno.serve(async (req): Promise<Response> => {
         roomKind: room.kind,
         roomType: room.kind === "watch-party" ? room.roomType : null,
         roomName: room.roomName,
+        roomGeneration: room.kind === "watch-party" ? room.roomGeneration : null,
         sessionGeneration: authResult.sessionGeneration,
         surface,
         userId,

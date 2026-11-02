@@ -64,6 +64,7 @@ async function mount(t, initial = [], initialReader = null) {
     './session': { useSession: () => ({ authority, authorityStatus: authority ? 'active' : 'unknown' }) },
     './sharedLiveUpdates': { getDiscoveryLiveUpdateInterest: options => options, isDiscoveryLiveUpdateConnected: () => false, subscribeToLiveUpdates: () => () => {} },
     './sharedLiveRead': evaluate(code.sharedRead, {}),
+    './liveDiscoveryInvalidation': evaluate(compile('_lib/liveDiscoveryInvalidation.ts'), {}),
     './discoveryRankingSignals': ranking,
     './accountSessionAuthority': {
       getCurrentAccountSessionAuthoritySnapshot: () => authority,

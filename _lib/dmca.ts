@@ -1,9 +1,16 @@
-import { supabase } from "./supabase";
+import { createClient } from "@supabase/supabase-js";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
+import { getCurrentAccountSessionAuthoritySnapshot, subscribeToAccountSessionAuthority } from "./accountSessionAuthority";
 import { adminPageLimit, parseAdminCursor, parseAdminCursorPage } from "./adminCursorPagination";
 import {
   createAccountBoundMutationOperationKey,
+  AccountBoundSupabaseMutationError,
+  assertAccountBoundSupabaseMutationSubjectCurrent,
+  captureAccountBoundSupabaseMutationSubject,
+  invokeAccountBoundSupabaseMutationRpc,
   isAccountBoundSupabaseMutationOutcomeAmbiguous,
   runCurrentAccountBoundSupabaseMutationRpc,
+  type AccountBoundSupabaseMutationSubject,
 } from "./accountBoundSupabaseMutation";
 
 export const DMCA_CASE_STATUSES = [
@@ -324,6 +331,67 @@ type DmcaRpcClient = {
 
 const dmcaClient = supabase as unknown as DmcaRpcClient;
 
+export type DmcaAttachmentMutationSubject = AccountBoundSupabaseMutationSubject | {
+  accessToken: string;
+  authority: null;
+  guestGeneration: number;
+  guestUserId: string | null;
+};
+export type DmcaAttachmentMutationOptions = {
+  mutationSubject?: DmcaAttachmentMutationSubject;
+  isCurrent?: () => boolean;
+};
+
+let guestGeneration = 0;
+let observingGuestAuthority = false;
+function observeDmcaGuestAuthority() {
+  if (observingGuestAuthority) return;
+  observingGuestAuthority = true;
+  // One app-lifetime observer, not one listener per selected file. A login /
+  // logout round trip must not revive an earlier signed-out picker or submit.
+  supabase.auth.onAuthStateChange((event) => {
+    if (event !== "INITIAL_SESSION") guestGeneration += 1;
+  });
+  subscribeToAccountSessionAuthority(() => { guestGeneration += 1; });
+}
+
+export async function captureDmcaAttachmentMutationSubject(): Promise<DmcaAttachmentMutationSubject> {
+  observeDmcaGuestAuthority();
+  if (getCurrentAccountSessionAuthoritySnapshot()) return captureAccountBoundSupabaseMutationSubject();
+  const generation = guestGeneration;
+  const { data, error } = await supabase.auth.getSession();
+  const session = data.session;
+  // Legal public intake remains available without signing in, including an
+  // anonymous Auth session. An unpublished registered login is not a guest.
+  if (error || (session && (!session.user.is_anonymous || !session.access_token))) {
+    throw new AccountBoundSupabaseMutationError();
+  }
+  const subject: DmcaAttachmentMutationSubject = {
+    authority: null,
+    accessToken: session?.access_token || SUPABASE_ANON_KEY,
+    guestGeneration: generation,
+    guestUserId: session?.user.id ?? null,
+  };
+  assertDmcaAttachmentMutationCurrent(subject);
+  return subject;
+}
+
+function assertDmcaAttachmentMutationCurrent(subject: DmcaAttachmentMutationSubject, isCurrent?: () => boolean) {
+  if (subject.authority) assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  else if (subject.guestGeneration !== guestGeneration || getCurrentAccountSessionAuthoritySnapshot()) {
+    throw new AccountBoundSupabaseMutationError();
+  }
+  if (isCurrent && !isCurrent()) throw new AccountBoundSupabaseMutationError();
+}
+
+function dmcaAttachmentMutationClient(subject: DmcaAttachmentMutationSubject, isCurrent?: () => boolean) {
+  assertDmcaAttachmentMutationCurrent(subject, isCurrent);
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${subject.accessToken}` } },
+  });
+}
+
 const toText = (value: unknown) => String(value ?? "").trim();
 const toLowerText = (value: unknown) => toText(value).toLowerCase();
 
@@ -509,10 +577,11 @@ export function validateDmcaNoticeInput(input: SubmitDmcaNoticeInput) {
   assertText(input.electronicSignature, "Electronic signature is required.");
 }
 
-export async function submitDmcaNotice(input: SubmitDmcaNoticeInput) {
+export async function submitDmcaNotice(input: SubmitDmcaNoticeInput, options: DmcaAttachmentMutationOptions = {}) {
   validateDmcaNoticeInput(input);
-
-  const { data, error } = await dmcaClient.rpc("submit_dmca_notice", {
+  const subject = options.mutationSubject ?? await captureDmcaAttachmentMutationSubject();
+  const client = dmcaAttachmentMutationClient(subject, options.isCurrent);
+  const { data, error } = await client.rpc("submit_dmca_notice", {
     p_payload: {
       reporterName: toText(input.reporterName),
       reporterCompany: toText(input.reporterCompany) || null,
@@ -534,6 +603,7 @@ export async function submitDmcaNotice(input: SubmitDmcaNoticeInput) {
     },
   });
 
+  assertDmcaAttachmentMutationCurrent(subject, options.isCurrent);
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return {
@@ -938,13 +1008,16 @@ export async function uploadDmcaAttachmentObject(input: {
   fileData: unknown;
   mimeType: string;
   objectPath: string;
-}) {
-  const { error } = await supabase.storage
+} & DmcaAttachmentMutationOptions) {
+  const subject = input.mutationSubject ?? await captureDmcaAttachmentMutationSubject();
+  const client = dmcaAttachmentMutationClient(subject, input.isCurrent);
+  const { error } = await client.storage
     .from(DMCA_EVIDENCE_BUCKET)
     .upload(input.objectPath, input.fileData as any, {
       contentType: normalizeAttachmentMimeType(input.mimeType),
       upsert: false,
     });
+  assertDmcaAttachmentMutationCurrent(subject, input.isCurrent);
   if (error) throw error;
 }
 
@@ -957,14 +1030,16 @@ export async function submitDmcaAttachmentMetadata(input: {
   objectPath: string;
   sizeBytes: number;
   source: "public_notice" | "uploader_counter_notice" | "admin_manual";
-}) {
+} & DmcaAttachmentMutationOptions) {
   validateDmcaAttachmentFile({
     fileName: input.fileName,
     mimeType: input.mimeType,
     sizeBytes: input.sizeBytes,
   });
 
-  const { data, error } = await dmcaClient.rpc("submit_dmca_attachment_metadata", {
+  const subject = input.mutationSubject ?? await captureDmcaAttachmentMutationSubject();
+  const client = dmcaAttachmentMutationClient(subject, input.isCurrent);
+  const { data, error } = await client.rpc("submit_dmca_attachment_metadata", {
     p_payload: {
       attachmentToken: toText(input.attachmentToken) || null,
       caseId: toText(input.caseId),
@@ -976,8 +1051,16 @@ export async function submitDmcaAttachmentMetadata(input: {
       source: input.source,
     },
   });
+  assertDmcaAttachmentMutationCurrent(subject, input.isCurrent);
   if (error) throw error;
-  return parseAttachment(data);
+  const attachment = parseAttachment(data);
+  const expectedUserId = subject.authority ? subject.authority.userId : subject.guestUserId;
+  if (attachment.dmcaCaseId !== toText(input.caseId) || attachment.objectPath !== toText(input.objectPath)
+    || attachment.counterNoticeId !== (toText(input.counterNoticeId) || null)
+    || attachment.submittedByUserId !== expectedUserId || attachment.source !== input.source) {
+    throw new Error("Unable to confirm this evidence attachment. Refresh the case before retrying.");
+  }
+  return attachment;
 }
 
 export async function uploadDmcaPublicNoticeAttachment(input: {
@@ -987,19 +1070,25 @@ export async function uploadDmcaPublicNoticeAttachment(input: {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-}) {
+} & DmcaAttachmentMutationOptions) {
   validateDmcaAttachmentFile(input);
+  const subject = input.mutationSubject ?? await captureDmcaAttachmentMutationSubject();
+  assertDmcaAttachmentMutationCurrent(subject, input.isCurrent);
   const objectPath = buildDmcaPublicAttachmentObjectPath({
     attachmentToken: input.attachmentToken,
     caseId: input.caseId,
     fileName: input.fileName,
   });
   await uploadDmcaAttachmentObject({
+    mutationSubject: subject,
+    isCurrent: input.isCurrent,
     fileData: input.fileData,
     mimeType: input.mimeType,
     objectPath,
   });
   return submitDmcaAttachmentMetadata({
+    mutationSubject: subject,
+    isCurrent: input.isCurrent,
     attachmentToken: input.attachmentToken,
     caseId: input.caseId,
     fileName: input.fileName,
@@ -1018,8 +1107,13 @@ export async function uploadDmcaCounterNoticeAttachment(input: {
   mimeType: string;
   sizeBytes: number;
   uploaderUserId: string;
-}) {
+} & DmcaAttachmentMutationOptions) {
   validateDmcaAttachmentFile(input);
+  const subject = input.mutationSubject ?? await captureDmcaAttachmentMutationSubject();
+  assertDmcaAttachmentMutationCurrent(subject, input.isCurrent);
+  if (!subject.authority || subject.authority.userId !== toText(input.uploaderUserId)) {
+    throw new AccountBoundSupabaseMutationError();
+  }
   const objectPath = buildDmcaCounterNoticeAttachmentObjectPath({
     caseId: input.caseId,
     counterNoticeId: input.counterNoticeId,
@@ -1027,11 +1121,15 @@ export async function uploadDmcaCounterNoticeAttachment(input: {
     uploaderUserId: input.uploaderUserId,
   });
   await uploadDmcaAttachmentObject({
+    mutationSubject: subject,
+    isCurrent: input.isCurrent,
     fileData: input.fileData,
     mimeType: input.mimeType,
     objectPath,
   });
   return submitDmcaAttachmentMetadata({
+    mutationSubject: subject,
+    isCurrent: input.isCurrent,
     caseId: input.caseId,
     counterNoticeId: input.counterNoticeId,
     fileName: input.fileName,
@@ -1078,7 +1176,7 @@ export async function submitUploaderDmcaCounterNotice(input: {
   jurisdictionConsentStatement: boolean;
   serviceAcceptanceStatement: boolean;
   electronicSignature: string;
-}) {
+}, options: DmcaAttachmentMutationOptions = {}) {
   assertText(input.caseId, "DMCA case id is required.");
   assertText(input.submitterName, "Submitter legal name is required.");
   assertText(input.submitterEmail, "Submitter email is required.");
@@ -1090,7 +1188,10 @@ export async function submitUploaderDmcaCounterNotice(input: {
   if (!input.serviceAcceptanceStatement) throw new Error("Confirm service acceptance.");
   assertText(input.electronicSignature, "Electronic signature is required.");
 
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("submit_dmca_counter_notice", {
+  const subject = options.mutationSubject ?? await captureDmcaAttachmentMutationSubject();
+  assertDmcaAttachmentMutationCurrent(subject, options.isCurrent);
+  if (!subject.authority) throw new AccountBoundSupabaseMutationError();
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "submit_dmca_counter_notice", {
     p_case_id: toText(input.caseId),
     p_payload: {
       electronicSignature: toText(input.electronicSignature),
@@ -1105,6 +1206,11 @@ export async function submitUploaderDmcaCounterNotice(input: {
       submitterPhone: toText(input.submitterPhone) || null,
     },
   });
+  assertDmcaAttachmentMutationCurrent(subject, options.isCurrent);
   if (error) throw error;
-  return parseCounterNotice(data);
+  const counterNotice = parseCounterNotice(data);
+  if (counterNotice.dmcaCaseId !== toText(input.caseId) || counterNotice.submitterUserId !== subject.authority.userId) {
+    throw new Error("Unable to confirm this counter-notice. Refresh the case before retrying.");
+  }
+  return counterNotice;
 }

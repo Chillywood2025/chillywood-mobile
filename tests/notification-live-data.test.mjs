@@ -161,7 +161,7 @@ for (const route of ['/watch-party/live-stage/[partyId]', '/watch-party/[partyId
  const attendance = row({category:'circle_activity',notification_type:'live_room_member_joined',title:'PRIVATE ACTOR joined',body:'PRIVATE ROOM',target_route:route,target_entity_id:'EXACT-ROOM',target_context:{},source_id:'join-event'});
  let available = false;
  const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')
-  ? available ? response({schemaVersion:1,items:[{notificationId:attendance.id,notificationType:'live_room_member_joined',targetRoute:route,targetId:'EXACT-ROOM',creatorName:'Exact Member',targetTitle:'Exact Room',resolution:'resolved'}]})
+  ? available ? response({schemaVersion:1,items:[{notificationId:attendance.id,notificationType:'live_room_member_joined',targetRoute:route,targetId:'EXACT-ROOM',creatorName:'Exact Member',targetTitle:'Exact Room',resolution:'resolved',liveState:'live'}]})
    : new Response(JSON.stringify({message:'unavailable'}),{status:503,headers:{'Content-Type':'application/json'}})
   : response([attendance])});
  const first=await h.api.readNotificationListPage('account-a',30);
@@ -171,6 +171,24 @@ for (const route of ['/watch-party/live-stage/[partyId]', '/watch-party/[partyId
  const verified=await h.api.readNotificationListPage('account-a',30);
  assert.match(verified.items[0].body,/Exact Member joined Exact Room/);
  assert.equal(verified.items[0].target.route,route);
+});
+for (const type of ['followed_creator_live','circle_friend_live']) test(`${type} SDK fallback redacts cached private names and ended read is non-joinable history`,async()=>{
+ const live=row({category:'creator_went_live',notification_type:type,title:'PRIVATE HOST is live',body:'PRIVATE ROOM',target_route:'/watch-party/live-stage/[partyId]',target_entity_id:'LIVE-ROOM',deep_link:'/watch-party/live-stage/LIVE-ROOM',target_context:{display_context:{creator_display_name:'PRIVATE HOST',subject_title:'PRIVATE ROOM'}}});
+ let state='missing';
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_notification_display_context')
+  ? state==='missing'?new Response('{}',{status:503,headers:{'Content-Type':'application/json'}})
+   : response({schemaVersion:1,items:[{notificationId:live.id,notificationType:type,targetRoute:live.target_route,targetId:live.target_entity_id,
+      creatorName:state==='unavailable'?null:'Exact Host',targetTitle:state==='unavailable'?null:'Exact Room',resolution:state==='unavailable'?'unavailable':'resolved',liveState:state}]})
+  :response([live])});
+ const fallback=(await h.api.readNotificationListPage('account-a',30)).items[0];
+ assert.doesNotMatch(JSON.stringify(fallback),/PRIVATE HOST|PRIVATE ROOM/);
+ assert.equal(fallback.target.context.live_discovery_state,'unavailable');
+ state='live';const active=(await h.api.readNotificationListPage('account-a',30)).items[0];
+ assert.match(active.title,/Exact Host/);assert.equal(active.target.context.live_discovery_state,'live');
+ state='ended';const ended=(await h.api.readNotificationListPage('account-a',30)).items[0];
+ assert.match(ended.title,/Live ended/);assert.match(ended.body,/not an invitation to join/);assert.equal(ended.isExpired,true);
+ state='unavailable';const hidden=(await h.api.readNotificationListPage('account-a',30)).items[0];
+ assert.doesNotMatch(hidden.title+hidden.body,/Exact Host|Exact Room|PRIVATE/);assert.equal(hidden.target.context.live_discovery_state,'unavailable');
 });
 test('label RPC response cannot follow an account replacement or a canceled screen',async()=>{
  for(const mode of ['replace','abort']){
@@ -356,4 +374,37 @@ test('failed summary sibling cannot release an abort-ignoring sibling before set
   await settle(); controller.abort(); await settle(); assert.equal(finished, false);
   held.resolve(response(null));
   assert.match((await pending).message, /could not be refreshed/);
+});
+
+test('summary detects sensitive attendance outside its recent category window with an exact owner-bound ID-only probe',async()=>{
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/notifications')&&call.url.searchParams.get('select')==='id'
+  ?response([{id:'old-live-attendance'}]):undefined});
+ const summary=await h.api.readNotificationSummary('account-a');
+ assert.equal(summary.hasLiveActivity,true);assert.deepEqual(summary.categories,['chilly_chat_call']);
+ const probe=h.calls.find(c=>c.url.searchParams.get('select')==='id');
+ assert.equal(probe.url.searchParams.get('limit'),'1');assert.equal(probe.url.searchParams.get('user_id'),'eq.account-a');
+ assert.equal(probe.url.searchParams.get('notification_type'),'in.(followed_creator_live,circle_friend_live,live_room_member_joined)');
+ assert.equal(probe.url.searchParams.get('dismissed_at'),'is.null');assert.ok(probe.signal);
+});
+
+const footprintKey='30000000-0000-4000-8000-000000000001';
+for(const [name,payload,complete] of [
+ ['current-complete',{schemaVersion:1,subjectUserId:'account-a',keys:[footprintKey],complete:true},true],
+ ['overflow-incomplete',{schemaVersion:1,subjectUserId:'account-a',keys:[footprintKey],complete:false},false],
+ ['foreign-subject',{schemaVersion:1,subjectUserId:'other',keys:[footprintKey],complete:true},false],
+ ['malformed-key',{schemaVersion:1,subjectUserId:'account-a',keys:['private-room-name'],complete:true},false],
+ ['oversized',{schemaVersion:1,subjectUserId:'account-a',keys:Array(257).fill(footprintKey),complete:true},false],
+])test(`actual SDK summary parses canonical footprint ${name} without trusting a loaded-row sample`,async()=>{
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_live_notification_hint_footprint')?response({totalCount:7,unreadCount:7,undismissedCount:7,hasLiveActivity:true,...payload}):undefined});
+ const summary=await h.api.readNotificationSummary('account-a');assert.equal(summary.liveHintKeysComplete,complete);
+ if(complete){assert.deepEqual(summary.liveHintKeys,[footprintKey]);assert.equal(summary.unreadCount,7,'atomic SQL count wins over independently stale135 HEAD count');}
+ assert.equal(h.calls.filter(c=>c.url.pathname.endsWith('/rpc/read_my_live_notification_hint_footprint')).length,1);
+});
+
+test('separate old HEAD counts cannot restore a newly hidden source omitted from the atomic footprint',async()=>{
+ const h=harness({fetcher:call=>call.url.pathname.endsWith('/rpc/read_my_live_notification_hint_footprint')
+  ?response({schemaVersion:1,subjectUserId:'account-a',keys:[],complete:true,totalCount:0,unreadCount:0,undismissedCount:0,hasLiveActivity:false}):undefined});
+ const result=await h.api.readNotificationSummary('account-a');
+ assert.equal(result.unreadCount,0);assert.equal(result.hasLiveActivity,false);assert.equal(result.liveHintKeysComplete,true);
+ assert.ok(!h.calls.some(c=>c.method==='HEAD'),'valid atomic protocol never dispatches redundant legacy HEAD queries that would return135');
 });

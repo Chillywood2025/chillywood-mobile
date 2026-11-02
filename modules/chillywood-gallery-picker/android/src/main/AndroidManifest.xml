@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Narrow handler visibility, not media-library access or package inventory. -->
+  <queries>
+    <intent><action android:name="android.intent.action.PICK" /><data android:mimeType="image/*" /></intent>
+    <intent><action android:name="android.intent.action.PICK" /><data android:mimeType="video/*" /></intent>
+  </queries>
+  <application>
+    <!-- A stable result owner, not a history-less trampoline. Keep the selected
+         URI grant alive until the importer finishes; never export this entry. -->
+    <activity android:name=".GalleryPickerActivity" android:exported="false"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+  </application>
+</manifest>

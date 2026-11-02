@@ -26,14 +26,18 @@ export function useLiveStageDiscoveryPublication(options: {
   roomName: string;
   hostUserId: string;
   visibility: "private" | "public" | "circle";
+  discoveryPaused: boolean | null;
+  roomGeneration: string;
+  settingsRevision: number | null;
+  settingsConfirmationVersion?: number;
   isHost: boolean;
   active: boolean;
   connectionKey: string;
 }) {
   const { authority, authorityStatus } = useSession();
-  const { roomName, hostUserId, visibility, isHost, active, connectionKey } = options;
-  const lifetime = useMemo(() => ({ authority, authorityStatus, roomName, hostUserId, visibility, isHost, active, connectionKey }),
-    [authority, authorityStatus, roomName, hostUserId, visibility, isHost, active, connectionKey]);
+  const { roomName, hostUserId, visibility, discoveryPaused, roomGeneration, settingsRevision, settingsConfirmationVersion = 0, isHost, active, connectionKey } = options;
+  const lifetime = useMemo(() => ({ authority, authorityStatus, roomName, hostUserId, visibility, discoveryPaused, roomGeneration, settingsRevision, settingsConfirmationVersion, isHost, active, connectionKey }),
+    [authority, authorityStatus, roomName, hostUserId, visibility, discoveryPaused, roomGeneration, settingsRevision, settingsConfirmationVersion, isHost, active, connectionKey]);
   const latest = useRef(lifetime);
   latest.current = lifetime;
   const retired = useRef<object | null>(null);
@@ -46,10 +50,11 @@ export function useLiveStageDiscoveryPublication(options: {
     setSaved(latestState.current);
   }, [lifetime]);
   const eligible = useCallback(() => latest.current === lifetime && retired.current !== lifetime
-    && active && isHost && !!connectionKey && !!roomName && visibility !== "private"
+    && active && isHost && !!connectionKey && !!roomName && visibility !== "private" && discoveryPaused === false
+    && !!roomGeneration && Number.isSafeInteger(settingsRevision) && Number(settingsRevision) >= 0
     && authorityStatus === "active" && !!authority && !authority.restoreOnly
     && authority.userId === hostUserId && AppState.currentState === "active",
-  [lifetime, active, isHost, connectionKey, roomName, visibility, authorityStatus, authority, hostUserId]);
+  [lifetime, active, isHost, connectionKey, roomName, visibility, discoveryPaused, roomGeneration, settingsRevision, authorityStatus, authority, hostUserId]);
 
   const cancel = useCallback(() => {
     if (latest.current !== lifetime) return;
@@ -97,10 +102,10 @@ export function useLiveStageDiscoveryPublication(options: {
             : result.reason === "not_eligible" ? "This room is not eligible for a live listing. Check its audience or reopen the room."
               : "Live listing not confirmed. Your room may not appear to others yet." });
     };
-    void markLiveStageRoomConnectedForDiscovery(roomName, { authority, signal: owned.controller.signal })
+    void markLiveStageRoomConnectedForDiscovery(roomName, { authority, signal: owned.controller.signal, roomGeneration, settingsRevision: Number(settingsRevision) })
       .then(finish, () => finish({ status: "failed", reason: "request_failed", retryable: true }))
       .finally(() => { if (run.current === owned) run.current = null; });
-  }, [authority, eligible, lifetime, roomName, save, visibility]);
+  }, [authority, eligible, lifetime, roomName, roomGeneration, settingsRevision, save, visibility]);
 
   const onConnected = useCallback(() => {
     if (!eligible()) return;
@@ -122,7 +127,9 @@ export function useLiveStageDiscoveryPublication(options: {
   const state = saved?.lifetime === lifetime ? saved.state : idle;
   return {
     ...state,
-    message: visibility === "private" ? "Private room · not listed in Live." : state.message,
+    message: visibility !== "private" && typeof discoveryPaused !== "boolean" ? "Live listing status could not be verified. Reload this room before changing discovery."
+      : visibility === "private" || discoveryPaused !== false
+      ? `Discovery off · not listed. ${visibility === "circle" ? "Circle-only entry is unchanged." : "Room-entry rules still apply."}` : state.message,
     canRetry: state.status === "failed" && state.retryable && eligible() && connected.current === lifetime,
     onConnected, onDisconnected, retry, cancel,
   };
