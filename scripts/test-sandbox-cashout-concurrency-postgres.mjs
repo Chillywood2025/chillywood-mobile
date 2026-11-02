@@ -70,6 +70,9 @@ try{
  async function seed(){
   await db.exec('reset role');
   const a=await seedCashoutExecutionFixture(db,{creatorId:randomUUID(),sessionId:randomUUID(),recipientAccountId:'acct_'+randomUUID().replaceAll('-',''),reserveInitialRequest:false});
+  // Provider account IDs are globally unique across mode rows. The test-mode
+  // binding must be a distinct account, never reuse/convert the live fixture.
+  a.accountId='acct_test'+randomUUID().replaceAll('-','');
   // Existing helper seeds synthetic live controls in this disposable clone;
   // close all live gates before ANY sandbox operation. Nothing calls a provider.
   query(`reset role;update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled');
