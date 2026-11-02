@@ -15,6 +15,7 @@ import { normalizeCommunicationRoomIdentifier } from "../_lib/communicationRoomI
 import { buildLegacyPairedBrowserBundle } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
 import { waitForLegacyBrowserReceivedSilence } from "../tests/assurance/helpers/legacy-browser-silence-wait.mjs";
 import { collectLegacyFailureTransportDiagnostics } from "../tests/assurance/helpers/legacy-failure-transport-diagnostics.mjs";
+import { hasIsolatedLegacyFreshPeerEvidence } from "../tests/assurance/helpers/legacy-fresh-peer-evidence.mjs";
 
 const secrets = new Set();
 const redact = (input) => {
@@ -103,7 +104,7 @@ async function main() {
   };
   const options = { auth: { autoRefreshToken: false, persistSession: false }, global: { fetch: localFetch } };
   const admin = createClient(apiOrigin, environment.SERVICE_ROLE_KEY, options);
-  const clients = [], users = [], endpoints = [], roomIds = [];
+  const clients = [], users = [], endpoints = [], roomIds = [], inviteIds = [];
   const nonce = crypto.randomBytes(6).toString("hex");
   const password = `Local-${crypto.randomBytes(16).toString("hex")}!`;
   secrets.add(password);
@@ -169,6 +170,7 @@ async function main() {
       p_thread_id: threadId, p_communication_room_id: roomId, p_call_type: "video",
     }), "authenticated exact-thread call begin");
     assert.ok(started.created && started.invite?.id, "a distinct actual call invitation was created");
+    inviteIds.push(started.invite.id);
     assert.equal(started.invite.thread_id, threadId);
     assert.equal(started.invite.communication_room_id, roomId);
     assert.equal(started.invite.caller_user_id, users[0]);
@@ -212,6 +214,20 @@ async function main() {
     assert.ok(current.every((row) => row.membership_state === "left" && row.left_at && !row.mic_enabled && !row.camera_enabled),
       "actual hook End must leave both PostgreSQL memberships terminal with media false before server invite cleanup");
     requireData(await terminalize(call.inviteId), "canonical server End transaction");
+    const endedInvite = requireData(await admin.from("chat_call_invites")
+      .select("status,accepted_at,ended_at").eq("id", call.inviteId).single(), "completed invite credit readback");
+    assert.equal(endedInvite.status, "ended");
+    assert.ok(endedInvite.accepted_at && endedInvite.ended_at
+      && Date.parse(endedInvite.ended_at) >= Date.parse(endedInvite.accepted_at), "completed credit requires actual acceptance before End");
+    const endedRoom = requireData(await admin.from("communication_rooms").select("status")
+      .eq("room_id", call.roomId).single(), "completed room credit readback");
+    assert.equal(endedRoom.status, "ended");
+    const receipts = requireData(await admin.from("chat_call_transition_deliveries")
+      .select("target_status,actor_user_id").eq("call_invite_id", call.inviteId)
+      .in("target_status", ["accepted", "ended"]), "server-only completed credit receipts");
+    assert.equal(receipts.length, 2);
+    assert.ok(receipts.some((receipt) => receipt.target_status === "accepted" && receipt.actor_user_id === users[1]));
+    assert.ok(receipts.some((receipt) => receipt.target_status === "ended" && receipt.actor_user_id === users[0]));
     const thread = requireData(await clients[0].from("chat_threads").select("active_communication_room_id,active_call_type")
       .eq("id", threadId).single(), "terminal thread binding readback");
     assert.equal(thread.active_communication_room_id, null);
@@ -389,29 +405,60 @@ async function main() {
       "repeated media changes use owned membership and broadcasts without more Presence updates");
     assert.equal(realtimeSystemErrors, 0, `the real backend did not reject a subscription: ${diagnostics(await read())}`);
     console.log("PASS: both endpoints commit actual PostgreSQL mic/camera controls and observe receiver silence, black frames, and restored media");
-    const beforeEnd = await read();
+    let beforeEnd = await read();
     await endAndProve(initialCall);
     console.log("PASS: browser End stops native capture/peers and confirms real PostgreSQL terminal media state");
 
-    const fresh = await createAcceptedCall("FRESH");
-    await page.evaluate((roomId) => window.__pairedCall.freshCall({ roomId }), fresh.roomId);
-    const oldPeerIds = beforeEnd.endpoints.flatMap((endpoint) => endpoint.peers.map((peer) => peer.id));
-    const freshInitial = await wait((state) => state.roomId === fresh.roomId && state.endpoints.length === 2
-      && state.endpoints.every((endpoint) => {
-        const previous = beforeEnd.endpoints.find((old) => old.userId === endpoint.userId);
-        return endpoint.instanceId === previous.instanceId && hasMedia(endpoint)
-          && endpoint.membership.membershipGeneration !== previous.membership.membershipGeneration
-          && connected(endpoint).every((peer) => !oldPeerIds.includes(peer.id))
-          && endpoint.stats.every((report) => !oldPeerIds.includes(report.peerId))
-          && receivedAudio(endpoint).every((receiver) => !oldPeerIds.includes(receiver.peerId))
-          && endpoint.pixels.every((frame) => !oldPeerIds.includes(frame.peerId));
-      }), "fresh accepted room must receive media in the same mounted hooks using new server generations and peers");
-    const freshAdvanced = await wait((state) => state.endpoints.every((endpoint) => hasMedia(endpoint)
-      && advances(endpoint, freshInitial.endpoints.find((old) => old.userId === endpoint.userId))),
-    "fresh-room media must advance independently of all prior peer counters");
-    await proveOwnedRows(fresh.roomId, freshAdvanced, () => ({ mic: true, camera: true }));
-    await endAndProve(fresh);
-    console.log("PASS: fresh authenticated accepted call in the same hooks/context receives advancing media and completes real server/native cleanup");
+    const priorGenerations = new Map(beforeEnd.endpoints.map((endpoint) => (
+      [endpoint.userId, new Set([endpoint.membership.membershipGeneration])]
+    )));
+    // Five mandatory fresh lifecycles, not retries. Keep the same mounted
+    // hooks, users, thread and browser context. Each accepted+ended call earns
+    // the existing server's completed-call credit; never alter rate ledgers,
+    // thresholds or clocks. Six total rooms cross the five-allocation window;
+    // preserved ledger timestamps below prove completion credit, not expiry.
+    for (let cycle = 1; cycle <= 5; cycle += 1) {
+      console.log(`Authenticated fresh-call cycle ${cycle}/5: begin`);
+      const fresh = await createAcceptedCall(`FRESH${cycle}`);
+      await page.evaluate((roomId) => window.__pairedCall.freshCall({ roomId }), fresh.roomId);
+      const oldPeerIds = new Set(beforeEnd.endpoints.flatMap((endpoint) => endpoint.peers.map((peer) => peer.id)));
+      const freshInitial = await wait((state) => state.roomId === fresh.roomId && state.endpoints.length === 2
+        && state.endpoints.every((endpoint) => hasMedia(endpoint) && hasIsolatedLegacyFreshPeerEvidence({
+          endpoint, previous: beforeEnd.endpoints.find((old) => old.userId === endpoint.userId),
+          priorGenerations: priorGenerations.get(endpoint.userId), oldPeerIds,
+          connectedPeers: connected(endpoint), receivedAudio: receivedAudio(endpoint),
+        })), `fresh accepted room must receive media in the same mounted hooks using new server generations and peers (cycle ${cycle}/5)`);
+      const freshAdvanced = await wait((state) => state.endpoints.every((endpoint) => hasMedia(endpoint)
+        && advances(endpoint, freshInitial.endpoints.find((old) => old.userId === endpoint.userId))),
+      `fresh-room media must advance independently of all prior peer counters (cycle ${cycle}/5)`);
+      await proveOwnedRows(fresh.roomId, freshAdvanced, () => ({ mic: true, camera: true }));
+      await endAndProve(fresh);
+      for (const endpoint of freshAdvanced.endpoints) {
+        priorGenerations.get(endpoint.userId).add(endpoint.membership.membershipGeneration);
+      }
+      beforeEnd = freshAdvanced;
+      assert.equal(realtimeSystemErrors, 0, `fresh-call subscription must remain healthy (cycle ${cycle}/5): ${diagnostics(await read())}`);
+      console.log(`PASS: fresh authenticated accepted call cycle ${cycle}/5 in the same hooks/context receives advancing media and completes real server/native cleanup`);
+    }
+    const ledger = requireData(await admin.from("abuse_rate_limit_events")
+      .select("action_key,target_key,metadata,created_at").eq("actor_user_id", users[0])
+      .in("action_key", ["communication_room_create", "chat_call_invite"]), "unchanged completion-credit ledger readback");
+    const allocations = ledger.filter((event) => event.action_key === "communication_room_create");
+    const invitations = ledger.filter((event) => event.action_key === "chat_call_invite");
+    assert.equal(allocations.length, 6, "all six real room allocation events remain in the ledger");
+    assert.equal(invitations.length, 6, "all six real invitation events remain in the ledger");
+    assert.deepEqual(new Set(allocations.map((event) => event.metadata?.room_id)), new Set(roomIds));
+    assert.deepEqual(new Set(invitations.map((event) => event.metadata?.invite_id)), new Set(inviteIds));
+    assert.ok(allocations.every((event) => event.target_key === "direct_call"));
+    assert.ok(invitations.every((event) => event.target_key === `${threadId}:${users[1]}`));
+    const timestampSpan = (events) => {
+      const timestamps = events.map((event) => Date.parse(event.created_at));
+      assert.ok(timestamps.every(Number.isFinite), "server ledger timestamps must be valid");
+      return Math.max(...timestamps) - Math.min(...timestamps);
+    };
+    assert.ok(timestampSpan(allocations) < 600_000, "six real allocations must cross the five-room limit inside its existing ten-minute window");
+    assert.ok(timestampSpan(invitations) < 300_000, "six real invitations must use completed credit inside the existing five-minute window");
+    console.log("PASS: six authenticated accepted-and-ended calls preserve every rate-ledger event and cross both existing windows using server completion credit");
   } catch (error) {
     failed = true;
     throw error;
