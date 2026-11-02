@@ -27,6 +27,46 @@ insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values
  ('9d440000-0000-4000-8000-000000000003',false,false,now()),
  ('9d440000-0000-4000-8000-000000000004',false,false,now());
 update public.user_profiles set display_name='Discovery Creator',username='discovery_'||right(user_id,1),profile_access_visibility='public' where user_id like '9d440000-%';
+insert into auth.sessions(id,user_id,not_after) values
+ ('9d440001-0000-4000-8000-000000000001','9d440000-0000-4000-8000-000000000001',now()+interval '1 day');
+insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
+ select '9d440000-0000-4000-8000-000000000001',public.wave1_sha256('9d440000-0000-4000-8000-000000000001'),
+   document_key,version,market,'member',capability,'9d440001-0000-4000-8000-000000000001','service_reconciliation'
+ from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='account';
+update public.platform_money_kill_switches set state='sandbox_only' where key in ('revenuecat_google_play_enabled','provider_webhooks_enabled');
+select is((public.process_revenuecat_premium_event_atomic('revenuecat_google_play','notification-discovery-premium','INITIAL_PURCHASE',
+ '9d440000-0000-4000-8000-000000000001',p.provider_product_id,p.provider_base_plan_id,'sandbox','active',
+ now()-interval '1 minute',now()+interval '1 day',now(),999,'usd',repeat('a',64),'NORMAL','google_play','android',null,p.id,
+ 'notification-discovery-original')->>'status'),'processed','real finite Premium lifecycle qualifies the synthetic host')
+ from public.monetization_products p where p.provider='revenuecat_google_play' and p.environment='sandbox'
+   and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1;
+
+-- The helper changes only synthetic request context, invoking the actual join
+-- as authenticated and actual publisher as service_role. No marker insertion,
+-- source-guard replacement or authority/policy grant is used.
+create function pg_temp.publish_notification_live(p_party text,p_audience text default null) returns boolean language plpgsql as $$
+declare r public.watch_party_rooms; result boolean;
+begin
+  select * into r from public.watch_party_rooms where party_id=p_party;
+  perform set_config('request.jwt.claims','{"role":"authenticated","sub":"9d440000-0000-4000-8000-000000000001","session_id":"9d440001-0000-4000-8000-000000000001"}',true);
+  perform set_config('request.jwt.claim.role','authenticated',true);
+  set local role authenticated;
+  perform public.join_watch_party_room_session(p_party,'Discovery Creator');
+  perform public.set_watch_party_room_host_settings(p_party,r.room_generation,r.host_settings_revision,
+    '9d440001-0000-4000-8000-000000000001',r.join_policy,coalesce(p_audience,r.discovery_visibility),
+    r.discovery_title,r.source_type,r.source_id,true,false,false);
+  reset role;
+  select * into r from public.watch_party_rooms where party_id=p_party;
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  perform set_config('request.jwt.claim.role','service_role',true);
+  set local role service_role;
+  result:=public.publish_live_stage_discovery_current(p_party,'9d440000-0000-4000-8000-000000000001',
+    '9d440001-0000-4000-8000-000000000001',r.room_generation,r.host_settings_revision);
+  reset role;
+  perform set_config('request.jwt.claims','{}',true);
+  perform set_config('request.jwt.claim.role','',true);
+  return result;
+end $$;
 insert into public.channel_followers(channel_user_id,follower_user_id) values
  ('9d440000-0000-4000-8000-000000000001','9d440000-0000-4000-8000-000000000002'),
  ('9d440000-0000-4000-8000-000000000001','9d440000-0000-4000-8000-000000000003');
@@ -50,6 +90,8 @@ insert into public.watch_party_rooms(party_id,host_user_id,room_type,discovery_v
  ('DISCOVERY-LIVE','9d440000-0000-4000-8000-000000000001','live','public');
 select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-LIVE'),0,'unpublished room creates no live alert');
 update public.watch_party_rooms set discovery_started_at=now() where party_id='DISCOVERY-LIVE';
+select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-LIVE'),0,'old timestamp alone is not authoritative publication');
+select ok(pg_temp.publish_notification_live('DISCOVERY-LIVE'),'exact session and actual host join permit canonical publication');
 select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-LIVE'),1,'published public live derives exact follower');
 select is(pg_temp.discovery_count('circle_friend_live','DISCOVERY-LIVE'),1,'friend who also follows gets one Circle alert');
 select is((select array_agg(recipient_user_id order by recipient_user_id)::text from public.notification_activity_events
@@ -67,6 +109,8 @@ update public.watch_party_rooms set is_active=false where party_id='DISCOVERY-LI
 select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-LIVE',true),0,'ended source suppresses queued live');
 update public.watch_party_rooms set is_active=true where party_id='DISCOVERY-LIVE';
 select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-LIVE'),1,'same live generation cannot resend');
+select ok(pg_temp.publish_notification_live('DISCOVERY-LIVE'),'new lifecycle requires a new exact current publication');
+select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-LIVE'),2,'only genuine republish enqueues the new lifecycle');
 delete from public.channel_followers where follower_user_id='9d440000-0000-4000-8000-000000000002';
 select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-LIVE',true),0,'unfollow suppresses queued source');
 insert into public.channel_followers(channel_user_id,follower_user_id) values
@@ -82,6 +126,7 @@ select is(pg_temp.discovery_count('circle_friend_live','DISCOVERY-LIVE',true),0,
 savepoint rolled_source;
 insert into public.watch_party_rooms(party_id,host_user_id,room_type,discovery_visibility,discovery_started_at) values
  ('DISCOVERY-ROLLBACK','9d440000-0000-4000-8000-000000000001','live','public',now());
+select ok(pg_temp.publish_notification_live('DISCOVERY-ROLLBACK'),'rollback source has real publication authority');
 select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-ROLLBACK'),1,'source and outbox are in same transaction');
 rollback to rolled_source;
 select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-ROLLBACK'),0,'source rollback removes the queued alert');
@@ -89,6 +134,7 @@ select is(pg_temp.discovery_count('followed_creator_live','DISCOVERY-ROLLBACK'),
 -- An open room can still have a paid entry offer; it must not be advertised as free discovery.
 savepoint paid_stage;
 update public.watch_party_rooms set discovery_visibility='public' where party_id='DISCOVERY-LIVE';
+select ok(pg_temp.publish_notification_live('DISCOVERY-LIVE'),'explicit current publication restores public authority before paid-source checks');
 insert into public.paid_live_watch_party_offers(id,party_id,creator_id,host_user_id,pass_type,product_id,provider,
  provider_product_id,price_cents,currency,environment,status) values
  ('9d446000-0000-4000-8000-000000000001','DISCOVERY-LIVE','9d440000-0000-4000-8000-000000000001',
@@ -199,6 +245,7 @@ select is(pg_temp.discovery_count('watch_party_starts_soon','9d442000-0000-4000-
 -- Approved broadcast state is insufficient until the exact playback is live.
 insert into public.watch_party_rooms(party_id,host_user_id,room_type) values
  ('DISCOVERY-BROADCAST','9d440000-0000-4000-8000-000000000001','live');
+select ok(pg_temp.publish_notification_live('DISCOVERY-BROADCAST','public'),'broadcast backing room explicitly chooses Public through exact-session settings and current host publication');
 insert into public.room_broadcast_sessions(id,source_type,source_room_id,host_user_id,channel_user_id,broadcast_status,
  hls_playback_url,playback_url_status,rights_status,access_type,is_publicly_watchable,is_spectator_playback_enabled,requires_premium,requires_ticket,metadata) values
  ('9d443000-0000-4000-8000-000000000001','watch_party_room','DISCOVERY-BROADCAST',

@@ -106,6 +106,12 @@ const recordedV17Source = {
   sha: "12623b336cab9e47f84c79012cab35dfa3058699",
   tree: "b3095ee5a212ab265b7f0f28d8440863450ce841",
 };
+// Retained V18 source cohort before Gallery and Expo picker native changes.
+// This is a Git-input identity, not a new signed-build or installation receipt.
+const recordedV18Source = {
+  sha: "daa63e320bcb6e4e5ed059d793af02a5af93d809",
+  tree: "ead50a10f9739a5f9964c260011d63f9c280c2dc",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -337,6 +343,18 @@ test("external-link native inputs use prospective v18 and preserve the v17 sourc
   assert.notEqual(currentReason, recordedReason);
 });
 
+test("retained v18 cohort digests remain bound to their historical native inputs", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV18Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v18");
+  assert.deepEqual(generation, recorded, "held picker source must not relabel V18 or advance release authority");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV18Source.sha, sourceTree: recordedV18Source.tree,
+    }).digest);
+  }
+});
+
 test("effective EAS inheritance enables diagnostics only for the exact reviewed iOS tester build", () => {
   const eas = JSON.parse(fs.readFileSync(path.join(repo, "eas.json"), "utf8"));
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -484,12 +502,10 @@ test("native publication fixture commits cannot leave automatic Git maintenance 
   assert.throws(assertNoAutomaticMaintenance, assert.AssertionError);
 });
 
-test("candidate internal generation digests match the canonical native input snapshot", (t) => {
-  const { root } = fixture(t);
+function copyCanonicalNativeInputs(root, sourceSha) {
   // The publication fixtures are intentionally compact. The generation proof
   // must retain every canonical Git input, including tracked platform resources
   // and executable modes, rather than certify that reduced fixture's digest.
-  const sourceSha = git(repo, "rev-parse", "HEAD");
   const snapshots = Object.fromEntries(["android", "ios"].map((platform) => [platform,
     nativeSourceSnapshot({ repositoryRoot: repo, platform, sourceSha }),
   ]));
@@ -500,17 +516,51 @@ test("candidate internal generation digests match the canonical native input sna
     write(root, entry.path, value.stdout);
     fs.chmodSync(path.join(root, entry.path), entry.mode === "100755" ? 0o755 : 0o644);
   }
-  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
-  write(root, "config/release/internal-native-generation.json", `${JSON.stringify(generation, null, 2)}\n`);
+  // These inputs are normalized by the snapshot algorithm, not in input.files.
+  for (const name of ["package.json", "config/release/production-ota-generation.json",
+    "config/release/internal-native-generation.json", "config/release/android-production.json",
+    "config/release/android-chat-livekit-qa.json"]) write(root, name, git(repo, "show", `${sourceSha}:${name}`) + "\n");
+  return snapshots;
+}
+
+test("held picker candidate preserves complete canonical inputs without rewriting the v18 cohort", (t) => {
+  const { root } = fixture(t);
+  const snapshots = copyCanonicalNativeInputs(root, git(repo, "rev-parse", "HEAD"));
+  const generation = JSON.parse(fs.readFileSync(path.join(root, "config/release/internal-native-generation.json"), "utf8"));
   const candidate = commit(root);
   for (const platform of ["android", "ios"]) {
     const snapshot = nativeSourceSnapshot({
       repositoryRoot: root, platform, sourceSha: candidate.sha, sourceTree: candidate.tree,
     });
     assert.deepEqual(snapshot.input.files, snapshots[platform].input.files);
-    assert.equal(generation.nativeCompatibility[`${platform}Digest`], snapshot.digest);
+    assert.equal(snapshot.digest, snapshots[platform].digest, "complete source snapshot survives fixture reconstruction");
+    assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], snapshot.digest,
+      "the new native picker source is intentionally incompatible with the retained V18 cohort");
   }
 });
+
+for (const platform of ["android", "ios"]) {
+  test(`${platform}: native picker changes cannot reuse the retained v18 binary or runtime`, (t) => {
+    const { root, publish } = fixture(t, recordedV18Source.sha);
+    const retained = copyCanonicalNativeInputs(root, recordedV18Source.sha);
+    const oldBinary = commit(root);
+    assert.equal(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: oldBinary.sha }).digest,
+      retained[platform].digest, "negative control starts from the exact canonical V18 inputs");
+    const current = copyCanonicalNativeInputs(root, git(repo, "rev-parse", "HEAD"));
+    const candidate = commit(root);
+    assert.equal(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: candidate.sha }).digest,
+      current[platform].digest, "test the actual held candidate, not an arbitrary native mutation");
+    const oldReceipt = publish(platform, oldBinary);
+    assert.notEqual(oldReceipt.status, 0);
+    assert.match(oldReceipt.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldReceipt.calls, [], "V18 receipt stops before Expo or provider calls");
+    const hypotheticalMatchingReceipt = publish(platform, candidate);
+    assert.notEqual(hypotheticalMatchingReceipt.status, 0);
+    assert.match(hypotheticalMatchingReceipt.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.doesNotMatch(hypotheticalMatchingReceipt.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(hypotheticalMatchingReceipt.calls, [], "even matching native source cannot repurpose V18");
+  });
+}
 
 for (const [change, changedPaths] of Object.entries({
   "LiteRT model adapter": [

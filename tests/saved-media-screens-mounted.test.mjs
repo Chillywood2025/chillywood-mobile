@@ -30,7 +30,7 @@ function textOf(tree) {
   return textOf(tree.props?.children);
 }
 async function mountScreen(file, overrides={}) {
-  const state = {user:{id:"a"},authority:{sessionGeneration:"1"}, tree:null, pushes:[], writes:[], syncRetries:[], resolutions:[], saved:["film"], failSaved:false, failTitles:false, ...overrides};
+  const state = {user:{id:"a"},authority:{sessionGeneration:"1"}, tree:null, pushes:[], writes:[], syncRetries:[], resolutions:[], publicCountRequests:[], saved:["film"], failSaved:false, failTitles:false, ...overrides};
   const title = {id:"film",title:"Film",is_published:true,status:"published",content_access_rule:"open"};
   const query = (table) => {
     const result = () => ({data: table === "titles" ? [title] : [],error:state.failTitles ? Error("offline") : null});
@@ -88,6 +88,45 @@ async function mountScreen(file, overrides={}) {
     "../../_lib/liveEvents":{readLatestPublicEventSummaries:async()=>[]},
     "../../_lib/homeLoadPolicy.mjs":{settleHomeOperationsWithinDeadline:async jobs=>{await Promise.allSettled(jobs);return {timedOut:false};}},
   };
+  // Title now owns live counts through the real shared hook. Keep that hook,
+  // reader and invalidation fence intact; only native/session/transport edges
+  // are modeled here. This suite's local-only "film" ID must never query rooms.
+  const loadCountModule = (file, dependencies) => {
+    const module = {exports:{}};
+    const code = ts.transpileModule(fs.readFileSync(file,"utf8"), {compilerOptions:{
+      module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+    }}).outputText;
+    vm.runInNewContext(code, {module,exports:module.exports,AbortController,setTimeout,clearTimeout,setInterval,clearInterval,
+      require:name=>{assert.ok(Object.hasOwn(dependencies,name),`Unmodeled count boundary ${name}`);return dependencies[name];}}, {filename:file});
+    return module.exports;
+  };
+  let countAuthority;
+  const currentCountAuthority = () => {
+    if (!state.user) return null;
+    if (countAuthority?.userId !== state.user.id || countAuthority?.sessionGeneration !== state.authority.sessionGeneration) {
+      countAuthority = {userId:state.user.id,accountId:state.user.id,sessionGeneration:state.authority.sessionGeneration,state:"ACTIVE",restoreOnly:false};
+    }
+    return countAuthority;
+  };
+  const countAccount = {
+    getCurrentAccountSessionAuthoritySnapshot:currentCountAuthority,
+    sameAccountSessionAuthority:(left,right)=>left===right,
+    subscribeToAccountSessionAuthority:()=>noop,
+  };
+  const countReader = loadCountModule("_lib/publicPartyRoomCounts.ts", {
+    "./accountSessionAuthority":countAccount,
+    "./supabase":{supabase:{rpc(...args){state.publicCountRequests.push(args);throw Error("Local-only title must not request public Party counts");}}},
+  });
+  modules["../../_lib/usePublicPartyRoomCounts"] = loadCountModule("_lib/usePublicPartyRoomCounts.ts", {
+    react:React,
+    "react-native":{AppState:{currentState:"active",addEventListener:()=>({remove:noop})}},
+    "@react-navigation/native":{useIsFocused:()=>true},
+    "./session":{useSession:()=>({authority:currentCountAuthority(),authorityStatus:state.user?"active":"signed_out"})},
+    "./accountSessionAuthority":countAccount,
+    "./publicPartyRoomCounts":countReader,
+    "./liveDiscoveryInvalidation":loadCountModule("_lib/liveDiscoveryInvalidation.ts", {}),
+    "./sharedLiveUpdates":{subscribeToLiveUpdates:()=>noop},
+  });
   let source=process.env.SAVED_MEDIA_BASELINE ? execFileSync("git",["show",`${process.env.SAVED_MEDIA_BASELINE}:${file}`],{encoding:"utf8"}) : fs.readFileSync(file,"utf8");
   if (file === "app/(tabs)/index.tsx") {
     // Observe the actual production state after React commits. The current
@@ -144,6 +183,11 @@ test("Library keeps saved cards on failed membership or title refresh and report
       h.state[failure]=false;
     }
   } finally {await h.unmount();}
+});
+
+test("Title retains the real public-count hook without querying rooms for a local-only title",async()=>{
+  const h=await mountScreen("app/title/[id].tsx");
+  try {assert.deepEqual(h.state.publicCountRequests,[]);} finally {await h.unmount();}
 });
 
 test("Title save blocks duplicate taps, ignores older initial reads, and reports local failure",async()=>{

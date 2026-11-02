@@ -48,7 +48,7 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
 
 assertIncludes(bell, "readNotificationSummary", "bell must use real unread summary");
 assertIncludes(bell, "readNotificationListPage", "bell tray must use the authoritative paginated notification reader");
-assertIncludes(bell, "mergeNotifications(current, page.items)", "bell tray must deduplicate records across page boundaries");
+assertIncludes(bell, "mergeNotifications(current, fenceRows(page.items))", "bell tray must deduplicate current-authority records across page boundaries");
 assertIncludes(bell, "Show More Activity", "bell tray must expose older retained activity");
 assertIncludes(bell, "Your existing activity is unchanged.", "bell refresh failure must preserve already-rendered safe activity");
 assertIncludes(bell, "accessibilityLabel={accessibilityLabel}", "bell accessibility label must be dynamic");

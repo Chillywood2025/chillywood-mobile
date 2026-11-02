@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createClient } from '@supabase/supabase-js';
 import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 import { deferred, loadStudioFunctions } from './helpers/studio-source-harness.mjs';
+import { createMediaPickerModules } from './helpers/media-picker-modules.mjs';
 
 // Execute current production helpers. All native, auth, storage and database
 // boundaries are synthetic; this suite makes no provider or account requests.
@@ -260,10 +261,18 @@ test('HEIC cover uploads converted JPEG but retains original preview and cleans 
 });
 
 test('gallery URI-only PNG metadata remains PNG through cover storage upload', async () => {
-  const picker = loadStubbed(`${root}/_lib/deviceImagePicker.ts`, {
+  const loadPicker = createMediaPickerModules({
+    'react-native': { Platform: { OS: 'web' } },
+    'expo-modules-core': { requireOptionalNativeModule: () => null },
+    accountSessionAuthority: {
+      getCurrentAccountSessionAuthoritySnapshot: () => firstAuthority,
+      sameAccountSessionAuthority,
+      subscribeToAccountSessionAuthority: () => () => {},
+    },
     'expo-image-picker': { UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
       launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'file:///photo.png' }] }) },
   });
+  const picker = loadPicker('_lib/deviceImagePicker.ts');
   const selected = await picker.pickDeviceImage('photos');
   const h = harness(), result = await h.cover(selected);
   assert.equal(result.mimeType, 'image/png'); assert.equal(h.forwarded[0].mimeType, 'image/png');

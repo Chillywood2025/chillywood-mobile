@@ -81,6 +81,14 @@ function messageHarness(rows = []) {
       return builder;
     } },
   };
+  scope.SUPABASE_URL = 'https://fixture.invalid';
+  scope.SUPABASE_ANON_KEY = 'fixture';
+  scope.captureAccountBoundSupabaseMutationSubject = async userId => ({ accessToken: 'frozen-host-token', authority: { userId } });
+  scope.assertAccountBoundSupabaseMutationSubjectCurrent = subject => assert.equal(subject.authority.userId, state.writableUserId);
+  scope.createClient = (_url, _key, options) => {
+    assert.equal(options.global.headers.Authorization, 'Bearer frozen-host-token');
+    return scope.supabase;
+  };
   evaluate(['fetchPartyMessages', 'sendPartyMessageRecord', 'sendPartyMessage'].map(name => declaration(party, name)).join('\n'), scope);
   return { state, api: scope.exports };
 }

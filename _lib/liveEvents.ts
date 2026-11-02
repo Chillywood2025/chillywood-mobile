@@ -38,6 +38,7 @@ export type CreatorEventRecord = {
   reminderReady: boolean;
   createdAt: string;
   updatedAt: string;
+  discoveryHintKey?: string;
 };
 
 export type CreatorEventReplayAvailability = {
@@ -100,12 +101,12 @@ export type UpdateCreatorEventInput = {
   reminderReady?: boolean;
 };
 
-type CreatorEventRow = Tables<"creator_events"> & { visibility?: string | null; time_zone?: string; management_status?: string | null; status_message?: string | null };
+type CreatorEventRow = Tables<"creator_events"> & { discovery_hint_key?: string; visibility?: string | null; time_zone?: string; management_status?: string | null; status_message?: string | null };
 type CreatorEventInsert = TablesInsert<"creator_events"> & { visibility?: CreatorEventVisibility; time_zone?: string };
 type CreatorEventUpdate = TablesUpdate<"creator_events"> & { visibility?: CreatorEventVisibility; time_zone?: string };
 
 const CREATOR_EVENT_SELECT =
-  "id,host_user_id,event_title,event_type,visibility,status,starts_at,ends_at,time_zone,management_status,status_message,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
+  "id,host_user_id,event_title,event_type,visibility,status,starts_at,ends_at,time_zone,management_status,status_message,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at,discovery_hint_key";
 
 const isDefined = <T>(value: T | null): value is T => value !== null;
 
@@ -187,6 +188,7 @@ export const parseCreatorEventRow = (row: CreatorEventRow | null): CreatorEventR
     // PostgreSQL retains microseconds; Date would round the optimistic-lock
     // token and make every subsequent management action reject a fresh row.
     updatedAt: readTimestampToken(row.updated_at) ?? new Date().toISOString(),
+    ...(typeof row.discovery_hint_key === "string" ? { discoveryHintKey: row.discovery_hint_key } : {}),
   };
 };
 

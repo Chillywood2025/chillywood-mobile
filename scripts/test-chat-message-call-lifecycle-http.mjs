@@ -100,6 +100,7 @@ async function loadChatSource(client, connection, { initializeAuthority = true }
   });
   const diagnostics = [];
   const chat = loadSource("_lib/chat.ts", {
+    "@supabase/supabase-js": { createClient },
     "./chatActivity": loadSource("_lib/chatActivity.ts", {}),
     "./communication": communication, "./chillyChatCalls": calls,
     "./socialAttachments": attachments, "./supabase": bootstrap,

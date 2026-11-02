@@ -18,6 +18,57 @@ export function googleExternalLinkCompileTasks() {
   ]);
 }
 
+export function mediaPickerCompileTasks() {
+  return ["chillywood-gallery-picker", "expo-modules-core", "expo-image-picker"].flatMap(name =>
+    ANDROID_VARIANTS.flatMap(variant => [`:${name}:compile${variantTitle(variant)}Kotlin`,
+      `:${name}:compile${variantTitle(variant)}JavaWithJavac`]))
+    .concat(":chillywood-gallery-picker:testDebugUnitTest");
+}
+
+export function resolveAndroidMediaPickerProjects(resolution, projectRoot) {
+  return [
+    ["chillywood-gallery-picker", "modules", "expo.modules.chillywoodgallerypicker.ChillywoodGalleryPickerModule"],
+    ["expo-modules-core", "node_modules", null],
+    ["expo-image-picker", "node_modules", "expo.modules.imagepicker.ImagePickerModule"],
+  ].map(([name, directory, moduleClass]) => {
+    const modules = resolution.modules?.filter(module => module.packageName === name) ?? [];
+    assert.equal(modules.length, 1, `Exactly one real ${name} package must autolink`);
+    assert.equal(modules[0].projects?.length, 1, `Exactly one ${name} source project is required`);
+    const project = modules[0].projects[0];
+    assert.equal(project.name, name);
+    assert.equal(project.sourceDir, path.join(projectRoot, directory, name, "android"),
+      "Picker compilation must use this isolated source copy");
+    if (moduleClass) assert(project.modules?.includes(moduleClass), "Actual native picker bridge must autolink");
+    if (project.publication) assert(resolution.configuration?.buildFromSource?.some(pattern =>
+      typeof pattern === "string" && new RegExp(`^(?:${pattern})$`, "u").test(name)),
+    "Patched picker must build from source, never select a prebuilt AAR");
+    return { name, sourceDir: project.sourceDir };
+  });
+}
+
+export function verifyMediaPickerRuntimeGraph(graph, manifests) {
+  for (const name of ["chillywood-gallery-picker", "expo-modules-core", "expo-image-picker"]) {
+    assert.equal(graph.components.filter(component => component.kind === "project"
+      && component.buildPath === ":" && component.projectPath === `:${name}`).length, 1,
+    `Actual app runtime requires source project ${name}`);
+  }
+  assert(!graph.components.some(component => component.group === "host.exp.exponent"
+    && component.name === "expo.modules.imagepicker"), "Prebuilt ImagePicker would omit the reviewed lifecycle patch");
+  for (const xml of manifests) {
+    const activity = xml.match(/<activity\b[^>]*android:name="expo\.modules\.chillywoodgallerypicker\.GalleryPickerActivity"[^>]*>/u)?.[0];
+    assert(activity && /android:exported="false"/u.test(activity), "Actual merged Gallery proxy must be non-exported");
+    assert(!/android:noHistory="true"/u.test(activity), "Result-owning proxy must survive child chooser presentation");
+  }
+}
+
+export function verifyGalleryNativeTestReport(xml) {
+  const suite = xml.match(/<testsuite\b[^>]*>/u)?.[0] ?? "";
+  assert.match(suite, /\bname="expo\.modules\.chillywoodgallerypicker\.GalleryPickerActivityTest"/u);
+  assert.match(suite, /\btests="8"/u, "All actual Gallery Activity/contract lifecycle cases must execute");
+  for (const name of ["failures", "errors", "skipped"]) assert.match(suite, new RegExp(`\\b${name}="0"`, "u"));
+  return { suite: "GalleryPickerActivityTest", tests: 8, failures: 0, errors: 0, skipped: 0 };
+}
+
 export function verifyGoogleBillingRuntimeGraph(graph) {
   const billing = graph.components.filter(component => component.kind === "module"
     && component.group === "com.android.billingclient" && component.name === "billing");
@@ -388,6 +439,7 @@ try {
     }
     const cameraProjects = platform === "android" ? resolveAndroidCameraProjects(resolution, project) : undefined;
     const devLauncherProject = platform === "android" ? resolveAndroidDevLauncherProject(resolution, project) : undefined;
+    const pickerProjects = platform === "android" ? resolveAndroidMediaPickerProjects(resolution, project) : undefined;
     run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformEnv);
     const generated = path.join(project, platform);
     assert(fs.existsSync(generated), `Expo must generate ${platform} sources`);
@@ -417,6 +469,7 @@ import org.gradle.api.artifacts.result.UnresolvedDependencyResult
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 def expectedCameraProjects = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_CAMERA_SOURCE_PROJECTS'))
 def expectedDevLauncher = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_CAMERA_DEV_LAUNCHER_PROJECT'))
+def expectedPickerProjects = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_MEDIA_PICKER_SOURCE_PROJECTS'))
 def expectedCameraRoot = new File(System.getenv('CHILLYWOOD_CAMERA_GRADLE_ROOT')).canonicalFile
 gradle.projectsEvaluated {
   // Init scripts also run for included Expo/React Native plugin builds.
@@ -442,6 +495,20 @@ gradle.projectsEvaluated {
     }
   }
   println('CHILLYWOOD_CAMERA_SOURCE_PROJECTS=' + JsonOutput.toJson(expectedCameraProjects))
+  expectedPickerProjects.each { expected ->
+    def actual = gradle.rootProject.findProject(':' + expected.name)
+    if (actual == null || actual.projectDir.canonicalFile != new File(expected.sourceDir).canonicalFile) {
+      throw new GradleException('Picker source project differs from actual autolinking: ' + expected.name)
+    }
+    ['Debug', 'Release'].each { variant ->
+      ['Kotlin', 'JavaWithJavac'].each { compiler ->
+        if (actual.tasks.findByName('compile' + variant + compiler) == null) {
+          throw new GradleException('Required picker compile task missing: ' + expected.name)
+        }
+      }
+    }
+  }
+  println('CHILLYWOOD_CAMERA_MEDIA_PICKER_SOURCE_PROJECTS=' + JsonOutput.toJson(expectedPickerProjects))
   def launcher = gradle.rootProject.findProject(':' + expectedDevLauncher.name)
   if (launcher == null || launcher.projectDir.canonicalFile != new File(expectedDevLauncher.sourceDir).canonicalFile ||
       launcher.tasks.findByName('compileDebugKotlin') == null) {
@@ -523,14 +590,20 @@ allprojects { p ->
     }
   }
 }`);
-      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), ...googleExternalLinkCompileTasks(), "--init-script", initScript,
+      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), ...googleExternalLinkCompileTasks(), ...mediaPickerCompileTasks(), "--init-script", initScript,
         "--no-daemon", "--console=plain"], generated,
       { ...platformEnv, CHILLYWOOD_CAMERA_SOURCE_PROJECTS: JSON.stringify(cameraProjects),
         CHILLYWOOD_CAMERA_DEV_LAUNCHER_PROJECT: JSON.stringify(devLauncherProject),
+        CHILLYWOOD_MEDIA_PICKER_SOURCE_PROJECTS: JSON.stringify(pickerProjects),
         CHILLYWOOD_CAMERA_GRADLE_ROOT: fs.realpathSync(generated) });
       assert.deepEqual(parseGradleRecord(output, "SOURCE_PROJECTS"), cameraProjects,
         "Both actual camera Gradle source projects must match autolinking");
       receipts.android.sourceProjects = cameraProjects.map(({ name, sourceDir }) => ({ name, sourceDir: path.relative(project, sourceDir) }));
+      assert.deepEqual(parseGradleRecord(output, "MEDIA_PICKER_SOURCE_PROJECTS"), pickerProjects);
+      receipts.android.mediaPickerSourceProjects = pickerProjects.map(({ name, sourceDir }) => ({ name, sourceDir: path.relative(project, sourceDir) }));
+      receipts.android.mediaPickerCompileTasks = mediaPickerCompileTasks();
+      receipts.android.galleryNativeTests = verifyGalleryNativeTestReport(fs.readFileSync(path.join(project,
+        "modules/chillywood-gallery-picker/android/build/test-results/testDebugUnitTest/TEST-expo.modules.chillywoodgallerypicker.GalleryPickerActivityTest.xml"), "utf8"));
       assert.deepEqual(parseGradleRecord(output, "DEV_LAUNCHER_SOURCE_PROJECT"), devLauncherProject,
         "Compiled development launcher must match the actual patched autolinked source");
       receipts.android.devLauncherSourceProject = { name: devLauncherProject.name, sourceDir: path.relative(project, devLauncherProject.sourceDir) };
@@ -546,6 +619,7 @@ allprojects { p ->
         const runtimePins = verifyRuntimeAars(artifacts);
         verifyRuntimeGraph(graph, runtimePins, manifests[variant].sources, variant);
         verifyGoogleBillingRuntimeGraph(graph);
+        verifyMediaPickerRuntimeGraph(graph, manifests[variant].sources);
         receipts.android.runtimeClosures[variant] = { scope: `app-${variant}-runtime-and-merged-manifest`,
           profile: records[variant].profile, runtimePins, graph,
           pinnedAarArtifacts: artifacts.map(({ coordinate, type }) => ({ coordinate, type })), manifests: manifests[variant].receipts };
@@ -558,8 +632,22 @@ allprojects { p ->
       console.log(run("bash", ["modules/chillywood-camera-effects/android/run-math-tests.sh"], project, platformEnv).trim());
       receipts.android.realJarContracts = true;
       receipts.android.mathAndMutationControls = true;
+      const pickerRetention = run(process.execPath, [path.join(root, "scripts/test-android-picker-result-retention.mjs"), project], root, platformEnv);
+      receipts.android.pickerResultRetention = JSON.parse(pickerRetention);
+      saveReceipt();
     } else {
       run("xcrun", ["--sdk", "iphonesimulator", "--show-sdk-path"]);
+      const pickerPatch = createRequire(import.meta.url)(path.join(project, "plugins/withIosPickerDismissal.js")).__test;
+      receipts.ios.pickerSources = pickerPatch.specification.packages.flatMap(sdk => {
+        const expected = [...sdk.files.map(file => ({ path: file.path, sha256: file.patchedSha256 })),
+          pickerPatch.specification.helper];
+        return expected.map(file => {
+          const relative = path.join("node_modules", sdk.name, file.path);
+          const sha256 = pickerPatch.digest(fs.readFileSync(path.join(project, relative)));
+          assert.equal(sha256, file.sha256, "Actual iOS prebuild must install the reviewed picker dismissal source");
+          return { path: relative, sha256 };
+        });
+      });
       run("pod", ["install"], generated, platformEnv);
       assert(fs.existsSync(path.join(generated, "Pods/Pods.xcodeproj")), "CocoaPods native project must exist");
       // Ask the installed pod executable itself for its Ruby/gem context. This
@@ -581,10 +669,15 @@ allprojects { p ->
       assert.equal(settings.CLANG_ENABLE_MODULES, "YES", "Actual compile must retain Clang modules");
       assert.notEqual(settings.GCC_WARN_INHIBIT_ALL_WARNINGS, "YES");
       console.log("iOS: effective Simulator importer settings verified; unrelated diagnostics remain enabled");
-      run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", "ChillywoodCameraEffects", "-configuration", "Debug",
-        "-sdk", "iphonesimulator", "-arch", process.arch === "arm64" ? "arm64" : "x86_64",
-        "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
-        `SYMROOT=${path.join(workspace, "ios-build")}`, "build"], generated, platformEnv);
+      receipts.ios.compiledTargets = [];
+      for (const target of ["ChillywoodCameraEffects", "ExpoImagePicker", "ExpoDocumentPicker"]) {
+        run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", target, "-configuration", "Debug",
+          "-sdk", "iphonesimulator", "-arch", process.arch === "arm64" ? "arm64" : "x86_64",
+          "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
+          `SYMROOT=${path.join(workspace, "ios-build")}`, "build"], generated, platformEnv);
+        receipts.ios.compiledTargets.push(target);
+        saveReceipt();
+      }
     }
     receipts[platform].compiled = true;
     saveReceipt();

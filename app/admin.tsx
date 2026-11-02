@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAdminReadLifecycle } from "../hooks/use-admin-read-lifecycle";
 import { useAdminScopedRead } from "../hooks/use-admin-scoped-read";
 import { useAdminHistoryRead } from "../hooks/use-admin-history-read";
+import { useMediaPicker } from "../hooks/useMediaPicker";
+import { releasePickedMedia } from "../_lib/mediaPickerResources";
 import { OwnerCommerceReadinessPanel } from "../components/admin/owner-commerce-readiness";
 import { OwnerTaxCategoryReviewPanel } from "../components/admin/owner-tax-category-review";
 import { OwnerReconciliationHealthPanel } from "../components/admin/owner-reconciliation-health";
@@ -3835,6 +3837,11 @@ export default function AdminStudioScreen() {
     && hasPlatformRoleMembership(platformRoles, ["owner", "super_admin", "operator"]);
   const inspectionEntryAuthorityRef = useRef(adminReadAuthorityKey);
   inspectionEntryAuthorityRef.current = adminReadAuthorityKey;
+  const { pickMedia: pickRachiMedia, mediaPickerSheet: rachiMediaPickerSheet } = useMediaPicker(`official-rachi:${adminReadAuthorityKey ?? "unavailable"}`);
+  const rachiMediaPending = useRef(false);
+  const rachiMediaMounted = useRef(false);
+  useEffect(() => { rachiMediaMounted.current = true; return () => { rachiMediaMounted.current = false; }; }, []);
+  useEffect(() => { setRachiProfileImageBusy(false); }, [adminReadAuthorityKey]);
   useEffect(() => { setContentInspectionEntry(null); }, [adminReadAuthorityKey]);
   const openContentInspection = useCallback((initialTarget?: InspectionTarget, initialSubjectUserId?: string) => {
     if (!canOpenContentInspection || !adminReadAuthorityKey || inspectionEntryAuthorityRef.current !== adminReadAuthorityKey) return;
@@ -6826,17 +6833,38 @@ export default function AdminStudioScreen() {
   }, [canAccessContentProgramming]);
 
   const submitRachiProfileImage = useCallback(async (mode: "choose" | "clear" = "choose") => {
-    if (!canAccessContentProgramming || rachiProfileImageBusy) {
+    if (rachiProfileImageBusy || rachiMediaPending.current) return;
+    if (!canAccessContentProgramming) {
       setRachiNotice("Rachi profile photo changes require active Owner or Admin content permission.");
       return;
     }
+    const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => rachiMediaMounted.current && !!adminReadAuthorityKey
+      && inspectionEntryAuthorityRef.current === adminReadAuthorityKey
+      && sameAccountSessionAuthority(initiatingAuthority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!initiatingAuthority || initiatingAuthority.restoreOnly || !isCurrent()) return;
+    rachiMediaPending.current = true;
+    let selectedResult: unknown;
 
     try {
       setRachiProfileImageBusy(true);
       setRachiNotice(null);
       const result = mode === "clear"
         ? await clearOfficialRachiProfileImage({ previousAvatarUrl: rachiProfileImageSavedUrl })
-        : await chooseOfficialRachiProfileImageFromGallery({ previousAvatarUrl: rachiProfileImageSavedUrl });
+        : await pickRachiMedia({
+          title: "Choose Rachi Profile picture",
+          mediaKind: "image",
+          isCurrent,
+          pick: (source, operation) => chooseOfficialRachiProfileImageFromGallery({
+            operation,
+            previousAvatarUrl: rachiProfileImageSavedUrl,
+            source,
+            authority: initiatingAuthority,
+            isCurrent,
+          }),
+        });
+      selectedResult = result;
+      if (!isCurrent()) return;
       if (!result) {
         setRachiNotice("Rachi profile photo was not changed.");
         return;
@@ -6845,14 +6873,19 @@ export default function AdminStudioScreen() {
       setRachiProfileImageSavedUrl(savedUrl);
       setRachiNotice(mode === "clear"
         ? "Rachi profile photo cleared with admin audit."
-        : "Rachi profile photo selected from gallery and saved with admin audit.");
+        : "Rachi profile photo saved with admin audit.");
     } catch (error: any) {
+      if (!isCurrent()) return;
       setRachiNotice(formatAdminOperationFailure(error, "Unable to update Rachi profile photo."));
     } finally {
-      setRachiProfileImageBusy(false);
+      void releasePickedMedia(selectedResult);
+      rachiMediaPending.current = false;
+      if (isCurrent()) setRachiProfileImageBusy(false);
     }
   }, [
     canAccessContentProgramming,
+    adminReadAuthorityKey,
+    pickRachiMedia,
     rachiProfileImageBusy,
     rachiProfileImageSavedUrl,
   ]);
@@ -12727,6 +12760,7 @@ export default function AdminStudioScreen() {
       resizeMode="cover"
       style={styles.background}
     >
+      {rachiMediaPickerSheet}
       <View style={[styles.overlay, { backgroundColor: themePalette.screenOverlay }]} />
 
       <ScrollView
@@ -14376,7 +14410,7 @@ export default function AdminStudioScreen() {
                 <OwnerStatusPill label={rachiProfileImageSavedUrl ? "Custom" : "Default"} tone={rachiProfileImageSavedUrl ? "success" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Choose a picture from this device’s photo gallery to update Rachi’s official Profile and Platform picture. Saves and clears write admin audit.
+                Choose a picture to update Rachi’s official Profile and Platform picture. Saves and clears write admin audit.
               </Text>
               <View style={styles.rachiProfileImageRow}>
                 <View style={styles.rachiProfileImagePreview}>
@@ -14388,7 +14422,7 @@ export default function AdminStudioScreen() {
                 </View>
                 <View style={styles.rachiProfileImageCopy}>
                   <Text style={styles.configListBody}>
-                    Gallery uploads use the official Rachi storage prefix. Do not use screenshots that contain private user data.
+                    Picture uploads use the official Rachi storage prefix. Do not use screenshots that contain private user data.
                   </Text>
                 </View>
               </View>
@@ -14404,7 +14438,7 @@ export default function AdminStudioScreen() {
                   onPress={() => { void submitRachiProfileImage("choose"); }}
                 >
                   {rachiProfileImageBusy ? <ActivityIndicator color="#fff" size="small" /> : (
-                    <Text style={styles.actionText}>Choose from Gallery</Text>
+                    <Text style={styles.actionText}>Change Picture</Text>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity

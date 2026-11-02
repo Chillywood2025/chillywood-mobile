@@ -1,3 +1,5 @@
+import { createDiscoveryReadFence, type DiscoveryLiveInvalidation } from "../../_lib/liveDiscoveryInvalidation";
+import { canAcceptLiveNotificationSummary, canOpenLiveNotificationActivity, expireLiveNotificationActivity } from "../../_lib/liveNotificationActivity";
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
 import { conversationCreatedAt, formatConversationTimestamp } from "../../_lib/conversationTimestamp";
 import { useConversationClock } from "../../hooks/use-conversation-clock";
@@ -36,6 +38,7 @@ import {
 import { useSession } from "../../_lib/session";
 import { getCurrentNotificationActivityOwnerKey, getNotificationActivityOwnerKey, invalidateNotificationActivity, subscribeToNotificationActivity } from "../../_lib/notificationActivity";
 import { createNotificationHintBudget } from "../../_lib/notificationHintBudget";
+import { subscribeToLiveUpdates } from "../../_lib/sharedLiveUpdates";
 
 type NotificationBellButtonProps = {
   surface: string;
@@ -53,6 +56,8 @@ const EMPTY_SUMMARY: NotificationSummary = {
 
 const formatBadgeCount = (count: number) => (count > 99 ? "99+" : String(count));
 const NOTIFICATION_READ_DEADLINE_MS = 10_000;
+const LIVE_NOTIFICATION_RECHECK_MS = 30_000;
+const LIVE_NOTIFICATION_TYPES = new Set(["followed_creator_live", "circle_friend_live", "live_room_member_joined"]);
 type NotificationReadRequest = { kind: "refresh"; full: boolean } | { kind: "more"; cursor: NotificationListCursor };
 
 
@@ -73,12 +78,17 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   const interactionEpochRef = useRef(0);
   const foregroundRef = useRef(AppState.currentState === "active");
   const trayVisibleRef = useRef(false);
-  const readFlight = useRef<{ controller: AbortController; ownerKey: string } | null>(null);
+  const readFlight = useRef<{ controller: AbortController; ownerKey: string; fence: ReturnType<typeof createDiscoveryReadFence> } | null>(null);
   const queuedRead = useRef<NotificationReadRequest | null>(null);
   const runReadRef = useRef<(request: NotificationReadRequest) => void>(() => {});
   const [stateOwner, setStateOwner] = useState(ownerKey);
   const [summary, setSummary] = useState<NotificationSummary>(EMPTY_SUMMARY);
+  const summaryRef = useRef(summary);
+  summaryRef.current = summary;
+  const [liveSummaryUnverified, setLiveSummaryUnverified] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const notificationsRef = useRef(notifications);
+  notificationsRef.current = notifications;
   const [trayVisible, setTrayVisible] = useState(false);
   trayVisibleRef.current = trayVisible;
   const [loading, setLoading] = useState(false);
@@ -87,6 +97,9 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   const [actionError, setActionError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<NotificationListCursor | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const hasLiveNotices = useRef(false);
+  hasLiveNotices.current = summary.hasLiveActivity === true || summary.categories.includes("creator_went_live")
+    || notifications.some(notification => LIVE_NOTIFICATION_TYPES.has(notification.notificationType));
   const ownsActivity = useCallback(() => mountedRef.current && !!ownerKey && ownerRef.current === ownerKey
     && getCurrentNotificationActivityOwnerKey() === ownerKey, [ownerKey]);
   const canRead = useCallback(() => ownsActivity() && focusedRef.current && foregroundRef.current, [ownsActivity]);
@@ -104,6 +117,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     refreshAfterAction.current = false;
     setStateOwner(ownerKey);
     setSummary(EMPTY_SUMMARY);
+    setLiveSummaryUnverified(false);
     setNotifications([]);
     setNextCursor(null);
     setLoadError(null);
@@ -137,7 +151,10 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
 
   const runRead = useCallback(async (request: NotificationReadRequest) => {
     if (!canRead() || readFlight.current || actionPending.current) return;
-    const flight = { controller: new AbortController(), ownerKey };
+    const flight = { controller: new AbortController(), ownerKey, fence: createDiscoveryReadFence() };
+    const previousSummary = { ...summaryRef.current, hasLiveActivity: hasLiveNotices.current };
+    const fenceRows = (items: NotificationRecord[]) => items.flatMap(item => !LIVE_NOTIFICATION_TYPES.has(item.notificationType) || flight.fence.allows(item.target.context)
+      ? [item] : expireLiveNotificationActivity([item]));
     readFlight.current = flight;
     const signal = flight.controller.signal;
     const sequence = ++refreshSequence.current;
@@ -160,12 +177,13 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
         const page = await readNotificationListPage(user!.id, 30, request.cursor, signal);
         if (!isCurrent()) return;
         if (page.status !== "resolved") throw new Error("notification_page_unavailable");
-        setNotifications(current => mergeNotifications(current, page.items).filter(item => !item.isDismissed));
+        setNotifications(current => mergeNotifications(current, fenceRows(page.items)).filter(item => !item.isDismissed));
         setNextCursor(page.nextCursor);
       } else if (!request.full) {
         const nextSummary = await readNotificationSummary(user!.id, signal);
         if (!isCurrent()) return;
         setSummary(nextSummary);
+        setLiveSummaryUnverified(!canAcceptLiveNotificationSummary(previousSummary, nextSummary, flight.fence));
       } else {
         // Await every source, including failed siblings; Promise.all alone can
         // release ownership while another read/reconciliation is still alive.
@@ -181,7 +199,8 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
           throw new Error("notification_page_unavailable");
         }
         setSummary(summaryResult.value);
-        setNotifications(mergeNotifications(importantResult.value, pageResult.value.items)
+        setLiveSummaryUnverified(!canAcceptLiveNotificationSummary(previousSummary, summaryResult.value, flight.fence));
+        setNotifications(fenceRows(mergeNotifications(importantResult.value, pageResult.value.items))
           .filter(notification => !notification.isDismissed));
         setNextCursor(pageResult.value.nextCursor);
       }
@@ -235,27 +254,59 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
         if (reason === "confirmed") refreshNotifications();
         else budget.hint();
       });
+      // Privacy, Circle membership and host-session expiry need not generate a
+      // notification-row UPDATE. Expire sensitive cached labels before a bounded
+      // canonical refresh; do not depend on hidden rows producing CDC events.
+      let stopped = false;
+      let liveTimer: ReturnType<typeof setTimeout>;
+      const liveBudget = createNotificationHintBudget(() => refreshNotifications(false), 500);
+      const revalidateLive = (invalidation?: DiscoveryLiveInvalidation) => {
+        if (stopped || !canRead()) return;
+        readFlight.current?.fence.invalidate(invalidation);
+        if (hasLiveNotices.current || readFlight.current) {
+          const fence = createDiscoveryReadFence(); fence.invalidate(invalidation);
+          const currentSummary = { ...summaryRef.current, hasLiveActivity: hasLiveNotices.current };
+          setLiveSummaryUnverified(current => current || !canAcceptLiveNotificationSummary(currentSummary, currentSummary, fence));
+          setNotifications(current => expireLiveNotificationActivity(current, invalidation));
+          liveBudget.hint();
+        }
+      };
+      // Reuse the shared, metadata-free discovery transport. It already
+      // coalesces bursts; the existing queue never overlaps actual reads.
+      // No notification activity is emitted here, avoiding a feedback cycle.
+      const unsubscribeDiscovery = subscribeToLiveUpdates(authority, "discovery", revalidateLive, { surface: "home" });
+      const recheckLive = () => {
+        if (stopped) return;
+        revalidateLive();
+        liveTimer = setTimeout(recheckLive, LIVE_NOTIFICATION_RECHECK_MS);
+      };
+      liveTimer = setTimeout(recheckLive, LIVE_NOTIFICATION_RECHECK_MS);
       const appState = AppState.addEventListener("change", state => {
         const wasForeground = foregroundRef.current;
         foregroundRef.current = state === "active";
         if (!foregroundRef.current) {
           interactionEpochRef.current += 1;
           retireReads(); setLoading(false); setLoadingMore(false);
+          setNotifications(current => expireLiveNotificationActivity(current));
+          if (hasLiveNotices.current) setLiveSummaryUnverified(true);
         } else if (!wasForeground) refreshNotifications();
       });
       void refreshNotifications();
       return () => {
         interactionEpochRef.current += 1;
         focusedRef.current = false;
-        budget.stop(); unsubscribe(); appState.remove(); retireReads();
+        setNotifications(current => expireLiveNotificationActivity(current));
+        if (hasLiveNotices.current) setLiveSummaryUnverified(true);
+        stopped = true; clearTimeout(liveTimer);
+        budget.stop(); liveBudget.stop(); unsubscribe(); unsubscribeDiscovery(); appState.remove(); retireReads();
       };
-    }, [canRead, ownerKey, refreshNotifications, retireReads]),
+    }, [authority, canRead, ownerKey, refreshNotifications, retireReads]),
   );
 
   const visibleOwner = stateOwner === ownerKey && ownsActivity();
   const visibleNotifications = visibleOwner ? notifications : [];
   const visibleError = visibleOwner ? actionError ?? loadError : null;
-  const unreadCount = Math.max(0, visibleOwner ? summary.unreadCount : 0);
+  const unreadCount = Math.max(0, visibleOwner && !liveSummaryUnverified ? summary.unreadCount : 0);
   const accessibilityLabel = unreadCount > 0
     ? `${unreadCount} unread notifications`
     : "Notifications";
@@ -276,12 +327,19 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
 
   const openNotification = async (notification: NotificationRecord) => {
     if (busyId || actionPending.current || !canRead()) return;
+    const sensitive = LIVE_NOTIFICATION_TYPES.has(notification.notificationType);
+    const actionFence = createDiscoveryReadFence();
+    const currentLiveAction = () => {
+      const current = notificationsRef.current.find(item => item.id === notification.id);
+      return !sensitive || (!!current && canOpenLiveNotificationActivity(current) && actionFence.allows(current.target.context));
+    };
+    if (!currentLiveAction()) return;
     const action = ++actionSequence.current;
     const interactionEpoch = interactionEpochRef.current;
     actionPending.current = true;
     retireReads();
     const ownsAction = () => ownsActivity() && action === actionSequence.current;
-    const isCurrent = () => ownsAction() && canRead() && interactionEpochRef.current === interactionEpoch;
+    const isCurrent = () => ownsAction() && canRead() && interactionEpochRef.current === interactionEpoch && currentLiveAction();
     setBusyId(notification.id);
     setLoading(false);
     setLoadingMore(false);
@@ -357,7 +415,14 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
       targetContext: notification.target.context,
     });
     const timestamp = formatConversationTimestamp(conversationCreatedAt(notification));
-    const actionCopy = notification.isExpired
+    const targetContext = notification.target.context;
+    const liveState = targetContext && typeof targetContext === "object" && !Array.isArray(targetContext)
+      ? targetContext.live_discovery_state : null;
+    const actionCopy = liveState === "ended"
+      ? "Ended"
+      : liveState === "unavailable"
+        ? "Availability unconfirmed"
+        : notification.isExpired
       ? "Expired"
       : notification.actionStatus === "handled"
         ? "Handled"

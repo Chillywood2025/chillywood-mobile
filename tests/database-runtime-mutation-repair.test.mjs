@@ -9,7 +9,7 @@ import {createDatabase,repairMigrationPath,merchStorefrontFiles} from './helpers
 import {monetizationAuditFiles} from './helpers/creator-monetization-migration-inventory.mjs';
 import {profileFeedFiles} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles} from './helpers/discovery-invalidation-runtime-inventory.mjs';
-import {appCompletionFiles} from './helpers/app-completion-migration-inventory.mjs';
+import {appCompletionFiles,appCompletionStudioDependentFiles} from './helpers/app-completion-migration-inventory.mjs';
 
 // Explicit reviewed successors: excluded from historical delta checkpoints,
 // required in full-chain repair qualification alongside their real prerequisites.
@@ -129,6 +129,10 @@ const ownerSecurityFiles = [
 ];
 
 for(const includeHeldStudio of [false,true]) test(`staff mutation repair with Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async t=>{
+  // These exact reviewed successors depend on the held Studio schema; the
+  // historical pre-Studio scenario must exclude their identities, not merely
+  // subtract an unexplained count from the full-chain checkpoint.
+  const scenarioCommerceFiles=flexibleCommerceFiles.filter(file=>includeHeldStudio||!appCompletionStudioDependentFiles.includes(file));
   const sql=fs.readFileSync(repairMigrationPath,'utf8');
   const {db,replayReport}=await createDatabase({overlayLiveDrift:true,includeHeldStudio});
   const actor='e8200000-0000-4000-8000-000000000001',session='e8300000-0000-4000-8000-000000000001';
@@ -301,8 +305,9 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
     }
     // This remains a full-current-chain repair test, including reviewed successors.
     check('complete isolated brand retention successors',replayReport.files.filter(file=>brandRetentionFiles.includes(file)),brandRetentionFiles);
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length+flexibleCommerceFiles.length);
-    assert.deepEqual(replayReport.files.filter(file=>flexibleCommerceFiles.includes(file)),flexibleCommerceFiles, 'exact flexible commerce successor migrations replay');
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length+scenarioCommerceFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>flexibleCommerceFiles.includes(file)),scenarioCommerceFiles, 'exact flexible commerce successor migrations replay for this Studio scenario');
+    check('complete Studio-dependent live and Owner successors',replayReport.files.filter(file=>appCompletionStudioDependentFiles.includes(file)),includeHeldStudio?appCompletionStudioDependentFiles:[]);
     assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),merchStorefrontFiles, 'exact physical storefront/SKU/photo successors replay');
     check('exact creator/buyer monetization audit successors',replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles);
     assert.deepEqual(replayReport.files.filter(file=>profileFeedFiles.includes(file)),profileFeedFiles, 'exact profile feed migration bundle');

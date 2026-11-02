@@ -1,6 +1,9 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
-import type { ImagePickerAsset } from "expo-image-picker";
+import { withPickedMediaRead } from "./mediaPickerResources";
+import { prepareMediaUploadCopy } from "./prepareMediaUploadCopy";
+import { pickDeviceImage, type DeviceImageSource } from "./deviceImagePicker";
+import type { MediaPickerOperation } from "./mediaPickerCoordinator";
 import { createClient } from "@supabase/supabase-js";
 import { captureAccountBoundSupabaseMutationSubject, assertAccountBoundSupabaseMutationSubjectCurrent } from "./accountBoundSupabaseMutation";
 import { sameAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
@@ -38,6 +41,7 @@ export type ProfileMediaImageFile = {
 
 type ProfileMediaUploadOptions = {
   fitMode?: ProfileAppearanceFitMode;
+  owner?: ProfileMediaRemovalOwner;
 };
 
 type UserProfileUpdate = TablesUpdate<"user_profiles">;
@@ -60,11 +64,6 @@ const profileMediaLimitForKind = (kind: ProfileMediaKind) => (
 const friendlyKindLabel = (kind: ProfileMediaKind) => (
   kind === "avatar" ? "Profile photo" : "Profile background"
 );
-
-const imageFileNameFromUri = (uri: string, kind: ProfileMediaKind) => {
-  const name = uri.split("/").pop()?.trim();
-  return name || `${kind}-${Date.now()}.jpg`;
-};
 
 const inferMimeType = (file: ProfileMediaImageFile) => {
   const explicit = toText(file.mimeType).toLowerCase();
@@ -146,27 +145,9 @@ const assertMediaOperationCurrent = (operation: ProfileMediaOperation) => {
 };
 class ProfileAppearanceWriteRejectedError extends Error {}
 
-const loadImagePicker = async () => {
-  try {
-    return await import("expo-image-picker");
-  } catch {
-    throw new Error("Photo gallery needs the current app build. Install a rebuilt app, then try again.");
-  }
-};
-
 const buildProfileMediaObjectKey = (userId: string, kind: ProfileMediaKind, mimeType: string) => (
   `${userId}/${kind}/${Date.now()}-${createClientId()}.${extensionFromMimeType(mimeType)}`
 );
-
-const buildProfileMediaFileFromImageAsset = (
-  kind: ProfileMediaKind,
-  asset: ImagePickerAsset,
-): ProfileMediaImageFile => ({
-  uri: asset.uri,
-  name: asset.fileName || imageFileNameFromUri(asset.uri, kind),
-  mimeType: asset.mimeType || "image/jpeg",
-  size: asset.fileSize,
-});
 
 const extractProfileMediaObjectKey = (url?: string | null) => {
   const normalizedUrl = toText(url);
@@ -249,18 +230,11 @@ async function prepareProfileMediaUploadUri(
   }
 
   const cacheUri = `${FileSystem.cacheDirectory}profile-media-${kind}-${createClientId()}.${getFileExtension(file, mimeType)}`;
-  await withTimeout(
-    FileSystem.copyAsync({ from: sourceUri, to: cacheUri }),
-    20000,
-    "Profile image took too long to prepare. Try again.",
-  );
-
-  return {
-    uri: cacheUri,
-    cleanup: async () => {
-      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
-    },
-  };
+  return prepareMediaUploadCopy({
+    sourceUri,
+    destinationUri: cacheUri,
+    waitForCopy: (copy) => withTimeout(copy, 20000, "Profile image took too long to prepare. Try again."),
+  });
 }
 
 async function getPreparedProfileMediaFileSize(uri: string, fallback?: number | null) {
@@ -281,8 +255,9 @@ async function uploadProfileMediaFileToStorage(operation: ProfileMediaOperation,
   const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PROFILE_MEDIA_BUCKET}/${encodeStoragePath(input.objectKey)}`;
 
   try {
+    // A timeout only retires this wait, not the native reader of the picked URI.
     const result = await withTimeout(
-      FileSystem.uploadAsync(uploadUrl, input.uri, {
+      withPickedMediaRead(input.uri, () => FileSystem.uploadAsync(uploadUrl, input.uri, {
         httpMethod: "POST",
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
         headers: {
@@ -291,7 +266,7 @@ async function uploadProfileMediaFileToStorage(operation: ProfileMediaOperation,
           "Content-Type": input.mimeType,
           "x-upsert": "false",
         },
-      }),
+      })),
       PROFILE_MEDIA_UPLOAD_TIMEOUT_MS,
       "Profile image upload took too long. Try again.",
     );
@@ -301,13 +276,15 @@ async function uploadProfileMediaFileToStorage(operation: ProfileMediaOperation,
   }
 
   assertMediaOperationCurrent(operation);
-  const uploadBody = new File(input.uri);
-  const { error } = await operation.client.storage
-    .from(PROFILE_MEDIA_BUCKET)
-    .upload(input.objectKey, uploadBody as unknown as Blob, {
-      contentType: input.mimeType,
-      upsert: false,
-    });
+  const { error } = await withPickedMediaRead(input.uri, () => {
+    const uploadBody = new File(input.uri);
+    return operation.client.storage
+      .from(PROFILE_MEDIA_BUCKET)
+      .upload(input.objectKey, uploadBody as unknown as Blob, {
+        contentType: input.mimeType,
+        upsert: false,
+      });
+  });
   if (error) throw error;
 }
 
@@ -368,22 +345,8 @@ async function updateProfileAppearance(
   return cacheAcknowledgedUserProfile(cachePatch, operation.subject.authority, operation.client);
 }
 
-export async function pickProfileMediaImage(kind: ProfileMediaKind): Promise<ProfileMediaImageFile | null> {
-  const ImagePicker = await loadImagePicker();
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
-    allowsEditing: false,
-    quality: 1,
-    exif: false,
-    base64: false,
-    defaultTab: "photos",
-    legacy: false,
-  });
-
-  if (result.canceled) return null;
-  const asset = result.assets[0];
-  if (!asset?.uri) throw new Error(`Choose a ${kind === "avatar" ? "photo" : "background"} before saving.`);
-  return buildProfileMediaFileFromImageAsset(kind, asset);
+export async function pickProfileMediaImage(kind: ProfileMediaKind, source: DeviceImageSource = "photos", operation?: MediaPickerOperation): Promise<ProfileMediaImageFile | null> {
+  return pickDeviceImage(source, operation, { maximumBytes: kind === "avatar" ? PROFILE_AVATAR_MAX_BYTES : PROFILE_BACKGROUND_MAX_BYTES, allowHeicNormalization: true });
 }
 
 export async function uploadProfileMedia(
@@ -391,7 +354,7 @@ export async function uploadProfileMedia(
   file: ProfileMediaImageFile,
   options: ProfileMediaUploadOptions = {},
 ): Promise<UserProfile> {
-  const operation = await captureProfileMediaOperation();
+  const operation = await captureProfileMediaOperation(options.owner);
   const userId = operation.subject.authority.userId;
   const existingProfile = await readUserProfile(userId);
   assertMediaOperationCurrent(operation);

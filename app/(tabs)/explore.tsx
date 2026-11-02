@@ -39,10 +39,9 @@ import {
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
-import { NewLiveStreamsButton } from "../../components/live/new-live-streams-button";
+import { usePublicPartyRoomCounts } from "../../_lib/usePublicPartyRoomCounts";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
-import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import {
   getPrimaryPeopleSearchCandidate,
@@ -83,11 +82,6 @@ type TitleRow = Pick<
 > & {
   slug?: string | null;
 };
-
-type WatchPartyRoomRow = Pick<
-  Tables<"watch_party_rooms">,
-  "title_id" | "is_active" | "last_activity_at" | "updated_at"
->;
 
 type TitleLiveMetadata = {
   liveRoomCount: number;
@@ -290,7 +284,8 @@ export default function ExploreScreen() {
   const [peopleResults, setPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleError, setPeopleError] = useState<string | null>(null);
-  const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
+  const publicPartyCounts = usePublicPartyRoomCounts(titles.map(title => String(title.id)));
+  const titleLiveMetadataById = publicPartyCounts.counts;
 
   const programmedTitles = useMemo(() => sortTitlesByProgramTruth(titles), [titles]);
   const showContentScope = activeScope === "all" || activeScope === "content";
@@ -325,8 +320,7 @@ export default function ExploreScreen() {
   );
   const liveDiscoveryItems = useMemo(
     () => liveDiscovery.items
-      .filter((item) => matchesTextSearch(debouncedSearchQuery, [item.title, item.subtitle, item.category_key]))
-      .slice(0, 8),
+      .filter((item) => matchesTextSearch(debouncedSearchQuery, [item.title, item.subtitle, item.category_key])),
     [debouncedSearchQuery, liveDiscovery.items],
   );
   const platformDiscoveryItems = useMemo(
@@ -531,51 +525,6 @@ export default function ExploreScreen() {
     showPlatformScope,
   ]);
 
-  const fetchTitleLiveMetadata = useCallback(async (nextTitles: TitleRow[], generation: number) => {
-    const titleIds = nextTitles.map((item) => String(item.id)).filter(Boolean);
-    if (!titleIds.length) {
-      if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById({});
-      return;
-    }
-
-    try {
-      const { data: roomData, error: roomError } = await supabase
-        .from("watch_party_rooms")
-        .select("title_id,is_active,last_activity_at,updated_at")
-        .eq("is_active", true)
-        .eq("room_type", "title")
-        .in("title_id", titleIds)
-        .returns<WatchPartyRoomRow[]>();
-
-      if (roomError || !roomData) {
-        if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById({});
-        return;
-      }
-
-      const activeRooms = roomData.filter((row) => {
-        if (row.is_active !== true) return false;
-        const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
-        if (!activitySource) return false;
-        const activityAt = Date.parse(activitySource);
-        if (!Number.isFinite(activityAt)) return false;
-        return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
-      });
-
-      const nextMetadata: Record<string, TitleLiveMetadata> = {};
-      activeRooms.forEach((row) => {
-        const titleId = String(row.title_id ?? "").trim();
-        if (!titleId) return;
-        const current = nextMetadata[titleId] ?? { liveRoomCount: 0 };
-        current.liveRoomCount += 1;
-        nextMetadata[titleId] = current;
-      });
-
-      if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById(nextMetadata);
-    } catch {
-      if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById({});
-    }
-  }, []);
-
   const loadExplore = useCallback(async (options?: { refresh?: boolean }) => {
     const generation = ++exploreLoadGenerationRef.current;
     if (options?.refresh) {
@@ -606,11 +555,9 @@ export default function ExploreScreen() {
       rachiOriginals,
       publicEvents,
     });
-    await fetchTitleLiveMetadata(titleResult.titles, generation);
-    if (generation !== exploreLoadGenerationRef.current) return;
     setLoading(false);
     setRefreshing(false);
-  }, [fetchTitleLiveMetadata]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -992,7 +939,7 @@ export default function ExploreScreen() {
 
   const renderTitleItem: ListRenderItem<TitleRow> = ({ item }) => {
     const imageSource = getExploreImageSource(item);
-    const liveMetadata = titleLiveMetadataById[String(item.id)] ?? null;
+    const liveMetadata = titleLiveMetadataById[String(item.id).toLowerCase()] ?? null;
     const badges = formatTitleBadgeList(item, liveMetadata);
 
     return (
@@ -1028,7 +975,7 @@ export default function ExploreScreen() {
           <Text numberOfLines={1} style={styles.titleMeta}>{buildExploreInfoLine(item)}</Text>
           {liveMetadata?.liveRoomCount ? (
             <Text style={styles.liveSummary}>
-              {liveMetadata.liveRoomCount === 1 ? "1 active title room" : `${liveMetadata.liveRoomCount} active title rooms`}
+              {liveMetadata.liveRoomCount === 1 ? "1 public live Party Room" : `${liveMetadata.liveRoomCount} public live Party Rooms`}
             </Text>
           ) : null}
           {!!item.synopsis && (
@@ -1063,7 +1010,7 @@ export default function ExploreScreen() {
             style={styles.list}
             contentContainerStyle={[styles.listContent, { paddingBottom: bottomTabBarHeight + 24 }]}
             renderItem={renderTitleItem}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void loadExplore({ refresh: true }); void discovery.reload(); void liveDiscovery.reload(); }} tintColor="#E50914" />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void loadExplore({ refresh: true }); void discovery.reload(); void liveDiscovery.reload(); void publicPartyCounts.reload(); }} tintColor="#E50914" />}
             ListHeaderComponent={
               <View style={styles.headerBlock}>
                 <MainTabTopBar surface="explore" label="EXPLORE" style={styles.mainTabTopBar} />
@@ -1080,7 +1027,7 @@ export default function ExploreScreen() {
                   <View style={styles.inlineError}>
                     <Text style={styles.inlineErrorTitle}>Explore could not refresh</Text>
                     <Text style={styles.inlineErrorText}>{errorMsg ?? discovery.error ?? liveDiscovery.error}</Text>
-                    <Pressable onPress={() => { void loadExplore({ refresh: true }); void discovery.reload(); void liveDiscovery.reload(); }} style={styles.retryBtn}>
+                    <Pressable onPress={() => { void loadExplore({ refresh: true }); void discovery.reload(); void liveDiscovery.reload(); void publicPartyCounts.reload(); }} style={styles.retryBtn}>
                       <ChillywoodPrimaryActionFill radius={12} />
                       <Text style={styles.retryText}>Retry</Text>
                     </Pressable>
@@ -1171,7 +1118,6 @@ export default function ExploreScreen() {
                   <>
                     {liveDiscoveryItems.map((item) => renderDiscoveryCard(item, "Live"))}
                   </>,
-                  <NewLiveStreamsButton pendingItemCount={liveDiscovery.pendingItemCount} onRefresh={liveDiscovery.reload} />,
                 ) : null}
 
                 {showPlatformScope ? renderBackedSection(

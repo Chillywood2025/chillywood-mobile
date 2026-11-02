@@ -35,6 +35,20 @@ test("notification policy accepts the current exact-invite cleanup contract", (t
 
 const mutations = [
   {
+    name: "pagination drops cross-page deduplication",
+    file: "components/notifications/notification-bell-button.tsx",
+    before: "mergeNotifications(current, fenceRows(page.items))",
+    after: "[...current, ...fenceRows(page.items)]",
+    diagnostic: "bell tray must deduplicate current-authority records across page boundaries",
+  },
+  {
+    name: "pagination bypasses current live-authority fencing",
+    file: "components/notifications/notification-bell-button.tsx",
+    before: "mergeNotifications(current, fenceRows(page.items))",
+    after: "mergeNotifications(current, page.items)",
+    diagnostic: "bell tray must deduplicate current-authority records across page boundaries",
+  },
+  {
     name: "global cleanup loses its room/account compare-and-clear binding",
     file: "app/_layout.tsx",
     before: "clearEndedChatThreadCall(declinedInvite.threadId, declinedInvite.communicationRoomId, authority)",

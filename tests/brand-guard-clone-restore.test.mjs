@@ -117,11 +117,41 @@ test('source catalog fingerprint is read-only, lazy, and checked after failed re
 test('every full logical clone runner uses the adapter and unconditional source catalog check',()=>{
   const files=readdirSync('scripts').filter(name=>name.startsWith('test-')&&name.endsWith('-concurrency.mjs')
     &&readFileSync('scripts/'+name,'utf8').includes('pg_dump'));
-  assert.equal(files.length,17);
+  assert.deepEqual(files.sort(),[
+    'test-archived-brand-verification-concurrency.mjs',
+    'test-brand-empty-test-concurrency.mjs',
+    'test-brand-expiry-dispatch-concurrency.mjs',
+    'test-brand-global-retention-concurrency.mjs',
+    'test-brand-soft-removal-concurrency.mjs',
+    'test-content-inspection-concurrency.mjs',
+    'test-database-runtime-authority-concurrency.mjs',
+    'test-deleted-content-retention-concurrency.mjs',
+    'test-external-reference-retention-concurrency.mjs',
+    'test-legacy-retention-concurrency.mjs',
+    'test-live-room-host-settings-concurrency.mjs',
+    'test-media-scan-byte-receipt-concurrency.mjs',
+    'test-platform-brand-retention-concurrency.mjs',
+    'test-platform-studio-authority-concurrency.mjs',
+    'test-r2-qualification-ledger-concurrency.mjs',
+    'test-revenuecat-premium-quarantine-concurrency.mjs',
+    'test-room-live-start-dedup-concurrency.mjs',
+    'test-staff-permission-template-concurrency.mjs',
+    'test-supabase-copy-cutover-concurrency.mjs',
+  ],'exact reviewed logical clone runners, including both Live successors');
+  const assertRunner=(code,file)=>{
+    // The two Live runners use `restore`, not `cloneGuardRestore`. Bind both
+    // calls to the actual constructed adapter; an unrelated decoy is not proof.
+    const bindings=[...code.matchAll(/\bconst\s+(\w+)\s*=\s*createBrandGuardCloneRestorer\(\{container\}\)/gu)];
+    assert.equal(bindings.length,1,`${file}: exactly one clone restorer`);
+    const binding=bindings[0][1];
+    assert.match(code,new RegExp(`\\b${binding}\\.prepare\\(`,'u'),file);
+    assert.match(code,new RegExp(`finally\\s*\\{\\s*${binding}\\.assertSourceUnchanged\\(\\);\\s*\\}`,'u'),file);
+  };
   for(const file of files){const code=readFileSync('scripts/'+file,'utf8');
-    assert.match(code,/createBrandGuardCloneRestorer\(\{container\}\)/u,file);
-    assert.match(code,/cloneGuardRestore\.prepare\(/u,file);
-    assert.match(code,/finally \{ cloneGuardRestore\.assertSourceUnchanged\(\); \}/u,file);
+    assertRunner(code,file);
+    assert.throws(()=>assertRunner(code.replaceAll('.prepare(','.unreviewedPrepare('),file));
+    assert.throws(()=>assertRunner(code.replace('.assertSourceUnchanged();','.unreviewedSourceCheck();'),file));
+    assert.throws(()=>assertRunner(code.replace(/finally\s*\{\s*(\w+\.assertSourceUnchanged\(\);)/u,'finally { if (false) $1'),file));
   }
   const ledger=readFileSync('scripts/test-r2-qualification-ledger-concurrency.mjs','utf8');
   assert.match(ledger,/prepare\(bytes, allowed\(db\)\)/u);

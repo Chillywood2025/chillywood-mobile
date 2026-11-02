@@ -9,6 +9,7 @@ const normalizeErrorText = (error: unknown) => {
 
 export type UserFacingErrorCode =
   | "attachment_action"
+  | "attachment_parent_saved"
   | "brand_draft"
   | "chat_action"
   | "chat_call_rate_limited"

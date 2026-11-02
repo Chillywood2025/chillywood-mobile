@@ -138,14 +138,17 @@ import { useSession } from "../../_lib/session";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
 import {
-  type SocialAttachmentPickerScope,
+  isAttachmentParentSavedError,
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
-import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
+import { useMediaPicker } from "../../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../../hooks/useOwnedPickedMediaState";
+import { releasePickedMedia, retainPickedMedia } from "../../_lib/mediaPickerResources";
+import { captureAccountBoundSupabaseMutationSubject, type AccountBoundSupabaseMutationSubject } from "../../_lib/accountBoundSupabaseMutation";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { useChatCallMediaSession } from "../../hooks/use-chat-call-media-session";
 import { useOutgoingIosCallAudioHandoff } from "../../hooks/use-outgoing-ios-call-audio-handoff";
@@ -538,8 +541,18 @@ export default function ChillyChatThreadScreen() {
     targetMessageId: routeMessageId,
   });
   const [draft, setDraft] = useState("");
-  const [attachmentFile, setAttachmentFile] = useState<SocialAttachmentFile | null>(null);
-  const [attachmentSheetVisible, setAttachmentSheetVisible] = useState(false);
+  const composerEditRevisionRef = useRef(0);
+  const messageAttemptSerialRef = useRef(0);
+  const [messageSendRecoveries, setMessageSendRecoveries] = useOwnedPickedMediaState<{
+    id: string; body: string; attachmentFile: SocialAttachmentFile | null; outcome: "not_sent" | "unconfirmed";
+  }[]>([], (recoveries) => recoveries.map((recovery) => recovery.attachmentFile));
+  const handleDraftChange = useCallback((value: string) => {
+    composerEditRevisionRef.current += 1;
+    setDraft(value);
+  }, []);
+  const [attachmentFile, setAttachmentFile] = useOwnedPickedMediaState<SocialAttachmentFile | null>(null);
+  const attachmentSubjectRef = useRef<AccountBoundSupabaseMutationSubject | null>(null);
+  const { pickMedia, mediaPickerSheet, cancelMediaPicker } = useMediaPicker(`chat:${threadId}`);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const messageSendContext = useMemo(() => ({
     userId: currentUserId, threadId, sessionGeneration: authority?.sessionGeneration ?? "", isSignedIn,
@@ -550,6 +563,8 @@ export default function ChillyChatThreadScreen() {
     mountedMessageSendContextRef.current = messageSendContext;
     messageSendOperationRef.current = null;
     setSending(false);
+    composerEditRevisionRef.current += 1;
+    setMessageSendRecoveries([]);
     setDraft("");
     setAttachmentFile(null);
     return () => {
@@ -557,7 +572,7 @@ export default function ChillyChatThreadScreen() {
       mountedMessageSendContextRef.current = null;
       messageSendOperationRef.current = null;
     };
-  }, [messageSendContext]);
+  }, [messageSendContext, setAttachmentFile, setMessageSendRecoveries]);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [messageReportTarget, setMessageReportTarget] = useState<ChatMessage | null>(null);
@@ -2391,22 +2406,37 @@ export default function ChillyChatThreadScreen() {
     });
   }, [otherMemberDisplayName, thread?.activeCallType]);
 
-  const handlePickAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
+  const handlePickAttachment = useCallback(async () => {
+    if (mountedMessageSendContextRef.current !== messageSendContext || sending || messageSendOperationRef.current) return;
+    let selection: { file: SocialAttachmentFile; mutationSubject: AccountBoundSupabaseMutationSubject } | null = null;
     try {
       setError(null);
-      const file = await pickSocialAttachmentFile(scope);
-      if (!file) return;
-      setAttachmentFile(file);
+      selection = await pickMedia({
+        title: "Add to message",
+        mediaKind: "attachment",
+        sources: ["photos", "camera", "files"],
+        isCurrent: () => mountedMessageSendContextRef.current === messageSendContext,
+        pick: async (source, operation) => {
+          const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+          if (mountedMessageSendContextRef.current !== messageSendContext) return null;
+          const file = await pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation);
+          return file ? { file, mutationSubject } : null;
+        },
+      });
+      if (!selection || mountedMessageSendContextRef.current !== messageSendContext
+        || !sameAccountSessionAuthority(selection.mutationSubject.authority, getCurrentAccountSessionAuthoritySnapshot())) return;
+      composerEditRevisionRef.current += 1;
+      attachmentSubjectRef.current = selection.mutationSubject;
+      setAttachmentFile(selection.file);
     } catch (error) {
-      setAttachmentFile(null);
+      if (mountedMessageSendContextRef.current !== messageSendContext) return;
       setError(getUserFacingErrorMessage(error, "Unable to attach that file right now."));
+    } finally {
+      // The synchronous state lease owns adopted files; an unadopted final
+      // handoff must also dispose its exact native result after retirement.
+      void releasePickedMedia(selection);
     }
-  }, []);
-
-  const handleSelectAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
-    setAttachmentSheetVisible(false);
-    void handlePickAttachment(scope);
-  }, [handlePickAttachment]);
+  }, [messageSendContext, pickMedia, sending, setAttachmentFile]);
 
   const handleSend = useCallback(async (bodyOverride?: string) => {
     // A stale event handler must not submit using the replacement session.
@@ -2414,6 +2444,7 @@ export default function ChillyChatThreadScreen() {
     // completion must never update a different screen/account/session context.
     if (mountedMessageSendContextRef.current !== messageSendContext
       || !messageSendContext.isSignedIn || !messageSendContext.userId
+      || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())
       || messageSendOperationRef.current) return;
     const trimmedDraft = String(bodyOverride ?? draft).trim();
     const selectedAttachment = bodyOverride ? null : attachmentFile;
@@ -2427,12 +2458,20 @@ export default function ChillyChatThreadScreen() {
       return;
     }
 
+    cancelMediaPicker();
+    // Keep the exact local file alive before clearing the composer, including
+    // preflight awaits and any transfer to a non-resendable recovery card.
+    let releaseSendFile: () => void;
+    try { releaseSendFile = retainPickedMedia(selectedAttachment); }
+    catch { setError("The attachment changed. Review the current selection before sending."); return; }
     const operation = { context: messageSendContext };
+    const editRevision = composerEditRevisionRef.current;
     messageSendOperationRef.current = operation;
     const isCurrent = () => mountedMessageSendContextRef.current === operation.context
-      && messageSendOperationRef.current === operation;
+      && messageSendOperationRef.current === operation
+      && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
 
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${Date.now()}-${++messageAttemptSerialRef.current}`;
     const optimistic: ChatMessage = {
       id: tempId,
       threadId,
@@ -2445,13 +2484,22 @@ export default function ChillyChatThreadScreen() {
       isModerationHidden: false,
     };
 
-    setDraft("");
-    if (!bodyOverride) setAttachmentFile(null);
+    if (!bodyOverride) { setDraft(""); setAttachmentFile(null); }
     setSending(true);
     setMessages((prev) => [...prev, optimistic]);
 
+    let apiInvoked = false;
     try {
-      const sent = await sendChatMessage(threadId, trimmedDraft, selectedAttachment);
+      const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+      if (!isCurrent()) return;
+      if (selectedAttachment && !sameAccountSessionAuthority(attachmentSubjectRef.current?.authority, mutationSubject.authority)) {
+        throw new Error("Choose the attachment again for this account before sending.");
+      }
+      apiInvoked = true;
+      const sent = await sendChatMessage(threadId, trimmedDraft, selectedAttachment, {
+        mutationSubject,
+        isCurrent,
+      });
       if (!isCurrent()) return;
       trackEvent("chat_message_sent", {
         surface: "chat-thread",
@@ -2464,19 +2512,38 @@ export default function ChillyChatThreadScreen() {
     } catch (sendError) {
       if (!isCurrent()) return;
       setMessages((prev) => prev.filter((message) => message.id !== tempId));
-      if (selectedAttachment) setAttachmentFile(selectedAttachment);
-      const message = getUserFacingErrorMessage(sendError, "Unable to send Chi'lly Chat message.");
-      setError(message);
+      if (isAttachmentParentSavedError(sendError)) {
+        // That attempt's composer was already cleared. Never erase text typed
+        // while the confirmed parent/attachment operation was settling.
+        void loadThreadState().catch(() => undefined);
+      } else if (!apiInvoked && !bodyOverride && composerEditRevisionRef.current === editRevision) {
+        setDraft(trimmedDraft);
+        setAttachmentFile(selectedAttachment);
+      } else {
+        // The API has no exact attempt receipt for a rejected/lost response.
+        // Keep the attempted content visible, never match by body/time or turn
+        // an inconclusive refresh into an automatic resendable draft.
+        setMessageSendRecoveries((current) => [...current, {
+          id: tempId, body: trimmedDraft, attachmentFile: selectedAttachment,
+          outcome: apiInvoked ? "unconfirmed" : "not_sent",
+        }]);
+      }
+      if (apiInvoked && !isAttachmentParentSavedError(sendError)) {
+        setError("Send not confirmed. Your attempted message is kept below; check this conversation before sending it again.");
+      } else {
+        setError(getUserFacingErrorMessage(sendError, "Unable to send Chi'lly Chat message."));
+      }
       reportRuntimeError("chat-thread-send-message", sendError, {
         threadId,
       });
     } finally {
+      releaseSendFile();
       if (isCurrent()) {
         messageSendOperationRef.current = null;
         setSending(false);
       }
     }
-  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, messageSendContext, sending, thread, threadId]);
+  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, authority, cancelMediaPicker, currentUserId, draft, loadThreadState, messageSendContext, sending, setAttachmentFile, setMessageSendRecoveries, thread, threadId]);
 
   const handleRecoverCallStart = useCallback(async () => {
     const pending = pendingCallStartRecoveryRef.current;
@@ -4114,12 +4181,27 @@ export default function ChillyChatThreadScreen() {
           </View>
           <Text style={styles.composerAssistText}>Calls stay in-thread. Attachments stay private to this thread.</Text>
         </View>
+        {messageSendRecoveries.map((attempt) => (
+          <View key={attempt.id} style={styles.composerRecoveryCard} testID="chat-send-recovery" accessibilityLiveRegion="polite">
+            <Text style={styles.composerRecoveryTitle}>{attempt.outcome === "unconfirmed" ? "Send not confirmed — check this conversation" : "Earlier draft kept — not sent"}</Text>
+            {attempt.body ? <Text selectable style={styles.composerRecoveryBody} testID="chat-send-recovery-text">{attempt.body}</Text> : null}
+            {attempt.attachmentFile ? <SocialAttachmentCard file={attempt.attachmentFile} compact /> : null}
+            <Text style={styles.composerAssistText}>{attempt.outcome === "unconfirmed"
+              ? "This copy will not be sent again automatically. Refreshing may show the message, but an empty result does not confirm it was not saved."
+              : "Your newer draft was left unchanged. You can select and copy this earlier text."} This copy is kept while this conversation is open.</Text>
+            <View style={styles.composerRecoveryActions}>
+              {attempt.outcome === "unconfirmed" ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh conversation without resending" onPress={() => { void loadThreadState().catch(() => undefined); }}><Text style={styles.composerRecoveryActionText}>Refresh conversation</Text></TouchableOpacity> : null}
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss this attempted-message copy without sending" onPress={() => setMessageSendRecoveries((current) => current.filter((entry) => entry.id !== attempt.id))}><Text style={styles.composerRecoveryActionText}>Dismiss this copy</Text></TouchableOpacity>
+            </View>
+          </View>
+        ))}
         <GatedSmartReplySuggestions
           activeCallType={thread?.activeCallType}
           currentUserId={currentUserId}
           messages={messages}
           otherMemberName={otherMemberDisplayName}
           onSelectSuggestion={(suggestion) => {
+            composerEditRevisionRef.current += 1;
             trackEvent("chat_thread_ai_suggestion_selected", {
               surface: "chat-thread",
               threadId,
@@ -4132,7 +4214,7 @@ export default function ChillyChatThreadScreen() {
           <SocialAttachmentCard
             file={attachmentFile}
             compact
-            onRemove={() => setAttachmentFile(null)}
+            onRemove={() => { composerEditRevisionRef.current += 1; cancelMediaPicker(); setAttachmentFile(null); }}
           />
         ) : null}
         <View style={styles.composerInputRow}>
@@ -4143,7 +4225,7 @@ export default function ChillyChatThreadScreen() {
             activeOpacity={0.86}
             disabled={sending}
             onPress={() => {
-              setAttachmentSheetVisible(true);
+              void handlePickAttachment();
             }}
           >
             <MaterialIcons name="attach-file" size={18} color="#F4F8FF" />
@@ -4155,7 +4237,7 @@ export default function ChillyChatThreadScreen() {
             placeholder="Write a message"
             placeholderTextColor="#7F8AA1"
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={handleDraftChange}
             onFocus={() => setComposerFocused(true)}
             onBlur={() => setComposerFocused(false)}
             multiline
@@ -4302,14 +4384,7 @@ export default function ChillyChatThreadScreen() {
         onSubmit={handleSubmitMessageReport}
         onClose={() => setMessageReportTarget(null)}
       />
-      <SocialAttachmentActionSheet
-        visible={attachmentSheetVisible}
-        kicker="CHI'LLY CHAT ATTACHMENT"
-        title="Add to message"
-        body="Photos and files stay private to this Chi'lly Chat thread."
-        onSelect={handleSelectAttachment}
-        onClose={() => setAttachmentSheetVisible(false)}
-      />
+      {mediaPickerSheet}
     </KeyboardAvoidingView>
     </ChillywoodBrandedSurface>
   );
@@ -4967,6 +5042,11 @@ const styles = StyleSheet.create({
     // Keep the composer in normal flow so the input stays visible above the keyboard.
     position: "relative",
   },
+  composerRecoveryCard: { padding: 12, marginBottom: 10, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,205,128,0.28)", backgroundColor: "rgba(22,28,42,0.94)", gap: 8 },
+  composerRecoveryTitle: { color: "#FFE0A8", fontSize: 13, fontWeight: "700" },
+  composerRecoveryBody: { color: "#F4F8FF", fontSize: 14, lineHeight: 20 },
+  composerRecoveryActions: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
+  composerRecoveryActionText: { color: "#BFD6FF", fontSize: 13, fontWeight: "600", paddingVertical: 10 },
   composerAffordanceRow: {
     flexDirection: "row",
     alignItems: "center",

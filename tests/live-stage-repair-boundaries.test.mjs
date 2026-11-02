@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import { createStageAttachmentBoundaries } from './helpers/stage-attachment-boundaries.mjs';
 
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
@@ -22,6 +23,84 @@ function evaluate(source, context = {}) {
 }
 const lifecycle = evaluate(fs.readFileSync('_lib/watch-party/live-stage-lifecycle.ts', 'utf8'));
 const presentation = evaluate(fs.readFileSync('_lib/watch-party/live-stage-presentation.ts', 'utf8'));
+const resources = evaluate(fs.readFileSync('_lib/mediaPickerResources.ts', 'utf8'));
+const userFacingErrors = evaluate(fs.readFileSync('_lib/userFacingErrors.ts', 'utf8'));
+const socialSource = fs.readFileSync('_lib/socialAttachments.ts', 'utf8');
+const outcomes = evaluate(socialSource.slice(socialSource.indexOf('const AMBIGUOUS_ATTACHMENT_MESSAGE'),
+  socialSource.indexOf('export const SOCIAL_ATTACHMENT_PICKER_TYPES')), userFacingErrors);
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+function screenEffect(dependencies, context) {
+  let result;
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect'
+      && node.arguments[1]?.getText(ast) === dependencies) result = node.arguments[0].getText(ast);
+    ts.forEachChild(node, visit);
+  };
+  visit(ast); assert.ok(result, `actual effect ${dependencies} exists`);
+  return evaluate(`export const callback = ${result};`, context).callback;
+}
+
+// Execute actual account publication/capture, admission and resource ownership.
+// Only the session/readback/native/canonical transport boundaries are modeled.
+function bindCommentBoundary(context) {
+  const deadline = evaluate(fs.readFileSync('_lib/entitlementAuthority.ts', 'utf8'));
+  let current = { userId: context.trackedUserId, accountId: context.trackedUserId,
+    sessionGeneration: 'session', state: 'ACTIVE', restoreOnly: false };
+  const token = binding => `token:${binding.userId}:${binding.sessionGeneration}`;
+  const database = { auth: { getSession: async () => ({ data: { session: { access_token: token(current), user: { id: current.userId } } } }) } };
+  const account = evaluate(fs.readFileSync('_lib/accountSessionAuthority.ts', 'utf8'), { require: name => {
+    assert.ok(['./supabase', './entitlementAuthority'].includes(name));
+    return name === './supabase' ? { supabase: database } : deadline;
+  } });
+  account.publishAccountSessionAuthoritySnapshot(current);
+  const modules = { './accountSessionAuthority': account, './entitlementAuthority': deadline,
+    './supabase': { supabase: database, SUPABASE_URL: 'https://fixture.invalid', SUPABASE_ANON_KEY: 'fixture' },
+    'react-native': { Platform: { OS: 'android' } }, './accountBoundSupabaseRpc.mjs': {
+      async invokeAccountBoundSupabaseRpc(request) {
+        assert.equal(request.functionName, 'wave1_session_authority_readback');
+        assert.equal(request.accessToken, token(current));
+        return { data: { ...current, authoritative: true }, error: null };
+      },
+    } };
+  const mutation = evaluate(fs.readFileSync('_lib/accountBoundSupabaseMutation.ts', 'utf8'), { require: name => {
+    assert.ok(name in modules, `unmodeled mutation dependency ${name}`); return modules[name];
+  } });
+  Object.assign(context, account, mutation, resources, outcomes, {
+    commentMediaContext: { authority: { ...current }, partyId: context.partyId },
+    commentMediaContextRef: { current: null }, stageAttachmentRequestRef: { current: null },
+    selectedStageAttachmentRequestRef: { current: null }, attachmentSubjectRef: { current: null },
+    cancelCommentMediaPicker: () => { boundary.cancellations++; },
+  });
+  context.commentMediaContextRef.current = context.commentMediaContext;
+  context.retireStageAttachmentSelection = screenCallback('retireStageAttachmentSelection', context);
+  const boundary = { cancellations: 0, context, ready: Promise.resolve(),
+    replace({ partyId = context.partyId, userId = current.userId, sessionGeneration = current.sessionGeneration } = {}) {
+      current = { ...current, userId, accountId: userId, sessionGeneration };
+      account.publishAccountSessionAuthoritySnapshot(current);
+      context.partyId = partyId; context.trackedUserId = userId;
+      context.commentMediaContext = { authority: { ...current }, partyId };
+      context.commentMediaContextRef.current = context.commentMediaContext;
+    },
+  };
+  if (context.hybridCommentAttachmentFile) {
+    const runtime = { target: context.partyId, authority: current };
+    const stage = createStageAttachmentBoundaries(runtime);
+    const capturedContext = context.commentMediaContext;
+    const intent = stage.scope.createRoomAttachmentIntent({ snapshot: runtime.stageSnapshot, userId: current.userId,
+      current: () => context.commentMediaContextRef.current === capturedContext
+        && account.sameAccountSessionAuthority(capturedContext.authority, account.getCurrentAccountSessionAuthoritySnapshot()),
+      foreground: () => stage.scope.AppState.currentState === 'active', subscribeForeground: listener => {
+        const subscription = stage.scope.AppState.addEventListener('change', listener); return () => subscription.remove();
+      }, read: () => stage.scope.getPartyRoomSnapshot(runtime.target) });
+    assert.ok(intent); assert.equal(intent.beginNative(), true);
+    context.selectedStageAttachmentRequestRef.current = { intent, file: context.hybridCommentAttachmentFile };
+    context.attachmentSubjectRef.current = { authority: { ...current }, accessToken: token(current) };
+    boundary.ready = intent.verifyBeforeApply().then(valid => assert.equal(valid, true));
+    boundary.runtime = runtime;
+  }
+  return boundary;
+}
 
 // Extract the actual callback AST; behavior below is executed from the shipped screen,
 // not a separately maintained imitation of its branches.
@@ -101,7 +180,7 @@ test('a completed Join releases the latch and a failed old ticket cannot release
 
 const goodContract = { status: 'ready', roomName: 'ROOM', participantRole: 'host', participantToken: 'good', requestedGrants: { canPublish: true } };
 function refreshHarness(result, overrides = {}) {
-  const writes = [], recovery = [], requests = [];
+  const writes = [], recovery = [], requests = [], retiredSelections = [];
   const context = {
     liveKitFoundationEnabled: true, canOwnActiveStageSurface: true, canUseBetaStage: true,
     mediaAppState: 'active', liveKitRecoveryError: '', liveSurface: 'stage', Platform: { OS: 'android' },
@@ -123,9 +202,10 @@ function refreshHarness(result, overrides = {}) {
     setLiveKitRecoveryError: value => writes.push(['error', value]),
     scheduleLiveKitRecovery: (...args) => recovery.push(args), debugLog: noop, reportRuntimeError: noop,
     refreshStageSnapshot: async () => null, setLiveKitRefreshVersion: noop,
+    retireStageAttachmentSelection: clearSelected => retiredSelections.push(clearSelected),
     ...presentation, ...lifecycle, ...overrides,
   };
-  return { context, writes, recovery, requests, run: refreshEffect(context) };
+  return { context, writes, recovery, requests, retiredSelections, run: refreshEffect(context) };
 }
 
 test('actual authority effect renews matching expired credentials and does not renew healthy ones', async () => {
@@ -149,11 +229,13 @@ test('renewal preserves valid media only on transient failure, but immediately r
   temporary.run(); await Promise.resolve();
   assert.ok(temporary.writes.some(([key, value]) => key === 'renderable' && value === goodContract));
   assert.equal(temporary.recovery[0][1], false);
+  assert.deepEqual(temporary.retiredSelections, [], 'transient media recovery retains logical attachment admission');
   const denied = refreshHarness({ status: 'unavailable', reason: 'request_failed', responseStatus: 403 });
   denied.run(); await Promise.resolve();
   assert.ok(denied.writes.some(([key, value]) => key === 'active' && value === null));
   assert.ok(denied.writes.some(([key, value]) => key === 'renderable' && value === null));
   assert.equal(denied.recovery.length, 0);
+  assert.deepEqual(denied.retiredSelections, [true], 'definitive access denial retires staged admission');
 });
 test('near-expiry replacement is cooled down, and canceled authority response is ignored', async () => {
   const short = refreshHarness({ ...goodContract, participantToken: 'expired' }); short.run(); await Promise.resolve();
@@ -311,15 +393,18 @@ test('actual send trusts durable insert #126 without a list reread and suppresse
     setHybridComments: fn => { comments = fn(comments); }, setHybridCommentDraft: value => { draft = value; },
     setHybridCommentAttachmentFile: noop, setCommentsOpen: noop, getUserFacingErrorMessage: (_, fallback) => fallback,
   };
+  bindCommentBoundary(context);
   const send = screenCallback('onSendHybridComment', context);
-  const first = send(), second = send(); assert.equal(sends, 1);
+  const first = send(), second = send();
+  assert.ok(context.hybridCommentSendRef.current, 'single-flight is claimed before async account preflight');
+  await settle(); assert.equal(sends, 1);
   d.resolve({ id: '126', userId: 'user', body: 'saved comment', createdAt: '0126' }); await Promise.all([first, second]);
   assert.equal(draft, ''); assert.equal(busy, false); assert.equal(comments[0].id, '126');
   assert.equal(lifecycle.canApplyLiveStageCommentSnapshot(0, context.hybridCommentRevisionRef.current), false);
 });
 
-for (const replacementOwner of ['OTHER:user:session', 'ROOM:other:session', 'ROOM:user:new-session', 'ROOM:user:session']) {
-  test(`actual comment owner replacement releases abandoned flight without releasing new send: ${replacementOwner}`, async () => {
+for (const replacementOwner of ['OTHER:user:session', 'ROOM:other:session', 'ROOM:user:new-session']) {
+  test(`actual logical comment owner replacement releases abandoned flight without releasing new send: ${replacementOwner}`, async () => {
     const first = deferred(), second = deferred(), persistedRooms = []; let sends = 0, busy = false, comments = [], draft = 'new comment';
     const context = {
       hybridCommentDraft: draft, hybridCommentAttachmentFile: null, partyId: 'ROOM',
@@ -332,22 +417,22 @@ for (const replacementOwner of ['OTHER:user:session', 'ROOM:other:session', 'ROO
       setHybridComments: fn => { comments = fn(comments); }, setHybridCommentDraft: value => { draft = value; },
       setHybridCommentAttachmentFile: noop, setCommentsOpen: noop, getUserFacingErrorMessage: (_, fallback) => fallback,
     };
-    let ownerEffectSource;
-    const visit = node => {
-      if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect'
-        && node.arguments[1]?.getText(ast) === '[stageOperationOwnerKey]') ownerEffectSource = node.arguments[0].getText(ast);
-      ts.forEachChild(node, visit);
-    };
-    visit(ast); assert.ok(ownerEffectSource);
-    const ownerEffect = evaluate(`export const callback = ${ownerEffectSource};`, context).callback;
-    const retire = ownerEffect(), send = screenCallback('onSendHybridComment', context);
-    const abandoned = send(); assert.equal(sends, 1); assert.equal(busy, true);
-    retire(); context.stageOperationOwnerKeyRef.current = '';
-    ownerEffect(); assert.equal(busy, false); assert.equal(context.hybridCommentSendRef.current, null);
-    context.stageOperationOwnerKeyRef.current = replacementOwner; ownerEffect();
-    [context.partyId, context.trackedUserId] = replacementOwner.split(':');
+    const boundary = bindCommentBoundary(context);
+    const dependencies = '[commentMediaContext, setHybridCommentAttachmentFile]';
+    const retire = screenEffect(dependencies, context)();
+    draft = context.hybridCommentDraft;
+    const send = screenCallback('onSendHybridComment', context);
+    const abandoned = send(); await settle(); assert.equal(sends, 1); assert.equal(busy, true);
+    retire();
+    const [partyId, userId, sessionGeneration] = replacementOwner.split(':');
+    boundary.replace({ partyId, userId, sessionGeneration });
+    context.stageOperationOwnerKeyRef.current = replacementOwner;
+    screenEffect(dependencies, context)();
+    assert.equal(busy, false); assert.equal(context.hybridCommentSendRef.current, null);
+    draft = context.hybridCommentDraft;
     const replacementSend = screenCallback('onSendHybridComment', context);
     const current = replacementSend(), currentFlight = context.hybridCommentSendRef.current;
+    await settle();
     assert.equal(sends, 2); assert.ok(currentFlight); assert.equal(busy, true);
     assert.deepEqual(persistedRooms, [['ROOM', 'user'], [context.partyId, context.trackedUserId]]);
     first.resolve({ id: 'old', userId: 'user', body: 'old comment', createdAt: '0001' }); await abandoned;
@@ -360,25 +445,49 @@ for (const replacementOwner of ['OTHER:user:session', 'ROOM:other:session', 'ROO
   });
 }
 
+test('foreground media-owner teardown cannot release an irreversible comment send in the same logical session', async () => {
+  const h = commentReconciliationHarness();
+  const sending = h.send(); await settle();
+  const flight = h.context.hybridCommentSendRef.current;
+  h.context.stageOperationOwnerKeyRef.current = '';
+  screenEffect('[stageOperationOwnerKey]', { ...h.context, setStageEntryBusy: noop })();
+  assert.equal(h.context.hybridCommentSendRef.current, flight); assert.equal(h.state.busy, true);
+  h.context.stageOperationOwnerKeyRef.current = 'ROOM:user:replacement-foreground-resource';
+  screenEffect('[stageOperationOwnerKey]', { ...h.context, setStageEntryBusy: noop })();
+  await h.send(); assert.equal(h.state.sends, 1, 'same-session foreground recovery must not enable duplicate dispatch');
+  h.receipt.resolve(h.saved); await sending;
+  assert.equal(h.state.comments[0].id, h.saved.id); assert.equal(h.state.busy, false);
+});
+
 function commentReconciliationHarness({ attachment = false } = {}) {
   const receipt = deferred();
   let uploadResolve, uploadReject;
   const upload = new Promise((resolve, reject) => { uploadResolve = resolve; uploadReject = reject; });
-  const state = { comments: [], draft: 'Original comment', busy: false, errors: [], uploads: 0, rollbacks: 0 };
+  const state = { comments: [], draft: 'Original comment', busy: false, errors: [], sends: 0, uploads: 0, rollbacks: 0 };
   const context = {
     hybridCommentDraft: state.draft, hybridCommentAttachmentFile: attachment ? { name: 'photo.jpg' } : null,
     partyId: 'ROOM', hybridCommentSendRef: { current: null }, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' },
     liveKitStageMountedRef: { current: true }, appConfig: { runtimeControls: { chat_enabled: true, chat_attachments_enabled: true } },
     trackedUserId: 'user', resolvedCurrentUsername: 'Me', setHybridCommentSending: value => { state.busy = value; },
-    setHybridCommentError: value => { if (value) state.errors.push(value); }, sendPartyMessageRecord: () => receipt.promise,
+    setHybridCommentError: value => { if (value) state.errors.push(value); },
+    sendPartyMessageRecord: (room, user, kind, body, options) => {
+      assert.equal(room, context.partyId); assert.equal(user, context.trackedUserId);
+      assert.equal(options.mutationSubject.authority.sessionGeneration, 'session');
+      assert.equal(options.isCurrent(), true); state.sends++; return receipt.promise;
+    },
     hybridCommentRevisionRef: { current: 0 }, setHybridComments: fn => { state.comments = fn(state.comments); },
     setHybridCommentDraft: value => { state.draft = value; }, setHybridCommentAttachmentFile: noop, setCommentsOpen: noop,
     getUserFacingErrorMessage: (_, fallback) => fallback,
-    createSocialAttachmentForSurface: () => { state.uploads++; return upload; },
+    createSocialAttachmentForSurface: input => {
+      assert.equal(input.file, context.hybridCommentAttachmentFile);
+      assert.equal(input.isCurrent(), true); assert.equal(input.mutationSubject.authority.sessionGeneration, 'session');
+      state.uploads++; return upload;
+    },
     deletePartyMessage: async () => { state.rollbacks++; },
     mapLiveStageCommentRow: row => ({ id: row.id, userId: row.user_id, body: row.text,
       createdAt: row.created_at, authorLabel: 'You', isMe: true, attachments: [] }),
   };
+  const boundary = bindCommentBoundary(context);
   let eventSource;
   const visit = node => {
     if (ts.isCallExpression(node) && node.arguments[0]?.getText(ast) === '"postgres_changes"'
@@ -390,11 +499,13 @@ function commentReconciliationHarness({ attachment = false } = {}) {
   const event = makeEvent();
   const saved = { id: 'saved-comment', userId: 'user', body: 'Original comment', createdAt: '2026-10-14T20:00:00Z' };
   const row = { id: saved.id, user_id: saved.userId, text: saved.body, created_at: saved.createdAt };
-  return { state, context, receipt, saved, row, event, makeEvent, send: screenCallback('onSendHybridComment', context), uploadResolve, uploadReject };
+  return { state, context, receipt, saved, row, event, makeEvent, boundary, ready: boundary.ready,
+    send: screenCallback('onSendHybridComment', context), uploadResolve, uploadReject };
 }
 
 test('delayed durable insert receipt cannot resurrect a newer realtime deletion', async () => {
   const h = commentReconciliationHarness(), sending = h.send();
+  await settle(); assert.equal(h.state.sends, 1);
   h.event({ eventType: 'INSERT', new: h.row });
   h.event({ eventType: 'DELETE', old: { id: h.saved.id } });
   assert.equal(h.state.comments.length, 0);
@@ -405,6 +516,7 @@ test('delayed durable insert receipt cannot resurrect a newer realtime deletion'
 
 test('delayed durable insert receipt preserves a newer realtime edit and existing list order', async () => {
   const h = commentReconciliationHarness(), sending = h.send();
+  await settle(); assert.equal(h.state.sends, 1);
   h.event({ eventType: 'INSERT', new: h.row });
   h.event({ eventType: 'INSERT', new: { ...h.row, id: 'later-comment', text: 'Later comment' } });
   h.event({ eventType: 'UPDATE', new: { ...h.row, text: 'Edited comment' } });
@@ -417,6 +529,7 @@ test('delayed durable insert receipt preserves a newer realtime edit and existin
 
 test('unrelated realtime changes do not suppress a durable receipt or survive its flight', async () => {
   const h = commentReconciliationHarness(), sending = h.send();
+  await settle(); assert.equal(h.state.sends, 1);
   h.event({ eventType: 'UPDATE', new: { ...h.row, id: 'other-comment', text: 'Other edit' } });
   h.receipt.resolve(h.saved); await sending;
   assert.equal(h.state.comments.find(comment => comment.id === h.saved.id)?.body, 'Original comment');
@@ -425,10 +538,11 @@ test('unrelated realtime changes do not suppress a durable receipt or survive it
 
 test('retired channel events and foreign room callbacks cannot poison the current send flight', async () => {
   const h = commentReconciliationHarness(), sending = h.send(), flight = h.context.hybridCommentSendRef.current;
+  await settle(); assert.equal(h.state.sends, 1);
   h.makeEvent({ active: false })({ eventType: 'DELETE', old: { id: h.saved.id } });
   h.makeEvent({ partyId: 'OLD-ROOM' })({ eventType: 'DELETE', old: { id: h.saved.id } });
   assert.equal(flight.realtimeChanges.size, 0);
-  h.context.stageOperationOwnerKeyRef.current = 'ROOM:user:new-session';
+  h.boundary.replace({ sessionGeneration: 'new-session' });
   h.event({ eventType: 'DELETE', old: { id: h.saved.id } });
   assert.equal(flight.realtimeChanges.size, 0, 'an abandoned owner cannot collect newer-session events');
   h.receipt.resolve(h.saved); await sending;
@@ -436,16 +550,33 @@ test('retired channel events and foreign room callbacks cannot poison the curren
 });
 
 test('a deletion received before the save receipt skips attachment upload without suggesting a resend', async () => {
-  const h = commentReconciliationHarness({ attachment: true }), sending = h.send();
+  const h = commentReconciliationHarness({ attachment: true }); await h.ready;
+  const sending = h.send();
+  await settle(); assert.equal(h.state.sends, 1);
   h.event({ eventType: 'DELETE', old: { id: h.saved.id } });
   h.receipt.resolve(h.saved); await sending;
   assert.equal(h.state.uploads, 0); assert.equal(h.state.comments.length, 0);
   assert.equal(h.state.draft, ''); assert.deepEqual(h.state.errors, []);
 });
 
+for (const change of ['roomGeneration', 'joinedAt']) {
+  test(`actual attachment send rejects changed original ${change} before dispatch`, async () => {
+    const h = commentReconciliationHarness({ attachment: true }); await h.ready;
+    const snapshot = h.boundary.runtime.stageSnapshot;
+    if (change === 'roomGeneration') snapshot.room.roomGeneration = 'replacement-room-generation';
+    else snapshot.memberships[0].joinedAt = '2026-11-02T00:00:00Z';
+    await h.send();
+    assert.equal(h.state.sends, 0); assert.equal(h.state.uploads, 0);
+    assert.equal(h.state.draft, 'Original comment', 'unsubmitted text remains available');
+    assert.equal(h.context.selectedStageAttachmentRequestRef.current, null);
+    assert.equal(h.state.errors.length, 1); assert.equal(h.state.busy, false);
+  });
+}
+
 for (const uploadFails of [false, true]) {
   test(`deletion during attachment upload wins over its ${uploadFails ? 'failure' : 'success'} without rollback/resend`, async () => {
-    const h = commentReconciliationHarness({ attachment: true }), sending = h.send();
+    const h = commentReconciliationHarness({ attachment: true }); await h.ready;
+    const sending = h.send();
     h.receipt.resolve(h.saved); await new Promise(resolve => setImmediate(resolve));
     assert.equal(h.state.uploads, 1);
     h.event({ eventType: 'INSERT', new: h.row });
@@ -459,7 +590,8 @@ for (const uploadFails of [false, true]) {
 }
 
 test('attachment failure cannot roll back a newer authoritative text edit', async () => {
-  const h = commentReconciliationHarness({ attachment: true }), sending = h.send();
+  const h = commentReconciliationHarness({ attachment: true }); await h.ready;
+  const sending = h.send();
   h.receipt.resolve(h.saved); await new Promise(resolve => setImmediate(resolve));
   h.event({ eventType: 'UPDATE', new: { ...h.row, text: 'Authoritative edit' } });
   h.uploadReject(Error('attachment upload failed')); await sending;

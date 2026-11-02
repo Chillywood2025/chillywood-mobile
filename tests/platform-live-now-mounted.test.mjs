@@ -52,6 +52,7 @@ async function mount(t,initial=[row()]){
     './discoveryFeed':{...feed,readRankedPublicDiscoveryFeedItems:read,readPublicDiscoveryFeedItems:async options=>(await read(options)).items.filter(item=>!options.itemIds||options.itemIds.includes(item.id))},'./circleSpectatorFeed':{readRankedCircleSpectatorFeedItems:()=>assert.fail('Public Platform must not broaden its audience')},
     './sharedLiveUpdates':{getDiscoveryLiveUpdateInterest: options=>options,isDiscoveryLiveUpdateConnected:()=>false,subscribeToLiveUpdates:()=>()=>{}},
     './sharedLiveRead':evaluate(code.sharedRead,{}),
+    './liveDiscoveryInvalidation':evaluate(compile('_lib/liveDiscoveryInvalidation.ts'),{}),
     './discoveryRankingSignals':ranking,
   });
   const surface={AppSection:props=>{tree=props.children;action=props.action;return null;},AppActionButton:'Action',AppEmptyState:'Empty'};
@@ -75,15 +76,12 @@ test('mounted Platform shows standalone canonical stage without a creator Event 
   assert.equal(h.requests[0].creatorUserId,creator);assert.equal(h.requests[0].surface,'channel');assert.equal(h.requests[0].liveOnly,true);
   await h.press(h.buttons()[0]);assert.deepEqual(h.routes,['/spectate/stage-one']);
 });
-test('Platform retains browse cards until explicit new-live refresh and never navigates automatically',async t=>{
+test('Platform automatically adds new live cards while retaining browse order and never auto-navigates',async t=>{
   const h=await mount(t);
   await h.refresh([row({id:'stage-two',title:'New stage'}),row()]);
-  assert.equal(h.buttons().length,1);
-  assert.equal(h.action().props.pendingItemCount,1);
-  assert.equal(h.routes.length,0);
-  await React.act(async()=>h.action().props.onRefresh());
   assert.equal(h.buttons().length,2);
-  assert.equal(h.action().props.pendingItemCount,0);
+  assert.equal(h.action(),undefined,'no manual acceptance button gates current live discovery');
+  assert.equal(h.buttons()[0].props.accessibilityLabel.includes('Actual standalone stage'),true);
   assert.equal(h.routes.length,0);
 });
 test('canonical public live Event retains its Event destination',async t=>{

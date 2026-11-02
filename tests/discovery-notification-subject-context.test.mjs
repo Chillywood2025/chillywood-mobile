@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedLiveRoomActor,withLiveRoomActor} from './helpers/live-room-authority-fixture.mjs';
 
 test('discovery notification copy resolves exact public creator and subject after real authorization', {timeout:180000}, async()=>{
  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
@@ -50,6 +51,12 @@ test('discovery notification copy resolves exact public creator and subject afte
   await db.exec(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,discovery_visibility,discovery_title)
     values('CONTEXT-STAGE','${a}','live','public','Chicago Live');
     update public.watch_party_rooms set discovery_started_at=now() where party_id='CONTEXT-STAGE';`);
+  const hostActor={id:a,session:'ed116000-0000-4000-8000-000000000001'};
+  await seedLiveRoomActor(db,hostActor);
+  await withLiveRoomActor(db,hostActor,()=>db.exec("select public.join_watch_party_room_session('CONTEXT-STAGE')"));
+  const room=await one("select room_generation,host_settings_revision from public.watch_party_rooms where party_id='CONTEXT-STAGE'");
+  assert.equal((await withLiveRoomActor(db,hostActor,()=>one("select public.publish_live_stage_discovery_current('CONTEXT-STAGE',$1,$2,$3,$4) value",
+    [a,hostActor.session,room.room_generation,room.host_settings_revision]),'service_role')).value,true);
   const stage=(await plans('CONTEXT-STAGE','followed_creator_live'))[0].plan;
   assert.equal(stage.title,'Rachi (@creator_a) is live');assert.equal(stage.body,'Chicago Live. Open to check access.');
   assert.equal(stage.target_route,'/watch-party/live-stage/[partyId]');assert.equal(stage.target_entity_id,'CONTEXT-STAGE');
@@ -105,7 +112,7 @@ test('discovery notification copy resolves exact public creator and subject afte
   const shared=await social('content_shared');
   assert.equal(shared.body,'Rachi (@creator_a) shared Circle Premiere.');
   assert.equal(shared.target_entity_id,'ed113000-0000-4000-8000-000000000001');
-  await db.exec(`insert into auth.sessions(id,user_id) values('ed116000-0000-4000-8000-000000000001','${a}');
+  await db.exec(`insert into auth.sessions(id,user_id) values('ed116000-0000-4000-8000-000000000001','${a}') on conflict do nothing;
     select set_config('request.jwt.claims','{"role":"authenticated","sub":"${a}","session_id":"ed116000-0000-4000-8000-000000000001"}',false);
     insert into public.chat_threads(id,participant_pair_key,created_by)
     values('ed114000-0000-4000-8000-000000000001','${a}::${viewer}','${a}');

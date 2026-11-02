@@ -5,6 +5,7 @@ import test from 'node:test';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import ts from 'typescript';
+import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 
 // Actual AST-selected screen callback in a real React lifecycle host, wired to
 // complete production media/mutation/authority modules. Native Alert, auth and
@@ -24,7 +25,9 @@ const declaration = (file, name) => {
   visit(ast); assert.ok(result, `${file}:${name}`); return result;
 };
 const load = (text, mocks = {}, globals = {}) => {
-  const context = { exports: {}, console, setTimeout, clearTimeout, ...globals, require(name) { assert.ok(name in mocks, `unmodeled import ${name}`); return mocks[name]; } };
+  const context = { exports: {}, console, setTimeout, clearTimeout, ...globals, require(name) {
+    if (name === './prepareMediaUploadCopy') return load(source('_lib/prepareMediaUploadCopy.ts'), mocks);
+    assert.ok(name in mocks, `unmodeled import ${name}`); return mocks[name]; } };
   vm.runInNewContext(ts.transpileModule(text, { fileName: 'module.ts', compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, context);
   return context.exports;
 };
@@ -33,6 +36,8 @@ async function mount(t, file, { oldHelper = false, oldCallback = false, noRevisi
   const state = { authority: owner(), token: 'token-a-1', route: 'a', focused: true, alerts: [], writes: [], removes: [], cache: [], ui: [], busy: [], reads: [], readGate: null, writeGate: null, callback: null };
   const profile = userId => ({ avatarUrl: `https://fixture.invalid/storage/v1/object/public/profile-media/${userId}/avatar/photo.jpg`, profileBackgroundUrl: `https://fixture.invalid/storage/v1/object/public/profile-media/${userId}/background/photo.jpg`, profileAvatarMediaStatus: 'active', profileBackgroundMediaStatus: 'active' });
   const mocks = {
+    './mediaPickerResources': loadStubbed('_lib/mediaPickerResources.ts'),
+    './deviceImagePicker': {},
     './supabase': { SUPABASE_URL: 'https://fixture.invalid', SUPABASE_ANON_KEY: 'fixture', supabase: { auth: { getSession: async () => ({ data: { session: state.authority && { access_token: state.token, user: { id: state.authority.userId } } } }) } } },
     './entitlementAuthority': { withAuthorityReadDeadline: async p => p },
     'react-native': { Platform: { OS: 'web' } },
@@ -49,6 +54,7 @@ async function mount(t, file, { oldHelper = false, oldCallback = false, noRevisi
       }, storage: { from(bucket) { assert.equal(bucket, 'profile-media'); return { remove: async keys => { state.removes.push({ token, keys }); return { error: null }; } }; } } };
     } },
     'expo-file-system': {}, 'expo-file-system/legacy': {}, './imageUploadNormalization': {}, './logger': { reportRuntimeError: noop },
+    './deviceImagePicker': { pickDeviceImage: async () => { throw new Error('Removal must not launch a picker.'); } },
     './userData': { USER_PROFILES_TABLE: 'user_profiles', normalizeProfileMediaStatus: value => value,
       normalizeUserProfile: value => value, normalizeProfileAppearanceFitMode: value => value, normalizeProfileAppearanceNumber: value => value,
       readUserProfile: async userId => { state.reads.push(userId); if (state.readGate) await state.readGate.promise; return profile(userId); },

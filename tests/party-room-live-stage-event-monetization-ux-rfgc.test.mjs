@@ -112,7 +112,8 @@ test("Party Room presents exact public content identity without exposing its int
     partyRoom,
     /const contentDisplay = snapshot\.room\.roomType === "live"[\s\S]{0,180}await resolveWatchPartyContentDisplay\(snapshot\.room\)\.catch\(\(\) => null\);/u,
   );
-  assert.match(partyRoom, /if \(cancelled\) return;[\s\S]{0,620}contentDisplay\?\.displayName/u);
+  assert.match(partyRoom, /const current = \(\) => !cancelled && roomAuthority\.current\(\)/u);
+  assert.match(partyRoom, /if \(!current\(\)\) return;[\s\S]{0,620}contentDisplay\?\.displayName/u);
   assert.doesNotMatch(
     partyRoom,
     /resolveWatchPartyContentDisplay\(snapshot\.room\)[\s\S]{0,80}\.then\(/u,

@@ -2,7 +2,10 @@
 
 Requested 2026-11-01. Baseline: `632d9cdb5b14c841aecfb5469c3cbf9ce03af77e`.
 The preceding backend rollout and Android 112 / iOS 43 internal OTA are complete.
-This plan does not reopen those completed repairs or claim installed-device proof.
+This refers to the earlier delivery, not a new OTA for the items below. New
+builds/OTA are currently held. See the dated [operational checkpoint](APP_OPERATIONAL_READINESS_20261101.md)
+for the deployed batch, pending tracking repair and remaining commissioning
+gates. This plan does not claim installed-device proof.
 
 ## Scope and completion rules
 

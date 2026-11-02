@@ -39,6 +39,7 @@ function read(file) {
   if (file === "_lib/notifications.ts" && process.env.TIMESTAMP_CONTROL === "normalized-invalid-date") source = source.replace("displayCreatedAt: normalizeText(row.created_at) || null", "displayCreatedAt: normalizeIsoTimestamp(row.created_at)");
   if (file === "app/chat/index.tsx" && process.env.TIMESTAMP_CONTROL === "changed-back-wrapper") source = source.replace('backNavigation: { position: "absolute", zIndex: 1', 'backNavigation: { position: "absolute", zIndex: 2');
   if (file === "app/chat/[threadId].tsx" && process.env.TIMESTAMP_CONTROL === "changed-unread-color") source = source.replace('borderColor: "#C5A8FF"', 'borderColor: "#000000"');
+  if (file === "app/chat/[threadId].tsx" && process.env.TIMESTAMP_CONTROL === "changed-recovery-color") source = source.replace('composerRecoveryTitle: { color: "#FFE0A8"', 'composerRecoveryTitle: { color: "#000000"');
   if (file === "app/chat/index.tsx" && process.env.TIMESTAMP_CONTROL === "changed-original-style") source = source.replace('paddingBottom: 38', 'paddingBottom: 39');
   return source;
 }
@@ -306,6 +307,7 @@ test("whole notification tray executes service-to-row mapping and refreshes acce
     "../../_lib/session": { useSession: () => session },
     "../../_lib/notificationActivity": { getNotificationActivityOwnerKey: () => "owner", getCurrentNotificationActivityOwnerKey: () => "owner",
       subscribeToNotificationActivity: () => noop, invalidateNotificationActivity: noop },
+    "../../_lib/sharedLiveUpdates": { subscribeToLiveUpdates: () => noop },
     "../ui/chillywood-visual-system": { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: () => null },
     "../../_lib/notifications": { readNotificationSummary: async () => ({ unreadCount: rows.length, categories: [] }),
       readNotificationListPage: async () => ({ status: "resolved", items: rows, nextCursor: null }),
@@ -348,8 +350,10 @@ test("whole inbox loads threads, preserves row order/navigation and updates time
     otherMember: { userId: `other${i}`, displayName: `Person ${i}` }, currentMember: { unreadCount: 0 },
   }));
   const routes = [];
-  h.native.FlatList = ({ data, renderItem, ListHeaderComponent }) => React.createElement(React.Fragment, null,
-    ListHeaderComponent, ...data.map(item => React.createElement(React.Fragment, { key: item.threadId }, renderItem({ item }))));
+  h.native.FlatList = function TimestampInboxFlatList({ data, renderItem, ListHeaderComponent }) {
+    return React.createElement(React.Fragment, null,
+      ListHeaderComponent, ...data.map(item => React.createElement(React.Fragment, { key: item.threadId }, renderItem({ item }))));
+  };
   h.native.Alert = { alert: noop };
   h.native.StyleSheet.flatten = value => value;
   // Mount the real shared Back control; only its native icon is a host stub.
@@ -434,15 +438,20 @@ test("actual Party history/realtime and Stage mappings reach their production re
 test("actual Party insert receipt preserves raw time through Stage and Player saved comments", async t => {
   const h = harness(); t.after(h.unmount);
   let createdAt;
+  const subject = { authority: { userId: "u" }, accessToken: "synthetic-timestamp-receipt" };
   const service = h.evaluate(`${declaration("_lib/watchParty.ts", "sendPartyMessageRecord")}\nexports.send = sendPartyMessageRecord;`, {
-    resolveWritableUserId: async () => "u", WATCH_PARTY_MESSAGES_TABLE: "watch_party_room_messages",
-    supabase: { from(table) {
+    captureAccountBoundSupabaseMutationSubject: async () => subject,
+    assertAccountBoundSupabaseMutationSubjectCurrent: value => assert.equal(value, subject),
+    WATCH_PARTY_MESSAGES_TABLE: "watch_party_room_messages", SUPABASE_URL: "https://fixture.invalid", SUPABASE_ANON_KEY: "fixture",
+    createClient: (url, key, options) => {
+      assert.equal(options.global.headers.Authorization, `Bearer ${subject.accessToken}`);
+      return { from(table) {
       assert.equal(table, "watch_party_room_messages");
       return { insert(payload) {
         assert.equal(payload.text, "Hello");
-        return { select: () => ({ single: async () => ({ data: { id: "m", user_id: "u", text: "Hello", created_at: createdAt }, error: null }) }) };
+        return { select: () => ({ single: async () => ({ data: { id: "m", party_id: "PARTY", user_id: "u", text: "Hello", created_at: createdAt }, error: null }) }) };
       } };
-    } },
+    } }; },
   }).exports;
   for (const file of ["app/player/[id].tsx", "app/watch-party/live-stage/[partyId].tsx"]) {
     const source = ast(file);
@@ -491,13 +500,18 @@ test("audited surfaces retain exact original StyleSheet colors, backgrounds and 
       'stateBackNavigation: { position: "absolute", zIndex: 1, alignItems: "flex-start" }',
       'callEventCardUnread: {\n    borderColor: "#C5A8FF",\n    backgroundColor: "rgba(138,73,255,0.18)",\n  }',
       'callEventUnreadLabel: {\n    color: "#E2D3FF",\n    fontSize: 10,\n    fontWeight: "800",\n  }',
+      'composerRecoveryCard: { padding: 12, marginBottom: 10, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,205,128,0.28)", backgroundColor: "rgba(22,28,42,0.94)", gap: 8 }',
+      'composerRecoveryTitle: { color: "#FFE0A8", fontSize: 13, fontWeight: "700" }',
+      'composerRecoveryBody: { color: "#F4F8FF", fontSize: 14, lineHeight: 20 }',
+      'composerRecoveryActions: { flexDirection: "row", flexWrap: "wrap", gap: 16 }',
+      'composerRecoveryActionText: { color: "#BFD6FF", fontSize: 13, fontWeight: "600", paddingVertical: 10 }',
     ] : [];
     const styles = source => nodes(source, n => ts.isCallExpression(n) && n.expression.getText(source) === "StyleSheet.create").map(n => {
       if (!additions.length) return n.getText(source);
       assert.ok(ts.isObjectLiteralExpression(n.arguments[0]), `${file}: literal style inventory`);
       return n.arguments[0].properties.map(property => property.getText(source));
     });
-    // Permit only the exact reviewed wrappers, new-post overlay and unread-call styles. Every original
+    // Permit only the exact reviewed wrappers, new-post overlay, unread-call and recovery styles. Every original
     // style property remains text-exact and ordered; unknown additions fail.
     if (additions.length) {
       const current = styles(after);
@@ -532,7 +546,7 @@ test("old source and deliberately broken timestamp controls fail the real render
 });
 
 test("reviewed visual additions cannot mask modified Back, unread or original styles", { skip: !!process.env.TIMESTAMP_CONTROL }, () => {
-  for (const mutation of ["changed-back-wrapper", "changed-unread-color", "changed-original-style"]) {
+  for (const mutation of ["changed-back-wrapper", "changed-unread-color", "changed-original-style", "changed-recovery-color"]) {
     const env = { ...process.env, TIMESTAMP_CONTROL: mutation }; delete env.NODE_TEST_CONTEXT;
     const result = spawnSync(process.execPath, ["--test", "--test-name-pattern=^audited surfaces", import.meta.filename], {
       cwd: rootPath, encoding: "utf8", env, timeout: 30000,

@@ -156,7 +156,7 @@ Deno.test("title recovery cannot weaken paid boundaries or extend stale authorit
 });
 
 Deno.test("deployed denial aliases remain denials, never viewer authority", () => {
-  for (const reason of ["viewer_authority_invalid", "exact_live_access_authority_required"]) {
+  for (const reason of ["viewer_authority_invalid", "exact_live_access_authority_required", "circle_live_authority_required"]) {
     const value = { allowed: false, paidSeatRequired: true, hostAuthority: false, expiresAt: null, reason };
     assertEquals(parseWatchPartyLiveKitAuthorityDecision(value, NOW)?.allowed, false, reason);
     assertEquals(parseWatchPartyLiveKitAuthority(value, NOW), null, "denial cannot issue token");

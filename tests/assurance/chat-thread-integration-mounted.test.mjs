@@ -1307,9 +1307,15 @@ test("full screen rejected message write removes only its optimistic row and pre
   assert.equal(store.messages.length, 2);
   assert.equal(caller.runtime.snapshot.messages.length, 2);
   assert.equal(caller.runtime.snapshot.sending, false);
-  assert.match(caller.runtime.snapshot.error, /message write rejected/);
+  assert.match(caller.runtime.snapshot.error, /Send not confirmed/);
+  assert.doesNotMatch(caller.runtime.snapshot.error, /message write rejected/);
+  assert.equal(caller.runtime.snapshot.messageSendRecoveries.length, 1);
+  assert.equal(caller.runtime.snapshot.messageSendRecoveries[0].body, "uncommitted");
+  assert.equal(caller.runtime.snapshot.messageSendRecoveries[0].outcome, "unconfirmed");
   await exchangeScreenMessages(store, caller, callee, "retry");
   assert.equal(store.messages.length, 4);
+  assert.equal(store.messages.some(message => message.body === "uncommitted"), false,
+    "An unconfirmed attempt must not be automatically resent with a later explicit message");
 });
 
 function deferredMessageWrite() {

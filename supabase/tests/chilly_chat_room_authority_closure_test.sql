@@ -252,8 +252,10 @@ where document.active
     ('money_terms', 'creator_money')
   );
 
--- The paid viewer also needs current account legal authority bound to the
--- exact session used below. Creator acceptance cannot authorize the buyer.
+-- Sensitive room viewers need current account legal authority bound to their
+-- exact sessions. Keep that evidence valid for the stale/removed/blocked
+-- membership negative controls, so those controls test their named boundary.
+-- Creator acceptance cannot authorize a different viewer or paid buyer.
 insert into public.wave1_legal_acceptances (
   user_id, subject_hash, document_key, document_version, market,
   role_key, capability, session_generation, authority_source
@@ -270,8 +272,14 @@ select
   'service_reconciliation'
 from auth.sessions session
 cross join public.wave1_legal_document_versions document
-where session.id = 'b2222222-2222-4222-8222-222222222201'
-  and session.user_id = 'b2222222-2222-4222-8222-222222222222'
+where session.id in (
+  'b2222222-2222-4222-8222-222222222201',
+  'b8888888-8888-4888-8888-888888888801',
+  'c3333333-3333-4333-8333-333333333301',
+  'd4444444-4444-4444-8444-444444444401',
+  'e5555555-5555-4555-8555-555555555501',
+  'f6666666-6666-4666-8666-666666666601'
+)
   and document.active
   and document.market = 'UNITED_STATES'
   and document.capability = 'account';

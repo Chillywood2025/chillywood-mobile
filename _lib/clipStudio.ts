@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { prepareMediaUploadCopy } from "./prepareMediaUploadCopy";
 
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 import { CREATOR_VIDEO_BUCKET, formatCreatorVideoFileSize, type CreatorVideoFile } from "./creatorVideos";
@@ -150,18 +151,13 @@ async function prepareCoverUploadUri(file: CreatorVideoFile): Promise<{ file: Cr
   }
 
   const cacheUri = `${FileSystem.cacheDirectory}clip-cover-${createClientId()}.${getCoverExtension(file)}`;
-  await withTimeout(
-    FileSystem.copyAsync({ from: normalizedUri, to: cacheUri }),
-    CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS,
-    "Cover image preparation took too long. Try again.",
-  );
-
   return {
     file,
-    uri: cacheUri,
-    cleanup: async () => {
-      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
-    },
+    ...await prepareMediaUploadCopy({
+      sourceUri: normalizedUri,
+      destinationUri: cacheUri,
+      waitForCopy: (copy) => withTimeout(copy, CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS, "Cover image preparation took too long. Try again."),
+    }),
   };
 }
 

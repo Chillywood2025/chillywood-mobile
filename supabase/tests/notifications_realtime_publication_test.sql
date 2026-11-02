@@ -1,5 +1,5 @@
 begin;
-select plan(10);
+select plan(12);
 
 select is((select count(*)::integer from pg_publication_tables
   where pubname='supabase_realtime' and schemaname='public' and tablename='notifications'),1,
@@ -8,8 +8,15 @@ select ok((select relrowsecurity from pg_class where oid='public.notifications':
   'notification rows retain owner RLS');
 select is((select relreplident::text from pg_class where oid='public.notifications'::regclass),'d',
   'notification publication does not expose old full records');
-select is((select count(*)::integer from pg_policy where polrelid='public.notifications'::regclass),2,
+select is((select count(*)::integer from pg_policy where polrelid='public.notifications'::regclass and polpermissive),2,
   'publication adds no permissive policies');
+select is((select count(*)::integer from pg_policy where polrelid='public.notifications'::regclass),3,
+  'the exact current inventory adds only one restrictive live-availability policy');
+select ok((select not polpermissive and polcmd='r'
+  and polroles=array[(select oid from pg_roles where rolname='authenticated')]::oid[]
+  and pg_get_expr(polqual,polrelid)=$policy$((notification_type <> ALL (ARRAY['followed_creator_live'::text, 'circle_friend_live'::text, 'live_room_member_joined'::text])) OR private.live_notification_visible(id))$policy$
+  from pg_policy where polrelid='public.notifications'::regclass and polname='notifications_live_current_audience'),
+  'live availability is an authenticated restrictive read gate, never an extra grant');
 
 insert into auth.users(id,is_sso_user,is_anonymous) values
   ('9a110000-0000-4000-8000-000000000001',false,false),

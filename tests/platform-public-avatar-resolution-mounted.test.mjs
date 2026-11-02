@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import test from 'node:test';
+import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 import { mount, ROOT, ts } from './platform-public-mounted-harness.mjs';
 
 const rachi = 'platform_rachi_official';
@@ -14,6 +15,7 @@ function clientModule(file, imports) {
     fileName: file, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText;
   const context = { exports: {}, require(name) {
+    if (name === './prepareMediaUploadCopy') return clientModule('_lib/prepareMediaUploadCopy.ts', imports);
     assert.ok(name in imports, `Unexpected client dependency: ${name}`);
     return imports[name];
   } };
@@ -79,6 +81,7 @@ function environment(mode, { background = false, failAsset = 'avatar' } = {}) {
     } },
   };
   const api = clientModule('_lib/platformBranding.ts', {
+    './mediaPickerResources': loadStubbed('_lib/mediaPickerResources.ts'),
     'expo-file-system': {}, 'expo-file-system/legacy': {},
     './supabase': { supabase, SUPABASE_URL: 'https://example.invalid', SUPABASE_ANON_KEY: 'synthetic' },
     './accountBoundSupabaseMutation': {}, './accountSessionAuthority': {}, './userFacingErrors': {},

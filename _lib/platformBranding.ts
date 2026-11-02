@@ -1,5 +1,7 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
+import { withPickedMediaRead } from "./mediaPickerResources";
+import { prepareMediaUploadCopy } from "./prepareMediaUploadCopy";
 
 import type { Tables, TablesInsert } from "../supabase/database.types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
@@ -503,18 +505,13 @@ async function preparePlatformBrandUploadUri(file: PlatformBrandAssetFile, asset
   }
 
   const cacheUri = `${FileSystem.cacheDirectory}platform-brand-${createClientId()}.${getFileExtension(file, assetType)}`;
-  await withTimeout(
-    FileSystem.copyAsync({ from: sourceUri, to: cacheUri }),
-    20000,
-    "Platform media took too long to prepare. Try again.",
-  );
-
   return {
     file,
-    uri: cacheUri,
-    cleanup: async () => {
-      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
-    },
+    ...await prepareMediaUploadCopy({
+      sourceUri,
+      destinationUri: cacheUri,
+      waitForCopy: (copy) => withTimeout(copy, 20000, "Platform media took too long to prepare. Try again."),
+    }),
   };
 }
 
@@ -538,8 +535,9 @@ async function uploadPlatformBrandFileToStorage(input: {
   const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PLATFORM_BRAND_BUCKET}/${encodeStoragePath(input.storagePath)}`;
 
   try {
+    // Keep the raw reader leased even if the timeout starts a fallback upload.
     const result = await withTimeout(
-      FileSystem.uploadAsync(uploadUrl, input.uri, {
+      withPickedMediaRead(input.uri, () => FileSystem.uploadAsync(uploadUrl, input.uri, {
         httpMethod: "POST",
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
         headers: {
@@ -548,7 +546,7 @@ async function uploadPlatformBrandFileToStorage(input: {
           "Content-Type": input.mimeType,
           "x-upsert": "false",
         },
-      }),
+      })),
       PLATFORM_BRAND_UPLOAD_TIMEOUT_MS,
       "Platform media upload took too long. Try again.",
     );
@@ -559,14 +557,16 @@ async function uploadPlatformBrandFileToStorage(input: {
   }
 
   input.assertOperationCurrent?.();
-  const localFile = new File(input.uri);
-  const upload = await supabase.storage
-    .from(PLATFORM_BRAND_BUCKET)
-    .upload(input.storagePath, localFile as unknown as Blob, {
-      contentType: input.mimeType,
-      upsert: false,
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+  const upload = await withPickedMediaRead(input.uri, () => {
+    const localFile = new File(input.uri);
+    return supabase.storage
+      .from(PLATFORM_BRAND_BUCKET)
+      .upload(input.storagePath, localFile as unknown as Blob, {
+        contentType: input.mimeType,
+        upsert: false,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+  });
   if (upload.error) throw upload.error;
 }
 

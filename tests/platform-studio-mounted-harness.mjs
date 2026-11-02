@@ -25,7 +25,7 @@ export function productionFunctions(file,names,bindings){
  function visit(n){if(ts.isFunctionDeclaration(n)&&names.includes(n.name?.text))found.set(n.name.text,n.getText(ast));if(ts.isVariableDeclaration(n)&&names.includes(n.name.getText(ast)))found.set(n.name.getText(ast),`const ${n.getText(ast)};`);ts.forEachChild(n,visit);}visit(ast);
  names.forEach(name=>assert.ok(found.has(name),`Production declaration ${name}`));const ctx={exports:{},...bindings};vm.runInNewContext(compile([...found.values()].join('\n')+`\nexports.api={${names.join(',')}};`),ctx);return ctx.exports.api;
 }
-export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B')],overrides={},session:initialSession=null}={}){
+export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B')],overrides={},session:initialSession=null,platform='android'}={}){
   const replayPolicy = productionFunctions('_lib/liveEvents.ts',['readNewCreatorEventReplayTermsError'],{Date,Number});
   const nodes=new Map(),calls=[],alerts=[],routes=[],timers=new Map(),scrolls=[],measures=[];let timerId=0;
   let session=initialSession||{user:{id:'owner',email:'owner@example.test'},isSignedIn:true,isLoading:false,authority:{userId:'owner',accountId:'owner',sessionGeneration:'first',state:'ACTIVE',restoreOnly:false},authorityStatus:'active'};
@@ -41,8 +41,8 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     return React.createElement(React.Fragment,null,...renderChildren(props.children));
   });
   const native={};for(const n of ['View','Text','TextInput','TouchableOpacity','Pressable','ScrollView','ImageBackground','ActivityIndicator','Image','Video'])native[n]=host(n);
-  native.Modal=function FixtureModal({visible,children}){return visible?React.createElement(React.Fragment,null,children):null;};
-  Object.assign(native,{AppState:{currentState:'active',addEventListener:()=>({remove(){}})},StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:'android',select:x=>x.android??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
+  native.Modal=function FixtureModal(props){const id=React.useId();nodes.set(id,{type:'Modal',props});React.useLayoutEffect(()=>()=>nodes.delete(id),[id]);return props.visible?React.createElement(React.Fragment,null,props.children):null;};
+  Object.assign(native,{AppState:{currentState:'active',addEventListener:()=>({remove(){}})},StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:platform,select:x=>x[platform]??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
   const config={branding:{appDisplayName:"Chi'llywood"},features:{creatorSettingsEnabled:true},runtimeControls:{uploads_enabled:true,creator_posting_enabled:true,max_upload_size_mb:500}};
   const snapshot={targets:{premium_subscription:{hasEntitlement:true}}};
   const authorityApi=productionFunctions('_lib/accountSessionAuthority.ts',['sameAccountSessionAuthority'],{});
@@ -51,6 +51,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     invokeAccountBoundSupabaseMutationRpc:async()=>({data:null,error:null}),
     captureAccountBoundSupabaseMutationSubject:async()=>({accessToken:'synthetic-clip-token',authority:session.authority}),
     getCurrentAccountSessionAuthoritySnapshot:()=>session.authority??null,
+    subscribeToAccountSessionAuthority:()=>noop,
     readCreatorAuthoringPrices:async sourceType=>({status:'resolved',subjectUserId:session.user.id,prices:[{priceKey:'fixture-price',productKey:'fixture-product',amountMinor:['vip_pass','channel_subscription'].includes(sourceType)?499:99,currency:'usd',label:['vip_pass','channel_subscription'].includes(sourceType)?'$4.99':'$0.99',environment:'sandbox',provider:'revenuecat_app_store',providerProductId:'fixture-store-product',platform:'ios',status:'sandbox',providerVerified:false,availablePlatforms:['ios','android'],availabilityLabel:'iOS and Android'}]}),
     sameAccountSessionAuthority:authorityApi.sameAccountSessionAuthority,
     useSession:()=>session,useBetaProgram:()=>({isLoading:false,isActive:true,accessState:{status:'active'}}),getBetaAccessBlockCopy:()=>({title:'Beta required',body:'Blocked'}),
@@ -95,14 +96,23 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name==='react-native-safe-area-context')return {useSafeAreaInsets:()=>({top:0,bottom:0,left:0,right:0})};
       if(name==='expo-router')return {useLocalSearchParams:()=>params,useRouter:()=>router,useFocusEffect:callback=>React.useEffect(callback,[callback])};
       if(name==='expo-av')return {Video:native.Video,ResizeMode:{CONTAIN:'contain',COVER:'cover'}};
-      if(name==='expo-image-picker')return {UIImagePickerPreferredAssetRepresentationMode:{Compatible:'compatible'},launchImageLibraryAsync:(...args)=>{calls.push(['launchImageLibraryAsync',...args]);return mocks.launchImageLibraryAsync?.(...args)??Promise.resolve({canceled:true});}};
-      if(name.endsWith('/deviceImagePicker'))return evaluate('_lib/deviceImagePicker.ts');
+      if(name==='expo-image-picker')return {UIImagePickerPreferredAssetRepresentationMode:{Compatible:'compatible'},VideoExportPreset:{HighestQuality:'highest'},requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:(...args)=>{calls.push(['launchCameraAsync',...args]);return mocks.launchCameraAsync?.(...args)??Promise.resolve({canceled:true});},launchImageLibraryAsync:(...args)=>{calls.push(['launchImageLibraryAsync',...args]);return mocks.launchImageLibraryAsync?.(...args)??Promise.resolve({canceled:true});}};
+      if(name.endsWith('/useMediaPicker'))return evaluate('hooks/useMediaPicker.tsx');
+      if(name.endsWith('/useOwnedPickedMediaState'))return evaluate('hooks/useOwnedPickedMediaState.ts');
+      if(name.endsWith('/mediaPickerResources'))return evaluate('_lib/mediaPickerResources.ts');
+      if(name.endsWith('/deviceGalleryPicker'))return {getDeviceGalleryCapability:async()=>({available:false})};
+      if(name.endsWith('/MediaSourceSheet'))return evaluate('components/ui/MediaSourceSheet.tsx');
+      if(name==='./tokens')return evaluate('components/ui/tokens.ts');
+      if(name==='./icon-symbol')return {IconSymbol:native.View};
+      if(name.endsWith('/mediaPickerCoordinator'))return evaluate('_lib/mediaPickerCoordinator.ts');
+      if(name.endsWith('/deviceAttachmentPicker'))return evaluate('_lib/deviceAttachmentPicker.ts');
+      if(name.endsWith('/deviceImagePicker'))return mocks.pickDeviceImage?{pickDeviceImage:mocks.pickDeviceImage}:evaluate('_lib/deviceImagePicker.ts');
       if(name==='./userFacingErrors')return evaluate('_lib/userFacingErrors.ts');
       if(name==='expo-document-picker')return {getDocumentAsync:(...args)=>{calls.push(['getDocumentAsync',...args]);return mocks.getDocumentAsync(...args);}};
       if(name.endsWith('.jpg'))return 1;
       if(name.endsWith('/creator-video-card'))return evaluate('components/creator-media/creator-video-card.tsx');
       if(name.endsWith('/ClipExportPanel'))return evaluate('components/creator-media/ClipExportPanel.tsx');
-      if(name.endsWith('/deviceVideoPicker'))return evaluate('_lib/deviceVideoPicker.ts');
+      if(name.endsWith('/deviceVideoPicker'))return mocks.pickDeviceVideo?{pickDeviceVideo:mocks.pickDeviceVideo}:evaluate('_lib/deviceVideoPicker.ts');
       if(name.endsWith('/creatorVideoPreview'))return evaluate('_lib/creatorVideoPreview.ts');
       if(name.endsWith('/CreatorContentActionSheet'))return evaluate('components/creator-media/CreatorContentActionSheet.tsx');
       if(name.endsWith('/creatorMonetizationFeatures'))return evaluate('_lib/creatorMonetizationFeatures.ts');
@@ -145,11 +155,12 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
   const render=()=>React.act(async()=>root.render(rootElement()));
   await render();t?.after(()=>React.act(async()=>root.unmount()));
   const all=()=>[...nodes.values()];
-  return {calls,alerts,routes,scrolls,measures,mocks,all,text:()=>all().filter(n=>n.type==='Text').map(n=>textOf(n)).join('\n'),
+  return {media:evaluate('_lib/mediaPickerResources.ts'),calls,alerts,routes,scrolls,measures,mocks,all,text:()=>all().filter(n=>n.type==='Text').map(n=>textOf(n)).join('\n'),
     find:(predicate)=>all().find(predicate),input:p=>all().find(n=>n.type==='TextInput'&&n.props.placeholder===p),
     button:label=>all().find(n=>['TouchableOpacity','Pressable'].includes(n.type)&&(n.props.accessibilityLabel===label||textOf(n).trim()===label)),
     async press(n){assert.ok(n,'mounted visible button exists');assert.notEqual(n.props.disabled,true,'mounted button enabled');await React.act(async()=>{void n.props.onPress();});},
     async change(n,v){assert.ok(n,'mounted visible input exists');assert.notEqual(n.props.editable,false,'mounted input editable');await React.act(async()=>n.props.onChangeText(v));},
+    async dismiss(n){assert.equal(n?.type,'Modal');assert.equal(n.props.visible,false);await React.act(async()=>n.props.onDismiss?.());},
     async resolve(d,v){await React.act(async()=>d.resolve(v));},async reject(d,e){await React.act(async()=>d.reject(e));},
     async timers(){await React.act(async()=>{const pending=[...timers.values()];timers.clear();for(const f of pending)void f();});},
     async route(x){params={...params,...x};await render();},async account(x){session=x;await render();},unmount:()=>React.act(async()=>root.unmount())};

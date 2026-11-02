@@ -1,5 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { requireOptionalNativeModule } from "expo";
+import { ownPickedMedia, releasePickedMedia, withPickedMediaRead } from "./mediaPickerResources";
 
 import {
   IMAGE_MANIPULATOR_NATIVE_MODULE_NAME,
@@ -143,21 +144,29 @@ export async function normalizeImageUploadFile<TFile extends ImageUploadFile>(
       compress: 0.92,
       format: SaveFormat.JPEG,
       withTimeout: <T>(promise: Promise<T>) => withTimeout(promise, IMAGE_NORMALIZATION_TIMEOUT_MS),
+      withRead: (start: () => Promise<void>) => withPickedMediaRead(sourceUri, start),
+      discardOutput: async (output: { uri: string }) => {
+        await FileSystem.deleteAsync(output.uri, { idempotent: true }).catch(() => undefined);
+      },
     });
     const size = await readFileSize(result.uri);
 
+    const normalizedFile = {
+      ...file,
+      uri: result.uri,
+      name: buildJpegFileName(file),
+      mimeType: "image/jpeg",
+      size,
+    };
+    // This exact native-generated output also needs a lease: a later upload
+    // timeout can return while its raw transport is still reading the JPEG.
+    ownPickedMedia(normalizedFile, createIdempotentCleanup(async () => {
+      await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => undefined);
+    }));
     return {
-      cleanup: createIdempotentCleanup(async () => {
-        await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => undefined);
-      }),
+      cleanup: () => releasePickedMedia(normalizedFile),
       convertedFromHeic: true,
-      file: {
-        ...file,
-        uri: result.uri,
-        name: buildJpegFileName(file),
-        mimeType: "image/jpeg",
-        size,
-      },
+      file: normalizedFile,
     };
   } catch (error) {
     if (error instanceof ImageManipulatorCapabilityError) throw error;

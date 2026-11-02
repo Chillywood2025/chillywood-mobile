@@ -13,6 +13,8 @@ function fixture(initial, bindings) {
     getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
     replayActionsMountedRef: { current: true }, brandDraftOwnershipRef: { current: { revision: 0, dirty: false } },
     brandUploadAttemptRef: { current: null }, brandUploadInFlightRef: { current: false },
+    studioMediaTargetRef: { current: 'brand:hero' }, setBrandUploadFile: () => {},
+    formatPlatformBrandAssetTypeLabel: value => value, pickMedia: options => options.pick('photos'),
     ...bindings };
   for (const name of Object.keys(initial)) {
     Object.defineProperty(context, name, { get: () => state[name], configurable: true });

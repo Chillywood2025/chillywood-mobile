@@ -267,6 +267,11 @@ export type NotificationSummary = {
   undismissedCount: number;
   latestCreatedAt: string | null;
   categories: NotificationCategory[];
+  /** Exact current visible live activity, including rows beyond the recent window. */
+  hasLiveActivity?: boolean;
+  /** Complete canonical source footprint, not a sample of loaded rows. */
+  liveHintKeys?: string[];
+  liveHintKeysComplete?: boolean;
 };
 
 export type NotificationListCursor = {
@@ -1220,25 +1225,47 @@ export async function readNotificationSummary(
   return withNotificationRead<NotificationSummary>(userId, signal,
     { totalCount: 0, unreadCount: 0, undismissedCount: 0, latestCreatedAt: null, categories: [] }, async operation => {
       const viewerUserId = operation.authority.userId;
-      const [total, unread, undismissed, recentPage] = await settleNotificationReads([
-        supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", viewerUserId)
-          .abortSignal(operation.signal),
-        supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
-          .eq("user_id", viewerUserId).is("read_at", null).is("dismissed_at", null).abortSignal(operation.signal),
-        supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
-          .eq("user_id", viewerUserId).is("dismissed_at", null).abortSignal(operation.signal),
-        // Preserve existing call reconciliation semantics even for summary-only
-        // consumers. This internal window is bounded; counts remain exact beyond it.
+      const [recentPage, footprint] = await settleNotificationReads([
+        // Keep existing call reconciliation and newest-category semantics. The
+        // aggregate/key authority below is one canonical SQL snapshot, not this
+        // bounded recent page (which cannot establish a complete key footprint).
         readNotificationPageForOperation(operation, 100),
+        supabase.rpc("read_my_live_notification_hint_footprint").abortSignal(operation.signal).then(value => value, () => null),
       ] as const);
       operation.assertCurrent();
-      if (!total || !unread || !undismissed || total.error || unread.error || undismissed.error || recentPage.status !== "resolved") {
-        throw new Error("Notification activity could not be refreshed.");
+      if (recentPage.status !== "resolved") throw new Error("Notification activity could not be refreshed.");
+      const keyData = normalizeJsonRecord(footprint?.error ? null : footprint?.data);
+      const atomicCounts = [keyData.totalCount, keyData.unreadCount, keyData.undismissedCount]
+        .every(count => typeof count === "number" && Number.isSafeInteger(count) && count >= 0)
+        && typeof keyData.hasLiveActivity === "boolean";
+      const validKeys = atomicCounts && keyData.schemaVersion === 1 && keyData.subjectUserId === viewerUserId
+        && Array.isArray(keyData.keys) && keyData.keys.length <= 256
+        && keyData.keys.every(key => typeof key === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(key));
+      let counts = { totalCount: keyData.totalCount as number, unreadCount: keyData.unreadCount as number,
+        undismissedCount: keyData.undismissedCount as number, hasLiveActivity: keyData.hasLiveActivity as boolean };
+      if (!validKeys) {
+        // Compatibility only: incomplete authority cannot cross a received
+        // discovery hint. A valid new backend does not pay for four redundant
+        // legacy reads or combine their independent snapshots with its keys.
+        const [total, unread, undismissed, liveActivity] = await settleNotificationReads([
+          supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", viewerUserId).abortSignal(operation.signal),
+          supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", viewerUserId).is("read_at", null).is("dismissed_at", null).abortSignal(operation.signal),
+          supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", viewerUserId)
+            .is("dismissed_at", null).abortSignal(operation.signal),
+          supabase.from(NOTIFICATIONS_TABLE).select("id").eq("user_id", viewerUserId)
+            .in("notification_type", ["followed_creator_live", "circle_friend_live", "live_room_member_joined"])
+            .is("dismissed_at", null).limit(1).abortSignal(operation.signal),
+        ] as const);
+        operation.assertCurrent();
+        if (!total || !unread || !undismissed || !liveActivity || total.error || unread.error || undismissed.error || liveActivity.error)
+          throw new Error("Notification activity could not be refreshed.");
+        counts = { totalCount: Number(total.count ?? 0), unreadCount: Number(unread.count ?? 0),
+          undismissedCount: Number(undismissed.count ?? 0), hasLiveActivity: (liveActivity.data?.length ?? 0) > 0 };
       }
       return {
-        totalCount: Number(total.count ?? 0),
-        unreadCount: Number(unread.count ?? 0),
-        undismissedCount: Number(undismissed.count ?? 0),
+        liveHintKeys: validKeys ? [...new Set((keyData.keys as string[]).map(key => key.toLowerCase()))] : [],
+        liveHintKeysComplete: validKeys && keyData.complete === true,
+        ...counts,
         latestCreatedAt: recentPage.items[0]?.createdAt ?? null,
         categories: Array.from(new Set(recentPage.items.map(notification => notification.category))),
       };

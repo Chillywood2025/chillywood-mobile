@@ -5,7 +5,10 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import { useSession } from "../../_lib/session";
-import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from "../../_lib/accountSessionAuthority";
+import { useMediaPicker } from "../../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../../hooks/useOwnedPickedMediaState";
+import { releasePickedMedia, retainPickedMedia } from "../../_lib/mediaPickerResources";
 import {
   resolveChannelAccess,
   type ChannelAccessResolution,
@@ -39,6 +42,8 @@ import {
 } from "../../_lib/channelAudience";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
 import { useProfileLiveState } from "../../_lib/useProfileLiveState";
+import { useLiveNotificationPage } from "../../_lib/useLiveNotificationPage";
+import { canOpenLiveNotificationActivity, isLiveNotificationActivity } from "../../_lib/liveNotificationActivity";
 import { ProfileLiveNow } from "../../components/live/profile-live-now";
 import { useProfilePresentation } from "../../components/profile/use-profile-presentation";
 import { Skeleton } from "../../components/ui/Skeleton";
@@ -48,7 +53,6 @@ import {
   type CreatorEventType,
 } from "../../_lib/liveEvents";
 import {
-  readNotificationListPage,
   readPublicEventReminderSummaries,
   resolveNotificationPath,
   setEventReminderEnrollment,
@@ -108,12 +112,12 @@ import {
   type ProfileSocialFeedPostActivity,
 } from "../../_lib/profileSocialFeed";
 import { readOwnProfileFeedHead, readOwnProfileFeedPage, type ProfileFeedHead } from "../../_lib/profileFeedReader";
+import { reconcileProfileFeedDiscovery } from "../../_lib/profileFeedDiscovery";
 import { hasNewProfileFeedHead, startProfileFeedFreshness } from "../../_lib/profileFeedFreshness";
 import { readSharedLiveSnapshot } from "../../_lib/sharedLiveRead";
 import { getNotificationActivityOwnerKey, subscribeToNotificationActivity } from "../../_lib/notificationActivity";
 import {
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
-  type SocialAttachmentPickerScope,
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
@@ -153,7 +157,6 @@ import {
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { ProfileSocialFeedCard } from "../../components/ProfileSocialFeedCard";
 import { LinkedText } from "../../components/social/linked-text";
-import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import {
   ProfileActionsSheet,
@@ -284,10 +287,6 @@ type ProfilePostUiState = {
   likeBusy?: boolean;
   deletingCommentId?: string | null;
 };
-
-type ProfileAttachmentSheetTarget =
-  | { surface: "post"; identity: string }
-  | { surface: "comment"; post: ProfilePost; identity: string };
 
 const PROFILE_DEEP_LINK_SCHEME = "chillywoodmobile";
 
@@ -679,7 +678,7 @@ export function useProfileFeedPages(userId: string, own: boolean, enabled: boole
     setState(s => ({ ...s, notice: null, ready: append ? s.ready : false }));
     try {
       const page = own
-        ? await readOwnProfileFeedPage({ limit: 24, cursor: append ? state.cursor ?? undefined : undefined })
+        ? await readOwnProfileFeedPage({ limit: 24, cursor: append ? state.cursor ?? undefined : undefined, includeDiscovery: false })
         : await readProfilePostsPage(userId, { limit: 24, cursor: append ? state.cursor ?? undefined : undefined });
       const linkedPost = !append && postId ? await readProfilePostById(postId) : null;
       if (!current()) return;
@@ -765,13 +764,17 @@ export default function ProfileScreen() {
     imageUrl?: string;
     fitMode?: ProfileAppearanceFitMode;
   } | null>(null);
-  const [profileMediaReview, setProfileMediaReview] = useState<{
+  const [profileMediaReview, setProfileMediaReview] = useOwnedPickedMediaState<{
     kind: ProfileMediaKind;
     file: ProfileMediaImageFile;
     fitMode: ProfileAppearanceFitMode;
-  } | null>(null);
+    authority: AccountSessionAuthorityBinding;
+    isCurrent: () => boolean;
+  } | null>(null, review => review?.file);
   const [profileAppearanceBusy, setProfileAppearanceBusy] = useState<ProfileMediaKind | null>(null);
   const profileGalleryPending = useRef(false);
+  const profileReviewRevision = useRef(0);
+  const profileSavePending = useRef(false);
   const profileGalleryMounted = useRef(false);
   useEffect(() => {
     profileGalleryMounted.current = true;
@@ -783,11 +786,14 @@ export default function ProfileScreen() {
   const [profilePostReportTarget, setProfilePostReportTarget] = useState<ProfilePost | null>(null);
   const [profileMediaReportTarget, setProfileMediaReportTarget] = useState<ProfileMediaKind | null>(null);
   const [profilePostDraft, setProfilePostDraft] = useState("");
-  const [profilePostAttachmentFile, setProfilePostAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [profilePostAttachmentFile, setProfilePostAttachmentFile] = useOwnedPickedMediaState<SocialAttachmentFile | null>(null);
   const [profilePostBusy, setProfilePostBusy] = useState(false);
   const [profilePostDeletingId, setProfilePostDeletingId] = useState<string | null>(null);
-  const [profilePostUiById, setProfilePostUiById] = useState<Record<string, ProfilePostUiState>>({});
-  const [profileAttachmentSheetTarget, setProfileAttachmentSheetTarget] = useState<ProfileAttachmentSheetTarget | null>(null);
+  const [profilePostUiById, setProfilePostUiById] = useOwnedPickedMediaState<Record<string, ProfilePostUiState>>({}, posts => Object.values(posts).map(post => post.commentAttachmentFile));
+  const profileAttachmentRevision = useRef(0);
+  const profileAttachmentPending = useRef(false);
+  const profilePostAttachmentCurrent = useRef<(() => boolean) | null>(null);
+  const profileCommentAttachmentCurrent = useRef(new Map<string, () => boolean>());
   const [profilePostCommentReportTarget, setProfilePostCommentReportTarget] = useState<{
     post: ProfilePost;
     comment: ProfilePostComment;
@@ -866,11 +872,15 @@ export default function ProfileScreen() {
     channelAccessReady, profileVisibility: channelAccessProfile?.profileVisibility });
   const { friendState, chillyCircleLoading, chillyCircleActionBusy, profilePrivacyAccess, profilePrivacyReady } = profileAudience;
   const canViewFullProfile = profilePrivacyAccess?.canViewFullProfile ?? false;
+  const profileNotificationActivity = useLiveNotificationPage({ authority,
+    enabled: focused && feedAppActive && isSelfProfile && !isOfficialProfile && profilePrivacyReady && canViewFullProfile,
+    refreshKey: socialRefresh, limit: 12 });
   const sharedPostId = String(Array.isArray(params.postId) ? params.postId[0] : params.postId ?? "").trim();
   const feedPages = useProfileFeedPages(userId, isSelfProfile, profilePrivacyReady && canViewFullProfile, sharedPostId);
   const { posts: profilePosts, setPosts: setProfilePosts, ready: profilePostsReady, setReady: setProfilePostsReady,
     notice: profilePostsNotice, setNotice: setProfilePostsNotice } = feedPages;
   const socialIdentity = `${userId}:${currentUserId}:${authority?.sessionGeneration ?? ""}`;
+  const { pickMedia, mediaPickerSheet, cancelMediaPicker } = useMediaPicker(`${socialIdentity}:${focused}`);
   const socialIdentityRef = useRef(socialIdentity);
   socialIdentityRef.current = socialIdentity;
   const mediaRemovalIdentity = JSON.stringify([socialIdentity, authority?.accountId, authority?.state, authority?.restoreOnly, focused]);
@@ -892,14 +902,18 @@ export default function ProfileScreen() {
     visibleFeedPostIdsRef.current = [];
     setProfilePostUiById({}); setAboutBusy(false); setAboutNotice(null);
     setProfilePostDraft(""); setProfilePostAttachmentFile(null); setProfilePostBusy(false);
-    setProfileAttachmentSheetTarget(null); setProfilePostReportTarget(null); setProfilePostCommentReportTarget(null);
+    profileAttachmentRevision.current += 1;
+    profilePostAttachmentCurrent.current = null;
+    profileCommentAttachmentCurrent.current.clear();
+    setProfilePostReportTarget(null); setProfilePostCommentReportTarget(null);
     setProfileMediaReportTarget(null); setReportVisible(false); setReportBusy(false);
     setProfileMediaReview(null); setProfileImagePreview(null); setProfilePhotoSheetVisible(false);
+    setProfileAppearanceBusy(null);
     setProfileBackgroundSheetVisible(false); setProfileActionsSheetVisible(false);
     setCreatorVideos([]); setCreatorVideosError(null);
     setPublicEvents([]); setPublicReminderSummaries([]);
     setProfileSocialFeedExtras(createEmptyProfileSocialFeedExtras());
-  }, [socialIdentity]);
+  }, [socialIdentity, setProfileMediaReview, setProfilePostAttachmentFile, setProfilePostUiById]);
 
   useEffect(() => {
     let active = true;
@@ -973,6 +987,10 @@ export default function ProfileScreen() {
     enabled: !!userId && profilePrivacyReady && canViewFullProfile && !isOfficialProfile,
   });
   const profileLive = useProfileLiveState(userId, !!userId && profilePrivacyReady && canViewFullProfile && !isOfficialProfile);
+  // Public suggestions are independently current; a cursor page must not pin
+  // an old room title/host after its visibility or lifecycle changes.
+  const profileSuggestedDiscovery = useLiveDiscoveryFeed({ surface: "profile", limit: 8,
+    enabled: !!userId && isSelfProfile && profilePrivacyReady && canViewFullProfile && !isOfficialProfile });
   const shouldShowLockedShell = profilePrivacyReady
     && (profileAudience.privacyError || (!!profilePrivacyAccess?.isLocked && !isOfficialProfile && !isSelfProfile));
   const shouldShowUnavailableProfile = channelAccessReady
@@ -1049,11 +1067,8 @@ export default function ProfileScreen() {
 
     const loadProfileSocialFeedExtras = async () => {
       if (isSelfProfile && currentUserId) {
-        const notificationPage = await readNotificationListPage(currentUserId, 12);
-        if (notificationPage.status !== "resolved" || notificationPage.subjectUserId !== currentUserId) throw new Error("Activity could not be loaded.");
-        const notifications = notificationPage.items;
         if (!active || !isSocialIdentityCurrent()) return;
-        setProfileSocialFeedExtras({ ...createEmptyProfileSocialFeedExtras(), notifications });
+        setProfileSocialFeedExtras(createEmptyProfileSocialFeedExtras());
         setProfileSocialFeedExtrasReady(true);
         return;
       }
@@ -1145,7 +1160,7 @@ export default function ProfileScreen() {
     return () => {
       active = false;
     };
-  }, [currentUserId, profilePostIdsKey, profilePosts, socialIdentity, isSocialIdentityCurrent, feedPages.refreshRevision]);
+  }, [currentUserId, profilePostIdsKey, profilePosts, socialIdentity, isSocialIdentityCurrent, feedPages.refreshRevision, setProfilePostUiById]);
 
   const updateProfilePostUiState = (
     postId: string,
@@ -1158,64 +1173,77 @@ export default function ProfileScreen() {
     }));
   };
 
-  const attachProfilePostFile = async (scope: SocialAttachmentPickerScope) => {
-    if (!isSocialIdentityCurrent()) return;
+  const attachProfilePostFile = async () => {
+    if (!isSocialIdentityCurrent() || profileAttachmentPending.current) return;
+    profileAttachmentPending.current = true;
+    const revision = ++profileAttachmentRevision.current;
+    const isCurrent = () => isSocialIdentityCurrent() && profileAttachmentRevision.current === revision;
+    let selectedFile: SocialAttachmentFile | null = null;
     try {
       setProfilePostsNotice(null);
-      const file = await pickSocialAttachmentFile(scope);
-      if (!isSocialIdentityCurrent()) return;
+      const file = await pickMedia({
+        title: "Add to post",
+        mediaKind: "attachment",
+        isCurrent,
+        pick: (source, operation) => pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation),
+      });
+      selectedFile = file;
+      if (!isCurrent()) return;
       if (!file) return;
+      profilePostAttachmentCurrent.current = isSocialIdentityCurrent;
       setProfilePostAttachmentFile(file);
     } catch (error) {
-      if (!isSocialIdentityCurrent()) return;
-      setProfilePostAttachmentFile(null);
+      if (!isCurrent()) return;
       setProfilePostsNotice(getUserFacingErrorMessage(error, "Unable to attach that file right now."));
+    } finally {
+      void releasePickedMedia(selectedFile);
+      profileAttachmentPending.current = false;
     }
   };
 
-  const attachProfilePostCommentFile = async (post: ProfilePost, scope: SocialAttachmentPickerScope) => {
-    if (!isSocialIdentityCurrent()) return;
+  const attachProfilePostCommentFile = async (post: ProfilePost) => {
+    if (!isSocialIdentityCurrent() || profileAttachmentPending.current) return;
+    profileAttachmentPending.current = true;
+    const revision = ++profileAttachmentRevision.current;
+    const isCurrent = () => isSocialIdentityCurrent() && profileAttachmentRevision.current === revision;
+    let selectedFile: SocialAttachmentFile | null = null;
     try {
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
         commentNotice: null,
       }));
-      const file = await pickSocialAttachmentFile(scope);
-      if (!isSocialIdentityCurrent()) return;
+      const file = await pickMedia({
+        title: "Add to comment",
+        mediaKind: "attachment",
+        isCurrent,
+        pick: (source, operation) => pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation),
+      });
+      selectedFile = file;
+      if (!isCurrent()) return;
       if (!file) return;
+      profileCommentAttachmentCurrent.current.set(post.id, isSocialIdentityCurrent);
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
         commentAttachmentFile: file,
       }));
     } catch (error) {
+      if (!isCurrent()) return;
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
-        commentAttachmentFile: null,
         commentNotice: getUserFacingErrorMessage(error, "Unable to attach that file right now."),
       }));
+    } finally {
+      void releasePickedMedia(selectedFile);
+      profileAttachmentPending.current = false;
     }
   };
 
   const onPickProfilePostAttachment = () => {
-    setProfileAttachmentSheetTarget({ surface: "post", identity: socialIdentity });
+    void attachProfilePostFile();
   };
 
   const onPickProfilePostCommentAttachment = (post: ProfilePost) => {
-    setProfileAttachmentSheetTarget({ surface: "comment", post, identity: socialIdentity });
-  };
-
-  const onSelectProfileAttachment = (scope: SocialAttachmentPickerScope) => {
-    if (!isSocialIdentityCurrent()) return;
-    const target = profileAttachmentSheetTarget;
-    if (!target || target.identity !== socialIdentity) return;
-
-    setProfileAttachmentSheetTarget(null);
-    if (target.surface === "post") {
-      void attachProfilePostFile(scope);
-      return;
-    }
-
-    void attachProfilePostCommentFile(target.post, scope);
+    void attachProfilePostCommentFile(post);
   };
 
   const clearProfilePostCommentReply = (postId: string) => {
@@ -1503,7 +1531,7 @@ export default function ProfileScreen() {
     const unsubscribe = subscribeToNotificationActivity(ownerKey, controller.hint);
     return () => { retired = true; controller.dispose(); unsubscribe(); };
   }, [activeTab, canViewFullProfile, currentUserId, feedAppActive, focused,
-    isOfficialProfile, isSelfProfile, profilePostsReady, socialIdentity]);
+    isOfficialProfile, isSelfProfile, profilePostsReady, socialIdentity, setProfilePostUiById]);
   const liveNowEvent = useMemo(
     () => publicEvents.find((event) => event.isLiveNow) ?? null,
     [publicEvents],
@@ -1891,7 +1919,7 @@ export default function ProfileScreen() {
       fitMode: kind === "avatar" ? profile.profileAvatarFitMode : profile.profileBackgroundFitMode,
     });
   };
-  const onChooseProfileMedia = async (kind: ProfileMediaKind) => {
+  const onChooseProfileMedia = async (kind: ProfileMediaKind, previousReview = profileMediaReview) => {
     if (!isSelfProfile) {
       Alert.alert("Profile Appearance", "Only the Profile owner can change this image.");
       return;
@@ -1900,49 +1928,80 @@ export default function ProfileScreen() {
     const pickerAuthority = getCurrentAccountSessionAuthoritySnapshot();
     if (!pickerAuthority || pickerAuthority.restoreOnly || pickerAuthority.userId !== userId
       || !sameAccountSessionAuthority(authority, pickerAuthority)) return;
-    const isCurrent = () => profileGalleryMounted.current && isSocialIdentityCurrent()
+    const pickerRevision = mediaRemovalScope.revision;
+    const isCurrent = () => focused && profileGalleryMounted.current && isSocialIdentityCurrent()
+      && mediaRemovalScopeRef.current === mediaRemovalScope && mediaRemovalScope.revision === pickerRevision
       && sameAccountSessionAuthority(pickerAuthority, getCurrentAccountSessionAuthoritySnapshot());
     if (!isCurrent()) return;
     profileGalleryPending.current = true;
+    // A replacement picker temporarily hides, but does not discard, this review.
+    let releasePreviousReview = () => {};
+    let previousReviewHeld = false;
+    let selectedFile: ProfileMediaImageFile | null = null;
 
     if (kind === "avatar") setProfilePhotoSheetVisible(false);
     if (kind === "background") setProfileBackgroundSheetVisible(false);
     try {
-      const file = await pickProfileMediaImage(kind);
-      if (!file || !isCurrent()) return;
+      releasePreviousReview = retainPickedMedia(previousReview?.file);
+      previousReviewHeld = true;
+      if (previousReview) setProfileMediaReview(null);
+      const file = await pickMedia({
+        title: kind === "avatar" ? "Choose Profile photo" : "Choose Profile background",
+        mediaKind: "image",
+        isCurrent,
+        pick: (source, operation) => pickProfileMediaImage(kind, source, operation),
+      });
+      selectedFile = file;
+      if (!isCurrent()) return;
+      if (!file) { if (previousReview) setProfileMediaReview(previousReview); return; }
+      const reviewRevision = ++profileReviewRevision.current;
       setProfileMediaReview({
         kind,
         file,
         fitMode: kind === "avatar" ? profile.profileAvatarFitMode : profile.profileBackgroundFitMode,
+        authority: pickerAuthority,
+        isCurrent: () => isCurrent() && profileReviewRevision.current === reviewRevision,
       });
     } catch (error) {
       if (!isCurrent()) return;
+      if (previousReview && previousReviewHeld) setProfileMediaReview(previousReview);
       Alert.alert(
         "Profile Appearance",
         getUserFacingErrorMessage(error, "Unable to choose a Profile image right now."),
       );
     } finally {
+      void releasePickedMedia(selectedFile);
+      releasePreviousReview();
       profileGalleryPending.current = false;
     }
   };
   const onSaveProfileMediaReview = async () => {
-    if (!isSelfProfile || !profileMediaReview || profileAppearanceBusy) return;
+    if (!isSelfProfile || !profileMediaReview || profileAppearanceBusy || profileSavePending.current || !profileMediaReview.isCurrent()) return;
+    const review = profileMediaReview;
+    let releaseSave = () => {};
+    profileSavePending.current = true;
 
     setProfileAppearanceBusy(profileMediaReview.kind);
     try {
+      releaseSave = retainPickedMedia(review.file);
       const nextProfile = await uploadProfileMedia(profileMediaReview.kind, profileMediaReview.file, {
         fitMode: profileMediaReview.fitMode,
+        owner: { authority: review.authority, isCurrent: review.isCurrent },
       });
+      if (!review.isCurrent()) return;
       setChannelAccessProfile(nextProfile);
       setProfileMediaReview(null);
       Alert.alert("Profile Appearance", profileMediaReview.kind === "avatar" ? "Profile photo updated." : "Profile background updated.");
     } catch (error) {
+      if (!review.isCurrent()) return;
       Alert.alert(
         "Profile Appearance",
         getUserFacingErrorMessage(error, "Unable to update Profile appearance right now."),
       );
     } finally {
-      setProfileAppearanceBusy(null);
+      releaseSave();
+      profileSavePending.current = false;
+      if (review.isCurrent()) setProfileAppearanceBusy(null);
     }
   };
   const onRemoveProfileMedia = (kind: ProfileMediaKind) => {
@@ -2203,6 +2262,7 @@ export default function ProfileScreen() {
   };
   const onSubmitProfilePost = async () => {
     if (!isSocialIdentityCurrent()) return;
+    if (profilePostAttachmentFile && !profilePostAttachmentCurrent.current?.()) return;
     const key = `${socialIdentity}:post-submit`;
     if (!isSelfProfile || profilePostBusy || socialActionKeysRef.current.has(key)) return;
 
@@ -2224,8 +2284,10 @@ export default function ProfileScreen() {
       return;
     }
 
+    let releaseSubmission = () => {};
     socialActionKeysRef.current.add(key);
     try {
+      releaseSubmission = retainPickedMedia(profilePostAttachmentFile);
       setProfilePostBusy(true);
       setProfilePostsNotice(null);
       const post = await createProfilePost({
@@ -2268,6 +2330,7 @@ export default function ProfileScreen() {
         ? SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
         : getUserFacingErrorMessage(error, "Unable to post this update right now."));
     } finally {
+      releaseSubmission();
       socialActionKeysRef.current.delete(key);
       if (isSocialIdentityCurrent()) setProfilePostBusy(false);
     }
@@ -2386,6 +2449,7 @@ export default function ProfileScreen() {
     }
 
     const uiState = profilePostUiById[post.id] ?? {};
+    if (uiState.commentAttachmentFile && !profileCommentAttachmentCurrent.current.get(post.id)?.()) return;
     const body = String(uiState.commentDraft ?? "").trim();
     if (!body) {
       updateProfilePostUiState(post.id, (current) => ({
@@ -2416,6 +2480,7 @@ export default function ProfileScreen() {
       return;
     }
 
+    let releaseSubmission = () => {};
     socialActionKeysRef.current.add(key);
     updateProfilePostUiState(post.id, (current) => ({
       ...current,
@@ -2423,6 +2488,7 @@ export default function ProfileScreen() {
       commentNotice: null,
     }));
     try {
+      releaseSubmission = retainPickedMedia(uiState.commentAttachmentFile);
       const replyTarget = (uiState.comments ?? []).find((comment) => comment.id === uiState.replyTargetCommentId) ?? null;
       const parentCommentId = replyTarget?.parentCommentId || replyTarget?.id || null;
       const comment = await createProfilePostComment({
@@ -2458,6 +2524,7 @@ export default function ProfileScreen() {
           : getUserFacingErrorMessage(error, "Unable to post this comment right now."),
       }));
     } finally {
+      releaseSubmission();
       socialActionKeysRef.current.delete(key);
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
@@ -3194,7 +3261,7 @@ export default function ProfileScreen() {
         circleVideos: profileSocialFeedExtras.circleVideos,
         followedVideos: profileSocialFeedExtras.followedVideos,
         discoveryItems: profileDiscovery.items,
-        notifications: profileSocialFeedExtras.notifications,
+        notifications: profileNotificationActivity.items,
         actorsByUserId: {
           ...profileSocialFeedExtras.actorsByUserId,
           ...(profileSocialFeedActor ? { [userId]: profileSocialFeedActor } : {}),
@@ -3203,7 +3270,8 @@ export default function ProfileScreen() {
         followedChannelUserIds: profileSocialFeedExtras.followedChannelUserIds,
       });
       const livePosts = new Map(profilePosts.map(post => [post.id, post]));
-      const paged = feedPages.items.filter(item => !("post" in item) || livePosts.has(item.post.id));
+      const paged = reconcileProfileFeedDiscovery(feedPages.items.filter(item => !("post" in item) || livePosts.has(item.post.id)),
+        profileSuggestedDiscovery.items, userId);
       const seenPosts = new Set(paged.flatMap(item => "post" in item ? [item.post.id] : []));
       const seenDiscovery = new Set(paged.flatMap(item => "discoveryItem" in item ? [item.discoveryItem.id] : []));
       return [...supplemental.filter(item => "post" in item && !seenPosts.has(item.post.id)), ...paged,
@@ -3232,14 +3300,16 @@ export default function ProfileScreen() {
     profileSocialFeedExtras.circleUserIds,
     profileSocialFeedExtras.circleVideos,
     profileDiscovery.items,
+    profileSuggestedDiscovery.items,
     profileSocialFeedExtras.followedChannelUserIds,
     profileSocialFeedExtras.followedPosts,
     profileSocialFeedExtras.followedVideos,
-    profileSocialFeedExtras.notifications,
+    profileNotificationActivity.items,
     profileSocialFeedMode,
     userId,
   ]);
-  const profileSocialFeedReady = profilePostsReady && creatorVideosReady && profileSocialFeedExtrasReady && !profileDiscovery.loading;
+  const profileSocialFeedReady = profilePostsReady && creatorVideosReady && profileSocialFeedExtrasReady && profileNotificationActivity.ready && !profileDiscovery.loading;
+  const activityNotice = profileSocialFeedNotice ?? profileNotificationActivity.notice;
   const publicEventSummaryCards: readonly OwnerStatCard[] = [
     {
       label: "Live Now",
@@ -3467,6 +3537,14 @@ export default function ProfileScreen() {
     router.push(`/spectate/${encodeURIComponent(itemId)}` as Parameters<typeof router.push>[0]);
   };
   const openProfileSocialNotification = (item: Extract<ProfileSocialFeedItem, { type: "backed_activity_item" }>) => {
+    if (isLiveNotificationActivity(item.notification)) {
+      const current = profileNotificationActivity.current(item.notification.id);
+      if (!current || !canOpenLiveNotificationActivity(current)) return;
+      const path = resolveNotificationPath(current.deepLink, { notificationType: current.notificationType,
+        targetEntityId: current.target.entityId, targetContext: current.target.context });
+      if (path) router.push(path as Parameters<typeof router.push>[0]);
+      return;
+    }
     const target = item.notification.target;
     const entityId = normalizeFeedUserId(target.entityId);
 
@@ -3637,7 +3715,7 @@ export default function ProfileScreen() {
           <SocialAttachmentCard
             file={profilePostAttachmentFile}
             compact
-            onRemove={() => setProfilePostAttachmentFile(null)}
+            onRemove={() => { profileAttachmentRevision.current += 1; profilePostAttachmentCurrent.current = null; cancelMediaPicker(); setProfilePostAttachmentFile(null); }}
           />
         ) : null}
         <View style={styles.profilePostComposerFooter}>
@@ -3958,10 +4036,12 @@ export default function ProfileScreen() {
                     <SocialAttachmentCard
                       file={uiState.commentAttachmentFile}
                       compact
-                      onRemove={() => updateProfilePostUiState(post.id, (current) => ({
-                        ...current,
-                        commentAttachmentFile: null,
-                      }))}
+                      onRemove={() => {
+                        profileAttachmentRevision.current += 1;
+                        profileCommentAttachmentCurrent.current.delete(post.id);
+                        cancelMediaPicker();
+                        updateProfilePostUiState(post.id, (current) => ({ ...current, commentAttachmentFile: null }));
+                      }}
                     />
                   ) : null}
                   <View style={styles.profilePostCommentComposerFooter}>
@@ -4042,17 +4122,17 @@ export default function ProfileScreen() {
         </AppText>
       </View>
       {renderProfilePostComposer()}
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh profile feed" onPress={() => { void feedPages.refresh(); setSocialRefresh(value => value + 1); void profileAudience.refreshProfileAudience(); void profileDiscovery.reload(); }}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh profile feed" onPress={() => { void feedPages.refresh(); setSocialRefresh(value => value + 1); void profileAudience.refreshProfileAudience(); void profileDiscovery.reload(); void profileSuggestedDiscovery.reload(); }}>
         <Text style={styles.feedPostActionText}>Refresh feed</Text>
       </TouchableOpacity>
-      {profilePostsNotice || profileSocialFeedNotice || creatorVideosError || profileDiscovery.error ? (
+      {profilePostsNotice || activityNotice || creatorVideosError || profileDiscovery.error || profileSuggestedDiscovery.error ? (
         <View style={styles.profileComposerNotice}>
-          <AppText scale="footnote" style={styles.profileComposerNoticeText}>{profilePostsNotice ?? profileSocialFeedNotice ?? creatorVideosError ?? profileDiscovery.error}</AppText>
-          {profilePostsNotice || profileSocialFeedNotice || creatorVideosError ? <TouchableOpacity accessibilityRole="button" onPress={() => { void feedPages.refresh(); setSocialRefresh(value => value + 1); }}>
+          <AppText scale="footnote" style={styles.profileComposerNoticeText}>{profilePostsNotice ?? activityNotice ?? creatorVideosError ?? profileDiscovery.error ?? profileSuggestedDiscovery.error}</AppText>
+          {profilePostsNotice || activityNotice || creatorVideosError ? <TouchableOpacity accessibilityRole="button" onPress={() => { void feedPages.refresh(); setSocialRefresh(value => value + 1); }}>
             <Text style={styles.feedPostActionText}>Retry posts</Text>
           </TouchableOpacity> : null}
-          {profileDiscovery.error ? (
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry profile discovery" onPress={() => { void profileDiscovery.reload(); }}>
+          {profileDiscovery.error || profileSuggestedDiscovery.error ? (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry profile discovery" onPress={() => { void profileDiscovery.reload(); void profileSuggestedDiscovery.reload(); }}>
               <AppText scale="footnote" style={styles.profileComposerNoticeText}>Retry live discovery</AppText>
             </TouchableOpacity>
           ) : null}
@@ -4069,7 +4149,7 @@ export default function ProfileScreen() {
           <AppText scale="subhead" style={styles.feedEmptyTitle}>Loading profile feed</AppText>
           <AppText scale="footnote" style={styles.feedEmptyText}>Checking posts, public activity, and safe live entries.</AppText>
         </View>
-      ) : !profileSocialFeedItems.length && !profilePostsNotice && !profileSocialFeedNotice && !creatorVideosError && !profileDiscovery.error ? (
+      ) : !profileSocialFeedItems.length && !profilePostsNotice && !activityNotice && !creatorVideosError && !profileDiscovery.error && !profileSuggestedDiscovery.error ? (
         <View style={styles.feedEmptyCard}>
           <AppText scale="subhead" style={styles.feedEmptyTitle}>
             {profileSocialFeedMode === "own_profile_social_feed"
@@ -4237,7 +4317,7 @@ export default function ProfileScreen() {
         onViewableItemsChanged={onFeedViewableItemsChanged}
         viewabilityConfig={feedViewabilityConfig}
         refreshing={!profilePostsReady && profilePosts.length > 0}
-        onRefresh={() => { void feedPages.refresh(); setSocialRefresh(value => value + 1); void profileAudience.refreshProfileAudience(); void profileDiscovery.reload(); }}
+        onRefresh={() => { void feedPages.refresh(); setSocialRefresh(value => value + 1); void profileAudience.refreshProfileAudience(); void profileDiscovery.reload(); void profileSuggestedDiscovery.reload(); }}
         style={styles.screen}
         contentContainerStyle={[styles.content, styles.contentKeyboardInset]}
         keyboardShouldPersistTaps="handled"
@@ -4933,14 +5013,7 @@ export default function ProfileScreen() {
       </View>}
       />
       </KeyboardAvoidingView>
-      <SocialAttachmentActionSheet
-        visible={!!profileAttachmentSheetTarget && profileAttachmentSheetTarget.identity === socialIdentity}
-        kicker="PROFILE ATTACHMENT"
-        title={profileAttachmentSheetTarget?.surface === "comment" ? "Add to comment" : "Add to post"}
-        body="Photos and files attach to social posts."
-        onSelect={onSelectProfileAttachment}
-        onClose={() => setProfileAttachmentSheetTarget(null)}
-      />
+      {mediaPickerSheet}
       <ProfileAppearanceSheet
         visible={profilePhotoSheetVisible && isSelfProfile}
         kind="avatar"
@@ -5014,15 +5087,15 @@ export default function ProfileScreen() {
         }}
         onChooseAnother={() => {
           if (!profileMediaReview || profileAppearanceBusy) return;
-          const { kind } = profileMediaReview;
-          setProfileMediaReview(null);
-          void onChooseProfileMedia(kind);
+          const previousReview = profileMediaReview;
+          const { kind } = previousReview;
+          void onChooseProfileMedia(kind, previousReview);
         }}
         onSave={() => {
           void onSaveProfileMediaReview();
         }}
         onCancel={() => {
-          if (!profileAppearanceBusy) setProfileMediaReview(null);
+          if (!profileAppearanceBusy) { profileReviewRevision.current += 1; setProfileMediaReview(null); }
         }}
       />
       {watchPartyPremiumGate?.reason === "premium_required" ? (

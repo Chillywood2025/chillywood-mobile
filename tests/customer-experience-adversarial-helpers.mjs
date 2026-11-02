@@ -5,6 +5,7 @@ export const read = (path) => readFileSync(path, "utf8");
 
 export const loadStubbed = (path, mocks = {}) => {
   const module = { exports: {} };
+  let pickedMediaResources;
   const javascript = ts.transpileModule(read(path), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
@@ -16,7 +17,12 @@ export const loadStubbed = (path, mocks = {}) => {
     module.exports,
     module,
     (id) => mocks[id] ?? (id === "./userCollectionSync" ? loadStubbed("_lib/userCollectionSync.ts")
-      : id === "./chatActivity" ? loadStubbed("_lib/chatActivity.ts") : {}),
+      : id === "./chatActivity" ? loadStubbed("_lib/chatActivity.ts")
+        : id === "./mediaPickerResources" ? (pickedMediaResources ??= loadStubbed("_lib/mediaPickerResources.ts"))
+          : id === "./prepareMediaUploadCopy" ? loadStubbed("_lib/prepareMediaUploadCopy.ts", {
+            ...mocks,
+            "./mediaPickerResources": mocks["./mediaPickerResources"] ?? (pickedMediaResources ??= loadStubbed("_lib/mediaPickerResources.ts")),
+          }) : {}),
     false,
   );
   return module.exports;

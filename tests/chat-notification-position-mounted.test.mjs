@@ -19,6 +19,9 @@ const evaluate = (source, imports = {}) => {
 };
 const links = evaluate(read('_lib/appLinks.ts'));
 const targets = evaluate(read('_lib/notificationMessageTarget.ts'), { './appLinks': links });
+const liveActivity = evaluate(read('_lib/liveNotificationActivity.ts'), {
+  './liveDiscoveryInvalidation': evaluate(read('_lib/liveDiscoveryInvalidation.ts')),
+});
 const threadId = '10000000-0000-4000-8000-000000000001';
 const otherThread = '10000000-0000-4000-8000-000000000002';
 const id = n => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -64,7 +67,8 @@ test('actual Profile backed-notification action preserves the same message prese
     ts.forEachChild(node, visit);
   };
   visit(ast); assert.equal(declarations.size, 2);
-  const routes = [], context = { exports: {}, router: { push: path => routes.push(path) },
+  const routes = [], context = { exports: {}, ...liveActivity, router: { push: path => routes.push(path) },
+    profileNotificationActivity: { current() { assert.fail('Chat notification must not use live room activity authority'); } },
     resolveNotificationPath: targets.resolveNotificationMessagePath };
   vm.runInNewContext(ts.transpileModule([...declarations.values()].join('\n')
     + '\nglobalThis.open = openProfileSocialNotification;', { compilerOptions: {

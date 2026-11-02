@@ -19,8 +19,9 @@ const owner = (generation = 'session-a') => ({ userId: 'host', accountId: 'host'
 const same = (a, b) => !!a && !!b && ['userId', 'accountId', 'sessionGeneration', 'state', 'restoreOnly'].every(key => a[key] === b[key]);
 const row = (age = 20 * 60_000) => ({
   party_id: 'PARTY42', room_type: 'title', host_user_id: 'host', title_id: 'title-a', source_type: 'platform_title', source_id: 'title-a',
+  room_generation: 'generation-a', host_settings_revision: 0,
   is_active: true, started_at: new Date(Date.now() - age).toISOString(), updated_at: new Date().toISOString(),
-  last_activity_at: new Date(Date.now() - age).toISOString(), discovery_visibility: 'private', discovery_title: null, discovery_started_at: null,
+  last_activity_at: new Date(Date.now() - age).toISOString(), discovery_visibility: 'private', discovery_paused: false, discovery_title: null, discovery_started_at: null,
   join_policy: 'open', content_access_rule: 'open', reactions_policy: 'enabled', capture_policy: 'best_effort',
 });
 
@@ -30,6 +31,9 @@ function harness({ age, stored = row(age) } = {}) {
     WATCH_PARTY_ROOM_ACTIVE_WINDOW_MILLIS: 15 * 60_000,
     getCurrentAccountSessionAuthoritySnapshot: () => state.authority,
     sameAccountSessionAuthority: same,
+    getWritablePartyUserId: async () => state.authority?.userId,
+    requirePremiumAccessForRoom: async () => ({ allowed: true }),
+    readCreatorPermissions: async () => null,
     async captureAccountBoundSupabaseMutationSubject(expectedUserId) {
       assert.ok(state.authority?.state === 'ACTIVE' && !state.authority.restoreOnly);
       if (expectedUserId) assert.equal(expectedUserId, state.authority.userId);
@@ -37,10 +41,12 @@ function harness({ age, stored = row(age) } = {}) {
     },
     async invokeAccountBoundSupabaseMutationRpc(subject, name, args) {
       scope.assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+      if (name === 'resolve_watch_party_room_entry') return { data: [], error: null };
       state.calls.push({ name, args });
       const data = state.server ? await state.server({ name, args }) : {
         partyId: args.p_party_id, sourceType: args.p_expected_source_type, sourceId: args.p_expected_source_id,
-        visibility: args.p_visibility, title: args.p_title, published: false, startedAt: null, projectionId: null,
+        roomType: state.stored.room_type, roomGeneration: args.p_expected_room_generation, settingsRevision: args.p_expected_settings_revision + 1, joinPolicy: args.p_join_policy,
+        visibility: args.p_discovery_visibility, discoveryPaused: args.p_discovery_paused, title: args.p_discovery_title, published: false, startedAt: null, projectionId: null,
       };
       scope.assertAccountBoundSupabaseMutationSubjectCurrent(subject);
       return { data, error: null };
@@ -58,19 +64,43 @@ function harness({ age, stored = row(age) } = {}) {
   };
   const rules = extract('_lib/roomRules.ts', ['normalizeJoinPolicy', 'normalizeContentAccessRule', 'normalizeReactionsPolicy', 'normalizeCapturePolicy']);
   const subject = extract('_lib/accountBoundSupabaseMutation.ts', ['AccountBoundSupabaseMutationError', 'assertAccountBoundSupabaseMutationSubjectCurrent']);
-  const source = extract('_lib/watchParty.ts', ['PARTY_ROOMS_TABLE', 'PARTY_ROOMS_LEGACY_BASE_SELECT', 'PARTY_ROOMS_BASE_SELECT', 'PARTY_ROOMS_POLICY_SELECT',
+  const source = extract('_lib/watchParty.ts', ['PARTY_ROOMS_TABLE', 'PARTY_ROOMS_LEGACY_BASE_SELECT', 'PARTY_ROOMS_BASE_SELECT', 'PARTY_ROOMS_POLICY_SELECT', 'PARTY_ROOMS_HOST_SETTINGS_SELECT',
     'normalizeWatchPartyContentSourceType', 'normalizeWatchPartyDiscoveryVisibility', 'isMissingColumnError',
     'toTimeMillis', 'getWatchPartyRoomActivityMillis', 'isWatchPartyRoomActive', 'rowToState', 'fetchPartyRoomRow', 'getPartyRoom',
-    'readOwnedPartyRoomForPreparation', 'getOwnedPartyRoomForPreparation', 'writePartyRoomDiscovery', 'setPartyRoomDiscoverySettings', 'publishPartyRoomDiscovery']);
+    'readOwnedPartyRoomForPreparation', 'getOwnedPartyRoomForPreparation', 'writePartyRoomDiscovery', 'setPartyRoomDiscoverySettings', 'publishPartyRoomDiscovery', 'setPartyRoomPolicies']);
   vm.runInNewContext(ts.transpileModule(`${rules}\n${subject}\n${source}\nObject.assign(exports, { rowToState });`, { compilerOptions: options }).outputText, scope);
   scope.assertAccountBoundSupabaseMutationSubjectCurrent = scope.exports.assertAccountBoundSupabaseMutationSubjectCurrent;
+  const helper = { exports: {}, Date, require(name) {
+    if (name === './accountSessionAuthority') return scope;
+    if (name === './accountBoundSupabaseMutation') return scope;
+    if (name === './watchParty') return scope.exports;
+    throw Error(name);
+  } };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('_lib/watchPartyHostSettings.ts', 'utf8'), { compilerOptions: options }).outputText, helper);
+  scope.setWatchPartyHostSettings = helper.exports.setWatchPartyHostSettings;
   return { state, api: scope.exports, expected: scope.exports.rowToState(stored) };
 }
 
 test('recent exact host settings still use the existing authoritative setter', async () => {
   const h = harness({ age: 60_000 });
   assert.ok(await h.api.setPartyRoomDiscoverySettings('PARTY42', { discoveryVisibility: 'public', discoveryTitle: 'Tonight' }, h.expected));
-  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'set_party_room_discovery');
+  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'set_watch_party_room_host_settings');
+});
+
+for (const field of ['room_generation', 'host_settings_revision']) test(`Live preparation cannot rebase an old ${field} draft through the real policy helper`, async () => {
+  const h = harness({ stored: { ...row(60_000), room_type: 'live', title_id: null, source_type: null, source_id: null,
+    discovery_visibility: 'circle', discovery_paused: true } });
+  h.state.stored = { ...h.state.stored, [field]: field === 'room_generation' ? 'generation-b' : 2 };
+  assert.equal(await h.api.setPartyRoomPolicies('PARTY42', { discoveryPaused: false, discoveryVisibility: 'circle' }, h.expected), null);
+  assert.equal(h.state.calls.length, 0);
+});
+
+test('Live preparation title update preserves an explicitly paused audience through the real helper', async () => {
+  const h = harness({ stored: { ...row(60_000), room_type: 'live', title_id: null, source_type: null, source_id: null,
+    discovery_visibility: 'circle', discovery_paused: true } });
+  const saved = await h.api.setPartyRoomPolicies('PARTY42', { discoveryTitle: 'A paused room' }, h.expected);
+  assert.equal(saved.discoveryVisibility, 'circle'); assert.equal(saved.discoveryPaused, true);
+  assert.equal(h.state.calls[0].args.p_publish, false); assert.equal(h.state.calls[0].args.p_discovery_paused, true);
 });
 
 for (const visibility of ['public', 'private']) test(`prepared host can save ${visibility} after the activity window without renewing or publishing`, async () => {
@@ -78,7 +108,8 @@ for (const visibility of ['public', 'private']) test(`prepared host can save ${v
   const saved = await h.api.setPartyRoomDiscoverySettings('PARTY42', { discoveryVisibility: visibility, discoveryTitle: 'Tonight' }, h.expected);
   assert.ok(saved, 'exact active prepared room reaches the authoritative settings RPC');
   assert.equal(saved.lastActivityAt, h.expected.lastActivityAt);
-  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'set_party_room_discovery');
+  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'set_watch_party_room_host_settings');
+  assert.equal(h.state.calls[0].args.p_publish, false);
   assert.equal(h.state.calls[0].args.p_session_generation, 'session-a');
   assert.equal(h.state.reads[0].table, 'watch_party_rooms');
   assert.deepEqual(h.state.reads[0].filters, [['party_id', 'PARTY42']]);
@@ -129,7 +160,7 @@ for (const replacement of [null, { ...owner(), userId: 'other', accountId: 'othe
 test('server source or Premium denial remains a failed save without retry or publication', async () => {
   const h = harness(); h.state.server = async () => null;
   assert.equal(await h.api.setPartyRoomDiscoverySettings('PARTY42', { discoveryVisibility: 'public' }, h.expected), null);
-  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'set_party_room_discovery');
+  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'set_watch_party_room_host_settings');
 });
 
 test('account replacement after settings dispatch cannot return a successful saved room', async () => {

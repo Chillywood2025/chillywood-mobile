@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { deferred, owner, same, premiumRuntime } from './helpers/premium-runtime-harness.mjs';
+import { loadMediaPickerHost } from './helpers/media-picker-host.mjs';
 import { resolvePremiumPurchaseReadiness } from '../_lib/premiumPurchaseReadiness.mjs';
 
 const require = createRequire(import.meta.url), React = require('react'), ts = require('typescript');
@@ -95,6 +96,15 @@ async function mount(t, { active = false, providerActive = false } = {}) {
     '../components/navigation/app-back-button': { AppBackButton: 'Back' }, '../components/ui/ProfileMediaImage': { ProfileMediaImage: 'Image' },
     '../components/ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: 'Fill' },
   };
+  // The real shared picker and owned-file hooks observe the same account
+  // replacement/retirement events as both composed Premium surfaces.
+  const media = loadMediaPickerHost({ React, native: common['react-native'],
+    snapshot: () => h.state.authority, subscribe: h.subscribeAuthority });
+  Object.assign(common, {
+    '../hooks/useMediaPicker': media,
+    '../hooks/useOwnedPickedMediaState': media.ownedState,
+    '../_lib/mediaPickerResources': media.resources,
+  });
   screens = Object.fromEntries(Object.entries(sources).map(([screen, code]) => {
     const mocks = { ...common,
       '@react-navigation/native': { useIsFocused: () => state.route === screen },
