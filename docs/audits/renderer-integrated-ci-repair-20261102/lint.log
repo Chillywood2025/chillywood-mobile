@@ -1,0 +1,27 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> chillywood-mobile@1.0.0 lint
+> expo lint app components hooks _lib constants --max-warnings 0 -- --concurrency off
+
+<checkout>/node_modules/expo/node_modules/@expo/cli/build/src/utils/errors.js:130
+    throw error;
+    ^
+
+Error: ENOENT: no such file or directory, mkdir '/home/agent/.expo'
+    at Object.mkdirSync (node:fs:1410:26)
+    at write (<checkout>/node_modules/@expo/json-file/build/JsonFile.js:228:27)
+    at setSync (<checkout>/node_modules/@expo/json-file/build/JsonFile.js:276:12)
+    at JsonFile.set (<checkout>/node_modules/@expo/json-file/build/JsonFile.js:109:16)
+    at getAnonymousId (<checkout>/node_modules/expo/node_modules/@expo/cli/build/src/api/user/UserSettings.js:180:18)
+    at new Telemetry (<checkout>/node_modules/expo/node_modules/@expo/cli/build/src/utils/telemetry/Telemetry.js:31:66)
+    at getTelemetry (<checkout>/node_modules/expo/node_modules/@expo/cli/build/src/utils/telemetry/index.js:43:21)
+    at record (<checkout>/node_modules/expo/node_modules/@expo/cli/build/src/utils/telemetry/index.js:59:29)
+    at recordCommand (<checkout>/node_modules/expo/node_modules/@expo/cli/build/src/utils/telemetry/index.js:66:12)
+    at <checkout>/node_modules/expo/node_modules/@expo/cli/build/bin/cli:258:9 {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'mkdir',
+  path: '/home/agent/.expo'
+}
+
+Node.js v24.22.1

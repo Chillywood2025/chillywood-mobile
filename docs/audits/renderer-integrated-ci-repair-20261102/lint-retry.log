@@ -1,0 +1,6 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> chillywood-mobile@1.0.0 lint
+> expo lint app components hooks _lib constants --max-warnings 0 -- --concurrency off
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
