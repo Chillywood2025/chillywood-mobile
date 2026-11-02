@@ -35,6 +35,8 @@ function validate(source,workflowText) {
     'message.payload.keys.includes(titleKey)',"profile_access_visibility='private'",'rt_circle_',
     'set_watch_party_room_host_settings',"next_action:'remove'",'actual Circle reacceptance',
     'private-only edit','rolled-back publication','post-reconnect Off','primary-disabled negative control',
+    "p_discovery_paused:visibility==='private'",'reportMutationFailureState(observer,label,watermark,read)',
+    'assert.equal(rolledBack.published,true','assert.equal(rolledBack.discoveryPaused,false',
     "admin.rpc('flush_discovery_invalidations'",'receive-only viewer channel',"delete from auth.sessions",'host session revoked',
     'primary_delivery_enabled=${initial.config.primary_delivery_enabled}']) assert.ok(source.includes(fragment),fragment);
   assert.doesNotMatch(source,/create\s+(?:or\s+replace\s+)?function\s+(?:public|private|realtime)\./i,
@@ -104,6 +106,18 @@ test('native proof qualifies exact managed transaction or wall-clock defaults wi
     assert.throws(()=>run('timestamp without time zone',value),assert.AssertionError);
   assert.throws(()=>run('timestamp with time zone','now()'),assert.AssertionError);
 });
+test('supplemental mutation diagnostics never replace the original receipt failure or its bound',async()=>{
+  const from=script.indexOf('}catch(error){\n    try{await reportMutationFailureState');assert.ok(from>0);
+  const body=script.slice(from+'}catch(error){'.length,script.indexOf('}finally{observer.pending=null;}',from));
+  const primary=Error('original receipt timeout'),labels=[],logs=[];
+  const run=vm.runInNewContext(`(async(error)=>{${body}})`,{reportMutationFailureState:async()=>{throw Error('private supplemental text');},
+    observer:{},label:'Circle start',watermark:'synthetic timestamp',read:()=>{},
+    console:{log:value=>logs.push(JSON.parse(value))},diagnostics:{phase:value=>labels.push(value)}});
+  await assert.rejects(run(primary),error=>error===primary);
+  assert.deepEqual(labels,['mutation Circle start']);
+  assert.deepEqual(logs,[{proof:'native discovery failed mutation state unavailable',label:'Circle start'}]);
+  assert.ok(script.includes('timeout(3000,`${label} primary Broadcast`)'),'diagnostics do not lengthen or replace actual receipt timing');
+});
 test('actual runner cleanup rejects resolved non-ok removal without replacing its original primary failure',async()=>{
   const from=script.indexOf('const cleanup=async(label,operation)=>{');assert.ok(from>0);
   const body=script.slice(from,script.indexOf('for(const client of clients)',from));
@@ -133,6 +147,8 @@ test('actual runner cleanup rejects resolved non-ok removal without replacing it
 test('native proof source guard rejects removed privacy, primary timing and execution boundaries',()=>{
   for(const needle of ["query('show cron.launch_active_jobs'),'off'",'receiptMs<3000',"next_action:'remove'",'rolled-back publication',
     'primary-disabled negative control','receive-only viewer channel',"delete from auth.sessions",'JSON.stringify(message.payload)',
+    "p_discovery_paused:visibility==='private'",'reportMutationFailureState(observer,label,watermark,read)',
+    'assert.equal(rolledBack.published,true','assert.equal(rolledBack.discoveryPaused,false',
     'message.payload.keys.includes(source.key)',"profile_access_visibility='private'",'diagnostics.primary(error)',
     'diagnostics.cleanup(label,error)','diagnostics.finish()',
     'id===retainedHost?.id&&await verifyRetainedDiscoveryHost(db,retainedHost,{email:retainedHost.email})'])

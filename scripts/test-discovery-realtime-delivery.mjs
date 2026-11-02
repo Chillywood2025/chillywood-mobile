@@ -128,6 +128,31 @@ async function count(client,audience='public') {
     .select('id',{count:'exact',head:true}).eq('source_type','party_room').eq('source_id',party);
   noError(result,`${audience} canonical viewer read`);return result.count;
 }
+async function reportMutationFailureState(observer,label,watermark,read) {
+  // Read-only, exact synthetic-source diagnostics after failure. These counts
+  // never substitute for the actual Broadcast receipt or extend its 3s bound.
+  const state=JSON.parse(await query(`select jsonb_build_object(
+    'roomPaused',(select discovery_paused from public.watch_party_rooms where party_id=${lit(party)}),
+    'publicProjectionRows',(select count(*)::int from public.discovery_feed_items where source_type='party_room' and source_id=${lit(party)}),
+    'circleProjectionRows',(select count(*)::int from public.circle_spectator_feed_items where source_type='party_room' and source_id=${lit(party)}),
+    'outbox',(select coalesce(jsonb_agg(jsonb_build_object('status',status,'attempts',attempts,'rows',rows,
+      'keyedRows',keyed_rows)),'[]') from (select status,attempts,count(*)::int rows,
+        count(*) filter(where cardinality(hint_keys)>0)::int keyed_rows from private.discovery_invalidation_outbox
+      where topic=${lit(observer.topic)} and source_id in (
+        select id from public.discovery_feed_items where source_type='party_room' and source_id=${lit(party)}
+        union select id from public.circle_spectator_feed_items where source_type='party_room' and source_id=${lit(party)})
+      group by status,attempts order by status,attempts limit 20) grouped),
+    'managedReceiptRows',(select count(*)::int from realtime.messages where topic=${lit(observer.topic)}
+      and extension='broadcast' and private is true and event='discovery:invalidate'
+      and inserted_at>=(${lit(watermark)}::timestamptz at time zone 'UTC')),
+    'managedKeyedReceiptRows',(select count(*)::int from realtime.messages where topic=${lit(observer.topic)}
+      and extension='broadcast' and private is true and event='discovery:invalidate' and jsonb_typeof(payload->'keys')='array'
+      and inserted_at>=(${lit(watermark)}::timestamptz at time zone 'UTC')))`));
+  const canonicalCount=await read();
+  assert.ok(Number.isInteger(canonicalCount)&&canonicalCount>=0);
+  const channelState=['closed','errored','joined','joining','leaving'].includes(observer.channel.state)?observer.channel.state:'unknown';
+  console.log(JSON.stringify({proof:'native discovery failed mutation state',label,channelState,canonicalCount,...state}));
+}
 async function observed(observer,label,mutation,read,expected) {
   diagnostics.phase(`mutation ${label}`);
   assert.equal(observer.error,null);
@@ -168,6 +193,11 @@ async function observed(observer,label,mutation,read,expected) {
     assert.ok(receiptMs<3000,`${label}: healthy primary transport must not wait for the 10s scheduler`);
     samples.push({label,receiptMs,projectionMs});
     console.log(JSON.stringify({proof:'native discovery mutation',label,receiptMs,projectionMs}));
+  }catch(error){
+    try{await reportMutationFailureState(observer,label,watermark,read);}
+    catch{console.log(JSON.stringify({proof:'native discovery failed mutation state unavailable',label}));}
+    diagnostics.phase(`mutation ${label}`);
+    throw error; // Supplemental read failure can never replace the primary.
   }finally{observer.pending=null;}
 }
 async function silent(observersToCheck,label,mutation) {
@@ -225,6 +255,7 @@ try {
     const r=await room();return noError(await host.client.rpc('set_watch_party_room_host_settings',{
       p_party_id:party,p_expected_room_generation:r.room_generation,p_expected_settings_revision:r.host_settings_revision,
       p_session_generation:host.session,p_join_policy:'open',p_discovery_visibility:visibility,p_discovery_title:caption,
+      p_discovery_paused:visibility==='private',
       p_expected_source_type:r.source_type,p_expected_source_id:r.source_id,p_publish:publish,p_allow_owner_discovery:false,
     }),'actual versioned host settings');
   };
@@ -255,9 +286,11 @@ try {
   await observed(circle,'Circle Off withdrawal',()=>settings('private'),()=>count(friend.client,'circle'),0);
   await silent([home,other,circle],'rolled-back publication',async()=>{
     const r=await room(),claims=JSON.stringify({role:'authenticated',sub:host.id,session_id:host.session});
-    query(`begin;set local role authenticated;set local request.jwt.claims=${lit(claims)};
+    const rolledBack=JSON.parse(query(`begin;set local role authenticated;set local request.jwt.claims=${lit(claims)};
       select public.set_watch_party_room_host_settings(${lit(party)},${lit(r.room_generation)},${r.host_settings_revision},${lit(host.session)},
-        'open','public','Rolled back',${lit(r.source_type)},${lit(r.source_id)},true,false);rollback`);
+        'open','public','Rolled back',${lit(r.source_type)},${lit(r.source_id)},true,false,false);rollback`));
+    assert.equal(rolledBack.published,true,'rollback control actually publishes inside its uncommitted transaction');
+    assert.equal(rolledBack.discoveryPaused,false,'rollback control explicitly resumes before rolling back');
   });
   assert.equal(await count(outsider.client),0,'rollback retained private source and no websocket publication');
   await observed(home,'public restart listing',()=>settings('public'),()=>count(outsider.client),1);
