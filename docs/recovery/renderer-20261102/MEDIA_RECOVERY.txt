@@ -1,0 +1,3 @@
+Media recovery archive SHA-256: 274ab76c79fa2975acb1bdb1605ef81871b35577da2825d52263410e83cca5de
+
+Contains transcript-derived SAR/HDR source snapshots and patches. Core snapshots match retained original Git blob prefixes; newly recovered helper/test/doc source lacks independently retained original complete hashes. See archive README and manifest. This archive is NOT installed runtime code, a complete pool implementation, a tested release, or production qualification. No tests rerun. No raw workload receipts recovered.
