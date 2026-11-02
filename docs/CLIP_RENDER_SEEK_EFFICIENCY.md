@@ -1,15 +1,17 @@
 # Clip render seek efficiency: recovered source, rebuilt proof
 
 The runtime renderer was recovered byte-for-byte (Git blob
-`141a33a963d1cf520208049b0c30dabdb04b875c`). Its implementation is unchanged by
-this reconstruction. Missing test helpers and the seek matrix were rebuilt;
+`141a33a963d1cf520208049b0c30dabdb04b875c`). The later delayed-timeline correction
+narrows optimization eligibility as described below. Missing test helpers and the seek matrix were rebuilt;
 they are **new tests**, not a claim that the lost original test files or raw
 benchmark receipts were recovered. Historical pass messages are not new proof.
 
 ## Qualified seek path
 
-Only the MOV/MP4 demuxer + H264 + AAC-LC (or no audio) combination uses input
-seeking. The input seek is a whole second at least one second before the cut;
+Only the MOV/MP4 demuxer + H264 + AAC-LC (or no audio) combination with explicit
+zero video/container starts and zero audio start when present uses input seeking.
+Nonzero, misaligned, missing or unknown starts retain legacy output-only seeking;
+accepted inputs are not rejected. The input seek is a whole second at least one second before the cut;
 `-noaccurate_seek` retains keyframe preroll. The remaining exact trim stays at
 output. This preserves the existing `fps=30` grid and warms the AAC decoder.
 Fractional input seeking or a fixed preroll allowance must not replace it without

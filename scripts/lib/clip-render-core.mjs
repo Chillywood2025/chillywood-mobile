@@ -12,6 +12,12 @@ const IMAGE_DEMUXERS = 'image2,png_pipe,jpeg_pipe,webp_pipe';
 export function clipRenderInputSeek(plan, probe) {
   const video = probe?.streams?.find(stream => stream.codec_type === 'video');
   const audio = probe?.streams?.find(stream => stream.codec_type === 'audio');
+  // Nonzero/unknown timeline anchors retain legacy seeking. Delayed video
+  // produced intermittent decoded differences on identical source bytes while
+  // legacy renders stayed stable. Keep the separate negative-packet PTS guard.
+  const zeroStart = value => typeof value === 'string' && value.trim() !== '' && Number(value) === 0;
+  if (!zeroStart(video?.start_time) || !zeroStart(probe?.format?.start_time)
+      || (audio && !zeroStart(audio.start_time))) return 0;
   // Only this container/codec/profile has passed the decoded-media seek
   // equivalence fixtures. In particular, Opus seek preroll is not equivalent.
   // Other accepted inputs retain output-only seeking, not a new rejection.

@@ -30,12 +30,17 @@ test('frozen baseline is the recovered pre-seek renderer, not a rewritten compar
   assert.equal(createHash('sha256').update(source).digest('hex'), 'f7f1b2fa705f0aa518c58ff4ff18d80dd54917dc3e05c345431ac26d864cde67');
 });
 test('hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio', () => {
-  const video = { codec_type: 'video', codec_name: 'h264' };
-  const audio = { codec_type: 'audio', codec_name: 'aac', profile: 'LC' };
-  const probe = { streams: [video, audio], format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2' } };
+  const video = { codec_type: 'video', codec_name: 'h264', start_time: '0.000000' };
+  const audio = { codec_type: 'audio', codec_name: 'aac', profile: 'LC', start_time: '0.000000' };
+  const probe = { streams: [video, audio], format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2', start_time: '0.000000' } };
   assert.equal(clipRenderInputSeek({ start: 11.123 }, probe), 10);
   assert.equal(clipRenderInputSeek({ start: 0.9 }, probe), 0);
   assert.equal(clipRenderInputSeek({ start: 11.123 }, { ...probe, streams: [video] }), 10);
+  for (const start_time of ['0.333008', '5.125000', '-0.001', '', 'NaN', undefined, null]) {
+    assert.equal(clipRenderInputSeek({ start: 11.123 }, { ...probe, streams: [{ ...video, start_time }, audio] }), 0);
+    assert.equal(clipRenderInputSeek({ start: 11.123 }, { ...probe, streams: [video, { ...audio, start_time }] }), 0);
+    assert.equal(clipRenderInputSeek({ start: 11.123 }, { ...probe, format: { ...probe.format, start_time } }), 0);
+  }
   for (const codec_name of ['hevc', 'av1', 'vp9']) assert.equal(clipRenderInputSeek({ start: 11.123 }, { ...probe, streams: [{ ...video, codec_name }, audio] }), 0);
   for (const codec_name of ['opus', 'mp3', 'pcm_s16le']) assert.equal(clipRenderInputSeek({ start: 11.123 }, { ...probe, streams: [video, { ...audio, codec_name }] }), 0);
   for (const profile of ['HE-AAC', undefined]) assert.equal(clipRenderInputSeek({ start: 11.123 }, { ...probe, streams: [video, { ...audio, profile }] }), 0);
@@ -56,6 +61,7 @@ test('rebuilt real-media matrix compares exact decoded frames and aligned audio 
   const dir = await mkdtemp(path.join(tmpdir(), 'clip-seek-rebuilt-'));
   try {
     const source = await syntheticSource(dir, 'source');
+    assert.equal(clipRenderInputSeek({ start: 11.123 }, await probeClip(source)), 10);
     const receipt = [];
     const compare = async (name, input, spec, watermark = null) => {
       // Completed cases survive an abrupt later process exit in TAP/spec output.
@@ -82,6 +88,9 @@ test('rebuilt real-media matrix compares exact decoded frames and aligned audio 
       ['positive-pts', { offset: 5.125 }], ['mov-delayed-audio', { mov: true, audioDelay: 0.317, audioRate: 44100 }],
       ['delayed-video', { videoDelay: 0.317 }], ['webm-opus', { webm: true }]]) {
       const input = await syntheticSource(dir, name, options);
+      if (options.offset || options.videoDelay || options.audioDelay) {
+        assert.equal(clipRenderInputSeek({ start: 11.123 }, await probeClip(input)), 0);
+      }
       if (options.offset) assert.ok(Number((await probeClip(input)).format.start_time) > 5);
       if (options.videoDelay) assert.ok(Number((await probeClip(input)).streams.find(s => s.codec_type === 'video').start_time) > 0.3);
       await compare(name, input, { ...edit,
