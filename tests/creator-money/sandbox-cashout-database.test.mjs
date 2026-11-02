@@ -78,8 +78,64 @@ test('sandbox cashout uses provider-backed test sources without opening live mon
   assert.equal((await observe({kind:'reversal',objectId:'trr_sandboxReturn',transferId:transfer.objectId,amountMinor:8820,accountId:context.accountId,environment:'test'},reversal.token)).status,'returned');
   assert.equal(await scalar('select sum(released_minor)::integer from private.sandbox_cashout_simulated_return_accounting'),9000);
   assert.equal((await user("select public.preview_sandbox_creator_cashout(9000,'instant')")).ready,true,'test principal and app fee can be reserved again under explicitly simulated economics');
+  const returnedProof={kind:'reversal',objectId:'trr_sandboxReturn',transferId:transfer.objectId,amountMinor:8820,accountId:context.accountId,environment:'test'};
+  assert.equal((await observe(returnedProof,reversal.token)).status,'returned');
+  assert.equal(await scalar('select count(*)::int from private.sandbox_cashout_simulated_return_accounting'),1,'duplicate terminal observation does not release twice');
+  await assert.rejects(db.query("update private.sandbox_cashout_qualifications set settlement_policy_version='rewritten' where id=$1",[q]),/immutable/);
+  await assert.rejects(user("select public.preview_sandbox_creator_cashout($1,'instant')",['1.5']),/invalid input syntax/);
+  await assert.rejects(user("select public.preview_sandbox_creator_cashout($1,'instant')",['2147483648']),/out of range/);
+  await assert.rejects(user("select public.preview_sandbox_creator_cashout(-1,'instant')"),/cashout_input_invalid/);
+
+  // A second independently observed purchase supplies the second allocation.
+  // Ceil(10% * 333) = 34, not a floating-point or truncation-based 33.
+  const pe2=await scalar("insert into public.provider_events(provider,provider_event_id,user_id,environment,event_type,status,idempotency_key) values('revenuecat_app_store','evt_sandboxPurchase2',$1,'sandbox','INITIAL_PURCHASE','processed','evt_sandboxPurchase2') returning id",[buyer]);
+  const source2=await scalar(`insert into public.money_access_ledger_events(user_id,creator_id,provider_event_id,event_type,amount_minor,currency,environment,payable_state,status,source_type,metadata)
+   values($1,$2,$3,'INITIAL_PURCHASE',333,'usd','sandbox','not_payable','sandbox_only','tip','{"original_transaction_id":"sandboxOriginal2"}') returning id`,[buyer,creator,pe2]);
+  assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[source2,q])).netMinor,299);
+  await db.query("update public.money_access_ledger_events set currency='eur' where id=$1",[source2]);
+  assert.equal(await scalar('select private.sandbox_cashout_source($1,$2)',[source2,q]),null,'EUR source cannot fund USD test cashout');
+  await db.query("update public.money_access_ledger_events set currency='usd' where id=$1",[source2]);
+  const q2=await scalar(`insert into private.sandbox_cashout_qualifications select
+   gen_random_uuid(),creator_id,platform_account_id,account_id,destination_id,environment,payout_type,source_type,
+   0,25,'synthetic-test-policy-v2',simulated_tax_bps,simulated_platform_bps,simulated_provider_bps,simulated_provider_fixed_minor,
+   manual_schedule_verified,exclusive_writer_verified,zero_additional_application_fee_verified,platform_fee_payer_verified,test_mode_verified,
+   provider_evidence_reference,clock_timestamp(),expires_at from private.sandbox_cashout_qualifications where id=$1 returning id`,[q]);
+  const quote2=await user("select public.preview_sandbox_creator_cashout(9200,'instant')");
+  assert.equal(quote2.ready,true);assert.equal(quote2.expectedProviderFeeMinor,25);assert.equal(quote2.bankMinor,8991);
+  const request2=async(op)=>user("select public.request_sandbox_creator_cashout(9200,'instant',$1,$2,184,25,8991)",[q2,op]);
+  const cancelBefore=await request2(quote2.operationId);
+  assert.equal(await scalar('select count(*)::int from private.sandbox_cashout_allocations where execution_id=$1',[cancelBefore.requestId]),2);
+  assert.equal((await user('select public.cancel_undispatched_sandbox_creator_cashout($1)',[cancelBefore.requestId])).status,'canceled');
+  assert.equal((await user("select public.preview_sandbox_creator_cashout(9200,'instant')")).ready,true,'cancel before dispatch releases test reservation');
+  const requestAfterCancel=await request2((await user("select public.preview_sandbox_creator_cashout(9200,'instant')")).operationId);
+  const claim2=stage=>rpc('select public.claim_sandbox_creator_cashout_dispatch($1,$2)',[requestAfterCancel.requestId,stage]);
+  const observe2=(facts,token=null)=>rpc('select public.record_sandbox_creator_cashout_observation($1,$2,$3)',[requestAfterCancel.requestId,token,JSON.stringify(facts)]);
+  // Rolled-back durable claims cannot leave external-dispatch authority behind.
+  await db.exec('begin');assert.equal((await claim2('funding')).claimed,true);await db.exec('rollback');
+  assert.equal((await rpc('select public.get_sandbox_creator_cashout_execution_context($1)',[requestAfterCancel.requestId])).phase,'prepared');
+  const claim2fund=await claim2('funding');
+  await observe2({...transfer,objectId:'tr_sandboxFunding2',amountMinor:8991},claim2fund.token);
+  const canceledFunded=await user('select public.cancel_undispatched_sandbox_creator_cashout($1)',[requestAfterCancel.requestId]);
+  assert.equal(canceledFunded.status,'funding_return_pending');assert.equal(canceledFunded.bankPaid,false);
+  assert.equal((await claim2('payout')).claimed,false,'funded cancellation forever fences bank dispatch');
+  const return2=await claim2('funding_return');assert.equal(return2.claimed,true);assert.equal((await claim2('funding_return')).claimed,false);
+  const fundingReturn={kind:'funding_return',objectId:'trr_sandboxFundingReturn2',transferId:'tr_sandboxFunding2',amountMinor:8991,
+   accountId:context.accountId,platformAccountId:context.platformAccountId,environment:'test',
+   fundingBalance:{transactionId:'txn_funding2',sourceId:'tr_sandboxFunding2',amountMinor:-8991,feeMinor:0,netMinor:-8991,currency:'usd',status:'available',type:'transfer'},
+   returnBalance:{transactionId:'txn_return2',sourceId:'trr_sandboxFundingReturn2',amountMinor:8991,feeMinor:0,netMinor:8991,currency:'usd',status:'available',type:'transfer_refund'}};
+  await assert.rejects(observe2({...fundingReturn,amountMinor:9200}),/sandbox_observation_binding_invalid/);
+  assert.equal((await observe2(fundingReturn)).status,'returned');
+  assert.equal((await observe2(fundingReturn)).status,'returned');
+  const totals=await scalar('select jsonb_build_object(\'released\',sum(released_minor),\'retained\',sum(retained_fixture_cost_minor),\'rows\',count(*)) from private.sandbox_cashout_simulated_return_accounting where execution_id=$1',[requestAfterCancel.requestId]);
+  assert.deepEqual(totals,{released:9175,retained:25,rows:2});
+  assert.equal((await user("select public.preview_sandbox_creator_cashout(9275,'instant')")).availableMinor,9274,'nonzero fixture cost retained exactly once across both allocations');
+  const reReserveQuote=await user("select public.preview_sandbox_creator_cashout(9200,'instant')");
+  const reReserved=await request2(reReserveQuote.operationId);
   await db.query("update public.money_access_ledger_events set payable_state='refunded',status='refunded' where id=$1",[source]);
   assert.equal((await user('select public.get_my_sandbox_creator_cashout_execution($1)',[record.requestId])).sourceHeld,true);
+  assert.equal((await user('select public.get_my_sandbox_creator_cashout_execution($1)',[reReserved.requestId])).sourceHeld,true,'refund after release and re-reservation holds the new execution too');
+  await assert.rejects(rpc("select public.claim_sandbox_creator_cashout_dispatch($1,'funding')",[reReserved.requestId]),/sandbox_source_reconciliation_required/);
+  await user('select public.cancel_undispatched_sandbox_creator_cashout($1)',[reReserved.requestId]);
   await assert.rejects(user("select public.request_sandbox_creator_cashout(1,'instant',$1,gen_random_uuid(),1,0,0)",[q]),/sandbox_source_reconciliation_required/);
   await db.query("update public.sandbox_monetization_testers set status='revoked' where user_id=$1",[creator]);
   await assert.rejects(user('select public.list_my_sandbox_creator_cashout_executions()'),/sandbox_current_tester_required/);

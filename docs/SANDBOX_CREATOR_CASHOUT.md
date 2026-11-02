@@ -22,6 +22,36 @@ Sandbox earning fee/tax/net deductions are labeled simulated. A quote is not
 a payout. Reservation, connected-account funding, pending payout and provider
 test-paid status are distinct; none proves a real bank deposit.
 
+## Accounting and source evidence
+
+Digital test earnings consume existing canonical sandbox purchase/renewal ledger
+rows backed by processed provider events. Physical merchandise consumes its own
+canonical paid order, processed Stripe payment receipt and immutable sandbox
+Checkout/account binding; it does not create fake digital ledger rows. Historical
+merch orders without that binding stay unavailable. Buyer and creator must differ.
+Only USD sources are supported. Both source types retain their own private
+reservations; public sandbox ledger rows remain `not_payable`.
+
+The independently qualified test account carries an immutable, explicitly
+simulated settlement policy. Integer-cent deductions are rounded upward per
+component, and payout gross equals bank principal plus the accepted app fee and
+quoted provider cost exactly. Test return accounting releases principal and app
+fee while retaining that fixed simulated provider cost once, across all allocated
+sources. This is not actual-fee reconciliation or production tax evidence.
+
+Refunds, disputes and source identity/economic changes hold further dispatch,
+including after a prior return and re-reservation. Unknown dispatch stays GET-only.
+An expired or revoked test qualification blocks new provider writes, including
+return dispatch; existing-object GET reconciliation remains possible. No implicit
+renewal or generic retry grants new dispatch authority. Recovery requiring a fresh
+qualification must be reviewed independently rather than editing an old receipt.
+
+Local full-schema tests exercise real Apple/Google subscription processors and
+the real Stripe merchandise lifecycle processor with synthetic provider inputs.
+They prove source integration, not actual store/provider delivery. Shared-engine
+recovery tests use actual SQL contexts through the Edge adapter and verify epoch
+seconds, account-scoped GET filters and repeated unknown recovery without POSTs.
+
 ## Server dependencies
 
 The database companion migration owns all `*_sandbox_creator_cashout*` RPCs,

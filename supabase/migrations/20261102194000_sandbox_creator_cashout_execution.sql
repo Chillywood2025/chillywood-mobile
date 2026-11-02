@@ -64,6 +64,22 @@ create table private.sandbox_cashout_simulated_return_accounting (
  primary key(execution_id,money_ledger_id),
  foreign key(execution_id,money_ledger_id) references private.sandbox_cashout_allocations(execution_id,money_ledger_id)
 );
+-- Physical orders retain their own canonical identity. Never manufacture a
+-- digital provider event or a payable earnings row to represent merchandise.
+create table private.sandbox_cashout_merch_allocations (
+ execution_id uuid not null references private.sandbox_cashout_executions(id),
+ order_id uuid not null references public.merch_orders(id),
+ amount_minor integer not null check(amount_minor>0), source_hash text not null,
+ primary key(execution_id,order_id)
+);
+create index sandbox_cashout_merch_allocations_order_idx on private.sandbox_cashout_merch_allocations(order_id);
+create index sandbox_cashout_allocations_source_idx on private.sandbox_cashout_allocations(money_ledger_id);
+create table private.sandbox_cashout_merch_simulated_returns (
+ execution_id uuid not null, order_id uuid not null,
+ released_minor integer not null check(released_minor>=0), retained_fixture_cost_minor integer not null check(retained_fixture_cost_minor>=0),
+ primary key(execution_id,order_id),
+ foreign key(execution_id,order_id) references private.sandbox_cashout_merch_allocations(execution_id,order_id)
+);
 
 create function private.sandbox_cashout_subject_current(p_user uuid,p_session uuid) returns boolean
 language sql stable set search_path='' as $$
@@ -89,9 +105,20 @@ end; $$;
 create function private.lock_sandbox_cashout_creator(p_creator uuid) returns void
 language plpgsql set search_path='' as $$
 begin
+ perform 1 from public.merch_orders where creator_id=p_creator and environment='sandbox' order by id for update;
  perform 1 from public.money_access_ledger_events where creator_id=p_creator and environment='sandbox' order by id for update;
  perform pg_advisory_xact_lock(hashtextextended('sandbox-cashout:'||p_creator::text,0));
 end; $$;
+create function private.sandbox_cashout_revoke_admission() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare creator uuid;
+begin
+ select creator_id into strict creator from private.sandbox_cashout_qualifications where id=new.qualification_id;
+ perform private.lock_sandbox_cashout_creator(creator);
+ return new;
+end; $$;
+create trigger sandbox_cashout_revoke_admission before insert on private.sandbox_cashout_revocations
+ for each row execute function private.sandbox_cashout_revoke_admission();
 create function public.request_sandbox_creator_cashout(p_amount_minor integer,p_payout_type text,p_qualification_id uuid,p_operation_id uuid,
  p_expected_app_fee_minor integer,p_expected_provider_fee_minor integer,p_expected_bank_minor integer) returns jsonb
 language plpgsql security definer set search_path='' as $$
@@ -131,6 +158,19 @@ begin
   if take>0 then insert into private.sandbox_cashout_allocations values(new_execution,m.id,take,s->>'sourceHash'); remaining:=remaining-take; end if;
   exit when remaining=0;
  end loop;
+ if remaining>0 then
+  for m in select * from public.merch_orders where creator_id=u and environment='sandbox' order by merch_orders.created_at,merch_orders.id loop
+   s:=private.sandbox_cashout_merch_source(m.id,p_qualification_id);
+   if s is null then continue; end if;
+   select coalesce(sum(a.amount_minor-coalesce(r.released_minor,0)),0) into used
+    from private.sandbox_cashout_merch_allocations a join private.sandbox_cashout_executions e on e.id=a.execution_id
+    left join private.sandbox_cashout_merch_simulated_returns r on r.execution_id=a.execution_id and r.order_id=a.order_id
+    where a.order_id=m.id and e.phase<>'canceled';
+   take:=least(remaining,greatest(0,(s->>'netMinor')::bigint-used));
+   if take>0 then insert into private.sandbox_cashout_merch_allocations values(new_execution,m.id,take,s->>'sourceHash'); remaining:=remaining-take; end if;
+   exit when remaining=0;
+  end loop;
+ end if;
  if remaining<>0 then raise exception 'sandbox_earnings_insufficient'; end if;
  return private.sandbox_cashout_summary(new_execution);
 end; $$;
@@ -158,6 +198,10 @@ begin
  if p_stage is null or not ((p_stage='funding' and e.phase='prepared') or (p_stage='payout' and e.phase='funded')
  or (p_stage='reversal' and e.phase='return_confirmed') or (p_stage='funding_return' and e.phase='funding_return_pending'))
  then return jsonb_build_object('claimed',false,'token',tok); end if;
+ perform 1 from private.sandbox_cashout_control where singleton for share;
+ perform 1 from public.platform_money_kill_switches where key in
+  ('live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled','creator_monetization_enabled','provider_webhooks_enabled')
+  order by key for share;
  if not private.sandbox_cashout_enabled() then raise exception 'sandbox_payout_execution_disabled'; end if;
  select * into q from private.sandbox_cashout_qualifications where id=e.qualification_id;
  if q.verified_at>clock_timestamp() or q.expires_at<=clock_timestamp()
@@ -166,9 +210,18 @@ begin
   and a.provider='stripe_connect' and a.provider_environment='test' and a.provider_account_id=q.account_id)
  then raise exception 'sandbox_cashout_provider_qualification_required'; end if;
  if p_stage in ('funding','payout') then
+  -- Freeze every current subject/cohort authority row until the durable claim
+  -- commits. Revocation that committed first is re-read after these waits.
+  perform 1 from auth.users where id=e.creator_id for share;
+  perform 1 from auth.sessions where id=e.originating_session_id and user_id=e.creator_id for share;
+  perform 1 from public.sandbox_monetization_testers where user_id=e.creator_id::text for share;
+  perform 1 from public.beta_access_memberships where user_id=e.creator_id::text for share;
+  perform 1 from public.platform_role_memberships where user_id=e.creator_id::text for share;
   if not private.sandbox_cashout_subject_current(e.creator_id,e.originating_session_id) then raise exception 'sandbox_origin_tester_required'; end if;
   if e.source_hold or exists(select 1 from private.sandbox_cashout_allocations a where a.execution_id=e.id
    and (private.sandbox_cashout_source(a.money_ledger_id,q.id)->>'sourceHash') is distinct from a.source_hash)
+   or exists(select 1 from private.sandbox_cashout_merch_allocations a where a.execution_id=e.id
+    and (private.sandbox_cashout_merch_source(a.order_id,q.id)->>'sourceHash') is distinct from a.source_hash)
   then raise exception 'sandbox_source_reconciliation_required'; end if;
  end if;
  update private.sandbox_cashout_executions set phase=case p_stage when 'funding' then 'funding_unknown' when 'payout' then 'payout_unknown'
@@ -225,6 +278,48 @@ begin
  -((m.amount_minor::bigint*q.simulated_provider_bps+9999)/10000)-q.simulated_provider_fixed_minor;
  if net<=0 or net>2147483647 then return null; end if;
  h:=md5(to_jsonb(m)::text||to_jsonb(p)::text);
+ return jsonb_build_object('netMinor',net,'sourceHash',h);
+end; $$;
+
+create function private.sandbox_cashout_merch_source(p_id uuid,p_qualification uuid) returns jsonb
+language plpgsql stable set search_path='' as $$
+declare o public.merch_orders; p public.stripe_merch_events; q private.sandbox_cashout_qualifications;
+ b private.commerce_tax_checkout_bindings; net bigint; h text;
+begin
+ select * into o from public.merch_orders where id=p_id;
+ select * into q from private.sandbox_cashout_qualifications where id=p_qualification;
+ select * into b from private.commerce_tax_checkout_bindings where feature='physical_merch' and identity_id=p_id;
+ if o.id is null or q.id is null or o.creator_id is distinct from q.creator_id or o.buyer_id is null or o.buyer_id=o.creator_id
+  or o.provider is distinct from 'stripe_physical_goods' or o.environment is distinct from 'sandbox' or o.currency is distinct from 'usd'
+  or o.payment_status is distinct from 'paid' or o.order_status not in ('paid','fulfilled') or o.paid_at is null
+  or o.amount_total_minor is null or o.amount_total_minor<=0 or o.digital_access_grant_id is not null
+  or coalesce(o.refunded_amount_minor,0)<>0 or o.refunded_at is not null or o.canceled_at is not null
+  or o.fulfillment_status in ('canceled','blocked','returned')
+  or b.identity_id is null or b.environment is distinct from 'sandbox' or b.product_id is distinct from o.product_id::text
+  or b.account_id is distinct from q.platform_account_id
+  or exists(select 1 from public.stripe_merch_events t where t.linked_order_id=o.id and t.environment='sandbox'
+   and t.status='processed' and t.event_type in ('charge.refunded','charge.dispute.created'))
+ then return null; end if;
+ -- The canonical signed-webhook processor proves the order identity, amount,
+ -- currency and test mode. The checkout's immutable tax-account binding came
+ -- before provider dispatch and the Edge path verified that account with GET.
+ select * into p from public.stripe_merch_events where linked_order_id=o.id and provider='stripe'
+  and environment='sandbox' and status='processed' and processed_at is not null
+  and raw_event_hash ~ '^[a-f0-9]{64}$' and metadata->>'processing_reason'='payment_confirmed'
+  and ((event_type in ('checkout.session.completed','checkout.session.async_payment_succeeded') and object_id=o.stripe_checkout_session_id)
+   or (event_type='payment_intent.succeeded' and object_id=o.stripe_payment_intent_id))
+  order by processed_at,id limit 1;
+ if p.id is null then return null; end if;
+ net:=o.amount_total_minor::bigint-((o.amount_total_minor::bigint*q.simulated_tax_bps+9999)/10000)
+  -((o.amount_total_minor::bigint*q.simulated_platform_bps+9999)/10000)
+  -((o.amount_total_minor::bigint*q.simulated_provider_bps+9999)/10000)-q.simulated_provider_fixed_minor;
+ if net<=0 or net>2147483647 then return null; end if;
+ -- Shipping progress does not invalidate unchanged payment economics. Refund,
+ -- dispute, ownership, mode, amount or payment-identity changes do invalidate.
+ h:=md5(jsonb_build_object('order',o.id,'buyer',o.buyer_id,'creator',o.creator_id,'product',o.product_id,
+  'environment',o.environment,'currency',o.currency,'amount',o.amount_total_minor,'paidAt',o.paid_at,
+  'checkout',o.stripe_checkout_session_id,'paymentIntent',o.stripe_payment_intent_id,'charge',o.stripe_charge_id,
+  'receipt',p.id,'receiptHash',p.raw_event_hash,'binding',to_jsonb(b))::text);
  return jsonb_build_object('netMinor',net,'sourceHash',h);
 end; $$;
 
@@ -304,6 +399,10 @@ begin
    retained:=least(allocation.amount_minor,remaining_fixture_cost); remaining_fixture_cost:=remaining_fixture_cost-retained;
    insert into private.sandbox_cashout_simulated_return_accounting values(e.id,allocation.money_ledger_id,allocation.amount_minor-retained,retained);
   end loop;
+  for allocation in select * from private.sandbox_cashout_merch_allocations where execution_id=e.id order by order_id loop
+   retained:=least(allocation.amount_minor,remaining_fixture_cost); remaining_fixture_cost:=remaining_fixture_cost-retained;
+   insert into private.sandbox_cashout_merch_simulated_returns values(e.id,allocation.order_id,allocation.amount_minor-retained,retained);
+  end loop;
  end if;
  return private.sandbox_cashout_summary(e.id);
 end; $$;
@@ -326,6 +425,23 @@ begin
 end; $$;
 create trigger hold_sandbox_cashout_changed_source after insert or update or delete on public.money_access_ledger_events
  for each row execute function private.hold_sandbox_cashout_changed_source();
+
+create function private.hold_sandbox_cashout_changed_merch() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare source_id uuid; c uuid;
+begin
+ source_id:=case when tg_op='DELETE' then old.id else new.id end;
+ for c in select distinct e.creator_id from private.sandbox_cashout_executions e
+  join private.sandbox_cashout_merch_allocations a on a.execution_id=e.id where a.order_id=source_id order by e.creator_id loop
+  perform pg_advisory_xact_lock(hashtextextended('sandbox-cashout:'||c::text,0));
+  update private.sandbox_cashout_executions e set source_hold=true where e.creator_id=c and e.phase<>'canceled'
+   and exists(select 1 from private.sandbox_cashout_merch_allocations a where a.execution_id=e.id and a.order_id=source_id
+    and (private.sandbox_cashout_merch_source(a.order_id,e.qualification_id)->>'sourceHash') is distinct from a.source_hash);
+ end loop;
+ return null;
+end; $$;
+create trigger hold_sandbox_cashout_changed_merch after update or delete on public.merch_orders
+ for each row execute function private.hold_sandbox_cashout_changed_merch();
 
 create function private.sandbox_cashout_summary(p_id uuid) returns jsonb
 language sql stable set search_path='' as $$
@@ -357,13 +473,15 @@ end; $$;
 create function public.preview_sandbox_creator_cashout(p_amount_minor integer,p_payout_type text) returns jsonb
 language plpgsql stable security definer set search_path='' as $$
 declare u uuid:=private.sandbox_cashout_current_user(); q private.sandbox_cashout_qualifications;
- app_fee bigint; bank bigint; fee bigint; available bigint;
+ app_fee bigint; bank bigint; fee bigint; available bigint; merch_available bigint;
 begin
  if p_amount_minor is null or p_amount_minor<=0 or p_payout_type is null or p_payout_type not in ('scheduled','instant') then raise exception 'cashout_input_invalid'; end if;
  if not private.sandbox_cashout_enabled() then return jsonb_build_object('ready',false,'reason','sandbox_payout_execution_disabled','environment','test','financialAuthority',false); end if;
  select * into q from private.sandbox_cashout_qualifications a where creator_id=u and payout_type=p_payout_type
  and verified_at<=clock_timestamp() and expires_at>clock_timestamp()
  and not exists(select 1 from private.sandbox_cashout_revocations r where r.qualification_id=a.id)
+ and exists(select 1 from public.creator_payout_accounts c where c.creator_user_id=u::text
+  and c.provider='stripe_connect' and c.provider_environment='test' and c.provider_account_id=a.account_id)
  order by verified_at desc,id desc limit 1;
  if q.id is null then return jsonb_build_object('ready',false,'reason','sandbox_cashout_provider_qualification_required','environment','test','financialAuthority',false); end if;
  select coalesce(sum(greatest(0,(private.sandbox_cashout_source(m.id,q.id)->>'netMinor')::bigint
@@ -371,6 +489,13 @@ begin
  left join private.sandbox_cashout_simulated_return_accounting r on r.execution_id=a.execution_id and r.money_ledger_id=a.money_ledger_id
  where a.money_ledger_id=m.id and e.phase<>'canceled'),0))),0)
  into available from public.money_access_ledger_events m where creator_id=u and environment='sandbox';
+ select coalesce(sum(greatest(0,(private.sandbox_cashout_merch_source(o.id,q.id)->>'netMinor')::bigint
+  -coalesce((select sum(a.amount_minor-coalesce(r.released_minor,0)) from private.sandbox_cashout_merch_allocations a
+   join private.sandbox_cashout_executions e on e.id=a.execution_id
+   left join private.sandbox_cashout_merch_simulated_returns r on r.execution_id=a.execution_id and r.order_id=a.order_id
+   where a.order_id=o.id and e.phase<>'canceled'),0))),0)
+ into merch_available from public.merch_orders o where creator_id=u and environment='sandbox';
+ available:=available+merch_available;
  if available<p_amount_minor then return jsonb_build_object('ready',false,'reason','sandbox_earnings_insufficient','availableMinor',available,'earningsBasis','sandbox_fixture_deductions_not_actual_fees','environment','test','financialAuthority',false); end if;
  app_fee:=case when p_payout_type='instant' then public.calculate_creator_instant_cashout_fee(p_amount_minor) else 0 end;
  bank:=floor(((p_amount_minor::bigint-app_fee-q.provider_fee_fixed_minor)*10000)::numeric/(10000+q.provider_fee_bps));
@@ -383,16 +508,16 @@ begin
 end; $$;
 
 do $$ declare t text; r record; begin
- foreach t in array array['sandbox_cashout_control','sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_executions','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting'] loop
+ foreach t in array array['sandbox_cashout_control','sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_executions','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting','sandbox_cashout_merch_allocations','sandbox_cashout_merch_simulated_returns'] loop
   execute format('alter table private.%I enable row level security',t);
   execute format('alter table private.%I force row level security',t);
   execute format('revoke all on private.%I from public,anon,authenticated,service_role',t);
  end loop;
- foreach t in array array['sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting'] loop
+ foreach t in array array['sandbox_cashout_qualifications','sandbox_cashout_revocations','sandbox_cashout_allocations','sandbox_cashout_observations','sandbox_cashout_simulated_return_accounting','sandbox_cashout_merch_allocations','sandbox_cashout_merch_simulated_returns'] loop
   execute format('create trigger %I before update or delete on private.%I for each row execute function private.guard_event_ticket_terms_immutable()',t||'_immutable',t);
  end loop;
  for r in select p.oid::regprocedure as identity,n.nspname,p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
- where (n.nspname='private' and p.proname in ('sandbox_cashout_subject_current','sandbox_cashout_current_user','sandbox_cashout_enabled','sandbox_cashout_source','sandbox_cashout_summary','lock_sandbox_cashout_creator','hold_sandbox_cashout_changed_source'))
+ where (n.nspname='private' and p.proname in ('sandbox_cashout_subject_current','sandbox_cashout_current_user','sandbox_cashout_enabled','sandbox_cashout_source','sandbox_cashout_merch_source','sandbox_cashout_summary','lock_sandbox_cashout_creator','sandbox_cashout_revoke_admission','hold_sandbox_cashout_changed_source','hold_sandbox_cashout_changed_merch'))
  or (n.nspname='public' and p.proname in ('get_my_sandbox_creator_cashout_execution','list_my_sandbox_creator_cashout_executions','preview_sandbox_creator_cashout','request_sandbox_creator_cashout','cancel_undispatched_sandbox_creator_cashout','get_sandbox_creator_cashout_execution_context','claim_sandbox_creator_cashout_dispatch','record_sandbox_creator_cashout_observation')) loop
   execute format('revoke all on function %s from public,anon,authenticated,service_role',r.identity);
   if r.nspname='public' then
