@@ -11,6 +11,8 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {createClient} from '@supabase/supabase-js';
 import {seedLiveRoomActor} from '../tests/helpers/live-room-authority-fixture.mjs';
 import {assertDiscoveryHintPayload} from './lib/discovery-native-hint-contract.mjs';
+import {createDiscoveryProofDiagnostics} from './lib/discovery-native-proof-diagnostics.mjs';
+import {verifyRetainedDiscoveryHost} from './lib/discovery-native-retention-fixture.mjs';
 
 if(process.argv.includes('--help')) {
   console.log('Runs real private Broadcast/RLS discovery proof in the cron-paused ephemeral local Supabase Actions cluster. No remote endpoint or arguments accepted.');
@@ -61,7 +63,7 @@ const options={auth:{persistSession:false,autoRefreshToken:false},global:{fetch:
   signal:init?.signal?AbortSignal.any([init.signal,AbortSignal.timeout(8000)]):AbortSignal.timeout(8000)})}};
 const admin=createClient(environment.API_URL,environment.SERVICE_ROLE_KEY,options);
 const makeClient=()=>createClient(environment.API_URL,environment.ANON_KEY,options);
-const noError=(response,label)=>{assert.equal(response.error,null,`${label}: ${response.error?.message??'unknown'}`);return response.data;};
+const noError=(response,label)=>{diagnostics.phase(label);assert.equal(response.error,null,`${label}: ${response.error?.message??'unknown'}`);return response.data;};
 const friendship=(response,label)=>{
   const data=noError(response,label);
   if(Array.isArray(data)){assert.equal(data.length,1,`${label}: one relationship`);return data[0];}
@@ -70,6 +72,8 @@ const friendship=(response,label)=>{
 const timeout=(milliseconds,label)=>new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error(`${label}: timeout`)),milliseconds);timer.unref?.();});
 const nonce=randomBytes(8).toString('hex'),party=`RTDISC${nonce}`.toUpperCase(),title=randomUUID();
 const clients=[],actors=[],createdUserIds=[],observers=[],samples=[];
+const diagnostics=createDiscoveryProofDiagnostics();
+let retainedHost=null;
 const initial=JSON.parse(query(`select jsonb_build_object('config',(select to_jsonb(c) from private.discovery_invalidation_worker_config c where singleton),
   'money',(select jsonb_agg(jsonb_build_object('key',key,'state',state)) from public.platform_money_kill_switches
     where key in ('revenuecat_google_play_enabled','provider_webhooks_enabled'))) `));
@@ -77,8 +81,10 @@ assert.equal(typeof initial.config.primary_delivery_enabled,'boolean','transacti
 let roomCreated=false;
 const canonicalKeys=new Map();
 async function subscribe(client,topic,{denied=false}={}) {
+  diagnostics.phase(`subscribe ${denied?'denied':'allowed'} ${topic.includes(':viewer:')?'viewer':'home'}`);
   const channel=client.channel(topic,{config:{private:true,broadcast:{ack:true,self:false}}});
   const observer={client,channel,topic,messages:[],pending:null,error:null};observers.push(observer);
+  let initialStatus=true;
   channel.on('broadcast',{event:'discovery:invalidate'},message=>{
     try {
       assertDiscoveryHintPayload(message.payload,[party,title,...actors.flatMap(a=>[a.id,a.session])]);
@@ -87,6 +93,10 @@ async function subscribe(client,topic,{denied=false}={}) {
     }catch(error){observer.error=error;observer.pending?.({error});}
   });
   const status=await Promise.race([new Promise((resolve,reject)=>channel.subscribe((value,error)=>{
+    if(initialStatus&&['SUBSCRIBED','CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(value)){
+      diagnostics.phase(`subscription ${denied?'denied':'allowed'} ${topic.includes(':viewer:')?'viewer':'home'} ${value}`);
+      initialStatus=false;
+    }
     if(value==='SUBSCRIBED')resolve(value);
     else if(value==='CHANNEL_ERROR'){
       if(denied)resolve(value);else reject(error??Error('channel authorization failed'));
@@ -103,6 +113,7 @@ async function count(client,audience='public') {
   noError(result,`${audience} canonical viewer read`);return result.count;
 }
 async function observed(observer,label,mutation,read,expected) {
+  diagnostics.phase(`mutation ${label}`);
   assert.equal(observer.error,null);
   await delay(150);
   const watermark=query('select clock_timestamp()::text');
@@ -144,6 +155,7 @@ async function observed(observer,label,mutation,read,expected) {
   }finally{observer.pending=null;}
 }
 async function silent(observersToCheck,label,mutation) {
+  diagnostics.phase(`silence ${label}`);
   await delay(200);const before=observersToCheck.map(o=>o.messages.length);
   await mutation();await delay(650);
   observersToCheck.forEach((o,i)=>{assert.equal(o.error,null);assert.equal(o.messages.length,before[i],`${label}: no unauthorized existence hint`);});
@@ -151,25 +163,34 @@ async function silent(observersToCheck,label,mutation) {
 
 try {
   for(const kind of ['host','circle','outsider']) {
+    diagnostics.phase(`Auth create ${kind}`);
     const client=makeClient();clients.push(client);
     const email=`discovery-${kind}-${nonce}@example.invalid`,password=`Local-${randomBytes(16).toString('hex')}!`;
     const created=noError(await admin.auth.admin.createUser({email,password,email_confirm:true}),`create ${kind}`);
     createdUserIds.push(created.user.id);
+    if(kind==='host')retainedHost={id:created.user.id,email};
+    diagnostics.phase(`Auth sign in ${kind}`);
     const session=noError(await client.auth.signInWithPassword({email,password}),`sign in ${kind}`).session;
     const claims=JSON.parse(Buffer.from(session.access_token.split('.')[1],'base64url').toString('utf8'));
     assert.equal(claims.sub,created.user.id);assert.ok(claims.session_id);
     const actor={id:created.user.id,session:claims.session_id,client,token:session.access_token};actors.push(actor);
+    diagnostics.phase(`seed session legal and ${kind==='host'?'Premium':'ordinary'} authority`);
     await seedLiveRoomActor(db,actor,{premium:kind==='host'});
+    diagnostics.phase(`Realtime authenticate ${kind}`);
     await client.realtime.setAuth(actor.token);
   }
   const [host,friend,outsider]=actors;
+  diagnostics.phase('prepare private Circle profile');
   // Public target profiles intentionally permit instant-add. Make this
   // synthetic target private to exercise genuine pending/accept transitions.
   query(`insert into public.user_profiles(user_id,username,display_name,profile_access_visibility)
     values(${lit(friend.id)},${lit(`rt_circle_${nonce.slice(0,12)}`)},'Synthetic Circle viewer','private')
     on conflict(user_id) do update set profile_access_visibility='private'`);
+  diagnostics.phase('request Circle friendship');
   assert.equal(friendship(await host.client.rpc('request_friendship',{target_user_id:friend.id}),'actual Circle request').status,'pending');
+  diagnostics.phase('accept Circle friendship');
   assert.equal(friendship(await friend.client.rpc('respond_to_friendship',{target_user_id:host.id,next_action:'accept'}),'actual Circle acceptance').status,'active');
+  diagnostics.phase('prepare title and enable local discovery');
   query(`insert into public.titles(id,title,video_url,is_published,status) values(${lit(title)},'Synthetic Realtime title','https://example.invalid/realtime.mp4',true,'published')`);
   query(`update private.discovery_invalidation_worker_config set collecting=true,enabled=true,primary_delivery_enabled=true,
     token_sha256=encode(extensions.digest(repeat('n',32),'sha256'),'hex') where singleton`);
@@ -256,16 +277,27 @@ try {
     ()=>count(outsider.client),0);
   console.log(JSON.stringify({proof:'native discovery primary transport',samples,cronLauncher:'off',
     assertions:'public/Circle start, privacy/end, actual membership loss, private/no-outside hints, exact RLS, rollback, reconnect, receive-only, viewer/host session retirement'}));
+} catch(error) {
+  diagnostics.primary(error);
 } finally {
-  const cleanupFailures=[];
-  const cleanup=async(label,operation)=>{try{await operation();}catch{cleanupFailures.push(label);}};
+  const cleanup=async(label,operation)=>{
+    diagnostics.phase(`cleanup ${label}`);
+    try{await operation();}catch(error){diagnostics.cleanup(label,error);}
+  };
   for(const o of observers)await cleanup('remove synthetic channel',()=>o.client.removeChannel(o.channel));
-  for(const client of clients)await client.auth.signOut({scope:'local'}).catch(()=>undefined);
+  for(const client of clients)await cleanup('sign out synthetic session',async()=>noError(await client.auth.signOut({scope:'local'}),'synthetic sign out'));
   if(roomCreated)await cleanup('delete synthetic room',()=>query(`delete from public.watch_party_rooms where party_id=${lit(party)}`));
   await cleanup('delete synthetic title',()=>query(`delete from public.titles where id=${lit(title)}`));
-  for(const id of createdUserIds)await cleanup('delete synthetic Auth user',async()=>noError(await admin.auth.admin.deleteUser(id),'synthetic user cleanup'));
+  for(const id of createdUserIds)await cleanup('dispose synthetic Auth user',async()=>{
+    if(id===retainedHost?.id&&await verifyRetainedDiscoveryHost(db,retainedHost,{email:retainedHost.email})){
+      console.log(JSON.stringify({proof:'native discovery retained fixture',count:1,
+        reason:'verified synthetic sandbox Premium financial authority requires retention',disposal:'owned ephemeral runner whole-cluster disposal'}));
+      return;
+    }
+    noError(await admin.auth.admin.deleteUser(id),'synthetic user cleanup');
+  });
   await cleanup('restore local discovery configuration',()=>query(`update private.discovery_invalidation_worker_config set collecting=${initial.config.collecting},enabled=${initial.config.enabled},
     primary_delivery_enabled=${initial.config.primary_delivery_enabled},token_sha256=${lit(initial.config.token_sha256)} where singleton`));
   for(const row of initial.money)await cleanup('restore local sandbox switch',()=>query(`update public.platform_money_kill_switches set state=${lit(row.state)} where key=${lit(row.key)}`));
-  assert.deepEqual(cleanupFailures,[],'local fixture cleanup and operational settings restoration are required');
+  diagnostics.finish();
 }

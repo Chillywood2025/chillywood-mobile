@@ -13,6 +13,9 @@ const workflowSource=fs.readFileSync('.github/workflows/required-validation.yml'
 function validate(source,workflowText) {
   for(const fragment of ["from '@supabase/supabase-js'","process.env.GITHUB_ACTIONS,'true'",'GITHUB_REPOSITORY',
     "typeof globalThis.WebSocket,'function'",'globalThis.WebSocket.prototype.close','globalThis.WebSocket.prototype.send',
+    'diagnostics.primary(error)','diagnostics.cleanup(label,error)','diagnostics.finish()',
+    "if(kind==='host')retainedHost={id:created.user.id,email}",
+    'id===retainedHost?.id&&await verifyRetainedDiscoveryHost(db,retainedHost,{email:retainedHost.email})',
     "query('show cron.launch_active_jobs'),'off'", "['127.0.0.1','localhost']",'com.supabase.cli.project',
     "admin.auth.admin.createUser",'auth.signInWithPassword','seedLiveRoomActor',"client.channel(topic",
     "event:'discovery:invalidate'",'discovery:v1:viewer:',"{denied:true}","receiptMs<3000",'inserted_at>=','pg_sleep(0.25)',
@@ -36,6 +39,9 @@ function validate(source,workflowText) {
   const block=steps[0].run.split("<<'NATIVE_PROOFS'")[1]?.split('NATIVE_PROOFS')[0];
   assert.ok(block?.split('\n').includes(command),'real websocket proof is inside cron-paused disposable validation');
   assert.ok(block.includes('node --test tests/discovery-realtime-native-source.test.mjs'));
+  assert.deepEqual(block.split('\n').map(line=>line.trim()).filter(Boolean).slice(0,3),[
+    'supabase test db','node --test tests/discovery-realtime-native-source.test.mjs',command,
+  ],'actual SDK startup is the first proof after full pgTAP, not after unrelated native schedules');
 }
 test('native discovery proof retains real SDK/Auth/RLS receipts, no polling substitute, and mandatory CI execution',()=>validate(script,workflowSource));
 test('native runner rejects missing WebSocket before any cluster or Auth setup',()=>{
@@ -75,11 +81,37 @@ test('native proof qualifies exact managed transaction or wall-clock defaults wi
 test('native proof source guard rejects removed privacy, primary timing and execution boundaries',()=>{
   for(const needle of ["query('show cron.launch_active_jobs'),'off'",'receiptMs<3000',"next_action:'remove'",'rolled-back publication',
     'primary-disabled negative control','receive-only viewer channel',"delete from auth.sessions",'JSON.stringify(message.payload)',
-    'message.payload.keys.includes(source.key)',"profile_access_visibility='private'"])
+    'message.payload.keys.includes(source.key)',"profile_access_visibility='private'",'diagnostics.primary(error)',
+    'diagnostics.cleanup(label,error)','diagnostics.finish()',
+    'id===retainedHost?.id&&await verifyRetainedDiscoveryHost(db,retainedHost,{email:retainedHost.email})'])
     assert.throws(()=>validate(script.replaceAll(needle,'REMOVED_BOUNDARY'),workflowSource),assert.AssertionError,needle);
   for(const replacement of ['',command.replace(' --experimental-websocket',''),`${command} || true`,`if false; then ${command}; fi`])
     assert.throws(()=>validate(script,workflowSource.replace(command,replacement)),assert.AssertionError,replacement);
   assert.throws(()=>validate(`${script}\nalter table realtime.messages alter column inserted_at set default clock_timestamp();`,workflowSource),assert.AssertionError);
+});
+test('retention disposition skips only the verified tracked host and never hides ordinary cleanup errors',async()=>{
+  const start="for(const id of createdUserIds)await cleanup('dispose synthetic Auth user',async()=>{";
+  const from=script.indexOf(start);assert.ok(from>0);
+  const body=script.slice(from+start.length,script.indexOf('\n  });',from));
+  assert.ok(body.includes('verifyRetainedDiscoveryHost'));
+  const retainedHost={id:randomUUID(),email:'discovery-host-0123456789abcdef@example.invalid'};
+  const ordinary=randomUUID(),deleted=[],verified=[],logs=[];let qualifies=true,verificationError=null,deletionError=null;
+  const dispose=vm.runInNewContext(`(async id=>{${body}})`,{retainedHost,db:{},
+    verifyRetainedDiscoveryHost:async(_db,actor,options)=>{
+      verified.push({actor,options});if(verificationError)throw verificationError;return qualifies;
+    },console:{log:value=>logs.push(JSON.parse(value))},
+    admin:{auth:{admin:{deleteUser:async id=>{deleted.push(id);return {error:deletionError};}}}},
+    noError:response=>assert.equal(response.error,null),
+  });
+  await dispose(retainedHost.id);assert.deepEqual(deleted,[]);assert.equal(verified.length,1);
+  assert.equal(verified[0].actor,retainedHost);assert.equal(verified[0].options.email,retainedHost.email);
+  assert.equal(logs[0].count,1);assert.doesNotMatch(JSON.stringify(logs),new RegExp(retainedHost.id));
+  await dispose(ordinary);assert.deepEqual(deleted,[ordinary]);assert.equal(verified.length,1);
+  deletionError={code:'unexpected_failure',status:500};await assert.rejects(dispose(ordinary),assert.AssertionError);
+  verificationError=new Error('binding mismatch');await assert.rejects(dispose(retainedHost.id),/binding mismatch/);
+  assert.equal(deleted.length,2,'a failed host binding must not fall through to deleting retained evidence');
+  verificationError=null;deletionError=null;qualifies=false;await dispose(retainedHost.id);
+  assert.equal(deleted.at(-1),retainedHost.id,'a host with no protected authority still follows normal cleanup');
 });
 test('native receipt parser rejects ID-only, raw identity, unbounded and metadata-bearing payloads',()=>{
   const id=randomUUID(),key=randomUUID(),raw=randomUUID();

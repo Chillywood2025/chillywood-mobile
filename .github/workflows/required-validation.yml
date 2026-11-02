@@ -205,6 +205,8 @@ jobs:
           # Keep every cron row and source fingerprint intact during native proofs.
           node scripts/with-local-ci-cron-paused.mjs <<'NATIVE_PROOFS'
           supabase test db
+          node --test tests/discovery-realtime-native-source.test.mjs
+          node --experimental-websocket scripts/test-discovery-realtime-delivery.mjs
           node --test tests/live-room-native-runner-source.test.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-live-room-host-settings-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-room-live-start-dedup-concurrency.mjs
@@ -272,8 +274,6 @@ jobs:
           npm run test:chat-message-call-lifecycle-http
           node scripts/test-chilly-chat-real-peer-http.mjs
           npm run test:communication-room-realtime-delivery
-          node --test tests/discovery-realtime-native-source.test.mjs
-          node --experimental-websocket scripts/test-discovery-realtime-delivery.mjs
           npm run test:revenuecat-premium-quarantine-concurrency
           npm run test:cognitive-net-acl-guard-concurrency
           npm run test:cognitive-db-concurrency
