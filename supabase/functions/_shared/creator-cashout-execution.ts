@@ -52,7 +52,10 @@ export function validateCashoutContext(c: CashoutContext) {
   if (c.fundingMode !== undefined && !["fund_first", "prefunded_destination"].includes(c.fundingMode)) fail("funding_mode_invalid");
   if (c.fundingMode === "prefunded_destination" && (c.environment !== "test" || c.method !== "standard"
     || c.transferId !== null || c.reversalId !== null || c.appFeeMinor !== 0
-    || !["ready", "canceled", "payout_unknown", "payout_pending", "paid", "return_pending", "returned", "needs_review"].includes(c.phase)))
+    || !["ready", "canceled", "payout_unknown", "payout_pending", "paid", "return_pending", "returned", "needs_review"].includes(c.phase)
+    || (["ready", "canceled", "payout_unknown"].includes(c.phase) && c.payoutId !== null)
+    || (["payout_pending", "paid", "return_pending", "returned"].includes(c.phase) && !objectId(c.payoutId, "po"))
+    || (c.payoutId !== null && !objectId(c.payoutId, "po"))))
     fail("prefunded_context_invalid");
 }
 

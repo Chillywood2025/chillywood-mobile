@@ -87,3 +87,33 @@ test('canonical status, historical binding, source hash and no self-tipping are 
     assert.throws(() => normalize({ ...source, ...delta }, fixture(), 1100), /source_invalid/);
   }
 });
+
+const globals = { URLSearchParams, AbortSignal, Date, Error, JSON, Number, RegExp, TextDecoder, Uint8Array, setTimeout, clearTimeout };
+const engine = { ...globals, exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('supabase/functions/_shared/creator-cashout-execution.ts','utf8'), {
+  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+}).outputText, engine);
+const reader = { ...globals, exports: {}, require: name => name.includes('evidence') ? runtime.exports : engine.exports };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('supabase/functions/_shared/stripe-tip-prefunded-reader.ts','utf8'), {
+  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},
+}).outputText, reader);
+test('trusted collector constructs exactly seven GETs and connected scope; never returns private responses', async()=>{
+ const values=fixture(), calls=[];
+ const order=['platform','checkout','paymentIntent','charge','transfer','destinationPayment','connectedCredit'];
+ const result=await reader.exports.readPrefundedTipEvidence(source,'rk_test_fixture',async(url,options)=>{
+  const key=order[calls.length];calls.push(url);
+  assert.equal(options.method,'GET');assert.equal(options.redirect,'error');assert.equal(new URL(url).origin,'https://api.stripe.com');
+  assert.equal(options.headers['Stripe-Account']??null,values[key].accountId);
+  return Response.json(values[key].value);
+ },()=>1100000);
+ assert.equal(calls.length,7);assert.equal(calls[5],'https://api.stripe.com/v1/charges/py_example');assert.equal(result.creditNetMinor,975);
+});
+test('trusted collector rejects wrong credentials, platform, unsafe links and expired budget without POST',async()=>{
+ let calls=0;
+ await assert.rejects(reader.exports.readPrefundedTipEvidence(source,'rk_live_fixture',async()=>{calls++;}),/credential_mode_mismatch/);assert.equal(calls,0);
+ await assert.rejects(reader.exports.readPrefundedTipEvidence(source,'rk_test_fixture',async()=>{calls++;return Response.json({object:'account',id:'acct_other'});}),/platform_invalid/);assert.equal(calls,1);
+ const values=fixture();values.paymentIntent.value.latest_charge='ch_bad/../account';let index=0;
+ await assert.rejects(reader.exports.readPrefundedTipEvidence(source,'rk_test_fixture',async(url,options)=>{assert.equal(options.method,'GET');return Response.json(Object.values(values)[index++].value);},()=>1100000),/provider_link_invalid/);assert.equal(index,3);
+ let now=1100000;
+ await assert.rejects(reader.exports.readPrefundedTipEvidence(source,'rk_test_fixture',async()=>{now+=60001;return Response.json(values.platform.value);},()=>now),/provider_budget_exhausted/);
+});

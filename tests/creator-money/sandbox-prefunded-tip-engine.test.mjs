@@ -36,13 +36,13 @@ test('prefunded ready dispatches only one connected payout, reserving actual pay
  const insufficient=harness(c,{balance:990});assert.equal((await insufficient.run()).status,'waiting_for_connected_balance');assert.equal(insufficient.claims.length,0);
 });
 test('prefunded mode rejects every funding/reversal phase and incompatible context before provider access',async()=>{
- for(const patch of [{phase:'prepared'},{phase:'funded'},{phase:'funding_unknown'},{phase:'return_confirmed'},{phase:'reversal_unknown'},{phase:'funding_return_pending'},{phase:'funding_return_unknown'},{environment:'live'},{method:'instant'},{transferId:'tr_source'},{reversalId:'trr_source'},{fundingMode:'typo'}]) {
+ for(const patch of [{phase:'prepared'},{phase:'funded'},{phase:'funding_unknown'},{phase:'return_confirmed'},{phase:'reversal_unknown'},{phase:'funding_return_pending'},{phase:'funding_return_unknown'},{phase:'paid'},{phase:'return_pending'},{payoutId:'po_existing'},{environment:'live'},{method:'instant'},{transferId:'tr_source'},{reversalId:'trr_source'},{fundingMode:'typo'}]) {
   const h=harness({...c,...patch});await assert.rejects(h.run(),/prefunded_context_invalid|funding_mode_invalid/);assert.equal(h.calls.length,0);assert.equal(h.claims.length,0);
  }
 });
 test('lost prefunded POST remains GET-only on repeated unknown recovery and cancellation stays inert',async()=>{
  const lost=harness(c,{lost:true});await assert.rejects(lost.run(),/lost response/);assert.equal(lost.claims.length,1);
- for(const phase of ['payout_unknown','canceled','returned','return_pending']) {
+ for(const phase of ['payout_unknown','canceled','needs_review']) {
   const h=harness({...c,phase});await h.run();await h.run();assert.equal(h.calls.some(x=>x.request.method==='POST'),false);assert.equal(h.claims.length,0);
  }
 });
