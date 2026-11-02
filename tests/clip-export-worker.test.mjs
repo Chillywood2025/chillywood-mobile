@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { Buffer } from 'node:buffer';
 import { createServer } from 'node:http';
 import { randomUUID, createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runMediaProcess } from '../scripts/lib/clip-render-core.mjs';
-import { runClipExportOnce } from '../scripts/lib/clip-export-worker.mjs';
+import { runClipExportOnce,runClipExportJob } from '../scripts/lib/clip-export-worker.mjs';
 
 test('production worker downloads, actually renders, streams verified output, seals and finishes in order', {timeout:30000},async()=>{
  const temp=await mkdtemp(path.join(tmpdir(),'clip-worker-proof-'));
@@ -33,7 +33,9 @@ test('production worker downloads, actually renders, streams verified output, se
   calls.push(name);
   if(name==='claim_creator_clip_export')return job;
   if(name==='heartbeat_creator_clip_export')return true;
-  if(name==='begin_secondary_media_producer')return {producerId:job.lease,claimToken:'claim'};
+  if(name==='begin_creator_clip_export_output'){
+   assert.deepEqual(args,{p_job_id:job.id,p_lease:job.lease});return {producerId:job.lease,claimToken:'claim'};
+  }
   if(name==='reserve_secondary_media_objects'){inventory=args.p_inventory;return {reserved:true,objectCount:1};}
   if(name==='begin_secondary_media_object_write')return {objectId:randomUUID(),writeToken:randomUUID(),provider:'cloudflare_r2',bucket:'private',...inventory.objects[0]};
   if(name==='record_secondary_media_object_receipt'){assert.equal(args.p_receipt.fullReadback,true);return {recorded:true,publishable:true};}
@@ -42,13 +44,65 @@ test('production worker downloads, actually renders, streams verified output, se
   throw new Error(`unexpected RPC ${name}`);
  };
  try{
-  const result=await runClipExportOnce({rpc,outputBucket:'private',signer:async(_method,id)=>`http://127.0.0.1:${server.address().port}/${id.objectKey.endsWith('/source.mp4')?'source':'output'}`});
+  const progress=[];
+  const result=await runClipExportOnce({rpc,outputBucket:'private',onProgress:event=>progress.push(event),signer:async(_method,id)=>`http://127.0.0.1:${server.address().port}/${id.objectKey.endsWith('/source.mp4')?'source':'output'}`});
   assert.equal(result.completed,true);assert.equal(result.privateDraftCreated,true);assert.equal(writeCount,1);
   assert.equal(completed.width,180);assert.equal(completed.height,180);assert.ok(Math.abs(completed.durationMs-1000)<100);
   assert.equal(completed.sha256,createHash('sha256').update(written).digest('hex'));
   const meaningful=calls.filter(name=>name!=='heartbeat_creator_clip_export');
-  assert.deepEqual(meaningful,['claim_creator_clip_export','begin_secondary_media_producer','reserve_secondary_media_objects','begin_secondary_media_object_write','record_secondary_media_object_receipt','seal_secondary_media_producer','finish_creator_clip_export']);
+  assert.deepEqual(meaningful,['claim_creator_clip_export','begin_creator_clip_export_output','reserve_secondary_media_objects','begin_secondary_media_object_write','record_secondary_media_object_receipt','seal_secondary_media_producer','finish_creator_clip_export']);
+  assert.deepEqual(progress.map(event=>event.stage),['source_downloaded','render_verified','output_hashed','upload_readback_verified','receipt_recorded','producer_sealed','draft_completed']);
+  assert.ok(progress.every(event=>Number.isSafeInteger(event.observedAtMs)));
  }finally{await new Promise(resolve=>server.close(resolve));await rm(temp,{recursive:true,force:true});}
+});
+
+function injectedJob(){
+ const f={calls:[],progress:[],writes:0,job:{id:randomUUID(),lease:randomUUID(),owner_id:randomUUID(),output_video_id:randomUUID(),
+  source_snapshot:{fixture:true},edit_snapshot:{brand_mark_enabled:false}}};
+ f.options={job:f.job,onProgress:event=>f.progress.push(event),download:async({file})=>writeFile(file,'synthetic-source'),
+  render:async({outputPath})=>{await writeFile(outputPath,'synthetic-output');return {width:1,height:1,durationMs:1};},
+  upload:async()=>{f.writes++;throw Error('clip_output_write_unknown');},
+  rpc:async(name,args)=>{
+   f.calls.push({name,args});
+   if(name==='heartbeat_creator_clip_export')return true;
+   if(name==='begin_creator_clip_export_output')return {producerId:f.job.lease,claimToken:'synthetic-claim'};
+   if(name==='reserve_secondary_media_objects')return {reserved:true,objectCount:1};
+   if(name==='begin_secondary_media_object_write')return {writeToken:'synthetic-write'};
+   if(name==='fail_creator_clip_export')return true;
+   throw Error('unexpected synthetic RPC');
+  }};
+ return f;
+}
+test('unknown PUT is terminal locally, retains reconciliation evidence, and never repeats upload or publishes',async()=>{
+ const f=injectedJob(),result=await runClipExportJob(f.options);
+ assert.equal(result.completed,false);assert.equal(result.errorCode,'clip_output_write_unknown');assert.equal(f.writes,1);
+ assert.equal(f.calls.filter(call=>call.name==='begin_creator_clip_export_output').length,1);
+ assert.equal(f.calls.filter(call=>call.name==='fail_creator_clip_export').length,1);
+ assert.equal(f.calls.at(-1).args.p_error_code,'clip_output_write_unknown');
+ assert.equal(f.calls.some(call=>['finish_creator_clip_export','record_secondary_media_object_receipt'].includes(call.name)),false);
+ assert.deepEqual(f.progress.map(event=>event.stage),['source_downloaded','render_verified','output_hashed']);
+});
+test('source authority lost after rendering cannot start an output producer or PUT',async()=>{
+ const f=injectedJob(),rpc=f.options.rpc;let leases=0;
+ f.options.rpc=async(name,args)=>name==='heartbeat_creator_clip_export'?++leases===1:rpc(name,args);
+ const result=await runClipExportJob(f.options);
+ assert.equal(result.errorCode,'source_changed');assert.equal(f.writes,0);
+ assert.equal(f.calls.some(call=>call.name==='begin_creator_clip_export_output'),false);
+});
+test('a real job heartbeat transport outage is not mislabeled cancellation and does not retry the job',async()=>{
+ const f=injectedJob(),rpc=f.options.rpc;let leases=0;
+ f.options.heartbeatMs=5;
+ f.options.rpc=async(name,args)=>{
+  if(name==='heartbeat_creator_clip_export'&&++leases>1)throw Error('worker_rpc_auth_failed');
+  return rpc(name,args);
+ };
+ f.options.render=async({signal})=>{
+  if(!signal.aborted)await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));
+  throw Error('render_canceled');
+ };
+ const result=await runClipExportJob(f.options);
+ assert.equal(result.errorCode,'worker_rpc_auth_failed');assert.equal(f.writes,0);
+ assert.equal(f.calls.filter(call=>call.name==='fail_creator_clip_export').length,1);
 });
 test('retired lease never downloads or publishes; disabled/empty queue performs no work',async()=>{
  const calls=[];const job={id:'fixture',lease:'lease'};

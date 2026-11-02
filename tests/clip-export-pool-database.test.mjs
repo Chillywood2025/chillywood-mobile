@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 import {seedClipPoolSource} from './helpers/clip-export-pool-fixture.mjs';
 import {seedPreparedClipExport} from './helpers/clip-export-authority-fixture.mjs';
-import {createPostgresClipScaleLedger} from '../scripts/lib/clip-export-scale-ledger.mjs';
+import {createPostgresClipScaleLedger,emptyClipScaleLedger} from '../scripts/lib/clip-export-scale-ledger.mjs';
 import {runClipScaleControllerTick} from '../scripts/lib/clip-export-scale-controller.mjs';
 import {CLIP_EXPORT_FAILURE_CODES} from '../scripts/lib/clip-export-health.mjs';
 import {syntheticClipHealthEvidence} from './helpers/clip-export-health-fixture.mjs';
@@ -37,15 +37,16 @@ test('bounded pool full-chain SQL semantics, fences and 1000-request admission b
    const {rows}=await db.query("select id from private.creator_clip_export_jobs where owner_id=$1 and status in('queued','rendering')",[f.owner]);
    for(const row of rows)await call('select cancel_creator_clip_export($1)',[row.id],f);
   }
-  await db.query('update private.creator_clip_export_worker set enabled=true,accepting_requests=true,max_active_jobs=$1,max_pending_jobs=1000,max_pending_media_ms=900000000,last_heartbeat_at=clock_timestamp() where singleton',[maxActive]);
+  await db.query("update private.creator_clip_export_worker set enabled=true,accepting_requests=true,max_active_jobs=$1,max_pending_jobs=1000,max_pending_media_ms=900000000,last_heartbeat_at=clock_timestamp(),scale_pool_id=null,scale_zero_admission_enabled=false,controller_admission_ready=false,health_state='unknown',health_observed_at=null where singleton",[maxActive]);
   assert.equal(await active(),0);
  };
  try{
   await service();
   for(const [code,category] of Object.entries(CLIP_EXPORT_FAILURE_CODES))assert.equal(await scalar('select private.clip_export_failure_class($1)',[code]),category,`SQL/JS exact failure classification: ${code}`);
   assert.equal(await scalar("select private.clip_export_failure_class('untrusted raw error')"),'unknown');
-  const config=(await db.query('select enabled,max_active_jobs,max_pending_jobs,max_pending_media_ms from private.creator_clip_export_worker')).rows[0];
+  const config=(await db.query('select enabled,max_active_jobs,max_pending_jobs,max_pending_media_ms,scale_zero_admission_enabled,controller_admission_ready from private.creator_clip_export_worker')).rows[0];
   assert.equal(config.enabled,false);assert.equal(config.max_active_jobs,1);assert.equal(config.max_pending_jobs,1000);assert.equal(Number(config.max_pending_media_ms),900000000);
+  assert.equal(config.scale_zero_admission_enabled,false);assert.equal(config.controller_admission_ready,false);
   assert.equal(await scalar('select count(*)::int from private.creator_clip_export_workers'),0);
   assert.equal(await call('select claim_creator_clip_export()'),null);
   assert.equal((await call('select open_creator_clip_export_worker($1,$2)',[randomUUID(),randomUUID()])).accepted,false);
@@ -54,6 +55,33 @@ test('bounded pool full-chain SQL semantics, fences and 1000-request admission b
    assert.deepEqual(flags,{relrowsecurity:true,relforcerowsecurity:true});
    for(const role of ['anon','authenticated','service_role'])assert.equal(await scalar("select has_table_privilege($1,$2,'INSERT,UPDATE,DELETE')",[role,table]),false);
   }
+
+  const cold=await source();
+  await assert.rejects(request(cold),/clip_export_worker_unavailable/,'OFF rejects even a valid source');
+  await reset();
+  await assert.rejects(request(cold),/clip_export_worker_unavailable/,'unbound/manual pool still requires a live worker');
+  await db.exec("update private.creator_clip_export_worker set scale_pool_id='synthetic_cold_pool',scale_zero_admission_enabled=true,controller_admission_ready=true,health_state='healthy',health_observed_at=clock_timestamp()");
+  await assert.rejects(request(cold),/clip_export_admission_paused/,'a binding without durable controller state cannot admit');
+  await db.query('insert into private.creator_clip_scale_ledger(pool_id,state) values($1,$2::jsonb)',
+   ['synthetic_cold_pool',JSON.stringify(emptyClipScaleLedger())]);
+  const coldJob=await request(cold);assert.equal(coldJob.status,'queued');assert.equal(coldJob.displayState,'queued');
+  assert.equal(await scalar('select count(*)::int from private.creator_clip_export_workers'),0,'bounded demand is admitted without provisioning a worker');
+  const nextCold=await source();
+  await db.exec("update private.creator_clip_export_worker set health_observed_at=clock_timestamp()-interval '3 minutes'");
+  await assert.rejects(request(nextCold),error=>/clip_export_admission_paused/.test(error.message)
+   &&JSON.parse(error.detail).reason==='processing_technical_delay');
+  assert.equal((await request(cold)).id,coldJob.id,'stale controller does not discard or duplicate an accepted request');
+  assert.equal((await request(cold)).displayState,'technical_delay');
+  await db.exec("update private.creator_clip_export_worker set health_observed_at=clock_timestamp()+interval '3 minutes'");
+  await assert.rejects(request(nextCold),/clip_export_admission_paused/,'future timestamps are not fresh readiness');
+  await db.exec('update private.creator_clip_export_worker set controller_admission_ready=false,health_observed_at=clock_timestamp()');
+  await assert.rejects(request(nextCold),/clip_export_admission_paused/,'disabled controller cannot use a fresh old health success');
+  await db.exec('update private.creator_clip_export_worker set controller_admission_ready=true,health_observed_at=clock_timestamp(),max_pending_jobs=1');
+  await assert.rejects(request(nextCold),/clip_export_capacity_exhausted/,'zero-worker admission still enforces global backpressure');
+  assert.equal((await request(cold,randomUUID())).id,coldJob.id,'healthy recovery deduplicates exact accepted source/edit');
+  assert.equal(await scalar("select count(*)::int from private.creator_clip_export_jobs where status='queued'"),1);
+  await db.exec('update private.creator_clip_export_worker set enabled=false');
+  await assert.rejects(request(nextCold),/clip_export_worker_unavailable/,'worker activation OFF wins over readiness');
 
   await reset(2);const wa=await worker(),wb=await worker(),only=await enqueue();
   const first=await claim(wa);assert.equal(first.id,only.job.id);assert.equal(await claim(wb),null);assert.equal(first.attempts,1);

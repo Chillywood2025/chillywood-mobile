@@ -34,10 +34,14 @@
       "paths": [
         "ops/clip-export-worker/chillywood-clip-export.service",
         "ops/clip-export-worker/chillywood-clip-export.timer",
+        "ops/clip-export-worker/chillywood-clip-export-pool.service",
         "scripts/clip-export-worker-cli.mjs",
-        "supabase/migrations/20261101141646_creator_clip_export_jobs.sql"
+        "scripts/lib/clip-export-pool.mjs",
+        "scripts/lib/clip-export-worker-resources.mjs",
+        "supabase/migrations/20261101141646_creator_clip_export_jobs.sql",
+        "supabase/migrations/20261102093836_creator_clip_export_bounded_pool.sql"
       ],
-      "schedulerCadence": "template disabled; bounded single job every30 seconds only after host and worker qualification",
+      "schedulerCadence": "templates disabled; either supervised bounded pool or one-shot timer after exact host/capacity qualification, never both per identity",
       "allowedReads": [
         "exact owned source generation and approved watermark bytes"
       ],
@@ -52,10 +56,36 @@
         "cross-account media",
         "unqualified deletion"
       ],
-      "proof": "tests/clip-export-worker.test.mjs and tests/clip-export-database.test.mjs",
-      "killSwitch": "disable private Clip worker gate and stop systemd timer",
+      "proof": "tests/clip-export-worker.test.mjs, tests/clip-export-database.test.mjs and tests/clip-export-pool.test.mjs; native races and installed host qualification separate",
+      "killSwitch": "pause admission and drain; emergency disable private Clip gate and stop supervised runtime; prove empty cgroup before replacement",
       "rollback": "stop admission; preserve original bytes, pending jobs and immutable output receipts",
       "deploymentState": "template_disabled"
+    },
+    {
+      "id": "creator_clip_export_scale_control_plane",
+      "owningSystem": "creator_media",
+      "componentType": "foundation_only_off",
+      "supportedPlatforms": ["shared"],
+      "paths": [
+        "scripts/clip-export-control-plane-cli.mjs",
+        "scripts/lib/clip-export-control-plane.mjs",
+        "scripts/lib/clip-export-health.mjs",
+        "scripts/lib/clip-export-scale-plan.mjs",
+        "scripts/lib/clip-export-scale-controller.mjs",
+        "scripts/lib/clip-export-scale-ledger.mjs",
+        "supabase/migrations/20261102094308_creator_clip_scale_lifecycle_ledger.sql"
+      ],
+      "schedulerCadence": "default OFF; explicitly enabled read-only once/loop (30 seconds default); no installed scheduler",
+      "allowedReads": ["approved profile and aggregate queue/worker inventory", "trusted timestamped worker/dependency observations", "original-scope owned-resource reconciliation"],
+      "allowedWrites": ["none in dry-run", "durable reservations and bounded owned lifecycle only with separate current mutation authority and qualified adapters"],
+      "forbiddenScope": ["implicit purchasing or activation", "unqualified provider or telemetry adapter", "shared LiveKit/scanner resources", "blind media retry", "force-kill deletion", "treating approval expiry as billing stop", "unapproved credentials or provider changes"],
+      "approvalLevel": 4,
+      "proof": "tests/clip-export-control-plane.test.mjs and tests/clip-export-scale-controller.test.mjs; real provider, native contention and alarm delivery remain separate qualifications",
+      "guard": "guard:autonomous-component-inventory",
+      "killSwitch": "disable execution/local controller and new admission; preserve reservations; cleanup requires current approved authority",
+      "rollback": "stop new dispatch, retain ledger and unknown outcomes; separately authorized drain/stop/owned-asset reconciliation without deleting accepted media",
+      "deploymentState": "foundation_only_off",
+      "physicalProofRequired": false
     },
     {
       "supportedPlatforms": [

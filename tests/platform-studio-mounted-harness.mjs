@@ -40,9 +40,10 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     React.useLayoutEffect(()=>{onLayout?.({nativeEvent:{layout:{x:0,y:100,width:360,height:100}}});},[onLayout]);
     return React.createElement(React.Fragment,null,...renderChildren(props.children));
   });
+  const appStateListeners=new Set();
   const native={};for(const n of ['View','Text','TextInput','TouchableOpacity','Pressable','ScrollView','ImageBackground','ActivityIndicator','Image','Video'])native[n]=host(n);
   native.Modal=function FixtureModal(props){const id=React.useId();nodes.set(id,{type:'Modal',props});React.useLayoutEffect(()=>()=>nodes.delete(id),[id]);return props.visible?React.createElement(React.Fragment,null,props.children):null;};
-  Object.assign(native,{AppState:{currentState:'active',addEventListener:()=>({remove(){}})},StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:platform,select:x=>x[platform]??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
+  Object.assign(native,{AppState:{currentState:'active',addEventListener:(_event,listener)=>{appStateListeners.add(listener);return {remove(){appStateListeners.delete(listener);}};}},StyleSheet:{create:x=>x,absoluteFillObject:{}},Platform:{OS:platform,select:x=>x[platform]??x.default},Alert:{alert:(...a)=>alerts.push(a)},Linking:{openURL:async()=>{}},Share:{share:async()=>{}}});
   const config={branding:{appDisplayName:"Chi'llywood"},features:{creatorSettingsEnabled:true},runtimeControls:{uploads_enabled:true,creator_posting_enabled:true,max_upload_size_mb:500}};
   const snapshot={targets:{premium_subscription:{hasEntitlement:true}}};
   const authorityApi=productionFunctions('_lib/accountSessionAuthority.ts',['sameAccountSessionAuthority'],{});
@@ -163,5 +164,6 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     async dismiss(n){assert.equal(n?.type,'Modal');assert.equal(n.props.visible,false);await React.act(async()=>n.props.onDismiss?.());},
     async resolve(d,v){await React.act(async()=>d.resolve(v));},async reject(d,e){await React.act(async()=>d.reject(e));},
     async timers(){await React.act(async()=>{const pending=[...timers.values()];timers.clear();for(const f of pending)void f();});},
+    async appState(state){await React.act(async()=>{native.AppState.currentState=state;for(const listener of appStateListeners)listener(state);});},
     async route(x){params={...params,...x};await render();},async account(x){session=x;await render();},unmount:()=>React.act(async()=>root.unmount())};
 }

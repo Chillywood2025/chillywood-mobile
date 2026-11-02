@@ -264,6 +264,8 @@ grant execute on function public.open_creator_clip_export_worker(uuid,uuid),publ
 create function private.clip_export_failure_class(p_code text) returns text
 language sql immutable set search_path='' as $$
  select case
+ when p_code in('hdr_dolby_vision_unqualified','hdr_color_metadata_unqualified') then 'input_permanent'
+ when p_code='hdr_conversion_unavailable' then 'worker_resource'
  when p_code in('invalid_render_format','invalid_trim_range','invalid_watermark_choice','invalid_source_probe','trim_outside_source','invalid_watermark_probe','probe_output_limit') then 'input_permanent'
  when p_code in('render_canceled','source_changed','clip_export_stale_lease','clip_export_source_changed','clip_source_identity_invalid','watermark_bytes_required') then 'source_or_cancel'
  when p_code in('clip_source_auth_failed','worker_rpc_auth_failed','clip_origin_configuration_invalid') then 'dependency_auth'
@@ -282,6 +284,8 @@ declare code text;
 begin
  if auth.role() is distinct from 'service_role' then raise exception 'service_role_required';end if;
  code:=case when p_error_code in('invalid_render_format','invalid_trim_range','invalid_watermark_choice','invalid_source_probe','trim_outside_source','invalid_watermark_probe','probe_output_limit','render_canceled','source_changed','clip_export_stale_lease','clip_export_source_changed','clip_source_identity_invalid','watermark_bytes_required','clip_source_auth_failed','worker_rpc_auth_failed','clip_origin_configuration_invalid','clip_source_download_failed','worker_rpc_unavailable','clip_worker_disk_full','clip_worker_filesystem_denied','media_binary_unavailable','worker_disk_capacity_exhausted','worker_oom','clip_output_write_unknown','clip_output_conflict','clip_output_readback_failed','clip_output_identity_changed','clip_output_size_mismatch','clip_output_digest_mismatch','completion_unknown','output_reconciliation_required','producer_not_admitted','output_not_reserved','output_not_sealed','media_process_failed','render_timeout','invalid_probe_json','render_output_mismatch','clip_source_download_invalid','clip_source_size_mismatch','clip_source_size_exceeded','clip_file_size_invalid','clip_file_changed','clip_output_changed','clip_output_identity_invalid','immutable_source_required','render_output_exists','worker_failed') then p_error_code else 'worker_failed' end;
+ -- Explicit safe HDR outcomes only; never persist raw decoder diagnostics.
+ if p_error_code in('hdr_dolby_vision_unqualified','hdr_color_metadata_unqualified','hdr_conversion_unavailable') then code:=p_error_code;end if;
  update private.creator_clip_export_jobs set status='failed',error_code=code,
   failure_class=private.clip_export_failure_class(code),lease_until=null,updated_at=clock_timestamp()
  where id=p_job_id and lease=p_lease and status='rendering';

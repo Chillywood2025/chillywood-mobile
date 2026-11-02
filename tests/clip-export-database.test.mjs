@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createDatabase } from './helpers/database-runtime-authority-fixture.mjs';
+import { seedClipExportWorker } from './helpers/clip-export-authority-fixture.mjs';
 
 test('clip export queue uses full migration chain, exact owner/session, fenced worker and private drafts', {timeout:240000}, async()=>{
  const {db}=await createDatabase({includeHeldStudio:true});
@@ -26,7 +27,7 @@ test('clip export queue uses full migration chain, exact owner/session, fenced w
   const edit={clip_format:'square_1_1',fit_mode:'fill',trim_start_ms:null,trim_end_ms:null,brand_mark_enabled:false,brand_asset_id:null};
   const request=randomUUID();
   await assert.rejects(call('select request_creator_clip_export($1,$2,$3) r',[video,request,edit]),/worker_unavailable/);
-  await db.exec("update private.creator_clip_export_worker set enabled=true,last_heartbeat_at=clock_timestamp()");
+  const {worker,workerSession}=await seedClipExportWorker(db);
   for (const role of ['anon','authenticated','service_role']) {
     assert.equal((await q("select has_table_privilege($1,'private.creator_clip_export_jobs','INSERT') ok",[role])).ok,false);
   }
@@ -36,7 +37,9 @@ test('clip export queue uses full migration chain, exact owner/session, fenced w
   await assert.rejects(call('select request_creator_clip_export($1,$2,$3) r',[video,request,{...edit,fit_mode:'fit'}]),/request_mismatch/);
   assert.equal((await call('select read_creator_clip_export($1) r',[other])).r,null);
   await assert.rejects(call('select claim_creator_clip_export()'),/permission denied/);
-  const claimed=(await q('select claim_creator_clip_export() r')).r;
+  await assert.rejects(call('select claim_creator_clip_export($1,$2)',[worker,workerSession]),/permission denied/);
+  assert.equal((await q('select claim_creator_clip_export() r')).r,null,'retired unregistered endpoint is fail closed');
+  const claimed=(await q('select claim_creator_clip_export($1,$2) r',[worker,workerSession])).r;
   assert.equal(claimed.id,first.id);assert.equal(claimed.attempts,1);assert.ok(claimed.lease);
   assert.equal((await q('select heartbeat_creator_clip_export($1,$2) ok',[claimed.id,randomUUID()])).ok,false);
   assert.equal((await q('select heartbeat_creator_clip_export($1,$2) ok',[claimed.id,claimed.lease])).ok,true);
@@ -45,11 +48,12 @@ test('clip export queue uses full migration chain, exact owner/session, fenced w
   assert.equal((await q('select heartbeat_creator_clip_export($1,$2) ok',[claimed.id,claimed.lease])).ok,false);
   await assert.rejects(q("select finish_creator_clip_export($1,$2,'bad', '{}'::jsonb)",[claimed.id,claimed.lease]),/stale_lease/);
   assert.equal((await q('select count(*)::int n from videos where owner_id::text=$1',[owner])).n,1,'failed and canceled exports never create output');
-  const second=(await call('select request_creator_clip_export($1,$2,$3) r',[video,randomUUID(),edit])).r;
-  const next=(await q('select claim_creator_clip_export() r')).r;
+  const secondRequest=randomUUID();
+  const second=(await call('select request_creator_clip_export($1,$2,$3) r',[video,secondRequest,edit])).r;
+  const next=(await q('select claim_creator_clip_export($1,$2) r',[worker,workerSession])).r;
   assert.equal(next.id,second.id);
   const prefix=`${owner}/${next.output_video_id}/${next.lease}/`,key=`${prefix}export.mp4`;
-  const producer=(await q("select begin_secondary_media_producer('creator_video',$1,$2,$3,'cloudflare_r2','chillywood-media-origin',$4) r",[video,next.lease,next.source_snapshot.sourceBinding,prefix])).r;
+  const producer=(await q('select begin_creator_clip_export_output($1,$2) r',[next.id,next.lease])).r;
   const digest='a'.repeat(64),inventory={inventorySha256:'b'.repeat(64),objectCount:1,objects:[{objectKey:key,kind:'render',sizeBytes:100,sha256:digest,dependencies:[]}]};
   await q('select reserve_secondary_media_objects($1,$2,$3)',[next.lease,producer.claimToken,inventory]);
   const identity=(await q('select begin_secondary_media_object_write($1,$2,$3) r',[next.lease,producer.claimToken,key])).r;
@@ -67,8 +71,33 @@ test('clip export queue uses full migration chain, exact owner/session, fenced w
   assert.equal(output.visibility,'draft');assert.equal(output.scan_status,'pending_scan');assert.equal(output.storage_object_key,key);
   assert.equal((await q('select count(*)::int n from private.secondary_media_bindings where object_id=$1',[identity.objectId])).n,2,'original and exported draft both protect output');
   assert.equal((await q('select fail_creator_clip_export($1,$2,$3) r',[next.id,next.lease,'worker_failed'])).r,false,'lost completion response cannot mark committed output failed');
+  assert.equal((await call('select request_creator_clip_export($1,$2,$3) r',[video,randomUUID(),edit])).r.id,done.id,'pending scan draft is not replaced by a new request');
+  const foreign=(await q("select private.clip_export_safe_status(jsonb_populate_record(null::private.creator_clip_export_jobs,to_jsonb(j)||jsonb_build_object('owner_id',$2::text))) r from private.creator_clip_export_jobs j where id=$1",[done.id,other])).r;
+  assert.equal(foreign.status,'stale');assert.equal(foreign.outputVideoId,null,'safe presentation never exposes a non-owned output');
+  await db.query('delete from videos where id=$1',[done.outputVideoId]);
+  const unavailable=(await call('select read_creator_clip_export($1) r',[video])).r;
+  assert.equal(unavailable.id,done.id);assert.equal(unavailable.status,'stale');
+  assert.equal(unavailable.errorCode,'output_unavailable');assert.equal(unavailable.outputVideoId,null);
+  assert.deepEqual((await call('select request_creator_clip_export($1,$2,$3) r',[video,secondRequest,edit])).r,unavailable,'same request retains original job identity after output deletion');
+  assert.deepEqual((await q('select finish_creator_clip_export($1,$2,$3,$4) r',[next.id,next.lease,key,result])).r,unavailable,'late completion retry never resurrects deleted output');
+  assert.equal((await q('select status from private.creator_clip_export_jobs where id=$1',[done.id])).status,'ready','historical successful completion is retained');
+  const replacement=(await call('select request_creator_clip_export($1,$2,$3) r',[video,randomUUID(),edit])).r;
+  assert.notEqual(replacement.id,done.id);assert.equal(replacement.status,'queued');
+  assert.equal((await call('select request_creator_clip_export($1,$2,$3) r',[video,randomUUID(),edit])).r.id,replacement.id,'reopened fresh intent deduplicates the replacement');
+  assert.equal((await q('select count(*)::int n from videos where id=$1',[done.outputVideoId])).n,0);
+  for(const [code,category] of [['hdr_dolby_vision_unqualified','input_permanent'],['hdr_color_metadata_unqualified','input_permanent'],['hdr_conversion_unavailable','worker_resource'],['raw ffmpeg secret diagnostic','unknown']]){
+   await call('select request_creator_clip_export($1,$2,$3) r',[video,randomUUID(),edit]);
+   const hdr=(await q('select claim_creator_clip_export($1,$2) r',[worker,workerSession])).r;
+   assert.ok(hdr);
+   assert.equal((await q('select fail_creator_clip_export($1,$2,$3) r',[hdr.id,hdr.lease,code])).r,true);
+   const safeCode=code.startsWith('hdr_')?code:'worker_failed';
+   const stored=await q('select error_code,failure_class from private.creator_clip_export_jobs where id=$1',[hdr.id]);
+   assert.equal(stored.error_code,safeCode);assert.equal(stored.failure_class,category);
+   const visible=(await call('select read_creator_clip_export($1) r',[video])).r;
+   assert.equal(visible.status,'failed');assert.equal(visible.errorCode,safeCode);assert.equal(visible.outputVideoId,null);
+  }
   await db.query("update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id=$1",[session]);
   await assert.rejects(call('select request_creator_clip_export($1,$2,$3)',[video,randomUUID(),edit]),/current_session_required/);
-  assert.equal((await q('select count(*)::int n from videos where owner_id::text=$1',[owner])).n,2);
+  assert.equal((await q('select count(*)::int n from videos where owner_id::text=$1',[owner])).n,1);
  } finally {await db.close();}
 });

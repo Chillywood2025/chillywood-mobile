@@ -8,9 +8,11 @@ Type=oneshot
 User=chillywood
 WorkingDirectory=/opt/chillywood/clip-export
 EnvironmentFile=/etc/chillywood/clip-export.env
+Environment=CLIP_EXPORT_WORKER_ENABLED=false
 ExecStart=/usr/bin/node scripts/clip-export-worker-cli.mjs --once
 TimeoutStartSec=7900
 TimeoutStopSec=45
+KillSignal=SIGINT
 KillMode=control-group
 NoNewPrivileges=true
 PrivateTmp=true

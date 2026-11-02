@@ -27,15 +27,20 @@ of this change. Existing title/template metadata remains display metadata.
    owner-scoped source access, clean scan, allowed moderation and saved edit
    snapshot matching. A stable request UUID reconciles a lost response without
    creating another job. Maximum three pending jobs per creator.
-3. One global worker claim at a time, two-minute lease, 30-second heartbeat,
-   three abandoned-lease attempts at most. Each attempt has a new lease UUID and
+3. Operator-registered bounded pool, default one global slot (hard ceiling 32;
+   at most 8 qualified slots per worker and one active job per creator), two-minute
+   lease and 30-second heartbeat. At most three abandoned-lease attempts before
+   output production; begun producers require reconciliation. Each attempt has a new lease UUID and
    output video UUID. Cancellation, revoked authority, source changes and stale
    leases cannot finish a draft. Administrative activation remains separate.
 4. Download exact server-owned private coordinates with byte-size bounds; no
    caller-supplied URL is accepted. Local ffmpeg sees only files and pipes,
    never network URLs. Demuxer allowlists reject playlists/concat and nested file
    reads even when MIME is mislabeled. Arguments are arrays, not shell commands.
-5. Render new H.264/AAC MP4, at most 1080 long edge without upscaling. Original
+5. Render new H.264/AAC SDR MP4, at most 1080 long edge / 30 fps without upscaling.
+   Qualified PQ/HLG conversion and explicit unsupported/capability outcomes follow
+   [color policy](CLIP_RENDER_COLOR_POLICY.md); not all HDR/Dolby Vision sources
+   are qualified. Original
    bytes are never replaced. Probe dimensions/duration/codec and decode the whole
    result. Optional watermark bytes must come from a clean, approved published
    owner asset; completion rechecks that exact asset snapshot.
@@ -45,7 +50,8 @@ of this change. Existing title/template metadata remains display metadata.
    R2, with a write-identity marker. Full GET readback must match size, SHA-256,
    ETag and write identity. A timeout/412 is never retried as an overwrite.
    This renderer does not resume a prior PUT: failed jobs retain their durable
-   intents; a new attempt uses a new immutable prefix. Registry reconciliation
+   intents; a separately admitted new attempt uses a new immutable prefix, never
+   a blind automatic retry of an unknown output. Registry reconciliation
    may inspect old writes using GET-only proof, never an overwrite or blind delete.
 7. Record the durable receipt and seal the producer. In one database transaction,
    revalidate source/owner/lease/watermark, insert a new draft with pending scan
@@ -53,9 +59,13 @@ of this change. Existing title/template metadata remains display metadata.
    mark the export ready. Lost completion responses cannot mark a committed
    draft failed or create a second draft. Source deletion cannot cascade away
    export evidence. Neither renderer nor receipt grants public visibility.
-8. Creator sees queue/render/failure/cancel/ready status and opens the new draft
+8. Creator sees durable capacity wait separately from technical processing delay,
+   plus render/failure/cancel/ready status, and opens the new draft
    from Content Library. Scanning, review and explicit publish use existing
-   guarded video flows. There is no automatic publication.
+   guarded video flows. Deleted drafts become unavailable/stale without changing
+   historical completion evidence; an explicit fresh request can replace them.
+   Polling cannot overwrite a newer intent or cross account/focus/background
+   authority. There is no automatic publication.
 9. Hero Reel playback uses only resolved assets and clean scan status, no cache,
    no autoplay/background/external playback, account/route-keyed lifetime,
    focus/background pause and safe error fallback. Watermark changes affect new
@@ -95,10 +105,19 @@ Configuring new persistent credential access needs the applicable approval.
 Before activation, verify existing credential scope, disk/CPU/memory bounds,
 clean synthetic source -> real render -> private create-only readback -> scanner
 -> owner-only output proof, interruption/retry, no public asset leakage, and
-backlog/error alerts. Then enable only this renderer's worker row and install
-the one-job timer. Record immutable deployment/source receipts.
+backlog/error alerts. Then enable only qualified operator registrations and the
+global gate under separate activation authority. Use either the supervised pool
+unit or one-shot timer, never both for an identity. Record immutable deployment/
+source receipts. See the [pool runbook](CLIP_RENDER_POOL_OPERATIONS.md) and
+[disabled scaling contract](CLIP_RENDER_AUTOSCALING_CONTRACT.md). No live
+provider adapter or alert delivery is qualified by this source.
 
-Rollback: disable the renderer gate and stop its timer. Heartbeats fail closed;
+Graceful rollback pauses admission and drains supervised workers while retaining
+accepted-job heartbeats. Emergency rollback disables the renderer gate and stops
+the process; heartbeats fail closed;
 no new claims or completion may proceed. Leave originals, durable receipts and
 already-created drafts intact. Do not delete unknown/partial provider objects
 or undo migration history. Shared retention handles lifecycle after qualification.
+Database lease expiry is not proof ffmpeg stopped: prove the old service's entire
+cgroup empty before restart/replacement. Approval expiry does not stop billing;
+an activated scaling plan needs explicit expiry/cleanup authority and escalation.

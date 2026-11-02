@@ -38,6 +38,10 @@ export async function runClipExportPool({enabled=false,workerId,sessionId=random
  let claimed=0,completed=0,failed=0,availableBytes=null,lastDiskBlocked=false;
  let workerResources=null;
  let lastHeartbeatAtMs=null;
+ const diskSnapshot=async()=>{
+  try{const bytes=await freeDiskBytes();availableBytes=Number.isFinite(bytes)&&bytes>=0?bytes:null;}
+  catch{availableBytes=null;}
+ };
  const resourceSnapshot=async()=>{try{workerResources=await readResources();}catch{workerResources={available:false,reason:'resource_reader_unavailable',observedAtMs:Date.now()};}};
  const wake=()=>{const resolve=waiter;waiter=undefined;resolve?.();};
  const stop=()=>{draining=true;abort.abort();wake();};
@@ -75,14 +79,17 @@ export async function runClipExportPool({enabled=false,workerId,sessionId=random
    workerHeartbeat=(async()=>{
     try{
      const next=workerState(await rpc('heartbeat_creator_clip_export_worker',identity));
-     lastHeartbeatAtMs=Date.now();capacity=next.capacity;if(next.draining)drain();await resourceSnapshot();metric('worker_heartbeat');wake();
+     lastHeartbeatAtMs=Date.now();capacity=next.capacity;if(next.draining)drain();
+     // Saturated workers do not enter claim admission again. Observe current
+     // disk alongside RAM rather than stamping pre-download headroom as fresh.
+     await Promise.all([resourceSnapshot(),diskSnapshot()]);metric('worker_heartbeat');wake();
     }catch(error){lost(error,'heartbeat');}
    })().finally(()=>{workerHeartbeat=null;});
   },workerHeartbeatMs);
   while(true){
    if(draining&&active.size===0)break;
    if(!draining&&active.size<capacity){
-    try{availableBytes=await freeDiskBytes();}catch{availableBytes=null;}
+    await diskSnapshot();
     const enoughDisk=Number.isFinite(availableBytes)&&availableBytes>=(active.size+1)*CLIP_EXPORT_SLOT_DISK_BYTES;
     if(!enoughDisk){
      if(!lastDiskBlocked)metric('worker_disk_capacity_exhausted');lastDiskBlocked=true;
