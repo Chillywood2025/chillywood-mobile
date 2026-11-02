@@ -314,5 +314,12 @@ verify_jwt = true
 # Dedicated raw-body signature plus authenticated current-provider readback.
 verify_jwt = false
 
+[functions.sandbox-creator-cashout]
+verify_jwt = true
+
+[functions.sandbox-creator-cashout-webhook]
+# Dedicated test-only signature; GET-only provider reconciliation.
+verify_jwt = false
+
 [functions.stripe-tax-category-catalog]
 verify_jwt = true
