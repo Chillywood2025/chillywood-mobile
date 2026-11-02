@@ -189,11 +189,12 @@ storefront, catalog, receipt/access and installed Android/iOS commissioning proo
 | Room-seat auction | Canonical platform checkout, immutable contract, paid/refund receipt into source |
 | Physical merchandise | Canonical checkout binding and Stripe lifecycle into separate merch source |
 
-Native PostgreSQL contention harness currently registers 31 schedules, including
+Native PostgreSQL contention harness currently registers 33 schedules, including
 recovery-authority revocation and canonical event/room auction refund commit/rollback. Local source tests are not native execution: Docker
 is unavailable here, so exact-head hosted native validation remains required.
 Auction quote-before-ledger locking has independent source review; dedicated
-auction refund contention schedules are integrated but their native execution is pending. Arbitrary multi-receipt
+auction refund contention and separate quote-only pre-projection barrier schedules
+are integrated but their native execution is pending. Arbitrary multi-receipt
 transactions are not covered by a universal race-safety claim.
 
 ### Existing tip route limitations
