@@ -67,3 +67,40 @@ test('ambiguous request failure clears confirmation and instructs history, never
  await m.amount('100');await m.press(m.button('Review test payout'));await m.press(m.button('Confirm sandbox request'));
  assert.equal(m.button('Confirm sandbox request'),undefined);assert.match(m.text(),/not confirmed/);assert.doesNotMatch(m.text(),/Test request reserved/);
 });
+test('expired recovery authority shows exact held reason and read-only refresh, never a replacement payout',async t=>{
+ let reads=0;
+ const row={requestId:'held',status:'funding_return_pending',grossMinor:10000,bankMinor:9990,observedProviderFeeMinor:null,
+  recoveryAuthorityRequired:true,qualificationStatus:'expired_or_revoked',ownerAction:'sandbox_recovery_authority_required'};
+ const m=await mount(t,{readSandboxCreatorCashoutHistory:async()=>{reads++;return [row];}});
+ await m.press(m.button('Refresh test payout history'));
+ assert.match(m.text(),/fresh, recovery-only authority for this exact execution/);
+ assert.match(m.text(),/does not authorize a new payout/);
+ assert.equal(m.button('Continue provider test payout'),undefined);assert.equal(m.button('Reconcile this test payout'),undefined);
+ await m.press(m.button('Refresh held test payout status'));assert.equal(reads,2);
+ assert.equal(m.calls.filter(x=>x[0]==='advance').length,0);
+});
+test('expired ordinary provider qualification never offers continuation and distinguishes recovery authority',async t=>{
+ const row={requestId:'held',status:'funded',grossMinor:10000,bankMinor:9990,observedProviderFeeMinor:null,
+  recoveryAuthorityRequired:false,qualificationStatus:'expired_or_revoked',ownerAction:'sandbox_cashout_provider_qualification_required'};
+ const m=await mount(t,{readSandboxCreatorCashoutHistory:async()=>[row]});
+ await m.press(m.button('Refresh test payout history'));
+ assert.match(m.text(),/Qualification is not renewed automatically/);assert.doesNotMatch(m.text(),/fresh, recovery-only authority/);
+ assert.equal(m.button('Continue provider test payout'),undefined);
+ await m.press(m.button('Refresh held test payout status'));assert.equal(m.calls.filter(x=>x[0]==='advance').length,0);
+});
+test('fresh recovery-only authority allows exact return despite original expired qualification',async t=>{
+ const row={requestId:'recovery',status:'funding_return_pending',grossMinor:10000,bankMinor:9990,observedProviderFeeMinor:null,
+  recoveryAuthorityRequired:false,qualificationStatus:'expired_or_revoked',ownerAction:null};
+ const m=await mount(t,{readSandboxCreatorCashoutHistory:async()=>[row]});
+ await m.press(m.button('Refresh test payout history'));
+ assert.equal(m.button('Refresh held test payout status'),undefined);assert.equal(m.button('Continue provider test payout'),undefined);
+ await m.press(m.button('Continue test funds recovery'));assert.equal(m.calls.filter(x=>x[0]==='advance').length,1);
+});
+test('unknown dispatch with expired qualification retains safe provider reconciliation',async t=>{
+ const row={requestId:'unknown',status:'funding_unknown',grossMinor:10000,bankMinor:9990,observedProviderFeeMinor:null,
+  recoveryAuthorityRequired:false,qualificationStatus:'expired_or_revoked',ownerAction:'sandbox_cashout_provider_qualification_required'};
+ const m=await mount(t,{readSandboxCreatorCashoutHistory:async()=>[row]});
+ await m.press(m.button('Refresh test payout history'));
+ assert.equal(m.button('Continue provider test payout'),undefined);
+ await m.press(m.button('Reconcile this test payout'));assert.equal(m.calls.filter(x=>x[0]==='advance').length,1);
+});

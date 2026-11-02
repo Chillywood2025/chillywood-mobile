@@ -81,6 +81,7 @@ export const appCompletionAddedFunctionIdentities = new Map([
   ['private.sandbox_cashout_revoke_admission/0','private.sandbox_cashout_revoke_admission()'],
   ['private.sandbox_cashout_enabled/0','private.sandbox_cashout_enabled()'],
   ['private.sandbox_cashout_source/2','private.sandbox_cashout_source(uuid,uuid)'],
+  ['private.sandbox_cashout_auction_binding/2','private.sandbox_cashout_auction_binding(uuid,uuid)'],
   ['private.sandbox_cashout_merch_source/2','private.sandbox_cashout_merch_source(uuid,uuid)'],
   ['private.sandbox_cashout_summary/1','private.sandbox_cashout_summary(uuid)'],
   ['private.hold_sandbox_cashout_changed_source/0','private.hold_sandbox_cashout_changed_source()'],

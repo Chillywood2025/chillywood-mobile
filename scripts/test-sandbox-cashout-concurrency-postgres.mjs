@@ -217,6 +217,31 @@ try{
   assert.equal(query(`select count(*) from private.sandbox_cashout_simulated_return_accounting where execution_id=${lit(id)};`),'0','cancel is not return proof');
   invariants(a);
  }
+ // Independent recovery evidence is return-only. Revoking it serializes with
+ // a return claim after original qualification revocation, never reauthorizing
+ // funding/payout or releasing accounting before a provider return observation.
+ for(const outcome of ['commit','rollback']){
+  const a=await seed(),id=funded(a);
+  assert.equal(run(a,'authenticated',cancel(id)).status,'funding_return_pending');
+  query(`insert into private.sandbox_cashout_revocations(qualification_id) values(${lit(a.qualification)});`);
+  const authority=query(`insert into private.sandbox_cashout_recovery_authorities(execution_id,stage,platform_account_id,account_id,transfer_id,
+   environment,currency,original_transfer_minor,prior_returned_minor,recoverable_minor,provider_evidence_reference,provider_evidence_sha256,verified_at,expires_at)
+   values(${lit(id)},'funding_return','acct_sandboxPlatform',${lit(a.accountId)},${lit(a.transfer)},'test','usd',8991,0,8991,
+   'SYNTHETIC DISPOSABLE RECOVERY TEST ONLY',${lit(createHash('sha256').update(id).digest('hex'))},now(),now()+interval '30 minutes') returning id;`);
+  const {waited}=await race(`insert into private.sandbox_cashout_recovery_revocations(authority_id) values(${lit(authority)});`,auth('service_role',a)+claim(id,'funding_return'),outcome);
+  if(outcome==='commit'){
+   failed(waited,/sandbox_recovery_authority_required/);assert.equal(phase(id),'funding_return_pending');
+   assert.equal(query(`select recovery_authority_id is null from private.sandbox_cashout_executions where id=${lit(id)};`),'t');
+  }else{
+   passed(waited);assert.equal(parse(waited.stdout).claimed,true);assert.equal(phase(id),'funding_return_unknown');
+   assert.equal(query(`select recovery_authority_id from private.sandbox_cashout_executions where id=${lit(id)};`),authority);
+   assert.equal(run(a,'service_role',claim(id,'funding_return')).claimed,false,'unknown return cannot be dispatched twice');
+  }
+  assert.equal(run(a,'service_role',claim(id,'funding')).claimed,false);
+  assert.equal(run(a,'service_role',claim(id,'payout')).claimed,false);
+  assert.equal(query(`select count(*) from private.sandbox_cashout_simulated_return_accounting where execution_id=${lit(id)};`),'0');
+  invariants(a);
+ }
  // A late failed observation without balance proof must not erase committed
  // full-return proof. Two simultaneous terminal observations release once.
  {
@@ -236,8 +261,8 @@ try{
   invariants(a);
  }
  restore.assertSourceUnchanged();
- assert.equal(schedules,25,'all real-lock schedules executed');
- console.log('PASS native sandbox cashout: 25 actual-lock schedules including mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
+ assert.equal(schedules,27,'all real-lock schedules executed');
+ console.log('PASS native sandbox cashout: 27 actual-lock schedules including mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control/recovery-authority barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
 }finally{
  for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end();s.child.kill('SIGTERM');}
  await Promise.allSettled(sessions.map(s=>s.done));

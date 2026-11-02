@@ -127,6 +127,10 @@ create function private.lock_sandbox_cashout_creator(p_creator uuid) returns voi
 language plpgsql set search_path='' as $$
 begin
  perform 1 from public.merch_orders where creator_id=p_creator and environment='sandbox' order by id for update;
+ -- Canonical auction refunds lock their quote before appending terminal ledger rows.
+ -- Lock quotes first so a started refund cannot be missed at dispatch admission.
+ perform 1 from private.creator_event_auction_quotes where creator_id=p_creator and environment='test' order by id for update;
+ perform 1 from private.creator_room_auction_quotes where creator_id=p_creator and environment='test' order by id for update;
  perform 1 from public.money_access_ledger_events where creator_id=p_creator and environment='sandbox' order by id for update;
  perform pg_advisory_xact_lock(hashtextextended('sandbox-cashout:'||p_creator::text,0));
 end; $$;
@@ -315,10 +319,81 @@ $$;
 -- Refund/terminal events on the same provider transaction invalidate the source.
 -- If an older provider path has no transaction identity, use its exact buyer/source
 -- domain conservatively; never reinterpret missing linkage as no refund.
+-- Consuming an existing fulfilled external-auction receipt does not admit a
+-- storefront, create a product, authorize checkout or relax external-program
+-- requirements. Legacy direct-connected charges lack the platform contract and
+-- remain ineligible for this platform-funded test cashout adapter.
+create function private.sandbox_cashout_auction_binding(p_id uuid,p_qualification uuid) returns text
+language plpgsql stable set search_path='' as $$
+declare m public.money_access_ledger_events; p public.provider_events; sq private.sandbox_cashout_qualifications;
+ c private.auction_platform_settlement_contracts; i public.money_purchase_intents;
+ v_lane text; receipt jsonb; quote jsonb; terminal boolean;
+begin
+ select * into m from public.money_access_ledger_events where id=p_id;
+ select * into p from public.provider_events where id=m.provider_event_id;
+ select * into sq from private.sandbox_cashout_qualifications where id=p_qualification;
+ v_lane:=case p.provider when 'stripe_event_auction' then 'event' when 'stripe_room_auction' then 'room' end;
+ if v_lane is null or m.id is null or p.id is null or sq.id is null then return null; end if;
+ select * into c from private.auction_platform_settlement_contracts where lane=v_lane
+  and purchase_intent_id::text=m.metadata->>'purchase_intent_id';
+ if c.id is null or c.environment<>'test' or c.platform_account_id is distinct from sq.platform_account_id
+  or c.recipient_account_id is distinct from sq.account_id or c.creator_id is distinct from sq.creator_id
+  or c.creator_id is distinct from m.creator_id or c.buyer_id is distinct from m.user_id
+  or c.amount_minor is distinct from m.amount_minor or c.currency is distinct from m.currency
+  or m.environment is distinct from 'sandbox' or p.environment is distinct from 'sandbox'
+  or m.source_type is distinct from (case v_lane when 'event' then 'event' else 'room_seat_auction' end)
+  or m.metadata->>'auction_quote_id' is distinct from c.quote_id::text
+  or m.metadata->>'provider_account_id' is distinct from c.platform_account_id
+ then return null; end if;
+ select * into i from public.money_purchase_intents where id=c.purchase_intent_id;
+ if i.id is null or i.status<>'consumed' or i.environment<>'sandbox' or i.provider is distinct from p.provider
+  or i.user_id is distinct from m.user_id or i.creator_id is distinct from m.creator_id
+  or i.product_id is distinct from m.product_id or i.source_id is distinct from m.source_id
+  or i.source_type is distinct from m.source_type or i.amount_minor is distinct from m.amount_minor or i.currency is distinct from 'usd'
+  or i.provider_product_id is distinct from c.platform_product_id then return null; end if;
+ if v_lane='event' then
+  select to_jsonb(q) into quote from private.creator_event_auction_quotes q where q.id=c.quote_id;
+  select to_jsonb(r) into receipt from private.creator_event_auction_receipts r where r.ledger_event_id=m.id
+   and r.provider_record_id=p.id and r.outcome='paid' and r.resolution='fulfilled' and r.environment='test'
+   and r.provider_account_id=c.platform_account_id and r.payload_hash=p.raw_payload_hash
+   and p.provider_event_id=r.provider_account_id||':'||r.provider_event_id order by r.created_at,r.id limit 1;
+  select exists(select 1 from private.creator_event_auction_receipts r where r.quote_id=c.quote_id
+   and r.environment='test' and r.provider_account_id=c.platform_account_id and r.outcome in ('refunded','disputed')
+   and r.ledger_event_id is not null) into terminal;
+ else
+  select to_jsonb(q) into quote from private.creator_room_auction_quotes q where q.id=c.quote_id;
+  select to_jsonb(r) into receipt from private.creator_room_auction_receipts r where r.ledger_event_id=m.id
+   and r.provider_record_id=p.id and r.outcome='paid' and r.resolution='fulfilled' and r.environment='test'
+   and r.provider_account_id=c.platform_account_id and r.payload_hash=p.raw_payload_hash
+   and p.provider_event_id=r.provider_account_id||':'||r.provider_event_id order by r.created_at,r.id limit 1;
+  select exists(select 1 from private.creator_room_auction_receipts r where r.quote_id=c.quote_id
+   and r.environment='test' and r.provider_account_id=c.platform_account_id and r.outcome in ('refunded','disputed')
+   and r.ledger_event_id is not null) into terminal;
+ end if;
+ if quote is null or receipt is null or terminal
+  or quote->>'environment' is distinct from 'test' or quote->>'provider_account_id' is distinct from c.recipient_account_id
+  or quote->>'buyer_id' is distinct from c.buyer_id::text or quote->>'creator_id' is distinct from c.creator_id::text
+  or quote->>'capability_id' is distinct from c.capability_id::text
+  or quote->>'amount_minor' is distinct from c.amount_minor::text or quote->>'currency' is distinct from c.currency
+  or quote->>'auction_id' is distinct from m.metadata->>'auction_id'
+  or quote->>'session_id' is distinct from i.session_generation or quote->>'purchase_intent_id' is distinct from i.id::text
+  or quote->>'checkout_attempt_id' is distinct from i.checkout_attempt_id::text or quote->>'superseded_at' is not null
+  or quote->>'provider_payment_intent_id' is distinct from receipt->>'payment_intent_id'
+  or m.metadata->>'original_transaction_id' is distinct from receipt->>'payment_intent_id'
+  or receipt->>'quote_id' is distinct from c.quote_id::text
+  or receipt#>>'{evidence,settlementContractId}' is distinct from c.id::text
+  or receipt#>>'{evidence,settlementPolicy}' is distinct from c.policy_version
+  or receipt#>>'{evidence,providerProductId}' is distinct from c.platform_product_id
+  or receipt#>>'{evidence,checkoutSessionId}' is distinct from quote->>'provider_checkout_session_id'
+ then return null; end if;
+ return md5(to_jsonb(c)::text||quote::text||receipt::text||to_jsonb(i)::text);
+end; $$;
+revoke all on function private.sandbox_cashout_auction_binding(uuid,uuid) from public,anon,authenticated,service_role;
+
 create function private.sandbox_cashout_source(p_id uuid,p_qualification uuid) returns jsonb
 language plpgsql stable set search_path='' as $$
 declare m public.money_access_ledger_events; p public.provider_events; q private.sandbox_cashout_qualifications;
- net bigint; h text;
+ net bigint; h text; auction_binding text;
 begin
  select * into m from public.money_access_ledger_events where id=p_id;
  select * into q from private.sandbox_cashout_qualifications where id=p_qualification;
@@ -327,7 +402,7 @@ begin
  or m.user_id=m.creator_id or m.environment<>'sandbox' or m.currency<>'usd' or m.payable_state<>'not_payable'
  or m.status not in ('sandbox_only','verified') or m.amount_minor<=0 or p.environment<>'sandbox'
  or p.status<>'processed' or p.user_id is distinct from m.user_id
- or p.provider not in ('revenuecat_app_store','revenuecat_google_play','google_play','revenuecat','stripe_physical_goods')
+ or p.provider not in ('revenuecat_app_store','revenuecat_google_play','google_play','revenuecat','stripe_physical_goods','stripe_event_auction','stripe_room_auction')
  or m.event_type not in ('INITIAL_PURCHASE','NON_RENEWING_PURCHASE','RENEWAL','checkout.session.completed','checkout.session.async_payment_succeeded')
  or exists(select 1 from public.money_access_ledger_events t where t.environment='sandbox'
    and t.creator_id=m.creator_id and t.user_id=m.user_id and t.source_type is not distinct from m.source_type
@@ -337,11 +412,15 @@ begin
    and (t.payable_state in ('refunded','reversed','chargeback') or t.status in ('refunded','reversed','chargeback')
      or t.event_type in ('REFUND','REVOCATION','charge.refunded','charge.dispute.created')))
  then return null; end if;
+ if p.provider in ('stripe_event_auction','stripe_room_auction') then
+  auction_binding:=private.sandbox_cashout_auction_binding(m.id,q.id);
+  if auction_binding is null then return null; end if;
+ end if;
  net:=m.amount_minor::bigint-((m.amount_minor::bigint*q.simulated_tax_bps+9999)/10000)
  -((m.amount_minor::bigint*q.simulated_platform_bps+9999)/10000)
  -((m.amount_minor::bigint*q.simulated_provider_bps+9999)/10000)-q.simulated_provider_fixed_minor;
  if net<=0 or net>2147483647 then return null; end if;
- h:=md5(to_jsonb(m)::text||to_jsonb(p)::text);
+ h:=md5(to_jsonb(m)::text||to_jsonb(p)::text||coalesce(auction_binding,''));
  return jsonb_build_object('netMinor',net,'sourceHash',h);
 end; $$;
 

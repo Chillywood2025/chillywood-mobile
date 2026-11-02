@@ -29,7 +29,11 @@ rows backed by processed provider events. Physical merchandise consumes its own
 canonical paid order, processed Stripe payment receipt and immutable sandbox
 Checkout/account binding; it does not create fake digital ledger rows. Historical
 merch orders without that binding stay unavailable. Buyer and creator must differ.
-Only USD sources are supported. Both source types retain their own private
+Only USD sources are supported. Canonical external event and room-seat auction receipts additionally require their
+immutable test platform settlement contract, exact platform/recipient accounts,
+consumed intent, quote/session, paid receipt and provider ledger binding. Legacy
+unbound direct-charge receipts stay unavailable; storefront eligibility is unchanged.
+These source types retain their own private
 reservations; public sandbox ledger rows remain `not_payable`.
 
 The independently qualified test account carries an immutable, explicitly
@@ -71,7 +75,8 @@ revocation shares the dispatch locks. An expired/revoked recovery authority cann
 authorize a write, and an unknown attempt remains GET-only forever.
 
 Local full-schema tests exercise real Apple/Google subscription processors and
-the real Stripe merchandise lifecycle processor with synthetic provider inputs.
+the real Stripe merchandise and event/room auction lifecycle processors with
+synthetic provider inputs.
 They prove source integration, not actual store/provider delivery. Shared-engine
 recovery tests use actual SQL contexts through the Edge adapter and verify epoch
 seconds, account-scoped GET filters and repeated unknown recovery without POSTs.
@@ -157,3 +162,28 @@ connected test account, tester qualification and installed-device results are
    identifiers, tokens or secrets belong in committed diagnostics. Record failed,
    skipped and never-run cases explicitly. Full Required Validation and this
    commissioning evidence are separate gates; neither substitutes for the other.
+
+## Source coverage ledger
+
+The following describes disposable full-schema processor fixtures, not real
+provider delivery or device validation. Every lane still needs its actual authorized
+storefront, catalog, receipt/access and installed Android/iOS commissioning proof.
+
+| Existing paid lane | Cashout-source integration evidence |
+| --- | --- |
+| Channel subscription | Apple/Google canonical initial purchase; renewal fixture tracked separately until passing |
+| Tips | One-time canonical store fixture tracked separately until passing |
+| Paid content | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
+| Fixed event tickets | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
+| VIP | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
+| Watch-party/live access/fixed seats | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
+| Event auction | Canonical platform checkout, immutable contract, paid/refund receipt into source |
+| Room-seat auction | Canonical platform checkout, immutable contract, paid/refund receipt into source |
+| Physical merchandise | Canonical checkout binding and Stripe lifecycle into separate merch source |
+
+Native PostgreSQL contention harness currently registers 27 schedules, including
+recovery-authority revocation. Local source tests are not native execution: Docker
+is unavailable here, so exact-head hosted native validation remains required.
+Auction quote-before-ledger locking has independent source review; dedicated
+auction refund contention schedules are pending integration. Arbitrary multi-receipt
+transactions are not covered by a universal race-safety claim.
