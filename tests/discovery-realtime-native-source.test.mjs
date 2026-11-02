@@ -4,13 +4,15 @@ import test from 'node:test';
 import {parse} from 'yaml';
 import {randomUUID} from 'node:crypto';
 import vm from 'node:vm';
+import {spawnSync} from 'node:child_process';
 import {assertDiscoveryHintPayload} from '../scripts/lib/discovery-native-hint-contract.mjs';
 
-const command='node scripts/test-discovery-realtime-delivery.mjs';
+const command='node --experimental-websocket scripts/test-discovery-realtime-delivery.mjs';
 const script=fs.readFileSync('scripts/test-discovery-realtime-delivery.mjs','utf8');
 const workflowSource=fs.readFileSync('.github/workflows/required-validation.yml','utf8');
 function validate(source,workflowText) {
   for(const fragment of ["from '@supabase/supabase-js'","process.env.GITHUB_ACTIONS,'true'",'GITHUB_REPOSITORY',
+    "typeof globalThis.WebSocket,'function'",'globalThis.WebSocket.prototype.close','globalThis.WebSocket.prototype.send',
     "query('show cron.launch_active_jobs'),'off'", "['127.0.0.1','localhost']",'com.supabase.cli.project',
     "admin.auth.admin.createUser",'auth.signInWithPassword','seedLiveRoomActor',"client.channel(topic",
     "event:'discovery:invalidate'",'discovery:v1:viewer:',"{denied:true}","receiptMs<3000",'inserted_at>=','pg_sleep(0.25)',
@@ -36,6 +38,30 @@ function validate(source,workflowText) {
   assert.ok(block.includes('node --test tests/discovery-realtime-native-source.test.mjs'));
 }
 test('native discovery proof retains real SDK/Auth/RLS receipts, no polling substitute, and mandatory CI execution',()=>validate(script,workflowSource));
+test('native runner rejects missing WebSocket before any cluster or Auth setup',()=>{
+  const result=spawnSync(process.execPath,['--no-experimental-websocket','scripts/test-discovery-realtime-delivery.mjs'],{
+    encoding:'utf8',timeout:10000,env:{...process.env,GITHUB_ACTIONS:'false'},
+  });
+  assert.equal(result.error,undefined);assert.equal(result.status,1);
+  assert.match(result.stderr,/native WebSocket required: run node --experimental-websocket/);
+  assert.doesNotMatch(result.stderr,/owned Actions cluster only|connToClose|spawnSync docker/);
+});
+test('native flag supplies the actual SDK WebSocket transport, never Object or a fake adapter',()=>{
+  const preflight=script.slice(script.indexOf('assert.equal(typeof globalThis.WebSocket'),script.indexOf('assert.equal(process.env.GITHUB_ACTIONS'));
+  assert.ok(preflight.includes('globalThis.WebSocket.prototype.close'));
+  assert.throws(()=>vm.runInNewContext(preflight,{assert,WebSocket:Object}),assert.AssertionError,'a function without socket methods is not a transport');
+  const result=spawnSync(process.execPath,['--experimental-websocket','--input-type=module','-e',`
+    import assert from 'node:assert/strict';
+    import {createClient} from '@supabase/supabase-js';
+    ${preflight}
+    const client=createClient('http://127.0.0.1:1','synthetic-noncredential',{
+      auth:{persistSession:false,autoRefreshToken:false}
+    });
+    assert.equal(client.realtime.transport,globalThis.WebSocket);
+    assert.notEqual(client.realtime.transport,Object);
+  `],{encoding:'utf8',timeout:10000});
+  assert.equal(result.error,undefined);assert.equal(result.status,0,result.stderr);
+});
 test('native proof qualifies exact managed transaction or wall-clock defaults without accepting arbitrary timestamps',()=>{
   const contract=script.slice(script.indexOf('assert.equal(managedClock.type'),script.indexOf('const lit='));
   assert.ok(contract.includes('managedClock.default'));
@@ -51,7 +77,7 @@ test('native proof source guard rejects removed privacy, primary timing and exec
     'primary-disabled negative control','receive-only viewer channel',"delete from auth.sessions",'JSON.stringify(message.payload)',
     'message.payload.keys.includes(source.key)',"profile_access_visibility='private'"])
     assert.throws(()=>validate(script.replaceAll(needle,'REMOVED_BOUNDARY'),workflowSource),assert.AssertionError,needle);
-  for(const replacement of ['',`${command} || true`,`if false; then ${command}; fi`])
+  for(const replacement of ['',command.replace(' --experimental-websocket',''),`${command} || true`,`if false; then ${command}; fi`])
     assert.throws(()=>validate(script,workflowSource.replace(command,replacement)),assert.AssertionError,replacement);
   assert.throws(()=>validate(`${script}\nalter table realtime.messages alter column inserted_at set default clock_timestamp();`,workflowSource),assert.AssertionError);
 });

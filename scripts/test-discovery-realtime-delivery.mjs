@@ -17,6 +17,11 @@ if(process.argv.includes('--help')) {
   process.exit(0);
 }
 assert.deepEqual(process.argv.slice(2),[]);
+// Node 20 requires this flag. Fail before DB/Auth setup, rather than allowing
+// an unsupported SDK transport to time out and mask the cause during cleanup.
+assert.equal(typeof globalThis.WebSocket,'function','native WebSocket required: run node --experimental-websocket');
+assert.equal(typeof globalThis.WebSocket.prototype.close,'function','native WebSocket close required');
+assert.equal(typeof globalThis.WebSocket.prototype.send,'function','native WebSocket send required');
 assert.equal(process.env.GITHUB_ACTIONS,'true','owned Actions cluster only');
 assert.match(process.env.GITHUB_RUN_ID??'',/^\d+$/);
 assert.equal(process.env.GITHUB_REPOSITORY,'Chillywood2025/chillywood-mobile');
@@ -135,6 +140,7 @@ async function observed(observer,label,mutation,read,expected) {
     const receiptMs=Math.round(receipt.at-started),projectionMs=Math.round(performance.now()-started);
     assert.ok(receiptMs<3000,`${label}: healthy primary transport must not wait for the 10s scheduler`);
     samples.push({label,receiptMs,projectionMs});
+    console.log(JSON.stringify({proof:'native discovery mutation',label,receiptMs,projectionMs}));
   }finally{observer.pending=null;}
 }
 async function silent(observersToCheck,label,mutation) {

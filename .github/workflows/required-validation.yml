@@ -273,7 +273,7 @@ jobs:
           node scripts/test-chilly-chat-real-peer-http.mjs
           npm run test:communication-room-realtime-delivery
           node --test tests/discovery-realtime-native-source.test.mjs
-          node scripts/test-discovery-realtime-delivery.mjs
+          node --experimental-websocket scripts/test-discovery-realtime-delivery.mjs
           npm run test:revenuecat-premium-quarantine-concurrency
           npm run test:cognitive-net-acl-guard-concurrency
           npm run test:cognitive-db-concurrency
