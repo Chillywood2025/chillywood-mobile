@@ -8,6 +8,7 @@ import "react-native-url-polyfill/auto";
 import type { Database } from "../supabase/database.types";
 import { getRuntimeConfig } from "./runtimeConfig";
 import { createAccountSessionStorage, guardAccountSessionSignOutEvents } from "./accountSessionStorage";
+import { observeRealtimeDisconnect } from "./realtimeDisconnectBarrier";
 
 const DEFAULT_SUPABASE_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co";
 const DEFAULT_SUPABASE_FUNCTIONS_URL = "https://network-proof.chillywoodstream.com";
@@ -82,6 +83,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     },
   },
 });
+
+export const getRealtimeDisconnectBarrier = observeRealtimeDisconnect(supabase.realtime);
 
 guardAccountSessionSignOutEvents(supabase.auth, accountSessionStorage.storage, ACCOUNT_SESSION_STORAGE_KEY);
 

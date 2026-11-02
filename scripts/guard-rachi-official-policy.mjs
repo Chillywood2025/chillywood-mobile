@@ -110,7 +110,9 @@ assertIncludes(officialRachi, "chooseOfficialRachiProfileImageFromGallery", "cli
 assertIncludes(admin, "createOfficialRachiPost", "admin Rachi post action");
 assertIncludes(admin, "rachiPostOperationRef", "admin preserves operation key across ambiguous retry");
 assertIncludes(admin, "rachiPostLatchRef.current.tryAcquire()", "admin same-frame publish single-flight");
-assertIncludes(admin, "Choose from Gallery", "admin Rachi gallery profile image action");
+assertIncludes(admin, "Change Picture", "admin single Rachi profile image action");
+assertIncludes(admin, "await pickRachiMedia({", "admin Rachi shared source sheet");
+assertIncludes(admin, "authority: initiatingAuthority", "admin Rachi initiating operator binding");
 assertIncludes(admin, "Clear Picture", "admin Rachi profile image clear action");
 assertNotIncludes(admin, "Paste a public HTTPS image URL", "visible URL-based Rachi profile image UI");
 assertIncludes(admin, "Normal Users", "normal-user Rachi protection copy");

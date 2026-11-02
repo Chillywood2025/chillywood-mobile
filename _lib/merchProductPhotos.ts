@@ -6,8 +6,10 @@ import {
 import { normalizeImageUploadFile } from "./imageUploadNormalization";
 import { pickSocialAttachmentFile } from "./socialAttachmentPicker";
 import { pickDeviceImage } from "./deviceImagePicker";
+import type { MediaPickerSource, MediaPickerOperation } from "./mediaPickerCoordinator";
 import {
   uploadPlatformBrandAsset,
+  PLATFORM_BRAND_IMAGE_MAX_BYTES,
   type PlatformBrandAssetFile,
   type PlatformBrandUploadAttempt,
 } from "./platformBranding";
@@ -30,8 +32,9 @@ export type MerchPhotoFields = {
   photoScanStatus?: string | null;
 };
 
-export function pickMerchProductPhoto(source: "photos" | "files" = "photos"): Promise<MerchProductPhotoFile | null> {
-  return source === "files" ? pickDeviceImage("files") : pickSocialAttachmentFile("images");
+export function pickMerchProductPhoto(source: MediaPickerSource = "photos", operation?: MediaPickerOperation): Promise<MerchProductPhotoFile | null> {
+  return source === "files" ? pickDeviceImage("files", operation, { maximumBytes: PLATFORM_BRAND_IMAGE_MAX_BYTES })
+    : pickSocialAttachmentFile("images", source, operation, { maximumBytes: PLATFORM_BRAND_IMAGE_MAX_BYTES });
 }
 
 // Staging never edits a product or its revision. Keep attempt in the initiating

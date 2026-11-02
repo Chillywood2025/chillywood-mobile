@@ -225,14 +225,38 @@ const approvedCircleErrors = new Set([
   "Unable to update Chi'lly Circle right now.",
   "Chi'lly Circle could not load right now.",
   "You cannot request yourself.",
+  "Chi'lly Circle read retired.",
+  "Chi'lly Circle account changed.",
 ]);
+
+// A cancellation Error may be named before throwing. Permit only the exact
+// static constructor plus an AbortError name assignment, never a provider
+// alias, changed message, or an Error handed to another function.
+const resolveThrownError = (throwPath) => {
+  const argumentPath = throwPath.get("argument");
+  if (!argumentPath.isIdentifier()) return argumentPath;
+  const binding = argumentPath.scope.getBinding(argumentPath.node.name);
+  if (!binding?.constant || !binding.path.isVariableDeclarator()) return argumentPath;
+  const init = binding.path.get("init");
+  if (!init.isNewExpression()) return argumentPath;
+  const safeReferences = binding.referencePaths.every((reference) => {
+    if (reference === argumentPath) return true;
+    const member = reference.parentPath;
+    const assignment = member?.parentPath;
+    return member?.isMemberExpression() && reference.key === "object"
+      && !member.node.computed && member.get("property").isIdentifier({ name: "name" })
+      && assignment?.isAssignmentExpression({ operator: "=" }) && member.key === "left"
+      && assignment.get("right").isStringLiteral({ value: "AbortError" });
+  });
+  return safeReferences ? init : argumentPath;
+};
 
 const findUnsafeThrownErrors = (source) => {
   const ast = parseSource(source);
   const unsafe = [];
   traverse(ast, {
     ThrowStatement(throwPath) {
-      const argumentPath = throwPath.get("argument");
+      const argumentPath = resolveThrownError(throwPath);
       const calleePath = argumentPath.isNewExpression() ? argumentPath.get("callee") : null;
       const argumentPaths = argumentPath.isNewExpression() ? argumentPath.get("arguments") : [];
       const messagePath = calleePath?.isIdentifier({ name: "Error" })
@@ -258,6 +282,7 @@ const liveTab = read("app/(tabs)/live.tsx");
 const profileTab = read("app/(tabs)/profile.tsx");
 const libraryTab = read("app/(tabs)/my-list.tsx");
 const explore = read("app/(tabs)/explore.tsx");
+const liveDiscoveryFeed = read("_lib/useLiveDiscoveryFeed.ts");
 const home = read("app/(tabs)/index.tsx");
 const homeRoute = read("app/home.tsx");
 const libraryRoute = read("app/library.tsx");
@@ -323,7 +348,8 @@ assertIncludes(profileTab, "Platform and Platform Studio stay separate", "Profil
 assertIncludes(libraryTab, "My Library", "Library screen header");
 assertIncludes(libraryTab, "Saved titles, unlocked creator videos, watch progress, followed Platforms, and saved replays live here.", "Library saved scope copy");
 assertNotIncludes(libraryTab, "creator-owned draft", "viewer Library must not become creator Content Library");
-assertIncludes(libraryTab, "readMergedWatchProgress", "Library backed continue watching");
+assertIncludes(libraryTab, "readWatchProgressState(", "Library backed continue watching");
+assertIncludes(libraryTab, "const progressMap = progressState?.progress ?? null", "Library reads backed progress state");
 assertIncludes(libraryTab, "readFollowedChannelUserIds", "Library backed followed Platforms");
 assertIncludes(libraryTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Library Chi'llywood background");
 assertIncludes(explore, "Search titles, public people, Platforms, creator videos, Originals, events, and replays.", "Explore backed scope copy");
@@ -334,7 +360,9 @@ assertIncludes(explore, 'testID="explore-typeahead-results"', "Explore typeahead
 assertIncludes(explore, "EXPLORE_SEARCH_DEBOUNCE_MS", "Explore debounced search");
 assertIncludes(explore, "searchPublicPeople", "Explore public people search source");
 assertIncludes(explore, 'testID="explore-people-search-section"', "Explore People results section");
-assertIncludes(explore, "readRankedPublicDiscoveryFeedItems({ surface: \"home\"", "Explore ranked public discovery feed source");
+assertIncludes(explore, "const discovery = useLiveDiscoveryFeed({ surface: \"home\"", "Explore ranked public discovery feed source");
+assertIncludes(liveDiscoveryFeed, "readPublicDiscoveryFeedItems({ ...settings, signal: sharedSignal })", "Explore backing public discovery read");
+assertIncludes(liveDiscoveryFeed, "rankDiscoveryFeedItems(publicRows, signals)", "Explore backed public discovery ranking");
 assertIncludes(explore, "readLatestPublicCreatorVideos", "Explore public creator video source");
 assertIncludes(explore, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Explore Rachi Originals source");
 assertIncludes(explore, "No public replays yet", "Explore honest replay empty state");
@@ -403,7 +431,8 @@ assertIncludes(player, 'surfaceLabel="Watch-Party Live"', "Player Watch-Party Li
 assertIncludes(player, "Audio Mix", "Player Watch-Party Live audio mix label");
 assertIncludes(player, "This room belongs to Live Watch-Party, not Watch-Party Live.", "Player live naming split");
 assertIncludes(player, "Open Party Room", "Player Party Room compatibility action");
-assertIncludes(watchPartyIndex, "HOST PREFLIGHT", "Watch-Party host preflight");
+assertIncludes(watchPartyIndex, ">QUICK HEADS-UP</AppText>", "Watch-Party host preflight");
+assertIncludes(watchPartyIndex, "{hostGuideRows.map((row) => (", "Watch-Party rendered host guidance");
 assertIncludes(watchPartyIndex, "Live Watch-Party", "Watch-Party Live/Live Watch-Party label split");
 assertIncludes(watchPartyIndex, "Watch-Party Live", "Watch-Party Live label");
 assertNotIncludes(watchPartyIndex, "Selected Title", "Watch-Party unresolved content placeholder");
@@ -553,6 +582,8 @@ if (findUnsafeThrownErrors(friendGraph).length > 0) {
   "const providerError = error; throw providerError;",
   "throw new Error(error.message);",
   "throw new Error(`Provider: ${error.message}`);",
+  "const safe = new Error(\"Chi'lly Circle read retired.\"); safe.message = error.message; throw safe;",
+  "const safe = new Error(\"Chi'lly Circle read retired.\"); change(safe); throw safe;",
 ].forEach((mutant) => {
   if (findUnsafeThrownErrors(`const run = () => { ${mutant} };`).length === 0) {
     fail(`Chi'lly Circle error guard accepted unsafe-throw mutant: ${mutant}`);

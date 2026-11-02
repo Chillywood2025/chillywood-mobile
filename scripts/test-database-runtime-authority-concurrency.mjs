@@ -94,6 +94,18 @@ async function queueCase({label,boundary='advisory',change='none',replay=false,o
   try{
     holder=openSession(holderName,`begin;set local statement_timeout='35s';${holderSql}select 'HOLDER_READY';`);
     await waitUntil(()=>holder.output().includes('HOLDER_READY'),`${label}: holder ready`);
+    const preseedSelfExpiry=self&&change==='role-expiry';
+    if(preseedSelfExpiry){
+      // A self-grant inserts a role for the same actor before its audit/receipt
+      // wait. The retained discovery trigger then owns that actor's 190731
+      // mutex. Updating Owner expiry from a third backend at that point would
+      // wait behind the grant while this harness waits to release its blocker.
+      // Establish a real finite grant first; prove below that its wall-clock
+      // deadline crosses while the grant is held at the intended boundary.
+      assert.equal(query(`update public.platform_role_memberships set expires_at=clock_timestamp()+interval '5 seconds'
+        where user_id=${literal(person.user)} and role='owner' returning expires_at>clock_timestamp();`),'t',
+      'finite Owner authority established before self-grant dispatch');
+    }
     waiter=openSession(waiterName,`begin;set local statement_timeout='35s';${claimSql(person)}${call}commit;\n\\q`);
     waiter.child.stdin.end();await waitUntil(isBlocked,`${label}: exact real blocker`);
     assert.equal(query(`select count(distinct pid) from pg_stat_activity where datname=current_database() and application_name in (${literal(holderName)},${literal(waiterName)});`),'2','two distinct backend sessions');
@@ -111,7 +123,15 @@ async function queueCase({label,boundary='advisory',change='none',replay=false,o
           : {table:'public.platform_role_memberships',column:'expires_at',where:`user_id=${literal(person.user)} and role=${literal(operator?'operator':'owner')}`};
       // Valid finite grants go through real triggers. Waiter began before cutoff;
       // observe wall-clock expiry while its actual lock wait remains in place.
-      query(`update ${descriptor.table} set ${descriptor.column}=clock_timestamp()+interval '500 milliseconds' where ${descriptor.where};`);
+      if(!preseedSelfExpiry)query(`update ${descriptor.table} set ${descriptor.column}=clock_timestamp()+interval '500 milliseconds' where ${descriptor.where};`);
+      else{
+        assert.equal(query(`select count(*) from pg_locks l join pg_stat_activity w on w.pid=l.pid
+          where w.datname=current_database() and w.application_name=${literal(waiterName)} and l.granted
+            and l.locktype='advisory' and l.classid=190731::oid and l.objid=hashtext(${literal(person.user)})::oid and l.objsubid=2;`),'1',
+        'self-grant keeps the real discovery actor mutex while waiting');
+        assert.equal(query(`select clock_timestamp()<${descriptor.column} from ${descriptor.table} where ${descriptor.where};`),'t',
+          'self-grant reaches the intended audit/receipt boundary before Owner expiry');
+      }
       assert.equal(query(`select w.xact_start<t.${descriptor.column} from pg_stat_activity w cross join ${descriptor.table} t
         where w.datname=current_database() and w.application_name=${literal(waiterName)} and ${descriptor.where};`),'t','waiter transaction began before authority cutoff');
       await waitUntil(()=>query(`select clock_timestamp()>=${descriptor.column} from ${descriptor.table} where ${descriptor.where};`)==='t',`${label}: observed cutoff`);

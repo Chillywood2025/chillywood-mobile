@@ -67,7 +67,7 @@ const premiumWatchPartyAccess = readSource("_lib/premiumWatchPartyAccess.ts");
 const partyRoomWatchTogether = sliceBetween(
   partyRoom,
   "const onWatchTogether = useCallback(async () => {",
-  "const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {",
+  "const onPickPartyRoomCommentAttachment = useCallback(async () => {",
   "Party Room Watch Together handler boundary",
 );
 const partyRoomCameraPreviewGate = sliceBetween(
@@ -577,13 +577,13 @@ const playerPartyCommentsContent = sliceBetween(
   "const renderSharedFullscreenCommentsRail = () => (",
   "Player party comments content boundary",
 );
-const playerWatchPartyEntryAccessCheck = sliceBetween(
+sliceBetween(
   player,
   "const premiumAccessKey = resolvePremiumAccessKeyForRoom(snapshot.room);",
   "return () => {\n      active = false;",
   "Player Watch-Party entry access check boundary",
 );
-const lobbyJoinAccessCheck = sliceBetween(
+sliceBetween(
   watchPartyIndex,
   "const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {",
   "const onConfirmJoin = async () => {",
@@ -625,7 +625,7 @@ const liveStageHostRemoveAction = sliceBetween(
   "<Text style={[styles.stageParticipantActionText, styles.stageParticipantActionTextDanger]}",
   "Live Stage host remove action boundary",
 );
-const liveStageRouteAccessCheck = sliceBetween(
+sliceBetween(
   liveStage,
   "const access = await resolveRoomAccess({",
   "syncStageSnapshot(snapshot, trackedUserId);",
@@ -952,10 +952,11 @@ assertIncludes(
 );
 assertIncludes(
   liveWatchPartyCreateHandler,
-  "discoveryVisibility: draft.visibility,\n                discoveryTitle: draft.title,",
-  "Live Watch-Party entry persistence must bind both visibility and title to the prepared room update.",
+  "discoveryVisibility: draft.visibility,\n                discoveryPaused: draft.paused,\n                discoveryTitle: draft.title,",
+  "Live Watch-Party entry persistence must bind audience, listing pause and title to the prepared room update.",
 );
 assertIncludes(liveWatchPartyCreateHandler, "persistedLiveRoom.discoveryVisibility === draft.visibility", "Live entry must confirm the requested visibility was saved.");
+assertIncludes(liveWatchPartyCreateHandler, "persistedLiveRoom.discoveryPaused === draft.paused", "Live entry must confirm listing pause without broadening the chosen audience.");
 assertIncludes(liveWatchPartyCreateHandler, "(persistedLiveRoom.discoveryTitle ?? \"\") === draft.title.trim()", "Live entry must confirm the requested title was saved.");
 assertIncludes(
   liveWatchPartyCreateHandler,
@@ -1421,7 +1422,7 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "partySeatRequestPollRef.current = setInterval",
+  "const ownedSeatPoll = setInterval(pollPersistedSeatRequests, 2500)",
   "Player Watch-Party LiveKit host must poll persisted request markers as a Realtime fallback",
 );
 assertNotIncludes(
@@ -1630,7 +1631,7 @@ assertIncludes(
 );
 assertIncludes(
   playerSharedPlaybackControlAuthority,
-  "canControl: !isSharedPartyPlayback || authority.isHost",
+  "canControl: (!inWatchParty || playerPartyAuthority.current()) && (!isSharedPartyPlayback || authority.isHost)",
   "Player Watch-Party shared playback control authority must allow only host mutation while shared",
 );
 assertIncludes(

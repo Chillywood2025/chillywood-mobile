@@ -38,7 +38,7 @@ import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { isPubliclyReleasedTitle } from "../../_lib/publicTitles";
-import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
+import { usePublicPartyRoomCounts } from "../../_lib/usePublicPartyRoomCounts";
 import { readMyListState, setMyListTitleSaved } from "../../_lib/userData";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -73,19 +73,6 @@ type TitleRow = Omit<TitleDbRow, "created_at" | "content_access_rule" | "sponsor
   content_access_rule: TitleAccessRule | null;
   sponsor_placement: SponsorPlacement | null;
 };
-
-type TitleLiveMetadata = {
-  liveRoomCount: number;
-  commentCount: number;
-  reactionsEnabled: boolean;
-};
-
-type WatchPartyRoomRow = Pick<
-  Tables<"watch_party_rooms">,
-  "party_id" | "reactions_policy" | "is_active" | "last_activity_at" | "updated_at"
->;
-
-type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party_id">;
 
 const toTitleRow = (row: TitleDbRow): TitleRow => ({
   ...row,
@@ -159,7 +146,6 @@ export default function TitleDetails() {
   const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const watchPartyTransitionLatchRef = useRef(createActionSingleFlightLatch());
   const [watchPartyTransitionInFlight, setWatchPartyTransitionInFlight] = useState(false);
-  const [liveMetadata, setLiveMetadata] = useState<TitleLiveMetadata | null>(null);
   const [engagementState, setEngagementState] = useState<TitleEngagementState | null>(null);
   const [engagementLoading, setEngagementLoading] = useState(true);
   const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
@@ -180,6 +166,12 @@ export default function TitleDetails() {
   const localFallbackTitle = useMemo(() => (localMatch ? buildLocalFallbackTitle(localMatch) : null), [localMatch]);
 
   const titleId = String(item?.id ?? localMatch?.id ?? cleanId).trim();
+  // The previous title can remain mounted while a newer route loads. Its live
+  // count must not follow the viewer into the new title's screen.
+  const discoveryTitleId = item && (String(item.id).toLowerCase() === cleanId.toLowerCase()
+    || item.title?.toLowerCase() === cleanId.toLowerCase()) ? String(item.id) : String(localMatch?.id ?? "");
+  const publicPartyCounts = usePublicPartyRoomCounts([discoveryTitleId]);
+  const liveMetadata = publicPartyCounts.counts[discoveryTitleId.toLowerCase()];
   const engagementKey = `${viewerUserId}:${cleanId}:${titleId}`;
   const engagementOwnerRef = useRef({ key: engagementKey, generation: 0, busy: false });
   if (engagementOwnerRef.current.key !== engagementKey) {
@@ -316,76 +308,6 @@ export default function TitleDetails() {
   }, [cleanId, item?.id, localMatch?.id, engagementOwner]);
 
   const title = useMemo(() => item ?? localFallbackTitle, [item, localFallbackTitle]);
-
-  useEffect(() => {
-    let active = true;
-
-    const syncLiveMetadata = async () => {
-      const safeTitleId = String(title?.id ?? titleId).trim();
-      if (!safeTitleId) {
-        setLiveMetadata(null);
-        return;
-      }
-
-      try {
-        const { data: roomData, error: roomError } = await supabase
-          .from("watch_party_rooms")
-          .select("party_id,reactions_policy,is_active,last_activity_at,updated_at")
-          .eq("is_active", true)
-          .eq("room_type", "title")
-          .eq("title_id", safeTitleId)
-          .returns<WatchPartyRoomRow[]>();
-
-        if (roomError || !roomData) {
-          if (active) setLiveMetadata(null);
-          return;
-        }
-
-        const activeRooms = roomData.filter((row) => {
-          if (row.is_active !== true) return false;
-          const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
-          if (!activitySource) return false;
-          const activityAt = Date.parse(activitySource);
-          if (!Number.isFinite(activityAt)) return false;
-          return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
-        });
-
-        if (!activeRooms.length) {
-          if (active) setLiveMetadata(null);
-          return;
-        }
-
-        const activePartyIds = activeRooms.map((row) => String(row.party_id ?? "").trim()).filter(Boolean);
-        let commentCount = 0;
-
-        if (activePartyIds.length) {
-          const { data: messageData } = await supabase
-            .from("watch_party_room_messages")
-            .select("party_id")
-            .in("party_id", activePartyIds)
-            .returns<WatchPartyRoomMessageRow[]>();
-
-          commentCount = (messageData ?? []).length;
-        }
-
-        if (!active) return;
-
-        setLiveMetadata({
-          liveRoomCount: activeRooms.length,
-          commentCount,
-          reactionsEnabled: activeRooms.some((row) => String(row.reactions_policy ?? "").trim().toLowerCase() !== "muted"),
-        });
-      } catch {
-        if (active) setLiveMetadata(null);
-      }
-    };
-
-    void syncLiveMetadata();
-
-    return () => {
-      active = false;
-    };
-  }, [title?.id, titleId]);
 
   useEffect(() => {
     let active = true;
@@ -760,7 +682,7 @@ export default function TitleDetails() {
       tone: "default" as const,
     }] : []),
     ...(liveMetadata?.liveRoomCount ? [{
-      label: `${liveMetadata.liveRoomCount} live room${liveMetadata.liveRoomCount === 1 ? "" : "s"}`,
+      label: `${liveMetadata.liveRoomCount} public live room${liveMetadata.liveRoomCount === 1 ? "" : "s"}`,
       tone: "live" as const,
     }] : []),
   ];
@@ -863,17 +785,9 @@ export default function TitleDetails() {
               <AppText scale="caption" weight="900" style={styles.liveActivityKicker}>LIVE WATCH-PARTY</AppText>
               <AppText scale="subhead" weight="700" style={styles.liveActivityBody}>
                 {liveMetadata.liveRoomCount === 1
-                  ? "One live room is already moving around this title. Jump in through Watch-Party Live."
-                  : `${liveMetadata.liveRoomCount} live rooms are already moving around this title. Jump in through Watch-Party Live.`}
+                  ? "One public Party Room is live around this title. Room-entry and content access still apply."
+                  : `${liveMetadata.liveRoomCount} public Party Rooms are live around this title. Room-entry and content access still apply.`}
               </AppText>
-              <View style={styles.liveActivityMetaRow}>
-                <AppText scale="caption" weight="800" style={styles.liveActivityMetaText}>
-                  {liveMetadata.commentCount} room comment{liveMetadata.commentCount === 1 ? "" : "s"}
-                </AppText>
-                {liveMetadata.reactionsEnabled ? (
-                  <AppText scale="caption" weight="800" style={styles.liveActivityMetaText}>Reactions live</AppText>
-                ) : null}
-              </View>
               <Pressable
                 style={[
                   styles.btnGhost,

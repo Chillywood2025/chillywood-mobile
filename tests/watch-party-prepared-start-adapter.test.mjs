@@ -10,8 +10,9 @@ const deferred = () => { let resolve; const promise = new Promise(done => { reso
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const row = () => ({
   party_id: 'PARTY42', host_user_id: 'host', room_type: 'title', title_id: 'title-a', source_type: 'platform_title', source_id: 'title-a',
+  room_generation: '11111111-1111-4111-8111-111111111111', host_settings_revision: 0,
   is_active: true, started_at: new Date(Date.now() - 20 * 60_000).toISOString(), updated_at: new Date().toISOString(),
-  last_activity_at: new Date(Date.now() - 20 * 60_000).toISOString(), discovery_visibility: 'private', discovery_title: null,
+  last_activity_at: new Date(Date.now() - 20 * 60_000).toISOString(), discovery_visibility: 'private', discovery_paused: false, discovery_title: null,
   discovery_started_at: null, join_policy: 'open', content_access_rule: 'open', reactions_policy: 'enabled', capture_policy: 'best_effort',
 });
 const extract = (file, names) => {
@@ -83,7 +84,7 @@ function harness() {
   const authority = load('_lib/accountSessionAuthority.ts'); authority.publishAccountSessionAuthoritySnapshot(state.authority);
   const mutation = load('_lib/accountBoundSupabaseMutation.ts');
   const production = extract('_lib/watchParty.ts', [
-    'PARTY_ROOMS_TABLE', 'PARTY_ROOMS_LEGACY_BASE_SELECT', 'PARTY_ROOMS_BASE_SELECT', 'PARTY_ROOMS_POLICY_SELECT',
+    'PARTY_ROOMS_TABLE', 'PARTY_ROOMS_LEGACY_BASE_SELECT', 'PARTY_ROOMS_BASE_SELECT', 'PARTY_ROOMS_POLICY_SELECT', 'PARTY_ROOMS_HOST_SETTINGS_SELECT',
     'normalizeWatchPartyContentSourceType', 'normalizeWatchPartyDiscoveryVisibility', 'isMissingColumnError',
     'toTimeMillis', 'getWatchPartyRoomActivityMillis', 'isWatchPartyRoomActive', 'rowToState', 'fetchPartyRoomRow', 'getPartyRoom',
     'readOwnedPartyRoomForPreparation', 'getOwnedPartyRoomForPreparation', 'refreshOwnedPartyRoomForStart', 'getPartyRoomSnapshot', 'joinPartyRoomSession',
@@ -120,7 +121,7 @@ test('age-expired owned preparation is read-only; acknowledged explicit Start ad
   assert.deepEqual(Object.keys(write.payload), ['last_activity_at']); assert.equal(write.authorization, 'Bearer token-a');
   assert.match(write.prefer, /return=representation/);
   assert.equal(write.url.searchParams.get('party_id'), 'eq.PARTY42');
-  for (const [key, value] of [['host_user_id', 'host'], ['room_type', 'title'], ['title_id', 'title-a'], ['source_type', 'platform_title'], ['source_id', 'title-a'], ['is_active', 'true']]) {
+  for (const [key, value] of [['host_user_id', 'host'], ['room_type', 'title'], ['title_id', 'title-a'], ['source_type', 'platform_title'], ['source_id', 'title-a'], ['is_active', 'true'], ['room_generation', h.expected.roomGeneration], ['host_settings_revision', '0']]) {
     assert.equal(write.url.searchParams.get(key), `eq.${value}`);
   }
   assert.equal(write.url.searchParams.get('last_activity_at'), `lte.${write.payload.last_activity_at}`);
@@ -129,6 +130,14 @@ test('age-expired owned preparation is read-only; acknowledged explicit Start ad
   h.state.admissionAllowed = false; assert.equal(await h.join(), null); assert.equal(h.state.memberships.length, 1);
   h.state.stored.is_active = false; assert.equal(await h.join(), null);
 });
+
+for (const [field, value] of [['room_generation', '22222222-2222-4222-8222-222222222222'], ['host_settings_revision', 2]]) {
+  test(`Start rejects a same-source pause/restart ABA ${field} before renewing room activity`, async () => {
+    const h = harness(), held = h.hold('patch'), pending = h.refresh(); await held.entered;
+    h.state.stored[field] = value; const before = h.state.stored.last_activity_at; held.release();
+    assert.equal(await pending, null); assert.equal(h.state.stored.last_activity_at, before); assert.equal(h.state.memberships.length, 0);
+  });
+}
 
 test('creator video renewal filters null title exactly', async () => {
   const h = harness(); Object.assign(h.expected, { titleId: null, sourceType: 'creator_video', sourceId: 'creator-a' });

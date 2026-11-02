@@ -58,6 +58,7 @@ function fixture() {
         if (name === './supabase') return { supabase: database };
         if (name === './actionSingleFlight.mjs') return {};
         if (name === './liveEvents') return load('_lib/liveEvents.ts');
+        if (name === './liveDiscoveryInvalidation') return load('_lib/liveDiscoveryInvalidation.ts');
         if (name === './sharedLiveUpdates') return { getDiscoveryLiveUpdateInterest: options => options.creatorUserIds?.length === 1 ? { creatorUserId: options.creatorUserIds[0] } : { surface: 'home' }, subscribeToLiveUpdates: (binding, domain, listener, interest) => {
           assert.equal(domain, 'discovery'); const record = { binding, listener, interest, active: true }; subscriptions.push(record); hints.add(listener);
           return () => { record.active = false; hints.delete(listener); };
@@ -201,10 +202,10 @@ async function mount(t, setup = () => {}) {
     resolve: async (d, value) => React.act(async () => { d.resolve(value); }),
   };
 }
-test('1000 hints coalesce at the 10s minimum; absent hints polling remains 30s from the last read', async t => {
+test('1000 hints coalesce at the500ms budget; absent hints polling remains30s from the last read', async t => {
   const h = await mount(t); assert.equal(h.queries.length, 2);
   await h.hint(1000); assert.equal(h.timers.size, 1);
-  await h.advance(9999); assert.equal(h.queries.length, 2);
+  await h.advance(499); assert.equal(h.queries.length, 2);
   h.rows([event('changed')]); await h.advance(1); assert.equal(h.queries.length, 4); assert.equal(h.result().items[0].id, 'changed');
   assert.equal(h.timers.size, 1); await h.advance(29999); assert.equal(h.queries.length, 4);
   await h.advance(1); assert.equal(h.queries.length, 6);
@@ -212,14 +213,25 @@ test('1000 hints coalesce at the 10s minimum; absent hints polling remains 30s f
   await React.act(async () => h.result().reload()); assert.equal(h.queries.length, 8);
 });
 test('hints during a held read retain one trailing refresh without a timer loop or concurrent reads', async t => {
-  const h = await mount(t), held = deferred(); await h.advance(5000); h.response(() => held.promise);
-  await h.hint(); await h.advance(5000); assert.equal(h.queries.length, 4);
+  const h = await mount(t), held = deferred(); await h.advance(500); h.response(() => held.promise);
+  await h.hint(); await h.advance(100); assert.equal(h.queries.length, 4);
   await h.hint(1000); assert.equal(h.timers.size, 2, 'one read deadline plus one trailing hint');
-  await h.advance(10000); assert.equal(h.queries.length, 4); assert.equal(h.timers.size, 1, 'due hint waits on the request, not a zero-delay loop');
+  await h.advance(400); assert.equal(h.queries.length, 4); assert.equal(h.timers.size, 1, 'due hint waits on the request, not a zero-delay loop');
   h.response(async () => ({ data: [event('after-hint')], error: null }));
   await h.resolve(held, { data: [event('before-hint')], error: null }); assert.equal(h.timers.size, 1);
   await h.advance(0); assert.equal(h.queries.length, 6); assert.equal(h.result().items[0].id, 'after-hint');
   assert.equal(h.timers.size, 1); await h.advance(29999); assert.equal(h.queries.length, 6);
+});
+test('continuous unrelated scoped hints cannot starve upcoming events or revive an explicitly withdrawn event', async t => {
+  const h=await mount(t), activeKey='a0000000-0000-4000-8000-000000000001', removedKey='b0000000-0000-4000-8000-000000000002', unrelatedKey='c0000000-0000-4000-8000-000000000003';
+  for(let i=0;i<12;i++) {
+    const held=deferred();h.response(()=>held.promise);await h.advance(500);
+    await React.act(async()=>{for(const hint of h.hints)hint({keys:[unrelatedKey]});});
+    await h.advance(100);
+    await React.act(async()=>{for(const hint of h.hints)hint({keys:[unrelatedKey,removedKey]});});
+    await h.resolve(held,{data:[event(`current-${i}`,{discovery_hint_key:activeKey}),event('removed',{discovery_hint_key:removedKey})],error:null});
+    assert.equal(h.result().items.map(row=>row.id).join(','),`current-${i}`);
+  }
 });
 test('mounted fallback recovers lost hints and applies rescheduling/cancellation/end/private transitions', async t => {
   const h = await mount(t);

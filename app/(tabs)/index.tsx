@@ -47,7 +47,6 @@ import {
 } from "../../_lib/creatorVideos";
 import { readCreatorRelationshipFeedVideos } from "../../_lib/creatorFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
-import { NewLiveStreamsButton } from "../../components/live/new-live-streams-button";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
@@ -64,7 +63,6 @@ import {
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
-import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
 import { StableImage } from "../../components/ui/StableImage";
@@ -104,11 +102,6 @@ type TitleRow = Omit<
   slug?: string | null;
   video_thumbnail?: string | null;
 };
-
-type HomeActiveTitleRoomRow = Pick<
-  Tables<"watch_party_rooms">,
-  "party_id" | "title_id" | "is_active" | "last_activity_at" | "updated_at"
->;
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
 const HOME_CONTINUE_MIN_POSITION_MILLIS = 10_000;
@@ -242,7 +235,6 @@ export default function HomeScreen() {
   const [progressError, setProgressError] = useState<string | null>(null);
   const [progressSubjectId, setProgressSubjectId] = useState(progressViewerId);
   const visibleWatchProgress = useMemo(() => progressSubjectId === progressViewerId ? watchProgress : {}, [progressSubjectId, progressViewerId, watchProgress]);
-  const [, setHomeActiveTitleRoomCount] = useState(0);
   const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
   const [followedFeedVideos, setFollowedFeedVideos] = useState<CreatorVideo[]>([]);
   const [circleFeedVideos, setCircleFeedVideos] = useState<CreatorVideo[]>([]);
@@ -290,36 +282,6 @@ export default function HomeScreen() {
     setError(null);
     const nextTitles = filterPubliclyReleasedTitles(data ?? []);
     setTitles(nextTitles);
-  }
-
-  async function fetchHomeActiveTitleRoomCount() {
-    try {
-      const { data, error } = await supabase
-        .from("watch_party_rooms")
-        .select("party_id,title_id,is_active,last_activity_at,updated_at")
-        .eq("is_active", true)
-        .eq("room_type", "title")
-        .returns<HomeActiveTitleRoomRow[]>();
-
-      if (error || !data) {
-        setHomeActiveTitleRoomCount(0);
-        return;
-      }
-
-      const activeTitleRooms = data.filter((row) => {
-        if (row.is_active !== true) return false;
-        if (!String(row.title_id ?? "").trim()) return false;
-        const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
-        if (!activitySource) return false;
-        const activityAt = Date.parse(activitySource);
-        if (!Number.isFinite(activityAt)) return false;
-        return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
-      });
-
-      setHomeActiveTitleRoomCount(activeTitleRooms.length);
-    } catch {
-      setHomeActiveTitleRoomCount(0);
-    }
   }
 
   async function fetchWatchProgress() {
@@ -441,7 +403,6 @@ export default function HomeScreen() {
         fetchTitles(),
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
-        fetchHomeActiveTitleRoomCount(),
         fetchDiscoveryFeedV1(),
       ]);
       if (result.timedOut) setError((existing) => existing ?? HOME_LOAD_TIMEOUT_MESSAGE);
@@ -455,7 +416,6 @@ export default function HomeScreen() {
         fetchHomeConfig(),
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
-        fetchHomeActiveTitleRoomCount(),
         fetchDiscoveryFeedV1(),
       ]).catch(() => {});
     }, []),
@@ -470,7 +430,6 @@ export default function HomeScreen() {
       fetchTitles(),
       fetchCurrentChannelProfile(),
       fetchWatchProgress(),
-      fetchHomeActiveTitleRoomCount(),
       fetchDiscoveryFeedV1(),
       discovery.reload(),
       liveDiscovery.reload(),
@@ -603,7 +562,7 @@ export default function HomeScreen() {
     () => liveDiscovery.circleItems.filter((item) => (
       item.live_state === "live"
       && (item.item_type === "live_room" || item.item_type === "creator_event")
-    )).slice(0, 8),
+    )),
     [liveDiscovery.circleItems],
   );
   const circleWatchPartySpectatorItems = useMemo(
@@ -1034,7 +993,6 @@ export default function HomeScreen() {
 
           {renderHomeEventRail({
             title: "Live Now",
-            action: <NewLiveStreamsButton pendingItemCount={liveDiscovery.pendingItemCount} onRefresh={liveDiscovery.reload} />,
             subtitle: "Public rooms and events that are live now.",
             feedItems: liveDiscoveryItems,
             events: [],

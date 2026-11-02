@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { loadStubbed } from './customer-experience-adversarial-helpers.mjs';
 import { deferred } from './helpers/studio-source-harness.mjs';
 
 // Execute both complete production modules. Only filesystem, auth, fetch and
@@ -102,12 +103,18 @@ function fixture(options = {}) {
   const sizeExports = {};
   vm.runInNewContext(sizeCode, { exports: sizeExports, Error });
   const exports = {};
+  const resources = loadStubbed('_lib/mediaPickerResources.ts');
+  const copyHelper = loadStubbed('_lib/prepareMediaUploadCopy.ts', {
+    'expo-file-system/legacy': fileSystem, './mediaPickerResources': resources,
+  });
   vm.runInNewContext(storageCode, {
     exports, Error, AbortController, fetch,
     require: name => {
       if (name === 'expo-file-system') return { File: SyntheticFile };
       if (name === 'expo-file-system/legacy') return fileSystem;
       if (name === './mediaUploadSize') return sizeExports;
+      if (name === './mediaPickerResources') return resources;
+      if (name === './prepareMediaUploadCopy') return copyHelper;
       if (name === './supabase') return { SUPABASE_FUNCTIONS_URL: 'https://gateway.invalid', supabase: { auth } };
       throw new Error(`Unexpected production import: ${name}`);
     },

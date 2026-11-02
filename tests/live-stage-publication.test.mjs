@@ -10,7 +10,10 @@ const owner = (id = "host", sessionGeneration = "session-a") => ({ userId: id, a
 const same = (a, b) => !!a && !!b && a.userId === b.userId && a.accountId === b.accountId && a.sessionGeneration === b.sessionGeneration && a.restoreOnly === b.restoreOnly;
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
-const reply = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
+const roomGeneration = 'ac510003-0000-4000-8000-000000000001';
+const version = { roomGeneration, settingsRevision: 0 };
+const reply = (status, body) => ({ status, ok: status >= 200 && status < 300,
+  json: async () => body.published === true ? { ...version, discoveryPaused: false, ...body } : body });
 
 function harness() {
   let time = 0, seq = 0, authority = owner(), session = { access_token: "fixture-token", user: { id: "host" } };
@@ -41,7 +44,7 @@ function harness() {
       const next = [...timers.entries()].filter(([, value]) => value.at <= target).sort((a, b) => a[1].at - b[1].at)[0];
       if (!next) break; time = next[1].at; timers.delete(next[0]); next[1].fn(); await tick();
     } time = target; await tick(); },
-    start(signal = new AbortController().signal) { return context.exports.markLiveStageRoomConnectedForDiscovery("STAGE42", { authority: owner(), signal }); },
+    start(signal = new AbortController().signal) { return context.exports.markLiveStageRoomConnectedForDiscovery("STAGE42", { authority: owner(), signal, ...version }); },
   };
 }
 
@@ -72,8 +75,19 @@ test("a success response must name the exact room", async () => {
   const h = harness(); h.send(async () => reply(200, { published: true, roomName: "OTHER42" }));
   assert.equal((await h.start()).reason, "invalid_response");
   const request = h.calls[0]; assert.equal(request.init.headers.Authorization, "Bearer fixture-token");
-  assert.deepEqual(JSON.parse(request.init.body), { action: "mark-room-live", surface: "live-stage", roomName: "STAGE42" });
+  assert.deepEqual(JSON.parse(request.init.body), { action: "mark-room-live", surface: "live-stage", roomName: "STAGE42", ...version });
 });
+
+test("success for another settings revision cannot confirm the current publication", async () => {
+  const h = harness(); h.send(async () => reply(200, { published: true, roomName: "STAGE42", settingsRevision: 1 }));
+  assert.equal((await h.start()).reason, "invalid_response");
+});
+
+for (const discoveryPaused of [true, null, undefined, "false", 0])
+  test(`publication success requires explicit unpaused acknowledgment: ${String(discoveryPaused)}`, async () => {
+    const h = harness(); h.send(async () => reply(200, { published: true, roomName: "STAGE42", discoveryPaused }));
+    assert.equal((await h.start()).reason, "invalid_response");
+  });
 
 test("network failure is bounded and does not claim publication", { timeout: 3000 }, async () => {
   const h = harness(); h.send(async () => { throw new Error("network unavailable"); });
@@ -139,7 +153,7 @@ doc.documentElement = container(); globalThis.document = doc; globalThis.window 
 
 async function mount(t, overrides = {}, strict = false, connectionState = null) {
   const h = harness(); let result, disposed = false;
-  const props = { roomName: "STAGE42", hostUserId: "host", visibility: "public", isHost: true, active: true, connectionKey: "connection-a", ...overrides };
+  const props = { roomName: "STAGE42", hostUserId: "host", visibility: "public", discoveryPaused: false, isHost: true, active: true, connectionKey: "connection-a", ...version, ...overrides };
   const listeners = new Set(), app = { currentState: "active", addEventListener: (_, fn) => { listeners.add(fn); return { remove: () => listeners.delete(fn) }; } };
   const context = { exports: {}, AbortController, console, require(name) {
     if (name === "react") return React;
@@ -194,20 +208,20 @@ test("mounted host shows exhausted failure, then one explicit retry can recover"
   await h.invoke(oldRetry); assert.equal(h.calls.length, 4, "a retained failed-state button cannot republish after success");
 });
 
-for (const options of [{ visibility: "private" }, { isHost: false }, { active: false }, { hostUserId: "someone-else" }])
+for (const options of [{ visibility: "private" }, { discoveryPaused: true }, { discoveryPaused: null }, { isHost: false }, { active: false }, { hostUserId: "someone-else" }])
   test(`mounted hook cannot publish ${JSON.stringify(options)}`, async t => {
     const h = await mount(t, options); await h.invoke(h.result().onConnected); await h.invoke(h.result().retry);
     assert.equal(h.calls.length, 0);
-    if (options.visibility === "private") assert.match(h.result().message, /Private room/);
+    if (options.visibility === "private") assert.match(h.result().message, /Discovery off/);
   });
 
 test("Circle listing keeps its audience and does not request a public transition", async t => {
   const h = await mount(t, { visibility: "circle" }); await h.invoke(h.result().onConnected);
   assert.match(h.result().message, /Circle/);
-  assert.deepEqual(JSON.parse(h.calls[0].init.body), { action: "mark-room-live", surface: "live-stage", roomName: "STAGE42" });
+  assert.deepEqual(JSON.parse(h.calls[0].init.body), { action: "mark-room-live", surface: "live-stage", roomName: "STAGE42", ...version });
 });
 
-for (const boundary of ["room", "account", "session", "end", "private", "connection", "background", "unmount"])
+for (const boundary of ["room", "account", "session", "end", "private", "pause", "connection", "background", "unmount"])
   test(`mounted hook retires held work and old callbacks after ${boundary}`, async t => {
     const h = await mount(t), held = deferred(), old = h.result(); h.send(() => held.promise);
     await h.invoke(old.onConnected); assert.equal(h.calls.length, 1);
@@ -216,6 +230,7 @@ for (const boundary of ["room", "account", "session", "end", "private", "connect
     if (boundary === "session") await h.account(owner("host", "new-session"));
     if (boundary === "end") { await h.invoke(old.cancel); await h.props({ active: false }); }
     if (boundary === "private") await h.props({ visibility: "private" });
+    if (boundary === "pause") await h.props({ discoveryPaused: true, settingsRevision: 1 });
     if (boundary === "connection") await h.props({ connectionKey: "new-connection" });
     if (boundary === "background") await h.background();
     if (boundary === "unmount") await h.unmount();
@@ -249,6 +264,36 @@ test("actual connected-room hook confirms an explicit private-to-public audience
   const h = await mount(t, { visibility: "private" }, false, "connected"); assert.equal(h.calls.length, 0);
   await h.props({ visibility: "public" }); await h.advance(0);
   assert.equal(h.calls.length, 1); assert.equal(h.result().status, "published");
+});
+
+test("connected Circle listing pause aborts held work; On reconfirms only the new revision without reconnecting media", async t => {
+  const h = await mount(t, { visibility: "circle", discoveryPaused: true, settingsRevision: 1 }, false, "connected");
+  assert.equal(h.calls.length, 0); assert.match(h.result().message, /Circle-only entry is unchanged/);
+  const held = deferred(); h.send(() => held.promise);
+  await h.props({ discoveryPaused: false, settingsRevision: 2, settingsConfirmationVersion: 1 }); await h.advance(0);
+  assert.equal(h.calls.length, 1); const old = h.result();
+  assert.equal(JSON.parse(h.calls[0].init.body).settingsRevision, 2);
+  await h.props({ discoveryPaused: true, settingsRevision: 3, settingsConfirmationVersion: 2 });
+  assert.equal(h.calls[0].init.signal.aborted, true); assert.notEqual(h.result().status, "published");
+  await h.resolve(held, reply(200, { published: true, roomName: "STAGE42", settingsRevision: 2 }));
+  await h.invoke(old.onConnected); await h.invoke(old.retry); await h.advance(0);
+  assert.equal(h.calls.length, 1); assert.notEqual(h.result().status, "published");
+  h.send(async () => reply(200, { published: true, roomName: "STAGE42", settingsRevision: 4 }));
+  await h.props({ discoveryPaused: false, settingsRevision: 4, settingsConfirmationVersion: 3 }); await h.advance(0);
+  assert.equal(h.calls.length, 2); assert.equal(h.result().status, "published");
+  assert.equal(JSON.parse(h.calls[1].init.body).settingsRevision, 4);
+  await h.props({ settingsRevision: 4, settingsConfirmationVersion: 3 }); await h.advance(0);
+  assert.equal(h.calls.length, 2, "unchanged connected confirmation does not churn publication");
+});
+
+test("explicit owner opt-in retries an unchanged Public room only through the actual connected instance", async t => {
+  const h = await mount(t, { visibility: "private" }, false, "connected");
+  h.send(async () => reply(403, {}));
+  await h.props({ visibility: "public" }); await h.advance(0);
+  assert.equal(h.calls.length, 1); assert.notEqual(h.result().status, "published");
+  h.send(async () => reply(200, { published: true, roomName: "STAGE42" }));
+  await h.props({ settingsConfirmationVersion: 1 }); await h.advance(0);
+  assert.equal(h.calls.length, 2); assert.equal(h.result().status, "published");
 });
 
 test("foreground uses the same actual connected room, not a fabricated new connection", async t => {

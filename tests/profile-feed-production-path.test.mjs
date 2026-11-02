@@ -143,6 +143,11 @@ test('news reader propagates relationship/discovery failures rather than claimin
  const a=feedHarness();a.fail();await assert.rejects(a.module.readOwnProfileFeedPage(),/RPC unavailable/);
  const b=feedHarness();b.failDiscovery();await assert.rejects(b.module.readOwnProfileFeedPage(),/Discovery unavailable/);
 });
+test('route-owned current suggestion reader avoids stale discovery hydration inside cursor pages',async()=>{
+ const h=feedHarness();h.failDiscovery();
+ const page=await h.module.readOwnProfileFeedPage({includeDiscovery:false});
+ assert.ok(page.items.length);assert.ok(page.items.every(item=>!('discoveryItem' in item)));
+});
 test('news reader discards response on session switch before hydration',async()=>{
  const h=feedHarness(),release=h.pause();const pending=h.module.readOwnProfileFeedPage();h.switch();release();await assert.rejects(pending,/account changed/);assert.equal(h.hydrations.length,0);
 });

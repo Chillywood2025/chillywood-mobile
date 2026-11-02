@@ -4,7 +4,6 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "rea
 
 import { getDiscoveryAccessLabel, getDiscoveryItemDestination, isDiscoveryFeedItemEligibleForRanking } from "../../_lib/discoveryFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
-import { NewLiveStreamsButton } from "./new-live-streams-button";
 import { AppActionButton, AppEmptyState, AppSection } from "../ui/app-surface";
 
 /** Current canonical live sources, including standalone stages with no Event. */
@@ -21,7 +20,7 @@ export function PlatformLiveNow({ creatorUserId, enabled }: { creatorUserId: str
   )) : [];
 
   return (
-    <AppSection title="Live Now" action={<NewLiveStreamsButton pendingItemCount={feed.pendingItemCount} onRefresh={feed.reload} />}>
+    <AppSection title="Live Now">
       {feed.error ? (
         <View style={styles.list} testID="platform-live-discovery-error">
           <Text style={styles.body}>Live sessions could not be checked. Try again.</Text>

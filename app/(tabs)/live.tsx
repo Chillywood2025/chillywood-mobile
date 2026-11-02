@@ -30,7 +30,6 @@ import {
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
-import { NewLiveStreamsButton } from "../../components/live/new-live-streams-button";
 import { type CreatorEventSummary } from "../../_lib/liveEvents";
 import { useLiveUpcomingEvents } from "../../_lib/useLiveUpcomingEvents";
 import {
@@ -263,7 +262,6 @@ export default function LiveTabScreen() {
                 <Text style={styles.sectionTitle}>Live Now</Text>
                 <Text style={styles.sectionMeta}>{discovery.error ? "Unavailable" : discovery.loading ? "Checking" : `${totalLiveNow} available`}</Text>
               </View>
-              <NewLiveStreamsButton pendingItemCount={discovery.pendingItemCount} onRefresh={discovery.reload} />
             </View>
             {discovery.loading ? (
               <View style={styles.loadingRow}><ActivityIndicator color="#E50914" /><Text style={styles.muted}>Loading live discovery...</Text></View>

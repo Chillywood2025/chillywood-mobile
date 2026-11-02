@@ -4,11 +4,39 @@ import {readFileSync} from 'node:fs';
 
 export const gallerySettingsContext=JSON.parse(readFileSync(new URL('../fixtures/notification-history/gallery-settings-context.json',import.meta.url),'utf8'));
 export const removalSettingsContext=JSON.parse(readFileSync(new URL('../fixtures/notification-history/removal-settings-context.json',import.meta.url),'utf8'));
+export const mediaSettingsContext=JSON.parse(readFileSync(new URL('../fixtures/notification-history/media-settings-context.json',import.meta.url),'utf8'));
 const digest=value=>createHash('sha256').update(value).digest('hex');
+
+// Project only the authorized shared-picker/admission/resource ownership delta.
+// Immutable notification, account-action, gallery and removal witnesses below
+// remain unchanged; an unknown source or modified media hunk fails closed.
+export function priorRemovalSettings(settings) {
+  const context=mediaSettingsContext;
+  assert.equal(context.review,'authorized-shared-media-picker-and-resource-ownership-repair-2026-11-01');
+  assert.equal(context.path,'app/settings.tsx');
+  assert.equal(context.baselineCommit,'748b0fec2ccb472891f5f8adf8de0f188764efe9');
+  assert.deepEqual(context.reviewedCommits,[
+    '3db58d827607c9099abde1e713b36d4a7af60318',
+    'fe75bb2642f2575a1882914e4d9d7c4e7611519b',
+  ]);
+  assert.equal(context.changes.length,6);
+  assert.equal(context.removalContextSha256,removalSettingsContext.removalContextSha256);
+  assert.equal(context.mediaContextSha256,'4b3f8ce5813a75d19c695e53e9661013657b46427c6a94d50e610c960a2fa874');
+  if ([context.removalContextSha256,gallerySettingsContext.galleryContextSha256].includes(digest(settings))) return settings;
+  assert.equal(digest(settings),context.mediaContextSha256,'Settings changed after media-only scope review');
+  let projected=settings;
+  for (const {mediaContext:current,removalContext:previous} of context.changes) {
+    assert.equal(projected.split(current).length-1,1,'exactly one reviewed media hunk is required');
+    projected=projected.replace(current,previous);
+  }
+  assert.equal(digest(projected),context.removalContextSha256,'media reversal must recover the exact prior removal source');
+  return projected;
+}
 
 // Reverse only the separately reviewed removal-owner/focus delta. The older
 // gallery fixture and every account-action/notification witness remain intact.
 export function priorGallerySettings(settings) {
+  settings=priorRemovalSettings(settings);
   const context=removalSettingsContext;
   assert.equal(context.review,'authorized-profile-removal-authority-repair-2026-11-01');
   assert.equal(context.path,'app/settings.tsx');

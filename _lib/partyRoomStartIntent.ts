@@ -14,7 +14,7 @@ export function rememberPartyRoomStartIntent(room: WatchPartyState, authority: A
   if (!authority || authority.restoreOnly || authority.state !== "ACTIVE" || AppState.currentState !== "active"
     || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())
     || room.hostUserId !== authority.userId || room.roomType !== "title" || !room.isActive
-    || room.discoveryVisibility === "private" || !room.sourceId
+    || room.discoveryVisibility === "private" || room.discoveryPaused !== false || !room.sourceId
     || (room.sourceType !== "platform_title" && room.sourceType !== "creator_video")) return null;
   for (const [key, value] of intents) if (value.expiresAt <= Date.now()) intents.delete(key);
   const key = `party-start-${Date.now()}-${++sequence}`;
@@ -32,6 +32,8 @@ export function takePartyRoomStartIntent(key: string, room: WatchPartyState, aut
     && sameAccountSessionAuthority(intent.authority, authority)
     && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())
     && intent.room.partyId === room.partyId && intent.room.hostUserId === room.hostUserId
+    && intent.room.roomGeneration === room.roomGeneration && intent.room.hostSettingsRevision === room.hostSettingsRevision
+    && intent.room.discoveryPaused === room.discoveryPaused
     && intent.room.sourceType === room.sourceType && intent.room.sourceId === room.sourceId
     && intent.room.discoveryVisibility === room.discoveryVisibility && intent.room.discoveryTitle === room.discoveryTitle;
 }

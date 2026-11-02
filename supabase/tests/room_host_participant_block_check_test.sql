@@ -118,6 +118,30 @@ values
   )
 on conflict (id) do nothing;
 
+-- Current message/member RLS also checks the exact session's account legal
+-- authority. Supply the real current documents for only these four sessions,
+-- so blocked/unblocked comparisons do not depend on an unrelated legal denial.
+insert into public.wave1_legal_acceptances (
+  user_id, subject_hash, document_key, document_version, market, role_key,
+  capability, session_generation, authority_source
+)
+select
+  session_row.user_id, public.wave1_sha256(session_row.user_id::text),
+  document.document_key, document.version, document.market, 'member',
+  document.capability, session_row.id::text, 'service_reconciliation'
+from auth.sessions session_row
+cross join public.wave1_legal_document_versions document
+where session_row.id in (
+  '46111111-1111-4111-8111-111111111101',
+  '46222222-2222-4222-8222-222222222201',
+  '46555555-5555-4555-8555-555555555501',
+  '46666666-6666-4666-8666-666666666601'
+)
+  and document.active
+  and document.market = 'UNITED_STATES'
+  and document.capability = 'account'
+on conflict do nothing;
+
 -- Migration 001 requires every source-less Live Stage host to have the
 -- complete current server-authoritative creator eligibility projection. These
 -- rows establish only the two exact hosts exercised by this block-check test.
@@ -844,6 +868,13 @@ select ok(
   )
   and pg_get_functiondef(
     'public.join_watch_party_room_session(text,text,text,text,boolean,boolean,boolean)'::regprocedure
+  ) like '%join_watch_party_room_session_pre_listing_pause%'
+  and not has_function_privilege('authenticated',
+    'public.join_watch_party_room_session_pre_listing_pause(text,text,text,text,boolean,boolean,boolean)','EXECUTE')
+  and not has_function_privilege('service_role',
+    'public.join_watch_party_room_session_pre_listing_pause(text,text,text,text,boolean,boolean,boolean)','EXECUTE')
+  and pg_get_functiondef(
+    'public.join_watch_party_room_session_pre_listing_pause(text,text,text,text,boolean,boolean,boolean)'::regprocedure
   ) like '%join_watch_party_room_session_pre_party_room%'
   and pg_get_functiondef(
     'public.join_watch_party_room_session_pre_party_room(text,text,text,text,boolean,boolean,boolean)'::regprocedure

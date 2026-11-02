@@ -1,0 +1,130 @@
+{
+  "packages": [
+    {
+      "name": "expo-modules-core",
+      "version": "3.0.30",
+      "upstreamTarball": "https://registry.npmjs.org/expo-modules-core/-/expo-modules-core-3.0.30.tgz",
+      "upstreamIntegrity": "sha512-a6IrpAn/Jbmwxi9L+hMmXKpNqnkUpoF7WHOpn02rVLyax2J0gB1vvCVE5rNydplEnt41Q6WxQwvcOjZaIkcSUg==",
+      "files": [
+        {
+          "path": "android/src/main/java/expo/modules/kotlin/activityresult/AppContextActivityResultContract.kt",
+          "originalSha256": "9d9fec2cff16a41cb6a0abcee06f0b42a1519338c251abe0249ced8d1177a73c",
+          "patchedSha256": "bdd158d7ab75d77618130f5af1507119aaf87b8c94c36b735828e983810f3ae8",
+          "changes": [
+            [
+              "interface AppContextActivityResultContract<I : Serializable, O> {",
+              "/**\n * Explicit app-local opt-in for a single-stage request owned by the surviving\n * AppContext. Separate from the existing contract interface for binary safety:\n * prebuilt, non-opted-in contracts do not need a new Kotlin default method.\n */\ninterface AppContextActivityResultRetention<I : Serializable> {\n  fun shouldRetainCallbackOnHostDestroy(input: I): Boolean\n}\n\ninterface AppContextActivityResultContract<I : Serializable, O> {"
+            ]
+          ]
+        },
+        {
+          "path": "android/src/main/java/expo/modules/kotlin/activityresult/AppContextActivityResultRegistry.kt",
+          "originalSha256": "cb866b0f357f516156824fb17176272fda625cd9aa0bcc608ec3c64a3ab10508",
+          "patchedSha256": "fcde6207c3507f4727fd6a1328ae51e2ff44b567a3d640f39f4db95f4a442e8a",
+          "changes": [
+            [
+              "  private var launchedKeys: ArrayList<String> = ArrayList()",
+              "  private var launchedKeys: ArrayList<String> = ArrayList()\n  // In-memory only: no callback/owner is reconstructed after AppContext loss.\n  private val retainedCallbackKeys = HashSet<String>()"
+            ],
+            [
+              "    DataPersistor(context)\n      .addStringArrayList(\"launchedKeys\", launchedKeys)\n      .addStringToIntMap(\"keyToRequestCode\", keyToRequestCode)\n      .addStringToSerializableMap(\"keyToParamsForFallbackCallback\", keyToInputParam.filter { (key) -> launchedKeys.contains(key) })\n      .addBundle(\"pendingResult\", pendingResults)",
+              "    // These callbacks have a live JS/account/target owner in this AppContext.\n    // A different process cannot reconstruct that owner from persisted input.\n    // Keep the upstream snapshot behavior for every other contract/input.\n    val ownerBoundKeys = launchedKeys.filter { key ->\n      keyToCallbacksAndContract[key]?.retainCallbackOnHostDestroy == true\n    }.toSet()\n    val persistableResults = Bundle(pendingResults)\n    ownerBoundKeys.forEach { persistableResults.remove(it) }\n    DataPersistor(context)\n      .addStringArrayList(\"launchedKeys\", ArrayList(launchedKeys.filterNot { it in ownerBoundKeys }))\n      .addStringToIntMap(\"keyToRequestCode\", keyToRequestCode.filterKeys { it !in ownerBoundKeys })\n      .addStringToSerializableMap(\"keyToParamsForFallbackCallback\", keyToInputParam.filter { (key) -> launchedKeys.contains(key) && key !in ownerBoundKeys })\n      .addBundle(\"pendingResult\", persistableResults)"
+            ],
+            [
+              "        keyToCallbacksAndContract[key] = CallbacksAndContract(fallbackCallback, callback, contract)",
+              "        @Suppress(\"UNCHECKED_CAST\")\n        val retention = contract as? AppContextActivityResultRetention<I>\n        keyToCallbacksAndContract[key] = CallbacksAndContract(\n          fallbackCallback, callback, contract, retention?.shouldRetainCallbackOnHostDestroy(input) == true\n        )"
+            ],
+            [
+              "  fun unregister(key: String) {\n    if (!launchedKeys.contains(key)) {",
+              "  fun unregister(key: String) {\n    val callbacksAndContract = keyToCallbacksAndContract[key]\n    if (callbacksAndContract?.retainCallbackOnHostDestroy == true &&\n      callbacksAndContract.mainCallback != null && launchedKeys.contains(key)) {\n      // The React host/AppContext can outlive this Activity. Retain only the\n      // exact launched callback and its request/input, never the old Activity.\n      retainedCallbackKeys.add(key)\n      keyToLifecycleContainers.remove(key)?.clearObservers()\n      return\n    }\n    if (!launchedKeys.contains(key)) {"
+            ],
+            [
+              "      // 1. There's main callback available, so use it right away",
+              "      if (retainedCallbackKeys.contains(key)) {\n        // Consume before invoking user code: a reentrant/duplicate result must\n        // not resume the original continuation twice. Always release this old\n        // key, even when parsing or a callback throws; new registrations differ.\n        launchedKeys.remove(key)\n        try {\n          @Suppress(\"UNCHECKED_CAST\")\n          val input = keyToInputParam[key] as I\n          callbacksAndContract.mainCallback.onActivityResult(callbacksAndContract.contract.parseResult(input, resultCode, data))\n        } finally {\n          releaseRetainedCallback(key)\n        }\n        return\n      }\n      // 1. There's main callback available, so use it right away"
+            ],
+            [
+              "  private fun generateRandomNumber(): Int {",
+              "  private fun releaseRetainedCallback(key: String) {\n    retainedCallbackKeys.remove(key)\n    launchedKeys.remove(key)\n    keyToCallbacksAndContract.remove(key)\n    keyToInputParam.remove(key)\n    pendingResults.remove(key)\n    keyToRequestCode.remove(key)?.let { requestCodeToKey.remove(it) }\n    keyToLifecycleContainers.remove(key)?.clearObservers()\n  }\n\n  /** AppContext destruction is final, unlike host Activity destruction. */\n  fun disposeRetainedCallbacks() {\n    keyToCallbacksAndContract.filterValues { it.retainCallbackOnHostDestroy }\n      .keys.toList().forEach { releaseRetainedCallback(it) }\n  }\n\n  private fun generateRandomNumber(): Int {"
+            ],
+            [
+              "    val contract: AppContextActivityResultContract<I, O>\n  )",
+              "    val contract: AppContextActivityResultContract<I, O>,\n    val retainCallbackOnHostDestroy: Boolean = false\n  )"
+            ]
+          ]
+        },
+        {
+          "path": "android/src/main/java/expo/modules/kotlin/activityresult/ActivityResultsManager.kt",
+          "originalSha256": "1775851ce69d871b1643c0f534c80e92d7ea732957aeb65a8df4865f6d520e99",
+          "patchedSha256": "1b63c2ac986908abeabdb7c80d40f5cb740bf78f2c60b0917799a3663418c2d1",
+          "changes": [
+            [
+              "import android.content.Intent",
+              "import android.content.Intent\nimport android.os.Handler\nimport android.os.Looper"
+            ],
+            [
+              "  fun onHostDestroy(activity: AppCompatActivity) {\n    registry.persistInstanceState(activity)\n  }",
+              "  fun onHostDestroy(activity: AppCompatActivity) {\n    registry.persistInstanceState(activity)\n  }\n\n  fun onDestroy() {\n    // AppContext destruction can arrive off-main. Do not enqueue on its\n    // cancelled coroutine scope or mutate registry maps on that caller thread.\n    if (Looper.myLooper() == Looper.getMainLooper()) {\n      registry.disposeRetainedCallbacks()\n    } else {\n      Handler(Looper.getMainLooper()).post { registry.disposeRetainedCallbacks() }\n    }\n  }"
+            ]
+          ]
+        },
+        {
+          "path": "android/src/main/java/expo/modules/kotlin/AppContext.kt",
+          "originalSha256": "8bbe2632277a83aaae4d1925f7c9da37290440a1ae858577806bd513f1ce3a94",
+          "patchedSha256": "58ebd4c303af030ad0fd1b815746035498c48b6e7fc675e55f2ff293f47a05aa",
+          "changes": [
+            [
+              "    backgroundCoroutineScope.cancel(ContextDestroyedException())\n    hostingRuntimeContext.deallocate()",
+              "    backgroundCoroutineScope.cancel(ContextDestroyedException())\n    activityResultsManager.onDestroy()\n    hostingRuntimeContext.deallocate()"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "expo-image-picker",
+      "version": "17.0.11",
+      "upstreamTarball": "https://registry.npmjs.org/expo-image-picker/-/expo-image-picker-17.0.11.tgz",
+      "upstreamIntegrity": "sha512-/apkoyukDvsCHHb9fzP+F34A1uQqSzUtYH/2P/xJACNEwq+mwEXjXvVU8bzlJq6ih0Qo1+tpVivIa7B9kYSwOQ==",
+      "files": [
+        {
+          "path": "android/src/main/java/expo/modules/imagepicker/contracts/CameraContract.kt",
+          "originalSha256": "058d5b164cc4e1fae945ff2f758c9a1e82c5883599d5010342154e886b80a0b8",
+          "patchedSha256": "b619cb2ce82954ef2f5a42703a3a6b1717c125111b2eb2087a9a44b852bdfe4c",
+          "changes": [
+            [
+              "import expo.modules.kotlin.activityresult.AppContextActivityResultContract",
+              "import expo.modules.kotlin.activityresult.AppContextActivityResultContract\nimport expo.modules.kotlin.activityresult.AppContextActivityResultRetention"
+            ],
+            [
+              ") : AppContextActivityResultContract<CameraContractOptions, ImagePickerContractResult> {",
+              ") : AppContextActivityResultContract<CameraContractOptions, ImagePickerContractResult>, AppContextActivityResultRetention<CameraContractOptions> {\n  // The app uses single-stage, non-editing picks. Editing may launch a crop\n  // Activity before replacement launchers register, so it is not opted in.\n  override fun shouldRetainCallbackOnHostDestroy(input: CameraContractOptions): Boolean =\n    !input.options.allowsEditing\n"
+            ],
+            [
+              "  override fun parseResult(input: CameraContractOptions, resultCode: Int, intent: Intent?): ImagePickerContractResult =",
+              "  override fun parseResult(input: CameraContractOptions, resultCode: Int, intent: Intent?): ImagePickerContractResult {\n    if (input.options.allowsEditing) return parsePickerResult(input, resultCode, intent)\n    // Unreadable/revoked provider URIs must reject the original native promise,\n    // not throw before its retained continuation can settle and release ownership.\n    return try {\n      parsePickerResult(input, resultCode, intent)\n    } catch (cause: Exception) {\n      ImagePickerContractResult.Error\n    }\n  }\n\n  private fun parsePickerResult(input: CameraContractOptions, resultCode: Int, intent: Intent?): ImagePickerContractResult ="
+            ]
+          ]
+        },
+        {
+          "path": "android/src/main/java/expo/modules/imagepicker/contracts/ImageLibraryContract.kt",
+          "originalSha256": "2684174656c626e568598bf7926f9bd767c6f57e60265082623ba4f25ae2a0cc",
+          "patchedSha256": "4615980af16ef26aa428a2c943880a61419de755da9b0142d7725cd7bf41a551",
+          "changes": [
+            [
+              "import expo.modules.kotlin.activityresult.AppContextActivityResultContract",
+              "import expo.modules.kotlin.activityresult.AppContextActivityResultContract\nimport expo.modules.kotlin.activityresult.AppContextActivityResultRetention"
+            ],
+            [
+              ") : AppContextActivityResultContract<ImageLibraryContractOptions, ImagePickerContractResult> {",
+              ") : AppContextActivityResultContract<ImageLibraryContractOptions, ImagePickerContractResult>, AppContextActivityResultRetention<ImageLibraryContractOptions> {\n  // The app uses single-stage, non-editing picks. Editing may launch a crop\n  // Activity before replacement launchers register, so it is not opted in.\n  override fun shouldRetainCallbackOnHostDestroy(input: ImageLibraryContractOptions): Boolean =\n    !input.options.allowsEditing\n"
+            ],
+            [
+              "  override fun parseResult(input: ImageLibraryContractOptions, resultCode: Int, intent: Intent?) =",
+              "  override fun parseResult(input: ImageLibraryContractOptions, resultCode: Int, intent: Intent?): ImagePickerContractResult {\n    if (input.options.allowsEditing) return parsePickerResult(input, resultCode, intent)\n    // Unreadable/revoked provider URIs must reject the original native promise,\n    // not throw before its retained continuation can settle and release ownership.\n    return try {\n      parsePickerResult(input, resultCode, intent)\n    } catch (cause: Exception) {\n      ImagePickerContractResult.Error\n    }\n  }\n\n  private fun parsePickerResult(input: ImageLibraryContractOptions, resultCode: Int, intent: Intent?) ="
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

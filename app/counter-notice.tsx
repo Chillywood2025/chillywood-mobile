@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import * as DocumentPicker from "expo-document-picker";
+import React, { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
@@ -16,6 +15,7 @@ import {
 import {
   DMCA_ATTACHMENT_ALLOWED_MIME_TYPES,
   DMCA_ATTACHMENT_MAX_BYTES,
+  captureDmcaAttachmentMutationSubject,
   readMyDmcaCounterNoticeCase,
   submitUploaderDmcaCounterNotice,
   type DmcaCounterNoticeCase,
@@ -23,6 +23,12 @@ import {
   validateDmcaAttachmentFile,
 } from "../_lib/dmca";
 import { useSession } from "../_lib/session";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+import { pickDeviceAttachments } from "../_lib/deviceAttachmentPicker";
+import { useMediaPicker } from "../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../hooks/useOwnedPickedMediaState";
+import { bindPickedMediaResult, releasePickedMedia, retainPickedMedia, withPickedMediaRead } from "../_lib/mediaPickerResources";
+import { LEGAL_SUPPORT_EMAIL } from "../_lib/legalPolicies";
 import { formatContentTypeLabel } from "../_lib/userFacingProductCopy";
 import { LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
@@ -72,7 +78,7 @@ function ToggleRow({ active, label, onPress }: ToggleRowProps) {
 
 export default function CounterNoticePage() {
   const params = useLocalSearchParams<{ caseId?: string; contentId?: string }>();
-  const { isLoading, isSignedIn, user } = useSession();
+  const { isLoading, isSignedIn, user, authority } = useSession();
   const [caseId, setCaseId] = useState(String(params.caseId ?? "").trim());
   const [caseRecord, setCaseRecord] = useState<DmcaCounterNoticeCase | null>(null);
   const [caseLoading, setCaseLoading] = useState(false);
@@ -86,9 +92,23 @@ export default function CounterNoticePage() {
   const [jurisdictionConsent, setJurisdictionConsent] = useState(false);
   const [serviceAcceptance, setServiceAcceptance] = useState(false);
   const [signature, setSignature] = useState("");
-  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
+  const [attachments, setAttachments] = useOwnedPickedMediaState<PickedAttachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [submittedCounterNoticeId, setSubmittedCounterNoticeId] = useState<string | null>(null);
+  const evidenceIdentity = JSON.stringify([caseId, authority]);
+  const evidenceScopeRef = useRef({ identity: evidenceIdentity, pending: false, revision: 0, recorded: false });
+  if (evidenceScopeRef.current.identity !== evidenceIdentity) evidenceScopeRef.current = { identity: evidenceIdentity, pending: false, revision: 0, recorded: false };
+  const evidenceScope = evidenceScopeRef.current;
+  const evidenceSelectionOwner = useRef<typeof evidenceScope | null>(null);
+  const mounted = useRef(false);
+  const evidencePicking = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { setAttachments([]); setCaseRecord(null); setBusy(false); setCaseLoading(false); setNotice(null); setSubmittedCounterNoticeId(null); }, [evidenceIdentity, setAttachments]);
+  const { pickMedia, mediaPickerSheet, cancelMediaPicker } = useMediaPicker(`counter-notice:${caseId}`);
+  const currentEvidenceScope = () => mounted.current && evidenceScopeRef.current === evidenceScope
+    && !!authority && !authority.restoreOnly && authority.userId === user?.id
+    && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
 
   useEffect(() => {
     if (!submitterEmail && user?.email) setSubmitterEmail(user.email);
@@ -101,40 +121,55 @@ export default function CounterNoticePage() {
   }, [caseRecord, contentLocation]);
 
   const loadCase = async () => {
-    if (caseLoading || !caseId.trim()) return;
+    if (caseLoading || !caseId.trim() || !currentEvidenceScope()) return;
     setCaseLoading(true);
     setNotice(null);
     try {
       const loaded = await readMyDmcaCounterNoticeCase(caseId);
+      if (!currentEvidenceScope()) return;
       setCaseRecord(loaded);
       setContentLocation((current) => current || loaded.contentUrl || loaded.contentId || "");
       setNotice(`Case ${loaded.caseNumber || loaded.id} is available for your account.`);
     } catch (error) {
+      if (!currentEvidenceScope()) return;
       setCaseRecord(null);
       const message = error instanceof Error ? error.message : "Unable to load that DMCA case.";
       setNotice(message);
       Alert.alert("Counter-notice", message);
     } finally {
-      setCaseLoading(false);
+      if (currentEvidenceScope()) setCaseLoading(false);
     }
   };
 
   const pickAttachments = async () => {
-    if (busy) return;
+    if (busy || evidenceScope.pending || evidenceScope.recorded || evidencePicking.current || attachments.length >= 6 || !currentEvidenceScope()) return;
+    evidencePicking.current = true;
+    const revision = ++evidenceScope.revision;
+    const isCurrent = () => currentEvidenceScope() && evidenceScope.revision === revision;
+    let selectedFiles: unknown;
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
+      const files = await pickMedia({
+        title: "Add counter-notice evidence",
+        mediaKind: "attachment",
         multiple: true,
-        type: [...DMCA_ATTACHMENT_ALLOWED_MIME_TYPES],
+        isCurrent,
+        pick: (source, operation) => pickDeviceAttachments(source, {
+          operation,
+          multiple: true,
+          selectionLimit: 6 - attachments.length,
+          mimeTypes: [...DMCA_ATTACHMENT_ALLOWED_MIME_TYPES],
+        }),
       });
-      if (result.canceled) return;
-      const nextFiles = result.assets.map((asset) => {
+      selectedFiles = files;
+      if (!files || !isCurrent()) return;
+      const nextFiles = files.map((asset) => {
         const picked = {
           name: asset.name || "counter-notice-evidence",
           size: Number(asset.size ?? 0),
           type: asset.mimeType || "application/octet-stream",
           uri: asset.uri,
         };
+        bindPickedMediaResult(picked, new Set([asset]));
         validateDmcaAttachmentFile({
           fileName: picked.name,
           mimeType: picked.type,
@@ -142,23 +177,39 @@ export default function CounterNoticePage() {
         });
         return picked;
       });
+      evidenceSelectionOwner.current = evidenceScope;
       setAttachments((current) => [...current, ...nextFiles].slice(0, 6));
     } catch (error) {
+      if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : "Unable to attach that evidence file.";
       Alert.alert("Attachments", message);
+    } finally {
+      void releasePickedMedia(selectedFiles);
+      evidencePicking.current = false;
     }
   };
 
   const submitCounterNotice = async () => {
-    if (busy) return;
+    if (busy || evidenceScope.pending || evidenceScope.recorded) return;
     if (!user?.id) {
       Alert.alert("Sign in required", "Counter-notice submission requires a signed-in uploader account.");
       return;
     }
+    if (!currentEvidenceScope() || !caseRecord || caseRecord.id !== caseId.trim()) return;
+    if (attachments.length && evidenceSelectionOwner.current !== evidenceScope) return;
+    evidenceScope.pending = true;
+    evidenceScope.revision += 1;
+    cancelMediaPicker();
 
     setBusy(true);
     setNotice(null);
+    let parentRecorded = false;
+    let uploadedCount = 0;
+    let releaseSubmission = () => {};
     try {
+      releaseSubmission = retainPickedMedia(attachments);
+      const mutationSubject = await captureDmcaAttachmentMutationSubject();
+      if (!currentEvidenceScope()) return;
       const counterNotice = await submitUploaderDmcaCounterNotice({
         caseId,
         electronicSignature: signature,
@@ -171,13 +222,22 @@ export default function CounterNoticePage() {
         submitterEmail,
         submitterName,
         submitterPhone,
-      });
+      }, { mutationSubject, isCurrent: currentEvidenceScope });
+      if (!currentEvidenceScope()) return;
+      parentRecorded = true;
+      evidenceScope.recorded = true;
+      setSubmittedCounterNoticeId(counterNotice.id || "reference-pending");
 
-      let uploadedCount = 0;
       for (const attachment of attachments) {
-        const fileResponse = await fetch(attachment.uri);
-        const fileData = await fileResponse.arrayBuffer();
+        if (!currentEvidenceScope()) return;
+        const fileData = await withPickedMediaRead(attachment.uri, async () => {
+          const fileResponse = await fetch(attachment.uri);
+          return fileResponse.arrayBuffer();
+        });
+        if (!currentEvidenceScope()) return;
         await uploadDmcaCounterNoticeAttachment({
+          mutationSubject,
+          isCurrent: currentEvidenceScope,
           caseId,
           counterNoticeId: counterNotice.id,
           fileData,
@@ -186,6 +246,7 @@ export default function CounterNoticePage() {
           sizeBytes: attachment.size,
           uploaderUserId: user.id,
         });
+        if (!currentEvidenceScope()) return;
         uploadedCount += 1;
       }
 
@@ -194,15 +255,24 @@ export default function CounterNoticePage() {
       Alert.alert("Counter-notice received", "Your counter-notice has been recorded for legal review.");
       await loadCase();
     } catch (error) {
+      if (!currentEvidenceScope()) return;
       const message = error instanceof Error ? error.message : "Unable to submit this counter-notice right now.";
-      setNotice(message);
-      Alert.alert("Counter-notice not submitted", message);
+      if (parentRecorded) {
+        const recordedNotice = `Counter-notice recorded. ${uploadedCount} evidence file uploads were confirmed; the remaining uploads could not be confirmed. Do not resubmit. Contact ${LEGAL_SUPPORT_EMAIL} with case ${caseId}. ${message}`;
+        setNotice(recordedNotice);
+        Alert.alert("Counter-notice recorded", recordedNotice);
+      } else {
+        setNotice(message);
+        Alert.alert("Counter-notice not submitted", message);
+      }
     } finally {
-      setBusy(false);
+      releaseSubmission();
+      evidenceScope.pending = false;
+      if (currentEvidenceScope()) setBusy(false);
     }
   };
 
-  const submitDisabled = busy || !caseId.trim() || !caseRecord;
+  const submitDisabled = busy || !!submittedCounterNoticeId || !caseId.trim() || !caseRecord;
 
   if (isLoading) {
     return (
@@ -240,6 +310,7 @@ export default function CounterNoticePage() {
   }
 
   return (
+    <>
     <LegalPageShell
       eyebrow="Chi'llywood Copyright"
       title="Counter-Notice"
@@ -332,8 +403,8 @@ export default function CounterNoticePage() {
             <Text style={styles.boxText}>
               Optional screenshots, PDFs, images, or plain-text evidence. Files are private to legal operators and are queued for malware scanning before operators rely on them.
             </Text>
-            <TouchableOpacity style={[styles.secondaryButton, busy && styles.disabled]} disabled={busy} onPress={pickAttachments}>
-              <Text style={styles.secondaryButtonText}>Add Evidence Files</Text>
+            <TouchableOpacity style={[styles.secondaryButton, (busy || !!submittedCounterNoticeId || attachments.length >= 6) && styles.disabled]} disabled={busy || !!submittedCounterNoticeId || attachments.length >= 6} onPress={pickAttachments}>
+              <Text style={styles.secondaryButtonText}>{attachments.length >= 6 ? "6 of 6 evidence files attached" : "Add Evidence Files"}</Text>
             </TouchableOpacity>
             {attachments.length ? attachments.map((attachment, index) => (
               <View key={`${attachment.uri}-${index}`} style={styles.attachmentRow}>
@@ -344,7 +415,7 @@ export default function CounterNoticePage() {
                 <TouchableOpacity
                   style={styles.removeButton}
                   disabled={busy}
-                  onPress={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  onPress={() => { evidenceScope.revision += 1; cancelMediaPicker(); setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}
                 >
                   <Text style={styles.removeButtonText}>Remove</Text>
                 </TouchableOpacity>
@@ -393,7 +464,7 @@ export default function CounterNoticePage() {
             {busy ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryButtonText}>{caseRecord ? "Submit Counter-Notice" : "Load case before submit"}</Text>
+              <Text style={styles.primaryButtonText}>{submittedCounterNoticeId ? "Counter-Notice Recorded" : caseRecord ? "Submit Counter-Notice" : "Load case before submit"}</Text>
             )}
           </TouchableOpacity>
           {!caseRecord ? (
@@ -404,6 +475,8 @@ export default function CounterNoticePage() {
         </View>
       </KeyboardAvoidingView>
     </LegalPageShell>
+      {mediaPickerSheet}
+    </>
   );
 }
 

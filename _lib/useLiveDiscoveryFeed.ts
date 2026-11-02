@@ -8,14 +8,16 @@ import { readDiscoveryCandidateRankingSignals } from './discoveryRankingSignals'
 import { useSession } from './session';
 import { getDiscoveryLiveUpdateInterest, isDiscoveryLiveUpdateConnected, subscribeToLiveUpdates } from './sharedLiveUpdates';
 import { readSharedLiveSnapshot } from './sharedLiveRead';
+import { createDiscoveryReadFence, discoveryReadEpoch, type DiscoveryLiveInvalidation } from './liveDiscoveryInvalidation';
 
 export const LIVE_DISCOVERY_REFRESH_MS = 30_000;
 export const LIVE_DISCOVERY_READ_TIMEOUT_MS = 12_000;
-export const LIVE_DISCOVERY_HEALTHY_HEAD_REFRESH_MS = 120_000;
+export const LIVE_DISCOVERY_HEALTHY_HEAD_REFRESH_MS = 30_000;
+export const LIVE_DISCOVERY_HINT_MIN_MS = 500;
 export type LiveDiscoveryFeedOptions = Omit<PublicDiscoveryFeedReadOptions, 'itemId' | 'itemIds' | 'signal'> & {
   enabled?: boolean;
   includeCircle?: boolean;
-  /** Only card rails with an explicit new-items button should opt in. */
+  /** Retain surviving-card order while automatically adopting current additions. */
   preserveBrowsePosition?: boolean;
 };
 const empty = () => ({ items: [] as DiscoveryFeedItem[], publicItems: [] as DiscoveryFeedItem[], circleItems: [] as DiscoveryFeedItem[], signals: {} as DiscoveryFeedRankingSignals, ready: false, pendingItemCount: 0 });
@@ -47,6 +49,7 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
     let acceptRequested = false;
     let trailing: ReturnType<typeof setTimeout> | undefined;
     let dirty = false;
+    const readFence = createDiscoveryReadFence();
     const guest = authorityStatus === 'signed_out' && authority === null;
     const enabled = settings.enabled !== false && focused && (guest || (authorityStatus === 'active' && !!authority && !authority.restoreOnly));
     const current = () => !disposed && latest.current === lifetime && enabled
@@ -56,7 +59,12 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
     const arm = () => {
       dirty = true;
       if (!current() || trailing !== undefined) return;
-      trailing = setTimeout(() => { trailing = undefined; if (dirty) void run(); }, Math.max(1_000, 10_000 - (Date.now() - lastAutomaticRead)));
+      const wait = LIVE_DISCOVERY_HINT_MIN_MS - (Date.now() - lastAutomaticRead);
+      // Once the budget is due, the pending read owns its deadline and its
+      // finally block schedules exactly one trailing read. Never spin a1ms
+      // timer while a transport is still held.
+      if (pending && wait <= 0) return;
+      trailing = setTimeout(() => { trailing = undefined; if (dirty) void run(); }, Math.max(1, wait));
     };
     const run = (acceptNew = false, periodic = false): Promise<void> => {
       if (!current()) return Promise.resolve();
@@ -69,17 +77,23 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
         }
         arm(); return pending;
       }
-      if (!acceptNew && Date.now() - lastAutomaticRead < 10_000) { arm(); return Promise.resolve(); }
+      if (!acceptNew && Date.now() - lastAutomaticRead < LIVE_DISCOVERY_HINT_MIN_MS) { arm(); return Promise.resolve(); }
       dirty = false;
+      readFence.begin();
       if (trailing !== undefined) clearTimeout(trailing);
       trailing = undefined;
       lastAutomaticRead = Date.now();
-      const stable = settings.preserveBrowsePosition === true && settings.liveOnly === true && snapshot.ready && !acceptNew;
+      const stable = settings.preserveBrowsePosition === true && settings.liveOnly === true
+        && snapshot.ready && snapshot.items.length > 0 && !acceptNew;
       const previous = snapshot;
-      // Healthy push reduces expensive head/ranking polling, not visibility
-      // checks. Pinned cards still revalidate every30s and open/join is canonical.
+      // Hints are primary. Even a nominally healthy socket retains a complete
+      // 30-second fallback, so a missed hint cannot strand a new live card.
       const refreshHead = !stable || !periodic || !isDiscoveryLiveUpdateConnected(authority, getDiscoveryLiveUpdateInterest(settings))
         || Date.now() - lastHeadRead >= LIVE_DISCOVERY_HEALTHY_HEAD_REFRESH_MS;
+      // The scoped Broadcast currently covers PUBLIC changes only. A healthy
+      // public channel cannot justify slowing Circle discovery to 120 seconds.
+      const refreshCircleHead = settings.includeCircle === true && !guest;
+      const refreshRanking = refreshHead || refreshCircleHead;
       if (refreshHead) lastHeadRead = Date.now();
       const request = ++sequence;
       const ownedController = new AbortController();
@@ -94,14 +108,13 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
           timeout = setTimeout(() => ownedController.abort(), LIVE_DISCOVERY_READ_TIMEOUT_MS);
           const result = await Promise.race([
             readSharedLiveSnapshot(JSON.stringify([authority?.userId, authority?.accountId, authority?.sessionGeneration, guest]),
-              JSON.stringify([settings, refreshHead, stable ? previous.publicItems.map(item => item.id) : [], stable ? previous.circleItems.map(item => item.id) : []]),
+              JSON.stringify([discoveryReadEpoch(), settings, refreshHead, refreshCircleHead, stable ? previous.publicItems.map(item => item.id) : [], stable ? previous.circleItems.map(item => item.id) : []]),
               ownedController.signal, async sharedSignal => {
                 // An early failure must not release shared ownership while a
                 // sibling source still runs, even if it ignores cancellation.
                 const reads = await Promise.allSettled([
               refreshHead ? readPublicDiscoveryFeedItems({ ...settings, signal: sharedSignal }) : Promise.resolve(previous.publicItems),
-              !refreshHead ? Promise.resolve(previous.circleItems)
-                : settings.includeCircle && !guest ? readCircleSpectatorFeedItems({ ...settings, signal: sharedSignal }) : Promise.resolve([]),
+              refreshCircleHead ? readCircleSpectatorFeedItems({ ...settings, signal: sharedSignal }) : Promise.resolve([]),
               stable && previous.publicItems.length
                 ? readPublicDiscoveryFeedItems({ ...settings, itemIds: previous.publicItems.map(item => item.id), limit: 50, signal: sharedSignal })
                 : Promise.resolve(null),
@@ -112,23 +125,39 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
                 const publicRows = settledValue(reads[0]), circleRows = settledValue(reads[1]);
                 const publicPinned = settledValue(reads[2]), circlePinned = settledValue(reads[3]);
                 if (sharedSignal.aborted) throw new Error('Discovery read retired.');
-                const signals = !refreshHead ? previous.signals : guest ? {} : await readDiscoveryCandidateRankingSignals([...publicRows, ...circleRows], sharedSignal);
+                const signals = !refreshRanking ? previous.signals : guest ? {} : await readDiscoveryCandidateRankingSignals([...publicRows, ...circleRows], sharedSignal);
                 return [{ items: rankDiscoveryFeedItems(publicRows, signals), signals }, { items: rankCircleSpectatorFeedItems(circleRows, signals) }, publicPinned, circlePinned] as const;
               }),
             aborted,
           ]);
-          if (!current() || request !== sequence) return;
-          const [publicResult, circleResult, currentPublic, currentCircle] = result;
+          // Only affected keys invalidate rows from this held snapshot. Global
+          // unrelated churn must not starve valid starts; known withdrawals
+          // cannot flash back while the trailing canonical read is queued.
+          if (!current() || request !== sequence || readFence.full()) return;
+          const [rawPublic, rawCircle, pinnedPublic, pinnedCircle] = result;
+          const publicResult = { ...rawPublic, items: rawPublic.items.filter(readFence.allows) };
+          const circleResult = { ...rawCircle, items: rawCircle.items.filter(readFence.allows) };
+          const currentPublic = pinnedPublic?.filter(readFence.allows) ?? null;
+          const currentCircle = pinnedCircle?.filter(readFence.allows) ?? null;
           const inPreviousOrder = (before: DiscoveryFeedItem[], now: DiscoveryFeedItem[]) => {
             const byId = new Map(now.map(item => [item.id, item]));
             return before.flatMap(item => { const currentItem = byId.get(item.id); return currentItem ? [currentItem] : []; });
           };
-          const publicItems = stable ? inPreviousOrder(previous.publicItems, currentPublic ?? []) : publicResult.items;
-          const circleItems = stable ? inPreviousOrder(previous.circleItems, currentCircle ?? []) : circleResult?.items ?? [];
+          const adopt = (before: DiscoveryFeedItem[], head: DiscoveryFeedItem[], previouslyVisible: DiscoveryFeedItem[]) => {
+            // Pinned-ID withdrawal wins over an older concurrent head snapshot.
+            // A previously shown row omitted by current revalidation is not a
+            // new addition and must never be resurrected by the head read.
+            const previousIds = new Set(previouslyVisible.map(item => item.id));
+            const additions = head.filter(item => !previousIds.has(item.id));
+            // Keep the leading browse anchors where possible, but never put a
+            // new live session behind a manual acceptance gate. Both source
+            // reads and the retained-ID recheck remain bounded to 50 cards.
+            return [...before.slice(0, Math.max(0, 50 - additions.length)), ...additions].slice(0, 50);
+          };
+          const publicItems = stable ? adopt(inPreviousOrder(previous.publicItems, currentPublic ?? []), refreshHead ? publicResult.items : [], previous.publicItems) : publicResult.items;
+          const circleItems = stable ? adopt(inPreviousOrder(previous.circleItems, currentCircle ?? []), refreshCircleHead ? circleResult.items : [], previous.circleItems) : circleResult.items;
           const items = Array.from(new Map([...publicItems, ...circleItems].map((item) => [item.id, item])).values());
-          const visibleIds = new Set(items.map(item => item.id));
-          const pendingItemCount = !refreshHead ? previous.pendingItemCount : stable ? new Set([...publicResult.items, ...(circleResult?.items ?? [])].filter(item => !visibleIds.has(item.id)).map(item => item.id)).size : 0;
-          snapshot = { publicItems, circleItems, items, signals: refreshHead ? publicResult.signals : previous.signals, ready: true, pendingItemCount };
+          snapshot = { publicItems, circleItems, items, signals: refreshRanking ? publicResult.signals : previous.signals, ready: true, pendingItemCount: 0 };
           setState({ ...snapshot, lifetime, loading: false, error: null });
         } catch {
           ownedController.abort();
@@ -149,7 +178,23 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
     clear();
     void run();
     const interval = enabled ? setInterval(() => { void run(false, true); }, LIVE_DISCOVERY_REFRESH_MS) : null;
-    const updates = enabled && !guest ? subscribeToLiveUpdates(authority, 'discovery', () => { void run(); }, getDiscoveryLiveUpdateInterest(settings)) : () => {};
+    const onHint = (invalidation?: DiscoveryLiveInvalidation) => {
+      if (!current()) return;
+      if (pending) readFence.invalidate(invalidation);
+      // Withdraw affected visible metadata while its canonical replacement is
+      // read. Unrelated keys do not erase the rail or veto its held snapshot.
+      if (invalidation?.keys?.length) {
+        const visibleFence = createDiscoveryReadFence(); visibleFence.invalidate(invalidation);
+        const publicItems = snapshot.publicItems.filter(visibleFence.allows);
+        const circleItems = snapshot.circleItems.filter(visibleFence.allows);
+        if (publicItems.length !== snapshot.publicItems.length || circleItems.length !== snapshot.circleItems.length) {
+          snapshot = { ...snapshot, publicItems, circleItems, items: [...new Map([...publicItems, ...circleItems].map(item => [item.id, item])).values()] };
+          setState({ ...snapshot, lifetime, loading: false, error: null });
+        }
+      }
+      void run();
+    };
+    const updates = enabled && !guest ? subscribeToLiveUpdates(authority, 'discovery', onHint, getDiscoveryLiveUpdateInterest(settings)) : () => {};
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') { lastAutomaticRead = -Infinity; void run(); }
       else { ++sequence; controller?.abort(); controller = null; pending = null; dirty = false; if (trailing !== undefined) clearTimeout(trailing); trailing = undefined; clear(); }

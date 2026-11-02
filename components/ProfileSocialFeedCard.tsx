@@ -1,5 +1,6 @@
 import { ConversationTimestamp } from "./social/conversation-timestamp";
 import { conversationCreatedAt } from "../_lib/conversationTimestamp";
+import { canOpenLiveNotificationActivity } from "../_lib/liveNotificationActivity";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React from "react";
 import {
@@ -196,7 +197,7 @@ export function ProfileSocialFeedCard({
           <ConversationTimestamp style={styles.meta} value={conversationCreatedAt(item.notification)} />
         </View>
       </View>
-      {item.notification.target.supported ? (
+      {item.notification.target.supported && canOpenLiveNotificationActivity(item.notification) ? (
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={() => onOpenNotification(item)}>
             <Text style={styles.secondaryActionText}>Open</Text>

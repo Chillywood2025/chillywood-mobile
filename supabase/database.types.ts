@@ -2359,6 +2359,7 @@ export type Database = {
       }
       circle_spectator_feed_items: {
         Row: {
+          discovery_hint_key: string
           access_type: string
           allow_live_reaction_rooms: boolean
           allow_replay_watch_party: boolean
@@ -2400,6 +2401,7 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          discovery_hint_key?: string
           access_type?: string
           allow_live_reaction_rooms?: boolean
           allow_replay_watch_party?: boolean
@@ -2441,6 +2443,7 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          discovery_hint_key?: string
           access_type?: string
           allow_live_reaction_rooms?: boolean
           allow_replay_watch_party?: boolean
@@ -3378,6 +3381,7 @@ export type Database = {
       }
       creator_events: {
         Row: {
+          discovery_hint_key: string
           created_at: string
           ends_at: string | null
           event_title: string
@@ -3394,6 +3398,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          discovery_hint_key?: string
           created_at?: string
           ends_at?: string | null
           event_title: string
@@ -3410,6 +3415,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          discovery_hint_key?: string
           created_at?: string
           ends_at?: string | null
           event_title?: string
@@ -5923,6 +5929,7 @@ export type Database = {
       }
       discovery_feed_items: {
         Row: {
+          discovery_hint_key: string
           access_type: string
           ad_policy: string
           allow_live_reaction_rooms: boolean
@@ -5967,6 +5974,7 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          discovery_hint_key?: string
           access_type?: string
           ad_policy?: string
           allow_live_reaction_rooms?: boolean
@@ -6011,6 +6019,7 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          discovery_hint_key?: string
           access_type?: string
           ad_policy?: string
           allow_live_reaction_rooms?: boolean
@@ -16261,6 +16270,9 @@ export type Database = {
           max_broadcast_minutes: number | null
           max_concurrent_spectators: number | null
           metadata: Json
+          notification_room_id: string | null
+          notification_room_generation: string | null
+          notification_room_host: string | null
           playback_url_status: string
           requires_premium: boolean
           requires_ticket: boolean
@@ -16293,6 +16305,9 @@ export type Database = {
           max_broadcast_minutes?: number | null
           max_concurrent_spectators?: number | null
           metadata?: Json
+          notification_room_id?: string | null
+          notification_room_generation?: string | null
+          notification_room_host?: string | null
           playback_url_status?: string
           requires_premium?: boolean
           requires_ticket?: boolean
@@ -16325,6 +16340,9 @@ export type Database = {
           max_broadcast_minutes?: number | null
           max_concurrent_spectators?: number | null
           metadata?: Json
+          notification_room_id?: string | null
+          notification_room_generation?: string | null
+          notification_room_host?: string | null
           playback_url_status?: string
           requires_premium?: boolean
           requires_ticket?: boolean
@@ -18794,6 +18812,7 @@ export type Database = {
       }
       titles: {
         Row: {
+          party_count_hint_key: string
           ads_enabled: boolean
           category: string | null
           content_access_rule: string
@@ -18821,6 +18840,7 @@ export type Database = {
           year: number | null
         }
         Insert: {
+          party_count_hint_key?: string
           ads_enabled?: boolean
           category?: string | null
           content_access_rule?: string
@@ -18848,6 +18868,7 @@ export type Database = {
           year?: number | null
         }
         Update: {
+          party_count_hint_key?: string
           ads_enabled?: boolean
           category?: string | null
           content_access_rule?: string
@@ -20508,6 +20529,12 @@ export type Database = {
       }
       watch_party_rooms: {
         Row: {
+          discovery_paused: boolean
+          room_generation: string
+          host_settings_revision: number
+          discovery_visibility: string
+          discovery_title: string | null
+          discovery_started_at: string | null
           capture_policy: string
           content_access_rule: string
           created_at: string
@@ -20527,6 +20554,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          discovery_paused?: boolean
+          room_generation?: string
+          host_settings_revision?: number
+          discovery_visibility?: string
+          discovery_title?: string | null
+          discovery_started_at?: string | null
           capture_policy?: string
           content_access_rule?: string
           created_at?: string
@@ -20546,6 +20579,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          discovery_paused?: boolean
+          room_generation?: string
+          host_settings_revision?: number
+          discovery_visibility?: string
+          discovery_title?: string | null
+          discovery_started_at?: string | null
           capture_policy?: string
           content_access_rule?: string
           created_at?: string
@@ -20618,6 +20657,21 @@ export type Database = {
       }
     }
     Functions: {
+      set_watch_party_room_host_settings: {
+        Args: { p_party_id: string; p_expected_room_generation: string; p_expected_settings_revision: number;
+          p_session_generation: string; p_join_policy: string; p_discovery_visibility: string; p_discovery_title: string | null;
+          p_expected_source_type: string | null; p_expected_source_id: string | null; p_publish?: boolean; p_allow_owner_discovery?: boolean;
+          p_discovery_paused?: boolean | null }
+        Returns: Json
+      }
+      resolve_watch_party_room_entry: {
+        Args: { p_party_id: string; p_session_generation: string }
+        Returns: Database["public"]["Tables"]["watch_party_rooms"]["Row"][]
+      }
+      read_public_party_room_counts: {
+        Args: { p_title_ids?: string[] | null }
+        Returns: Json
+      }
       wave1_accept_legal_documents: {
         Args: { p_acceptances: Json; p_expected_account_id: string; p_expected_user_id: string; p_market: string; p_session_generation: string; p_capability?: string }
         Returns: Json
@@ -20671,6 +20725,10 @@ export type Database = {
       }
       read_my_push_registration_intent: {
         Args: { p_expected_account_id: string; p_expected_user_id: string; p_install_id: string; p_platform: string; p_provider: string; p_revocation_credential_hash: string; p_session_generation: string }
+        Returns: Json
+      }
+      read_my_live_notification_hint_footprint: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       read_my_notification_display_context: {

@@ -1,5 +1,5 @@
 begin;
-select plan(20);
+select plan(23);
 
 select is((select enabled from private.discovery_invalidation_worker_config),false,'dispatcher defaults disabled');
 select is((select collecting from private.discovery_invalidation_worker_config),false,'collection defaults disabled');
@@ -10,7 +10,13 @@ select ok(not has_function_privilege('authenticated','public.flush_discovery_inv
 select is((select cmd from pg_policies where schemaname='realtime' and policyname='discovery_scoped_invalidation_receive'),'SELECT','receive-only policy');
 select is((select count(*)::integer from pg_policies where schemaname='realtime' and policyname like 'discovery%' and cmd<>'SELECT'),0,'no client send policy');
 
-insert into auth.users(id,is_anonymous,is_sso_user) values('9d280001-0000-4000-8000-000000000001',false,false);
+insert into auth.users(id,is_anonymous,is_sso_user,email_confirmed_at) values('9d280001-0000-4000-8000-000000000001',false,false,now());
+insert into auth.sessions(id,user_id,not_after) values
+  ('9d280001-0000-4000-8000-000000000003','9d280001-0000-4000-8000-000000000001',now()+interval '1 day');
+insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
+select '9d280001-0000-4000-8000-000000000001'::uuid,public.wave1_sha256('9d280001-0000-4000-8000-000000000001'),
+  document_key,version,market,'member',capability,'9d280001-0000-4000-8000-000000000003','service_reconciliation'
+from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='account';
 insert into public.discovery_feed_items(id,item_type,source_type,owner_user_id,channel_user_id,
   visibility,rights_status,is_publicly_discoverable,discovery_surface,title)
 values('9d280001-0000-4000-8000-000000000002','manual_foundation','manual_foundation',
@@ -29,12 +35,27 @@ select is((select count(*)::integer from private.discovery_invalidation_outbox),
 select is((public.flush_discovery_invalidations(100)->>'enabled')::boolean,false,'disabled flush does not consume queued work');
 select is((select count(*)::integer from private.discovery_invalidation_outbox where status='pending'),8,'disabled work remains durable');
 
-select set_config('request.jwt.claims','{"role":"authenticated","sub":"9d280001-0000-4000-8000-000000000001"}',true);
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"9d280001-0000-4000-8000-000000000001","session_id":"9d280001-0000-4000-8000-000000000003"}',true);
 set local role authenticated;
 select ok(public.can_receive_discovery_invalidation('discovery:v1:surface:home'),'active authenticated recipient accepts public scope');
 select ok(not public.can_receive_discovery_invalidation('discovery:v1:surface:circle'),'no Circle scope authority');
 select ok(not public.can_receive_discovery_invalidation('comm-room-anything'),'no old room authority change');
 reset role;
+update auth.sessions set not_after=now()-interval '1 second' where id='9d280001-0000-4000-8000-000000000003';
+set local role authenticated;
+select ok(not public.can_receive_discovery_invalidation('discovery:v1:surface:home'),'expired exact session cannot subscribe');
+reset role;
+update auth.sessions set not_after=now()+interval '1 day' where id='9d280001-0000-4000-8000-000000000003';
+update public.wave1_legal_acceptances set invalidated_at=now() where user_id='9d280001-0000-4000-8000-000000000001';
+set local role authenticated;
+select ok(not public.can_receive_discovery_invalidation('discovery:v1:surface:home'),'missing current legal acceptance cannot subscribe');
+reset role;
+update public.wave1_legal_acceptances set invalidated_at=null where user_id='9d280001-0000-4000-8000-000000000001';
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"9d280001-0000-4000-8000-000000000001"}',true);
+set local role authenticated;
+select ok(not public.can_receive_discovery_invalidation('discovery:v1:surface:home'),'legacy identity-only claims cannot subscribe without the exact session');
+reset role;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"9d280001-0000-4000-8000-000000000001","session_id":"9d280001-0000-4000-8000-000000000003"}',true);
 update auth.users set banned_until=now()+interval '1 day' where id='9d280001-0000-4000-8000-000000000001';
 set local role authenticated;
 select ok(not public.can_receive_discovery_invalidation('discovery:v1:surface:home'),'restricted account rejected at join');

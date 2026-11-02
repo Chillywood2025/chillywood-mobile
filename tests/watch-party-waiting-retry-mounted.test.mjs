@@ -36,7 +36,7 @@ const code = ts.transpileModule(source, {
   }, context)] },
 }).outputText;
 const owner = (id = 'host', generation = 'session-a') => ({ userId: id, accountId: id, sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false });
-const room = (id = 'ROOM01') => ({ partyId: id, roomCode: id, hostUserId: 'host', roomType: 'live', isActive: true, status: 'active', joinPolicy: 'open', contentAccessRule: 'open', discoveryVisibility: 'private', discoveryTitle: null, titleId: null, sourceType: null, sourceId: null, lastActivityAt: new Date().toISOString() });
+const room = (id = 'ROOM01') => ({ partyId: id, roomCode: id, hostUserId: 'host', roomType: 'live', roomGeneration: 'generation-a', hostSettingsRevision: 0, isActive: true, status: 'active', joinPolicy: 'open', contentAccessRule: 'open', discoveryVisibility: 'private', discoveryPaused: false, discoveryTitle: null, titleId: null, sourceType: null, sourceId: null, lastActivityAt: new Date().toISOString() });
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const sheetSource = fs.readFileSync(new URL('../components/monetization/access-sheet.tsx', import.meta.url), 'utf8');
 const sheetAst = ts.createSourceFile('access-sheet.tsx', sheetSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -86,7 +86,14 @@ async function mount(t, { ticketAccess = null, normal = false, prepared = true, 
   const appListeners = new Set(), authorityListeners = new Set();
   const AppState = { currentState: 'active', addEventListener: (_, listener) => { appListeners.add(listener); return { remove: () => appListeners.delete(listener) }; } };
   const gate = async options => { runtime.premium.push(options); return runtime.gate ? runtime.gate(options) : { allowed: runtime.premiumAllowed, reason: runtime.premiumAllowed ? 'allowed' : 'premium_required' }; };
-  const save = async (id, changes) => { runtime.writes.push({ id, changes }); return runtime.policy ? runtime.policy(id, changes) : (runtime.room = { ...runtime.room, ...changes, discoveryTitle: changes.discoveryTitle?.trim() || null }); };
+  const save = async (id, changes, expected) => {
+    if (expected && ['partyId', 'hostUserId', 'roomGeneration', 'hostSettingsRevision'].some(key => expected[key] !== runtime.room[key])) return null;
+    runtime.writes.push({ id, changes, expected });
+    if (runtime.policy) return runtime.policy(id, changes);
+    const next = { ...runtime.room, ...changes, discoveryTitle: changes.discoveryTitle?.trim() || null };
+    next.hostSettingsRevision += ['joinPolicy', 'discoveryVisibility', 'discoveryPaused', 'discoveryTitle'].some(key => runtime.room[key] !== next[key]) ? 1 : 0;
+    return runtime.room = next;
+  };
   const intent = { exports: {}, Date, require(name) {
     if (name === 'react-native') return { AppState };
     if (name === './accountSessionAuthority') return { getCurrentAccountSessionAuthoritySnapshot: () => runtime.authority,
@@ -163,7 +170,7 @@ async function mount(t, { ticketAccess = null, normal = false, prepared = true, 
   const find = (predicate) => { const values = walk(tree, predicate); assert.equal(values.length, 1, 'one actual rendered control'); return values[0].props; };
   return { runtime, find, tree: () => tree,
     text: () => walk(tree, n => n.type === 'AppText').map(n => n.props.children).filter(x => typeof x === 'string').join('\n'),
-    audience: value => find(n => n.props?.accessibilityLabel === `Set ${normal ? 'Party audience' : 'Live discovery'} to ${value}`),
+    audience: value => find(n => n.props?.accessibilityLabel === `Set ${normal ? 'Party audience' : 'Live discovery'} ${value === 'private' || value === 'on' ? `listing ${value === 'private' ? 'off' : 'on'}` : `to ${value}`}`),
     title: () => find(n => n.props?.accessibilityLabel === (normal ? 'Party discovery title' : 'Live discovery title')),
     continue: () => find(n => n.props?.testID === 'watch-party-create-room'),
     generate: () => find(n => typeof n.props?.onPress === 'function' && n.props.onPress.name === 'onGenerateNewCode'),
@@ -290,7 +297,79 @@ test('normal Party defaults private and audience saves do not navigate or start 
   assert.equal(h.audience('private').accessibilityState.selected, true);
   await h.act(() => h.audience('public').onPress());
   assert.equal(h.runtime.room.discoveryVisibility, 'public');
+  assert.equal(h.runtime.room.discoveryPaused, true);
   assert.match(h.text(), /Party audience saved/); assert.equal(h.runtime.navigations.length, 0);
+});
+
+for (const normal of [false, true]) test(`waiting Off retains Circle admission and audience changes stay unlisted, title=${normal}`, async t => {
+  const h = await mount(t, { normal });
+  await h.act(() => h.audience("Chi'lly Circle").onPress());
+  assert.equal(h.runtime.room.discoveryVisibility, 'circle'); assert.equal(h.runtime.room.discoveryPaused, true);
+  await h.act(() => h.audience('on').onPress());
+  assert.equal(h.runtime.room.discoveryVisibility, 'circle'); assert.equal(h.runtime.room.discoveryPaused, false);
+  await h.act(() => h.audience('private').onPress());
+  assert.equal(h.runtime.room.discoveryVisibility, 'circle'); assert.equal(h.runtime.room.discoveryPaused, true);
+  assert.match(h.text(), /Starting audience: Chi'lly Circle only · Discovery: Off/);
+  await h.act(() => h.audience('public').onPress());
+  assert.equal(h.runtime.room.discoveryVisibility, 'public'); assert.equal(h.runtime.room.discoveryPaused, true);
+  assert.equal(h.runtime.navigations.length, 0);
+  assert.ok(h.runtime.writes.every(write => Object.hasOwn(write.changes, 'discoveryPaused')));
+});
+
+test('paused Circle Party Start enters normally without manufacturing a publication intent', async t => {
+  const h = await mount(t, { normal: true });
+  await h.act(() => h.audience("Chi'lly Circle").onPress());
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.navigations.length, 1); assert.equal(h.runtime.navigations[0].params.startIntent, undefined);
+  assert.equal(h.runtime.room.discoveryVisibility, 'circle'); assert.equal(h.runtime.room.discoveryPaused, true);
+});
+
+for (const normal of [false, true]) for (const change of ['pause', 'aba', 'generation']) {
+  test(`waiting Start rejects external ${change} instead of rebasing stale On draft, title=${normal}`, async t => {
+    const h = await mount(t, { normal });
+    await h.act(() => h.audience("Chi'lly Circle").onPress()); await h.act(() => h.audience('on').onPress());
+    h.runtime.room = { ...h.runtime.room, discoveryPaused: change !== 'aba', hostSettingsRevision: h.runtime.room.hostSettingsRevision + 2,
+      ...(change === 'generation' ? { roomGeneration: 'generation-b' } : {}) };
+    const before = h.runtime.writes.length;
+    await h.act(() => h.continue().onPress());
+    assert.equal(h.runtime.writes.length, before); assert.equal(h.runtime.navigations.length, 0); assert.equal(h.entered(), 0);
+    assert.match(h.text(), /settings changed since this draft/);
+    await h.act(() => h.find(n => n.props?.accessibilityLabel === 'Reload current audience and discard edits').onPress());
+    assert.equal(h.runtime.writes.length, before, 'explicit reload is read-only');
+    assert.equal(h.audience(change === 'aba' ? 'on' : 'private').accessibilityState.selected, true);
+    await h.act(() => h.continue().onPress());
+    assert.equal(normal ? h.runtime.navigations.length : h.entered(), 1);
+    assert.equal(h.runtime.room.discoveryPaused, change !== 'aba');
+  });
+}
+
+for (const normal of [false, true]) test(`waiting title save retains original expected revision after an external pause, title=${normal}`, async t => {
+  const h = await mount(t, { normal }); await h.act(() => h.audience('on').onPress());
+  const before = h.runtime.writes.length;
+  h.runtime.room = { ...h.runtime.room, discoveryPaused: true, hostSettingsRevision: h.runtime.room.hostSettingsRevision + 1 };
+  await h.act(() => h.title().onChangeText('Old screen title')); await h.act(() => h.title().onBlur());
+  assert.equal(h.runtime.writes.length, before); assert.equal(h.runtime.room.discoveryPaused, true);
+  assert.match(h.text(), /was not saved/);
+});
+
+for (const transition of ['account', 'generation', 'focus', 'state']) test(`waiting explicit reload cannot install a retired ${transition} response`, async t => {
+  const h = await mount(t, { normal: true }), d = deferred();
+  await h.act(() => h.title().onChangeText('Unsaved current title'));
+  h.runtime.preparation = () => d.promise;
+  const before = h.runtime.writes.length;
+  await h.act(() => h.find(n => n.props?.accessibilityLabel === 'Reload current audience and discard edits').onPress());
+  assert.equal(h.continue().disabled, true);
+  await h[transition](transition === 'focus' ? false : transition === 'state' ? 'background' : 'replacement');
+  await h.act(() => d.resolve({ ...h.runtime.room, discoveryTitle: 'Stale reload title', hostSettingsRevision: 9 }));
+  assert.equal(h.runtime.writes.length, before); assert.equal(h.runtime.navigations.length, 0);
+  assert.equal(walk(h.tree(), n => n.props?.accessibilityLabel === 'Party discovery title' && n.props.value === 'Stale reload title').length, 0);
+});
+
+for (const transition of ['account', 'generation', 'focus', 'state']) test(`retained listing On cannot write after waiting ${transition} retirement`, async t => {
+  const h = await mount(t), on = h.audience('on').onPress;
+  await h[transition](transition === 'focus' ? false : transition === 'state' ? 'background' : 'replacement');
+  await h.act(() => on()); assert.equal(h.runtime.writes.length, 0);
+  assert.equal(h.runtime.room.discoveryVisibility, 'private'); assert.equal(h.runtime.navigations.length, 0);
 });
 
 test('unavailable normal prepared Start stays denied and directs a fresh Player preparation', async t => {
@@ -476,6 +555,7 @@ for (const blocked of ['listing', 'premium', 'access']) test(`discovery preview 
 test('normal explicit Start carries one process-owned intent through the existing Party Room route', async t => {
   const h = await mount(t, { normal: true });
   await h.act(() => h.audience("Chi'lly Circle").onPress());
+  await h.act(() => h.audience('on').onPress());
   const start = h.continue().onPress;
   await h.act(() => { void start(); void start(); });
   assert.equal(h.runtime.navigations.length, 1);
@@ -525,13 +605,13 @@ test('a pending save visibly disables Continue and cannot dispatch a second writ
   await h.act(() => { first(); first(); });
   assert.equal(h.runtime.writes.length, 1); assert.equal(h.continue().disabled, true); assert.match(h.text(), /Saving Live discovery/);
   await h.act(() => h.continue().onPress()); assert.equal(h.entered(), 0);
-  await h.act(() => d.resolve({ ...room(), discoveryVisibility: 'public' }));
+  await h.act(() => d.resolve({ ...room(), discoveryVisibility: 'public', discoveryPaused: true }));
   assert.equal(h.continue().disabled, false); assert.match(h.text(), /Live discovery saved/);
 });
 
-for (const [field, value] of [['partyId', 'OTHER'], ['hostUserId', 'other'], ['roomType', 'title'], ['discoveryVisibility', 'private']]) {
+for (const [field, value] of [['partyId', 'OTHER'], ['hostUserId', 'other'], ['roomType', 'title'], ['discoveryVisibility', 'private'], ['discoveryPaused', false]]) {
   test(`save response with different ${field} cannot claim success`, async t => {
-    const h = await mount(t); h.runtime.policy = async () => ({ ...room(), discoveryVisibility: 'public', [field]: value });
+    const h = await mount(t); h.runtime.policy = async () => ({ ...room(), discoveryVisibility: 'public', discoveryPaused: true, [field]: value });
     await h.act(() => h.audience('public').onPress()); assert.match(h.text(), /not saved/);
     assert.equal(h.audience('public').accessibilityState.selected, true);
   });

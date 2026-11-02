@@ -377,6 +377,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "./plugins/withWebRtcSenderAcknowledgment",
       "./plugins/withWebRtcCameraEffectOwnership",
       "./plugins/withExpoCameraNoBarcode",
+      "./plugins/withExpoImagePickerAndroidResultRetention",
+      "./plugins/withIosPickerDismissal",
       "./plugins/withOwnedAndroidAudioSession",
       "./plugins/withLiveKitIosStaticFrameworkCompatibility",
       [

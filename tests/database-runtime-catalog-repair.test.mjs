@@ -3,14 +3,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {createDatabase, splitSQL, merchStorefrontFiles} from './helpers/database-runtime-authority-fixture.mjs';
+import {createDatabase, splitSQL, merchStorefrontFiles, heldStudioBundleVersions} from './helpers/database-runtime-authority-fixture.mjs';
 import {monetizationAuditFiles, monetizationImplementationFiles,
   monetizationAddedFunctionIdentities, monetizationReplacedFunctionIdentities,
   monetizationRenamedFunctionIdentities, monetizationRemovedFunctionIdentities,
 } from './helpers/creator-monetization-migration-inventory.mjs';
 import {profileFeedFiles, profileFeedFunctions, assertProfileFeedInventory} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles, discoveryInvalidationFunctions, assertDiscoveryInvalidationInventory} from './helpers/discovery-invalidation-runtime-inventory.mjs';
-import {appCompletionFiles,appCompletionAddedFunctionIdentities,appCompletionReplacedFunctionIdentities,appCompletionRemovedFunctionIdentities} from './helpers/app-completion-migration-inventory.mjs';
+import {appCompletionFiles,appCompletionAddedFunctionIdentities,appCompletionReplacedFunctionIdentities,appCompletionRemovedFunctionIdentities,
+  appCompletionStudioDependentFiles,appCompletionStudioDependentAddedFunctionIdentities} from './helpers/app-completion-migration-inventory.mjs';
 
 // Explicit reviewed successors: excluded from historical delta checkpoints,
 // required in full-chain repair qualification alongside their real prerequisites.
@@ -964,16 +965,23 @@ test('commerce tax, automation, tracking and case successors retain explicit API
 });
 
 for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idempotence, Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async()=>{
+  assert.deepEqual([...heldStudioBundleVersions].sort(),
+    [...studioBundleFiles,...appCompletionStudioDependentFiles].map(file=>file.split('_')[0]).sort(),
+    'fixture hold matches exactly the Studio bundle and its declared dependent successors');
+  const expectedFlexibleFunctions = new Map([...flexibleCommerceAddedFunctionIdentities]
+    .filter(([key])=>includeHeldStudio||!appCompletionStudioDependentAddedFunctionIdentities.has(key)));
+  const expectedFlexibleFiles = flexibleCommerceFiles
+    .filter(file=>includeHeldStudio||!appCompletionStudioDependentFiles.includes(file));
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length+merchAddedFunctionIdentities.size+flexibleCommerceAddedFunctionIdentities.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length+merchAddedFunctionIdentities.size+expectedFlexibleFunctions.size);
     for(const [label,identities] of [['added',monetizationAddedFunctionIdentities],['replaced',monetizationReplacedFunctionIdentities]]){
       assert.deepEqual(before.functions.filter(fn=>identities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
         [...identities].sort(),`exact creator monetization ${label} signatures are present`);
     }
     assert.deepEqual(before.functions.filter(fn=>flexibleCommerceAddedFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
-      [...flexibleCommerceAddedFunctionIdentities].sort(),'exact flexible commerce added signatures are present');
+      [...expectedFlexibleFunctions].sort(),'exact flexible commerce added signatures match the Studio replay scenario');
     await assertProfileFeedInventory(db,before.functions);
     assert.deepEqual(before.functions.filter(fn=>merchAddedFunctionIdentities.has(fn.key)).map(fn=>[fn.key,fn.identity]).sort(),
       [...merchAddedFunctionIdentities].sort(),'exact physical storefront/SKU/photo signatures are present');
@@ -1031,8 +1039,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length+flexibleCommerceFiles.length);
-    assert.deepEqual(replayReport.files.filter(file=>flexibleCommerceFiles.includes(file)),flexibleCommerceFiles, 'exact flexible commerce successor migrations replay');
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length+notificationPreferenceOrderingFiles.length+notificationRegistrationOrderingFiles.length+explicitApiGrantFiles.length+brandRetentionFiles.length+legacyRetentionFiles.length+originalCopyFiles.length+realtimeIdentityFiles.length+externalReferenceFiles.length+r2QualificationFiles.length+brandGlobalRetentionFiles.length+brandObservationFiles.length+brandEmptyFiles.length+brandArchivedVerificationFiles.length+userIdHoldScopeFiles.length+brandReferenceFiles.length+legacyRenditionFiles.length+monetizationAuditFiles.length+profileFeedFiles.length+discoveryInvalidationFiles.length+merchStorefrontFiles.length+expectedFlexibleFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>flexibleCommerceFiles.includes(file)),expectedFlexibleFiles, 'exact flexible commerce successor migrations match the Studio replay scenario');
     assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),merchStorefrontFiles, 'exact physical storefront/SKU/photo successors replay');
     assert.deepEqual(replayReport.files.filter(file=>monetizationAuditFiles.includes(file)),monetizationAuditFiles,
       'exact creator/buyer monetization audit migrations replay in both Studio scenarios');

@@ -1,4 +1,6 @@
 import { RoomSeatAuctionEntry } from "../../../components/monetization/room-seat-auction-entry";
+import { RoomPrivacyDiscoveryControls } from "../../../components/live/room-privacy-discovery-controls";
+import { applyWatchPartyHostSettingsReadback } from "../../../_lib/watchPartyHostSettings";
 import { ConversationTimestamp } from "../../../components/social/conversation-timestamp";
 import { conversationCreatedAt } from "../../../_lib/conversationTimestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -123,12 +125,14 @@ import {
 } from "../../../_lib/watchParty";
 import {
     createSocialAttachmentForSurface,
+    isAttachmentParentSavedError,
+    isSocialAttachmentOutcomeAmbiguous,
     readSocialAttachmentsForSurfaces,
     type SocialAttachment,
-    type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../../_lib/socialAttachmentPicker";
+import { createRoomAttachmentIntent } from "../../../_lib/roomAttachmentIntent";
 import { getUserFacingErrorMessage } from "../../../_lib/userFacingErrors";
 import { resolveWatchPartyContentSource } from "../../../_lib/watchPartyContentSources";
 import {
@@ -152,7 +156,11 @@ import { useChannelFollowAction } from "../../../hooks/use-channel-follow-action
 import { LiveCameraControls } from "../../../components/live/live-camera-controls";
 import { useLiveCameraEffects, type LiveCameraEffectsControls, type LiveCameraEffectsProps } from "../../../hooks/use-live-camera-effects";
 import { useLocalCameraMirror } from "../../../hooks/use-local-camera-mirror";
-import { SocialAttachmentActionSheet } from "../../../components/social/social-attachment-action-sheet";
+import { useMediaPicker } from "../../../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../../../hooks/useOwnedPickedMediaState";
+import { releasePickedMedia, retainPickedMedia } from "../../../_lib/mediaPickerResources";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../../_lib/accountSessionAuthority";
+import { captureAccountBoundSupabaseMutationSubject, type AccountBoundSupabaseMutationSubject } from "../../../_lib/accountBoundSupabaseMutation";
 import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
 import { AppBackButton } from "../../../components/navigation/app-back-button";
 import {
@@ -248,6 +256,7 @@ type LiveStageComment = {
 
 type LiveStageCommentSendFlight = {
   ownerKey: string;
+  isCurrent: () => boolean;
   partyId: string;
   realtimeChanges: Map<string, LiveStageComment | null>;
 };
@@ -1027,6 +1036,8 @@ export default function WatchPartyLiveStageScreen({
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [stageControlsOpen, setStageControlsOpen] = useState(false);
+  const [privacyDiscoveryOpen, setPrivacyDiscoveryOpen] = useState(false);
+  const [discoverySettingsConfirmationVersion, setDiscoverySettingsConfirmationVersion] = useState(0);
   const [faceFilterSheetOpen, setFaceFilterSheetOpen] = useState(false);
   const [hybridCommentFocused, setHybridCommentFocused] = useState(false);
   const [hybridComments, setHybridComments] = useState<LiveStageComment[]>([]);
@@ -1049,8 +1060,45 @@ export default function WatchPartyLiveStageScreen({
       });
     };
   }, [isFocused, partyId]);
-  const [hybridCommentAttachmentFile, setHybridCommentAttachmentFile] = useState<SocialAttachmentFile | null>(null);
-  const [hybridCommentAttachmentSheetVisible, setHybridCommentAttachmentSheetVisible] = useState(false);
+  const [hybridCommentAttachmentFile, setHybridCommentAttachmentFile] = useOwnedPickedMediaState<SocialAttachmentFile | null>(null);
+  const attachmentSubjectRef = useRef<AccountBoundSupabaseMutationSubject | null>(null);
+  const { pickMedia: pickCommentMedia, mediaPickerSheet: commentMediaPickerSheet, cancelMediaPicker: cancelCommentMediaPicker } = useMediaPicker(`stage-comment:${partyId}`);
+  const stageAttachmentRequestRef = useRef<{ intent: ReturnType<typeof createRoomAttachmentIntent>; file?: SocialAttachmentFile } | null>(null);
+  const selectedStageAttachmentRequestRef = useRef<typeof stageAttachmentRequestRef.current>(null);
+  const stageAttachmentAccessRef = useRef(true);
+  const stageAttachmentModeRef = useRef(stageMode);
+  stageAttachmentModeRef.current = stageMode;
+  stageAttachmentAccessRef.current = canUseBetaStage && isFocused && !roomMissing
+    && blockedRoomAccess?.isAllowed !== false && liveMoneyAccess?.allowed !== false;
+  const retireStageAttachmentSelection = useCallback((clearSelected = false) => {
+    stageAttachmentRequestRef.current?.intent?.retire();
+    stageAttachmentRequestRef.current = null;
+    cancelCommentMediaPicker();
+    if (clearSelected) {
+      selectedStageAttachmentRequestRef.current?.intent?.retire();
+      selectedStageAttachmentRequestRef.current = null;
+      attachmentSubjectRef.current = null;
+      setHybridCommentAttachmentFile(null);
+    }
+  }, [cancelCommentMediaPicker, setHybridCommentAttachmentFile]);
+  // Equivalent token-refresh snapshots keep the same selection/send owner.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const commentMediaContext = useMemo(() => ({ authority: authority ? { ...authority } : null, partyId }), [authority?.accountId, authority?.restoreOnly, authority?.sessionGeneration, authority?.state, authority?.userId, partyId]);
+  const commentMediaContextRef = useRef<typeof commentMediaContext | null>(commentMediaContext);
+  commentMediaContextRef.current = commentMediaContext;
+  useEffect(() => {
+    setHybridCommentAttachmentFile(null);
+    setHybridCommentDraft("");
+    setHybridCommentError("");
+    setHybridCommentSending(false);
+    hybridCommentSendRef.current = null;
+    return () => { if (commentMediaContextRef.current === commentMediaContext) commentMediaContextRef.current = null; };
+  }, [commentMediaContext, setHybridCommentAttachmentFile]);
+  useEffect(() => () => retireStageAttachmentSelection(true), [commentMediaContext, retireStageAttachmentSelection]);
+  useEffect(() => () => retireStageAttachmentSelection(true), [stageMode, retireStageAttachmentSelection]);
+  useEffect(() => {
+    if (!stageAttachmentAccessRef.current) retireStageAttachmentSelection(true);
+  }, [canUseBetaStage, isFocused, roomMissing, blockedRoomAccess?.isAllowed, liveMoneyAccess?.allowed, retireStageAttachmentSelection]);
   const [stageKeyboardHeight, setStageKeyboardHeight] = useState(0);
   const [selectedStageEffectId, setSelectedStageEffectId] = useState(LIVE_EFFECT_OFF_ID);
   const [stageEffectIntensity, setStageEffectIntensity] = useState(0.5);
@@ -1135,6 +1183,7 @@ export default function WatchPartyLiveStageScreen({
   const monetizationConfig = resolveMonetizationConfig(appConfig);
 
   const handleAuthoritativeLiveRoomEnded = useCallback(() => {
+    retireStageAttachmentSelection(true);
     stageSnapshotRequestRef.current += 1;
     stageEntryOwnerRef.current.invalidate();
     liveSurfaceRef.current = "room";
@@ -1143,12 +1192,23 @@ export default function WatchPartyLiveStageScreen({
     setLiveKitRenderableJoinContract(null);
     setCommunicationRoomId("");
     setRoom(null);
+    setIsHost(false);
+    membershipMapRef.current = {};
+    setParticipants([]);
+    setHybridComments([]);
+    for (const channel of new Set([channelRef.current, roomRealtimeChannelRef.current])) {
+      if (channel) void supabase.removeChannel(channel).catch(() => {});
+    }
+    channelRef.current = null;
+    roomRealtimeChannelRef.current = null;
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    heartbeatRef.current = null;
     setRoomMissing(true);
     setRoomEntryError("");
     setBlockedRoomAccess(null);
     setLiveSurface("room");
     setLoading(false);
-  }, []);
+  }, [retireStageAttachmentSelection]);
 
   useEffect(() => {
     stageLocalMediaIntentRef.current = stageLocalMediaIntent;
@@ -1170,10 +1230,7 @@ export default function WatchPartyLiveStageScreen({
   }, []);
 
   useEffect(() => {
-    hybridCommentSendRef.current = null;
     setStageEntryBusy(false);
-    setHybridCommentSending(false);
-    return () => { hybridCommentSendRef.current = null; };
   }, [stageOperationOwnerKey]);
 
   useEffect(() => {
@@ -1267,6 +1324,12 @@ export default function WatchPartyLiveStageScreen({
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
+    const selectionIntent = stageAttachmentRequestRef.current?.intent;
+    const selectedIntent = selectedStageAttachmentRequestRef.current?.intent;
+    if ((selectionIntent && !selectionIntent.observe(snapshot)) || (selectedIntent && !selectedIntent.observe(snapshot))) {
+      retireStageAttachmentSelection(true);
+      setHybridCommentError("This room session changed. Choose the attachment again before sending.");
+    }
     setRoom(snapshot.room);
     membershipMapRef.current = Object.fromEntries(snapshot.memberships.map((membership) => [membership.userId, membership]));
     setIsHost(String(snapshot.room.hostUserId) === String(trackedUserId));
@@ -1300,7 +1363,7 @@ export default function WatchPartyLiveStageScreen({
       });
       return { pendingById, versionById, closedVersionById };
     });
-  }, []);
+  }, [retireStageAttachmentSelection]);
 
   const refreshStageSnapshot = useCallback(async (trackedUserId?: string) => {
     const ownerKey = stageOperationOwnerKeyRef.current;
@@ -1310,11 +1373,15 @@ export default function WatchPartyLiveStageScreen({
     // Otherwise an older response can restore a seat/mute state just revoked.
     if (!liveKitStageMountedRef.current || stageOperationOwnerKeyRef.current !== ownerKey
       || stageSnapshotRequestRef.current !== request) return null;
-    if (!snapshot) return null;
-    if (snapshot.room.roomType !== "live") return null;
+    if (!snapshot || snapshot.room.roomType !== "live" || !snapshot.room.isActive) {
+      handleAuthoritativeLiveRoomEnded();
+      setRoomMissing(false);
+      setRoomEntryError("Current room access could not be verified. The room may have ended or its audience may have changed. Reopen it to check current access.");
+      return null;
+    }
     syncStageSnapshot(snapshot, String(trackedUserId ?? myUserId ?? "").trim());
     return snapshot;
-  }, [myUserId, partyId, syncStageSnapshot]);
+  }, [handleAuthoritativeLiveRoomEnded, myUserId, partyId, syncStageSnapshot]);
 
   const buildStageParticipantsFromPresence = useCallback((options: {
     state: Record<string, StagePresenceEntry[] | undefined>;
@@ -1718,6 +1785,10 @@ export default function WatchPartyLiveStageScreen({
         // Cleanup can run during the snapshot read. Never create room channels
         // or a heartbeat after the effect that owns them has been retired.
         if (cancelled) return;
+        if (!refreshedSnapshot) {
+          setLoading(false);
+          return;
+        }
         const persistedTrackedMembership = persistedSessionMembership
           ?? refreshedSnapshot?.memberships.find((membership) => membership.userId === trackedUserId)
           ?? membershipMapRef.current[trackedUserId]
@@ -2067,6 +2138,10 @@ export default function WatchPartyLiveStageScreen({
     roomName: partyId,
     hostUserId: room?.hostUserId ?? "",
     visibility: room?.discoveryVisibility ?? "private",
+    discoveryPaused: room?.discoveryPaused ?? null,
+    roomGeneration: room?.roomGeneration ?? "",
+    settingsRevision: room?.hostSettingsRevision ?? null,
+    settingsConfirmationVersion: discoverySettingsConfirmationVersion,
     isHost: isHost && trackedUserId === room?.hostUserId,
     active: canUseBetaStage && shouldRenderLiveKitStage && mediaAppState === "active" && !saveReplayEnding
       && room?.isActive === true && room.roomType === "live"
@@ -3501,7 +3576,7 @@ export default function WatchPartyLiveStageScreen({
           hybridCommentRevisionRef.current += 1;
           const pendingSend = hybridCommentSendRef.current;
           const ownedSend = pendingSend && pendingSend.partyId === partyId
-            && pendingSend.ownerKey === stageOperationOwnerKeyRef.current ? pendingSend : null;
+            && pendingSend.isCurrent() ? pendingSend : null;
           if (payload.eventType === "DELETE") {
             const deletedId = String((payload.old as LiveStageCommentRow)?.id ?? "");
             if (deletedId) ownedSend?.realtimeChanges.set(deletedId, null);
@@ -3680,12 +3755,6 @@ export default function WatchPartyLiveStageScreen({
     }
     await refreshStageSnapshot(trackedUserId).catch(() => null);
   }, [isHost, partyId, refreshStageSnapshot, trackedUserId]);
-
-  const onToggleLiveRoomLock = useCallback(() => {
-    void updateLiveRoomPolicies({
-      joinPolicy: room?.joinPolicy === "locked" ? "open" : "locked",
-    });
-  }, [room?.joinPolicy, updateLiveRoomPolicies]);
 
   const onToggleLiveRoomReactions = useCallback(() => {
     void updateLiveRoomPolicies({
@@ -4116,6 +4185,7 @@ export default function WatchPartyLiveStageScreen({
         || [401, 403, 404, 410].includes(joinResult.responseStatus ?? 0)
         || ["room_expired", "room_not_found", "room_surface_mismatch"].includes(joinResult.responseError ?? "");
       if (accessDenied) {
+        retireStageAttachmentSelection(true);
         liveKitPendingRecoveryRef.current = null;
         if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
         liveKitRecoveryTimeoutRef.current = null;
@@ -4178,6 +4248,7 @@ export default function WatchPartyLiveStageScreen({
     mediaAppState,
     partyId,
     refreshStageSnapshot,
+    retireStageAttachmentSelection,
     resolvedCurrentUsername,
     room?.roomCode,
     scheduleLiveKitRecovery,
@@ -4185,6 +4256,7 @@ export default function WatchPartyLiveStageScreen({
   ]);
 
   const onReturnToLiveRoom = useCallback(() => {
+    retireStageAttachmentSelection(true);
     stageEntryOwnerRef.current.invalidate();
     liveSurfaceRef.current = "room";
     setStageEntryBusy(false);
@@ -4200,7 +4272,7 @@ export default function WatchPartyLiveStageScreen({
     setLiveKitJoinContract(null);
     setLiveKitRenderableJoinContract(null);
     setLiveSurface("room");
-  }, [closeStageOverlayPanels, stageOverlayMotion]);
+  }, [closeStageOverlayPanels, retireStageAttachmentSelection, stageOverlayMotion]);
 
   const onLiveStageBack = useCallback(() => {
     stageEntryOwnerRef.current.invalidate();
@@ -4256,28 +4328,104 @@ export default function WatchPartyLiveStageScreen({
     onSelectReactionFromPicker(emoji);
   }, [onSelectReactionFromPicker, revealStageOverlay, stageReactionsEnabled]);
 
-  const onPickHybridCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
+  const onPickHybridCommentAttachment = useCallback(async () => {
+    if (hybridCommentSending || hybridCommentSendRef.current || stageAttachmentRequestRef.current
+      || commentMediaContextRef.current !== commentMediaContext || !commentMediaContext.authority
+      || !stageOperationOwnerKeyRef.current || liveSurfaceRef.current !== "stage"
+      || !stageAttachmentAccessRef.current || room?.roomType !== "live") return;
+    const userId = commentMediaContext.authority.userId;
+    const request: { intent: ReturnType<typeof createRoomAttachmentIntent>; file?: SocialAttachmentFile } = { intent: null };
+    stageAttachmentRequestRef.current = request;
+    // Native Gallery/Camera can background the app and retire foreground media.
+    // Keep only this exact admitted selection intent; do not adopt a new stage
+    // owner on return. Applying the result requires a fresh canonical read.
+    const isCurrent = () => (stageAttachmentRequestRef.current === request || selectedStageAttachmentRequestRef.current === request)
+      && commentMediaContextRef.current === commentMediaContext && stageAttachmentAccessRef.current
+      && liveSurfaceRef.current === "stage" && stageAttachmentModeRef.current === stageMode
+      && sameAccountSessionAuthority(commentMediaContext.authority, getCurrentAccountSessionAuthoritySnapshot());
+    const intent = createRoomAttachmentIntent({
+      snapshot: { room, memberships: Object.values(membershipMapRef.current) }, userId,
+      current: isCurrent,
+      foreground: () => AppState.currentState === "active",
+      subscribeForeground: (listener) => {
+        const subscription = AppState.addEventListener("change", listener);
+        return () => subscription.remove();
+      },
+      read: async () => {
+        const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
+        if (!isCurrent() || !snapshot || snapshot.room.roomType !== "live") return null;
+        if (!request.intent?.observe(snapshot)) return null;
+        const access = await resolveRoomAccess({
+          roomSurface: "watch_party", partyId, room: snapshot.room, userId,
+          membership: snapshot.memberships.find((member) => member.userId === userId) ?? null,
+        }).catch(() => null);
+        if (!isCurrent() || !access?.isAllowed) return null;
+        const exactAccess = await readLiveWatchPartyMoneyAccess(partyId).catch(() => null);
+        if (!isCurrent() || !exactAccess?.allowed) return null;
+        const premium = await (stageMode === "hybrid" ? requireLiveWatchPartyPremium : requireLiveFirstPremium)({
+          accessKey: partyId,
+        }).catch(() => null);
+        if (!isCurrent() || !premium?.allowed) return null;
+        // Entitlement reads may await the network. Re-read the original room
+        // identity after them instead of applying an earlier membership view.
+        const confirmedSnapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
+        return isCurrent() ? confirmedSnapshot : null;
+      },
+    });
+    request.intent = intent;
+    if (!intent) {
+      if (stageAttachmentRequestRef.current === request) stageAttachmentRequestRef.current = null;
+      setHybridCommentError("Unable to confirm this room session. Refresh the room before choosing an attachment.");
+      return;
+    }
+    let selection: { file: SocialAttachmentFile; mutationSubject: AccountBoundSupabaseMutationSubject } | null = null;
     try {
       setHybridCommentError("");
-      const file = await pickSocialAttachmentFile(scope);
-      if (!file) return;
-      setHybridCommentAttachmentFile(file);
+      selection = await pickCommentMedia({
+        title: "Add to Live Stage comment", mediaKind: "attachment", sources: ["photos", "camera", "files"],
+        isCurrent: intent.current,
+        retainNativeResultWhileHidden: intent.retainWhileHidden,
+        pick: async (source, operation) => {
+          const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+          if (!intent.current() || !intent.beginNative()) return null;
+          let file: SocialAttachmentFile | null;
+          try {
+            file = await pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation);
+          } catch (error) {
+            // A native failure can also arrive after another room/session has
+            // replaced the admitted surface. Never publish that stale error.
+            if (await intent.verifyBeforeApply()) throw error;
+            return null;
+          }
+          return file && await intent.verifyBeforeApply() ? { file, mutationSubject } : null;
+        },
+      });
+      if (!selection || !intent.current()
+        || !sameAccountSessionAuthority(selection.mutationSubject.authority, getCurrentAccountSessionAuthoritySnapshot())) return;
+      selectedStageAttachmentRequestRef.current?.intent?.retire();
+      request.file = selection.file;
+      selectedStageAttachmentRequestRef.current = request;
+      attachmentSubjectRef.current = selection.mutationSubject;
+      setHybridCommentAttachmentFile(selection.file);
       setCommentsOpen(true);
       revealStageOverlay();
     } catch (error) {
-      setHybridCommentAttachmentFile(null);
+      if (!intent.current()) return;
       setHybridCommentError(getUserFacingErrorMessage(error, "Unable to choose this attachment right now."));
+    } finally {
+      void releasePickedMedia(selection);
+      if (selectedStageAttachmentRequestRef.current !== request) intent.retire();
+      if (stageAttachmentRequestRef.current === request) stageAttachmentRequestRef.current = null;
     }
-  }, [revealStageOverlay]);
-
-  const onSelectHybridCommentAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
-    setHybridCommentAttachmentSheetVisible(false);
-    void onPickHybridCommentAttachment(scope);
-  }, [onPickHybridCommentAttachment]);
+  }, [commentMediaContext, hybridCommentSending, partyId, pickCommentMedia, revealStageOverlay, room, setHybridCommentAttachmentFile, stageMode]);
 
   const onSendHybridComment = useCallback(async () => {
+    if (commentMediaContextRef.current !== commentMediaContext
+      || !commentMediaContext.authority || commentMediaContext.authority.restoreOnly
+      || !sameAccountSessionAuthority(commentMediaContext.authority, getCurrentAccountSessionAuthoritySnapshot())) return;
     const safeBody = hybridCommentDraft.trim();
     const hasAttachment = !!hybridCommentAttachmentFile;
+    const selectedAttachmentRequest = hasAttachment ? selectedStageAttachmentRequestRef.current : null;
     if ((!safeBody && !hasAttachment) || !partyId || hybridCommentSendRef.current || !stageOperationOwnerKeyRef.current) return;
     if (!appConfig.runtimeControls.chat_enabled) {
       setHybridCommentError("Room comments are temporarily paused. You can still read existing comments.");
@@ -4288,17 +4436,43 @@ export default function WatchPartyLiveStageScreen({
       return;
     }
 
+    retireStageAttachmentSelection();
+    let releaseSendFile: () => void;
+    try { releaseSendFile = retainPickedMedia(hybridCommentAttachmentFile); }
+    catch { setHybridCommentError("The attachment changed. Review the current selection before sending."); return; }
     const ownerKey = stageOperationOwnerKeyRef.current;
-    const flight: LiveStageCommentSendFlight = { ownerKey, partyId, realtimeChanges: new Map() };
+    const flight: LiveStageCommentSendFlight = { ownerKey, partyId, realtimeChanges: new Map(), isCurrent: () => false };
     hybridCommentSendRef.current = flight;
     const isCurrent = () => liveKitStageMountedRef.current && hybridCommentSendRef.current === flight
-      && stageOperationOwnerKeyRef.current === ownerKey;
+      && commentMediaContextRef.current === commentMediaContext
+      && sameAccountSessionAuthority(commentMediaContext.authority, getCurrentAccountSessionAuthoritySnapshot());
+    flight.isCurrent = isCurrent;
     setHybridCommentSending(true);
     setHybridCommentError("");
+    const validateSelectedAttachment = async () => {
+      const valid = selectedAttachmentRequest?.file === hybridCommentAttachmentFile
+        && selectedStageAttachmentRequestRef.current === selectedAttachmentRequest
+        && await selectedAttachmentRequest?.intent?.verifyBeforeMutation();
+      if (!isCurrent()) return false;
+      if (!valid) {
+        retireStageAttachmentSelection(true);
+        throw new Error("This room session or its access changed. Choose the attachment again before sending.");
+      }
+      return true;
+    };
     try {
+      const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+      if (!isCurrent()) return;
+      if (hybridCommentAttachmentFile && !sameAccountSessionAuthority(attachmentSubjectRef.current?.authority, mutationSubject.authority)) {
+        throw new Error("Choose the attachment again for this account before sending.");
+      }
+      if (hybridCommentAttachmentFile && !(await validateSelectedAttachment())) return;
       const bodyToSend = safeBody || String(hybridCommentAttachmentFile?.name ?? "Attachment").trim() || "Attachment";
       const sent = await sendPartyMessageRecord(partyId, trackedUserId, "chat", bodyToSend, {
         username: resolvedCurrentUsername,
+        mutationSubject,
+        isCurrent: () => isCurrent() && (!hasAttachment || (selectedStageAttachmentRequestRef.current === selectedAttachmentRequest
+          && !!selectedAttachmentRequest?.intent?.identityCurrent())),
       });
       if (!isCurrent()) return;
       if (!sent) {
@@ -4308,7 +4482,7 @@ export default function WatchPartyLiveStageScreen({
 
       const finishSavedDraft = () => {
         setHybridCommentDraft("");
-        setHybridCommentAttachmentFile(null);
+        retireStageAttachmentSelection(true);
         setCommentsOpen(true);
       };
       // An insert receipt may arrive after a later realtime edit or deletion.
@@ -4320,14 +4494,22 @@ export default function WatchPartyLiveStageScreen({
       const savedAttachments: SocialAttachment[] = [];
       if (hybridCommentAttachmentFile) {
         try {
+          if (!(await validateSelectedAttachment())) return;
           const attachment = await createSocialAttachmentForSurface({
             surfaceType: "watch_party_room_message",
             surfaceId: sent.id,
             file: hybridCommentAttachmentFile,
+            mutationSubject,
+            isCurrent: () => isCurrent() && selectedStageAttachmentRequestRef.current === selectedAttachmentRequest
+              && !!selectedAttachmentRequest?.intent?.identityCurrent(),
           });
           savedAttachments.push(attachment);
         } catch (attachmentError) {
           if (!isCurrent()) return;
+          if (isSocialAttachmentOutcomeAmbiguous(attachmentError)) {
+            finishSavedDraft();
+            throw attachmentError;
+          }
           const newerComment = flight.realtimeChanges.get(sent.id);
           if (newerComment !== undefined) {
             // Do not roll back a newer edit or turn an authoritative removal
@@ -4339,12 +4521,12 @@ export default function WatchPartyLiveStageScreen({
             return;
           }
           let deleted = false;
-          try { await deletePartyMessage(sent.id); deleted = true; } catch { /* Saved text remains authoritative. */ }
+          try { await deletePartyMessage(sent.id, { mutationSubject }); deleted = true; } catch { /* Saved text remains authoritative. */ }
           if (!isCurrent()) return;
           hybridCommentRevisionRef.current += 1;
           if (!deleted) {
             setHybridCommentDraft("");
-            setHybridCommentAttachmentFile(null);
+            retireStageAttachmentSelection(true);
             setHybridCommentError("Your comment was saved, but the attachment failed. Send the attachment separately to avoid repeating the comment.");
             return;
           }
@@ -4373,14 +4555,21 @@ export default function WatchPartyLiveStageScreen({
       });
       finishSavedDraft();
     } catch (error) {
-      if (isCurrent()) setHybridCommentError(getUserFacingErrorMessage(error, "Comment could not be saved. Try sending it again."));
+      if (!isCurrent()) return;
+      if (isAttachmentParentSavedError(error)) {
+        setHybridCommentDraft(""); retireStageAttachmentSelection(true);
+      }
+      setHybridCommentError(getUserFacingErrorMessage(error, "Comment could not be saved. Try sending it again."));
     } finally {
+      releaseSendFile();
       if (isCurrent()) setHybridCommentSending(false);
       if (hybridCommentSendRef.current === flight) hybridCommentSendRef.current = null;
     }
   }, [
     appConfig.runtimeControls.chat_attachments_enabled,
     appConfig.runtimeControls.chat_enabled,
+    commentMediaContext,
+    retireStageAttachmentSelection,
     hybridCommentAttachmentFile,
     hybridCommentDraft,
     partyId,
@@ -4427,6 +4616,7 @@ export default function WatchPartyLiveStageScreen({
       || hybridCommentFocused
       || reactionPickerOpen
       || stageControlsOpen
+      || privacyDiscoveryOpen
       || faceFilterSheetOpen
       || !!seatRequestSheetParticipantId
       || !!liveKitRecoveryError,
@@ -4588,19 +4778,24 @@ export default function WatchPartyLiveStageScreen({
     </View>
   );
 
+  const renderRoomPrivacyDiscoveryControls = () => <RoomPrivacyDiscoveryControls room={room}
+    publicationStatus={discoveryPublication.message}
+    active={isFocused && mediaAppState === "active" && canUseBetaStage && !saveReplayEnding
+      && isHost && trackedUserId === room?.hostUserId}
+    eventManaged={isPreparedEventRoom}
+    onPublished={() => setDiscoverySettingsConfirmationVersion(version => version + 1)}
+    onOpenChange={open => { setPrivacyDiscoveryOpen(open); if (!open) armAndRevealStageOverlay(); }}
+    onReadback={next => setRoom(current => applyWatchPartyHostSettingsReadback(current, next))} />;
+
   const renderLiveRoomPolicyCard = () => (
     <View style={[styles.liveRoomControlCard, styles.liveRoomControlCardSubtle]}>
       <Text style={styles.liveRoomControlKicker}>ROOM VIBE + PRIVACY</Text>
       <Text style={styles.liveRoomControlTitle}>{liveRoomPolicyTitle}</Text>
       <Text style={styles.liveRoomControlBody}>{liveRoomPolicyBody}</Text>
+      {renderRoomPrivacyDiscoveryControls()}
       <View style={styles.liveRoomActionRow}>
         {isHost ? (
           <>
-            <TouchableOpacity style={styles.liveRoomActionBtn} activeOpacity={0.84} onPress={onToggleLiveRoomLock}>
-              <Text style={styles.liveRoomActionText}>
-                {room?.joinPolicy === "locked" ? "Unlock room" : "Lock room"}
-              </Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.liveRoomActionBtn} activeOpacity={0.84} onPress={onToggleLiveRoomReactions}>
               <Text style={styles.liveRoomActionText}>
                 {room?.reactionsPolicy === "muted" ? "Enable reactions" : "Mute reactions"}
@@ -4706,6 +4901,7 @@ export default function WatchPartyLiveStageScreen({
           </Text>
           {isHost ? (
             <>
+              {renderRoomPrivacyDiscoveryControls()}
               <Text style={styles.stageTopChromeBody} accessibilityLiveRegion="polite" testID="live-stage-discovery-status">
                 {discoveryPublication.message}
               </Text>
@@ -5001,7 +5197,7 @@ export default function WatchPartyLiveStageScreen({
             <SocialAttachmentCard
               file={hybridCommentAttachmentFile}
               compact
-              onRemove={() => setHybridCommentAttachmentFile(null)}
+              onRemove={() => retireStageAttachmentSelection(true)}
             />
           ) : null}
           <View style={styles.stageHybridCommentInputRow}>
@@ -5018,7 +5214,7 @@ export default function WatchPartyLiveStageScreen({
               hitSlop={STAGE_CONTROL_HIT_SLOP}
               disabled={hybridCommentSending}
               onPress={() => {
-                setHybridCommentAttachmentSheetVisible(true);
+                void onPickHybridCommentAttachment();
               }}
               testID="live-stage-comment-attach"
             >
@@ -6682,14 +6878,7 @@ export default function WatchPartyLiveStageScreen({
           void onSystemShareLiveRoom();
         }}
       />
-      <SocialAttachmentActionSheet
-        visible={hybridCommentAttachmentSheetVisible}
-        kicker="LIVE COMMENT ATTACHMENT"
-        title="Add to live comment"
-        body="Photos and files attach to this live-room comment and follow the existing room attachment rules."
-        onSelect={onSelectHybridCommentAttachment}
-        onClose={() => setHybridCommentAttachmentSheetVisible(false)}
-      />
+      {commentMediaPickerSheet}
 
     </View>
   );

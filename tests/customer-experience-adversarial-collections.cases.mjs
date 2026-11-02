@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  accountAuthority,
   accountStorage,
-  createBlockingMemoryStorage,
   createMemoryStorage,
   loadStubbed,
   read,
@@ -416,27 +414,33 @@ const makeNotification = (number) => ({
   delivered_at: null,
 });
 
-const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage = true, switchAfterPage = 0, timeoutStage = "" } = {}) => {
+const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage = true, switchAfterPage = 0, timeoutStage = "", footprintMode = "current" } = {}) => {
   let currentUserId = "account-a";
   let pageReads = 0;
+  let countReads = 0;
+  let abortedReads = 0;
+  const footprintReads = [];
   const rows = Array.from({ length: notificationCount }, (_, index) => makeNotification(index + 1));
+  const waitForAbort = signal => new Promise(resolve => {
+    const finish = () => { abortedReads += 1; resolve({ data: null, error: { message: "read aborted" } }); };
+    if (signal.aborted) finish();
+    else signal.addEventListener("abort", finish, { once: true });
+  });
+  const matchesFilters = (row, filters) => filters.every(([column, value]) => (
+    Array.isArray(value) ? value.includes(row[column]) : row[column] === value
+  ));
   const createQuery = () => {
     const filters = [];
     let countOnly = false;
     let cursor = null;
     let pageSize = 30;
     let readSignal;
-    const waitForAbort = () => new Promise(resolve => {
-      const finish = () => resolve({ data: null, error: { message: "read aborted" } });
-      if (readSignal.aborted) finish();
-      else readSignal.addEventListener("abort", finish, { once: true });
-    });
     const query = {
       timeout: timeoutStage === "count",
       select(_columns, options) { countOnly = options?.count === "exact" && options?.head === true; return query; },
       eq(column, value) { filters.push([column, value]); return query; },
       is(column, value) { filters.push([column, value]); return query; },
-      in() { return query; },
+      in(column, values) { filters.push([column, values]); return query; },
       order() { return query; },
       or(expression) {
         const match = expression.match(/created_at\.lt\.([^,]+),and\(created_at\.eq\.[^,]+,id\.lt\.([0-9a-f-]+)\)/u);
@@ -446,9 +450,9 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
       limit(value) { pageSize = value; return query; },
       abortSignal(value) { readSignal = value; return query; },
       returns() {
-        if (timeoutStage === "page") return waitForAbort();
+        if (timeoutStage === "page") return waitForAbort(readSignal);
         pageReads += 1;
-        let result = rows.filter((row) => filters.every(([column, value]) => row[column] === value));
+        let result = rows.filter(row => matchesFilters(row, filters));
         if (cursor) {
           result = result.filter((row) => row.created_at < cursor.createdAt
             || row.created_at === cursor.createdAt && row.id < cursor.id);
@@ -463,8 +467,9 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
         return Promise.resolve({ data: result, error: null });
       },
       then(resolve, reject) {
-        if (timeoutStage === "count") return waitForAbort().then(resolve, reject);
-        const matching = rows.filter((row) => filters.every(([column, value]) => row[column] === value));
+        if (countOnly) countReads += 1;
+        if (timeoutStage === "count") return waitForAbort(readSignal).then(resolve, reject);
+        const matching = rows.filter(row => matchesFilters(row, filters));
         return Promise.resolve(countOnly
           ? { data: null, error: null, count: matching.length }
           : { data: matching, error: null, count: null }).then(resolve, reject);
@@ -475,6 +480,29 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
   const supabase = {
     auth: { getSession: async () => ({ data: { session: { user: { id: currentUserId } } } }) },
     from: () => createQuery(),
+    rpc(name, args) {
+      assert.equal(name, "read_my_live_notification_hint_footprint");
+      assert.equal(args, undefined, "the RPC derives its subject from the signed-in session");
+      const subjectUserId = currentUserId;
+      let readSignal;
+      const query = {
+        abortSignal(signal) { readSignal = signal; footprintReads.push({ name, signal }); return query; },
+        then(resolve, reject) {
+          assert.ok(readSignal instanceof AbortSignal);
+          if (timeoutStage === "count" && footprintMode === "current") return waitForAbort(readSignal).then(resolve, reject);
+          if (footprintMode === "unavailable") return Promise.resolve({ data: null, error: { message: "RPC unavailable" } }).then(resolve, reject);
+          const matching = rows.filter(row => row.user_id === subjectUserId);
+          return Promise.resolve({ error: null, data: {
+            schemaVersion: 1, subjectUserId: footprintMode === "wrong_subject" ? "account-b" : subjectUserId,
+            keys: [], complete: true, hasLiveActivity: false,
+            totalCount: matching.length,
+            unreadCount: matching.filter(row => !row.read_at && !row.dismissed_at).length,
+            undismissedCount: matching.filter(row => !row.dismissed_at).length,
+          } }).then(resolve, reject);
+        },
+      };
+      return query;
+    },
   };
   const runtime = loadStubbed("_lib/notifications.ts", {
     "react-native": { NativeModules: {}, Platform: { OS: "android" } },
@@ -498,7 +526,8 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
       subscribeToAccountSessionAuthority: () => () => {},
     },
   });
-  return { runtime, getPageReads: () => pageReads };
+  return { runtime, getPageReads: () => pageReads, getCountReads: () => countReads,
+    getAbortedReads: () => abortedReads, footprintReads };
 };
 
 test("large notification activity uses stable pages with tie-safe ordering and no duplicates after removal", async () => {
@@ -525,14 +554,23 @@ test("account replacement during notification pagination rejects the stale page"
   assert.deepEqual(stale, { status: "unavailable", subjectUserId: "account-a", items: [], nextCursor: null });
 });
 
-test("notification summary counts remain exact beyond the first hundred-row read window", async () => {
-  const harness = makeNotificationHarness({ notificationCount: 135, removeAfterFirstPage: false });
-  const summary = await harness.runtime.readNotificationSummary();
-  assert.equal(summary.totalCount, 135);
-  assert.equal(summary.unreadCount, 135);
-  assert.equal(summary.undismissedCount, 135);
-  assert.equal(summary.latestCreatedAt, makeNotification(135).created_at);
-});
+for (const footprintMode of ["current", "unavailable", "wrong_subject"]) {
+  test(`notification summary counts remain exact beyond the first hundred-row read window (${footprintMode})`, async () => {
+    const harness = makeNotificationHarness({ notificationCount: 135, removeAfterFirstPage: false, footprintMode });
+    const summary = await harness.runtime.readNotificationSummary();
+    assert.equal(summary.totalCount, 135);
+    assert.equal(summary.unreadCount, 135);
+    assert.equal(summary.undismissedCount, 135);
+    assert.equal(summary.latestCreatedAt, makeNotification(135).created_at);
+    assert.equal(summary.hasLiveActivity, false);
+    assert.equal(summary.liveHintKeysComplete, footprintMode === "current");
+    assert.deepEqual(summary.liveHintKeys, []);
+    assert.equal(harness.getPageReads(), 1);
+    assert.equal(harness.footprintReads.length, 1);
+    assert.equal(harness.footprintReads[0].signal.aborted, false);
+    assert.equal(harness.getCountReads(), footprintMode === "current" ? 0 : 3);
+  });
+}
 
 test("notification page timeout releases as unavailable without stale rows", async t => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -556,16 +594,23 @@ test("important notification timeout cannot silently hide retained action-needed
   );
 });
 
-test("notification count timeout releases the summary refresh with an accurate failure", async t => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const harness = makeNotificationHarness({ timeoutStage: "count" });
-  const pending = harness.runtime.readNotificationSummary();
-  t.mock.timers.tick(8_000);
-  await assert.rejects(
-    pending,
-    /could not be refreshed/u,
-  );
-});
+for (const footprintMode of ["current", "unavailable"]) {
+  test(`notification count timeout releases the summary refresh with an accurate failure (${footprintMode})`, async t => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const harness = makeNotificationHarness({ timeoutStage: "count", footprintMode });
+    const pending = harness.runtime.readNotificationSummary();
+    const rejected = assert.rejects(pending, /could not be refreshed/u);
+    // Let the real async reader reach the RPC or legacy count transports before
+    // expiring its deadline; an early abort alone would not exercise either hang.
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.getCountReads(), footprintMode === "current" ? 0 : 3);
+    t.mock.timers.tick(8_000);
+    await rejected;
+    assert.equal(harness.footprintReads.length, 1);
+    assert.equal(harness.footprintReads[0].signal.aborted, true);
+    assert.equal(harness.getAbortedReads(), footprintMode === "current" ? 1 : 4);
+  });
+}
 
 test("provider uncertainty settles every customer commerce authority read fail closed", async () => {
   const never = new Promise(() => {});

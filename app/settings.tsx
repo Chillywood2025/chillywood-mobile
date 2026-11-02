@@ -89,6 +89,9 @@ import {
   type UsernameAvailability,
 } from "../_lib/usernameHandles";
 import { useSession } from "../_lib/session";
+import { useMediaPicker } from "../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../hooks/useOwnedPickedMediaState";
+import { releasePickedMedia, retainPickedMedia } from "../_lib/mediaPickerResources";
 import {
   isProfileMediaActive,
   readMyProfileAccessVisibility,
@@ -608,21 +611,27 @@ export default function SettingsScreen() {
     if (mediaRemovalScope.pending && mediaRemovalScopeRef.current === mediaRemovalScope && mountedRef.current) setProfileAppearanceBusy(null);
   }), [authority, mediaRemovalScope]);
   const profileGalleryPending = useRef(false);
+  const profileReviewRevision = useRef(0);
+  const profileSavePending = useRef(false);
+  const { pickMedia, mediaPickerSheet } = useMediaPicker(`settings-profile:${authority?.userId ?? ""}:${focused}`);
   const [profileImagePreview, setProfileImagePreview] = useState<{
     title: string;
     imageUrl?: string;
     fitMode?: ProfileAppearanceFitMode;
   } | null>(null);
-  const [profileMediaReview, setProfileMediaReview] = useState<{
+  const [profileMediaReview, setProfileMediaReview] = useOwnedPickedMediaState<{
     kind: ProfileMediaKind;
     file: ProfileMediaImageFile;
     fitMode: ProfileAppearanceFitMode;
-  } | null>(null);
+    authority: AccountSessionAuthorityBinding;
+    isCurrent: () => boolean;
+  } | null>(null, review => review?.file);
   useEffect(() => {
     setProfileMediaReview(null);
+    setProfileAppearanceBusy(null);
     setProfileAppearanceSheetKind(null);
     setProfileImagePreview(null);
-  }, [authority?.userId, authority?.accountId, authority?.sessionGeneration, authority?.restoreOnly]);
+  }, [authority?.userId, authority?.accountId, authority?.sessionGeneration, authority?.restoreOnly, setProfileMediaReview]);
   const notificationOwnerKey = !isLoading && isSignedIn && authorityStatus === "active"
     && authority && !authority.restoreOnly && authority.userId === user?.id
     ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration]) : "unavailable";
@@ -1347,46 +1356,74 @@ export default function SettingsScreen() {
     });
   }, [activeProfileBackgroundUrl, activeProfilePhotoUrl, myProfile]);
 
-  const onChooseProfileMedia = useCallback(async (kind: ProfileMediaKind) => {
+  const onChooseProfileMedia = useCallback(async (kind: ProfileMediaKind, previousReview = profileMediaReview) => {
     if (profileAppearanceBusy || profileGalleryPending.current) return;
     const pickerAuthority = getCurrentAccountSessionAuthoritySnapshot();
     if (!pickerAuthority || pickerAuthority.restoreOnly
       || !sameAccountSessionAuthority(authority, pickerAuthority)) return;
-    const isCurrent = () => mountedRef.current
+    const pickerRevision = mediaRemovalScope.revision;
+    const isCurrent = () => focused && mountedRef.current
+      && mediaRemovalScopeRef.current === mediaRemovalScope && mediaRemovalScope.revision === pickerRevision
       && sameAccountSessionAuthority(pickerAuthority, getCurrentAccountSessionAuthoritySnapshot());
     if (!isCurrent()) return;
     profileGalleryPending.current = true;
+    // Keep the previous review alive while its modal is hidden for replacement.
+    let releasePreviousReview = () => {};
+    let previousReviewHeld = false;
+    let selectedFile: ProfileMediaImageFile | null = null;
 
     setProfileAppearanceSheetKind(null);
     try {
-      const file = await pickProfileMediaImage(kind);
-      if (!file || !isCurrent()) return;
+      releasePreviousReview = retainPickedMedia(previousReview?.file);
+      previousReviewHeld = true;
+      if (previousReview) setProfileMediaReview(null);
+      const file = await pickMedia({
+        title: kind === "avatar" ? "Choose Profile photo" : "Choose Profile background",
+        mediaKind: "image",
+        isCurrent,
+        pick: (source, operation) => pickProfileMediaImage(kind, source, operation),
+      });
+      selectedFile = file;
+      if (!isCurrent()) return;
+      if (!file) { if (previousReview) setProfileMediaReview(previousReview); return; }
+      const reviewRevision = ++profileReviewRevision.current;
       setProfileMediaReview({
         kind,
         file,
         fitMode: kind === "avatar"
           ? myProfile?.profileAvatarFitMode ?? "fill"
           : myProfile?.profileBackgroundFitMode ?? "fill",
+        authority: pickerAuthority,
+        isCurrent: () => isCurrent() && profileReviewRevision.current === reviewRevision,
       });
     } catch (error) {
       if (!isCurrent()) return;
+      if (previousReview && previousReviewHeld) setProfileMediaReview(previousReview);
       Alert.alert(
         "Profile Appearance",
         getUserFacingErrorMessage(error, "Unable to choose a Profile image right now."),
       );
     } finally {
+      void releasePickedMedia(selectedFile);
+      releasePreviousReview();
       profileGalleryPending.current = false;
     }
-  }, [authority, myProfile?.profileAvatarFitMode, myProfile?.profileBackgroundFitMode, profileAppearanceBusy]);
+  }, [authority, focused, mediaRemovalScope, myProfile?.profileAvatarFitMode, myProfile?.profileBackgroundFitMode, pickMedia, profileAppearanceBusy, profileMediaReview, setProfileMediaReview]);
 
   const onSaveProfileMediaReview = useCallback(async () => {
-    if (!profileMediaReview || profileAppearanceBusy) return;
+    if (!profileMediaReview || profileAppearanceBusy || profileSavePending.current || !profileMediaReview.isCurrent()) return;
+    const review = profileMediaReview;
+    let releaseSave = () => {};
+    profileSavePending.current = true;
 
     setProfileAppearanceBusy(profileMediaReview.kind);
     try {
+      releaseSave = retainPickedMedia(review.file);
       const nextProfile = await uploadProfileMedia(profileMediaReview.kind, profileMediaReview.file, {
         fitMode: profileMediaReview.fitMode,
+        owner: { authority: review.authority, isCurrent: review.isCurrent },
       });
+      if (!review.isCurrent()) return;
       setMyProfile(nextProfile);
       setProfileMediaReview(null);
       Alert.alert(
@@ -1394,14 +1431,17 @@ export default function SettingsScreen() {
         profileMediaReview.kind === "avatar" ? "Profile photo updated." : "Profile background updated.",
       );
     } catch (error) {
+      if (!review.isCurrent()) return;
       Alert.alert(
         "Profile Appearance",
         getUserFacingErrorMessage(error, "Unable to update Profile appearance right now."),
       );
     } finally {
-      setProfileAppearanceBusy(null);
+      releaseSave();
+      profileSavePending.current = false;
+      if (review.isCurrent()) setProfileAppearanceBusy(null);
     }
-  }, [profileAppearanceBusy, profileMediaReview]);
+  }, [profileAppearanceBusy, profileMediaReview, setProfileMediaReview]);
 
   const onRemoveProfileMedia = useCallback((kind: ProfileMediaKind) => {
     const imageUrl = kind === "avatar" ? activeProfilePhotoUrl : activeProfileBackgroundUrl;
@@ -1962,6 +2002,7 @@ export default function SettingsScreen() {
 
   return (
     <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
+      {mediaPickerSheet}
       <View style={styles.backgroundOverlay} />
       <ScrollView
         style={[styles.screen, { marginTop: insets.top }]}
@@ -2818,15 +2859,15 @@ export default function SettingsScreen() {
         }}
         onChooseAnother={() => {
           if (!profileMediaReview || profileAppearanceBusy) return;
-          const { kind } = profileMediaReview;
-          setProfileMediaReview(null);
-          void onChooseProfileMedia(kind);
+          const previousReview = profileMediaReview;
+          const { kind } = previousReview;
+          void onChooseProfileMedia(kind, previousReview);
         }}
         onSave={() => {
           void onSaveProfileMediaReview();
         }}
         onCancel={() => {
-          if (!profileAppearanceBusy) setProfileMediaReview(null);
+          if (!profileAppearanceBusy) { profileReviewRevision.current += 1; setProfileMediaReview(null); }
         }}
       />
     </ImageBackground>

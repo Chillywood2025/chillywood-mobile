@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { loadMediaPickerHost } from "../../helpers/media-picker-host.mjs";
 import * as mediaPolicy from "../../../_lib/communicationCallMediaPolicy.mjs";
 import * as nativeRoutes from "../../../_lib/chillyChatNativeCallRoutes.mjs";
 import * as nativeProvenance from "../../../_lib/nativeCallTransitionProvenance.mjs";
@@ -490,13 +491,28 @@ export async function mountFullChatThread(options = {}) {
     "../../_lib/officialAccounts": { getOfficialPlatformAccount: () => null },
     "../../_lib/performancePolicy": { READ_RECEIPT_THROTTLE_MS: 500 },
     "../../_lib/chatActivity": compile(fs.readFileSync("_lib/chatActivity.ts", "utf8"), "_lib/chatActivity.ts", {}),
+    // Runtime changes are followed by an explicit root rerender in this harness.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }, session: { access_token: runtime.accessToken ?? "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration, runtime.accessToken]) },
     "../../_lib/userFacingErrors": options.userFacingErrors ?? { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
     "../../_lib/usernameHandles": { formatUsernameHandle: () => "" },
-    "../../_lib/socialAttachmentPicker": {},
+    "../../_lib/socialAttachmentPicker": { pickSocialAttachmentFile: options.pickAttachment ?? (async () => null) },
+    "../../_lib/socialAttachments": { isAttachmentParentSavedError: error => error?.name === "AttachmentParentSavedError" },
     "../../hooks/use-chat-call-media-session": adapter,
   };
   // Execute the actual outgoing hook; only sound/native/authority boundaries
+  modules["../../hooks/useMediaPicker"] = loadMediaPickerHost({ React, native: modules["react-native"],
+    snapshot: modules["../../_lib/accountSessionAuthority"].getCurrentAccountSessionAuthoritySnapshot,
+    beforeHandoff: options.beforeMediaPickerHandoff });
+  modules["../../hooks/useOwnedPickedMediaState"] = modules["../../hooks/useMediaPicker"];
+  modules["../../_lib/mediaPickerResources"] = modules["../../hooks/useMediaPicker"];
+  runtime.mediaResources = modules["../../hooks/useMediaPicker"];
+  modules["../../_lib/accountBoundSupabaseMutation"] = {
+    captureAccountBoundSupabaseMutationSubject: async () => options.captureMutationSubject ? options.captureMutationSubject(runtime) : ({
+      authority: modules["../../_lib/accountSessionAuthority"].getCurrentAccountSessionAuthoritySnapshot(),
+      accessToken: runtime.accessToken ?? "test-token",
+    }),
+  };
   // are modeled. In particular iOS outgoing readiness is never bypassed.
   modules["../../hooks/use-outgoing-ios-call-audio-handoff"] = compile(
     fs.readFileSync("hooks/use-outgoing-ios-call-audio-handoff.ts", "utf8"),
@@ -543,12 +559,15 @@ export async function mountFullChatThread(options = {}) {
   let messageLayoutBinding;
   let circleToggle;
   let recoveryControl;
+  let dismissMessageRecovery;
+  let removeAttachment;
   const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave", "onToggleAudioRoute", "speakerEnabled", "mediaControlMessage"];
   const visit = node => {
     if (ts.isJsxElement(node)) {
       const attrs = node.openingElement.attributes.properties;
       const press = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "onPress")?.initializer?.expression;
       const style = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "style")?.initializer?.expression;
+      if (press?.getText(parsedScreen).includes('setMessageSendRecoveries')) dismissMessageRecovery = press.getText(parsedScreen);
       if (style?.getText(parsedScreen) === "styles.headerAvatarButton") circleToggle = press.getText(parsedScreen);
       if (press?.getText(parsedScreen).includes("handleFriendAction(")) {
         const action = press.getText(parsedScreen).match(/handleFriendAction\("(\w+)"\)/)?.[1];
@@ -596,6 +615,12 @@ export async function mountFullChatThread(options = {}) {
         panelBindings.set(attribute.name.text, attribute.initializer.expression.getText(parsedScreen));
       }
     }
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(parsedScreen) === 'SocialAttachmentCard') {
+      const file = node.attributes.properties.find(attr => ts.isJsxAttribute(attr) && attr.name.text === 'file')?.initializer?.expression;
+      if (file?.getText(parsedScreen) === 'attachmentFile') {
+        removeAttachment = node.attributes.properties.find(attr => ts.isJsxAttribute(attr) && attr.name.text === 'onRemove')?.initializer?.expression?.getText(parsedScreen);
+      }
+    }
     ts.forEachChild(node, visit);
   };
   visit(parsedScreen);
@@ -606,6 +631,7 @@ export async function mountFullChatThread(options = {}) {
   assert.equal(messageScrollBindings.size, 5);
   assert.ok(messageLayoutBinding, "actual message bubble layout binding");
   assert.ok(recoveryControl, "actual confirmed-Start recovery action must be observable");
+  assert.ok(dismissMessageRecovery && removeAttachment, 'actual attachment/recovery removal actions must be observable');
   const messageBindingSource = [...messageScrollBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   const circleBindingSource = [...circleBindings].map(([name, expression]) => `${name}: ${expression}`).join(",");
   const panelBindingSource = [...panelBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
@@ -638,7 +664,10 @@ export async function mountFullChatThread(options = {}) {
       handleAcceptIncomingCall, handleJoinOrCloseCall, handleStartCall, handleToggleCallMic,
       handleToggleCallCamera, handleSwitchCallCamera, handleToggleNativeAudioRoute,
       recentCalls: (${recentCallBinding}), markThreadReadWithThrottle,
-      loadThreadState, handleSend, handleDeclineIncomingCall }; });
+      loadThreadState, handleSend, handleDeclineIncomingCall,
+      handlePickAttachment, attachmentFile, mediaPickerSheet, cancelMediaPicker,
+      handleDraftChange, messageSendRecoveries,
+      dismissMessageRecovery: attempt => (${dismissMessageRecovery})(), removeAttachment: (${removeAttachment}) }; });
     return null;
   }`;
   for (const match of source.matchAll(/from "([^\"]+)"/g)) {

@@ -5,6 +5,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSession } from "../../_lib/session";
+import { useMediaPicker } from "../../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../../hooks/useOwnedPickedMediaState";
+import { releasePickedMedia, retainPickedMedia } from "../../_lib/mediaPickerResources";
+import type { AccountSessionAuthorityBinding } from "../../_lib/accountSessionAuthority";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { MerchTaxCategoryPicker } from "./merch-tax-category";
 import { MerchTrackingPanel } from "./merch-tracking-panel";
@@ -209,8 +213,9 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   const { user, authority } = useSession();
   const [currentProduct, setCurrentProduct] = useState(product), [managingVariants, setManagingVariants] = useState(false);
   const [title, setTitle] = useState(product?.title ?? ""), [description, setDescription] = useState(product?.description ?? ""), [imageUrl, setImageUrl] = useState(product?.imageUrl ?? "");
-  const [photoFile, setPhotoFile] = useState<MerchProductPhotoFile | null>(null), [stagedPhoto, setStagedPhoto] = useState<{ assetId: string; previewUrl: string; status: "pending_review" | "ready" | "blocked" } | null>(null);
-  const [attachedPreview, setAttachedPreview] = useState<{ assetId: string; uri: string } | null>(null);
+  const [photoFile, setPhotoFile] = useOwnedPickedMediaState<MerchProductPhotoFile | null>(null);
+  const [stagedPhoto, setStagedPhoto] = useOwnedPickedMediaState<{ assetId: string; previewUrl: string; status: "pending_review" | "ready" | "blocked"; file: MerchProductPhotoFile } | null>(null, photo => photo?.file);
+  const [attachedPreview, setAttachedPreview] = useOwnedPickedMediaState<{ assetId: string; uri: string; file: MerchProductPhotoFile } | null>(null, preview => preview?.file);
   const photoAttempt = useRef<MerchProductPhotoUploadAttempt>({}), photoGeneration = useRef(0);
   const [advancedImage, setAdvancedImage] = useState(false);
   const [publishReview, setPublishReview] = useState<MerchLivePublicationReview | null>(null);
@@ -218,27 +223,47 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   const [price, setPrice] = useState(product ? (product.priceMinor / 100).toFixed(2) : ""), [stock, setStock] = useState(String(product?.availableQuantity ?? 0));
   const [trackingMode, setTrackingMode] = useState<"tracked" | "untracked" | null>(product?.shippingTrackingMode ?? null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [productId, setProductId] = useState(() => product?.id ?? createMerchCheckoutAttemptId()); const latch = useRef(false), alive = useRef(true);
+  const { pickMedia, mediaPickerSheet } = useMediaPicker(`merch-photo:${productId}`);
+  const photoSelectionAuthorityRef = useRef<AccountSessionAuthorityBinding | null>(null);
+  useEffect(() => {
+    photoGeneration.current++;
+    photoSelectionAuthorityRef.current = null;
+    photoAttempt.current = {};
+    setPhotoFile(null); setStagedPhoto(null); setAttachedPreview(null);
+  }, [authority?.accountId, authority?.sessionGeneration, authority?.userId, setPhotoFile, setStagedPhoto, setAttachedPreview]);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  useFocusEffect(useCallback(() => { alive.current = true; return () => { alive.current = false; photoGeneration.current++; }; }, []));
+  useFocusEffect(useCallback(() => { alive.current = true; return () => { alive.current = false; photoGeneration.current++; setPhotoFile(null); setStagedPhoto(null); setAttachedPreview(null); }; }, [setPhotoFile, setStagedPhoto, setAttachedPreview]));
   const authorityCurrent = () => !!authority && authority.state === "ACTIVE" && !authority.restoreOnly
-    && authority.userId === user?.id && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
-  const choosePhoto = async (retry = false, source: "photos" | "files" = "photos") => {
+    && authority.userId === user?.id && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())
+    && (!photoFile || sameAccountSessionAuthority(photoSelectionAuthorityRef.current, authority));
+  const choosePhoto = async (retry = false) => {
     if (!alive.current || latch.current || !user || !authorityCurrent()) return;
     if (!retry && photoFile) return;
     latch.current = true; setBusy(true); setError(null); const generation = photoGeneration.current;
     const current = () => { if (!alive.current || generation !== photoGeneration.current || !authorityCurrent()) throw new Error("Photo operation ended. Reopen the product to continue."); };
+    let selectedFile: MerchProductPhotoFile | null = null;
+    let releaseSelection = () => {};
     try {
-      const file = retry ? photoFile : await pickMerchProductPhoto(source); current();
+      const file = retry ? photoFile : await pickMedia({
+        title: "Choose product photo", mediaKind: "image", sources: ["photos", "files"],
+        isCurrent: () => alive.current && generation === photoGeneration.current && authorityCurrent(),
+        advancedAction: { label: "Advanced image link", onPress: () => setAdvancedImage(true) },
+        preparingPlacement: "inline",
+        pick: pickMerchProductPhoto,
+      });
+      selectedFile = file;
+      releaseSelection = retainPickedMedia(file);
+      current();
       if (!file) return;
-      if (!retry) { photoAttempt.current = {}; setStagedPhoto(null); }
+      if (!retry) { photoSelectionAuthorityRef.current = authority; photoAttempt.current = {}; setStagedPhoto(null); }
       setPhotoFile(file);
       // A new product can choose locally before saving, but no bytes or asset
       // authority are allocated until the owned draft is acknowledged.
       if (!currentProduct) return;
       const staged = await uploadMerchProductPhoto({ ownerUserId: user.id, productId: currentProduct.id, file, attempt: photoAttempt.current, assertOperationCurrent: current });
-      current(); setStagedPhoto(staged);
+      current(); setStagedPhoto({ ...staged, file });
     } catch (e) { if (alive.current && generation === photoGeneration.current && authorityCurrent()) setError(errorText(e)); }
-    finally { latch.current = false; if (alive.current) setBusy(false); }
+    finally { void releasePickedMedia(selectedFile); releaseSelection(); latch.current = false; if (alive.current) setBusy(false); }
   };
   const refreshPhoto = async () => {
     if (!alive.current || latch.current || !currentProduct || !user) return;
@@ -279,11 +304,13 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
   const assignPhoto = async (assetId: string | null) => {
     if (!alive.current || latch.current || !currentProduct || !user) return;
     latch.current = true; setBusy(true); setError(null); const generation = photoGeneration.current;
+    let releaseAssignment = () => {};
     try {
+      releaseAssignment = retainPickedMedia(stagedPhoto?.file);
       const saved = await assignMerchProductPhoto({ ownerUserId: user.id, productId: currentProduct.id, assetId, expectedUpdatedAt: currentProduct.updatedAt });
-      if (alive.current && generation === photoGeneration.current) { setCurrentProduct(saved); setAttachedPreview(assetId && stagedPhoto?.assetId === assetId && saved.photoAssetId === assetId ? { assetId, uri: stagedPhoto.previewUrl } : null); setStagedPhoto(null); setPhotoFile(null); photoAttempt.current = {}; }
+      if (alive.current && generation === photoGeneration.current) { setCurrentProduct(saved); setAttachedPreview(assetId && stagedPhoto?.assetId === assetId && saved.photoAssetId === assetId ? { assetId, uri: stagedPhoto.previewUrl, file: stagedPhoto.file } : null); setStagedPhoto(null); setPhotoFile(null); photoAttempt.current = {}; }
     } catch (e) { if (alive.current && generation === photoGeneration.current) setError(errorText(e)); }
-    finally { latch.current = false; if (alive.current) setBusy(false); }
+    finally { releaseAssignment(); latch.current = false; if (alive.current) setBusy(false); }
   };
   const save = async (publicationStatus: MerchProductInput["publicationStatus"]) => {
     if (!alive.current || latch.current || !authorityCurrent()) return;
@@ -291,17 +318,19 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
     if (!title.trim() || !/^\d+(\.\d{1,2})?$/.test(price) || Number(price) <= 0 || !/^\d+$/.test(stock)) { setError("Enter a title, a positive USD price with at most two decimal places, and a whole-number available stock quantity."); return; }
     if (!trackingMode) { setError("Choose tracked or untracked shipping so buyers can review the return-window terms."); return; }
     latch.current = true; setBusy(true); setError(null); const generation = photoGeneration.current;
+    let releaseSave = () => {};
     try {
+      releaseSave = retainPickedMedia(photoFile);
       const saved = await saveMerchProduct({ id: productId, title: title.trim(), description, imageUrl: imageUrl.trim() || null, priceMinor: Math.round(Number(price) * 100), stockQuantity: currentProduct?.variantMode === "options" ? currentProduct.stockQuantity : Number(stock) + committedQuantity, publicationStatus, trackingMode, expectedUpdatedAt: currentProduct?.updatedAt });
       const current = () => { if (!alive.current || generation !== photoGeneration.current || !authorityCurrent()) throw new Error("Photo operation ended. Reopen the product to continue."); };
       current();
       if (!currentProduct && photoFile && user) {
         setCurrentProduct(saved);
         const staged = await uploadMerchProductPhoto({ ownerUserId: user.id, productId: saved.id, file: photoFile, attempt: photoAttempt.current, assertOperationCurrent: current });
-        current(); setStagedPhoto(staged);
+        current(); setStagedPhoto({ ...staged, file: photoFile });
       } else done();
     }
-    catch (e) { if (alive.current && generation === photoGeneration.current && authorityCurrent()) setError(errorText(e)); } finally { latch.current = false; if (alive.current) setBusy(false); }
+    catch (e) { if (alive.current && generation === photoGeneration.current && authorityCurrent()) setError(errorText(e)); } finally { releaseSave(); latch.current = false; if (alive.current) setBusy(false); }
   };
   useEffect(() => { setPublishReview(null); }, [title, description, price, stock, trackingMode, photoFile, stagedPhoto, managingVariants]);
   const livePublication = async (action: "review" | "confirm" | "copy") => {
@@ -336,8 +365,8 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
       {photoFile ? <Image source={{ uri: photoFile.uri }} style={styles.image} accessibilityLabel="Selected product photo preview" /> : null}
       <Text style={styles.notice}>{photoFile ? "Photo selected on this device. Save draft to upload it for safety checks, then choose Use this photo. Nothing is published automatically." : "Choose a photo now from Photos / Gallery or Files. It stays on your device until you save a draft."}</Text>
     </> : null}
-    <Button label="Choose product photo from Photos / Gallery" disabled={busy || !!photoFile} onPress={() => void choosePhoto()} />
-    <Button label="Choose product photo from Files" disabled={busy || !!photoFile} onPress={() => void choosePhoto(false, "files")} />
+    <Button label="Choose product photo" disabled={busy || !!photoFile} onPress={() => void choosePhoto()} />
+    {mediaPickerSheet}
     {photoFile && !stagedPhoto && !photoAttempt.current.upload?.payload ? <Button label="Cancel photo selection" disabled={busy} onPress={cancelPhotoSelection} /> : null}
     {currentProduct ? <>
       {(stagedPhoto?.previewUrl || currentPhotoPreview) ? <Image source={{ uri: (stagedPhoto?.previewUrl || currentPhotoPreview)! }} style={styles.image} accessibilityLabel="Product photo preview" /> : null}
@@ -351,7 +380,7 @@ function Editor({ product, done }: { product: MerchProduct | null; done: () => v
       {stagedPhoto ? <><Button label="Use this photo" disabled={busy || stagedPhoto.status === "blocked"} onPress={() => void assignPhoto(stagedPhoto.assetId)} /><Button label="Discard selected photo" disabled={busy} onPress={() => void discardPhoto()} /></> : null}
       {currentProduct.photoAssetId ? <Button label="Remove product photo" disabled={busy} onPress={() => void assignPhoto(null)} /> : null}
     </> : null}
-    <Button label={advancedImage ? "Hide advanced image link" : "Advanced image link"} disabled={busy} onPress={() => setAdvancedImage(value => !value)} />
+    {advancedImage ? <Button label="Hide advanced image link" disabled={busy} onPress={() => setAdvancedImage(false)} /> : null}
     {advancedImage ? <View><Text style={styles.notice}>Optional advanced fallback, used only when no uploaded photo is attached: use a permanent HTTPS image address you own, not a temporary signed link.</Text><TextInput accessibilityLabel="Image URL (HTTPS, optional)" value={imageUrl} onChangeText={setImageUrl} editable={!busy} style={styles.input} autoCapitalize="none" maxLength={2048} /></View> : null}
     <Text style={styles.notice}>{committedQuantity} units already held or sold. Available stock is the number you can still offer; saved totals also retain those committed units. If an order changes stock while you edit, refresh before saving again.</Text>
     {currentProduct ? <><Button label="Manage sizes / colors" disabled={busy} onPress={() => setManagingVariants(true)} /><Text style={styles.notice}>{currentProduct.variantMode === "options" ? "Options are enabled. Manage stock separately for each size / color." : "Optional: keep one simple product, or add sizes / colors after saving your product details."}</Text></> : <Text style={styles.notice}>Save a draft first to add optional sizes / colors.</Text>}

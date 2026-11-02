@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from "react";
-import * as DocumentPicker from "expo-document-picker";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,12 +15,19 @@ import {
   DMCA_ATTACHMENT_ALLOWED_MIME_TYPES,
   DMCA_ATTACHMENT_MAX_BYTES,
   DMCA_CONTENT_TYPES,
+  captureDmcaAttachmentMutationSubject,
   submitDmcaNotice,
   type DmcaContentType,
   uploadDmcaPublicNoticeAttachment,
   validateDmcaAttachmentFile,
 } from "../_lib/dmca";
 import { LEGAL_SUPPORT_EMAIL } from "../_lib/legalPolicies";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+import { pickDeviceAttachments } from "../_lib/deviceAttachmentPicker";
+import { useSession } from "../_lib/session";
+import { useMediaPicker } from "../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../hooks/useOwnedPickedMediaState";
+import { bindPickedMediaResult, releasePickedMedia, retainPickedMedia, withPickedMediaRead } from "../_lib/mediaPickerResources";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import { formatContentTypeLabel } from "../_lib/userFacingProductCopy";
 import { LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
@@ -71,6 +77,7 @@ function ToggleRow({ active, label, onPress }: ToggleRowProps) {
 }
 
 export default function CopyrightReportPage() {
+  const { authority } = useSession();
   const [reporterName, setReporterName] = useState("");
   const [reporterCompany, setReporterCompany] = useState("");
   const [reporterEmail, setReporterEmail] = useState("");
@@ -91,7 +98,21 @@ export default function CopyrightReportPage() {
   const [busy, setBusy] = useState(false);
   const [submittedCaseNumber, setSubmittedCaseNumber] = useState<string | null>(null);
   const [submittedAttachmentCount, setSubmittedAttachmentCount] = useState(0);
-  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
+  const [attachments, setAttachments] = useOwnedPickedMediaState<PickedAttachment[]>([]);
+  const evidenceTarget = JSON.stringify([contentType, contentId, contentUrl]);
+  const evidenceIdentity = JSON.stringify([evidenceTarget, authority]);
+  const evidenceScopeRef = useRef({ identity: evidenceIdentity, pending: false, revision: 0, recorded: false });
+  if (evidenceScopeRef.current.identity !== evidenceIdentity) evidenceScopeRef.current = { identity: evidenceIdentity, pending: false, revision: 0, recorded: false };
+  const evidenceScope = evidenceScopeRef.current;
+  const evidenceSelectionOwner = useRef<typeof evidenceScope | null>(null);
+  const mounted = useRef(false);
+  const evidencePicking = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { setAttachments([]); setBusy(false); setSubmittedCaseNumber(null); setSubmittedAttachmentCount(0); }, [evidenceIdentity, setAttachments]);
+  const { pickMedia, mediaPickerSheet, cancelMediaPicker } = useMediaPicker(`copyright:${evidenceTarget}`);
+  const currentEvidenceScope = () => mounted.current && evidenceScopeRef.current === evidenceScope
+    && (authority ? sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())
+      : getCurrentAccountSessionAuthoritySnapshot() === null);
 
   const workUrls = useMemo(
     () => copyrightedWorkUrls
@@ -102,21 +123,35 @@ export default function CopyrightReportPage() {
   );
 
   const pickAttachments = async () => {
-    if (busy) return;
+    if (busy || evidenceScope.pending || evidenceScope.recorded || evidencePicking.current || attachments.length >= 6 || !currentEvidenceScope()) return;
+    evidencePicking.current = true;
+    const revision = ++evidenceScope.revision;
+    const isCurrent = () => currentEvidenceScope() && evidenceScope.revision === revision;
+    let selectedFiles: unknown;
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
+      const files = await pickMedia({
+        title: "Add copyright evidence",
+        mediaKind: "attachment",
         multiple: true,
-        type: [...DMCA_ATTACHMENT_ALLOWED_MIME_TYPES],
+        allowUnauthenticated: true,
+        isCurrent,
+        pick: (source, operation) => pickDeviceAttachments(source, {
+          operation,
+          multiple: true,
+          selectionLimit: 6 - attachments.length,
+          mimeTypes: [...DMCA_ATTACHMENT_ALLOWED_MIME_TYPES],
+        }),
       });
-      if (result.canceled) return;
-      const nextFiles = result.assets.map((asset) => {
+      selectedFiles = files;
+      if (!files || !isCurrent()) return;
+      const nextFiles = files.map((asset) => {
         const picked = {
           name: asset.name || "dmca-evidence",
           size: Number(asset.size ?? 0),
           type: asset.mimeType || "application/octet-stream",
           uri: asset.uri,
         };
+        bindPickedMediaResult(picked, new Set([asset]));
         validateDmcaAttachmentFile({
           fileName: picked.name,
           mimeType: picked.type,
@@ -124,19 +159,34 @@ export default function CopyrightReportPage() {
         });
         return picked;
       });
+      evidenceSelectionOwner.current = evidenceScope;
       setAttachments((current) => [...current, ...nextFiles].slice(0, 6));
     } catch (error) {
+      if (!isCurrent()) return;
       const message = getUserFacingErrorMessage(error, "Unable to attach that evidence file.");
       Alert.alert("Attachments", message);
+    } finally {
+      void releasePickedMedia(selectedFiles);
+      evidencePicking.current = false;
     }
   };
 
   const submitNotice = async () => {
-    if (busy) return;
+    if (busy || evidenceScope.pending || evidenceScope.recorded || !currentEvidenceScope()) return;
+    if (attachments.length && evidenceSelectionOwner.current !== evidenceScope) return;
+    evidenceScope.pending = true;
+    evidenceScope.revision += 1;
+    cancelMediaPicker();
+    let recordedCaseNumber: string | null = null;
+    let uploadedCount = 0;
+    let releaseSubmission = () => {};
     try {
+      releaseSubmission = retainPickedMedia(attachments);
       setBusy(true);
       setSubmittedCaseNumber(null);
       setSubmittedAttachmentCount(0);
+      const mutationSubject = await captureDmcaAttachmentMutationSubject();
+      if (!currentEvidenceScope()) return;
       const result = await submitDmcaNotice({
         reporterName,
         reporterCompany,
@@ -155,16 +205,25 @@ export default function CopyrightReportPage() {
         goodFaithStatement,
         accuracyPenaltyPerjuryStatement: accuracyStatement,
         electronicSignature,
-      });
-      let uploadedCount = 0;
+      }, { mutationSubject, isCurrent: currentEvidenceScope });
+      if (!currentEvidenceScope()) return;
+      evidenceScope.recorded = true;
+      recordedCaseNumber = result.caseNumber || result.id || "Reference pending";
+      setSubmittedCaseNumber(recordedCaseNumber);
       if (attachments.length) {
         if (!result.id || !result.attachmentToken) {
           throw new Error("Case was recorded, but the attachment upload token was not returned.");
         }
         for (const attachment of attachments) {
-          const fileResponse = await fetch(attachment.uri);
-          const fileData = await fileResponse.arrayBuffer();
+          if (!currentEvidenceScope()) return;
+          const fileData = await withPickedMediaRead(attachment.uri, async () => {
+            const fileResponse = await fetch(attachment.uri);
+            return fileResponse.arrayBuffer();
+          });
+          if (!currentEvidenceScope()) return;
           await uploadDmcaPublicNoticeAttachment({
+            mutationSubject,
+            isCurrent: currentEvidenceScope,
             attachmentToken: result.attachmentToken,
             caseId: result.id,
             fileData,
@@ -172,25 +231,35 @@ export default function CopyrightReportPage() {
             mimeType: attachment.type,
             sizeBytes: attachment.size,
           });
+          if (!currentEvidenceScope()) return;
           uploadedCount += 1;
         }
       }
-      setSubmittedCaseNumber(result.caseNumber);
+      setSubmittedCaseNumber(recordedCaseNumber);
       setSubmittedAttachmentCount(uploadedCount);
       setAttachments([]);
       Alert.alert(
         "Copyright report received",
-        `Case ${result.caseNumber} has been recorded for review.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded and queued for malware scanning.` : ""}`,
+        `Case ${recordedCaseNumber} has been recorded for review.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded and queued for malware scanning.` : ""}`,
       );
     } catch (error) {
+      if (!currentEvidenceScope()) return;
       const message = getUserFacingErrorMessage(error, "Unable to submit this copyright report right now.");
-      Alert.alert("Copyright report not submitted", message);
+      if (recordedCaseNumber) {
+        setSubmittedAttachmentCount(uploadedCount);
+        Alert.alert("Copyright report recorded", `Case ${recordedCaseNumber} was recorded. ${uploadedCount} evidence file uploads were confirmed; the remaining uploads could not be confirmed. Do not resubmit the notice. Contact ${LEGAL_SUPPORT_EMAIL} with the case number. ${message}`);
+      } else {
+        Alert.alert("Copyright report not submitted", message);
+      }
     } finally {
-      setBusy(false);
+      releaseSubmission();
+      evidenceScope.pending = false;
+      if (currentEvidenceScope()) setBusy(false);
     }
   };
 
   return (
+    <>
     <LegalPageShell
       eyebrow="Chi'llywood Copyright"
       title="Report Copyright Infringement"
@@ -283,8 +352,8 @@ export default function CopyrightReportPage() {
             <Text style={styles.disabledText}>
               Optional screenshots, PDFs, WebP/JPEG/PNG images, or plain-text notes. Files are private to legal operators and are queued for malware scanning before operators rely on them.
             </Text>
-            <TouchableOpacity style={[styles.secondaryButton, busy && styles.disabled]} disabled={busy} onPress={pickAttachments}>
-              <Text style={styles.secondaryButtonText}>Add Evidence Files</Text>
+            <TouchableOpacity style={[styles.secondaryButton, (busy || !!submittedCaseNumber || attachments.length >= 6) && styles.disabled]} disabled={busy || !!submittedCaseNumber || attachments.length >= 6} onPress={pickAttachments}>
+              <Text style={styles.secondaryButtonText}>{attachments.length >= 6 ? "6 of 6 evidence files attached" : "Add Evidence Files"}</Text>
             </TouchableOpacity>
             {attachments.length ? (
               <View style={styles.attachmentList}>
@@ -299,7 +368,7 @@ export default function CopyrightReportPage() {
                     <TouchableOpacity
                       style={styles.removeButton}
                       disabled={busy}
-                      onPress={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      onPress={() => { evidenceScope.revision += 1; cancelMediaPicker(); setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}
                     >
                       <Text style={styles.removeButtonText}>Remove</Text>
                     </TouchableOpacity>
@@ -338,17 +407,19 @@ export default function CopyrightReportPage() {
               <Text style={styles.successMeta}>
                 {submittedAttachmentCount
                   ? `${submittedAttachmentCount} evidence file${submittedAttachmentCount === 1 ? "" : "s"} uploaded; scan status pending.`
-                  : `No evidence files uploaded. Supporting files can still be sent to ${LEGAL_SUPPORT_EMAIL} with the case number.`}
+                  : `No evidence file uploads were confirmed. Supporting files can still be sent to ${LEGAL_SUPPORT_EMAIL} with the case number. Do not resubmit the notice.`}
               </Text>
             </View>
           ) : null}
 
-          <TouchableOpacity style={[styles.primaryButton, busy && styles.disabled]} disabled={busy} onPress={submitNotice}>
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Submit Copyright Notice</Text>}
+          <TouchableOpacity style={[styles.primaryButton, (busy || !!submittedCaseNumber) && styles.disabled]} disabled={busy || !!submittedCaseNumber} onPress={submitNotice}>
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{submittedCaseNumber ? "Copyright Notice Recorded" : "Submit Copyright Notice"}</Text>}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </LegalPageShell>
+      {mediaPickerSheet}
+    </>
   );
 }
 

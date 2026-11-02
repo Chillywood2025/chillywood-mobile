@@ -1,4 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { withPickedMediaRead } from "./mediaPickerResources";
+import { prepareMediaUploadCopy } from "./prepareMediaUploadCopy";
 
 import type { Json } from "../supabase/database.types";
 
@@ -22,7 +24,10 @@ import {
 import {
   getCurrentAccountSessionAuthoritySnapshot,
   sameAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
+import type { DeviceImageSource } from "./deviceImagePicker";
+import type { MediaPickerOperation } from "./mediaPickerCoordinator";
 import { readUserProfileByUserId } from "./userData";
 
 export type OfficialRachiPostResult = ProfilePost & {
@@ -63,10 +68,11 @@ const inferImageMimeType = (file: ProfileMediaImageFile) => {
   const explicit = toText(file.mimeType).toLowerCase();
   if (explicit) return explicit;
 
-  const source = `${file.name ?? ""} ${file.uri}`.toLowerCase();
-  if (source.includes(".webp")) return "image/webp";
-  if (source.includes(".png")) return "image/png";
-  return "image/jpeg";
+  const source = (toText(file.name) || file.uri).split(/[?#]/, 1)[0].toLowerCase();
+  if (source.endsWith(".webp")) return "image/webp";
+  if (source.endsWith(".png")) return "image/png";
+  if (/\.jpe?g$/.test(source)) return "image/jpeg";
+  return "";
 };
 
 const imageExtensionForMimeType = (mimeType: string) => {
@@ -111,17 +117,11 @@ const prepareOfficialRachiProfileMediaUpload = async (
   }
 
   const cacheUri = `${FileSystem.cacheDirectory}official-rachi-${createClientId()}.${imageExtensionForMimeType(mimeType)}`;
-  await withTimeout(
-    FileSystem.copyAsync({ from: sourceUri, to: cacheUri }),
-    20000,
-    "Rachi's profile picture took too long to prepare. Try again.",
-  );
-  return {
-    uri: cacheUri,
-    cleanup: async () => {
-      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
-    },
-  };
+  return prepareMediaUploadCopy({
+    sourceUri,
+    destinationUri: cacheUri,
+    waitForCopy: (copy) => withTimeout(copy, 20000, "Rachi's profile picture took too long to prepare. Try again."),
+  });
 };
 
 const getPreparedOfficialRachiProfileMediaSize = async (
@@ -200,7 +200,13 @@ const removeOfficialRachiProfileMediaObject = async (
 const uploadOfficialRachiProfileMedia = async (
   subject: AccountBoundSupabaseMutationSubject,
   file: ProfileMediaImageFile,
+  isCurrent?: () => boolean,
 ) => {
+  const assertCurrent = () => {
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (isCurrent && !isCurrent()) throw new Error("The Rachi profile picture action is no longer current.");
+  };
+  assertCurrent();
   const uri = toText(file.uri);
   if (!uri) throw new Error("Choose a photo before saving Rachi's profile picture.");
 
@@ -210,7 +216,7 @@ const uploadOfficialRachiProfileMedia = async (
   }
 
   const selectedSize = await getImageFileSize(file);
-  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  assertCurrent();
   if (typeof selectedSize === "number" && selectedSize > PROFILE_AVATAR_MAX_BYTES) {
     throw new Error("Rachi profile pictures can be 10 MB or smaller.");
   }
@@ -221,7 +227,7 @@ const uploadOfficialRachiProfileMedia = async (
   let uploaded = false;
   try {
     const preparedSize = await getPreparedOfficialRachiProfileMediaSize(prepared.uri, selectedSize);
-    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    assertCurrent();
     if (preparedSize <= 0) {
       throw new Error("Rachi's selected profile picture did not contain readable image data.");
     }
@@ -231,7 +237,7 @@ const uploadOfficialRachiProfileMedia = async (
 
     const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PROFILE_MEDIA_BUCKET}/${encodeStoragePath(objectKey)}`;
     const result = await withTimeout(
-      FileSystem.uploadAsync(uploadUrl, prepared.uri, {
+      withPickedMediaRead(prepared.uri, () => FileSystem.uploadAsync(uploadUrl, prepared.uri, {
         httpMethod: "POST",
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
         headers: {
@@ -240,7 +246,7 @@ const uploadOfficialRachiProfileMedia = async (
           "Content-Type": mimeType,
           "x-upsert": "false",
         },
-      }),
+      })),
       RACHI_PROFILE_MEDIA_UPLOAD_TIMEOUT_MS,
       "Rachi's profile picture upload took too long. Try again.",
     );
@@ -248,7 +254,7 @@ const uploadOfficialRachiProfileMedia = async (
       throw new Error("Unable to upload Rachi's profile picture right now.");
     }
     uploaded = true;
-    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    assertCurrent();
     if (!officialRachiUploadResponseMatches(result.body, objectKey)) {
       throw new Error("Rachi's profile picture could not be verified after upload.");
     }
@@ -383,28 +389,35 @@ const updateOfficialRachiProfileImageWithSubject = async (
 
 export async function chooseOfficialRachiProfileImageFromGallery(input?: {
   previousAvatarUrl?: string | null;
+  source?: DeviceImageSource;
+  operation?: MediaPickerOperation;
+  authority?: AccountSessionAuthorityBinding;
+  isCurrent?: () => boolean;
 }): Promise<OfficialRachiProfileImage | null> {
-  const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
-  if (!initiatingAuthority || initiatingAuthority.restoreOnly) {
+  const initiatingAuthority = input?.authority ?? getCurrentAccountSessionAuthoritySnapshot();
+  const isCurrent = () => (!input?.isCurrent || input.isCurrent())
+    && sameAccountSessionAuthority(initiatingAuthority, getCurrentAccountSessionAuthoritySnapshot());
+  if (!initiatingAuthority || initiatingAuthority.restoreOnly || !isCurrent()) {
     throw new Error("Recheck the signed-in operator account before choosing Rachi's profile picture.");
   }
-  const file = await pickProfileMediaImage("avatar");
+  const file = await pickProfileMediaImage("avatar", input?.source ?? "photos", input?.operation);
   if (!file) return null;
-  if (!sameAccountSessionAuthority(initiatingAuthority, getCurrentAccountSessionAuthoritySnapshot())) {
+  if (!isCurrent()) {
     throw new Error("The signed-in operator account changed before the picture was selected.");
   }
   const subject = await captureAccountBoundSupabaseMutationSubject(initiatingAuthority.userId);
-  if (!sameAccountSessionAuthority(initiatingAuthority, subject.authority)) {
+  if (!isCurrent() || !sameAccountSessionAuthority(initiatingAuthority, subject.authority)) {
     throw new Error("The signed-in operator account changed before the picture could be saved.");
   }
 
-  const uploaded = await uploadOfficialRachiProfileMedia(subject, file);
+  const uploaded = await uploadOfficialRachiProfileMedia(subject, file, isCurrent);
   let saved: OfficialRachiProfileImage;
   try {
     assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (!isCurrent()) throw new Error("The Rachi profile picture action is no longer current.");
     saved = await updateOfficialRachiProfileImageWithSubject(subject, {
       avatarUrl: uploaded.publicUrl,
-      reason: "Update official Rachi profile photo from gallery",
+      reason: "Update official Rachi profile photo",
     });
   } catch (error) {
     if (isAccountBoundSupabaseMutationOutcomeAmbiguous(error)) {

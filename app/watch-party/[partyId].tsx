@@ -5,7 +5,13 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { usePartyRoomDiscoveryPublication } from "../../_lib/usePartyRoomDiscoveryPublication";
+import { applyWatchPartyHostSettingsReadback, type WatchPartyHostSettingsResult } from "../../_lib/watchPartyHostSettings";
+import { RoomPrivacyDiscoveryControls } from "../../components/live/room-privacy-discovery-controls";
 import { useIsFocused } from "@react-navigation/native";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
+import { createRoomSnapshotAuthority } from "../../_lib/roomSnapshotAuthority";
+import { createRoomAttachmentIntent } from "../../_lib/roomAttachmentIntent";
+import { subscribeToLiveUpdates } from "../../_lib/sharedLiveUpdates";
 
 
 
@@ -127,9 +133,10 @@ import {
 } from "../../_lib/watchPartyPinning";
 import {
     createSocialAttachmentForSurface,
+    isAttachmentParentSavedError,
+    isSocialAttachmentOutcomeAmbiguous,
     readSocialAttachmentsForSurfaces,
     type SocialAttachment,
-    type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
@@ -161,7 +168,10 @@ import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card"
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
-import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
+import { useMediaPicker } from "../../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../../hooks/useOwnedPickedMediaState";
+import { releasePickedMedia, retainPickedMedia } from "../../_lib/mediaPickerResources";
+import { captureAccountBoundSupabaseMutationSubject, type AccountBoundSupabaseMutationSubject } from "../../_lib/accountBoundSupabaseMutation";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import {
     buildOrderedParticipantsWithSelf,
@@ -247,6 +257,8 @@ type FloatingReaction = {
 };
 
 const ROOM_HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
+// Persists across route component remounts, like the shared Supabase client.
+const roomChannelRetirementRef: { current: Promise<void> | null } = { current: null };
 const WATCH_PARTY_LIVE_FEED_COLUMNS = 5;
 const WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS = 2;
 const WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT = 102;
@@ -330,7 +342,7 @@ const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, 
 export default function WatchPartyRoomScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const isFocused = useIsFocused();
-  const { isLoading: authLoading, isSignedIn } = useSession();
+  const { isLoading: authLoading, isSignedIn, authority, authorityStatus } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const {
     partyId: partyIdParam,
@@ -426,8 +438,34 @@ export default function WatchPartyRoomScreen() {
   const [chatSending, setChatSending] = useState(false);
   const [saveReplayEnding, setSaveReplayEnding] = useState(false);
   const [chatError, setChatError] = useState("");
-  const [chatAttachmentFile, setChatAttachmentFile] = useState<SocialAttachmentFile | null>(null);
-  const [chatAttachmentSheetVisible, setChatAttachmentSheetVisible] = useState(false);
+  const [chatAttachmentFile, setChatAttachmentFile] = useOwnedPickedMediaState<SocialAttachmentFile | null>(null);
+  const attachmentSubjectRef = useRef<AccountBoundSupabaseMutationSubject | null>(null);
+  const { pickMedia: pickCommentMedia, mediaPickerSheet: commentMediaPickerSheet, cancelMediaPicker: cancelCommentMediaPicker } = useMediaPicker(`party-comment:${partyId}`);
+  const partyAttachmentIntentRef = useRef<ReturnType<typeof createRoomAttachmentIntent>>(null);
+  const selectedPartyAttachmentIntentRef = useRef<ReturnType<typeof createRoomAttachmentIntent>>(null);
+  // Logical selection identity survives native Activity/VC presentation, never
+  // account/route/focus replacement. Foreground room authority remains separate.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const partyAttachmentContext = useMemo(() => ({ authority: authority ? { ...authority } : null, partyId, isFocused, canUseBetaRoom }), [authority?.accountId, authority?.restoreOnly, authority?.sessionGeneration, authority?.state, authority?.userId, partyId, isFocused, canUseBetaRoom]);
+  const partyAttachmentContextRef = useRef<typeof partyAttachmentContext | null>(partyAttachmentContext);
+  partyAttachmentContextRef.current = partyAttachmentContext;
+  const retirePartyAttachmentIntent = useCallback(() => {
+    partyAttachmentIntentRef.current?.retire(); partyAttachmentIntentRef.current = null;
+    cancelCommentMediaPicker();
+  }, [cancelCommentMediaPicker]);
+  const retireSelectedPartyAttachment = useCallback(() => {
+    selectedPartyAttachmentIntentRef.current?.retire(); selectedPartyAttachmentIntentRef.current = null;
+    attachmentSubjectRef.current = null; setChatAttachmentFile(null);
+  }, [setChatAttachmentFile]);
+  useEffect(() => {
+    retireSelectedPartyAttachment();
+    return () => {
+      if (partyAttachmentContextRef.current === partyAttachmentContext) partyAttachmentContextRef.current = null;
+      retirePartyAttachmentIntent();
+      retireSelectedPartyAttachment();
+    };
+  }, [partyAttachmentContext, retirePartyAttachmentIntent, retireSelectedPartyAttachment]);
+  const commentSendFlightRef = useRef<object | null>(null);
   const isLive = true;
   const [, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [participantReactions, setParticipantReactions] = useState<Record<string, ParticipantReaction>>({});
@@ -525,12 +563,81 @@ export default function WatchPartyRoomScreen() {
   const pinCoachTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchPartyLiveOpeningRef = useRef(false);
   const activityPulse = useRef(new Animated.Value(0)).current;
+  const [confirmedHostSettings, setConfirmedHostSettings] = useState<WatchPartyHostSettingsResult | null>(null);
+  const roomAuthorityRef = useRef<ReturnType<typeof createRoomSnapshotAuthority> | null>(null);
+  const [verifiedRoomOwner, setVerifiedRoomOwner] = useState<ReturnType<typeof createRoomSnapshotAuthority> | null>(null);
+  const retireRoomChannel = useCallback((channel: RealtimeChannel) => {
+    // Supabase may return the same topic object until removal settles. A newer
+    // owner must not reuse it while this older owner is still disconnecting it.
+    const removal = Promise.resolve().then(() => supabase.removeChannel(channel)).catch(() => {});
+    const pending = Promise.all([roomChannelRetirementRef.current, removal]).then(() => {});
+    roomChannelRetirementRef.current = pending;
+    void pending.then(() => { if (roomChannelRetirementRef.current === pending) roomChannelRetirementRef.current = null; });
+  }, []);
+  const clearUnavailableRoom = useCallback(() => {
+    setRoom(null); setMyRole(null); myRoleRef.current = null; myUserIdRef.current = null;
+    membershipMapRef.current = {}; lastRoomUpdatedAtRef.current = "";
+    setParticipants([]); setMessages([]); setParticipantStateById({}); setParticipantSeatRequestById({});
+    setParticipantReactions({}); setIsSpeakingById({}); setSelectedParticipant(null);
+    setFeaturedParticipantById({}); setParticipantPresentationById({}); setHiddenParticipantIds({});
+    setPinnedParticipantId(""); setActiveParticipantId(""); setFloatingReactions([]); setTapPulseById({});
+    setRoomTipStatus(null);
+    setTitleName(null); setSourceAttribution(null); setConfirmedHostSettings(null); setVerifiedRoomOwner(null);
+    // Native presentation still tears down room/media resources. Only its
+    // immutable selection intent may await fresh canonical proof after return.
+    if (!(AppState.currentState !== "active" && partyAttachmentIntentRef.current?.retainWhileHidden())) retirePartyAttachmentIntent();
+    retireSelectedPartyAttachment();
+    setChatDraft(""); setChatAttachmentFile(null); setInviteSheetVisible(false);
+    setChatSending(false); setChatError(""); watchPartyLiveOpeningRef.current = false; setWatchPartyLiveOpening(false);
+    setRoomTipTarget(null); setRoomTipSheetVisible(false); setReportVisible(false); setReportTarget(null);
+    setPartyRoomCameraPreviewIntent(false); setPartyRoomCameraPreviewSuppressed(true);
+    myCameraPreviewUrlRef.current = ""; myProfileUsernameRef.current = ""; myUsernameRef.current = "";
+    setAccessGate(null); setBlockedRoomAccess(null); setPaidTicketGate(null); setPaidTicketNotice(null);
+    setAccessSheetVisible(false); setPresenceSynced(false); setRoomLocked(true);
+    setLoading(false); setNotFound(true); setConnState("error");
+  }, [retirePartyAttachmentIntent, retireSelectedPartyAttachment, setChatAttachmentFile]);
+  const roomAuthority = useMemo(() => {
+    const enabled = canUseBetaRoom && isFocused && partyRoomAppState === "active"
+      && authorityStatus === "active" && !!authority && !authority.restoreOnly;
+    const owned = createRoomSnapshotAuthority({ partyId, userId: authority?.userId ?? "", retry: joinRetryToken,
+      current: () => roomAuthorityRef.current === owned && enabled && AppState.currentState === "active"
+        && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()),
+      unavailable: () => { if (roomAuthorityRef.current === owned) clearUnavailableRoom(); },
+      read: () => getPartyRoomSnapshot(partyId),
+    });
+    return owned;
+  }, [authority, authorityStatus, canUseBetaRoom, clearUnavailableRoom, isFocused, joinRetryToken, partyId, partyRoomAppState]);
+  roomAuthorityRef.current = roomAuthority;
+  // A media intent belongs to the canonical admitted room owner, not just its
+  // route code. Source/generation retirement must also retire its native pick.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const commentMediaContext = useMemo(() => ({ authority: authority ? { ...authority } : null, partyId, roomAuthority, verifiedRoomOwner }), [authority?.accountId, authority?.restoreOnly, authority?.sessionGeneration, authority?.state, authority?.userId, partyId, roomAuthority, verifiedRoomOwner]);
+  const commentMediaContextRef = useRef<typeof commentMediaContext | null>(commentMediaContext);
+  commentMediaContextRef.current = commentMediaContext;
+  useEffect(() => {
+    if (!partyAttachmentIntentRef.current?.retainWhileHidden()) retirePartyAttachmentIntent();
+    setChatDraft("");
+    setChatError("");
+    setChatSending(false);
+    commentSendFlightRef.current = null;
+    return () => { if (commentMediaContextRef.current === commentMediaContext) commentMediaContextRef.current = null; };
+  }, [commentMediaContext, retirePartyAttachmentIntent]);
+  useEffect(() => {
+    roomAuthority.activate();
+    if (roomAuthority.current()) setPartyRoomCameraPreviewSuppressed(false);
+    const account = subscribeToAccountSessionAuthority(next => {
+      if (!sameAccountSessionAuthority(authority, next)) roomAuthority.retire();
+    });
+    const app = AppState.addEventListener("change", state => { if (state !== "active") roomAuthority.retire(); });
+    return () => { account(); app.remove(); roomAuthority.retire(); };
+  }, [authority, roomAuthority]);
   const partyDiscovery = usePartyRoomDiscoveryPublication({
-    room,
-    membership: room?.hostUserId ? membershipMapRef.current[room.hostUserId] ?? null : null,
+    room: roomAuthority.current() && verifiedRoomOwner === roomAuthority ? room : null,
+    membership: roomAuthority.current() && verifiedRoomOwner === roomAuthority && room?.hostUserId ? membershipMapRef.current[room.hostUserId] ?? null : null,
     active: isFocused && partyRoomAppState === "active" && !loading && !notFound
       && !accessGate && !blockedRoomAccess && isSignedIn,
     startIntent,
+    confirmedHostSettings,
   });
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
@@ -620,11 +727,13 @@ export default function WatchPartyRoomScreen() {
   }, []);
 
   const loadRoomMessageAttachments = useCallback(async (messageIds: string[]) => {
+    const owned = roomAuthorityRef.current;
+    if (!owned?.current()) return;
     const normalizedIds = Array.from(new Set(messageIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
     if (!normalizedIds.length) return;
 
     const attachmentsByMessageId = await readSocialAttachmentsForSurfaces("watch_party_room_message", normalizedIds);
-    if (attachmentsByMessageId.size === 0) return;
+    if (!owned.current() || attachmentsByMessageId.size === 0) return;
 
     setMessages((prev) => prev.map((message) => {
       const attachments = attachmentsByMessageId.get(message.id);
@@ -689,6 +798,10 @@ export default function WatchPartyRoomScreen() {
   }, []);
 
   const syncRoomFromSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, userId?: string | null) => {
+    if (!roomAuthority.current()) return;
+    if (partyAttachmentIntentRef.current && !partyAttachmentIntentRef.current.observe(snapshot)) retirePartyAttachmentIntent();
+    if (selectedPartyAttachmentIntentRef.current && !selectedPartyAttachmentIntentRef.current.observe(snapshot)) retireSelectedPartyAttachment();
+    setVerifiedRoomOwner(roomAuthority);
     setRoom(snapshot.room);
     lastRoomUpdatedAtRef.current = snapshot.room.updatedAt;
     membershipMapRef.current = Object.fromEntries(snapshot.memberships.map((membership) => [membership.userId, membership]));
@@ -723,14 +836,14 @@ export default function WatchPartyRoomScreen() {
       });
       return next;
     });
-  }, []);
+  }, [retirePartyAttachmentIntent, retireSelectedPartyAttachment, roomAuthority]);
 
   const refreshRoomSnapshot = useCallback(async (userId?: string | null) => {
-    const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
-    if (!snapshot) return null;
+    const snapshot = await roomAuthority.read();
+    if (!snapshot || !roomAuthority.current()) return null;
     syncRoomFromSnapshot(snapshot, userId);
     return snapshot;
-  }, [partyId, syncRoomFromSnapshot]);
+  }, [roomAuthority, syncRoomFromSnapshot]);
 
   const buildPresenceParticipants = useCallback((options: {
     state: Record<string, { userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }[] | undefined>;
@@ -800,9 +913,8 @@ export default function WatchPartyRoomScreen() {
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!canUseBetaRoom) {
-      setLoading(false);
-      setConnState("error");
+    if (!roomAuthority.current()) {
+      clearUnavailableRoom();
       return;
     }
     if (!partyId) {
@@ -812,6 +924,8 @@ export default function WatchPartyRoomScreen() {
     }
 
     let cancelled = false;
+    const current = () => !cancelled && roomAuthority.current();
+    setLoading(true);
     setNotFound(false);
     setAccessGate(null);
     setBlockedRoomAccess(null);
@@ -833,14 +947,15 @@ export default function WatchPartyRoomScreen() {
 
         // Get session
         const userId = await getSafePartyUserId();
-        if (cancelled) return;
+        if (!current()) return;
+        if (!userId || userId !== authority?.userId) { roomAuthority.retire(); return; }
 
         myUserIdRef.current = userId;
         myProfileUsernameRef.current = resolveIdentityName(profile?.username, "Guest");
         myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
 
-        const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
-        if (cancelled) return;
+        let snapshot = await roomAuthority.read();
+        if (!current()) return;
 
         if (!snapshot) {
           setNotFound(true);
@@ -853,7 +968,7 @@ export default function WatchPartyRoomScreen() {
         const ticketAccess = isTicketedPartyRoom
           ? await resolvePaidWatchPartyTicketAccess(snapshot.room.partyId).catch(() => null)
           : null;
-        if (cancelled) return;
+        if (!current()) return;
 
         const hasTicketedTarget = !!ticketAccess && (
           ticketAccess.requiresPurchase
@@ -871,7 +986,7 @@ export default function WatchPartyRoomScreen() {
             || (!hasTicketedTarget && !paidWatchPartyResolutionIsExactFreeRoom(ticketAccess))
           )
         ) {
-          setRoom(snapshot.room);
+          setRoom(snapshot.room); setVerifiedRoomOwner(roomAuthority);
           setPaidTicketGate(ticketAccess);
           setPaidTicketNotice(
             ticketAccess.requiresPurchase
@@ -895,7 +1010,7 @@ export default function WatchPartyRoomScreen() {
           const premiumAccess = await (
             premiumAccessSource === "live_first" ? requireLiveFirstPremium : requireWatchPartyLivePremium
           )({ accessKey: premiumAccessKey }).catch(() => null);
-          if (cancelled) return;
+          if (!current()) return;
 
           if (!premiumAccess?.allowed) {
             if (premiumAccess) {
@@ -906,7 +1021,7 @@ export default function WatchPartyRoomScreen() {
               });
             }
             setAccessSheetVisible(!isRuntimeControlBlockedAccess(premiumAccess));
-            setRoom(snapshot.room);
+            setRoom(snapshot.room); setVerifiedRoomOwner(roomAuthority);
             setLoading(false);
             if (isRuntimeControlBlockedAccess(premiumAccess)) {
               trackEvent("runtime_control_blocked", {
@@ -939,7 +1054,7 @@ export default function WatchPartyRoomScreen() {
         if (exactTicketAllowsEntry) {
           roomAccessAllowed = true;
           const sessionIsHost = userId === snapshot.room.hostUserId;
-          const joinedMembership = await joinPartyRoomSession({
+          await joinPartyRoomSession({
             partyId,
             userId,
             role: sessionIsHost ? "host" : "viewer",
@@ -949,19 +1064,20 @@ export default function WatchPartyRoomScreen() {
             displayName: myProfileUsernameRef.current,
             cameraPreviewUrl: profileCameraPreviewUrl,
           }).catch(() => null);
+          if (!current()) return;
+          roomAuthority.requireMembership();
           let refreshedSnapshot = null;
-          if (!cancelled) {
+          if (current()) {
             refreshedSnapshot = await refreshRoomSnapshot(userId).catch(() => null);
           }
-          const persistedMembership = joinedMembership
-            ?? refreshedSnapshot?.memberships.find((membership) => membership.userId === userId)
-            ?? membershipMapRef.current[userId]
-            ?? null;
-          if (!persistedMembership) {
+          if (!current()) return;
+          const persistedMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === userId) ?? null;
+          if (!persistedMembership || !refreshedSnapshot) {
             setConnState("error");
             setLoading(false);
             return;
           }
+          snapshot = refreshedSnapshot;
         } else {
           const access = await resolveRoomAccess({
             roomSurface: "watch_party",
@@ -971,12 +1087,12 @@ export default function WatchPartyRoomScreen() {
             membership: currentMembership,
           }).catch(() => null);
 
-          if (cancelled) return;
+          if (!current()) return;
 
           if (access?.isAllowed) {
             roomAccessAllowed = true;
             const sessionIsHost = userId === snapshot.room.hostUserId;
-            const joinedMembership = await joinPartyRoomSession({
+            await joinPartyRoomSession({
               partyId,
               userId,
               role: sessionIsHost ? "host" : "viewer",
@@ -986,19 +1102,20 @@ export default function WatchPartyRoomScreen() {
               displayName: myProfileUsernameRef.current,
               cameraPreviewUrl: profileCameraPreviewUrl,
             }).catch(() => null);
+            if (!current()) return;
+            roomAuthority.requireMembership();
             let refreshedSnapshot = null;
-            if (!cancelled) {
+            if (current()) {
               refreshedSnapshot = await refreshRoomSnapshot(userId).catch(() => null);
             }
-            const persistedMembership = joinedMembership
-              ?? refreshedSnapshot?.memberships.find((membership) => membership.userId === userId)
-              ?? membershipMapRef.current[userId]
-              ?? null;
-            if (!persistedMembership) {
+            if (!current()) return;
+            const persistedMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === userId) ?? null;
+            if (!persistedMembership || !refreshedSnapshot) {
               setConnState("error");
               setLoading(false);
               return;
             }
+            snapshot = refreshedSnapshot;
           } else if (access?.reason === "identity_required") {
             setConnState("error");
           } else if (access && isAccessSheetReason(access.reason)) {
@@ -1022,10 +1139,11 @@ export default function WatchPartyRoomScreen() {
           }
         }
 
+        if (!roomAccessAllowed) { roomAuthority.retire(); return; }
         const contentDisplay = snapshot.room.roomType === "live"
           ? null
           : await resolveWatchPartyContentDisplay(snapshot.room).catch(() => null);
-        if (cancelled) return;
+        if (!current()) return;
 
         const exactSourceType = resolveWatchPartySourceType(snapshot.room);
         const exactSourceId = String(resolveWatchPartySourceId(snapshot.room) ?? "").trim();
@@ -1051,13 +1169,14 @@ export default function WatchPartyRoomScreen() {
           .limit(120)
           .returns<RoomChatMessageRow[]>();
 
-        if (!cancelled && recentRows?.length) {
+        if (current() && recentRows?.length) {
           const orderedRows = [...recentRows].reverse();
           const visibleRows = orderedRows.filter((row) => !decodePartySeatRequestMessage(row.text));
           const attachmentsByMessageId = await readSocialAttachmentsForSurfaces(
             "watch_party_room_message",
             visibleRows.map((row) => String(row.id ?? "")),
           );
+          if (!current()) return;
           const loaded: LocalMsg[] = visibleRows
             .map((row) => ({
               id: String(row.id),
@@ -1074,12 +1193,16 @@ export default function WatchPartyRoomScreen() {
 
         setLoading(false);
 
-        pollRef.current = setInterval(() => {
+        if (!current() || !roomAccessAllowed) return;
+        const poll = setInterval(() => {
           refreshRoomSnapshot(userId).catch(() => {});
         }, ROOM_SNAPSHOT_REFRESH_MS);
+        pollRef.current = poll;
+        roomAuthority.own(() => { clearInterval(poll); if (pollRef.current === poll) pollRef.current = null; });
 
         if (roomAccessAllowed) {
-          heartbeatRef.current = setInterval(() => {
+          const heartbeat = setInterval(() => {
+            if (!current()) return;
             const heartbeatMembership = membershipMapRef.current[userId];
             void touchPartyRoomSession({
               partyId,
@@ -1093,28 +1216,40 @@ export default function WatchPartyRoomScreen() {
               cameraPreviewUrl: myCameraPreviewUrlRef.current,
             }).then(() => refreshRoomSnapshot(userId));
           }, ROOM_HEARTBEAT_INTERVAL_MILLIS);
+          heartbeatRef.current = heartbeat;
+          roomAuthority.own(() => { clearInterval(heartbeat); if (heartbeatRef.current === heartbeat) heartbeatRef.current = null; });
         }
 
         if (partyId && snapshot.room.sourceType !== "creator_video" && snapshot.room.titleId) {
           await saveLastPartySession({ partyId, titleId: snapshot.room.titleId, joinedAt: Date.now() }).catch(() => {});
         }
 
+        await roomChannelRetirementRef.current;
+        if (!current()) return;
         startChatChannel(userId, myRoleRef.current === "host" ? "host" : "viewer", snapshot.room, profile);
         startRoomRealtimeSync();
         startRoomChatRealtimeSync();
+        // Relationship withdrawals may not update the room row. Subscribe only
+        // after admission, and retire this exact shared interest with its owner.
+        let readingHint = false, queuedHint = false;
+        const refreshHint = async () => {
+          if (!current()) return;
+          if (readingHint) { queuedHint = true; return; }
+          readingHint = true;
+          try {
+            do {
+              queuedHint = false;
+              await refreshRoomSnapshot(userId);
+            } while (queuedHint && current());
+          } finally { readingHint = false; }
+        };
+        roomAuthority.own(subscribeToLiveUpdates(authority, "discovery", () => { void refreshHint(); }, { viewerUserId: userId }));
       } catch (error) {
         reportRuntimeError("watch-party-room-bootstrap", error, {
           partyId,
           resolvedRoomForBootstrap,
         });
-        if (!cancelled) {
-          if (!resolvedRoomForBootstrap) {
-            setNotFound(true);
-          } else {
-            setConnState("error");
-          }
-          setLoading(false);
-        }
+        if (current()) roomAuthority.retire();
       }
     };
 
@@ -1122,29 +1257,18 @@ export default function WatchPartyRoomScreen() {
 
     return () => {
       cancelled = true;
-      if (pollRef.current) clearInterval(pollRef.current);
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      if (chatChannelRef.current) {
-        supabase.removeChannel(chatChannelRef.current);
-        chatChannelRef.current = null;
-      }
-      if (roomChatRealtimeChannelRef.current) {
-        supabase.removeChannel(roomChatRealtimeChannelRef.current);
-        roomChatRealtimeChannelRef.current = null;
-      }
-      if (roomRealtimeChannelRef.current) {
-        supabase.removeChannel(roomRealtimeChannelRef.current);
-        roomRealtimeChannelRef.current = null;
-      }
+      roomAuthority.retire();
       Object.values(participantReactionTimeoutsRef.current).forEach((timeoutId) => clearTimeout(timeoutId));
       participantReactionTimeoutsRef.current = {};
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canUseBetaRoom, joinRetryToken, partyId, refreshRoomSnapshot, syncRoomFromSnapshot]);
+  }, [clearUnavailableRoom, partyId, roomAuthority, refreshRoomSnapshot, syncRoomFromSnapshot]);
 
   // ── Chat + Presence channel ──────────────────────────────────────────────────
   const startChatChannel = useCallback(
     (userId: string | null, role: "host" | "viewer", fetchedRoom: WatchPartyState, profile: UserProfile | null) => {
+      const owned = roomAuthority;
+      if (!owned.current()) return;
       if (chatChannelRef.current) supabase.removeChannel(chatChannelRef.current);
       setConnState("connecting");
       setPresenceSynced(false);
@@ -1160,6 +1284,7 @@ export default function WatchPartyRoomScreen() {
 
       // Presence sync → participant list
       channel.on("presence", { event: "sync" }, () => {
+        if (!owned.current()) return;
         const state = channel.presenceState<{ userId?: string; username?: string; role?: string; avatarIndex?: number; avatarUrl?: string; cameraPreviewUrl?: string; camera_preview_url?: string; isLive?: boolean; isSpeaking?: boolean; isMuted?: boolean }>();
         const list = buildPresenceParticipants({
           state,
@@ -1171,6 +1296,7 @@ export default function WatchPartyRoomScreen() {
 
       // Presence join → system message
       channel.on("presence", { event: "join" }, ({ key, newPresences }: any) => {
+        if (!owned.current()) return;
         const newPres = Array.isArray(newPresences) ? newPresences[0] : newPresences;
         const joinedUserId = String(newPres?.userId ?? key ?? "").trim();
         const displayName = resolveIdentityName(newPres?.username, joinedUserId === trackedUserId ? myProfileUsernameRef.current : "", "Guest");
@@ -1187,6 +1313,7 @@ export default function WatchPartyRoomScreen() {
 
       // Presence leave → system message
       channel.on("presence", { event: "leave" }, ({ key, leftPresences }: any) => {
+        if (!owned.current()) return;
         const leftPres = Array.isArray(leftPresences) ? leftPresences[0] : leftPresences;
         const leftUserId = String(leftPres?.userId ?? key ?? "").trim();
         const displayName = resolveIdentityName(leftPres?.username, leftUserId === trackedUserId ? myProfileUsernameRef.current : "", "Guest");
@@ -1204,6 +1331,7 @@ export default function WatchPartyRoomScreen() {
       // Incoming chat messages
       // Incoming reactions (for chat display + floating overlay)
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        if (!owned.current()) return;
         if (!payload?.emoji) return;
         const emoji = String(payload.emoji);
         const reactionUserId = String(payload.userId ?? "").trim();
@@ -1227,6 +1355,7 @@ export default function WatchPartyRoomScreen() {
       });
 
       channel.on("broadcast", { event: "participant:speaking" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        if (!owned.current()) return;
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const speaking = !!payload?.isSpeaking;
@@ -1237,6 +1366,7 @@ export default function WatchPartyRoomScreen() {
       });
 
       channel.on("broadcast", { event: "participant:seat-request" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        if (!owned.current()) return;
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const pending = !!payload?.pending;
@@ -1252,6 +1382,7 @@ export default function WatchPartyRoomScreen() {
       });
 
       channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        if (!owned.current()) return;
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         // Broadcast payloads are refresh hints only. Persisted membership is
@@ -1261,6 +1392,7 @@ export default function WatchPartyRoomScreen() {
 
       // Subscribe → track presence once confirmed
       channel.subscribe(async (status) => {
+        if (!owned.current()) return;
         if (status === "SUBSCRIBED") {
           setConnState("live");
           await channel.track({
@@ -1293,12 +1425,14 @@ export default function WatchPartyRoomScreen() {
       });
 
       chatChannelRef.current = channel;
+      owned.own(() => { if (chatChannelRef.current === channel) chatChannelRef.current = null; retireRoomChannel(channel); });
     },
-    [partyId, addMsg, attachReactionToParticipant, buildPresenceParticipants, flashReaction, isLive, refreshRoomSnapshot],
+    [partyId, addMsg, attachReactionToParticipant, buildPresenceParticipants, flashReaction, isLive, refreshRoomSnapshot, retireRoomChannel, roomAuthority],
   );
 
   const startRoomChatRealtimeSync = useCallback(() => {
-    if (!partyId) return;
+    const owned = roomAuthority;
+    if (!partyId || !owned.current()) return;
 
     if (roomChatRealtimeChannelRef.current) {
       supabase.removeChannel(roomChatRealtimeChannelRef.current);
@@ -1316,6 +1450,7 @@ export default function WatchPartyRoomScreen() {
           filter: `party_id=eq.${partyId}`,
         },
         (payload) => {
+          if (!owned.current()) return;
           const row = payload.new as RoomChatMessageRow;
           const rowId = String(row.id ?? "").trim();
           const rowUserId = String(row.user_id ?? "").trim();
@@ -1342,17 +1477,21 @@ export default function WatchPartyRoomScreen() {
       .subscribe();
 
     roomChatRealtimeChannelRef.current = channel;
-  }, [partyId, addMsg, loadRoomMessageAttachments]);
+    owned.own(() => { if (roomChatRealtimeChannelRef.current === channel) roomChatRealtimeChannelRef.current = null; retireRoomChannel(channel); });
+  }, [partyId, addMsg, loadRoomMessageAttachments, retireRoomChannel, roomAuthority]);
 
   const myUserId = String(myUserIdRef.current ?? "").trim();
   const isNativeCameraPlatform = Platform.OS !== "web";
   const allowLocalCameraPreview = isNativeCameraPlatform
+    && roomAuthority.current() && verifiedRoomOwner === roomAuthority
     && isFocused
     && partyRoomAppState === "active"
     && partyRoomCameraPreviewIntent
     && !partyRoomCameraPreviewSuppressed;
 
   const onTogglePartyRoomCameraPreview = useCallback(async () => {
+    const owned = roomAuthority;
+    if (!owned.current()) return;
     if (partyRoomCameraPreviewIntent) {
       setPartyRoomCameraPreviewIntent(false);
       return;
@@ -1367,6 +1506,7 @@ export default function WatchPartyRoomScreen() {
       : cameraPermission?.canAskAgain === false
         ? cameraPermission
         : await requestCameraPermission().catch(() => null);
+    if (!owned.current()) return;
     if (permission?.granted) {
       setPartyRoomCameraPreviewIntent(true);
       return;
@@ -1385,7 +1525,7 @@ export default function WatchPartyRoomScreen() {
           ]
         : [{ text: "OK" }],
     );
-  }, [cameraPermission, isNativeCameraPlatform, partyRoomCameraPreviewIntent, requestCameraPermission]);
+  }, [cameraPermission, isNativeCameraPlatform, partyRoomCameraPreviewIntent, requestCameraPermission, roomAuthority]);
 
   useEffect(() => {
     setPartyRoomCameraPreviewIntent(false);
@@ -1411,7 +1551,8 @@ export default function WatchPartyRoomScreen() {
   }, [isLive, myUserId]);
 
   const startRoomRealtimeSync = useCallback(() => {
-    if (!partyId) return;
+    const owned = roomAuthority;
+    if (!partyId || !owned.current()) return;
 
     if (roomRealtimeChannelRef.current) {
       supabase.removeChannel(roomRealtimeChannelRef.current);
@@ -1445,13 +1586,15 @@ export default function WatchPartyRoomScreen() {
         },
       )
       .subscribe((status) => {
+        if (!owned.current()) return;
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           setConnState("reconnecting");
         }
       });
 
     roomRealtimeChannelRef.current = channel;
-  }, [partyId, refreshRoomSnapshot]);
+    owned.own(() => { if (roomRealtimeChannelRef.current === channel) roomRealtimeChannelRef.current = null; retireRoomChannel(channel); });
+  }, [partyId, refreshRoomSnapshot, retireRoomChannel, roomAuthority]);
 
   useEffect(() => {
     reportDebugParty({
@@ -1508,8 +1651,12 @@ export default function WatchPartyRoomScreen() {
   }, [partyId, reactionsGloballyMuted, refreshRoomSnapshot]);
 
   useEffect(() => {
+    const owned = roomAuthority;
     const subscription = AppState.addEventListener("change", (nextState) => {
       setPartyRoomAppState(nextState);
+      // Background retires this lifetime. Foreground bootstraps a new one and
+      // repeats the existing ticket, Premium and source checks before admission.
+      if (!owned.current()) return;
       const currentUserId = String(myUserIdRef.current ?? "").trim();
       if (!partyId || !currentUserId) return;
       const currentMembership = membershipMapRef.current[currentUserId];
@@ -1522,6 +1669,7 @@ export default function WatchPartyRoomScreen() {
             try {
               ticketAccess = await resolvePaidWatchPartyTicketAccess(partyId);
             } catch (error) {
+              if (!owned.current()) return;
               if (paidTicketAuthoritySeenRef.current || paidTicketGate) {
                 setPaidTicketGate(unavailablePaidTicketAccess("resume_verification_unavailable"));
                 setPaidTicketNotice("Party Room Pass access could not be refreshed after resume. This room stays locked until access is verified.");
@@ -1531,6 +1679,8 @@ export default function WatchPartyRoomScreen() {
               reportRuntimeError("watch-party-appstate-ticket-refresh", error, { partyId });
               return;
             }
+
+            if (!owned.current()) return;
 
             const hasTicketedTarget = !!(
               ticketAccess.requiresPurchase
@@ -1579,6 +1729,7 @@ export default function WatchPartyRoomScreen() {
             cameraPreviewUrl: myCameraPreviewUrlRef.current,
             membershipState: "active",
           });
+          if (!owned.current()) return;
           if (!membership) {
             setConnState("error");
             return;
@@ -1612,25 +1763,7 @@ export default function WatchPartyRoomScreen() {
     return () => {
       subscription.remove();
     };
-  }, [paidTicketGate, partyId, refreshRoomSnapshot, room?.roomType]);
-
-  // ── Host: toggle lock room ───────────────────────────────────────────────────
-  const onToggleLockRoom = useCallback(async () => {
-    if (myRoleRef.current !== "host" || !partyId) return;
-    const next = !roomLocked;
-    setRoomLocked(next);
-    trackModerationActionUsed({
-      surface: "watch-party-room",
-      action: next ? "lock_room" : "unlock_room",
-      roomId: partyId,
-      sourceRoute: `/watch-party/${partyId}`,
-    });
-    await (next
-      ? applyHostAction(partyId, { type: "lock_room" })
-      : setPartyRoomPolicies(partyId, { joinPolicy: "open" })
-    ).catch(() => {});
-    await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
-  }, [partyId, refreshRoomSnapshot, roomLocked]);
+  }, [paidTicketGate, partyId, refreshRoomSnapshot, room?.roomType, roomAuthority]);
 
   const onToggleCaptureRoom = useCallback(async () => {
     if (myRoleRef.current !== "host" || !partyId || !room) return;
@@ -1668,7 +1801,8 @@ export default function WatchPartyRoomScreen() {
   }, []);
 
   const emitParticipantUpdate = useCallback(async (participantId: string, changes: Partial<SharedParticipantLocalState>) => {
-    if (!partyId || !participantId || myRoleRef.current !== "host") return false;
+    const owned = roomAuthority;
+    if (!owned.current() || !partyId || !participantId || myRoleRef.current !== "host") return false;
     const currentMembership = membershipMapRef.current[participantId];
     const nextStageRole = changes.role
       ? (changes.role === "host" ? "host" : changes.role)
@@ -1702,6 +1836,7 @@ export default function WatchPartyRoomScreen() {
       membershipState: shouldRemove ? "removed" : "active",
       leftAt: shouldRemove ? new Date().toISOString() : null,
     }).catch(() => null);
+    if (!owned.current()) return false;
     if (!nextMembership) {
       debugLog("watch-party", "blocked participant seat-state broadcast before membership persisted", {
         partyId,
@@ -1724,15 +1859,18 @@ export default function WatchPartyRoomScreen() {
     await broadcastParticipantSeatState(participantId, nextState);
     await refreshRoomSnapshot(myUserIdRef.current).catch(() => {});
     return true;
-  }, [broadcastParticipantSeatState, partyId, refreshRoomSnapshot, room?.titleId]);
+  }, [broadcastParticipantSeatState, partyId, refreshRoomSnapshot, room?.titleId, roomAuthority]);
 
   const requestVisibleSeat = useCallback(async (participantId: string) => {
+    const owned = roomAuthority;
+    if (!owned.current()) return;
     const currentUserId = String(myUserIdRef.current ?? "").trim();
     if (!partyId || !participantId || participantId !== currentUserId || myRoleRef.current === "host") return;
     const currentMembership = membershipMapRef.current[participantId];
     if (currentMembership?.stageRole === "speaker" || currentMembership?.canSpeak) return;
     if (!currentMembership) {
       const refreshedSnapshot = await refreshRoomSnapshot(currentUserId).catch(() => null);
+      if (!owned.current()) return;
       const refreshedMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === participantId)
         ?? membershipMapRef.current[participantId]
         ?? null;
@@ -1752,7 +1890,7 @@ export default function WatchPartyRoomScreen() {
       partyId,
       participantId,
     });
-  }, [broadcastParticipantSeatRequest, partyId, refreshRoomSnapshot]);
+  }, [broadcastParticipantSeatRequest, partyId, refreshRoomSnapshot, roomAuthority]);
 
   // ── Share / invite ───────────────────────────────────────────────────────────
   const displayRoomCode = String(room?.roomCode ?? "").trim().toUpperCase() || roomCodeHint;
@@ -2058,12 +2196,14 @@ export default function WatchPartyRoomScreen() {
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async () => {
-    if (watchPartyLiveOpeningRef.current) return;
+    const owned = roomAuthority;
+    if (!owned.current() || watchPartyLiveOpeningRef.current) return;
 
     watchPartyLiveOpeningRef.current = true;
     setWatchPartyLiveOpening(true);
 
     const resetWatchPartyLiveOpening = () => {
+      if (!owned.current()) return;
       watchPartyLiveOpeningRef.current = false;
       setWatchPartyLiveOpening(false);
     };
@@ -2083,6 +2223,7 @@ export default function WatchPartyRoomScreen() {
 
       if ((!targetSourceId || !targetSourceType) && nextPartyId) {
         const latestRoom = await getPartyRoom(nextPartyId).catch(() => null);
+        if (!owned.current()) return;
         targetSourceType = resolveWatchPartySourceType(latestRoom);
         targetSourceId = resolveWatchPartySourceId(latestRoom);
         targetTitleId = String(latestRoom?.titleId ?? "").trim();
@@ -2107,6 +2248,7 @@ export default function WatchPartyRoomScreen() {
         titleId: targetTitleId || null,
       });
       const premiumAccess = await requireWatchPartyLivePremium({ accessKey: premiumAccessKey }).catch(() => null);
+      if (!owned.current()) return;
       if (!premiumAccess?.allowed) {
         resetWatchPartyLiveOpening();
         if (isRuntimeControlBlockedAccess(premiumAccess)) {
@@ -2202,6 +2344,7 @@ export default function WatchPartyRoomScreen() {
         },
       });
     } catch (error) {
+      if (!owned.current()) return;
       resetWatchPartyLiveOpening();
       setPartyRoomCameraPreviewSuppressed(false);
       reportRuntimeError("watch-party-live-open", error, { partyId });
@@ -2213,31 +2356,103 @@ export default function WatchPartyRoomScreen() {
   }, [
     partyId,
     room,
+    roomAuthority,
     router,
     titleIdHint,
   ]);
 
-  const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
+  const onPickPartyRoomCommentAttachment = useCallback(async () => {
+    const owned = roomAuthority;
+    if (chatSending || partyAttachmentIntentRef.current?.current() || !owned.current() || verifiedRoomOwner !== owned || !room
+      || loading || notFound || accessGate || paidTicketGate || blockedRoomAccess
+      || !partyAttachmentContext.authority || !partyAttachmentContext.isFocused || !partyAttachmentContext.canUseBetaRoom) return;
+    retirePartyAttachmentIntent();
+    let intent: ReturnType<typeof createRoomAttachmentIntent> = null;
+    intent = createRoomAttachmentIntent({
+      snapshot: { room, memberships: Object.values(membershipMapRef.current) }, userId: partyAttachmentContext.authority.userId,
+      current: () => partyAttachmentContextRef.current === partyAttachmentContext
+        && (partyAttachmentIntentRef.current === intent || selectedPartyAttachmentIntentRef.current === intent)
+        && sameAccountSessionAuthority(partyAttachmentContext.authority, getCurrentAccountSessionAuthoritySnapshot()),
+      foreground: () => AppState.currentState === "active",
+      subscribeForeground: listener => { const subscription = AppState.addEventListener("change", listener); return () => subscription.remove(); },
+      read: async () => {
+        const snapshot = await getPartyRoomSnapshot(partyAttachmentContext.partyId).catch(() => null);
+        if (!snapshot || !intent?.observe(snapshot)) return null;
+        const userId = partyAttachmentContext.authority!.userId;
+        const membership = snapshot.memberships.find(row => row.userId === userId) ?? null;
+        const ticketed = snapshot.room.roomType !== "live";
+        const ticket = ticketed ? await resolvePaidWatchPartyTicketAccess(snapshot.room.partyId).catch(() => null) : null;
+        if (!intent.current() || (ticketed && !ticket)) return null;
+        const hasTicket = !!ticket && (ticket.requiresPurchase || !!ticket.offer?.id || !!ticket.ticketId);
+        const exactTicket = ticketed && hasTicket && ticket?.allowed === true;
+        if (ticketed && !exactTicket && !paidWatchPartyResolutionIsExactFreeRoom(ticket)) return null;
+        if (!exactTicket) {
+          const premium = await (snapshot.room.roomType === "live" ? requireLiveFirstPremium : requireWatchPartyLivePremium)({
+            accessKey: String(resolvePremiumAccessKeyForRoom(snapshot.room) || snapshot.room.partyId),
+          }).catch(() => null);
+          if (!intent.current() || !premium?.allowed) return null;
+          const access = await resolveRoomAccess({ roomSurface: "watch_party", partyId: snapshot.room.partyId,
+            userId, room: snapshot.room, membership }).catch(() => null);
+          if (!intent.current() || !access?.isAllowed) return null;
+        }
+        // Access reads do not certify a later source, generation or admission.
+        return intent.current() ? getPartyRoomSnapshot(partyAttachmentContext.partyId).catch(() => null) : null;
+      },
+    });
+    if (!intent) return;
+    partyAttachmentIntentRef.current = intent;
+    const isCurrent = () => partyAttachmentIntentRef.current === intent && !!intent?.current();
+    let selection: { file: SocialAttachmentFile; mutationSubject: AccountBoundSupabaseMutationSubject } | null = null;
     try {
       setChatError("");
-      const file = await pickSocialAttachmentFile(scope);
-      if (!file) return;
-      setChatAttachmentFile(file);
+      selection = await pickCommentMedia({
+        title: "Add to room comment", mediaKind: "attachment", sources: ["photos", "camera", "files"],
+        isCurrent,
+        retainNativeResultWhileHidden: () => !!intent?.retainWhileHidden(),
+        pick: async (source, operation) => {
+          const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+          if (!isCurrent() || !intent?.beginNative()) return null;
+          try {
+            const file = await pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation);
+            return file && await intent.verifyBeforeApply() ? { file, mutationSubject } : null;
+          } catch (error) {
+            if (await intent.verifyBeforeApply()) throw error;
+            return null;
+          }
+        },
+      });
+      if (!isCurrent() || !selection) return;
+      selectedPartyAttachmentIntentRef.current?.retire();
+      selectedPartyAttachmentIntentRef.current = intent;
+      attachmentSubjectRef.current = selection.mutationSubject;
+      setChatAttachmentFile(selection.file);
     } catch (error) {
-      setChatAttachmentFile(null);
+      if (!isCurrent() || AppState.currentState !== "active") return;
       setChatError(getUserFacingErrorMessage(error, "Unable to choose this attachment right now."));
+    } finally {
+      // The owned-state setter retains synchronously. Any rejected handoff or
+      // extra collected native handle can now be released without losing it.
+      void releasePickedMedia(selection);
+      if (selectedPartyAttachmentIntentRef.current !== intent) intent.retire();
+      if (partyAttachmentIntentRef.current === intent) partyAttachmentIntentRef.current = null;
     }
-  }, []);
-
-  const onSelectPartyRoomCommentAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
-    setChatAttachmentSheetVisible(false);
-    void onPickPartyRoomCommentAttachment(scope);
-  }, [onPickPartyRoomCommentAttachment]);
+  }, [accessGate, blockedRoomAccess, chatSending, loading, notFound, paidTicketGate, partyAttachmentContext, pickCommentMedia, retirePartyAttachmentIntent, room, roomAuthority, setChatAttachmentFile, verifiedRoomOwner]);
 
   const onSendPartyRoomComment = useCallback(async () => {
+    const owned = commentMediaContext.roomAuthority;
+    if (commentMediaContextRef.current !== commentMediaContext || commentSendFlightRef.current
+      || !owned.current() || commentMediaContext.verifiedRoomOwner !== owned
+      || !commentMediaContext.authority || commentMediaContext.authority.restoreOnly
+      || !sameAccountSessionAuthority(commentMediaContext.authority, getCurrentAccountSessionAuthoritySnapshot())) return;
     const safeBody = chatDraft.trim();
     const hasAttachment = !!chatAttachmentFile;
     if ((!safeBody && !hasAttachment) || chatSending) return;
+    const selectedIntent = selectedPartyAttachmentIntentRef.current;
+    if (hasAttachment && (!selectedIntent || !room || !selectedIntent.observe({ room, memberships: Object.values(membershipMapRef.current) }))) {
+      retireSelectedPartyAttachment();
+      setChatError("Choose the attachment again for this room before sending.");
+      return;
+    }
 
     const currentUserId = String(myUserIdRef.current ?? "").trim();
     if (!partyId || !currentUserId) {
@@ -2253,30 +2468,82 @@ export default function WatchPartyRoomScreen() {
       return;
     }
 
+    retirePartyAttachmentIntent();
+    const flight = {};
+    commentSendFlightRef.current = flight;
+    const ownsFlight = () => commentMediaContextRef.current === commentMediaContext
+      && owned.current() && commentMediaContext.verifiedRoomOwner === owned
+      && commentSendFlightRef.current === flight
+      && sameAccountSessionAuthority(commentMediaContext.authority, getCurrentAccountSessionAuthoritySnapshot());
+    const isCurrent = () => ownsFlight()
+      && (!hasAttachment || (selectedPartyAttachmentIntentRef.current === selectedIntent && !!selectedIntent?.current()));
     setChatSending(true);
     setChatError("");
+    let releaseSendAttachment = () => {};
     try {
+      // UI/canonical retirement may clear the composer while a dispatched
+      // service still owns the original file. Keep that byte lifetime separate.
+      releaseSendAttachment = retainPickedMedia(chatAttachmentFile);
+      const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+      if (!isCurrent()) return;
+      if (chatAttachmentFile && !sameAccountSessionAuthority(attachmentSubjectRef.current?.authority, mutationSubject.authority)) {
+        throw new Error("Choose the attachment again for this account before sending.");
+      }
+      if (chatAttachmentFile && !(await selectedIntent?.verifyBeforeMutation())) {
+        if (ownsFlight()) {
+          retireSelectedPartyAttachment();
+          setChatError("Current room access could not be verified. Reopen the room and choose the attachment again.");
+        }
+        return;
+      }
+      if (!isCurrent()) return;
       const bodyToSend = safeBody || String(chatAttachmentFile?.name ?? "Attachment").trim() || "Attachment";
       const sent = await sendPartyMessageRecord(partyId, currentUserId, "chat", bodyToSend, {
         username: resolveIdentityName(myProfileUsernameRef.current, myUsernameRef.current, "Guest"),
+        mutationSubject,
+        isCurrent,
       });
+      if (!isCurrent()) return;
       if (!sent) {
         setChatError("Comment could not be sent. Try again.");
         return;
       }
 
       if (chatAttachmentFile) {
+        if (!(await selectedIntent?.verifyBeforeMutation())) {
+          if (ownsFlight()) {
+            setChatDraft(""); retireSelectedPartyAttachment();
+            setChatError("Your comment was saved, but current attachment access could not be verified. Refresh before sending it separately to avoid repeating the comment.");
+          }
+          return;
+        }
+        if (!isCurrent()) return;
         try {
           const attachment = await createSocialAttachmentForSurface({
             surfaceType: "watch_party_room_message",
             surfaceId: sent.id,
             file: chatAttachmentFile,
+            mutationSubject,
+            isCurrent,
           });
+          if (!isCurrent()) return;
           setMessages((prev) => prev.map((message) => (
             message.id === sent.id ? { ...message, attachments: [attachment] } : message
           )));
         } catch (attachmentError) {
-          await deletePartyMessage(sent.id).catch(() => undefined);
+          if (!isCurrent()) return;
+          if (isSocialAttachmentOutcomeAmbiguous(attachmentError)) {
+            setChatDraft(""); setChatAttachmentFile(null);
+            throw attachmentError;
+          }
+          let deleted = false;
+          try { await deletePartyMessage(sent.id, { mutationSubject }); deleted = true; } catch { /* Saved parent stays authoritative. */ }
+          if (!isCurrent()) return;
+          if (!deleted) {
+            setChatDraft(""); setChatAttachmentFile(null);
+            setChatError("Your comment was saved, but the attachment failed. Refresh before sending it separately to avoid repeating the comment.");
+            return;
+          }
           setMessages((prev) => prev.filter((message) => message.id !== sent.id));
           throw attachmentError;
         }
@@ -2286,20 +2553,31 @@ export default function WatchPartyRoomScreen() {
       setChatAttachmentFile(null);
       setTimeout(() => roomScrollRef.current?.scrollToEnd({ animated: true }), 80);
     } catch (error) {
+      if (!isCurrent()) return;
+      if (isAttachmentParentSavedError(error)) {
+        setChatDraft(""); setChatAttachmentFile(null);
+      }
       reportRuntimeError("watch-party-room-comment-send", error, {
         partyId,
       });
       setChatError(getUserFacingErrorMessage(error, "Comment could not be sent. Try again."));
     } finally {
-      setChatSending(false);
+      releaseSendAttachment();
+      if (ownsFlight()) setChatSending(false);
+      if (commentSendFlightRef.current === flight) commentSendFlightRef.current = null;
     }
   }, [
+    commentMediaContext,
+    retirePartyAttachmentIntent,
+    retireSelectedPartyAttachment,
     appConfig.runtimeControls.chat_attachments_enabled,
     appConfig.runtimeControls.chat_enabled,
     chatAttachmentFile,
     chatDraft,
     chatSending,
+    setChatAttachmentFile,
     partyId,
+    room,
   ]);
 
   // ── Connection display helpers ───────────────────────────────────────────────
@@ -2755,7 +3033,7 @@ export default function WatchPartyRoomScreen() {
     );
   }
 
-  if (accessGate && room) {
+  if (accessGate && room && roomAuthority.current() && verifiedRoomOwner === roomAuthority) {
     const accessGateSheetReason = isAccessSheetReason(accessGate.access.reason)
       ? accessGate.access.reason
       : null;
@@ -2850,7 +3128,7 @@ export default function WatchPartyRoomScreen() {
     );
   }
 
-  if (paidTicketGate && room) {
+  if (paidTicketGate && room && roomAuthority.current() && verifiedRoomOwner === roomAuthority) {
     const offer = paidTicketGate.offer;
     const priceLabel = offer
       ? `${(offer.priceCents / 100).toLocaleString(undefined, { style: "currency", currency: offer.currency.toUpperCase() })}`
@@ -2903,7 +3181,7 @@ export default function WatchPartyRoomScreen() {
     );
   }
 
-  if (blockedRoomAccess && room) {
+  if (blockedRoomAccess && room && roomAuthority.current() && verifiedRoomOwner === roomAuthority) {
     return (
       <View style={styles.center}>
         <View style={styles.errorCard}>
@@ -2918,7 +3196,7 @@ export default function WatchPartyRoomScreen() {
   }
 
   // ── Not found ────────────────────────────────────────────────────────────────
-  if (notFound || !room) {
+  if (notFound || !room || !roomAuthority.current() || verifiedRoomOwner !== roomAuthority) {
     return (
       <View style={styles.center}>
         <View style={styles.errorCard}>
@@ -2986,7 +3264,7 @@ export default function WatchPartyRoomScreen() {
     ? (tailoredFocusParticipant.userId === currentUserBubbleId ? "You" : tailoredFocusParticipant.displayName)
     : "Host";
   const partyRoomVisibilityLabel = hiddenParticipantCount > 0 ? `${hiddenParticipantCount} hidden locally` : "Everyone visible";
-  const partyRoomJoinLabel = roomLocked ? "Locked" : "Open";
+  const partyRoomJoinLabel = (room?.joinPolicy === "locked" || (!room && roomLocked)) ? "Locked" : "Open";
   const partyRoomReactionLabel = reactionsGloballyMuted ? "Muted" : "Enabled";
   const partyRoomCaptureLabel = room.capturePolicy === "host_managed" ? "Host-managed" : "Best-effort";
   const tailoredRoomIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
@@ -3041,6 +3319,12 @@ export default function WatchPartyRoomScreen() {
     return (
       <View style={styles.hostWrap}>
         <Text style={styles.sectionKicker}>CONTROLS</Text>
+        <RoomPrivacyDiscoveryControls room={room}
+          publicationStatus={partyDiscovery.message}
+          active={isFocused && partyRoomAppState === "active" && !saveReplayEnding && !loading && !notFound
+            && !accessGate && !blockedRoomAccess && isSignedIn}
+          onReadback={(next) => setRoom(current => applyWatchPartyHostSettingsReadback(current, next))}
+          onPublished={setConfirmedHostSettings} />
         <View style={styles.hostSection}>
           <Text style={styles.hostSectionLabel}>ROOM DEFAULTS</Text>
           <View style={styles.tailoredRoomMetaRow}>
@@ -3062,15 +3346,6 @@ export default function WatchPartyRoomScreen() {
             >
               <Text style={styles.hostBtnText}>
                 {reactionsGloballyMuted ? "🔇  Unmute reactions" : "🔇  Mute reactions"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.hostBtn, roomLocked && styles.hostBtnOn]}
-              onPress={onToggleLockRoom}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.hostBtnText}>
-                {roomLocked ? "🔓  Unlock room" : "🔒  Lock room"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -3271,7 +3546,7 @@ export default function WatchPartyRoomScreen() {
           <SocialAttachmentCard
             file={chatAttachmentFile}
             compact
-            onRemove={() => setChatAttachmentFile(null)}
+              onRemove={() => { if (commentSendFlightRef.current) return; retirePartyAttachmentIntent(); retireSelectedPartyAttachment(); }}
           />
         ) : null}
         <View style={styles.partyCommentInputRow}>
@@ -3281,7 +3556,7 @@ export default function WatchPartyRoomScreen() {
             activeOpacity={0.84}
             accessibilityLabel="Attach to room comment"
             onPress={() => {
-              setChatAttachmentSheetVisible(true);
+                void onPickPartyRoomCommentAttachment();
             }}
           >
             <MaterialIcons name="attach-file" size={19} color="#F3F7FF" />
@@ -3993,14 +4268,7 @@ export default function WatchPartyRoomScreen() {
           setReportTarget(null);
         }}
       />
-      <SocialAttachmentActionSheet
-        visible={chatAttachmentSheetVisible}
-        kicker="ROOM ATTACHMENT"
-        title="Add to room comment"
-        body="Photos and files attach to this room comment and stay inside the room context."
-        onSelect={onSelectPartyRoomCommentAttachment}
-        onClose={() => setChatAttachmentSheetVisible(false)}
-      />
+      {commentMediaPickerSheet}
     </View>
   );
 }

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
+import { loadPickedMediaResources } from "./picked-media-resources-host.mjs";
 
 // Execute the exact production declarations, replacing only their named IO
 // boundaries. SOURCE_ROOT also permits the same assertions against an old tree.
@@ -26,6 +27,7 @@ export function loadStudioFunctions(file, names, context, root = process.env.STU
     + `\nglobalThis.api = {${names.join(",")}};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React },
   }).outputText;
+  Object.assign(context, { ...loadPickedMediaResources(), ...context });
   vm.runInNewContext(code, context);
   return context.api;
 }

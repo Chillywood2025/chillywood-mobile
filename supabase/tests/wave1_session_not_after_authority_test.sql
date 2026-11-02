@@ -140,8 +140,8 @@ select is(
       and procedure.proname <> 'wave1_session_authority_readback'
       and pg_get_functiondef(procedure.oid) like '%wave1_session_authority_readback%'
   ),
-  30,
-  'all thirty direct SQL consumers inherit the one shared root correction'
+  33,
+  'all thirty-three direct SQL consumers inherit the one shared root correction'
 );
 
 select is(
@@ -172,7 +172,10 @@ select is(
     'create_vip_pass_intent_pre_source_lock',
     'creator_video_paid_precharge_authority_internal',
     'platform_exact_current_session_authority_internal',
+    'resolve_watch_party_room_entry',
     'restore_scheduled_account_deletion',
+    'set_watch_party_room_host_settings',
+    'set_watch_party_room_host_settings_pre_listing_pause',
     'wave1_accept_legal_documents',
     'wave1_accept_legal_documents_pre_integrity_closeout',
     'wave1_assert_current_creator_money_authority_internal',

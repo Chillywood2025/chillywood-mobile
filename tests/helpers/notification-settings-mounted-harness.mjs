@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { createRoot } from 'react-dom/client';
 import { webcrypto } from 'node:crypto';
 import { createPreferenceBackend } from './notification-preference-cas-backend.mjs';
+import { loadMediaPickerHost } from './media-picker-host.mjs';
 export { createPreferenceBackend, preferenceRow, preferenceRead, holdPreferenceWrite } from './notification-preference-cas-backend.mjs';
 
 export const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
@@ -146,20 +147,22 @@ export async function mount(t, { read, write, register, authority: initialAuthor
   const subscribe = authority.subscribeToAccountSessionAuthority;
   const authorityListeners = new Set();
   const screenAuthorityListeners = new Set();
-  const trackAuthoritySubscription = (listener, screen = false) => {
+  const pickerAuthorityListeners = new Set();
+  const trackAuthoritySubscription = (listener, owner = null) => {
     const subscription = Symbol('authority subscription');
     authorityListeners.add(subscription);
-    if (screen) screenAuthorityListeners.add(subscription);
+    owner?.add(subscription);
     state.authoritySubscriptions++; const unsubscribe = subscribe(listener);
     return () => {
       assert.ok(authorityListeners.delete(subscription), 'authority subscription releases exactly once');
       screenAuthorityListeners.delete(subscription);
+      pickerAuthorityListeners.delete(subscription);
       state.authoritySubscriptions--; unsubscribe();
     };
   };
   authority.subscribeToAccountSessionAuthority = listener => trackAuthoritySubscription(listener);
   const screenAuthority = { ...authority,
-    subscribeToAccountSessionAuthority: listener => trackAuthoritySubscription(listener, true) };
+    subscribeToAccountSessionAuthority: listener => trackAuthoritySubscription(listener, screenAuthorityListeners) };
   authority.publishAccountSessionAuthoritySnapshot(initialAuthority);
   const rpc = load(compile(source('_lib/accountBoundSupabaseRpc.mjs')), {}, { URL, fetch: async (url, options) => {
     const name = new URL(url).pathname.split('/').at(-1);
@@ -270,6 +273,14 @@ export async function mount(t, { read, write, register, authority: initialAuthor
     '../components/navigation/app-back-button': { AppBackButton: 'Back' }, '../components/ui/ProfileMediaImage': { ProfileMediaImage: 'Image' },
     '../components/ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: 'Fill' },
   };
+  // Mount the actual picker/owned-state lifecycle against the same authority
+  // publisher, rather than hiding its subscriptions behind no-op hook mocks.
+  const media = loadMediaPickerHost({ React, native: mocks['react-native'],
+    snapshot: authority.getCurrentAccountSessionAuthoritySnapshot,
+    subscribe: listener => trackAuthoritySubscription(listener, pickerAuthorityListeners) });
+  mocks['../hooks/useMediaPicker'] = media;
+  mocks['../hooks/useOwnedPickedMediaState'] = media.ownedState;
+  mocks['../_lib/mediaPickerResources'] = media.resources;
   const screen = load(settingsCode, mocks, { capture: value => { tree = value; return null; } }).default;
   const root = createRoot(container()), act = async fn => React.act(async () => { await fn(); await settle(); });
   const render = () => act(() => root.render(React.createElement(screen, { key: keyed ? authority.getAccountNavigationTreeKey(state.authority) : 'unkeyed-test-control' })));
@@ -281,7 +292,10 @@ export async function mount(t, { read, write, register, authority: initialAuthor
   // but a leaked transport callback cannot masquerade as either screen effect.
   const assertMountedAuthorityListeners = () => {
     assert.equal(screenAuthorityListeners.size, 2, 'notification and media ownership effects are the two screen subscriptions');
-    assert.deepEqual(new Set(authorityListeners), new Set(screenAuthorityListeners), 'only the current mounted screen subscriptions remain');
+    assert.equal(pickerAuthorityListeners.size, settingsSource.includes('useMediaPicker(') ? 1 : 0,
+      'the actual shared picker owns one subscription; historical screens predate it');
+    assert.deepEqual(new Set(authorityListeners), new Set([...screenAuthorityListeners, ...pickerAuthorityListeners]),
+      'only the current screen and shared-picker subscriptions remain; transport callbacks must retire');
     assert.equal(state.authoritySubscriptions, authorityListeners.size);
   };
   const section = () => walk(tree, n => n.props?.id === 'notifications')[0];

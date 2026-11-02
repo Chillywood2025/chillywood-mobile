@@ -10,7 +10,7 @@ select has_column('public','creator_events','visibility',
   'creator Events persist an authoritative audience');
 select has_function('public','can_read_creator_event',array['uuid','uuid'],
   'Event visibility has one server-side resolver');
-select has_function('public','publish_live_stage_discovery',array['text','uuid'],
+select has_function('public','publish_live_stage_discovery_current',array['text','uuid','uuid','uuid','bigint'],
   'connected Live Stages have a server-only publication transition');
 select has_function('public','sync_spectator_broadcast_discovery',array['uuid'],
   'provider-approved spectator broadcasts have a canonical producer');
@@ -20,11 +20,11 @@ select ok(not has_function_privilege(
   'anon','public.can_read_circle_spectator_feed_item(uuid,text)','EXECUTE'
 ), 'anonymous clients cannot invoke Circle discovery authority');
 
-select ok(has_function_privilege('service_role','public.publish_live_stage_discovery(text,uuid)','EXECUTE'),
+select ok(has_function_privilege('service_role','public.publish_live_stage_discovery_current(text,uuid,uuid,uuid,bigint)','EXECUTE'),
   'the service role can publish an exact connected Live Stage');
-select ok(not has_function_privilege('anon','public.publish_live_stage_discovery(text,uuid)','EXECUTE'),
+select ok(not has_function_privilege('anon','public.publish_live_stage_discovery_current(text,uuid,uuid,uuid,bigint)','EXECUTE'),
   'anonymous clients cannot publish a Live Stage');
-select ok(not has_function_privilege('authenticated','public.publish_live_stage_discovery(text,uuid)','EXECUTE'),
+select ok(not has_function_privilege('authenticated','public.publish_live_stage_discovery_current(text,uuid,uuid,uuid,bigint)','EXECUTE'),
   'authenticated clients cannot publish a Live Stage');
 select ok(has_function_privilege('service_role','public.read_authorized_event_reminder_recipients(uuid)','EXECUTE'),
   'the notification service can enumerate authorized Event reminders');
@@ -94,6 +94,37 @@ where session.id in (
   'a1000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000002',
   'c3000000-0000-4000-8000-000000000003','d4000000-0000-4000-8000-000000000004'
 ) and document.active and document.market='UNITED_STATES' and document.capability='account';
+
+update public.platform_money_kill_switches set state='sandbox_only'
+  where key in ('revenuecat_google_play_enabled','provider_webhooks_enabled');
+select is(public.process_revenuecat_premium_event_atomic('revenuecat_google_play','pre-activation-current-host','INITIAL_PURCHASE',
+  'a1000000-0000-4000-8000-000000000001',p.provider_product_id,p.provider_base_plan_id,'sandbox','active',
+  now()-interval '1 minute',now()+interval '1 day',now(),999,'usd',repeat('b',64),'NORMAL','google_play','android',null,p.id,'pre-activation-original')->>'status',
+  'processed','current Live host uses real finite Premium authority')
+  from public.monetization_products p where p.provider='revenuecat_google_play' and p.environment='sandbox'
+    and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1;
+create function pg_temp.enter_current_live_host(p_party text,p_audience text default null) returns void language plpgsql as $$
+declare claims text:=current_setting('request.jwt.claims',true); role_claim text:=current_setting('request.jwt.claim.role',true);
+  prior_role text:=current_setting('role',true); host uuid; r public.watch_party_rooms;
+begin
+  select host_user_id into host from public.watch_party_rooms where party_id=p_party;
+  perform set_config('request.jwt.claim.role','authenticated',true);
+  perform set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',host,'session_id',host)::text,true);
+  perform set_config('role','authenticated',true);
+  perform public.join_watch_party_room_session(p_party);
+  if p_audience is not null then
+    select * into r from public.watch_party_rooms where party_id=p_party;
+    perform public.set_watch_party_room_host_settings(p_party,r.room_generation,r.host_settings_revision,host::text,
+      r.join_policy,p_audience,r.discovery_title,r.source_type,r.source_id,false,false,false);
+  end if;
+  perform set_config('role',coalesce(prior_role,'none'),true);
+  perform set_config('request.jwt.claim.role',coalesce(role_claim,''),true);
+  perform set_config('request.jwt.claims',coalesce(claims,''),true);
+end $$;
+create function pg_temp.publish_current_live(p_party text,p_actor uuid) returns boolean language sql as $$
+  select public.publish_live_stage_discovery_current(r.party_id,p_actor,p_actor,r.room_generation,r.host_settings_revision)
+    from public.watch_party_rooms r where r.party_id=p_party;
+$$;
 
 insert into public.user_friendships(
   user_low_id,user_high_id,requested_by_user_id,status,responded_at,actioned_by_user_id
@@ -298,10 +329,11 @@ insert into public.watch_party_rooms(
 ) values (
   'RFGC-PUBLIC-LIVE','a1000000-0000-4000-8000-000000000001','live',true,'public','Public Live proof'
 );
-select ok(not public.publish_live_stage_discovery(
+select pg_temp.enter_current_live_host('RFGC-PUBLIC-LIVE');
+select ok(not pg_temp.publish_current_live(
   'RFGC-PUBLIC-LIVE','c3000000-0000-4000-8000-000000000003'),
   'a non-host cannot publish another creator Live');
-select ok(public.publish_live_stage_discovery(
+select ok(pg_temp.publish_current_live(
   'RFGC-PUBLIC-LIVE','a1000000-0000-4000-8000-000000000001'),
   'the exact host can publish the exact active connected Live');
 select is((select count(*)::integer from public.discovery_feed_items
@@ -349,7 +381,8 @@ insert into public.watch_party_rooms(
 ) values (
   'RFGC-SPECTATOR-WP','a1000000-0000-4000-8000-000000000001','live',true,'public','Exact Live Stage source'
 );
-select ok(public.publish_live_stage_discovery(
+select pg_temp.enter_current_live_host('RFGC-SPECTATOR-WP');
+select ok(pg_temp.publish_current_live(
   'RFGC-SPECTATOR-WP','a1000000-0000-4000-8000-000000000001'),
   'the exact Live Stage can publish even when a spectator source uses the same canonical room id');
 select is((select count(*)::integer from public.discovery_feed_items
@@ -364,6 +397,10 @@ select ok((select not is_publicly_discoverable and moderation_status='hidden'
   where source_type='watch_party_room' and source_id='RFGC-SPECTATOR-WP'),
   'ended spectator playback cannot remain publicly discoverable');
 
+-- A new Circle provider report cannot resurrect an ended Public room. The
+-- actual host first restarts, rejoins and explicitly selects Circle audience.
+update public.watch_party_rooms set is_active=true where party_id='RFGC-SPECTATOR-WP';
+select pg_temp.enter_current_live_host('RFGC-SPECTATOR-WP','circle');
 update public.spectator_hls_playback_records
 set visibility='circle',playback_status='live',access_type='circle',
     is_publicly_watchable=false,is_spectator_playback_enabled=true,
@@ -416,7 +453,8 @@ insert into public.watch_party_room_memberships(
   'RFGC-CIRCLE-LIVE','b2000000-0000-4000-8000-000000000002',
   'viewer','listener','active',timezone('utc'::text,now())
 );
-select ok(public.publish_live_stage_discovery(
+select pg_temp.enter_current_live_host('RFGC-CIRCLE-LIVE');
+select ok(pg_temp.publish_current_live(
   'RFGC-CIRCLE-LIVE','a1000000-0000-4000-8000-000000000001'),
   'the exact host can publish a Circle Live');
 select is((select count(*)::integer from public.circle_spectator_feed_items
@@ -428,7 +466,7 @@ select is((select count(*)::integer from public.discovery_feed_items
   'a Circle Live has no public discovery item');
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001"}',true);
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001","session_id":"a1000000-0000-4000-8000-000000000001"}',true);
 set local role authenticated;
 select throws_ok(
   $$update public.watch_party_rooms
@@ -454,7 +492,7 @@ reset role;
 
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-4000-8000-000000000002"}',true);
+  '{"role":"authenticated","sub":"b2000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',true);
 set local role authenticated;
 select is((select count(*)::integer from public.creator_events
   where id in (
@@ -480,7 +518,7 @@ insert into public.channel_audience_blocks(
 );
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"b2000000-0000-4000-8000-000000000002"}',true);
+  '{"role":"authenticated","sub":"b2000000-0000-4000-8000-000000000002","session_id":"b2000000-0000-4000-8000-000000000002"}',true);
 set local role authenticated;
 select ok(not public.can_read_creator_event(
   'e2000000-0000-4000-8000-000000000002',
@@ -495,7 +533,7 @@ where channel_user_id='a1000000-0000-4000-8000-000000000001'
   and blocked_user_id='b2000000-0000-4000-8000-000000000002';
 
 select set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"c3000000-0000-4000-8000-000000000003"}',true);
+  '{"role":"authenticated","sub":"c3000000-0000-4000-8000-000000000003","session_id":"c3000000-0000-4000-8000-000000000003"}',true);
 set local role authenticated;
 select is((select count(*)::integer from public.creator_events
   where id in (
@@ -645,7 +683,7 @@ where source_type='creator_video'
   and source_id='e9000000-0000-4000-8000-000000000009';
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claims',
-  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001"}',true);
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001","session_id":"a1000000-0000-4000-8000-000000000001"}',true);
 set local role authenticated;
 select ok(not public.can_read_creator_feed_item(
   'creator_video','e9000000-0000-4000-8000-000000000009',

@@ -36,6 +36,7 @@ type CircleSpectatorFeedItemRow = {
   category_key: string | null;
   channel_user_id: string | null;
   created_at: string | null;
+  discovery_hint_key?: string | null;
   ended_at: string | null;
   event_id: string | null;
   host_user_id: string | null;
@@ -83,6 +84,7 @@ const adaptCircleSpectatorFeedItem = (row: CircleSpectatorFeedItemRow): Discover
   circle_signal_user_id: toText(row.creator_user_id) || null,
   created_at: row.created_at ?? new Date().toISOString(),
   discovery_surface: "none",
+  discovery_hint_key: row.discovery_hint_key ?? null,
   ended_at: row.ended_at,
   event_id: row.event_id,
   follow_signal_user_id: null,

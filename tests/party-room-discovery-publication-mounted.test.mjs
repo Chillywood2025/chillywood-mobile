@@ -12,10 +12,10 @@ const container = () => ({ addEventListener: noop, removeEventListener: noop, na
 document.documentElement = container(); globalThis.document = document; globalThis.window = globalThis; globalThis.HTMLIFrameElement = class {};
 const authority = (id = 'host', generation = 'session-a') => ({ userId: id, accountId: id, sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false });
 const same = (a, b) => !!a && !!b && a.userId === b.userId && a.accountId === b.accountId && a.sessionGeneration === b.sessionGeneration && a.state === b.state && a.restoreOnly === b.restoreOnly;
-const room = () => ({ partyId: 'PARTY42', hostUserId: 'host', roomType: 'title', sourceType: 'platform_title', sourceId: 'title-a', discoveryVisibility: 'public', discoveryTitle: 'Tonight', isActive: true });
+const room = () => ({ partyId: 'PARTY42', hostUserId: 'host', roomType: 'title', roomGeneration: 'generation-a', hostSettingsRevision: 0, joinPolicy: 'open', sourceType: 'platform_title', sourceId: 'title-a', discoveryVisibility: 'public', discoveryPaused: false, discoveryTitle: 'Tonight', isActive: true });
 const member = () => ({ partyId: 'PARTY42', userId: 'host', role: 'host', membershipState: 'active', lastSeenAt: new Date().toISOString(), leftAt: null });
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
-const result = changes => ({ partyId: 'PARTY42', sourceType: 'platform_title', sourceId: 'title-a', visibility: 'public', title: 'Tonight', published: true, startedAt: new Date().toISOString(), projectionId: 'projection-a', ...changes });
+const result = changes => ({ partyId: 'PARTY42', roomType: 'title', roomGeneration: 'generation-a', settingsRevision: 0, joinPolicy: 'open', sourceType: 'platform_title', sourceId: 'title-a', visibility: 'public', discoveryPaused: false, title: 'Tonight', published: true, startedAt: new Date().toISOString(), projectionId: 'projection-a', ...changes });
 const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true };
 
 async function mount(t, { start = true, joined = true, server, bootstrapJoin = null } = {}) {
@@ -30,10 +30,11 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
   // are the real watchParty.ts functions, not a test reimplementation.
   const source = fs.readFileSync('_lib/watchParty.ts', 'utf8');
   const ast = ts.createSourceFile('watchParty.ts', source, ts.ScriptTarget.Latest, true);
-  const names = new Set(['readOwnedPartyRoomForPreparation', 'writePartyRoomDiscovery', 'setPartyRoomDiscoverySettings', 'publishPartyRoomDiscovery']);
+  const names = new Set(['readOwnedPartyRoomForPreparation', 'getOwnedPartyRoomForPreparation', 'writePartyRoomDiscovery', 'setPartyRoomDiscoverySettings', 'publishPartyRoomDiscovery']);
   const production = ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.has(node.name?.text)).map(node => node.getText(ast)).join('\n');
-  assert.equal(production.match(/(?:export )?async function /g).length, 4);
+  assert.equal(production.match(/(?:export )?async function /g).length, 5);
   const rpcScope = { exports: {}, getPartyRoom: async () => state.stored,
+    getCurrentAccountSessionAuthoritySnapshot: () => state.authority, sameAccountSessionAuthority: same,
     // This mounted publication suite models room reads; the separate prepared-owner
     // suite executes actual raw-row fetch/conversion/activity filtering.
     fetchPartyRoomRow: async () => state.stored ? {
@@ -51,7 +52,8 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
     async invokeAccountBoundSupabaseMutationRpc(subject, name, args) {
       if (!same(subject.authority, state.authority)) throw Error('account_changed');
       state.calls.push({ name, args: JSON.parse(JSON.stringify(args)) });
-      const data = state.server ? await state.server({ name, args }) : result();
+      const data = state.server ? await state.server({ name, args }) : result({ visibility: args.p_discovery_visibility, discoveryPaused: args.p_discovery_paused, title: args.p_discovery_title,
+        published: args.p_publish && args.p_discovery_visibility !== 'private' && !args.p_discovery_paused });
       if (!same(subject.authority, state.authority)) throw Error('account_changed');
       return { data, error: null };
     } };
@@ -59,18 +61,21 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
   const modules = new Map();
   function load(path) {
     if (modules.has(path)) return modules.get(path);
-    const scope = { exports: {}, Date, require(name) {
+    const scope = { exports: {}, Date, setTimeout, clearTimeout, require(name) {
       if (name === 'react') return React;
       if (name === 'react-native') return { AppState };
       if (name === './accountSessionAuthority') return account;
       if (name === './session') return { useSession: () => ({ authority: state.authority, authorityStatus: 'active' }) };
-      if (name === './watchParty') return rpcScope.exports;
+      if (name === './watchParty') return { ...rpcScope.exports, getPartyRoom: rpcScope.getPartyRoom };
+      if (name === './accountBoundSupabaseMutation') return rpcScope;
+      if (name === './watchPartyHostSettings') return load('_lib/watchPartyHostSettings.ts');
       if (name === './partyRoomStartIntent') return load('_lib/partyRoomStartIntent.ts');
       throw Error(`unmodeled production dependency ${name}`);
     } };
     vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions }).outputText, scope);
     modules.set(path, scope.exports); return scope.exports;
   }
+  rpcScope.setWatchPartyHostSettings = (...args) => load('_lib/watchPartyHostSettings.ts').setWatchPartyHostSettings(...args);
   const intents = load('_lib/partyRoomStartIntent.ts');
   if (start) state.startIntent = intents.rememberPartyRoomStartIntent(state.room, state.authority);
   const { usePartyRoomDiscoveryPublication } = load('_lib/usePartyRoomDiscoveryPublication.ts');
@@ -93,9 +98,11 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
     state.lifecycle = [];
     const ref = value => ({ current: value });
     const context = {
-      canUseBetaRoom: true, partyId: 'PARTY42',
+      canUseBetaRoom: true, partyId: 'PARTY42', authority: state.authority,
       setLoading(value) { state.lifecycle.push(`loading:${value}`); state.active = !value; root.render(React.createElement(Harness)); },
       setNotFound: noop, setConnState: noop, setAccessGate: noop, setBlockedRoomAccess: noop, setPaidTicketGate: noop,
+      clearUnavailableRoom: noop, setVerifiedRoomOwner: noop,
+      subscribeToLiveUpdates: () => noop,
       setPaidTicketNotice: noop, setAccessSheetVisible: noop, setRoom: noop, setTitleName: noop, setSourceAttribution: noop, setMessages: noop,
       readUserProfile: async () => ({ username: 'Host' }), getSafePartyUserId: async () => 'host',
       getPartyRoomSnapshot: async () => snapshot(), resolvePaidWatchPartyTicketAccess: async () => ({ allowed: true, reason: 'free_room' }),
@@ -116,6 +123,7 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
       myUserIdRef: ref(null), myProfileUsernameRef: ref(''), myCameraPreviewUrlRef: ref(''), myRoleRef: ref('host'),
       paidTicketAuthoritySeenRef: ref(false), membershipMapRef, pollRef: ref(null), heartbeatRef: ref(null),
       chatChannelRef: ref(null), roomChatRealtimeChannelRef: ref(null), roomRealtimeChannelRef: ref(null), participantReactionTimeoutsRef: ref({}),
+      roomChannelRetirementRef: ref(null),
       ROOM_SNAPSHOT_REFRESH_MS: 15000, ROOM_HEARTBEAT_INTERVAL_MILLIS: 15000,
       setInterval: () => 1, clearInterval: noop, clearTimeout: noop,
       saveLastPartySession: async () => {}, startChatChannel: noop, startRoomRealtimeSync: noop, startRoomChatRealtimeSync: noop,
@@ -126,11 +134,14 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
         query.returns = async () => ({ data: [] }); return query;
       } },
     };
+    context.roomAuthority = load('_lib/roomSnapshotAuthority.ts').createRoomSnapshotAuthority({
+      partyId: 'PARTY42', userId: 'host', current: () => true, unavailable: noop, read: async () => snapshot(),
+    });
     vm.runInNewContext(ts.transpileModule(`globalThis.effect = ${effects[0].getText(screenAst)}`, { compilerOptions }).outputText, context);
     bootstrapEffect = context.effect;
   }
   function Harness() {
-    state.view = usePartyRoomDiscoveryPublication({ room: state.room, membership: state.member, active: state.active, startIntent: state.startIntent });
+    state.view = usePartyRoomDiscoveryPublication({ room: state.room, membership: state.member, active: state.active, startIntent: state.startIntent, confirmedHostSettings: state.confirmed });
     React.useEffect(() => bootstrapEffect?.(), []);
     return null;
   }
@@ -150,8 +161,9 @@ test('only explicit Start plus actual joined host publishes, with exact session/
   const h = await mount(t, { joined: false }); assert.equal(h.state.calls.length, 0);
   await h.mutate(() => { h.state.member = member(); });
   assert.equal(h.state.view.status, 'published'); assert.equal(h.state.calls.length, 1);
-  assert.deepEqual(h.state.calls[0], { name: 'publish_party_room_discovery', args: {
+  assert.deepEqual(h.state.calls[0], { name: 'set_watch_party_room_host_settings', args: {
     p_party_id: 'PARTY42', p_expected_source_type: 'platform_title', p_expected_source_id: 'title-a', p_session_generation: 'session-a',
+    p_expected_room_generation: 'generation-a', p_expected_settings_revision: 0, p_join_policy: 'open', p_discovery_visibility: 'public', p_discovery_paused: false, p_discovery_title: 'Tonight', p_publish: true, p_allow_owner_discovery: false,
   } });
   await h.render(); await h.retry(); assert.equal(h.state.calls.length, 1);
 });
@@ -159,10 +171,10 @@ test('only explicit Start plus actual joined host publishes, with exact session/
 test('actual Party Room bootstrap completes normal host join and clears loading before publication without awaiting media readiness', async t => {
   const joining = deferred();
   const h = await mount(t, { joined: false, bootstrapJoin: () => joining.promise });
-  assert.deepEqual(h.state.lifecycle, ['join:started']); assert.equal(h.state.calls.length, 0);
+  assert.deepEqual(h.state.lifecycle, ['loading:true', 'join:started']); assert.equal(h.state.calls.length, 0);
   await h.resolve(joining, member());
-  assert.deepEqual(h.state.lifecycle, ['join:started', 'join:completed', 'loading:false']);
-  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'publish_party_room_discovery');
+  assert.deepEqual(h.state.lifecycle, ['loading:true', 'join:started', 'join:completed', 'loading:false']);
+  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'set_watch_party_room_host_settings');
   assert.equal(h.state.view.status, 'published');
 });
 
@@ -189,15 +201,30 @@ test('normal private Party and audience-only save do not publish', async t => {
   h.state.server = () => result({ visibility: 'private', published: false, startedAt: null, projectionId: null });
   const saved = await h.rpc.setPartyRoomDiscoverySettings('PARTY42', { discoveryVisibility: 'private', discoveryTitle: 'Tonight' }, h.state.stored);
   assert.equal(saved.discoveryVisibility, 'private'); assert.equal(h.state.calls.length, 1);
-  assert.equal(h.state.calls[0].name, 'set_party_room_discovery');
+  assert.equal(h.state.calls[0].name, 'set_watch_party_room_host_settings'); assert.equal(h.state.calls[0].args.p_publish, false);
   assert.equal(h.intents.rememberPartyRoomStartIntent(h.state.stored, h.state.authority), null);
 });
 
+test('paused Circle has no Start publication intent or retry, while real room entry remains separate', async t => {
+  const h = await mount(t, { start: false });
+  await h.mutate(() => { h.state.room = { ...room(), discoveryVisibility: 'circle', discoveryPaused: true }; h.state.stored = h.state.room; });
+  assert.equal(h.intents.rememberPartyRoomStartIntent(h.state.room, h.state.authority), null);
+  await h.retry(); assert.equal(h.state.calls.length, 0); assert.equal(h.state.view.canRetry, false);
+  assert.match(h.state.view.message, /Circle-only entry is unchanged/);
+});
+
+test('pause then resume cannot accept an old Start intent at a newer settings revision', async t => {
+  const h = await mount(t, { joined: false });
+  await h.mutate(() => { h.state.room = { ...h.state.room, discoveryPaused: true, hostSettingsRevision: 1 }; });
+  await h.mutate(() => { h.state.room = { ...h.state.room, discoveryPaused: false, hostSettingsRevision: 2 }; h.state.member = member(); });
+  assert.equal(h.state.calls.length, 0); assert.equal(h.state.view.status, 'failed');
+});
+
 test('explicit null title clears saved metadata without creating a listing', async t => {
-  const h = await mount(t, { start: false }); h.state.server = () => result({ title: null, published: false, startedAt: null, projectionId: null });
-  const saved = await h.rpc.setPartyRoomDiscoverySettings('PARTY42', { discoveryVisibility: 'public', discoveryTitle: null }, room());
-  assert.equal(saved.discoveryTitle, null); assert.equal(h.state.calls[0].args.p_title, null);
-  assert.equal(h.state.calls[0].name, 'set_party_room_discovery');
+  const h = await mount(t, { start: false }); h.state.server = () => result({ title: null, settingsRevision: 1, published: false, startedAt: null, projectionId: null });
+  const saved = await h.rpc.setPartyRoomDiscoverySettings('PARTY42', { discoveryVisibility: 'public', discoveryPaused: false, discoveryTitle: null }, room());
+  assert.equal(saved.discoveryTitle, null); assert.equal(h.state.calls[0].args.p_discovery_title, null);
+  assert.equal(h.state.calls[0].name, 'set_watch_party_room_host_settings');
 });
 
 test('publication failure is visible and retry is single-flight through the same room', async t => {
@@ -257,8 +284,15 @@ for (const [field, value] of [['partyId', 'wrong'], ['sourceId', 'wrong'], ['sou
 test('actual Party Room screen supplies membership/access/lifecycle state and visible retry', () => {
   const source = fs.readFileSync('app/watch-party/[partyId].tsx', 'utf8');
   assert.match(source, /usePartyRoomDiscoveryPublication\(\{/);
-  assert.match(source, /membership: room\?\.hostUserId \? membershipMapRef\.current\[room\.hostUserId\]/);
+  assert.match(source, /membership: roomAuthority\.current\(\) && verifiedRoomOwner === roomAuthority && room\?\.hostUserId \? membershipMapRef\.current\[room\.hostUserId\]/);
   assert.match(source, /active: isFocused && partyRoomAppState === "active" && !loading && !notFound/);
   assert.match(source, /!accessGate && !blockedRoomAccess && isSignedIn/);
   assert.match(source, /testID="party-room-discovery-retry"/);
+});
+
+test('explicit owner consent-only acknowledgement replaces failed Start without a new audience revision', async t => {
+  const h = await mount(t, { server: () => null }); assert.equal(h.state.view.status, 'failed');
+  await h.mutate(() => { h.state.confirmed = { room: h.state.room, authority: h.state.authority,
+    published: true, ownerDiscoveryConsent: true, projectionId: 'projection-a' }; });
+  assert.equal(h.state.view.status, 'published'); assert.equal(h.state.calls.length, 1, 'acknowledged in-room publication is not republished');
 });

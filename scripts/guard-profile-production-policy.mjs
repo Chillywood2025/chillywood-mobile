@@ -26,7 +26,10 @@ const profileMedia = read("_lib/profileMedia.ts");
 const profileMediaSheets = read("components/profile/profile-media-sheets.tsx");
 const socialAttachments = read("_lib/socialAttachments.ts");
 const socialAttachmentPicker = read("_lib/socialAttachmentPicker.ts");
-const socialAttachmentSheet = read("components/social/social-attachment-action-sheet.tsx");
+const mediaSourceSheet = read("components/ui/MediaSourceSheet.tsx");
+const mediaPickerHook = read("hooks/useMediaPicker.tsx");
+const deviceImagePicker = read("_lib/deviceImagePicker.ts");
+const deviceAttachmentPicker = read("_lib/deviceAttachmentPicker.ts");
 const chatInbox = read("app/chat/index.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const player = read("app/player/[id].tsx");
@@ -52,9 +55,11 @@ assertIncludes(profile, `!appConfig.runtimeControls.chat_enabled`, "Chi'lly Chat
 assertIncludes(profile, `const isChatAuthFailure = error instanceof Error`, "signed-out Chi'lly Chat auth handoff");
 assertIncludes(profile, `viewerFollowState === "signed_out"`, "signed-out Profile follow handoff");
 assertIncludes(profile, `accessibilityLabel="Attach to profile post"`, "Profile post attachment control");
-assertIncludes(profile, `SocialAttachmentActionSheet`, "Profile shared attachment sheet");
-assertIncludes(profile, `kicker="PROFILE ATTACHMENT"`, "modern Profile attachment sheet");
-assertIncludes(profile, `onSelect={onSelectProfileAttachment}`, "Profile shared attachment sheet action");
+assertIncludes(profile, `useMediaPicker(`, "Profile shared attachment sheet");
+assertIncludes(profile, `{mediaPickerSheet}`, "Profile shared attachment sheet render");
+assertIncludes(profile, `title: "Add to post"`, "modern Profile attachment sheet");
+assertIncludes(profile, `void onPickProfilePostAttachment();`, "Profile shared attachment sheet action");
+assertIncludes(profile, `pick: (source, operation) => pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation)`, "Profile attachment operation ownership");
 assertIncludes(profile, `Creator videos belong in Platform Studio.`, "Profile composer creator-video handoff copy");
 assertIncludes(profile, `resolveProfilePrivacyAccess`, "Profile privacy resolver");
 assertIncludes(profile, `if (!canViewFullProfile)`, "Profile private/blocked content gate");
@@ -102,10 +107,12 @@ assertIncludes(settings, `title="Profile Background"`, "Settings Profile Backgro
 assertIncludes(settings, `ProfileMediaReviewSheet`, "Settings Profile media review sheet");
 assertIncludes(settings, `Platform branding stays in Brand Studio.`, "Profile/Platform branding separation copy");
 assertIncludes(profileMedia, `PROFILE_MEDIA_BUCKET = "profile-media"`, "Profile media bucket");
-assertIncludes(profileMedia, `ImagePicker.launchImageLibraryAsync`, "Profile media phone gallery picker");
-assertIncludes(profileMedia, `allowsEditing: false`, "Profile media avoids broken native cropper");
-assertIncludes(profileMedia, `defaultTab: "photos"`, "Profile media gallery tab");
-assertIncludes(profileMedia, `legacy: false`, "Profile media modern photo-library picker");
+assertIncludes(profileMedia, `return pickDeviceImage(source, operation,`, "Profile media shared image picker ownership");
+assertIncludes(deviceImagePicker, `await pickDeviceAttachments(source,`, "Profile image shared native adapter");
+assertIncludes(deviceAttachmentPicker, `picker.launchImageLibraryAsync(pickerOptions)`, "shared phone photo-library picker");
+assertIncludes(deviceAttachmentPicker, `allowsEditing: false`, "shared picker avoids broken native cropper");
+assertIncludes(deviceAttachmentPicker, `legacy: false`, "shared modern photo-library picker");
+assertNotIncludes(deviceAttachmentPicker, `requestMediaLibraryPermissionsAsync`, "selected-item-only photo access");
 assertIncludes(profileMedia, `options: ProfileMediaUploadOptions = {}`, "Profile media in-app review fit options");
 assertIncludes(profileMedia, `prepareProfileMediaUploadUri`, "Profile media Android content URI staging");
 assertIncludes(profileMedia, `FileSystem.uploadAsync`, "Profile media robust Android upload");
@@ -163,14 +170,19 @@ assertIncludes(publicPlatform, `readCreatorVideos(routeUserId, { includeDrafts: 
 assertIncludes(platformStudio, `router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } })`, "Platform Studio public preview route");
 assertIncludes(socialAttachments, `export type SocialAttachmentPickerScope = "images" | "files"`, "shared attachment picker scope");
 assertIncludes(socialAttachments, `getSocialAttachmentPickerTypes`, "shared attachment picker type helper");
-assertIncludes(socialAttachmentPicker, `ImagePicker.launchImageLibraryAsync`, "shared photo gallery picker");
-assertIncludes(socialAttachmentPicker, `defaultTab: "photos"`, "shared photo picker gallery tab");
-assertIncludes(socialAttachmentPicker, `DocumentPicker.getDocumentAsync`, "shared file picker");
+assertIncludes(socialAttachmentPicker, `await pickDeviceAttachments(source, { mimeTypes: getSocialAttachmentPickerTypes(scope), operation,`, "shared attachment adapter and operation ownership");
+assertIncludes(socialAttachmentPicker, `getSocialAttachmentValidationMessage(file)`, "shared attachment validation");
+assertIncludes(deviceAttachmentPicker, `picker.getDocumentAsync`, "shared file picker");
+assertIncludes(deviceAttachmentPicker, `return runNativeMediaPicker(`, "shared native single-flight ownership");
 assertIncludes(packageJson, `"expo-image-picker"`, "native photo gallery picker dependency");
-assertIncludes(socialAttachmentSheet, `onSelect("images")`, "shared photo attachment sheet action");
-assertIncludes(socialAttachmentSheet, `onSelect("files")`, "shared file attachment sheet action");
-assertIncludes(socialAttachmentSheet, `Open your phone gallery.`, "shared photo attachment gallery copy");
-assertNotIncludes(socialAttachmentSheet, `Platform Studio`, "shared attachment sheet creator tools");
+assertIncludes(mediaPickerHook, `["photos", "camera", "files"]`, "shared attachment source choices");
+assertIncludes(mediaPickerHook, `<MediaSourceSheet`, "shared attachment sheet component");
+assertIncludes(mediaPickerHook, `onDismiss={onDismiss}`, "shared native dismissal handshake");
+assertIncludes(mediaPickerHook, `runMediaPickerSelection(isCurrent, (operation) => options.pick(choice, operation))`, "shared selection authority");
+assertIncludes(mediaSourceSheet, `onPress={() => props.onChoose(source)}`, "shared attachment source action");
+assertIncludes(mediaSourceSheet, `Browse photos and albums`, "shared photo attachment library copy");
+assertIncludes(mediaSourceSheet, `Choose from Files`, "shared file attachment copy");
+assertNotIncludes(mediaSourceSheet, `Platform Studio`, "shared attachment sheet creator tools");
 assertNotIncludes(profile, `showPlatformStudio`, "Profile attachment sheet creator-tool option");
 assertNotIncludes(profile, `onOpenPlatformStudio`, "Profile attachment sheet creator-tool callback");
 assertNotIncludes(profileMedia, `platform_brand_assets`, "Profile media helper must stay separate from Brand Studio assets");
@@ -186,10 +198,16 @@ assertIncludes(chatInbox, `formatUsernameHandle(other?.username)`, "Chi'lly Chat
 assertIncludes(chatInbox, `testID="chat-inbox-thread-handle"`, "Chi'lly Chat inbox handle render");
 assertIncludes(chatThread, `formatUsernameHandle(otherMember?.username)`, "Chi'lly Chat thread canonical @username formatter");
 assertIncludes(chatThread, `testID="chat-thread-header-handle"`, "Chi'lly Chat thread header handle render");
-assertIncludes(chatThread, `SocialAttachmentActionSheet`, "Chi'lly Chat shared attachment sheet");
-assertIncludes(player, `SocialAttachmentActionSheet`, "creator-video comments shared attachment sheet");
-assertIncludes(watchParty, `SocialAttachmentActionSheet`, "Watch-Party room comments shared attachment sheet");
-assertIncludes(liveStage, `SocialAttachmentActionSheet`, "Live Stage comments shared attachment sheet");
+for (const [source, sheet, label] of [
+  [chatThread, "mediaPickerSheet", "Chi'lly Chat"],
+  [player, "commentMediaPickerSheet", "creator-video comments"],
+  [watchParty, "commentMediaPickerSheet", "Watch-Party room comments"],
+  [liveStage, "commentMediaPickerSheet", "Live Stage comments"],
+]) {
+  assertIncludes(source, `useMediaPicker(`, `${label} shared attachment hook`);
+  assertIncludes(source, `{${sheet}}`, `${label} shared attachment sheet render`);
+  assertNotIncludes(source, `SocialAttachmentActionSheet`, `${label} obsolete attachment sheet`);
+}
 
 [
   "Upload a creator video",

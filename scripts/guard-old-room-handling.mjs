@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { assertLiveKitAuthoritativeRoomSelect, assertPublicRoomCountAuthority } from "./lib/live-room-source-authority-contract.mjs";
 
 const root = process.cwd();
 const readSource = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -29,6 +30,8 @@ const livekitRouting = readSource("supabase/functions/_shared/livekit-routing.ts
 const home = readSource("app/(tabs)/index.tsx");
 const explore = readSource("app/(tabs)/explore.tsx");
 const title = readSource("app/title/[id].tsx");
+const publicPartyCounts = readSource("_lib/publicPartyRoomCounts.ts");
+const publicPartyCountLifecycle = readSource("_lib/usePublicPartyRoomCounts.ts");
 const platformUsage = readSource("_lib/platformUsage.ts");
 const player = readSource("app/player/[id].tsx");
 const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
@@ -95,11 +98,8 @@ assertIncludes(
   "Chat call unavailable room clears active thread state",
 );
 
-assertIncludes(
-  livekitToken,
-  ".select(\"party_id,host_user_id,room_type,content_access_rule,is_active,started_at,updated_at,last_activity_at\")",
-  "LiveKit token room liveness and authoritative access-rule select",
-);
+try { assertLiveKitAuthoritativeRoomSelect(livekitToken); }
+catch (error) { fail(`LiveKit token room liveness and versioned authoritative select: ${error.message}`); }
 assertIncludes(livekitToken, "isWatchPartyRoomCurrentlyActive(room)", "LiveKit token stale-room check");
 assertIncludes(livekitToken, "error: \"room_expired\"", "LiveKit token room_expired rejection");
 assertBefore(
@@ -180,12 +180,13 @@ assertIncludes(
   "LiveKit existing assignment stale heartbeat rejection",
 );
 
-[home, explore, title].forEach((source, index) => {
-  const label = ["Home", "Explore", "Title"][index];
-  assertIncludes(source, "ROOM_ACTIVITY_ACTIVE_WINDOW_MS", `${label} shared room activity window`);
-  assertIncludes(source, "is_active", `${label} active room column`);
-  assertIncludes(source, ".eq(\"is_active\", true)", `${label} active room filter`);
-});
+try { assertPublicRoomCountAuthority({home,explore,title,helper:publicPartyCounts}); }
+catch (error) { fail(`Canonical room count privacy authority: ${error.message}`); }
+assertIncludes(publicPartyCounts, 'supabase.rpc("read_public_party_room_counts"', "Server-owned current public room count read");
+assertIncludes(publicPartyCounts, "sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())", "Count read exact account fence");
+assertIncludes(publicPartyCountLifecycle, "30_000", "Count lifecycle bounded canonical revalidation");
+assertIncludes(publicPartyCountLifecycle, 'AppState.currentState === "active"', "Count foreground visibility fence");
+assertIncludes(publicPartyCountLifecycle, "sequence === request", "Count stale response fence");
 
 assertIncludes(platformUsage, "ROOM_ACTIVITY_ACTIVE_WINDOW_MS", "Admin usage shared room activity window");
 assertIncludes(platformUsage, ".gte(\"last_activity_at\", activeRoomCutoffIso)", "Admin usage stale room filter");

@@ -8,6 +8,7 @@ const performance = productionModule("_lib/performancePolicy.ts");
 const stagePresentation = productionModule("_lib/watch-party/live-stage-presentation.ts");
 const stageLifecycle = productionModule("_lib/watch-party/live-stage-lifecycle.ts");
 const roomShared = productionModule("_lib/watch-party/room-shared.ts");
+const roomSnapshots = productionModule("_lib/roomSnapshotAuthority.ts");
 const ready = (roomName = "ROOM") => ({ status: "ready", roomName, participantRole: "viewer", participantToken: "test-token",
   requestedGrants: { canPublish: false } });
 const unavailable = { status: "unavailable", reason: "request_failed", responseStatus: 503 };
@@ -27,7 +28,7 @@ async function mountPlayerToken(t, options = {}) {
     source.declaration(name);
   source.assignment("watchPartyLiveKitOperationOwnerRef.current =");
   source.effect("watchPartyLiveKitMountedRef.current = true");
-  source.effect('AppState.addEventListener("change"');
+  source.effect('const changeSubscription = AppState.addEventListener("change"');
   source.effect('watchPartyLiveKitContractRequestKeyRef.current = "";\n    watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};');
   source.effect("const requestKey = [");
   const values = { inWatchParty: true, partyId: "ROOM", sessionUserId: "user", sessionGeneration: "session", isSignedIn: true, isFocused: true,
@@ -137,12 +138,24 @@ const row = (id = "message", text = "Original") => ({ id, user_id: "peer", usern
 async function mountComments(t, options = {}) {
   const time = clock(), channels = [], removed = [], reads = [];
   let history = async () => ({ data: [], error: null });
+  let owner = { channelKey: 1 };
+  // This composition starts after room admission. Use the actual authority
+  // helper for its resource lifetime; complete admission wiring is exercised by
+  // player-party-authority-retirement-mounted.test.mjs, not an allow-all mock.
+  const createAuthority = (partyId, userId) => {
+    const captured = owner;
+    return roomSnapshots.createRoomSnapshotAuthority({ partyId, userId, current: () => owner === captured,
+      read: async () => null, unavailable: noop });
+  };
+  let roomAuthority = createAuthority('ROOM', 'user');
   const source = sourceComposition(playerPath, "PlayerScreen", options.mutation);
+  for (const name of ['pendingPlayerPartyChannelRemovals', 'retirePlayerPartyChannel']) source.constant(name);
   for (const name of ["partyCommentSendRef", "partyCommentOwnerKey", "partyCommentOwnerKeyRef", "partyCommentRevisionRef", "refreshPartyCommentsRef", "partyOverlayMessages"])
     source.declaration(name);
   source.assignment("partyCommentOwnerKeyRef.current =");
   source.effect("player-comments-");
-  const values = { inWatchParty: true, partyId: "ROOM", sessionUserId: "user", sessionGeneration: "session", watchPartyEntryAllowed: true };
+  const values = { inWatchParty: true, partyId: "ROOM", sessionUserId: "user", sessionGeneration: "session", watchPartyEntryAllowed: true,
+    playerPartyOwner: owner, playerPartyAuthority: roomAuthority };
   const Component = source.compile({ inputs: Object.keys(values), outputs: ["partyOverlayMessages", "refreshPartyCommentsRef"], globals: {
     ...time, ...performance, partyMembershipMapRef: { current: {} },
     decodePartySeatRequestMessage: authority.decodePartySeatRequestMessage,
@@ -156,13 +169,20 @@ async function mountComments(t, options = {}) {
   } });
   const mounted = await mountComposition(t, Component, values, options);
   return { ...mounted, get current() { return mounted.current; }, time, channels, removed, reads,
+    update: async patch => {
+      roomAuthority.retire();
+      Object.assign(values, patch); owner = { channelKey: owner.channelKey + 1 };
+      roomAuthority = createAuthority(values.partyId, values.sessionUserId);
+      await mounted.update({ ...values, playerPartyOwner: owner, playerPartyAuthority: roomAuthority });
+    },
+    unmount: async () => { roomAuthority.retire(); await mounted.unmount(); },
     history: value => { history = value; }, event: async (payload, channel = channels.at(-1)) => settle(() => channel.event(payload)) };
 }
 
 async function mountStageBootstrap(t, { mutation } = {}) {
   const time = clock(), channels = [], removed = [], errors = [], snapshots = [], heartbeats = [], appliedSnapshots = [];
   const membership = { userId: "user", role: "viewer", stageRole: "listener", canSpeak: false, membershipState: "active" };
-  const snapshot = partyId => ({ room: { partyId, roomType: "live", hostUserId: "host" }, memberships: [membership] });
+  const snapshot = partyId => ({ room: { partyId, roomType: "live", hostUserId: "host", isActive: true }, memberships: [membership] });
   const source = sourceComposition("app/watch-party/live-stage/[partyId].tsx", "WatchPartyLiveStageScreen", mutation);
   for (const name of ["loading", "roomMissing", "roomEntryError", "blockedRoomAccess", "myUserId", "myUsername", "liveMoneyAccess",
     "liveMoneyNotice", "liveMoneyHostOfferState", "liveSeatPassStateByUserId", "participants", "isSpeakingById", "seatRequestState",
@@ -170,7 +190,7 @@ async function mountStageBootstrap(t, { mutation } = {}) {
     "stageEntryOwnerRef", "stageOperationOwnerKey", "stageOperationOwnerKeyRef", "liveKitStageMountedRef", "mediaAppState",
     "liveKitPendingRecoveryRef", "liveKitRecoveryTimeoutRef", "liveKitStageAuthorityRetryTimeoutRef", "stageSnapshotRequestRef", "refreshStageSnapshot",
     "room", "communicationRoomId", "liveKitJoinContract", "liveKitRenderableJoinContract", "liveSurface", "liveSurfaceRef", "stageEntryBusy",
-    "handleAuthoritativeLiveRoomEnded"])
+    "handleAuthoritativeLiveRoomEnded", "isHost", "hybridComments"])
     source.declaration(name);
   source.assignment("stageEntryOwnerRef.current.bind(");
   source.assignment("stageOperationOwnerKeyRef.current =");
@@ -190,6 +210,7 @@ async function mountStageBootstrap(t, { mutation } = {}) {
   const Component = source.compile({ inputs: Object.keys(values), outputs: ["loading", "roomMissing", "roomEntryError", "myUserId", "refreshStageSnapshot", "handleAuthoritativeLiveRoomEnded"], globals: {
     ...time, ...stagePresentation, ...stageLifecycle, ...roomShared, ...performance,
     Platform: { OS: "ios" }, AppState: { currentState: "active" }, debugLiveStage: noop, debugLog: noop,
+    retireStageAttachmentSelection: noop,
     reportRuntimeError: (name, error) => errors.push([name, error]), getWritablePartyUserId: async () => "user",
     readUserProfile: async () => ({ username: "User" }),
     getPartyRoomSnapshot: partyId => { const pending = held(); snapshots.push({ partyId, ...pending }); return pending.promise; },
@@ -235,6 +256,7 @@ for (const resolution of ["newer-first", "older-first", "newer-unavailable"]) {
     assert.equal(await older, null, "a superseded caller cannot consume stale authority either");
     assert.equal(h.appliedSnapshots.length, before + (resolution === "newer-unavailable" ? 0 : 1));
     if (resolution !== "newer-unavailable") assert.equal(h.appliedSnapshots.at(-1).value.memberships[0].isMuted, true);
+    else assert.match(h.current.roomEntryError, /Current room access could not be verified/, 'latest unavailable authority clears the live screen instead of retaining old controls');
     let retry;
     await settle(() => { retry = h.current.refreshStageSnapshot("user"); });
     await settle(() => h.snapshots.at(-1).resolve(current));
@@ -246,8 +268,8 @@ for (const resolution of ["newer-first", "older-first", "newer-unavailable"]) {
 for (const removeRetirement of [false, true]) {
   test(`Stage room-ended callback retires an outstanding snapshot, negative control=${removeRetirement}`, async t => {
     const h = await mountStageBootstrap(t, { mutation: source => removeRetirement
-      ? source.replace('const handleAuthoritativeLiveRoomEnded = useCallback(() => {\n    stageSnapshotRequestRef.current += 1;',
-        'const handleAuthoritativeLiveRoomEnded = useCallback(() => {') : source });
+      ? source.replace('const handleAuthoritativeLiveRoomEnded = useCallback(() => {\n    retireStageAttachmentSelection(true);\n    stageSnapshotRequestRef.current += 1;',
+        'const handleAuthoritativeLiveRoomEnded = useCallback(() => {\n    retireStageAttachmentSelection(true);') : source });
     await settle(() => { h.retiredPending.resolve(null); h.pending.resolve(h.snapshot("ROOM")); });
     let pending;
     await settle(() => { pending = h.current.refreshStageSnapshot("user"); });
@@ -280,7 +302,7 @@ test("React-mounted Stage installs its live resources once, heartbeats, and reti
   const h = await mountStageBootstrap(t);
   await settle(() => h.retiredPending.resolve(null));
   assert.equal(h.channels.length, 0, "the initialization retired by callback recreation cannot install resources");
-  await settle(() => h.pending.resolve(null));
+  await settle(() => h.pending.resolve(h.snapshot("ROOM")));
   assert.deepEqual(h.errors, []);
   assert.equal(h.current.loading, false);
   assert.equal(h.channels.length, 2);
@@ -294,11 +316,13 @@ test("React-mounted Stage installs its live resources once, heartbeats, and reti
   assert.equal(h.time.timeouts.size, 0);
 });
 
-test("Stage mounted negative control reproduces orphaned resources when the post-await cleanup guard is removed", async t => {
+test("Stage mounted negative control reproduces orphaned resources when both post-await admission guards are removed", async t => {
   const mutation = source => {
     const needle = "// Cleanup can run during the snapshot read. Never create room channels\n        // or a heartbeat after the effect that owns them has been retired.\n        if (cancelled) return;";
     assert.equal(source.split(needle).length, 2, "remove exactly the former missing cleanup guard");
-    return source.replace(needle, "");
+    const currentSnapshotGuard = "        if (!refreshedSnapshot) {\n          setLoading(false);\n          return;\n        }";
+    assert.equal(source.split(currentSnapshotGuard).length, 2);
+    return source.replace(needle, "").replace(currentSnapshotGuard, "");
   };
   const h = await mountStageBootstrap(t, { mutation });
   await h.unmount();
@@ -306,6 +330,14 @@ test("Stage mounted negative control reproduces orphaned resources when the post
   assert.deepEqual(h.errors, []);
   assert.equal(h.channels.length, 4, "both retired initializations create subscriptions after unmount");
   assert.equal(h.time.intervals.size, 2, "actual former behavior leaks both retired heartbeats after unmount");
+});
+
+test("latest unavailable Stage snapshot tears down channels and cannot reuse an earlier joined seat", async t => {
+  const h = await mountStageBootstrap(t);
+  await settle(() => { h.retiredPending.resolve(null); h.pending.resolve(null); });
+  assert.match(h.current.roomEntryError, /Current room access could not be verified/);
+  assert.equal(h.channels.length, 0); assert.equal(h.time.intervals.size, 0);
+  assert.equal(h.heartbeats.length, 0);
 });
 
 test("React-mounted persisted comments render remote inserts, edits and deletes without any sender broadcast", async t => {

@@ -24,6 +24,7 @@ const args=(db=database)=>['exec','-i',container,'psql','-X','-q','-A','-t','-v'
 const docker=(a,input,encoding='utf8')=>spawnSync('docker',a,{encoding,input,maxBuffer:256*1024*1024,timeout:120000});
 const success=(r,label)=>{assert.equal(r.status,0,`${label}: ${r.error?.message??r.stderr??''}`);return r.stdout;};
 const query=(sql,db)=>success(docker(args(db),`set statement_timeout='20s';set time zone 'UTC';${sql}`),'fixture query').trim();
+const accessGrantsSnapshotSql="select jsonb_build_object('count',count(*),'digest',encode(extensions.digest(coalesce(jsonb_agg(to_jsonb(g) order by g.id),'[]'::jsonb)::text,'sha256'),'hex'))::text from public.access_grants g";
 const admin=(a,input,encoding='utf8')=>docker(['exec',...(input===undefined?[]:['-i']),container,'sh','-lc','PGPASSWORD="$POSTGRES_PASSWORD" exec "$@"','auction-fixture-admin',...a],input,encoding);
 const sessions=[];
 function session(name,sql) {
@@ -48,6 +49,10 @@ try {
     '--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
   success(dump,'read-only local source export');
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore clone');
+  // Earlier native proofs retain protected synthetic Premium authority until
+  // whole-cluster disposal. Preserve the exact inherited grant rows: these
+  // auction schedules must neither create access nor alter/delete prior access.
+  const baselineAccessGrants=query(accessGrantsSnapshotSql);
   query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
   query("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
@@ -147,7 +152,9 @@ try {
   const binderResult=await binder.done;assert.equal(binderResult.code,0,binderResult.stderr);
   assert.equal(query(`select provider_checkout_session_id from private.creator_room_auction_quotes where id='${bindQuote.id}'`),'cs_test_RaceBind');
   console.log(`ok ${++checks} - provider binder and checkout claim preserve room/auction/quote lock order`);
-  assert.equal(query('select count(*) from public.access_grants'),'0','bids/holds never grant access');
+  assert.ok(query(accessGrantsSnapshotSql)===baselineAccessGrants,'bids/holds never add, remove or modify access grants');
+  assert.equal(query('select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors)'),
+    '0','auction fixture actors never gain access from bids/holds');
   assert.equal(checks,7);console.log('Room auction native concurrency:7 observed production lock races passed; no provider operation.');
 } finally {
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}

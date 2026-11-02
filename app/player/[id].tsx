@@ -95,7 +95,7 @@ import {
     type CreatorVideoComment,
 } from "../../_lib/creatorVideoComments";
 import {
-    type SocialAttachmentPickerScope,
+    isAttachmentParentSavedError,
     type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
@@ -106,6 +106,7 @@ import {
     resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
 import { useSession } from "../../_lib/session";
+import { createRoomSnapshotAuthority } from "../../_lib/roomSnapshotAuthority";
 import {
     getCurrentAccountSessionAuthoritySnapshot,
     sameAccountSessionAuthority,
@@ -133,7 +134,6 @@ import {
     encodePartySeatRequestMessage,
     fetchPartyMessages,
     getActivePartyMemberships,
-    getPartyRoom,
     getPartyRoomSnapshot,
     getSafePartyUserId,
     getWritablePartyUserId,
@@ -156,7 +156,10 @@ import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
-import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
+import { useMediaPicker } from "../../hooks/useMediaPicker";
+import { useOwnedPickedMediaState } from "../../hooks/useOwnedPickedMediaState";
+import { releasePickedMedia, retainPickedMedia } from "../../_lib/mediaPickerResources";
+import { captureAccountBoundSupabaseMutationSubject, type AccountBoundSupabaseMutationSubject } from "../../_lib/accountBoundSupabaseMutation";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { ProfileMediaImage } from "../../components/ui/ProfileMediaImage";
 import {
@@ -1159,11 +1162,39 @@ function usePlayerProgressLifetime(titleId: string, authority: AccountSessionAut
   return lifetime;
 }
 
+// Supabase can return an existing topic's channel until removal settles. A new
+// owner must not acquire a channel that an old owner's async cleanup can remove.
+const pendingPlayerPartyChannelRemovals = new Map<RealtimeChannel, Promise<void>>();
+let playerPartyChannelSequence = 0;
+const retirePlayerPartyChannel = (channel: RealtimeChannel) => {
+  const existing = pendingPlayerPartyChannelRemovals.get(channel);
+  if (existing) return existing;
+  const removal = supabase.removeChannel(channel).then(() => {}, () => {}).finally(() => {
+    if (pendingPlayerPartyChannelRemovals.get(channel) === removal) pendingPlayerPartyChannelRemovals.delete(channel);
+  });
+  pendingPlayerPartyChannelRemovals.set(channel, removal);
+  return removal;
+};
+const waitForPlayerPartyChannelRetirement = (topic: string) => Promise.all(
+  [...pendingPlayerPartyChannelRemovals].filter(([channel]) => channel.topic === topic || channel.topic === `realtime:${topic}`).map(([, pending]) => pending),
+);
+
 export default function PlayerScreen() {
   const { isSignedIn, user: sessionUser, authority: sessionAuthority } = useSession();
   const isFocused = useIsFocused();
   const sessionUserId = String(sessionUser?.id ?? "").trim();
   const sessionGeneration = sessionAuthority?.sessionGeneration ?? "";
+  const [playerAppState, setPlayerAppState] = useState<AppStateStatus>(() => AppState.currentState);
+  useEffect(() => {
+    const changeSubscription = AppState.addEventListener("change", (nextState) => {
+      setPlayerAppState(nextState);
+    });
+
+    return () => {
+      changeSubscription.remove();
+    };
+  }, []);
+
   const { width: viewportWidth } = useWindowDimensions();
   const {
     id,
@@ -1235,13 +1266,30 @@ export default function PlayerScreen() {
   const [watchPartyEntryError, setWatchPartyEntryError] = useState<string | null>(null);
   const [watchPartyAccess, setWatchPartyAccess] = useState<RoomAccessResolution | null>(null);
   const [watchPartyEntryRetryToken, setWatchPartyEntryRetryToken] = useState(0);
-  const watchPartyEntryAllowed = !inWatchParty || (
-    !watchPartyEntryLoading
+  const playerPartyLifetimeKey = JSON.stringify([sessionUserId, sessionGeneration, sessionAuthority?.accountId,
+    sessionAuthority?.state, sessionAuthority?.restoreOnly, isFocused, playerAppState, watchPartyEntryRetryToken]);
+  const playerPartyOwner = useMemo(() => ({ partyId, cleanId, sourceRaw, authority: sessionAuthority, key: playerPartyLifetimeKey,
+    video: null as PlayerController | null, channelKey: ++playerPartyChannelSequence }),
+  // A replacement session/source/focus lifetime must revalidate entry, not reuse the old access state.
+  [partyId, cleanId, sourceRaw, sessionAuthority, playerPartyLifetimeKey]);
+  const playerPartyOwnerRef = useRef(playerPartyOwner);
+  playerPartyOwnerRef.current = playerPartyOwner;
+  const playerPartyAuthorityRef = useRef<ReturnType<typeof createRoomSnapshotAuthority> | null>(null);
+  const [verifiedPlayerPartyOwner, setVerifiedPlayerPartyOwner] = useState<typeof playerPartyOwner | null>(null);
+  const [verifiedPlayerPartyMembershipOwner, setVerifiedPlayerPartyMembershipOwner] = useState<typeof playerPartyOwner | null>(null);
+  const watchPartyEntryPrepared = !inWatchParty || (
+    verifiedPlayerPartyOwner === playerPartyOwner && isFocused && playerAppState === "active"
+    && !!sessionAuthority && sessionAuthority.state === "ACTIVE" && !sessionAuthority.restoreOnly
+    && sameAccountSessionAuthority(sessionAuthority, getCurrentAccountSessionAuthoritySnapshot())
+    && playerPartyAuthorityRef.current?.current() === true
+    && !watchPartyEntryLoading
     && !watchPartyEntryMissing
     && !watchPartyEntryError
     && !watchPartyPremiumGate
     && !!watchPartyAccess?.isAllowed
   );
+
+  const watchPartyEntryAllowed = !inWatchParty || (watchPartyEntryPrepared && verifiedPlayerPartyMembershipOwner === playerPartyOwner);
 
   useEffect(() => {
     debugLog("player", "route id resolved", { id: cleanId });
@@ -1271,8 +1319,8 @@ export default function PlayerScreen() {
   const [creatorVideoCommentsLoading, setCreatorVideoCommentsLoading] = useState(false);
   const [creatorVideoCommentsError, setCreatorVideoCommentsError] = useState<string | null>(null);
   const [creatorVideoCommentDraft, setCreatorVideoCommentDraft] = useState("");
-  const [creatorVideoCommentAttachmentFile, setCreatorVideoCommentAttachmentFile] = useState<SocialAttachmentFile | null>(null);
-  const [creatorVideoCommentAttachmentSheetVisible, setCreatorVideoCommentAttachmentSheetVisible] = useState(false);
+  const [creatorVideoCommentAttachmentFile, setCreatorVideoCommentAttachmentFile] = useOwnedPickedMediaState<SocialAttachmentFile | null>(null);
+  const attachmentSubjectRef = useRef<AccountBoundSupabaseMutationSubject | null>(null);
   const [creatorVideoCommentReplyTargetId, setCreatorVideoCommentReplyTargetId] = useState<string | null>(null);
   const [creatorVideoCommentBusy, setCreatorVideoCommentBusy] = useState(false);
   const [creatorVideoCommentDeletingId, setCreatorVideoCommentDeletingId] = useState<string | null>(null);
@@ -1516,7 +1564,7 @@ export default function PlayerScreen() {
   const partySyncChannelRef = useRef<RealtimeChannel | null>(null);
   const partySocialChannelRef = useRef<RealtimeChannel | null>(null);
   const partySyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const partySyncApplyingRef = useRef(false);
+  const partySyncApplyingRef = useRef<object | null>(null);
   const partySyncRoleRef = useRef<"host" | "guest" | null>(null);
   const partySyncUserIdRef = useRef<string | null>(null);
   const lastPartySyncWriteAtRef = useRef(0);
@@ -1537,10 +1585,80 @@ export default function PlayerScreen() {
   const compactControlsOpacity = useRef(new Animated.Value(1)).current;
   const compactControlsTranslateY = useRef(new Animated.Value(0)).current;
 
+  const clearUnavailablePlayerParty = useCallback(() => {
+    if (playerPartyOwnerRef.current !== playerPartyOwner || !inWatchParty) return;
+    // No solo fallback: retain the party route, deny entry and retire its media.
+    const ownedVideo = playerPartyOwner.video ?? videoRef.current;
+    void ownedVideo?.pauseAsync().catch(() => {});
+    setIsPlaying(false); setWatchPartyAccess(null); setVerifiedPlayerPartyOwner(null); setVerifiedPlayerPartyMembershipOwner(null);
+    setWatchPartyEntryLoading(false); setWatchPartyEntryMissing(true);
+    setWatchPartyEntryError("This room is unavailable or your access changed. Reopen the Party Room to verify access.");
+    setWatchPartyLiveKitJoinContract(null); setWatchPartyLiveKitRenderableContract(null);
+    watchPartyLiveKitOperationOwnerRef.current = ""; watchPartyLiveKitContractRequestKeyRef.current = "";
+    if (watchPartyLiveKitAuthorityRetryTimeoutRef.current) clearTimeout(watchPartyLiveKitAuthorityRetryTimeoutRef.current);
+    watchPartyLiveKitAuthorityRetryTimeoutRef.current = null;
+    setWatchPartyLocalMediaIntent(false); setWatchPartyCameraPermissionGranted(false);
+    setWatchPartyLocalMediaPermissionBusy(false); setLiveCameraControls(null);
+    setPartySyncRole(null); setPartySyncStatus(null); partySyncRoleRef.current = null;
+    partySyncApplyingRef.current = null;
+    partySyncUserIdRef.current = null; partyRoomHostUserIdRef.current = ""; partyMembershipMapRef.current = {};
+    partyParticipantsRef.current = []; setPartyParticipants([]); setPartyParticipantPreview([]);
+    setPartyViewerCount(0); setViewerCount(0); setPartyUserId(""); partyUserIdRef.current = "";
+    partyDisplayNameRef.current = ""; partyAvatarUrlRef.current = ""; myCameraPreviewUrlRef.current = "";
+    setPartyOverlayMessages([]); setPartyMessages([]); setPartyCommentDraft(""); setPartyCommentsOpen(false);
+    setPartyReactionBursts([]); setPartyParticipantReactions([]); setLivePresenceEvent(null);
+    setActiveParticipantId(null); setActiveParticipantIds([]); setActiveParticipantToolsId(null);
+    setWatchPartyMenuOpen(false); setLiveFilterSheetOpen(false);
+    pendingPartySeatRequestsRef.current = {}; partySeatRequestClosedVersionRef.current = {};
+    partyCommentSendRef.current = null; partyCommentRevisionRef.current += 1;
+  }, [inWatchParty, playerPartyOwner]);
+  const playerPartyAuthority = useMemo(() => createRoomSnapshotAuthority({
+    partyId, userId: sessionUserId,
+    current: () => playerPartyOwnerRef.current === playerPartyOwner && inWatchParty && isFocused
+      && playerAppState === "active" && AppState.currentState === "active"
+      && !!playerPartyOwner.authority && playerPartyOwner.authority.state === "ACTIVE" && !playerPartyOwner.authority.restoreOnly
+      && playerPartyOwner.authority.userId === sessionUserId
+      && sameAccountSessionAuthority(playerPartyOwner.authority, getCurrentAccountSessionAuthoritySnapshot()),
+    unavailable: clearUnavailablePlayerParty,
+    read: async () => {
+      const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
+      if (!snapshot) return null;
+      const type = resolveWatchPartySourceType(snapshot.room), id = resolveWatchPartySourceId(snapshot.room);
+      const expectedType = expectsCreatorVideo ? "creator_video" : expectsSpectatorPlayback ? "spectator_playback" : "platform_title";
+      return snapshot.room.roomType === "title" && type === expectedType && String(id ?? snapshot.room.titleId ?? "") === cleanId ? snapshot : null;
+    },
+  }), [partyId, sessionUserId, playerPartyOwner, inWatchParty, isFocused, playerAppState, clearUnavailablePlayerParty,
+    expectsCreatorVideo, expectsSpectatorPlayback, cleanId]);
+  playerPartyAuthorityRef.current = playerPartyAuthority;
+  useEffect(() => {
+    playerPartyAuthority.activate();
+    if (!inWatchParty) return;
+    partySyncApplyingRef.current = null;
+    const unsubscribe = subscribeToAccountSessionAuthority(next => {
+      if (!sameAccountSessionAuthority(playerPartyOwner.authority, next)) playerPartyAuthority.retire();
+    });
+    const app = AppState.addEventListener("change", state => { if (state !== "active") playerPartyAuthority.retire(); });
+    if (!playerPartyAuthority.current()) playerPartyAuthority.retire();
+    return () => { unsubscribe(); app.remove(); playerPartyAuthority.retire(); };
+  }, [inWatchParty, playerPartyAuthority, playerPartyOwner]);
+
   const titleId = useMemo(
     () => String(item?.id ?? (localTitle as any)?.id ?? cleanId).trim(),
     [item?.id, localTitle, cleanId],
   );
+  const { pickMedia: pickCommentMedia, mediaPickerSheet: commentMediaPickerSheet, cancelMediaPicker: cancelCommentMediaPicker } = useMediaPicker(`creator-comment:${cleanId}:${playbackSourceKind}:${titleId}:${creatorVideoCommentReplyTargetId ?? ""}:${partyId}:${isLiveModeFlag}`);
+  // Equivalent token-refresh snapshots must not retire a picker/send or reset its busy state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const commentMediaContext = useMemo(() => ({ authority: sessionAuthority ? { ...sessionAuthority } : null, cleanId, titleId, playbackSourceKind, inWatchParty, isLiveModeFlag, replyTargetId: creatorVideoCommentReplyTargetId }), [cleanId, creatorVideoCommentReplyTargetId, inWatchParty, isLiveModeFlag, playbackSourceKind, sessionAuthority?.accountId, sessionAuthority?.restoreOnly, sessionAuthority?.sessionGeneration, sessionAuthority?.state, sessionAuthority?.userId, titleId]);
+  const commentMediaContextRef = useRef<typeof commentMediaContext | null>(commentMediaContext);
+  commentMediaContextRef.current = commentMediaContext;
+  const commentSendFlightRef = useRef<object | null>(null);
+  useEffect(() => {
+    setCreatorVideoCommentAttachmentFile(null);
+    setCreatorVideoCommentBusy(false);
+    commentSendFlightRef.current = null;
+    return () => { if (commentMediaContextRef.current === commentMediaContext) commentMediaContextRef.current = null; };
+  }, [commentMediaContext, setCreatorVideoCommentAttachmentFile]);
   const hasResolvedPlatformTitle = playbackSourceKind !== "creator-video"
     && playbackSourceKind !== "spectator-playback"
     && !expectsSpectatorPlayback
@@ -1585,7 +1703,7 @@ export default function PlayerScreen() {
           || partyMembershipMapRef.current[userId]?.displayName || "Guest" };
     };
     const loadComments = async () => {
-      if (!active || partyCommentOwnerKeyRef.current !== commentOwner) return;
+      if (!active || !playerPartyAuthority.current() || partyCommentOwnerKeyRef.current !== commentOwner) return;
       if (loading) { reloadRequested = true; return; }
       loading = true;
       const revision = partyCommentRevisionRef.current;
@@ -1595,7 +1713,7 @@ export default function PlayerScreen() {
           .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(30);
         // A failed read is not an empty history. A newer realtime change or
         // durable local send also outranks the snapshot that preceded it.
-        if (!active || partyCommentOwnerKeyRef.current !== commentOwner || error || !data || revision !== partyCommentRevisionRef.current) return;
+        if (!active || !playerPartyAuthority.current() || partyCommentOwnerKeyRef.current !== commentOwner || error || !data || revision !== partyCommentRevisionRef.current) return;
         const comments = [...data].reverse().map(mapComment).filter((value): value is PartyOverlayMessage => !!value);
         setPartyOverlayMessages((previous) => [...previous.filter((message) => !message.persisted), ...comments]
           .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")) || a.id.localeCompare(b.id))
@@ -1609,9 +1727,9 @@ export default function PlayerScreen() {
     };
     const refresh = () => { void loadComments(); };
     refreshPartyCommentsRef.current = refresh;
-    const channel = supabase.channel(`player-comments-${normalizedPartyId}-${sessionUserId}`)
+    const channel = supabase.channel(`player-comments-${normalizedPartyId}-${sessionUserId}-${playerPartyOwner.channelKey}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "watch_party_room_messages", filter: `party_id=eq.${normalizedPartyId}` }, (payload) => {
-        if (!active || partyCommentOwnerKeyRef.current !== commentOwner) return;
+        if (!active || !playerPartyAuthority.current() || partyCommentOwnerKeyRef.current !== commentOwner) return;
         const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as { id?: unknown; user_id?: unknown; username?: unknown; text?: unknown; created_at?: unknown };
         const id = String(row.id ?? "").trim();
         if (!id) return;
@@ -1631,13 +1749,15 @@ export default function PlayerScreen() {
       .subscribe((status) => { if (status === "SUBSCRIBED") refresh(); });
     refresh();
     const timer = setInterval(refresh, LIVE_COMMENT_FALLBACK_REFRESH_MS);
-    return () => {
+    const cleanup = () => {
       active = false;
       if (refreshPartyCommentsRef.current === refresh) refreshPartyCommentsRef.current = null;
       clearInterval(timer);
-      void supabase.removeChannel(channel);
+      void retirePlayerPartyChannel(channel);
     };
-  }, [inWatchParty, partyId, sessionUserId, sessionGeneration, watchPartyEntryAllowed]);
+    playerPartyAuthority.own(cleanup);
+    return cleanup;
+  }, [inWatchParty, partyId, sessionUserId, sessionGeneration, watchPartyEntryAllowed, playerPartyAuthority, playerPartyOwner]);
 
   useEffect(() => {
     const listener = zoomScale.addListener(({ value }) => {
@@ -1927,12 +2047,15 @@ export default function PlayerScreen() {
 
   const applyPartyRoomStateToGuest = useCallback(
     async (partyRoom: WatchPartyState) => {
-      if (!inWatchParty) return;
+      if (!inWatchParty || !playerPartyAuthority.current()) return;
+      const ownedVideo = videoRef.current; playerPartyOwner.video = ownedVideo;
+      const current = () => playerPartyAuthority.current() && videoRef.current === ownedVideo;
       if (partySyncRoleRef.current === "host") return;
       if (!isVideoReady) return;
       if (partySyncApplyingRef.current) return;
 
-      partySyncApplyingRef.current = true;
+      const syncFlight = {};
+      partySyncApplyingRef.current = syncFlight;
       try {
         const roomPosition = Math.max(0, Number(partyRoom.playbackPositionMillis ?? 0));
         const updatedAtMillis = Date.parse(String(partyRoom.updatedAt ?? ""));
@@ -1952,36 +2075,43 @@ export default function PlayerScreen() {
 
         if (shouldHardSeek) {
           setPartySyncStatus("Resyncing to Host…");
-          await videoRef.current?.setPositionAsync(targetPosition).catch(() => {});
+          await ownedVideo?.setPositionAsync(targetPosition).catch(() => {});
+          if (!current()) return;
           currentPositionRef.current = targetPosition;
           setPositionMillis(targetPosition);
         } else if (shouldSoftNudge) {
           setPartySyncStatus("Resyncing…");
           const nudge = clamp(offset, -PARTY_GUEST_SOFT_NUDGE_MILLIS, PARTY_GUEST_SOFT_NUDGE_MILLIS);
           const nudged = clamp(currentPositionRef.current + nudge, 0, duration);
-          await videoRef.current?.setPositionAsync(nudged).catch(() => {});
+          await ownedVideo?.setPositionAsync(nudged).catch(() => {});
+          if (!current()) return;
           currentPositionRef.current = nudged;
           setPositionMillis(nudged);
         }
 
+        if (!current()) return;
         if (partyRoom.playbackState === "playing") {
           if (!lastPlaybackIsPlayingRef.current) {
-            await videoRef.current?.playAsync().catch(() => {});
+            await ownedVideo?.playAsync().catch(() => {});
           }
         } else if (lastPlaybackIsPlayingRef.current) {
-          await videoRef.current?.pauseAsync().catch(() => {});
+          await ownedVideo?.pauseAsync().catch(() => {});
         }
 
+        if (!current()) {
+          if (playerPartyOwnerRef.current === playerPartyOwner && videoRef.current === ownedVideo) void ownedVideo?.pauseAsync().catch(() => {});
+          return;
+        }
         if (!shouldHardSeek && !shouldSoftNudge) {
           setPartySyncStatus(`Synced to Host · ${partyRoom.playbackState === "playing" ? "Playing" : "Paused"}`);
         } else {
           setPartySyncStatus(`Synced to Host · ${partyRoom.playbackState === "playing" ? "Playing" : "Paused"}`);
         }
       } finally {
-        partySyncApplyingRef.current = false;
+        if (partySyncApplyingRef.current === syncFlight) partySyncApplyingRef.current = null;
       }
     },
-    [inWatchParty, isVideoReady],
+    [inWatchParty, isVideoReady, playerPartyAuthority, playerPartyOwner],
   );
 
   useEffect(() => {
@@ -1991,7 +2121,7 @@ export default function PlayerScreen() {
       partySyncRoleRef.current = null;
       partySyncUserIdRef.current = null;
       if (partySyncChannelRef.current) {
-        supabase.removeChannel(partySyncChannelRef.current);
+        void retirePlayerPartyChannel(partySyncChannelRef.current);
         partySyncChannelRef.current = null;
       }
       if (partySyncPollRef.current) {
@@ -2002,11 +2132,20 @@ export default function PlayerScreen() {
     }
 
     let active = true;
+    let ownedChannel: RealtimeChannel | null = null;
+    let ownedPoll: ReturnType<typeof setInterval> | null = null;
+    const cleanup = () => {
+      active = false;
+      if (ownedChannel) { void retirePlayerPartyChannel(ownedChannel); if (partySyncChannelRef.current === ownedChannel) partySyncChannelRef.current = null; }
+      if (ownedPoll) { clearInterval(ownedPoll); if (partySyncPollRef.current === ownedPoll) partySyncPollRef.current = null; }
+      ownedChannel = null; ownedPoll = null;
+    };
+    playerPartyAuthority.own(cleanup);
 
     const handleRoomUpdate = (roomState: WatchPartyState | null) => {
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
       if (!roomState) {
-        setPartySyncStatus("Waiting for host…");
+        playerPartyAuthority.retire();
         return;
       }
       partyRoomHostUserIdRef.current = String(roomState.hostUserId ?? "").trim();
@@ -2025,20 +2164,20 @@ export default function PlayerScreen() {
     const bootstrapPartySync = async () => {
       setPartySyncStatus("Waiting for host…");
       const currentUserId = await getWritablePartyUserId().catch(() => null);
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
       partySyncUserIdRef.current = String(currentUserId ?? "").trim() || null;
 
-      const initialRoom = await getPartyRoom(partyId).catch(() => null);
-      if (!active) return;
+      const initialRoom = (await playerPartyAuthority.read())?.room ?? null;
+      if (!active || !playerPartyAuthority.current()) return;
       handleRoomUpdate(initialRoom);
 
       if (partySyncChannelRef.current) {
-        supabase.removeChannel(partySyncChannelRef.current);
+        void retirePlayerPartyChannel(partySyncChannelRef.current);
         partySyncChannelRef.current = null;
       }
 
-      partySyncChannelRef.current = supabase
-        .channel(`player-party-room-${partyId}`)
+      ownedChannel = partySyncChannelRef.current = supabase
+        .channel(`player-party-room-${partyId}-${playerPartyOwner.channelKey}`)
         .on(
           "postgres_changes",
           {
@@ -2048,7 +2187,7 @@ export default function PlayerScreen() {
             filter: `party_id=eq.${partyId}`,
           },
           () => {
-            getPartyRoom(partyId)
+            playerPartyAuthority.read().then(snapshot => snapshot?.room ?? null)
               .then((latest: WatchPartyState | null) => {
                 handleRoomUpdate(latest);
               })
@@ -2062,8 +2201,8 @@ export default function PlayerScreen() {
         partySyncPollRef.current = null;
       }
 
-      partySyncPollRef.current = setInterval(() => {
-        getPartyRoom(partyId)
+      ownedPoll = partySyncPollRef.current = setInterval(() => {
+        playerPartyAuthority.read().then(snapshot => snapshot?.room ?? null)
           .then((latest: WatchPartyState | null) => {
             handleRoomUpdate(latest);
           })
@@ -2073,18 +2212,8 @@ export default function PlayerScreen() {
 
     bootstrapPartySync();
 
-    return () => {
-      active = false;
-      if (partySyncChannelRef.current) {
-        supabase.removeChannel(partySyncChannelRef.current);
-        partySyncChannelRef.current = null;
-      }
-      if (partySyncPollRef.current) {
-        clearInterval(partySyncPollRef.current);
-        partySyncPollRef.current = null;
-      }
-    };
-  }, [applyPartyRoomStateToGuest, inWatchParty, partyId, watchPartyEntryAllowed]);
+    return cleanup;
+  }, [applyPartyRoomStateToGuest, inWatchParty, partyId, watchPartyEntryAllowed, playerPartyAuthority, playerPartyOwner]);
 
   const updatePartyMembershipMap = useCallback((memberships: WatchPartyRoomMembership[]) => {
     partyMembershipMapRef.current = Object.fromEntries(
@@ -2104,6 +2233,7 @@ export default function PlayerScreen() {
     }
 
     let active = true;
+    if (!playerPartyAuthority.current()) return;
     setWatchPartyEntryLoading(true);
     setWatchPartyEntryMissing(false);
     setWatchPartyEntryError(null);
@@ -2111,8 +2241,8 @@ export default function PlayerScreen() {
     setWatchPartyPremiumGate(null);
 
     (async () => {
-      const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
-      if (!active) return;
+      const snapshot = await playerPartyAuthority.read();
+      if (!active || !playerPartyAuthority.current()) return;
 
       if (!snapshot) {
         setWatchPartyEntryMissing(true);
@@ -2152,7 +2282,7 @@ export default function PlayerScreen() {
 
       const premiumAccessKey = resolvePremiumAccessKeyForRoom(snapshot.room);
       const premiumAccess = await requireWatchPartyLivePremium({ accessKey: premiumAccessKey }).catch(() => null);
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
 
       if (!premiumAccess?.allowed) {
         if (isRuntimeControlBlockedAccess(premiumAccess)) {
@@ -2183,7 +2313,7 @@ export default function PlayerScreen() {
 
       updatePartyMembershipMap(snapshot.memberships);
       const writableUserId = await getWritablePartyUserId().catch(() => null);
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
       const trackedUserId = String(writableUserId ?? "").trim();
       const membership = trackedUserId
         ? snapshot.memberships.find((entry) => entry.userId === trackedUserId) ?? null
@@ -2195,7 +2325,7 @@ export default function PlayerScreen() {
         membership,
         ...(trackedUserId ? { userId: trackedUserId } : {}),
       }).catch(() => null);
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
 
       if (!access) {
         setWatchPartyEntryError("Unable to confirm watch-party access right now.");
@@ -2203,6 +2333,8 @@ export default function PlayerScreen() {
         return;
       }
 
+      if (membership && !membership.leftAt && ["active", "reconnecting"].includes(membership.membershipState)) playerPartyAuthority.requireMembership();
+      setVerifiedPlayerPartyOwner(playerPartyOwner);
       setWatchPartyAccess(access);
       setWatchPartyEntryLoading(false);
     })();
@@ -2210,18 +2342,21 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [cleanId, expectsCreatorVideo, expectsSpectatorPlayback, inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken]);
+  }, [cleanId, expectsCreatorVideo, expectsSpectatorPlayback, inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken, playerPartyAuthority, playerPartyOwner]);
 
   const refreshPartyMembershipSnapshot = useCallback(async () => {
-    if (!partyId || !watchPartyLiveKitMountedRef.current || partyCommentOwnerKeyRef.current !== partyCommentOwnerKey) return null;
-    const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
-    if (!snapshot || !watchPartyLiveKitMountedRef.current || partyCommentOwnerKeyRef.current !== partyCommentOwnerKey) return null;
+    if (!partyId || !watchPartyLiveKitMountedRef.current || !playerPartyAuthority.current()) return null;
+    const snapshot = await playerPartyAuthority.read();
+    if (!snapshot || !playerPartyAuthority.current()) return null;
     partyRoomHostUserIdRef.current = String(snapshot.room.hostUserId ?? "").trim();
     updatePartyMembershipMap(snapshot.memberships);
     return snapshot;
-  }, [partyId, partyCommentOwnerKey, updatePartyMembershipMap]);
+  }, [partyId, playerPartyAuthority, updatePartyMembershipMap]);
 
   const getWatchPartyHostAuthority = useCallback((userIdOverride?: string | null) => {
+    if (inWatchParty && !playerPartyAuthority.current()) return {
+      isHost: false, source: "unavailable", currentUserId: "", partySyncRole: null, membershipRole: null, roomHostUserId: "",
+    };
     const currentUserId = String(
       userIdOverride
       ?? partyUserIdRef.current
@@ -2244,15 +2379,15 @@ export default function PlayerScreen() {
       membershipRole,
       roomHostUserId,
     };
-  }, []);
+  }, [inWatchParty, playerPartyAuthority]);
 
   const getSharedPlaybackControlAuthority = useCallback(() => {
     const authority = getWatchPartyHostAuthority();
     return {
       ...authority,
-      canControl: !isSharedPartyPlayback || authority.isHost,
+      canControl: (!inWatchParty || playerPartyAuthority.current()) && (!isSharedPartyPlayback || authority.isHost),
     };
-  }, [getWatchPartyHostAuthority, isSharedPartyPlayback]);
+  }, [getWatchPartyHostAuthority, isSharedPartyPlayback, inWatchParty, playerPartyAuthority]);
 
   const blockViewerSharedPlaybackControl = useCallback((control: string) => {
     const authority = getSharedPlaybackControlAuthority();
@@ -2504,7 +2639,7 @@ export default function PlayerScreen() {
   }, []);
 
   useEffect(() => {
-    if (!inWatchParty || !partyId || !watchPartyEntryAllowed) {
+    if (!inWatchParty || !partyId || !watchPartyEntryPrepared) {
       setWatchPartyLiveKitJoinContract((current) => (current ? null : current));
       setWatchPartyLiveKitRenderableContract((current) => (current ? null : current));
       setPartyViewerCount((current) => (current === 0 ? current : 0));
@@ -2528,7 +2663,7 @@ export default function PlayerScreen() {
       Object.values(partyReactionTimersRef.current).forEach((timer) => clearTimeout(timer));
       partyReactionTimersRef.current = {};
       if (partySocialChannelRef.current) {
-        supabase.removeChannel(partySocialChannelRef.current);
+        void retirePlayerPartyChannel(partySocialChannelRef.current);
         partySocialChannelRef.current = null;
       }
       if (partyMembershipRosterPollRef.current) {
@@ -2542,8 +2677,18 @@ export default function PlayerScreen() {
     }
 
     let active = true;
+    let ownedSocialChannel: RealtimeChannel | null = null;
+    let ownedRosterPoll: ReturnType<typeof setInterval> | null = null;
+    const cleanup = () => {
+      active = false;
+      if (ownedSocialChannel) { void retirePlayerPartyChannel(ownedSocialChannel); if (partySocialChannelRef.current === ownedSocialChannel) partySocialChannelRef.current = null; }
+      if (ownedRosterPoll) { clearInterval(ownedRosterPoll); if (partyMembershipRosterPollRef.current === ownedRosterPoll) partyMembershipRosterPollRef.current = null; }
+      ownedSocialChannel = null; ownedRosterPoll = null;
+    };
+    playerPartyAuthority.own(cleanup);
 
     const pushPresenceToast = (messageRaw: unknown) => {
+      if (!active || !playerPartyAuthority.current()) return;
       const message = String(messageRaw ?? "").trim();
       if (!message) return;
       setLivePresenceEvent(message);
@@ -2557,6 +2702,7 @@ export default function PlayerScreen() {
     };
 
     const pushReactionBurst = (emojiRaw: unknown) => {
+      if (!active || !playerPartyAuthority.current()) return;
       const emoji = String(emojiRaw ?? "").trim();
       if (!emoji) return;
       const id = `party-react-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2615,9 +2761,12 @@ export default function PlayerScreen() {
       const safeUserId = String(
         partySyncUserIdRef.current || (await getWritablePartyUserId().catch(() => null)) || "",
       ).trim();
-      if (!safeUserId) return;
+      if (!safeUserId || safeUserId !== sessionUserId) {
+        if (playerPartyAuthority.current()) playerPartyAuthority.retire();
+        return;
+      }
       const trackedUserId = safeUserId;
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
       setPartyUserId(trackedUserId);
 
       let displayName = "Guest";
@@ -2637,6 +2786,7 @@ export default function PlayerScreen() {
       } catch {
         // keep fallback displayName
       }
+      if (!active || !playerPartyAuthority.current()) return;
       partyDisplayNameRef.current = displayName;
       partyAvatarUrlRef.current = profileAvatarUrl;
       myCameraPreviewUrlRef.current = profileCameraPreviewUrl;
@@ -2651,7 +2801,7 @@ export default function PlayerScreen() {
       };
 
       const applyMembershipSnapshotToParticipants = (snapshot: WatchPartyRoomSnapshot | null) => {
-        if (!snapshot) return;
+        if (!active || !playerPartyAuthority.current() || !snapshot) return;
         const activeMemberships = getActivePartyMemberships(snapshot.memberships);
         if (activeMemberships.length === 0) return;
 
@@ -2730,7 +2880,7 @@ export default function PlayerScreen() {
         if (!force && now - lastPartyMembershipRosterRefreshAtRef.current < 2500) return null;
         lastPartyMembershipRosterRefreshAtRef.current = now;
         const snapshot = await refreshPartyMembershipSnapshot().catch(() => null);
-        if (!active || !snapshot) return snapshot;
+        if (!active || !playerPartyAuthority.current() || !snapshot) return snapshot;
         applyMembershipSnapshotToParticipants(snapshot);
         return snapshot;
       };
@@ -2841,12 +2991,13 @@ export default function PlayerScreen() {
       };
 
       const initialSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
       applyMembershipSnapshotToParticipants(initialSnapshot);
 
+      if (!initialSnapshot || !playerPartyAuthority.current()) return;
       if (initialSnapshot) {
         const existingMembership = initialSnapshot.memberships.find((membership) => membership.userId === trackedUserId) ?? null;
-        await joinPartyRoomSession({
+        const joined = await joinPartyRoomSession({
           partyId,
           userId: trackedUserId,
           role: trackedUserId === initialSnapshot.room.hostUserId ? "host" : existingMembership?.role ?? "viewer",
@@ -2858,18 +3009,25 @@ export default function PlayerScreen() {
           avatarUrl: profileAvatarUrl,
           cameraPreviewUrl: profileCameraPreviewUrl,
         }).catch(() => null);
+        if (!active || !playerPartyAuthority.current()) return;
+        if (!joined) { playerPartyAuthority.retire(); return; }
+        playerPartyAuthority.requireMembership();
         const refreshedSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
+        if (!active || !playerPartyAuthority.current() || !refreshedSnapshot) return;
         applyMembershipSnapshotToParticipants(refreshedSnapshot);
+        setVerifiedPlayerPartyMembershipOwner(playerPartyOwner);
       }
 
       const history = await fetchPartyMessages(partyId, 30).catch(() => []);
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
       applyPersistedSeatRequestMessages(
         history.map((message) => ({ body: String(message.body ?? ""), createdAt: message.createdAt })),
         "history",
       );
 
       const channelName = `party-chat-${partyId}`;
+      await waitForPlayerPartyChannelRetirement(channelName);
+      if (!active || !playerPartyAuthority.current()) return;
       const channelsToRemove = supabase
         .getChannels()
         .filter(
@@ -2880,16 +3038,17 @@ export default function PlayerScreen() {
         );
       partySocialChannelRef.current = null;
       if (channelsToRemove.length > 0) {
-        await Promise.all(channelsToRemove.map((existingChannel) => supabase.removeChannel(existingChannel).catch(() => null)));
+        await Promise.all(channelsToRemove.map(retirePlayerPartyChannel));
       }
-      if (!active) return;
+      if (!active || !playerPartyAuthority.current()) return;
 
       const channel = supabase.channel(channelName, {
         config: { presence: { key: watchPartyLiveKitIdentityRef.current || trackedUserId } },
       });
-      partySocialChannelRef.current = channel;
+      ownedSocialChannel = partySocialChannelRef.current = channel;
 
       channel.on("presence", { event: "sync" }, () => {
+        if (!active || !playerPartyAuthority.current()) return;
         const state = channel.presenceState<{
           userId?: string;
           liveKitIdentity?: string;
@@ -3096,6 +3255,7 @@ export default function PlayerScreen() {
           filter: `party_id=eq.${partyId}`,
         },
         (payload) => {
+          if (!active || !playerPartyAuthority.current()) return;
           const row = (payload as { new?: { text?: unknown; body?: unknown; created_at?: unknown } }).new;
           const marker = decodePartySeatRequestMessage(row?.text ?? row?.body);
           if (!marker) return;
@@ -3125,6 +3285,7 @@ export default function PlayerScreen() {
       );
 
       channel.on("broadcast", { event: "participant:seat-request" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        if (!active || !playerPartyAuthority.current()) return;
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const pending = !!payload?.pending;
@@ -3167,6 +3328,7 @@ export default function PlayerScreen() {
       });
 
       channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        if (!active || !playerPartyAuthority.current()) return;
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const nextCanSpeak = !!payload?.canSpeak;
@@ -3216,6 +3378,7 @@ export default function PlayerScreen() {
       });
 
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
+        if (!active || !playerPartyAuthority.current()) return;
         const emoji = String(payload?.emoji ?? "").trim();
         if (!emoji) return;
         pushReactionBurst(emoji);
@@ -3250,18 +3413,19 @@ export default function PlayerScreen() {
       });
 
       channel.on("broadcast", { event: "message" }, ({ payload }: { payload: Record<string, unknown> }) => {
-        if (!active || payload?.kind !== "chat") return;
+        if (!active || !playerPartyAuthority.current() || payload?.kind !== "chat") return;
         // Broadcasts are wake-up hints. Re-reading persisted state prevents a
         // delayed sender broadcast from reverting an edit or reviving a delete.
         refreshPartyCommentsRef.current?.();
       });
 
       channel.subscribe(async (status) => {
+        if (!active || !playerPartyAuthority.current()) return;
         if (status === "SUBSCRIBED") {
           await syncCurrentPartyPresence();
           fetchPartyMessages(partyId, 60)
             .then((messages) => {
-              if (!active) return;
+              if (!active || !playerPartyAuthority.current()) return;
               applyPersistedSeatRequestMessages(
                 messages.map((message) => ({ body: String(message.body ?? ""), createdAt: message.createdAt })),
                 "subscribe-history",
@@ -3275,26 +3439,14 @@ export default function PlayerScreen() {
         clearInterval(partyMembershipRosterPollRef.current);
         partyMembershipRosterPollRef.current = null;
       }
-      partyMembershipRosterPollRef.current = setInterval(() => {
+      ownedRosterPoll = partyMembershipRosterPollRef.current = setInterval(() => {
         refreshMembershipRosterFromAuthority(true).catch(() => null);
       }, 3000);
     };
 
     bootstrapPartySocial();
 
-    return () => {
-      active = false;
-      Object.values(partyReactionTimersRef.current).forEach((timer) => clearTimeout(timer));
-      partyReactionTimersRef.current = {};
-      if (partySocialChannelRef.current) {
-        supabase.removeChannel(partySocialChannelRef.current);
-        partySocialChannelRef.current = null;
-      }
-      if (partyMembershipRosterPollRef.current) {
-        clearInterval(partyMembershipRosterPollRef.current);
-        partyMembershipRosterPollRef.current = null;
-      }
-    };
+    return cleanup;
   }, [
     applyPendingSeatRequestToParticipant,
     getWatchPartyHostAuthority,
@@ -3304,7 +3456,10 @@ export default function PlayerScreen() {
     refreshPartyMembershipSnapshot,
     setPendingPartySeatRequest,
     syncCurrentPartyPresence,
-    watchPartyEntryAllowed,
+    watchPartyEntryPrepared,
+    playerPartyAuthority,
+    playerPartyOwner,
+    sessionUserId,
   ]);
 
   useEffect(() => {
@@ -3402,11 +3557,12 @@ export default function PlayerScreen() {
     };
 
     const pollPersistedSeatRequests = () => {
+      if (!active || !playerPartyAuthority.current()) return;
       const authority = getWatchPartyHostAuthority();
       if (!authority.isHost) return;
       fetchPartyMessages(partyId, 60)
         .then((messages) => {
-          if (!active) return;
+          if (!active || !playerPartyAuthority.current()) return;
           applyPersistedHostSeatRequestMessages(
             messages.map((message) => ({ body: String(message.body ?? ""), createdAt: message.createdAt })),
             "message-poll",
@@ -3416,15 +3572,16 @@ export default function PlayerScreen() {
     };
 
     pollPersistedSeatRequests();
-    partySeatRequestPollRef.current = setInterval(pollPersistedSeatRequests, 2500);
+    const ownedSeatPoll = setInterval(pollPersistedSeatRequests, 2500);
+    partySeatRequestPollRef.current = ownedSeatPoll;
 
-    return () => {
+    const cleanup = () => {
       active = false;
-      if (partySeatRequestPollRef.current) {
-        clearInterval(partySeatRequestPollRef.current);
-        partySeatRequestPollRef.current = null;
-      }
+      clearInterval(ownedSeatPoll);
+      if (partySeatRequestPollRef.current === ownedSeatPoll) partySeatRequestPollRef.current = null;
     };
+    playerPartyAuthority.own(cleanup);
+    return cleanup;
   }, [
     applyPendingSeatRequestToParticipant,
     getWatchPartyHostAuthority,
@@ -3433,6 +3590,7 @@ export default function PlayerScreen() {
     refreshPartyMembershipSnapshot,
     setPendingPartySeatRequest,
     watchPartyEntryAllowed,
+    playerPartyAuthority,
   ]);
 
   useEffect(() => {
@@ -4921,27 +5079,42 @@ export default function PlayerScreen() {
     }
   }, [creatorVideo?.id, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
 
-  const onPickCreatorVideoCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
+  const onPickCreatorVideoCommentAttachment = useCallback(async () => {
+    if (creatorVideoCommentBusy || inWatchParty || isLiveModeFlag || playbackSourceKind !== "creator-video"
+      || commentMediaContextRef.current !== commentMediaContext) return;
+    let selection: { file: SocialAttachmentFile; mutationSubject: AccountBoundSupabaseMutationSubject } | null = null;
     try {
       setCreatorVideoCommentsError(null);
-      const file = await pickSocialAttachmentFile(scope);
-      if (!file) return;
-      setCreatorVideoCommentAttachmentFile(file);
+      selection = await pickCommentMedia({
+        title: "Add to comment", mediaKind: "attachment", sources: ["photos", "camera", "files"],
+        isCurrent: () => commentMediaContextRef.current === commentMediaContext,
+        pick: async (source, operation) => {
+          const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+          if (commentMediaContextRef.current !== commentMediaContext) return null;
+          const file = await pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation);
+          return file ? { file, mutationSubject } : null;
+        },
+      });
+      if (!selection || commentMediaContextRef.current !== commentMediaContext
+        || !sameAccountSessionAuthority(selection.mutationSubject.authority, getCurrentAccountSessionAuthoritySnapshot())) return;
+      attachmentSubjectRef.current = selection.mutationSubject;
+      setCreatorVideoCommentAttachmentFile(selection.file);
     } catch (error) {
-      setCreatorVideoCommentAttachmentFile(null);
+      if (commentMediaContextRef.current !== commentMediaContext) return;
       setCreatorVideoCommentsError(getUserFacingErrorMessage(error, "Unable to attach that file right now."));
+    } finally {
+      void releasePickedMedia(selection);
     }
-  }, []);
-
-  const onSelectCreatorVideoCommentAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
-    setCreatorVideoCommentAttachmentSheetVisible(false);
-    void onPickCreatorVideoCommentAttachment(scope);
-  }, [onPickCreatorVideoCommentAttachment]);
+  }, [commentMediaContext, creatorVideoCommentBusy, inWatchParty, isLiveModeFlag, pickCommentMedia, playbackSourceKind, setCreatorVideoCommentAttachmentFile]);
 
   const onSubmitCreatorVideoComment = useCallback(async () => {
+    const ownsContext = () => commentMediaContextRef.current === commentMediaContext
+      && !!commentMediaContext.authority && !commentMediaContext.authority.restoreOnly
+      && sameAccountSessionAuthority(commentMediaContext.authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (commentSendFlightRef.current || !ownsContext()) return;
     const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
     const body = creatorVideoCommentDraft.trim();
-    if (!creatorVideoId || playbackSourceKind !== "creator-video" || creatorVideoCommentBusy) return;
+    if (!creatorVideoId || playbackSourceKind !== "creator-video" || inWatchParty || isLiveModeFlag || creatorVideoCommentBusy) return;
 
     if (!isSignedIn) {
       Alert.alert("Sign in required", "Sign in before commenting on creator videos.");
@@ -4964,9 +5137,21 @@ export default function PlayerScreen() {
       return;
     }
 
+    cancelCommentMediaPicker();
+    let releaseSendFile: () => void;
+    try { releaseSendFile = retainPickedMedia(creatorVideoCommentAttachmentFile); }
+    catch { setCreatorVideoCommentsError("The attachment changed. Review the current selection before posting."); return; }
+    const flight = {};
+    commentSendFlightRef.current = flight;
+    const isCurrent = () => ownsContext() && commentSendFlightRef.current === flight;
     setCreatorVideoCommentBusy(true);
     setCreatorVideoCommentsError(null);
     try {
+      const mutationSubject = await captureAccountBoundSupabaseMutationSubject();
+      if (!isCurrent()) return;
+      if (creatorVideoCommentAttachmentFile && !sameAccountSessionAuthority(attachmentSubjectRef.current?.authority, mutationSubject.authority)) {
+        throw new Error("Choose the attachment again for this account before posting.");
+      }
       const replyTarget = creatorVideoComments.find((comment) => comment.id === creatorVideoCommentReplyTargetId) ?? null;
       const parentCommentId = replyTarget?.parentCommentId || replyTarget?.id || null;
       const comment = await createCreatorVideoComment({
@@ -4974,17 +5159,28 @@ export default function PlayerScreen() {
         body,
         parentCommentId,
         attachmentFile: creatorVideoCommentAttachmentFile,
+        mutationSubject,
+        isCurrent,
       });
+      if (!isCurrent()) return;
       setCreatorVideoComments((current) => [...current.filter((entry) => entry.id !== comment.id), comment]);
       setCreatorVideoCommentDraft("");
       setCreatorVideoCommentAttachmentFile(null);
       setCreatorVideoCommentReplyTargetId(null);
     } catch (error) {
+      if (!isCurrent()) return;
+      if (isAttachmentParentSavedError(error)) {
+        setCreatorVideoCommentDraft(""); setCreatorVideoCommentAttachmentFile(null);
+      }
       setCreatorVideoCommentsError(getUserFacingErrorMessage(error, "Unable to post this comment right now."));
     } finally {
-      setCreatorVideoCommentBusy(false);
+      releaseSendFile();
+      if (isCurrent()) setCreatorVideoCommentBusy(false);
+      if (commentSendFlightRef.current === flight) commentSendFlightRef.current = null;
     }
   }, [
+    commentMediaContext,
+    cancelCommentMediaPicker,
     appConfig.runtimeControls.attachments_enabled,
     appConfig.runtimeControls.comments_enabled,
     creatorVideo?.id,
@@ -4993,8 +5189,11 @@ export default function PlayerScreen() {
     creatorVideoCommentDraft,
     creatorVideoCommentReplyTargetId,
     creatorVideoComments,
+    inWatchParty,
+    isLiveModeFlag,
     isSignedIn,
     playbackSourceKind,
+    setCreatorVideoCommentAttachmentFile,
     titleId,
   ]);
 
@@ -5809,22 +6008,13 @@ export default function PlayerScreen() {
     },
     [liveBubbleParticipants, partySyncRole, trackedUserId],
   );
-  const [playerAppState, setPlayerAppState] = useState<AppStateStatus>(() => AppState.currentState);
-  useEffect(() => {
-    const changeSubscription = AppState.addEventListener("change", (nextState) => {
-      setPlayerAppState(nextState);
-    });
-
-    return () => {
-      changeSubscription.remove();
-    };
-  }, []);
   // Android blur events can fire while the shared player remains foregrounded.
   // Gate LiveKit/video only on real AppState backgrounding so camera bubbles
   // keep their room connection while users type comments or system UI appears.
   const playerMediaIsInteractive = playerAppState === "active";
 
   const requestWatchPartyLocalMediaPermissions = useCallback(async () => {
+    if (!playerPartyAuthority.current() || !watchPartyEntryAllowed) return false;
     if (Platform.OS === "web") {
       setWatchPartyCameraRequestError("Camera and microphone publishing require the installed mobile app.");
       return false;
@@ -5835,19 +6025,23 @@ export default function PlayerScreen() {
     setWatchPartyCameraRequestError("");
     try {
       const currentCameraPermission = await getCameraPermission().catch(() => cameraPermission ?? null);
+      if (!playerPartyAuthority.current()) return false;
       const cameraResult = currentCameraPermission?.granted
         ? currentCameraPermission
         : currentCameraPermission?.canAskAgain === false
           ? currentCameraPermission
           : await requestCameraPermission().catch(() => currentCameraPermission ?? null);
 
+      if (!playerPartyAuthority.current()) return false;
       const currentMicrophonePermission = await Audio.getPermissionsAsync().catch(() => null);
+      if (!playerPartyAuthority.current()) return false;
       const microphoneResult = currentMicrophonePermission?.granted
         ? currentMicrophonePermission
         : currentMicrophonePermission?.canAskAgain === false
           ? currentMicrophonePermission
           : await Audio.requestPermissionsAsync().catch(() => currentMicrophonePermission);
 
+      if (!playerPartyAuthority.current()) return false;
       const cameraGranted = cameraResult?.granted === true;
       const microphoneGranted = microphoneResult?.granted === true;
       setWatchPartyCameraPermissionGranted(cameraGranted);
@@ -5882,16 +6076,17 @@ export default function PlayerScreen() {
       );
       return false;
     } finally {
-      setWatchPartyLocalMediaPermissionBusy(false);
+      if (playerPartyAuthority.current()) setWatchPartyLocalMediaPermissionBusy(false);
     }
   }, [
     cameraPermission,
     getCameraPermission,
     requestCameraPermission,
-    watchPartyLocalMediaPermissionBusy,
+    watchPartyLocalMediaPermissionBusy, playerPartyAuthority, watchPartyEntryAllowed,
   ]);
 
   const onToggleWatchPartyLocalMedia = useCallback(async () => {
+    if (!playerPartyAuthority.current() || !watchPartyEntryAllowed) return false;
     if (watchPartyLocalMediaIntent) {
       setWatchPartyLocalMediaIntent(false);
       setWatchPartyCameraRequestError("");
@@ -5899,9 +6094,10 @@ export default function PlayerScreen() {
       return false;
     }
     const enabled = await requestWatchPartyLocalMediaPermissions();
+    if (!playerPartyAuthority.current()) return false;
     if (enabled) showLivePresenceEvent("Camera and microphone ready");
     return enabled;
-  }, [requestWatchPartyLocalMediaPermissions, showLivePresenceEvent, watchPartyLocalMediaIntent]);
+  }, [requestWatchPartyLocalMediaPermissions, showLivePresenceEvent, watchPartyLocalMediaIntent, playerPartyAuthority, watchPartyEntryAllowed]);
 
   const watchPartyLiveKitJoinContractExpiryState = watchPartyLiveKitJoinContract?.participantToken
     ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitJoinContract.participantToken)
@@ -9241,7 +9437,7 @@ export default function PlayerScreen() {
               <SocialAttachmentCard
                 file={creatorVideoCommentAttachmentFile}
                 compact
-                onRemove={() => setCreatorVideoCommentAttachmentFile(null)}
+                onRemove={() => { cancelCommentMediaPicker(); setCreatorVideoCommentAttachmentFile(null); }}
               />
             ) : null}
             <View style={styles.creatorCommentsInputRow}>
@@ -9250,7 +9446,7 @@ export default function PlayerScreen() {
                 activeOpacity={0.84}
                 disabled={creatorVideoCommentBusy}
                 onPress={() => {
-                  setCreatorVideoCommentAttachmentSheetVisible(true);
+                  void onPickCreatorVideoCommentAttachment();
                 }}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: creatorVideoCommentBusy }}
@@ -9697,7 +9893,7 @@ export default function PlayerScreen() {
     );
   }
 
-  if (inWatchParty && watchPartyEntryLoading) {
+  if (inWatchParty && (watchPartyEntryLoading || (watchPartyEntryPrepared && !watchPartyEntryAllowed) || (!watchPartyEntryAllowed && !watchPartyEntryMissing && !watchPartyEntryError && !watchPartyPremiumGate && !watchPartyAccess))) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.container}>
@@ -9722,7 +9918,7 @@ export default function PlayerScreen() {
     );
   }
 
-  if (inWatchParty && (watchPartyEntryMissing || !!watchPartyEntryError || !!watchPartyPremiumGate || (watchPartyAccess && !watchPartyAccess.isAllowed))) {
+  if (inWatchParty && !watchPartyEntryAllowed) {
     const blockedAccess = watchPartyAccess && !watchPartyAccess.isAllowed ? watchPartyAccess : null;
     const blockedPremiumAccess = watchPartyPremiumGate;
     const runtimeBlockedCopy = isRuntimeControlBlockedAccess(blockedPremiumAccess)
@@ -10512,15 +10708,6 @@ export default function PlayerScreen() {
               />
             ) : null}
 
-            <SocialAttachmentActionSheet
-              visible={creatorVideoCommentAttachmentSheetVisible}
-              kicker="COMMENT ATTACHMENT"
-              title="Add to comment"
-              body="Photos and files attach to this creator-video comment. Creator uploads stay in Platform Studio."
-              onSelect={onSelectCreatorVideoCommentAttachment}
-              onClose={() => setCreatorVideoCommentAttachmentSheetVisible(false)}
-            />
-
             {seekFeedback ? (
               <Animated.View style={[styles.seekFeedback, { opacity: seekFeedbackOpacity }]}>
                 <Text style={styles.seekFeedbackText}>{seekFeedback}</Text>
@@ -10845,6 +11032,7 @@ export default function PlayerScreen() {
       </View>
       </View>
       </KeyboardAvoidingView>
+      {commentMediaPickerSheet}
     </SafeAreaView>
   );
 }

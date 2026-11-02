@@ -10,9 +10,11 @@ const screen=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===
 const declaration=screen.body.statements.find(n=>ts.isVariableStatement(n)&&n.declarationList.declarations.some(d=>d.name.getText(ast)==='profileSocialFeedItems'));
 const compile=code=>ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 const feedModule={exports:{}};vm.runInNewContext(compile(fs.readFileSync(new URL('../_lib/profileSocialFeed.ts',import.meta.url),'utf8')),feedModule);
+const discoveryModule={exports:{},require:name=>{assert.equal(name,'./discoveryFeed');return{isDiscoveryFeedItemEligibleForRanking:()=>true};}};
+vm.runInNewContext(compile(fs.readFileSync(new URL('../_lib/profileFeedDiscovery.ts',import.meta.url),'utf8')),discoveryModule);
 function evaluate(posts,items,mode='own_profile_social_feed'){
-  const context={...feedModule.exports,userId:'viewer',canViewFullProfile:true,profileSocialFeedMode:mode,profilePosts:posts,creatorVideos:[],profileSocialFeedActor:{userId:'viewer',displayName:'Viewer'},feedPages:{items},
-    profileDiscovery:{items:[]},profileSocialFeedExtras:{circlePosts:[],followedPosts:[],circleVideos:[],followedVideos:[],notifications:[],actorsByUserId:{},circleUserIds:[],followedChannelUserIds:[]},useMemo:fn=>fn(),exports:{}};
+  const context={...feedModule.exports,...discoveryModule.exports,userId:'viewer',canViewFullProfile:true,profileSocialFeedMode:mode,profilePosts:posts,creatorVideos:[],profileSocialFeedActor:{userId:'viewer',displayName:'Viewer'},feedPages:{items},
+    profileDiscovery:{items:[]},profileSuggestedDiscovery:{items:[]},profileNotificationActivity:{items:[]},profileSocialFeedExtras:{circlePosts:[],followedPosts:[],circleVideos:[],followedVideos:[],notifications:[],actorsByUserId:{},circleUserIds:[],followedChannelUserIds:[]},useMemo:fn=>fn(),exports:{}};
   vm.runInNewContext(compile(declaration.getText(ast)+'\nexports.result=profileSocialFeedItems;'),context);return context.exports.result;
 }
 const post=id=>({id,userId:'viewer',body:id,visibility:'public',moderationStatus:'active',createdAt:'2026-10-01T00:00:00Z',attachments:[]});

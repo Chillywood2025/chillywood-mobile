@@ -33,6 +33,21 @@ const timers = () => {
   return { entries, setTimeout: (call, delay) => { const id = next++; entries.set(id, { call, delay }); return id; },
     clearTimeout: (id) => entries.delete(id), fire() { const [id, entry] = entries.entries().next().value; entries.delete(id); entry.call(); } };
 };
+// Older closure-level regressions share the production retirement and channel
+// ownership helpers with the new mounted suite; do not replace their predicates
+// with an always-allowed authority mock.
+function installPlayerRoomLifetime(scope, current, readSnapshot = async () => null) {
+  const helper = { exports: {}, setTimeout, clearTimeout };
+  evaluate(fs.readFileSync('_lib/roomSnapshotAuthority.ts', 'utf8'), helper);
+  scope.playerPartyOwner = { channelKey: 'regression-owner' };
+  scope.playerPartyAuthority = helper.exports.createRoomSnapshotAuthority({
+    partyId: scope.partyId.trim().toUpperCase(), userId: scope.sessionUserId || 'user',
+    current, unavailable: noop, read: readSnapshot,
+  });
+  scope.pendingPlayerPartyChannelRemovals = new Map();
+  scope.retirePlayerPartyChannel = callback(player, 'retirePlayerPartyChannel', scope);
+  scope.waitForPlayerPartyChannelRetirement = callback(player, 'waitForPlayerPartyChannelRetirement', scope);
+}
 const tokenEffect = find(player, (node) => ts.isCallExpression(node) && node.expression.getText(player) === "useEffect"
   && node.arguments[0]?.getText(player).includes("const requestKey = [")
   && node.arguments[0]?.getText(player).includes("player-watch-party-live-authority-refresh")).arguments[0];
@@ -176,6 +191,7 @@ function commentsHarness(partyId = "ROOM") {
     setPartyCommentDraft: (value) => { state.draft = typeof value === "function" ? value(state.draft) : value; },
     Alert: { alert: (...args) => state.alerts.push(args) }, partySocialChannelRef: { current: { send: async () => { throw Error("broadcast lost"); } } },
     getSafePartyUserId: async () => "self", sendPartyMessageRecord: async () => null };
+  installPlayerRoomLifetime(scope, () => scope.partyCommentOwnerKeyRef.current === `${partyId}:self:session`);
   scope.pushPartyOverlayMessage = callback(player, "pushPartyOverlayMessage", scope);
   assert.ok(commentEffect, "production owns durable chat recovery instead of broadcast-only display");
   const cleanup = fn(player, commentEffect, scope)();
@@ -258,13 +274,21 @@ test("Stage initialization cannot install channels or heartbeat after final snap
 test("Player social bootstrap cannot install channels after awaited removal is abandoned", async () => {
   const pending = held(); let removing = false, channels = 0, heartbeats = 0;
   const oldChannel = { topic: "realtime:party-chat-ROOM" };
-  const scope = { active: true, partyId: "ROOM", partySyncUserIdRef: { current: "me" }, partyDisplayNameRef: {}, partyAvatarUrlRef: {}, myCameraPreviewUrlRef: {},
+  const membership = { partyId: 'ROOM', userId: 'me', role: 'viewer', membershipState: 'active', leftAt: null };
+  const snapshot = { room: { partyId: 'ROOM', hostUserId: 'host', isActive: true, roomGeneration: 'generation' }, memberships: [membership] };
+  const scope = { active: true, partyId: "ROOM", sessionUserId: "me", partySyncUserIdRef: { current: "me" }, partyDisplayNameRef: {}, partyAvatarUrlRef: {}, myCameraPreviewUrlRef: {},
     partySocialChannelRef: { current: oldChannel }, watchPartyLiveKitIdentityRef: {}, partyMembershipRosterPollRef: {}, setPartyUserId: noop,
-    setPartyOverlayMessages: noop, refreshPartyMembershipSnapshot: async () => null, fetchPartyMessages: async () => [],
+    watchPartyLiveKitMountedRef: { current: true }, partyRoomHostUserIdRef: {}, updatePartyMembershipMap: noop,
+    getActivePartyMemberships: rows => rows, resolvePartyParticipantDisplayName: () => 'Viewer',
+    setPartyViewerCount: noop, setViewerCount: noop, setPartyParticipantPreview: noop, setPartyParticipants: noop,
+    joinPartyRoomSession: async () => membership, setVerifiedPlayerPartyMembershipOwner: noop,
+    setPartyOverlayMessages: noop, fetchPartyMessages: async () => [],
     getWatchPartyHostAuthority: () => ({ isHost: false }), supabase: { auth: { getUser: async () => ({ data: { user: { id: "me" } } }) },
       getChannels: () => [oldChannel], removeChannel: async () => { removing = true; await pending.promise; },
       channel: () => { channels++; const channel = { on: () => channel, subscribe: () => channel }; return channel; } },
     setInterval: () => { heartbeats++; return 1; }, clearInterval: noop };
+  installPlayerRoomLifetime(scope, () => scope.active, async () => snapshot);
+  scope.refreshPartyMembershipSnapshot = callback(player, 'refreshPartyMembershipSnapshot', scope);
   const running = callback(player, "bootstrapPartySocial", scope)(); await flush(); assert.equal(removing, true);
   scope.active = false; pending.resolve(); await running; assert.equal(channels, 0); assert.equal(heartbeats, 0);
 });
@@ -275,6 +299,8 @@ for (const boundary of ["room", "account", "session", "unmount"]) {
     const scope = { partyId: "ROOM", partyCommentOwnerKey: "ROOM:user:session", partyCommentOwnerKeyRef: { current: "ROOM:user:session" },
       watchPartyLiveKitMountedRef: { current: true }, getPartyRoomSnapshot: () => pending.promise,
       partyRoomHostUserIdRef: { current: "current-host" }, updatePartyMembershipMap: (value) => changes.push(value) };
+    installPlayerRoomLifetime(scope, () => scope.watchPartyLiveKitMountedRef.current
+      && scope.partyCommentOwnerKeyRef.current === scope.partyCommentOwnerKey, () => pending.promise);
     const reading = callback(player, "refreshPartyMembershipSnapshot", scope)();
     if (boundary === "unmount") scope.watchPartyLiveKitMountedRef.current = false;
     else scope.partyCommentOwnerKeyRef.current = { room: "OTHER:user:session", account: "ROOM:other:session", session: "ROOM:user:new-session" }[boundary];

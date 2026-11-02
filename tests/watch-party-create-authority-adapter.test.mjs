@@ -75,6 +75,7 @@ function harness({ mutate = (source) => source } = {}) {
   };
   const modules = new Map();
   const mocks = {
+    "@supabase/supabase-js": { createClient: (_url, _key, options) => createClient(_url, _key, { ...options, global: { ...options.global, fetch } }) },
     "@react-native-async-storage/async-storage": {},
     "react-native": { Platform: { OS: "android" } },
     "./supabase": { supabase, SUPABASE_URL: "https://party-adapter.invalid", SUPABASE_ANON_KEY: "fixture-anon-key" },
@@ -100,6 +101,7 @@ function harness({ mutate = (source) => source } = {}) {
     "./performancePolicy": {}, "./paidWatchPartyTickets": {}, "./socialAttachments": {},
   };
   const actual = new Map([
+    ["./watchParty", "_lib/watchParty.ts"], ["./watchPartyHostSettings", "_lib/watchPartyHostSettings.ts"],
     ["./accountSessionAuthority", "_lib/accountSessionAuthority.ts"],
     ["./accountBoundSupabaseMutation", "_lib/accountBoundSupabaseMutation.ts"],
     ["./accountBoundSupabaseRpc.mjs", "_lib/accountBoundSupabaseRpc.mjs"],

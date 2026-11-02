@@ -107,13 +107,44 @@ assert.equal(imagePolicyModule.isHeicOrHeifImage({ uri: "file:///photo.jpg", mim
 const profileMedia = read("_lib/profileMedia.ts");
 const socialPicker = read("_lib/socialAttachmentPicker.ts");
 const socialAttachments = read("_lib/socialAttachments.ts");
-for (const [label, source] of [
-  ["profile picker", profileMedia],
-  ["social picker", socialPicker],
+const pickerSources = { profileMedia, socialPicker,
+  imagePicker: read("_lib/deviceImagePicker.ts"), nativePicker: read("_lib/deviceAttachmentPicker.ts") };
+const assertSharedPickerSources = ({ profileMedia, socialPicker, imagePicker, nativePicker }) => {
+  // Surface wrappers retain their validation/upload policies; the selected-item
+  // SDK options and cancellation fence now belong to one shared native adapter.
+  includes(profileMedia, 'from "./deviceImagePicker"', "profile picker shared import");
+  includes(profileMedia, "return pickDeviceImage(source, operation,", "profile picker operation ownership");
+  includes(imagePicker, 'from "./deviceAttachmentPicker"', "image picker shared import");
+  includes(imagePicker, "await pickDeviceAttachments(source,", "image picker shared adapter");
+  includes(imagePicker, "operation, maximumBytes:", "image picker operation ownership");
+  includes(socialPicker, 'from "./deviceAttachmentPicker"', "social picker shared import");
+  includes(socialPicker, "await pickDeviceAttachments(source, { mimeTypes: getSocialAttachmentPickerTypes(scope), operation,", "social picker operation ownership");
+  includes(nativePicker, 'await import("expo-image-picker")', "shared photo SDK");
+  includes(nativePicker, 'await import("expo-document-picker")', "shared Files SDK");
+  includes(nativePicker, "return runNativeMediaPicker(", "shared native single-flight");
+  includes(nativePicker, "}, options.operation);", "shared native operation ownership");
+  includes(nativePicker, "legacy: false", "shared modern picker");
+  includes(nativePicker, "allowsEditing: false", "shared no-native-crop picker");
+  includes(nativePicker, "picker.launchImageLibraryAsync(pickerOptions)", "shared photo options dispatch");
+  includes(nativePicker, "picker.getDocumentAsync", "shared Files dispatch");
+  assert.equal(nativePicker.split("if (!isCurrent() || result.canceled) return null;").length - 1, 2,
+    "shared Photos/Files cancellation and retired-owner fences must both return null");
+  for (const [label, source] of Object.entries({ profileMedia, socialPicker, imagePicker, nativePicker })) {
+    excludes(source, "requestMediaLibraryPermissionsAsync", `${label} selected-item-only privacy`);
+  }
+};
+assertSharedPickerSources(pickerSources);
+for (const [field, before, after, message] of [
+  ["profileMedia", "pickDeviceImage(source, operation,", "pickDeviceImage(source, undefined,", /profile picker operation ownership/u],
+  ["socialPicker", "getSocialAttachmentPickerTypes(scope), operation,", "getSocialAttachmentPickerTypes(scope),", /social picker operation ownership/u],
+  ["nativePicker", "legacy: false", "legacy: true", /shared modern picker/u],
+  ["nativePicker", "!isCurrent() || result.canceled", "!isCurrent()", /cancellation and retired-owner fences/u],
+  ["nativePicker", "!isCurrent() || result.canceled", "result.canceled", /cancellation and retired-owner fences/u],
+  ["nativePicker", "legacy: false", "legacy: false, requestMediaLibraryPermissionsAsync: true", /selected-item-only privacy/u],
 ]) {
-  includes(source, "legacy: false", label);
-  includes(source, "if (result.canceled) return null", label);
-  excludes(source, "requestMediaLibraryPermissionsAsync", label);
+  assert.ok(pickerSources[field].includes(before), "picker negative control must mutate the actual source");
+  assert.throws(() => assertSharedPickerSources({ ...pickerSources,
+    [field]: pickerSources[field].replaceAll(before, after) }), message);
 }
 includes(profileMedia, "normalizeImageUploadFile(file)", "profile upload conversion");
 includes(profileMedia, "await normalized.cleanup()", "profile temporary-file cleanup");
@@ -223,6 +254,19 @@ const runLivenessProof = (args, label) => {
   assert.equal(result.status, 0, `${label} failed:\n${result.stdout}\n${result.stderr}`);
   return result.stdout;
 };
+const pickerProof = runLivenessProof([
+  "--test", "--test-reporter=tap", "tests/shared-media-picker.test.mjs",
+], "actual shared picker adapter and mounted lifecycle regressions");
+for (const title of [
+  "production image adapter preserves unknown MIME and real URI name; no broad permission or OEM choice",
+  "canceling the sheet or a native selection preserves previous caller state",
+  "direct native helpers share single-flight until resolution and support cancel/retry",
+]) {
+  assert.ok(pickerProof.split("\n").some(line => /^ok \d+ - /u.test(line) && line.endsWith(` - ${title}`)),
+    `picker selection must execute the behavioral assertion: ${title}`);
+}
+const passedPickerCases = Number(pickerProof.match(/^# pass (\d+)$/mu)?.[1] ?? 0);
+console.log(`Shared picker proof passed: ${passedPickerCases} adapter/mounted cases with controlled native boundaries, including cancellation, retirement and the dismissal callback.`);
 const cameraProof = runLivenessProof([
   "--test", "--test-reporter=tap", "--test-name-pattern",
   "legacy supported camera flip|legacy camera retry|legacy foreground camera restore|installed RTC SDK",

@@ -1,5 +1,7 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
+import { withPickedMediaRead } from "./mediaPickerResources";
+import { prepareMediaUploadCopy } from "./prepareMediaUploadCopy";
 
 import { resolveMediaUploadSizeBytes } from "./mediaUploadSize";
 import { SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
@@ -131,15 +133,20 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: s
   }
 };
 
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number, message: string) {
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number, message: string, readUri?: string) {
+  // Lease the raw fetch, not its timeout/abort wait. An abort request alone does
+  // not establish that a native upload body has stopped reading the local URI.
+  const startFetch = (requestInit: RequestInit) => readUri
+    ? withPickedMediaRead(readUri, () => fetch(input, requestInit))
+    : fetch(input, requestInit);
   if (typeof AbortController === "undefined") {
-    return withTimeout(fetch(input, init), timeoutMs, message);
+    return withTimeout(startFetch(init), timeoutMs, message);
   }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    return await startFetch({ ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(message);
@@ -392,18 +399,11 @@ async function prepareUploadUri(input: {
   }
 
   const cacheUri = `${FileSystem.cacheDirectory}media-upload-${createClientId()}.${getUploadExtension(input.fileName, input.mimeType)}`;
-  await withTimeout(
-    FileSystem.copyAsync({ from: normalizedUri, to: cacheUri }),
-    MEDIA_STORAGE_REQUEST_TIMEOUT_MS,
-    "Media file preparation took too long. Try again.",
-  );
-
-  return {
-    uri: cacheUri,
-    cleanup: async () => {
-      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
-    },
-  };
+  return prepareMediaUploadCopy({
+    sourceUri: normalizedUri,
+    destinationUri: cacheUri,
+    waitForCopy: (copy) => withTimeout(copy, MEDIA_STORAGE_REQUEST_TIMEOUT_MS, "Media file preparation took too long. Try again."),
+  });
 }
 
 async function uploadPreparedFileToSignedUrl(input: {
@@ -420,12 +420,13 @@ async function uploadPreparedFileToSignedUrl(input: {
   try {
     for (let attemptIndex = 0; attemptIndex <= SLOW_DOWN_RETRY_DELAYS_MS.length; attemptIndex += 1) {
       input.assertOperationCurrent?.();
+      // The timeout may finish before native releases this picked-file reader.
       const result = await withTimeout(
-        FileSystem.uploadAsync(input.uploadUrl, input.uri, {
+        withPickedMediaRead(input.uri, () => FileSystem.uploadAsync(input.uploadUrl, input.uri, {
           httpMethod: "PUT",
           uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
           headers: input.uploadHeaders,
-        }),
+        })),
         uploadTimeoutMs,
         "Media upload took too long. Try again.",
       );
@@ -456,6 +457,7 @@ async function uploadPreparedFileToSignedUrl(input: {
           },
           uploadTimeoutMs,
           "Media upload took too long. Try again.",
+          input.uri,
         );
         input.assertOperationCurrent?.();
         await assertUploadResponseOk(response, attemptIndex);
@@ -489,6 +491,7 @@ async function uploadPreparedFileToSignedUrl(input: {
         },
         uploadTimeoutMs,
         "Media upload took too long. Try again.",
+        input.uri,
       );
       input.assertOperationCurrent?.();
       await assertUploadResponseOk(response, attemptIndex);

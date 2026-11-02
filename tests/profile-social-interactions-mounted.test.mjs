@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { loadPickedMediaResources } from './helpers/picked-media-resources-host.mjs';
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import test from 'node:test';
@@ -12,7 +13,7 @@ if(process.env.PROFILE_RACE_MUTANT==='comments')source=source.replace(/      if 
 if(process.env.PROFILE_RACE_MUTANT==='engagement')source=source.replace(/^          if \(revisions.get\(postId\).*return;\n/m,'');
 const ast=ts.createSourceFile('profile.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
 const screen=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='ProfileScreen');
-const names=['renderProfilePostCard','renderProfileSocialFeedItem','onToggleProfilePostLike','onToggleProfilePostComments','loadProfilePostComments','onShareProfilePost','onPressReportProfilePost','onSaveAbout','onSubmitProfilePostComment','refreshProfilePostEngagement','onSubmitProfilePost','onDeleteProfilePost','onDeleteProfilePostCommentPress','onSelectProfileAttachment','attachProfilePostFile','attachProfilePostCommentFile'];
+const names=['renderProfilePostCard','renderProfileSocialFeedItem','onToggleProfilePostLike','onToggleProfilePostComments','loadProfilePostComments','onShareProfilePost','onPressReportProfilePost','onSaveAbout','onSubmitProfilePostComment','refreshProfilePostEngagement','onSubmitProfilePost','onDeleteProfilePost','onDeleteProfilePostCommentPress','onPickProfilePostAttachment','attachProfilePostFile','attachProfilePostCommentFile'];
 const selected=screen.body.statements.filter(n=>ts.isVariableStatement(n)&&n.declarationList.declarations.some(d=>names.includes(d.name.getText(ast))));
 const engagementEffect=screen.body.statements.find(n=>ts.isExpressionStatement(n)&&n.getText(ast).startsWith('useEffect(')&&n.getText(ast).includes('readProfilePostEngagementStates'));
 const engagementCode=ts.transpileModule(engagementEffect.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
@@ -27,7 +28,7 @@ const text=value=>value==null?'':typeof value==='string'||typeof value==='number
 const post={id:'post-1',userId:'friend',body:'hello',visibility:'public',moderationStatus:'active',attachments:[]};
 async function mount(t){
   const calls=[],comments=[];let tree,current=true,saveError=null;
-  const context=vm.createContext({exports:{},React,styles:new Proxy({},{get:()=>({})}),
+  const context=vm.createContext({exports:{},React,...loadPickedMediaResources(),styles:new Proxy({},{get:()=>({})}),
     View:'View',TouchableOpacity:'TouchableOpacity',AppText:'AppText',Text:'Text',TextInput:'TextInput',MaterialIcons:'Icon',LinkedText:'LinkedText',SocialAttachmentCard:'Attachment',ActivityIndicator:'Spinner',ConversationTimestamp:'Timestamp',
     currentUserId:'viewer',isSelfProfile:true,userId:'viewer',isOfficialProfile:false,profile:{displayName:'Viewer'},profilePostUiById:{'post-1':{engagementReady:true,engagement:{likedByViewer:false,likeCount:0,commentCount:0}}},profilePostDeletingId:null,socialIdentity:'viewer:one',socialActionKeysRef:{current:new Set()},commentRevisionsRef:{current:new Map()},engagementRevisionsRef:{current:new Map()},
     isSocialIdentityCurrent:()=>current,formatEngagementCount:(n,label)=>n?`${n} ${label}`:'',formatProfilePostDate:()=>'',isProfilePostPubliclyShareable:()=>true,isProfilePostEngageable:()=>true,shouldShowOwnerDraftMarker:()=>false,
@@ -39,7 +40,8 @@ async function mount(t){
     PROFILE_POST_BODY_LIMIT:2000,profilePostBusy:false,profilePostDraft:'New post',profilePostAttachmentFile:null,setProfilePostBusy:noop,setProfilePostsNotice:value=>calls.push(['postNotice',value]),setProfilePosts:updater=>calls.push(['posts',updater([])]),setProfilePostUiById:noop,setProfilePostDraft:noop,setProfilePostAttachmentFile:noop,setProfilePostsReady:noop,
     createProfilePostComment:async input=>{calls.push(['createComment',input]);return{id:'new-comment',userId:'viewer',body:input.body,attachments:[]};},readProfilePostEngagementState:async()=>{throw new Error('counts offline');},
     deleteProfilePost:async(...args)=>calls.push(['deletePost',...args]),deleteProfilePostComment:async(...args)=>calls.push(['deleteComment',...args]),setProfilePostDeletingId:noop,
-    profileAttachmentSheetTarget:{surface:'post',identity:'viewer:one'},setProfileAttachmentSheetTarget:noop,pickSocialAttachmentFile:async()=>({uri:'file:test'}),
+    profileAttachmentRevision:{current:0},profileAttachmentPending:{current:false},cancelMediaPicker:noop,pickMedia:({pick})=>pick('photos'),pickSocialAttachmentFile:async()=>({uri:'file:test'}),
+    profilePostAttachmentCurrent:{current:null},profileCommentAttachmentCurrent:{current:new Map()},
     readProfilePostCommentsPage:async(id,options)=>{calls.push(['comments',id,options]);const result=comments.shift();if(result instanceof Error)throw result;return result;},
     trackModerationActionUsed:noop,setProfilePostReportTarget:value=>calls.push(['report',value]),setProfilePostCommentReportTarget:noop,setProfileMediaReportTarget:noop,setReportVisible:noop,
     aboutBusy:false,aboutDraft:'Updated About',channelAccessProfile:{displayName:'Viewer'},authority:{userId:'viewer',sessionGeneration:'one'},
@@ -132,10 +134,9 @@ test('held delete confirmations cannot execute for a replacement account',async 
 test('held attachment sheet action and pending gallery result cannot attach into a replacement account',async t=>{
   const m=await mount(t);let resolve,picks=0,attachments=0;
   m.context.pickSocialAttachmentFile=()=>{picks++;return new Promise(yes=>{resolve=yes;});};m.context.setProfilePostAttachmentFile=()=>{attachments++;};
-  m.context.exports.onSelectProfileAttachment('photos');assert.equal(picks,1);m.current(false);
+  m.context.exports.onPickProfilePostAttachment();assert.equal(picks,1);m.current(false);
   resolve({uri:'file:old-account'});await new Promise(done=>setImmediate(done));assert.equal(attachments,0);
-  m.context.exports.onSelectProfileAttachment('photos');assert.equal(picks,1);
-  m.current(true);m.context.socialIdentity='viewer:two';m.context.exports.onSelectProfileAttachment('photos');assert.equal(picks,1,'new handler also rejects a retained old target');
+  m.context.exports.onPickProfilePostAttachment();assert.equal(picks,1);
 });
 test('an older comment read cannot erase an acknowledged new comment',async t=>{
   const m=await mount(t);let resolve;m.context.readProfilePostCommentsPage=()=>new Promise(yes=>{resolve=yes;});

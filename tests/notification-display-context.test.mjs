@@ -5,7 +5,7 @@ import ts from 'typescript';
 const api={};
 new Function('exports',ts.transpileModule(fs.readFileSync('_lib/notificationDisplayContext.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(api);
 const row=(type='vip_access_active',extra={})=>({id:'notice-a',notification_type:type,target_route:'/vip-pass/[creatorId]',target_entity_id:'creator-a',title:'VIP Pass active.',body:'Your creator VIP access is active.',created_at:'2026-07-05T12:55:00Z',read_at:null,...extra});
-const item=(r,extra={})=>({notificationId:r.id,notificationType:r.notification_type,targetRoute:r.target_route,targetId:r.target_entity_id,creatorId:'creator-a',creatorName:'Rachi (@rachi)',targetTitle:null,resolution:'resolved',...extra});
+const item=(r,extra={})=>({notificationId:r.id,notificationType:r.notification_type,targetRoute:r.target_route,targetId:r.target_entity_id,creatorId:'creator-a',creatorName:'Rachi (@rachi)',targetTitle:null,resolution:'resolved',liveState:'live',...extra});
 const apply=(rows,items)=>api.applyNotificationDisplayContext(rows,{schemaVersion:1,items});
 test('attendance never displays cached private identity without current bound context',()=>{
  const r=row('live_room_member_joined',{target_route:'/watch-party/live-stage/[partyId]',target_entity_id:'EXACT-ROOM',title:'PRIVATE PERSON joined',body:'PRIVATE ROOM'});
@@ -17,6 +17,18 @@ test('attendance never displays cached private identity without current bound co
  assert.doesNotMatch(unavailable.title+unavailable.body,/Exact Member|Exact Room/);
  assert.equal(actual.target_entity_id,'EXACT-ROOM');
  assert.equal(actual.target_route,'/watch-party/live-stage/[partyId]');
+});
+test('negative control: live-start rows previously retain private snapshot text on missing display read',()=>{
+ const r=row('followed_creator_live',{title:'PRIVATE HOST is live',body:'PRIVATE ROOM',target_context:{display_context:{creator_display_name:'PRIVATE HOST'}}});
+ const oldAttendanceOnly=rows=>rows.map(n=>n.notification_type==='live_room_member_joined'?{...n,title:'Live attendance update',body:'Open details'}:n);
+ assert.match(JSON.stringify(oldAttendanceOnly([r])),/PRIVATE HOST/);
+ const safe=api.redactUnverifiedLiveAttendance([r]);assert.doesNotMatch(JSON.stringify(safe),/PRIVATE HOST|PRIVATE ROOM/);
+ assert.equal(safe[0].target_context.live_discovery_state,'unavailable');
+ for(const payload of [{schemaVersion:2,items:[]},{schemaVersion:1,items:[item(r),item(r)]}]) {
+  assert.equal(api.applyNotificationDisplayContext(safe,payload)[0].target_context.live_discovery_state,'unavailable');
+ }
+ const legacy=api.applyNotificationDisplayContext(safe,{schemaVersion:1,items:[item(r,{liveState:undefined,creatorName:'PRIVATE HOST',targetTitle:'PRIVATE ROOM'})]});
+ assert.doesNotMatch(JSON.stringify(legacy),/PRIVATE HOST|PRIVATE ROOM/,'older metadata-only backend cannot certify a current live disclosure');
 });
 test('historic VIP identifies its exact creator without claiming current active access',()=>{
  const r=row(),actual=apply([r],[item(r)])[0];
@@ -67,4 +79,11 @@ test('social context identifies the authorized actor without message previews an
   const resolved=apply([r],[item(r)])[0];assert.match(resolved.title,/Rachi/);assert.doesNotMatch(resolved.body,/Former/);
   const hidden=apply([r],[item(r,{resolution:'unavailable'})])[0];assert.doesNotMatch(hidden.title+hidden.body,/Former|Rachi/);
  }
+});
+
+test('only current bound context supplies an opaque discovery key; malformed/private labels cannot become a key',()=>{
+ const r=row('followed_creator_live'),key='30000000-0000-4000-8000-000000000001';
+ assert.equal(apply([r],[item(r,{discoveryHintKey:key})])[0].target_context.discovery_hint_key,key);
+ assert.equal(apply([r],[item(r,{discoveryHintKey:'private-room-name'})])[0].target_context.discovery_hint_key,undefined);
+ assert.equal(apply([r],[item(r,{resolution:'unavailable',discoveryHintKey:key})])[0].target_context.discovery_hint_key,undefined);
 });
