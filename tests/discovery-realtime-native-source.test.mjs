@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import {parse} from 'yaml';
 import {randomUUID} from 'node:crypto';
+import vm from 'node:vm';
 import {assertDiscoveryHintPayload} from '../scripts/lib/discovery-native-hint-contract.mjs';
 
 const command='node scripts/test-discovery-realtime-delivery.mjs';
@@ -22,6 +23,7 @@ function validate(source,workflowText) {
     'primary_delivery_enabled=${initial.config.primary_delivery_enabled}']) assert.ok(source.includes(fragment),fragment);
   assert.doesNotMatch(source,/create\s+(?:or\s+replace\s+)?function\s+(?:public|private|realtime)\./i,
     'no fake authority or Realtime transport replaces actual native boundaries');
+  assert.doesNotMatch(source,/alter\s+table\s+realtime\.messages/i,'never adapt the managed schema to satisfy the proof');
   assert.doesNotMatch(source,/setInterval\s*\(/,'no polling loop can satisfy primary receipt proof');
   const workflow=parse(workflowText),database=workflow.jobs.database;
   assert.equal(database.if,"needs.plan.outputs.database == 'true'");
@@ -34,6 +36,16 @@ function validate(source,workflowText) {
   assert.ok(block.includes('node --test tests/discovery-realtime-native-source.test.mjs'));
 }
 test('native discovery proof retains real SDK/Auth/RLS receipts, no polling substitute, and mandatory CI execution',()=>validate(script,workflowSource));
+test('native proof qualifies exact managed transaction or wall-clock defaults without accepting arbitrary timestamps',()=>{
+  const contract=script.slice(script.indexOf('assert.equal(managedClock.type'),script.indexOf('const lit='));
+  assert.ok(contract.includes('managedClock.default'));
+  const run=(type,defaultValue)=>vm.runInNewContext(contract,{assert,managedClock:{type,default:defaultValue}});
+  for(const value of ['now()',"timezone('utc'::text, clock_timestamp())"])
+    assert.doesNotThrow(()=>run('timestamp without time zone',value));
+  for(const value of [null,'',"'2000-01-01'::timestamp without time zone",'arbitrary_clock()'])
+    assert.throws(()=>run('timestamp without time zone',value),assert.AssertionError);
+  assert.throws(()=>run('timestamp with time zone','now()'),assert.AssertionError);
+});
 test('native proof source guard rejects removed privacy, primary timing and execution boundaries',()=>{
   for(const needle of ["query('show cron.launch_active_jobs'),'off'",'receiptMs<3000',"next_action:'remove'",'rolled-back publication',
     'primary-disabled negative control','receive-only viewer channel',"delete from auth.sessions",'JSON.stringify(message.payload)',
@@ -41,6 +53,7 @@ test('native proof source guard rejects removed privacy, primary timing and exec
     assert.throws(()=>validate(script.replaceAll(needle,'REMOVED_BOUNDARY'),workflowSource),assert.AssertionError,needle);
   for(const replacement of ['',`${command} || true`,`if false; then ${command}; fi`])
     assert.throws(()=>validate(script,workflowSource.replace(command,replacement)),assert.AssertionError,replacement);
+  assert.throws(()=>validate(`${script}\nalter table realtime.messages alter column inserted_at set default clock_timestamp();`,workflowSource),assert.AssertionError);
 });
 test('native receipt parser rejects ID-only, raw identity, unbounded and metadata-bearing payloads',()=>{
   const id=randomUUID(),key=randomUUID(),raw=randomUUID();

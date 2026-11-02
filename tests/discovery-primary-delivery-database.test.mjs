@@ -25,7 +25,7 @@ test('transactional discovery primary: immediate exact audience hints, withdrawa
     await db.exec(`alter table realtime.messages alter column id type uuid using null::uuid;
       alter table realtime.messages alter column id set default gen_random_uuid();
       alter table realtime.messages alter column inserted_at type timestamp without time zone using inserted_at at time zone 'UTC';
-      alter table realtime.messages alter column inserted_at set default timezone('utc',clock_timestamp());
+      alter table realtime.messages alter column inserted_at set default now();
       create index messages_inserted_at_topic_index on realtime.messages(inserted_at desc,topic) where extension='broadcast' and private is true;`);
     await db.exec(managedSend);await seedLiveRoomAuthority(db);
     assert.equal(await scalar('select primary_delivery_enabled from private.discovery_invalidation_worker_config'),true);

@@ -18,7 +18,7 @@ test('opaque progress keys: immutable assignment, exact public/count scopes, mul
     await db.exec(`alter table realtime.messages alter column id type uuid using null::uuid;
       alter table realtime.messages alter column id set default gen_random_uuid();
       alter table realtime.messages alter column inserted_at type timestamp without time zone using inserted_at at time zone 'UTC';
-      alter table realtime.messages alter column inserted_at set default timezone('utc',clock_timestamp());
+      alter table realtime.messages alter column inserted_at set default now();
       create or replace function realtime.send(jsonb,text,text,boolean) returns void language plpgsql as $$begin
         insert into realtime.messages(payload,event,topic,private,extension) values($1,$2,$3,$4,'broadcast');
         insert into realtime.fixture_outbox values($1,$2,$3,$4);end$$;`);

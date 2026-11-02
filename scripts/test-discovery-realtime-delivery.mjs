@@ -37,8 +37,8 @@ const managedClock=JSON.parse(query(`select jsonb_build_object('type',format_typ
   from pg_attribute a join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
   where a.attrelid='realtime.messages'::regclass and a.attname='inserted_at'`));
 assert.equal(managedClock.type,'timestamp without time zone','qualify actual managed timestamp contract, never adapt it in the test');
-assert.match(managedClock.default,/timezone\('utc'::text, clock_timestamp\(\)\)/,
-  'managed Broadcast insertion must use wall-clock time, not transaction-start now()');
+assert.ok(['now()', "timezone('utc'::text, clock_timestamp())"].includes(managedClock.default),
+  'qualify the actual supported managed default without changing provider schema');
 const lit=value=>value==null?'null':`'${String(value).replaceAll("'","''")}'`;
 const bind=(sql,values)=>sql.replace(/\$(\d+)/g,(_,n)=>lit(values[Number(n)-1]));
 const db={exec:async sql=>query(sql),query:async(sql,values=[])=>{

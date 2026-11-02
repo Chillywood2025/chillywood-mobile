@@ -69,10 +69,11 @@ jobs:
     needs: plan
     # The paired call gate uses Playwright's pinned Chromium with OS libraries.
     runs-on: ubuntu-24.04
-    # The complete 4,777-test run took 35m15s before mounted/real-peer gates;
-    # a measured 40m job timeout cut off those required gates, not a test failure.
-    # Retain every stage and individual test deadline; budget the full pipeline.
-    timeout-minutes: 60
+    # Hosted run 41376468605/job 125057739472 reached test 5267 without an
+    # assertion failure before the 60m cutoff (59m11s in the serialized matrix).
+    # Mandatory mounted/real-peer/SDK gates had not started. Bound the complete
+    # pipeline plus hosted variability at 120m; retain every per-test deadline.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # Native compatibility tests verify the recorded v3 cohort at its

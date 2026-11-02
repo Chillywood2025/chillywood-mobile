@@ -24,7 +24,7 @@ test('canonical scoped discovery outbox: authority, producer, atomic dispatch, r
     await db.exec(`alter table realtime.messages alter column id type uuid using null::uuid;
       alter table realtime.messages alter column id set default gen_random_uuid();
       alter table realtime.messages alter column inserted_at type timestamp without time zone using inserted_at at time zone 'UTC';
-      alter table realtime.messages alter column inserted_at set default timezone('utc',clock_timestamp());
+      alter table realtime.messages alter column inserted_at set default now();
       create index messages_inserted_at_topic_index on realtime.messages(inserted_at desc,topic)
         where extension='broadcast' and private is true`);
     // Match the observed managed send contract: generated TABLE id is separate,

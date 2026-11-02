@@ -39,7 +39,7 @@ revoke all on function public.can_receive_discovery_invalidation(text) from publ
 grant execute on function public.can_receive_discovery_invalidation(text) to authenticated;
 
 create function private.deliver_discovery_primary_hint()
-returns trigger language plpgsql security definer set search_path='' as $$
+returns trigger language plpgsql security definer set search_path='' set timezone='UTC' as $$
 declare delivery uuid; before_send timestamp; after_send timestamp; confirmed boolean;
 begin
   if new.available_at>clock_timestamp() or new.status<>'pending' or not exists(
@@ -53,7 +53,18 @@ begin
     return null;
   end if;
   begin
-    delivery:=gen_random_uuid(); before_send:=timezone('utc',clock_timestamp());
+    delivery:=gen_random_uuid(); before_send:=timezone('utc',transaction_timestamp());
+    -- Managed inserted_at may use now() (transaction start) or wall-clock time.
+    -- Keep its timestamp-without-time-zone cast in UTC without altering provider
+    -- schema. Require this random receipt to be absent BEFORE sending as well:
+    -- an old receipt/nonce collision must never certify a swallowed send.
+    with candidates as materialized (
+      select payload,event from realtime.messages where extension='broadcast' and private is true
+        and topic=new.topic and inserted_at>=before_send and inserted_at<=timezone('utc',clock_timestamp())
+      order by inserted_at desc limit 1001
+    ) select count(*)<=1000 and not coalesce(bool_or(event='discovery:invalidate'
+      and payload=jsonb_build_object('id',delivery)),false) into confirmed from candidates;
+    if not confirmed then raise exception 'discovery_primary_receipt_not_fresh'; end if;
     perform realtime.send(jsonb_build_object('id',delivery),'discovery:invalidate',new.topic,true);
     after_send:=timezone('utc',clock_timestamp());
     -- Managed send can swallow errors. Verify the exact durable insertion;

@@ -191,7 +191,7 @@ end;
 $$;
 
 create or replace function private.deliver_discovery_primary_hint()
-returns trigger language plpgsql security definer set search_path='' as $$
+returns trigger language plpgsql security definer set search_path='' set timezone='UTC' as $$
 declare delivery uuid; before_send timestamp; after_send timestamp; confirmed boolean; v_payload jsonb;
 begin
   if new.available_at>clock_timestamp() or new.status<>'pending' or not exists(
@@ -208,7 +208,17 @@ begin
   begin
     delivery:=gen_random_uuid(); v_payload:=jsonb_build_object('id',delivery);
     if new.hint_keys is not null then v_payload:=v_payload||jsonb_build_object('keys',new.hint_keys); end if;
-    before_send:=timezone('utc',clock_timestamp());
+    before_send:=timezone('utc',transaction_timestamp());
+    -- Managed inserted_at may use now() (transaction start) or wall-clock time.
+    -- Require the random exact payload to be absent before send, so an existing
+    -- receipt/nonce collision cannot certify a swallowed or no-op send.
+    with candidates as materialized (
+      select m.payload,m.event from realtime.messages m where extension='broadcast' and private is true
+        and topic=new.topic and inserted_at>=before_send and inserted_at<=timezone('utc',clock_timestamp())
+      order by inserted_at desc limit 1001
+    ) select count(*)<=1000 and not coalesce(bool_or(event='discovery:invalidate'
+      and candidates.payload=v_payload),false) into confirmed from candidates;
+    if not confirmed then raise exception 'discovery_primary_receipt_not_fresh'; end if;
     perform realtime.send(v_payload,'discovery:invalidate',new.topic,true);
     after_send:=timezone('utc',clock_timestamp());
     -- Managed send can swallow errors. Verify the exact durable insertion;
@@ -230,7 +240,7 @@ begin
 end $$;
 
 create or replace function public.flush_discovery_invalidations(p_limit integer default 100)
-returns jsonb language plpgsql security definer set search_path='' as $$
+returns jsonb language plpgsql security definer set search_path='' set timezone='UTC' as $$
 declare
   v_ids bigint[];
   v_group record;
@@ -300,7 +310,19 @@ begin
           from private.discovery_invalidation_outbox where id=any(v_group.ids) limit 257) keys;
         if cardinality(v_keys)<=256 then v_payload:=v_payload||jsonb_build_object('keys',v_keys); end if;
       end if;
-      v_before:=timezone('utc',clock_timestamp());
+      v_before:=timezone('utc',transaction_timestamp());
+      -- Match either managed timestamp default without changing provider schema.
+      -- Preflight the same bounded candidate range to reject an existing exact
+      -- receipt even under a nonce collision; post-send confirmation is separate.
+      with candidates as materialized (
+        select payload,event from realtime.messages
+        where extension='broadcast' and private is true and topic=v_group.topic
+          and inserted_at>=v_before and inserted_at<=timezone('utc',clock_timestamp())
+        order by inserted_at desc limit 1001
+      ) select count(*)<=1000 and not coalesce(bool_or(event='discovery:invalidate'
+          and payload=v_payload),false)
+        into v_confirmed from candidates;
+      if not v_confirmed then raise exception 'discovery_broadcast_receipt_not_fresh'; end if;
       perform realtime.send(v_payload,'discovery:invalidate',v_group.topic,true);
       v_after:=timezone('utc',clock_timestamp());
       -- Actual managed partial index: (inserted_at DESC,topic) WHERE
