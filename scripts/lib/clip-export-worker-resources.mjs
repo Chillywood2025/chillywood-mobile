@@ -33,6 +33,11 @@ function cgroupPath(value){
  * A cgroup is NOT automatically an isolated renderer: operator qualification
  * must prove that no LiveKit/scanner/other workloads share it. The peak belongs
  * to the cgroup lifetime, not this job or Node's RSS. No membership is changed.
+ * memory.max is leaf-local: ancestor limits and sibling usage can be tighter,
+ * and a cgroup namespace can hide those ancestors. Leaf subtraction is not
+ * effective headroom. This reader deliberately leaves effective constraints
+ * unknown; only separately qualified hierarchy evidence can authorize growth.
+ * https://docs.kernel.org/admin-guide/cgroup-v2.html (Hierarchy and Namespace)
  * Injected I/O/clock is for deterministic tests, never a configurable host path.
  */
 export async function readClipExportWorkerResources({platform=process.platform,openFile=open,resolvePath=realpath,
@@ -40,7 +45,9 @@ export async function readClipExportWorkerResources({platform=process.platform,o
  const observedAtMs=clock(),started=monotonic();
  const result={available:false,reason:'cgroup_v2_unavailable',observedAtMs,collectionElapsedMs:0,
   scope:null,isolationVerified:false,peakScope:'cgroup-lifetime',memoryCurrentBytes:null,memoryPeakBytes:null,
-  memoryLimitBytes:null,memoryAvailableHeadroomBytes:null,oomEvents:{oom:null,oomKill:null,oomGroupKill:null},cpuUsageUsec:null};
+  memoryLimitBytes:null,memoryLimitScope:'leaf-cgroup-only',leafMemoryAvailableHeadroomBytes:null,
+  memoryAvailableHeadroomBytes:null,effectiveMemoryConstraintKnown:false,effectiveMemoryLimitBytes:null,
+  effectiveMemoryAvailableHeadroomBytes:null,oomEvents:{oom:null,oomKill:null,oomGroupKill:null},cpuUsageUsec:null};
  const finish=()=>({...result,collectionElapsedMs:Math.max(0,monotonic()-started)});
  if(platform!=='linux')return finish();
  const read=async file=>{
@@ -68,7 +75,7 @@ export async function readClipExportWorkerResources({platform=process.platform,o
   if(currentBytes===null)return finish();
   result.available=true;result.reason=null;result.scope=SCOPE;result.memoryCurrentBytes=currentBytes;
   result.memoryPeakBytes=count(peak);result.memoryLimitBytes=count(limit);
-  result.memoryAvailableHeadroomBytes=result.memoryLimitBytes===null?null:Math.max(0,result.memoryLimitBytes-currentBytes);
+  result.leafMemoryAvailableHeadroomBytes=result.memoryLimitBytes===null?null:Math.max(0,result.memoryLimitBytes-currentBytes);
   result.oomEvents={oom:memoryEvents.get('oom')??null,oomKill:memoryEvents.get('oom_kill')??null,
    oomGroupKill:memoryEvents.get('oom_group_kill')??null};
   result.cpuUsageUsec=cpuEvents.get('usage_usec')??null;

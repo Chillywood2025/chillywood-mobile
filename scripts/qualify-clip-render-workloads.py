@@ -102,6 +102,13 @@ def generator_args(fixture, output):
     return args + [str(output)]
 
 
+def rotation_args(encoded, output):
+    # Input display-matrix override survives stream copy. Setting an output
+    # rotate tag alone did not produce side data in the measured FFmpeg 7 run.
+    return ['-nostdin', '-v', 'error', '-n', '-display_rotation', '90', '-i', str(encoded),
+            '-map', '0', '-c', 'copy', str(output)]
+
+
 def execute(plan, root, budget, keep):
     started = time.monotonic()
     binaries = {name: shutil.which(name) for name in ['ffmpeg', 'ffprobe', 'node']}
@@ -157,8 +164,7 @@ def execute(plan, root, budget, keep):
             encoded = media / (identity + '-unrotated.mp4') if fixture.get('rotation') else output
             ffmpeg('generate-' + identity, generator_args(fixture, encoded))
             if fixture.get('rotation'):
-                ffmpeg('rotate-' + identity, ['-nostdin', '-v', 'error', '-n', '-i', str(encoded),
-                        '-map', '0', '-c', 'copy', '-metadata:s:v:0', 'rotate=90', str(output)])
+                ffmpeg('rotate-' + identity, rotation_args(encoded, output))
                 encoded.unlink()
             metadata = root / (identity + '-probe.json')
             batch('probe-' + identity, [command('probe-' + identity, [binaries['ffprobe'], '-v', 'error',

@@ -7,6 +7,7 @@ import {runClipScaleControllerTick} from './clip-export-scale-controller.mjs';
 const POOL=/^[a-z][a-z0-9_-]{0,63}$/u;
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu;
 const SCOPE='current-process-cgroup-v2-including-descendants';
+const EFFECTIVE_MEMORY_SCOPE='qualified-effective-cgroup-v2-hierarchy';
 const WINDOW_MS=300000;
 const TERMINAL=new Set(['deleted','absent']);
 const number=value=>value===null||value===undefined?null:Number(value);
@@ -101,17 +102,25 @@ function memoryQualification(workers,qualifications,profile,now){
   const previous=previousSample?.workerCgroup;
   const proof=qualifications.find(item=>item?.workerId===id&&item.sessionId===latest.sessionId&&item.profileId===profile.profileId);
   if(!proof||proof.isolated!==true||proof.scope!==SCOPE||!fresh(proof.checkedAtMs,now)||!Number.isFinite(proof.expiresAtMs)||proof.expiresAtMs<=now
+   ||proof.effectiveMemoryConstraintKnown!==true||proof.memoryLimitScope!==EFFECTIVE_MEMORY_SCOPE
    ||!fresh(latest.observedAtMs,now)||!fresh(previousSample?.observedAtMs,now)
    ||current?.available!==true||current.scope!==SCOPE||!fresh(current.observedAtMs,now)||current.observedAtMs>latest.observedAtMs
    ||previous?.available!==true||previous.scope!==SCOPE||!fresh(previous.observedAtMs,now)
    ||previous.observedAtMs>previousSample.observedAtMs||previous.observedAtMs>=current.observedAtMs
    ||!integer(current.memoryCurrentBytes,0)||!integer(current.memoryLimitBytes,1)
+   ||current.effectiveMemoryConstraintKnown!==true||current.memoryLimitScope!==EFFECTIVE_MEMORY_SCOPE
+   ||!integer(current.effectiveMemoryLimitBytes,1)||!integer(current.effectiveMemoryAvailableHeadroomBytes,0,current.effectiveMemoryLimitBytes)
    ||!integer(current.oomEvents?.oomKill,0)||!integer(previous?.oomEvents?.oomKill,0)
    ||current.oomEvents.oomKill<previous.oomEvents.oomKill)return null;
   oomEventsDelta+=current.oomEvents.oomKill-previous.oomEvents.oomKill;observedAtMs=Math.min(observedAtMs,current.observedAtMs);
-  if(!worst||current.memoryCurrentBytes/current.memoryLimitBytes>worst.memoryCurrentBytes/worst.memoryLimitBytes)worst=current;
+  // The constrained ancestor can be near exhaustion while the leaf appears
+  // mostly empty. Qualification must cover hidden/namespaced ancestors too.
+  const effective={limitBytes:current.effectiveMemoryLimitBytes,
+   currentBytes:current.effectiveMemoryLimitBytes-current.effectiveMemoryAvailableHeadroomBytes};
+  if(!worst||effective.currentBytes/effective.limitBytes>worst.currentBytes/worst.limitBytes)worst=effective;
  }
- return {observedAtMs,currentBytes:worst.memoryCurrentBytes,limitBytes:worst.memoryLimitBytes,oomEventsDelta,isolated:true,scope:SCOPE,workersMeasured:ids.length};
+ return {observedAtMs,currentBytes:worst.currentBytes,limitBytes:worst.limitBytes,oomEventsDelta,isolated:true,scope:SCOPE,
+  effectiveMemoryConstraintKnown:true,memoryLimitScope:EFFECTIVE_MEMORY_SCOPE,workersMeasured:ids.length};
 }
 
 export async function collectClipExportTelemetry({adapter,profile,signal,clock=Date.now}={}){
@@ -135,7 +144,7 @@ export async function collectClipExportTelemetry({adapter,profile,signal,clock=D
   return [{workerId:known.id,sessionId:known.session_id,observedAtMs:sample.observedAtMs,
    lastHeartbeatAtMs:timestamp(known.last_heartbeat_at),capacity:number(known.capacity),activeJobs:number(known.active_jobs),
    oldestJobStartedAtMs:timestamp(known.oldest_job_started_at),lastProgressAtMs:sample.lastProgressAtMs,
-   tempAvailableBytes:sample.tempAvailableBytes,workerCgroup:sample.workerCgroup}];
+   tempAvailableBytes:sample.tempAvailableBytes,diskObservedAtMs:sample.diskObservedAtMs,workerCgroup:sample.workerCgroup}];
  });
  for(const known of snapshot.workers){
   const samples=workers.filter(worker=>worker.workerId===known.id).sort((a,b)=>b.observedAtMs-a.observedAtMs);
@@ -144,7 +153,7 @@ export async function collectClipExportTelemetry({adapter,profile,signal,clock=D
   // A missing host sample contributes ONLY fresh authoritative inventory counts.
   if(!samples.length)workers.push({workerId:known.id,sessionId:known.session_id,observedAtMs:snapshot.observedAtMs,
    lastHeartbeatAtMs:timestamp(known.last_heartbeat_at),capacity:number(known.capacity),activeJobs:number(known.active_jobs),
-   oldestJobStartedAtMs:timestamp(known.oldest_job_started_at),lastProgressAtMs:null,tempAvailableBytes:null,workerCgroup:null});
+   oldestJobStartedAtMs:timestamp(known.oldest_job_started_at),lastProgressAtMs:null,tempAvailableBytes:null,diskObservedAtMs:null,workerCgroup:null});
  }
  const healthEvidence={observedAtMs:snapshot.observedAtMs,inventory:{observedAtMs:snapshot.observedAtMs,workerIds},
   workers,outcomes:snapshot.outcomes,dependencies};

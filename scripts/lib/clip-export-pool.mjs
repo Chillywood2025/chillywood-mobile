@@ -35,12 +35,22 @@ export async function runClipExportPool({enabled=false,workerId,sessionId=random
  const identity=Object.freeze({p_worker_id:workerId,p_session_id:sessionId});
  const abort=new AbortController(),active=new Map();
  let draining=false,sessionLost=false,capacity=1,workerHeartbeat=null,heartbeatTimer,waiter;
- let claimed=0,completed=0,failed=0,availableBytes=null,lastDiskBlocked=false;
+ let claimed=0,completed=0,failed=0,availableBytes=null,diskObservedAtMs=null,diskRead=null,lastDiskBlocked=false;
  let workerResources=null;
  let lastHeartbeatAtMs=null;
  const diskSnapshot=async()=>{
-  try{const bytes=await freeDiskBytes();availableBytes=Number.isFinite(bytes)&&bytes>=0?bytes:null;}
-  catch{availableBytes=null;}
+  if(diskRead)return diskRead;
+  // Share an in-flight statfs read between admission and heartbeat. An older
+  // completion must not overwrite newer evidence. Timestamp collection start,
+  // never a later progress/outcome envelope that merely carries cached bytes.
+  const observedAtMs=Date.now();
+  diskRead=(async()=>{
+   try{
+    const bytes=await freeDiskBytes();availableBytes=Number.isFinite(bytes)&&bytes>=0?bytes:null;
+    diskObservedAtMs=availableBytes===null?null:observedAtMs;
+   }catch{availableBytes=null;diskObservedAtMs=null;}
+  })().finally(()=>{diskRead=null;});
+  return diskRead;
  };
  const resourceSnapshot=async()=>{try{workerResources=await readResources();}catch{workerResources={available:false,reason:'resource_reader_unavailable',observedAtMs:Date.now()};}};
  const wake=()=>{const resolve=waiter;waiter=undefined;resolve?.();};
@@ -54,7 +64,7 @@ export async function runClipExportPool({enabled=false,workerId,sessionId=random
   try{onMetric({event,workerId,sessionId,lastHeartbeatAtMs,active:active.size,activeJobs:active.size,capacity,claimed,completed,failed,draining,sessionLost,
    oldestJobStartedAtMs:jobs.length?Math.min(...jobs.map(job=>job.startedAtMs)):null,
    lastProgressAtMs:jobs.length&&jobs.every(job=>job.lastProgressAtMs!==null)?Math.min(...jobs.map(job=>job.lastProgressAtMs)):null,
-   observedAtMs:Date.now(),tempAvailableBytes:availableBytes,workerProcessRssBytes:process.memoryUsage().rss,
+   observedAtMs:Date.now(),tempAvailableBytes:availableBytes,diskObservedAtMs,workerProcessRssBytes:process.memoryUsage().rss,
    workerCgroup:workerResources,loadAverage1m:loadavg()[0],...extra});}catch{/* Observability is not publication authority. */}
  };
  const lost=(error,operation)=>{

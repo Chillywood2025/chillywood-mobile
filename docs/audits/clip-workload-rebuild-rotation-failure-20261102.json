@@ -1,0 +1,656 @@
+{
+  "tier": "representative",
+  "requested_budget": {
+    "cpu_count": 2,
+    "memory_mib": 1536,
+    "disk_mib": 4096,
+    "wall_seconds": 900
+  },
+  "fixtures": [
+    {
+      "id": "long-1080p",
+      "width": 1920,
+      "height": 1080,
+      "seconds": 600,
+      "codec": "h264",
+      "audio": "aac",
+      "vbr_maxrate_bps": null
+    },
+    {
+      "id": "phone-h264-4k",
+      "width": 3840,
+      "height": 2160,
+      "seconds": 12,
+      "codec": "h264",
+      "audio": "aac",
+      "rotation": 90,
+      "vfr": true
+    },
+    {
+      "id": "phone-hevc-vfr-4k",
+      "width": 3840,
+      "height": 2160,
+      "seconds": 12,
+      "codec": "hevc",
+      "audio": "aac",
+      "rotation": 90,
+      "vfr": true,
+      "pixel_format": "yuv420p10le"
+    },
+    {
+      "id": "large-lossless-h264",
+      "width": 1920,
+      "height": 1080,
+      "seconds": 10,
+      "codec": "h264",
+      "audio": "aac",
+      "content": "encoded temporal uniform noise; no padding",
+      "file_cap_bytes": 4831838208
+    }
+  ],
+  "not_qualified": [
+    "Actual Hetzner or other production hardware capacity",
+    "Sustained load, maximum concurrency, p95 latency or millions of users",
+    "Production queue/lease/pool disk admission and full worker lifecycle",
+    "Source download, malware scan, storage-provider upload or network transfer",
+    "Real creator media distribution, HDR/Dolby Vision or every codec/profile",
+    "150-minute whole-source export and full 5-GiB/16384-pixel cross-product"
+  ],
+  "product_input_limit_bytes": 5368709120,
+  "product_input_duration_seconds": 9000,
+  "export_scope": "short clips, not whole-source encoding",
+  "status": "failed_or_interrupted",
+  "started_utc": "2026-11-02T14:43:11Z",
+  "work_root": "/workspace/scratch/b54f0bc31372/renderer-workload-fresh-representative-20261102",
+  "TMPDIR": "/workspace/scratch/b54f0bc31372/renderer-workload-fresh-representative-20261102/tmp",
+  "source_sha256": {
+    "scripts/qualify-clip-render-workloads.py": "d399c1e7125781257fcfb499aea663e3be77c4f6fa12fcdd759204bb43b43434",
+    "scripts/lib/clip-workload-supervisor.py": "8079219762a6a5b0714fd670f6b0908d14161a9a2304ce1711d3a52f149a8b3b",
+    "scripts/lib/clip-workload-media-wrapper.py": "d6abaaeee78de2e2520156a12f60b5c4e8f6fc64a4f5d1e9f29b856b390aaaec",
+    "scripts/lib/clip-render-workload-job.mjs": "9e76475e2b1e29bb393d02822ff0c6a1b88b9824d6c768dbc4989334557cfbc4",
+    "scripts/lib/clip-render-core.mjs": "0e511876f25ca8f2e57ebe9be7d519ac31c42842615107dafb5d72458cedd71e",
+    "scripts/lib/clip-render-color.mjs": "7bb1e70df1f4aada77518d9188a30eb69d815d917f6bee7d0ef78c316b5db85b"
+  },
+  "versions": {
+    "kernel": "6.18.57",
+    "python": "3.12.14",
+    "ffmpeg": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version 7.1.5-0+deb13u1 Copyright (c) 2007-2026 the FFmpeg developers",
+    "node": "v24.22.1"
+  },
+  "host_preflight": {
+    "memory_available_bytes": 8973070336,
+    "memory_total_bytes": 10451427328,
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "disk_free_bytes": 58700357632,
+    "disk_total_bytes": 67586535424,
+    "cgroup": {
+      "membership": "0::/",
+      "memory_max": null,
+      "memory_current": null,
+      "cpu_max": null,
+      "cpu_quota_cores": null,
+      "root_files_only": true,
+      "nested_effective_limit_unresolved": false,
+      "status": "quota_unknown_not_exposed"
+    },
+    "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+  },
+  "stages": [
+    {
+      "name": "generate-long-1080p",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8967483392,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 58700353536,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 899.8575042870002,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 100.722599017,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 174661632,
+      "sampled_process_cpu_seconds": 181.48,
+      "scratch_logical_bytes_peak": 1172679867,
+      "scratch_allocated_bytes_peak": 1172684800,
+      "scratch_free_bytes_min": 57527549952,
+      "memory_available_bytes_min": 8783810560,
+      "sample_count": 997,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "generate-long-1080p",
+          "queue_wait_seconds": 0.00030532099981428473,
+          "peak_sampled_rss_bytes": 174661632,
+          "sampled_cpu_seconds": 181.48000000000033,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 100.72183688699988,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 177.560201,
+          "exit_rusage_system_seconds": 3.973054,
+          "exit_rusage_maxrss_kib": 170568,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "probe-long-1080p",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8890925056,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57527545856,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 799.1339592640002,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.10331211499988058,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 131072,
+      "sampled_process_cpu_seconds": 0.0,
+      "scratch_logical_bytes_peak": 1172687214,
+      "scratch_allocated_bytes_peak": 1172697088,
+      "scratch_free_bytes_min": 57527537664,
+      "memory_available_bytes_min": 8889688064,
+      "sample_count": 2,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "probe-long-1080p",
+          "queue_wait_seconds": 0.00031897100006972323,
+          "peak_sampled_rss_bytes": 131072,
+          "sampled_cpu_seconds": 0.0,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.10253809699997873,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.060662999999999995,
+          "exit_rusage_system_seconds": 0.015652,
+          "exit_rusage_maxrss_kib": 42384,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "decode-long-1080p",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8889450496,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57527533568,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 799.0297111780001,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 29.4330686469998,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 73486336,
+      "sampled_process_cpu_seconds": 55.18,
+      "scratch_logical_bytes_peak": 1172690006,
+      "scratch_allocated_bytes_peak": 1172701184,
+      "scratch_free_bytes_min": 57527533568,
+      "memory_available_bytes_min": 8868474880,
+      "sample_count": 292,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "decode-long-1080p",
+          "queue_wait_seconds": 0.000376656999833358,
+          "peak_sampled_rss_bytes": 73486336,
+          "sampled_cpu_seconds": 55.17999999999995,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 29.43208593600002,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 52.942504,
+          "exit_rusage_system_seconds": 2.367819,
+          "exit_rusage_maxrss_kib": 71764,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "generate-phone-h264-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8995237888,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57527529472,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 768.703042482,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 7.087144062999869,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 541577216,
+      "sampled_process_cpu_seconds": 12.55,
+      "scratch_logical_bytes_peak": 1245979473,
+      "scratch_allocated_bytes_peak": 1245995008,
+      "scratch_free_bytes_min": 57454239744,
+      "memory_available_bytes_min": 8347492352,
+      "sample_count": 71,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "generate-phone-h264-4k",
+          "queue_wait_seconds": 0.00030858499985697563,
+          "peak_sampled_rss_bytes": 541577216,
+          "sampled_cpu_seconds": 12.549999999999995,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 7.086214962000213,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 11.181493,
+          "exit_rusage_system_seconds": 1.414047,
+          "exit_rusage_maxrss_kib": 528884,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "rotate-phone-h264-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8857219072,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57454239744,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 761.6148767890004,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.2060534719998941,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 39108608,
+      "sampled_process_cpu_seconds": 0.1,
+      "scratch_logical_bytes_peak": 1319268135,
+      "scratch_allocated_bytes_peak": 1319284736,
+      "scratch_free_bytes_min": 57380950016,
+      "memory_available_bytes_min": 8857034752,
+      "sample_count": 3,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "rotate-phone-h264-4k",
+          "queue_wait_seconds": 0.0004127020001760684,
+          "peak_sampled_rss_bytes": 39108608,
+          "sampled_cpu_seconds": 0.1,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.2050499890001447,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.063479,
+          "exit_rusage_system_seconds": 0.09469999999999999,
+          "exit_rusage_maxrss_kib": 56608,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "probe-phone-h264-4k",
+      "ok": true,
+      "failure": null,
+      "host": {
+        "memory_available_bytes": 8869265408,
+        "memory_total_bytes": 10451427328,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "disk_free_bytes": 57454235648,
+        "disk_total_bytes": 67586535424,
+        "cgroup": {
+          "membership": "0::/",
+          "memory_max": null,
+          "memory_current": null,
+          "cpu_max": null,
+          "cpu_quota_cores": null,
+          "root_files_only": true,
+          "nested_effective_limit_unresolved": false,
+          "status": "quota_unknown_not_exposed"
+        },
+        "sampling_note": "Process-tree RSS is sampled, not cgroup peak memory. CPU affinity is not provider-vCPU equivalence."
+      },
+      "budget": {
+        "cpu_count": 2,
+        "memory_mib": 1536,
+        "disk_mib": 4096,
+        "wall_seconds": 761.4051736630004,
+        "selected_cpus": [
+          0,
+          1
+        ],
+        "memory_bytes": 1610612736,
+        "disk_bytes": 4294967296,
+        "memory_reserve_bytes": 1073741824,
+        "disk_reserve_bytes": 2147483648,
+        "sample_seconds": 0.1
+      },
+      "wall_seconds": 0.20532051999998657,
+      "max_active_jobs": 1,
+      "active_transcodes_peak": 0,
+      "peak_sampled_process_tree_rss_bytes": 28049408,
+      "sampled_process_cpu_seconds": 0.09,
+      "scratch_logical_bytes_peak": 1245989611,
+      "scratch_allocated_bytes_peak": 1246007296,
+      "scratch_free_bytes_min": 57454227456,
+      "memory_available_bytes_min": 8855330816,
+      "sample_count": 3,
+      "sample_interval_seconds": 0.1,
+      "owned_live_processes_after_cleanup": 0,
+      "supervisor_cleaned_group_count": 0,
+      "metrics_note": "RSS/CPU are sampled process-group observations, not cgroup peaks or guaranteed hard memory limits. Sampled CPU can miss short-lived children; exit rusage is separately reported by wait4.",
+      "jobs": [
+        {
+          "id": "probe-phone-h264-4k",
+          "queue_wait_seconds": 0.00027535500021258486,
+          "peak_sampled_rss_bytes": 28049408,
+          "sampled_cpu_seconds": 0.09,
+          "cancel_signal_sent": false,
+          "cancel_signal_after_seconds": null,
+          "live_descendants_after_exit": 0,
+          "supervisor_cleanup_performed": false,
+          "wall_seconds": 0.20436015199993562,
+          "return_code": 0,
+          "expected_exit": [
+            0
+          ],
+          "exit_rusage_user_seconds": 0.057511,
+          "exit_rusage_system_seconds": 0.088465,
+          "exit_rusage_maxrss_kib": 56624,
+          "observed_process_count": 1,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "actual_fixtures": [
+    {
+      "id": "long-1080p",
+      "duration_seconds": 600.0,
+      "video": {
+        "codec_name": "h264",
+        "profile": "Constrained Baseline",
+        "width": 1920,
+        "height": 1080,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "30/1",
+        "avg_frame_rate": "30/1",
+        "sample_aspect_ratio": "1:1"
+      },
+      "rotation": 0,
+      "audio": {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "channels": 1
+      },
+      "full_decode_passed": true,
+      "local_hash": {
+        "sha256": "a7f13661b23c2ae2236ef5eee20274da61775558f51eb3963cfc06a408ad3f0b",
+        "wall_seconds": 0.8915876249998291,
+        "cpu_seconds": 0.8899455039999999,
+        "bytes": 1172676072,
+        "scope": "local streaming read only, not provider transfer"
+      }
+    }
+  ],
+  "render_jobs": [],
+  "unexecuted_local_jobs": [
+    "serial",
+    "concurrent",
+    "cancel-direct",
+    "malformed-source",
+    "source-rehash"
+  ],
+  "failure": "synthetic_fixture_rotation_missing",
+  "elapsed_seconds": 138.80129417699982,
+  "generated_media_retained": false
+}

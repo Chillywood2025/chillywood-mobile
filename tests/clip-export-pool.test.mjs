@@ -36,9 +36,11 @@ test('a saturated worker refreshes disk telemetry and failed samples do not repl
   await until(()=>started);disk=128*1024**2;
   await until(()=>f.metrics.some(x=>x.event==='worker_heartbeat'&&x.active===1));
   assert.equal(f.metrics.filter(x=>x.event==='worker_heartbeat'&&x.active===1).at(-1).tempAvailableBytes,disk);
+  assert.ok(Number.isSafeInteger(f.metrics.filter(x=>x.event==='worker_heartbeat'&&x.active===1).at(-1).diskObservedAtMs));
   const before=f.metrics.length;fail=true;
   await until(()=>f.metrics.slice(before).some(x=>x.event==='worker_heartbeat'));
   assert.equal(f.metrics.filter(x=>x.event==='worker_heartbeat').at(-1).tempAvailableBytes,null);
+  assert.equal(f.metrics.filter(x=>x.event==='worker_heartbeat').at(-1).diskObservedAtMs,null);
   assert.equal(f.calls.filter(x=>x.name==='claim_creator_clip_export').length,1);
  }finally{f.drain.abort();gate.resolve();await running;}
 });
@@ -125,6 +127,23 @@ test('job progress is genuine stage evidence; heartbeat and fresh envelope canno
   await until(()=>f.metrics.some(metric=>metric.event==='worker_heartbeat'&&metric.lastProgressAtMs===at));
   assert.equal(f.metrics.at(-1).workerCgroup.observedAtMs,123);assert.equal(f.metrics.at(-1).workerCgroup.isolationVerified,false);
  }finally{f.drain.abort();gate.resolve();await task;}
+});
+test('progress, outcome and stopped envelopes cannot freshen cached disk evidence',async()=>{
+ const f=fixture({jobs:[{id:1}]}),gate=deferred();let progress,reads=0;
+ const task=runClipExportPool({...f.options,once:true,workerHeartbeatMs:300000,
+  freeDiskBytes:async()=>{reads++;return CLIP_EXPORT_SLOT_DISK_BYTES;},
+  runJob:async({onProgress})=>{progress=onProgress;await gate.promise;return {completed:true};}});
+ try{
+  await until(()=>progress);const original=f.metrics.find(metric=>metric.event==='worker_job_started').diskObservedAtMs;
+  assert.ok(Number.isSafeInteger(original));await sleep(25);
+  progress({stage:'render_verified',observedAtMs:Date.now()});
+  const event=f.metrics.find(metric=>metric.event==='worker_job_progress');
+  assert.ok(event.observedAtMs>original);assert.equal(event.diskObservedAtMs,original);assert.equal(reads,1);
+  gate.resolve();await task;
+  for(const name of ['worker_job_outcome','worker_stopped']){
+   const metric=f.metrics.find(value=>value.event===name);assert.ok(metric.observedAtMs>original);assert.equal(metric.diskObservedAtMs,original);
+  }
+ }finally{f.stop.abort();gate.resolve();await task;}
 });
 test('SIGINT aborts accepted jobs and an uncertain close is reported without reopening identity',async()=>{
  const f=fixture({jobs:[{id:1}]}),rpc=f.options.rpc;let started=false;

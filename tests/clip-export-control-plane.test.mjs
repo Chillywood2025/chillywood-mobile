@@ -45,13 +45,16 @@ function fixture(){
   },async release(){assert.equal(transaction,false,'all connections leave the transaction before release');}};
  };
  f.samples=()=>f.workers.flatMap(worker=>[1500,500].map(age=>({workerId:worker.id,sessionId:worker.session_id,observedAtMs:f.now-age,
-  capacity:99,activeJobs:99,lastHeartbeatAtMs:1,lastProgressAtMs:f.now-200,tempAvailableBytes:30*1024**3,
+  capacity:99,activeJobs:99,lastHeartbeatAtMs:1,lastProgressAtMs:f.now-200,tempAvailableBytes:30*1024**3,diskObservedAtMs:f.now-age,
   workerCgroup:{observedAtMs:f.now-age,available:true,scope:'current-process-cgroup-v2-including-descendants',isolationVerified:false,
-   memoryCurrentBytes:100,memoryLimitBytes:1000,oomEvents:{oomKill:0},cpuUsageUsec:10000000-age}})));
+   memoryCurrentBytes:100,memoryLimitBytes:1000,oomEvents:{oomKill:0},cpuUsageUsec:10000000-age,
+   effectiveMemoryConstraintKnown:true,memoryLimitScope:'qualified-effective-cgroup-v2-hierarchy',
+   effectiveMemoryLimitBytes:1000,effectiveMemoryAvailableHeadroomBytes:900}})));
  f.adapter={connect:f.connect,async readApprovedProfile(){return f.profile;},async readWorkerSamples(){assert.equal(f.inTransaction,0);return f.samples();},
   async probeDependencies(){assert.equal(f.inTransaction,0);return ['database','source_storage','output_storage'].map(dependency=>({dependency,operation:'read_only_probe',outcome:'ok',observedAtMs:f.now}));},
   async readWorkerQualifications(){return f.workers.map(worker=>({workerId:worker.id,sessionId:worker.session_id,profileId:f.profile.profileId,
-   checkedAtMs:f.now,expiresAtMs:f.now+60000,isolated:true,scope:'current-process-cgroup-v2-including-descendants'}));},
+   checkedAtMs:f.now,expiresAtMs:f.now+60000,isolated:true,scope:'current-process-cgroup-v2-including-descendants',
+   effectiveMemoryConstraintKnown:true,memoryLimitScope:'qualified-effective-cgroup-v2-hierarchy'}));},
   async close(){f.closed++;}};
  f.ownership=id=>({operationId:id,purpose:'clip-render',managedEphemeral:true,ownershipNamespace:f.profile.ownershipNamespace});
  f.executor={async capabilities(){return {...f.profile,qualified:true,checkedAtMs:f.now,expiresAtMs:f.now+60000,workerHourlyMicros:500000,
@@ -215,6 +218,49 @@ test('startup limits survive profile sanitation and missing qualification never 
  f.seed();delete f.adapter.readWorkerQualifications;
  const result=await collectClipExportTelemetry({adapter:f.adapter,profile:f.profile,clock:()=>f.now});assert.equal(result.telemetry.qualifiedWorkerMemory,null);
  assert.equal((await f.run()).last.action,'blocked');
+});
+
+test('collector retains independent stale disk age despite fresh envelope, CPU, RAM and progress',async()=>{
+ const f=fixture();f.seed();const samples=f.samples();for(const sample of samples)sample.diskObservedAtMs=f.now-120000;
+ f.samples=()=>samples;
+ const collected=await collectClipExportTelemetry({adapter:f.adapter,profile:f.profile,clock:()=>f.now});
+ assert.equal(collected.telemetry.healthEvidence.workers.at(-1).diskObservedAtMs,f.now-120000);
+ assert.equal(collected.measured.classification,'unknown');assert.equal(collected.measured.activeJobs,1);
+ assert.equal((await f.run()).last.action,'blocked');
+});
+
+test('collector uses qualified effective ancestor headroom, not spare leaf RAM, and rejects unknown hierarchy',async()=>{
+ const f=fixture();f.seed();const samples=f.samples();
+ for(const sample of samples)Object.assign(sample.workerCgroup,{memoryLimitBytes:3*1024**3,memoryCurrentBytes:1024**3,
+  effectiveMemoryLimitBytes:Math.round(1.2*1024**3),effectiveMemoryAvailableHeadroomBytes:Math.round(0.1*1024**3)});
+ f.samples=()=>samples;
+ const result=await collectClipExportTelemetry({adapter:f.adapter,profile:f.profile,clock:()=>f.now});
+ const memory=result.telemetry.qualifiedWorkerMemory;
+ assert.ok(memory.currentBytes/memory.limitBytes>0.9);assert.equal(result.measured.classification,'isolated_worker_fault');
+ assert.equal((await f.run()).last.action,'blocked');
+ for(const sample of samples){sample.workerCgroup.effectiveMemoryConstraintKnown=false;sample.workerCgroup.memoryLimitScope='leaf-cgroup-only';}
+ const unknown=await collectClipExportTelemetry({adapter:f.adapter,profile:f.profile,clock:()=>f.now});
+ assert.equal(unknown.telemetry.qualifiedWorkerMemory,null);assert.equal(unknown.measured.classification,'unknown');
+ // Host samples cannot self-qualify hidden ancestors: the operator proof must
+ // explicitly cover effective hierarchy rather than only process isolation.
+ for(const sample of samples){sample.workerCgroup.effectiveMemoryConstraintKnown=true;sample.workerCgroup.memoryLimitScope='qualified-effective-cgroup-v2-hierarchy';}
+ const proof=f.adapter.readWorkerQualifications;
+ f.adapter.readWorkerQualifications=async()=>{const results=await proof();for(const item of results)delete item.effectiveMemoryConstraintKnown;return results;};
+ assert.equal((await collectClipExportTelemetry({adapter:f.adapter,profile:f.profile,clock:()=>f.now})).telemetry.qualifiedWorkerMemory,null);
+});
+
+test('unknown effective memory and stale disk still permit fresh five-sample idle draining',async()=>{
+ const f=fixture();f.seed();f.now+=300001;f.workers[0].active_jobs=0;
+ f.queue={queued_jobs:0,active_jobs:0,oldest_queue_age_seconds:0};f.outcomes=[];
+ const samples=f.samples;
+ f.samples=()=>samples().map(sample=>({...sample,diskObservedAtMs:1,workerCgroup:{...sample.workerCgroup,
+  memoryLimitScope:'leaf-cgroup-only',effectiveMemoryConstraintKnown:false,effectiveMemoryLimitBytes:null,effectiveMemoryAvailableHeadroomBytes:null}}));
+ for(let n=0;n<5;n++){
+  f.now+=31000;f.workers[0].last_heartbeat_at=new Date(f.now);
+  const result=await f.run({executionEnabled:true});assert.equal(result.last.action,n===4?'drain':'hold');
+ }
+ assert.equal(f.providerCalls.filter(action=>action.kind==='drain').length,1);
+ assert.equal(f.providerCalls.filter(action=>action.kind==='create').length,0);
 });
 
 test('collector SQL executes against the actual full migration fixture (not native contention)',{timeout:240000},async()=>{
