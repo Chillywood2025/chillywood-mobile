@@ -66,3 +66,18 @@ test('phase meter has its own deadline and reaps its child instead of leaving a 
     assert.ok(receipt.child_peak_rss_kib > 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('fixture rotation helper creates real MP4 display-matrix side data', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'clip-workload-rotation-'));
+  try {
+    const input = path.join(root, 'input.mp4'), output = path.join(root, 'rotated.mp4');
+    execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'color=size=32x16:rate=10',
+      '-t', '0.2', '-c:v', 'libx264', '-threads', '1', input], { timeout: 10_000 });
+    const args = JSON.parse(execFileSync('python3', ['-c', common + `print(json.dumps(h.rotation_args(sys.argv[1],sys.argv[2])))`, input, output], { encoding: 'utf8' }));
+    execFileSync('ffmpeg', args, { timeout: 10_000 });
+    const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', output], { encoding: 'utf8', timeout: 10_000 }));
+    assert.equal(Math.abs(probe.streams[0].side_data_list.find(item => Object.hasOwn(item, 'rotation')).rotation), 90);
+    assert.equal(probe.streams[0].width, 32);
+    assert.equal(probe.streams[0].height, 16);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

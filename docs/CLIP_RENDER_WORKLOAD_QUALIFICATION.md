@@ -133,5 +133,14 @@ these tests. Full Required Validation still belongs to the final composed head.
 
 ## Fresh execution receipts
 
-No reconstructed historical receipt is valid. Add only freshly produced raw
-JSON here, with an explicit execution scope and any failures or NOT RUN cases.
+No reconstructed historical receipt is valid.
+
+- `audits/clip-workload-rebuild-rotation-failure-20261102.json`: first fresh
+  representative attempt, **failed** after 138.80 seconds. The 600-second
+  1080p H.264/AAC source was fully decoded and hashed (1,172,676,072 bytes).
+  The generated 4K H.264 file lacked rotation side data after a metadata-only
+  remux, so the strict fixture assertion stopped the run before any render
+  jobs. No concurrency/cancellation/failure-control coverage from that run.
+  Generated media was cleaned up. This is a fixture-generation defect, not a
+  production render failure. The corrected helper uses an input display-matrix
+  override and has a tiny real-MP4 regression; assertions were not relaxed.
