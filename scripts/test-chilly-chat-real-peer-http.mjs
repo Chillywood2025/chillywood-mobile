@@ -15,6 +15,7 @@ import { normalizeCommunicationRoomIdentifier } from "../_lib/communicationRoomI
 import { buildLegacyPairedBrowserBundle } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
 import { waitForLegacyBrowserReceivedSilence } from "../tests/assurance/helpers/legacy-browser-silence-wait.mjs";
 import { collectLegacyFailureTransportDiagnostics } from "../tests/assurance/helpers/legacy-failure-transport-diagnostics.mjs";
+import { hasIsolatedLegacyFreshPeerEvidence } from "../tests/assurance/helpers/legacy-fresh-peer-evidence.mjs";
 
 const secrets = new Set();
 const redact = (input) => {
@@ -389,29 +390,40 @@ async function main() {
       "repeated media changes use owned membership and broadcasts without more Presence updates");
     assert.equal(realtimeSystemErrors, 0, `the real backend did not reject a subscription: ${diagnostics(await read())}`);
     console.log("PASS: both endpoints commit actual PostgreSQL mic/camera controls and observe receiver silence, black frames, and restored media");
-    const beforeEnd = await read();
+    let beforeEnd = await read();
     await endAndProve(initialCall);
     console.log("PASS: browser End stops native capture/peers and confirms real PostgreSQL terminal media state");
 
-    const fresh = await createAcceptedCall("FRESH");
-    await page.evaluate((roomId) => window.__pairedCall.freshCall({ roomId }), fresh.roomId);
-    const oldPeerIds = beforeEnd.endpoints.flatMap((endpoint) => endpoint.peers.map((peer) => peer.id));
-    const freshInitial = await wait((state) => state.roomId === fresh.roomId && state.endpoints.length === 2
-      && state.endpoints.every((endpoint) => {
-        const previous = beforeEnd.endpoints.find((old) => old.userId === endpoint.userId);
-        return endpoint.instanceId === previous.instanceId && hasMedia(endpoint)
-          && endpoint.membership.membershipGeneration !== previous.membership.membershipGeneration
-          && connected(endpoint).every((peer) => !oldPeerIds.includes(peer.id))
-          && endpoint.stats.every((report) => !oldPeerIds.includes(report.peerId))
-          && receivedAudio(endpoint).every((receiver) => !oldPeerIds.includes(receiver.peerId))
-          && endpoint.pixels.every((frame) => !oldPeerIds.includes(frame.peerId));
-      }), "fresh accepted room must receive media in the same mounted hooks using new server generations and peers");
-    const freshAdvanced = await wait((state) => state.endpoints.every((endpoint) => hasMedia(endpoint)
-      && advances(endpoint, freshInitial.endpoints.find((old) => old.userId === endpoint.userId))),
-    "fresh-room media must advance independently of all prior peer counters");
-    await proveOwnedRows(fresh.roomId, freshAdvanced, () => ({ mic: true, camera: true }));
-    await endAndProve(fresh);
-    console.log("PASS: fresh authenticated accepted call in the same hooks/context receives advancing media and completes real server/native cleanup");
+    const priorGenerations = new Map(beforeEnd.endpoints.map((endpoint) => (
+      [endpoint.userId, new Set([endpoint.membership.membershipGeneration])]
+    )));
+    // Four mandatory fresh lifecycles, not retries. Keep the same mounted
+    // hooks, users, thread and browser context. Each accepted+ended call earns
+    // the existing server's completed-call credit; never alter rate ledgers,
+    // thresholds or clocks. Five total rooms also fit the allocation ceiling.
+    for (let cycle = 1; cycle <= 4; cycle += 1) {
+      console.log(`Authenticated fresh-call cycle ${cycle}/4: begin`);
+      const fresh = await createAcceptedCall(`FRESH${cycle}`);
+      await page.evaluate((roomId) => window.__pairedCall.freshCall({ roomId }), fresh.roomId);
+      const oldPeerIds = new Set(beforeEnd.endpoints.flatMap((endpoint) => endpoint.peers.map((peer) => peer.id)));
+      const freshInitial = await wait((state) => state.roomId === fresh.roomId && state.endpoints.length === 2
+        && state.endpoints.every((endpoint) => hasMedia(endpoint) && hasIsolatedLegacyFreshPeerEvidence({
+          endpoint, previous: beforeEnd.endpoints.find((old) => old.userId === endpoint.userId),
+          priorGenerations: priorGenerations.get(endpoint.userId), oldPeerIds,
+          connectedPeers: connected(endpoint), receivedAudio: receivedAudio(endpoint),
+        })), `fresh accepted room must receive media in the same mounted hooks using new server generations and peers (cycle ${cycle}/4)`);
+      const freshAdvanced = await wait((state) => state.endpoints.every((endpoint) => hasMedia(endpoint)
+        && advances(endpoint, freshInitial.endpoints.find((old) => old.userId === endpoint.userId))),
+      `fresh-room media must advance independently of all prior peer counters (cycle ${cycle}/4)`);
+      await proveOwnedRows(fresh.roomId, freshAdvanced, () => ({ mic: true, camera: true }));
+      await endAndProve(fresh);
+      for (const endpoint of freshAdvanced.endpoints) {
+        priorGenerations.get(endpoint.userId).add(endpoint.membership.membershipGeneration);
+      }
+      beforeEnd = freshAdvanced;
+      assert.equal(realtimeSystemErrors, 0, `fresh-call subscription must remain healthy (cycle ${cycle}/4): ${diagnostics(await read())}`);
+      console.log(`PASS: fresh authenticated accepted call cycle ${cycle}/4 in the same hooks/context receives advancing media and completes real server/native cleanup`);
+    }
   } catch (error) {
     failed = true;
     throw error;
