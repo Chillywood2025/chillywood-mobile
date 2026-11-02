@@ -84,8 +84,15 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   }, async removeChannel(channel) { channel.removed = true; } };
   const requestedUsers = [];
   let summaryReader = async () => ({ unreadCount: backendCount, undismissedCount: 1, totalCount: 1, latestCreatedAt: notification.createdAt, categories: [] });
-  const invalidationContext = { exports: {}, require: name => {
-    if (name === './supabase') return { supabase: realtime };
+  const rootRealtimeContext = { exports: {}, setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout,
+    require: name => {
+      assert.equal(name, './supabase');
+      return { supabase: realtime, getRealtimeDisconnectBarrier: () => null };
+    } };
+  vm.runInNewContext(compile(readSource('_lib/rootRealtimeLifecycle.ts')), rootRealtimeContext);
+  const invalidationContext = { exports: {}, setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout, require: name => {
+    if (name === './supabase') return { supabase: realtime, getRealtimeDisconnectBarrier: () => null };
+    if (name === './rootRealtimeLifecycle') return rootRealtimeContext.exports;
     if (name === 'react-native') return { AppState: appState };
     assert.equal(name, './accountSessionAuthority');
     return { getCurrentAccountSessionAuthoritySnapshot: () => session.authority,
