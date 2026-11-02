@@ -6,7 +6,7 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 // Only users, legal acceptance, test product/account qualification and the signed
 // provider delivery inputs are fixtures. No provider/earnings ledger is inserted
 // by this test. This does not establish a real store receipt or live readiness.
-test('canonical iOS and Google sandbox purchases feed test cashout sources and canonical refunds invalidate them', {timeout:240000},async()=>{
+test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and room admission reserve sandbox sources and invalidate on refunds', {timeout:240000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
  const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const hostSession='cd000000-0000-4000-8000-000000000001';
@@ -42,6 +42,9 @@ test('canonical iOS and Google sandbox purchases feed test cashout sources and c
    'SYNTHETIC-CANONICAL-TEST-v1',0,1000,0,0,true,true,true,true,true,'SYNTHETIC DISPOSABLE TEST ONLY',now()-interval '1 minute',now()+interval '1 day') returning id`,[host]);
   await claim(host,hostSession);
   const offer=await scalar("select public.set_creator_channel_subscription_offer('Sandbox cashout canonical monthly','Monthly','sandbox')");
+  await service();
+  await db.exec("update public.platform_money_kill_switches set state='sandbox_only' where key='tips_enabled'");
+  await db.query("insert into public.creator_tip_settings(creator_id,tips_enabled,status,min_amount_cents,max_amount_cents,currency) values($1,true,'active',100,1000,'usd')",[host]);
   const receipts=[];
   for(const [index,platform] of ['ios','android'].entries()){
    await claim(buyers[index],sessions[index],platform);
@@ -65,12 +68,106 @@ test('canonical iOS and Google sandbox purchases feed test cashout sources and c
    assert.equal(source?.netMinor,449,`${platform} canonical output must satisfy the real source adapter (explicit fixture 10% deduction)`);
    const duplicate=await process('INITIAL_PURCHASE');
    assert.equal(duplicate.ledgerEventId,purchased.ledgerEventId,'duplicate provider delivery must not create a second source');
-   receipts.push({platform,purchased,process});
+   const renewed=await process('RENEWAL');
+   assert.equal(renewed.status,'processed',JSON.stringify(renewed));
+   assert.notEqual(renewed.ledgerEventId,purchased.ledgerEventId);
+   assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[renewed.ledgerEventId,qualification]))?.netMinor,449);
+   assert.equal((await process('RENEWAL')).ledgerEventId,renewed.ledgerEventId,'renewal replay must not earn twice');
+   receipts.push({platform,purchased,renewed,process});
+   // Existing Android tip catalog is 99 cents but creator tips require >=100;
+   // do not invent a SKU or bypass recipient-scoped catalog admission.
+   if(platform==='android') continue;
+   await claim(buyers[index],sessions[index],platform);
+   const tip=await scalar(platform==='ios'
+    ? "select public.create_ios_app_store_purchase_intent('com.chillywood.tip.tier2','creator_tip',$1,'{}')"
+    : "select public.create_money_purchase_intent('creator_tip_sandbox_099','creator_tip',$1,'{}')",[host]);
+   assert.equal((await scalar('select public.begin_creator_money_checkout($1,gen_random_uuid())',[tip.id])).startAuthorized,true);
+   await service();
+   const tipProcess=type=>scalar(`select public.${fn}($1,$2,$3,$4,'sandbox',now(),null,$5,'usd',repeat('b',64),$6,null)`,
+    [`canonical-tip-${platform}-${type}`,type,buyers[index],tip.providerProductId,tip.amountMinor,`canonical-tip-${platform}-original`]);
+   const tipped=await tipProcess('NON_RENEWING_PURCHASE');
+   assert.equal(tipped.status,'processed',JSON.stringify(tipped));
+   assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[tipped.ledgerEventId,qualification]))?.netMinor,
+    tip.amountMinor-Math.ceil(tip.amountMinor/10),'canonical one-time tip earns explicit simulated net');
+   assert.equal((await tipProcess('NON_RENEWING_PURCHASE')).ledgerEventId,tipped.ledgerEventId);
+   receipts.push({platform,purchased:tipped,process:tipProcess});
   }
-  assert.equal(await scalar("select count(*)::int from public.money_access_ledger_events where creator_id=$1 and environment='sandbox'",[host]),2);
-  for(const {platform,purchased,process} of receipts){
-   const refund=await process('REFUND');assert.equal(refund.status,'processed',JSON.stringify(refund));
+  await service();
+  await db.exec("update public.platform_money_kill_switches set state='sandbox_only' where key in ('watch_party_tickets_enabled','paid_content_enabled')");
+  const video='cd000000-0000-4000-8000-000000000030';
+  const event='cd000000-0000-4000-8000-000000000040';
+  await db.query("insert into public.creator_events(id,host_user_id,event_title,event_type,status,starts_at,ends_at,time_zone,replay_policy,visibility) values($1,$2,'Canonical fixed ticket','live_first','scheduled',now()+interval '7 days',now()+interval '7 days 2 hours','America/New_York','none','public')",[event,host]);
+  await db.query(`insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes,vip_access_required)
+   values($1::uuid,$2::uuid,'Canonical cashout video','public','clean','cloudflare_r2','chillywood-media-origin',$2::uuid::text||'/'||$1::uuid::text||'/source.mp4',$2::uuid::text||'/'||$1::uuid::text||'/source.mp4','video/mp4',1024,false)`,[video,host]);
+  await db.query("update public.videos set scan_status='clean',scan_provider='pgtap',scan_result='clean',scanned_at=now() where id=$1",[video]);
+  await db.query("insert into public.watch_party_rooms(party_id,title_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility) values('CANONICAL-CASHOUT-ROOM','canonical-title',$1,'title','open','party_pass',true,'private')",[host]);
+  await claim(host,hostSession);
+  assert.equal((await scalar("select public.set_creator_content_price('creator_video',$1,true,99,'usd')",[video])).status,'saved');
+  const vipPrices=await scalar("select public.list_creator_supported_prices('vip_pass','ios','sandbox')");
+  const vip=await scalar("select public.set_creator_vip_pass_offer_at_price('Canonical VIP','Existing 30 day terms','sandbox',$1)",[vipPrices.find(p=>p.amountMinor===499).priceId]);
+  const room=await scalar("select public.set_paid_watch_party_offer('CANONICAL-CASHOUT-ROOM','Canonical admission',99,null,'sandbox')");
+  const ticket=await scalar("select public.configure_paid_creator_event_sale($1,'Canonical fixed ticket',99,5,'sandbox','America/New_York',now()-interval '1 hour',now()+interval '1 day')",[event]);
+  for(const [lane,platform,source,sql] of [
+   ['paid_video','ios',video,"select public.create_ios_creator_money_purchase_intent('paid_video',$1,99,'{}')"],
+   ['paid_video','android',video,"select public.create_money_purchase_intent('paid_content_access_sandbox_099','paid_content',$1,'{}')"],
+   ['vip_pass','ios',vip.id,'select public.create_creator_vip_pass_purchase_intent($1)'],
+   ['vip_pass','android',vip.id,'select public.create_creator_vip_pass_purchase_intent($1)'],
+   ['watch_party_live','ios',room.id,"select public.create_ios_app_store_purchase_intent('com.chillywood.seatpass.tier1','watch_party_live',$1,'{}')"],
+   ['watch_party_live','android',room.id,"select public.create_money_purchase_intent('watch_party_live_ticket_sandbox_099','watch_party_live',$1,'{}')"],
+   ['event','ios',ticket.id,`select public.create_reserved_creator_event_purchase_intent($1,'${ticket.termsRevisionId}')`],
+   ['event','android',ticket.id,`select public.create_reserved_creator_event_purchase_intent($1,'${ticket.termsRevisionId}')`],
+  ]){
+   const index=platform==='ios'?0:1;
+   await claim(buyers[index],sessions[index],platform);
+   const intent=await scalar(sql,[source]);
+   assert.equal((await scalar(`select public.${lane==='event'?'begin_creator_event_checkout':'begin_creator_money_checkout'}($1,gen_random_uuid())`,[intent.id])).startAuthorized,true,`${lane} checkout`);
+   await service();
+   const fn=platform==='ios'?'process_revenuecat_app_store_event_atomic':'process_revenuecat_google_play_event_atomic';
+   const process=type=>scalar(`select public.${fn}($1,$2,$3,$4,'sandbox',now(),null,$5,'usd',repeat('c',64),$6,null,$7)`,
+    [`canonical-${lane}-${platform}-${type}`,type,buyers[index],intent.providerProductId,intent.amountMinor,`canonical-${lane}-${platform}-original`,intent.createdAt]);
+   const purchased=await process('NON_RENEWING_PURCHASE');
+   assert.equal(purchased.status,'processed',`${lane}: ${JSON.stringify(purchased)}`);
+   assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[purchased.ledgerEventId,qualification]))?.netMinor,
+    intent.amountMinor-Math.ceil(intent.amountMinor/10),`${lane} canonical simulated source`);
+   assert.equal((await process('NON_RENEWING_PURCHASE')).ledgerEventId,purchased.ledgerEventId);
+   receipts.push({platform:`${platform}/${lane}`,purchased,process});
+  }
+  await service();
+  await db.exec("update public.platform_money_kill_switches set state='sandbox_only' where key in ('live_watch_party_access_enabled','live_watch_party_seats_enabled')");
+  await db.query("insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility) values('CANONICAL-CASHOUT-STAGE',$1,'live','open','open',true,'private')",[host]);
+  for(const kind of ['access','seat']){
+  await claim(host,hostSession,'android');
+  const stage=await scalar(`select public.set_my_live_watch_party_offer('CANONICAL-CASHOUT-STAGE','live_watch_party_${kind}_pass',true,'live_watch_party_${kind}_pass_sandbox_099')`);
+  await claim(buyers[1],sessions[1],'android');
+  const stageIntent=await scalar('select public.create_live_watch_party_purchase_intent($1)',[stage.offerId]);
+  assert.equal((await scalar('select public.begin_creator_money_checkout($1,gen_random_uuid())',[stageIntent.id])).startAuthorized,true);
+  await service();
+  const stageProcess=type=>scalar("select public.process_revenuecat_live_watch_party_event_atomic('revenuecat_google_play',$1,$2,$3,$4,'sandbox',now(),99,'usd',repeat('d',64),$5)",
+   [`canonical-live-stage-${kind}-${type}`,type,buyers[1],stageIntent.providerProductId,`canonical-live-stage-${kind}-original`]);
+  const stagePaid=await stageProcess('NON_RENEWING_PURCHASE');
+  assert.equal(stagePaid.status,'processed',JSON.stringify(stagePaid));
+  assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[stagePaid.ledgerEventId,qualification]))?.netMinor,89,'dedicated Live Stage access processor supplies its own earnings');
+  assert.equal((await stageProcess('NON_RENEWING_PURCHASE')).duplicateProviderEvent,true);
+  // The native seat pass proves eligibility only, not host approval, a speaking
+  // role or the separately auctioned reserved stage-seat inventory claim.
+  receipts.push({platform:`android/live_stage_${kind}`,purchased:stagePaid,process:stageProcess,refundStatus:'refunded'});
+  }
+  assert.equal(await scalar("select count(*)::int from public.money_access_ledger_events where creator_id=$1 and environment='sandbox'",[host]),receipts.length+receipts.filter(r=>r.renewed).length);
+  await service();
+  await db.exec('update private.sandbox_cashout_control set enabled=true');
+  await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,country) values($1,'stripe_connect','test','acct_canonicalSandboxCreator','US')",[host]);
+  const net=await scalar("select sum((private.sandbox_cashout_source(id,$2)->>'netMinor')::int)::int from public.money_access_ledger_events where creator_id=$1",[host,qualification]);
+  await claim(host,hostSession);
+  const quote=await scalar("select public.preview_sandbox_creator_cashout($1,'scheduled')",[net]);assert.equal(quote.ready,true);
+  const reserved=await scalar("select public.request_sandbox_creator_cashout($1,'scheduled',$2,gen_random_uuid(),$3,$4,$5)",[net,qualification,quote.appFeeMinor,quote.expectedProviderFeeMinor,quote.bankMinor]);
+  await service();
+  assert.equal(await scalar('select count(*)::int from private.sandbox_cashout_allocations where execution_id=$1',[reserved.requestId]),receipts.length+receipts.filter(r=>r.renewed).length,'every canonical lane has its own reserved ledger allocation');
+  assert.equal(await scalar("select count(*)::int from private.sandbox_cashout_allocations a where execution_id=$1 and amount_minor<>(private.sandbox_cashout_source(money_ledger_id,$2)->>'netMinor')::int",[reserved.requestId,qualification]),0);
+  for(const {platform,purchased,renewed,process,refundStatus='processed'} of receipts){
+   const refund=await process('REFUND');assert.equal(refund.status,refundStatus,JSON.stringify(refund));
    assert.equal(await scalar('select private.sandbox_cashout_source($1,$2)',[purchased.ledgerEventId,qualification]),null,`${platform} canonical refund must invalidate the original source`);
+   if(renewed) assert.equal(await scalar('select private.sandbox_cashout_source($1,$2)',[renewed.ledgerEventId,qualification]),null,'same-transaction refund holds renewable earnings');
+   assert.equal(await scalar('select source_hold from private.sandbox_cashout_executions where id=$1',[reserved.requestId]),true,`${platform} reserved cashout stays held throughout canonical refunds`);
   }
   assert.equal(await scalar("select count(*)::int from public.money_access_ledger_events where creator_id=$1 and payable_state in ('payable','paid')",[host]),0);
   assert.equal(await scalar('select count(*)::int from private.creator_cashout_executions'),0);

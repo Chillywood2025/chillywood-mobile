@@ -15,6 +15,10 @@ explicit provider-stage continuation/reconciliation, and cancellation. Every
 action captures the initiating session. Blur, logout, account/session changes,
 editing and stale controls retire earlier UI intent. Duplicate active clicks
 are latched. Accessible labels, radio state and status announcements are used.
+Payout controls remain hidden until a successful canonical, exact-session tester/owner
+history read. Unknown/denied authority hides quotes and records. A 30-second display
+lease clears stale UI, and every action revalidates server authority. Expiry does not
+release an unresolved submit latch or restore a late result.
 No new native modules are added; Android and iOS still require separate
 installed-device verification, including Back/navigation and interruption.
 
@@ -171,19 +175,49 @@ storefront, catalog, receipt/access and installed Android/iOS commissioning proo
 
 | Existing paid lane | Cashout-source integration evidence |
 | --- | --- |
-| Channel subscription | Apple/Google canonical initial purchase; renewal fixture tracked separately until passing |
-| Tips | One-time canonical store fixture tracked separately until passing |
-| Paid content | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
-| Fixed event tickets | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
-| VIP | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
-| Watch-party/live access/fixed seats | Shared canonical digital ledger adapter; lane-specific cashout fixture not yet proved |
+| Channel subscription | Apple/Google canonical initial purchase, renewal, duplicate and refund fixtures passed |
+| Native store tips | iOS one-time canonical fixture passed; Android existing99¢ SKU is below enforced100¢ floor and remains unavailable |
+| External Stripe tips | Not admitted: existing destination-charge transfer already funds connected account; adding another funding transfer would duplicate it |
+| Paid content | Apple/Google paid-video canonical processor, net, full reservation, replay and refund fixture |
+| Fixed event tickets | Apple/Google actual ticket reservation, checkout-time evidence, processor, net/reservation/replay/refund |
+| VIP | Apple/Google canonical processor, net, full reservation, replay and refund fixture |
+| Watch-party admission | Apple/Google canonical processor, net, full reservation, replay and refund fixture |
+| Live Stage access | Android existing Live Stage product through dedicated processor, net/reservation/replay/refund; iOS dedicated catalog unsupported |
+| Native Live Stage seat eligibility | Android existing product through dedicated processor, net/reservation/replay/refund; no speaking/host-approval or reserved-seat claim |
+| Reserved room stage seats | Canonical room-seat auction evidence below; native eligibility alone is not a reserved seat |
 | Event auction | Canonical platform checkout, immutable contract, paid/refund receipt into source |
 | Room-seat auction | Canonical platform checkout, immutable contract, paid/refund receipt into source |
 | Physical merchandise | Canonical checkout binding and Stripe lifecycle into separate merch source |
 
-Native PostgreSQL contention harness currently registers 27 schedules, including
-recovery-authority revocation. Local source tests are not native execution: Docker
+Native PostgreSQL contention harness currently registers 31 schedules, including
+recovery-authority revocation and canonical event/room auction refund commit/rollback. Local source tests are not native execution: Docker
 is unavailable here, so exact-head hosted native validation remains required.
 Auction quote-before-ledger locking has independent source review; dedicated
-auction refund contention schedules are pending integration. Arbitrary multi-receipt
+auction refund contention schedules are integrated but their native execution is pending. Arbitrary multi-receipt
 transactions are not covered by a universal race-safety claim.
+
+### Existing tip route limitations
+
+The Android native mapping `creator_tip_sandbox_099` is 99 cents, whereas the
+existing creator tip schema and settings RPC enforce at least 100 cents. This is
+a source policy/catalog mismatch, not an asserted Stripe minimum. Existing iOS
+299/499/999-cent mappings can satisfy the floor. Do not lower policy or invent
+Google product mappings to pass a test; higher genuine Google catalog evidence
+or an explicitly approved pricing-policy decision is required.
+
+External Stripe tip checkout uses `transfer_data.destination` and separate
+`creator_tip_transactions`/`monetization_webhook_events` accounting. Those tips
+are not a digital-ledger cashout source here. Their already-funded connected
+account balance needs independently reconciled payout-only authority; admitting
+them to the current funding-first engine would duplicate creator funding.
+
+A bounded follow-on for external tips must first reconcile authenticated test
+charge→destination transfer→connected balance transaction evidence, including
+remaining net, reversal history and availability, against the immutable original
+platform/account/USD binding. The current webhook records payment/refund facts,
+not transfer/balance-transaction availability, and projected `creator_net_cents`
+is not that proof. A separately reserved, immutable pre-funded source could then
+enter payout-only execution without a funding POST, with exact-account aggregate
+balance/exclusive-writer checks. Its return path must not fabricate an unrelated
+funding transfer. This evidence contract and payout-only admission are not
+implemented by this checkpoint.

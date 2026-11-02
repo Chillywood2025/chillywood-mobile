@@ -260,9 +260,86 @@ try{
   assert.notEqual(late.status,0);assert.match(late.stderr,/sandbox_terminal_observation_conflict/);assert.equal(phase(id),'returned');
   invariants(a);
  }
+ // Canonical auction processors lock their quote BEFORE projecting a refund
+ // ledger row. These schedules prove claim waits on that real quote lock, not
+ // a fabricated terminal ledger update that would miss the inversion.
+ for(const lane of ['event','room'])for(const outcome of ['commit','rollback']){
+  const suffix=randomUUID().replaceAll('-',''),schema='auction_native_'+suffix;
+  const account='acct_native'+suffix,platform='acct_platform'+suffix;
+  // Salt the existing authority fixture's deterministic identities so every
+  // schedule has an independent creator, source, qualification and allocation.
+  query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8').replaceAll('event_reservation_fixture',schema).replaceAll('event-reservation',`native-${suffix}`));
+  query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8').replaceAll('event_reservation_fixture',schema).replaceAll('acct_fixture',account));
+  const actors=parse(query(`select jsonb_object_agg(kind,jsonb_build_object('creator',user_id,'session',session_id)) from ${schema}.actors;`));
+  const a=actors.creator,buyer=actors.buyer1;
+  query(`update public.creator_events set visibility='public' where id in(select id from ${schema}.events);
+   update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled');
+   update public.platform_money_kill_switches set state='sandbox_only' where key='stripe_connect_enabled';update private.sandbox_cashout_control set enabled=true;`);
+  a.production=production();
+  const invoke=(actor,sql,role='authenticated')=>run(actor,role,`set local request.headers='{"x-chillywood-platform":"ios"}';${sql}`);
+  const qualification=query(`insert into private.sandbox_cashout_qualifications(creator_id,platform_account_id,account_id,destination_id,payout_type,source_type,
+   provider_fee_bps,provider_fee_fixed_minor,settlement_policy_version,simulated_tax_bps,simulated_platform_bps,simulated_provider_bps,simulated_provider_fixed_minor,
+   manual_schedule_verified,exclusive_writer_verified,zero_additional_application_fee_verified,platform_fee_payer_verified,test_mode_verified,provider_evidence_reference,verified_at,expires_at)
+   values(${lit(a.creator)},${lit(platform)},${lit(account)},'ba_nativeAuction','scheduled','card',0,0,'SYNTHETIC-AUCTION-80-20',0,2000,0,0,
+   true,true,true,true,true,'SYNTHETIC DISPOSABLE TEST ONLY',now()-interval '1 minute',now()+interval '1 hour') returning id;`);
+  const feature=lane==='event'?'event_auction':'room_seat_auction',sku='prod_native'+suffix;
+  const capability=query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,
+   platform,storefront,storefront_country,route_kind,currency,environment,payment_method,min_amount_minor,max_amount_minor,
+   provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)
+   values(${lit(feature)},${lit(a.creator)},${lit(account)},'ios','UNITED_STATES','US','external_browser_checkout','usd','test','card',50,100000,
+   'SYNTHETIC TEST ONLY','SYNTHETIC TEST ONLY',now(),now()+interval '2 hours',true) returning id;`);
+  query(`insert into private.creator_external_payment_eligibility(capability_id,buyer_id,session_id,eligibility_evidence,verified_at,expires_at)
+   values(${lit(capability)},${lit(buyer.creator)},${lit(buyer.session)},'SYNTHETIC TEST ONLY',now(),now()+interval '10 minutes');`);
+  const product=query(`insert into public.monetization_products(product_key,product_type,display_name,provider,provider_product_id,environment,status,is_android_digital,is_physical_good)
+   values(${lit('native_'+suffix)},${lit(lane==='event'?'event_pass':'room_seat_pass')},'Synthetic native auction',${lit('stripe_'+lane+'_auction')},${lit(sku)},'sandbox','sandbox',false,false) returning id;`);
+  query(`insert into private.creator_${lane}_auction_product_bindings values(${lit(capability)},${lit(product)},'SYNTHETIC TEST ONLY',now());
+   insert into private.auction_platform_qualifications(capability_id,platform_account_id,recipient_account_id,product_id,platform_product_id,evidence_reference,recipient_transfer_capability,enabled,verified_at,expires_at)
+   values(${lit(capability)},${lit(platform)},${lit(account)},${lit(product)},${lit(sku)},'SYNTHETIC TEST ONLY','active',true,now(),now()+interval '10 minutes');
+   insert into private.commerce_tax_qualifications(feature,product_id,account_id,environment,permitted_scope,platform_scope,
+   professional_basis_reference,coverage_evidence_reference,full_permitted_scope_reviewed,collection_mode,liability_type,tax_code,tax_behavior,
+   registration_evidence_reference,provider_settings_evidence_reference,provider_product_evidence_reference,provider_verified_at,provider_expires_at,expires_at,enabled)
+   values(${lit(lane+'_auction')},${lit(sku)},${lit(platform)},'test','worldwide','all_supported_platforms','SYNTHETIC ONLY','SYNTHETIC ONLY',true,'automatic','self',
+   'txcd_99999999','inclusive','SYNTHETIC ONLY','SYNTHETIC ONLY','SYNTHETIC ONLY',now(),now()+interval '1 hour',now()+interval '1 hour',true);`);
+  let auction;
+  if(lane==='event'){
+   const event=query(`select id from ${schema}.events where name='show1';`);
+   const offer=invoke(a,`select public.configure_paid_creator_event_sale(${lit(event)},'Native sandbox show',99,1,'sandbox','America/New_York',now()-interval '1 hour',now()+interval '1 day');`);
+   auction=invoke(a,`select public.create_creator_event_auction(${lit(event)},${lit(offer.termsRevisionId)},237,1,clock_timestamp()+interval '5 seconds',now()+interval '1 hour','test');`);
+   invoke(buyer,`select public.place_creator_event_auction_bid(${lit(auction.id)},237,${lit(randomUUID())},null);`);
+  }else{
+   const room='NATIVE-'+suffix;
+   query(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility) values(${lit(room)},${lit(a.creator)},'live','open','open',true,'private');`);
+   const setup=invoke(a,`select public.prepare_creator_room_seat_auction(${lit(room)});`);
+   auction=invoke(a,`select public.create_creator_room_seat_auction(${lit(room)},'stage_reserved_seat',237,1,clock_timestamp()+interval '5 seconds',now()+interval '1 hour','test',${lit(randomUUID())},${lit(setup.roomSessionId)});`);
+   invoke(buyer,`select public.place_creator_room_seat_auction_bid(${lit(auction.id)},237,${lit(randomUUID())},null);`);
+  }
+  // This delay only advances canonical auction time; race evidence below still
+  // requires pg_blocking_pids, never an elapsed-time contention assertion.
+  await delay(5100);
+  const quote=invoke(buyer,`select public.create_creator_${lane==='event'?'event_auction':'room_seat_auction'}_award_quote(${lit(auction.id)},null);`),attempt=randomUUID();
+  const checkout=invoke(buyer,`select public.prepare_creator_${lane}_auction_platform_checkout(${lit(quote.id)},${lit(buyer.creator)},${lit(buyer.session)},${lit(attempt)});`,'service_role');
+  assert.equal(checkout.startAuthorized,true);
+  invoke(buyer,`select public.bind_creator_${lane}_auction_checkout(${lit(quote.id)},${lit(attempt)},${lit('cs_test_'+suffix)},${lit('pi_'+suffix)},${lit(platform)},237,'usd');`,'service_role');
+  const evidence={eventId:'evt_'+suffix,eventType:'checkout.session.completed',occurredAt:new Date().toISOString(),accountId:platform,environment:'test',
+   objectId:'cs_test_'+suffix,paymentIntentId:'pi_'+suffix,checkoutSessionId:'cs_test_'+suffix,quoteId:quote.id,buyerId:buyer.creator,creatorId:a.creator,auctionId:auction.id,
+   amountMinor:237,currency:'usd',outcome:'paid',refundedAmountMinor:null,providerProductId:sku,settlementContractId:checkout.settlementContractId,settlementPolicy:checkout.settlementPolicy};
+  const receipt=e=>`select public.process_stripe_${lane}_auction_receipt(${lit(JSON.stringify(e))}::jsonb,${lit(createHash('sha256').update(JSON.stringify(e)).digest('hex'))});`;
+  assert.equal(invoke(buyer,receipt(evidence),'service_role').status,'fulfilled');
+  const ledger=query(`select ledger_event_id from private.creator_${lane}_auction_receipts where provider_event_id=${lit(evidence.eventId)};`);
+  assert.equal(parse(query(`select private.sandbox_cashout_source(${lit(ledger)},${lit(qualification)});`)).netMinor,189);
+  const id=run(a,'authenticated',`select public.request_sandbox_creator_cashout(189,'scheduled',${lit(qualification)},${lit(randomUUID())},0,0,189);`).requestId;
+  assert.equal(query(`select money_ledger_id from private.sandbox_cashout_allocations where execution_id=${lit(id)};`),ledger);
+  const refund={...evidence,eventId:'evt_refund'+suffix,eventType:'charge.refunded',objectId:'ch_'+suffix,checkoutSessionId:null,outcome:'refunded',refundedAmountMinor:100};
+  const {held,waited}=await race(auth('service_role',buyer)+receipt(refund),auth('service_role',a)+claim(id),outcome);
+  assert.equal(parse(held.stdout.split('HOLDING')[0]).status,'refunded');
+  if(outcome==='commit'){failed(waited,/sandbox_source_reconciliation_required/);assert.equal(phase(id),'prepared');}
+  else {passed(waited);assert.equal(parse(waited.stdout).claimed,true);assert.equal(phase(id),'funding_unknown');}
+  assert.equal(query(`select count(*) from private.sandbox_cashout_simulated_return_accounting where execution_id=${lit(id)};`),'0');
+  invariants(a);
+ }
  restore.assertSourceUnchanged();
- assert.equal(schedules,27,'all real-lock schedules executed');
- console.log('PASS native sandbox cashout: 27 actual-lock schedules including mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control/recovery-authority barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
+ assert.equal(schedules,31,'all real-lock schedules executed');
+ console.log('PASS native sandbox cashout: 31 actual-lock schedules including canonical event/room auction refunds, mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control/recovery-authority barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
 }finally{
  for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end();s.child.kill('SIGTERM');}
  await Promise.allSettled(sessions.map(s=>s.done));
