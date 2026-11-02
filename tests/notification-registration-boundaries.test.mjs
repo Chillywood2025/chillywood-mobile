@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { notificationHistoricalSource, notificationHistoryProvenance } from './helpers/notification-history-fixtures.mjs';
-import { gallerySettingsContext as galleryContext, removalSettingsContext, priorGallerySettings, priorAccountActionSettings } from './helpers/gallery-settings-context.mjs';
+import { gallerySettingsContext as galleryContext, removalSettingsContext, mediaSettingsContext, priorRemovalSettings, priorGallerySettings, priorAccountActionSettings } from './helpers/gallery-settings-context.mjs';
 const source = path => fs.readFileSync(path,'utf8');
 const digest = value => createHash('sha256').update(value).digest('hex');
 const span = (text,start,end) => {const i=text.indexOf(start);assert.ok(i>=0);return text.slice(i,end?text.indexOf(end,i):undefined);};
@@ -70,7 +70,8 @@ test('explicitly reviewed account-action Settings context retains original notif
   const reviewedSettingsSha256='b19c26bbb792aab62a034c53a87ae3df3f43cbfbdbf1eefbdb3e81e0a0d5795b';
   const settings=source('app/settings.tsx');
   assert.equal(galleryContext.accountActionContextSha256,reviewedSettingsSha256);
-  assert.equal(digest(settings),removalSettingsContext.removalContextSha256,'Settings changed after removal scope review');
+  assert.equal(digest(settings),mediaSettingsContext.mediaContextSha256,'Settings changed after media scope review');
+  assert.equal(digest(priorRemovalSettings(settings)),removalSettingsContext.removalContextSha256,'exact prior removal scope is preserved');
   assert.equal(digest(priorGallerySettings(settings)),galleryContext.galleryContextSha256,'exact prior gallery scope is preserved');
   assert.equal(digest(priorAccountActionSettings(settings)),reviewedSettingsSha256,'non-gallery Settings changed after account-action scope review');
   for(const [name,originalTarget] of [
@@ -110,9 +111,20 @@ test('gallery witness rejects absent, duplicate and unreviewed appearance change
 });
 
 test('removal witness rejects missing, duplicate and altered removal hunks',()=>{
-  const settings=source('app/settings.tsx');
+  const settings=priorRemovalSettings(source('app/settings.tsx'));
   for(const {removalContext:current,galleryContext:previous} of removalSettingsContext.changes) {
     for(const replacement of ['',current+current,previous]) {
+      const mutated=settings.replace(current,replacement);
+      assert.notEqual(mutated,settings);
+      assert.throws(()=>priorAccountActionSettings(mutated),assert.AssertionError);
+    }
+  }
+});
+
+test('media witness rejects missing, duplicate, reverted and altered picker/ownership hunks',()=>{
+  const settings=source('app/settings.tsx');
+  for(const {mediaContext:current,removalContext:previous} of mediaSettingsContext.changes) {
+    for(const replacement of ['',current+current,previous,current+'\n// unknown media delta\n']) {
       const mutated=settings.replace(current,replacement);
       assert.notEqual(mutated,settings);
       assert.throws(()=>priorAccountActionSettings(mutated),assert.AssertionError);

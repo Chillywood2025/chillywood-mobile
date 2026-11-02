@@ -137,14 +137,20 @@ test("Chat call, message, attachment, navigation, and safety authority wiring is
     'onPress={() => void handleStartCall("voice")}',
     'testID="chat-thread-video-call-button"',
     'onPress={() => void handleStartCall("video")}',
-    'sendChatMessage(threadId, trimmedDraft, selectedAttachment)',
-    'onSelect={handleSelectAttachment}',
+    'sendChatMessage(threadId, trimmedDraft, selectedAttachment, {',
+    'testID="chat-thread-attach-button"',
+    'void handlePickAttachment();',
+    'selection = await pickMedia({',
+    'const file = await pickSocialAttachmentFile(source === "files" ? "files" : "images", source, operation);',
+    'setAttachmentFile(selection.file);',
+    '{mediaPickerSheet}',
     'testID="chat-message-report-button"',
     'import { AppBackButton } from "../../components/navigation/app-back-button"',
     'onPress={onThreadBack}',
     'if (router.canGoBack()) router.back();',
     'else router.replace("/chat");',
   ], "direct Chat behavior");
+  assert.match(source.thread, /sendChatMessage\(threadId, trimmedDraft, selectedAttachment, \{\s*mutationSubject,\s*isCurrent,\s*\}\)/u);
   assertIncludes(source.inbox, [
     'listChatThreads({ signal })',
     'subscribeToInbox',

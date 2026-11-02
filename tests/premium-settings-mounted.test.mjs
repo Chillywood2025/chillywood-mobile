@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { deferred, owner, same, premiumRuntime } from './helpers/premium-runtime-harness.mjs';
+import { loadMediaPickerHost } from './helpers/media-picker-host.mjs';
 
 const require = createRequire(import.meta.url), React = require('react'), ts = require('typescript');
 const { createRoot } = require('react-dom/client');
@@ -71,6 +72,15 @@ async function mount(t, { active = false, holdInitial = false } = {}) {
     '../components/navigation/app-back-button': { AppBackButton: 'Back' }, '../components/ui/ProfileMediaImage': { ProfileMediaImage: 'Image' },
     '../components/ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: 'Fill' },
   };
+  // Keep the migrated screen's actual picker/owned-resource hooks on the same
+  // account authority as Premium; no picker lifecycle is replaced by a stub.
+  const media = loadMediaPickerHost({ React, native: mocks['react-native'],
+    snapshot: () => state.authority, subscribe: h.subscribeAuthority });
+  Object.assign(mocks, {
+    '../hooks/useMediaPicker': media,
+    '../hooks/useOwnedPickedMediaState': media.ownedState,
+    '../_lib/mediaPickerResources': media.resources,
+  });
   const context = { exports: {}, require: name => { if (name.endsWith('.png')) return 1; assert.ok(name in mocks, `unmodeled import ${name}`); return mocks[name]; }, capture: value => { tree = value; return null; }, console, setTimeout, clearTimeout };
   vm.runInNewContext(code, context);
   const root = createRoot(container()), act = async fn => React.act(async () => { await fn(); await settle(); });

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {execFileSync} from 'node:child_process';
 import test from 'node:test';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
@@ -48,12 +47,22 @@ async function mount(t){
  const hook=load('_lib/useLiveNotificationPage.ts').useLiveNotificationPage;
  const Card=load('components/ProfileSocialFeedCard.tsx').ProfileSocialFeedCard;
  const live=load('_lib/liveNotificationActivity.ts');const paths=load('_lib/notificationMessageTarget.ts');
- const open=(old=false)=>{
-  const source=old?execFileSync('git',['show','c531bab3058b6e210295b294b314b659defae184:app/profile/[userId].tsx'],{encoding:'utf8'}):fs.readFileSync('app/profile/[userId].tsx','utf8');
+ const open=(withoutCurrentLiveGuard=false)=>{
+  const source=fs.readFileSync('app/profile/[userId].tsx','utf8');
   const ast=ts.createSourceFile('profile.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let declaration;
   const visit=n=>{if(ts.isVariableDeclaration(n)&&n.name.getText(ast)==='openProfileSocialNotification')declaration=n;ts.forEachChild(n,visit);};visit(ast);assert.ok(declaration);
+  let callback=declaration.getText(ast);
+  if(withoutCurrentLiveGuard){
+   // Mutate the real current callback, not a historical Git checkout.
+   // Only remove the live/current-item fence; all actual route branches remain.
+   const guards=declaration.initializer.body.statements.filter(n=>ts.isIfStatement(n)
+    &&ts.isCallExpression(n.expression)&&n.expression.expression.getText(ast)==='isLiveNotificationActivity');
+   assert.equal(guards.length,1,'negative control must remove exactly the production live guard');
+   const guard=guards[0],start=declaration.getStart(ast);
+   callback=callback.slice(0,guard.getStart(ast)-start)+callback.slice(guard.end-start);
+  }
   const context={exports:{},...live,profileNotificationActivity:api,normalizeFeedUserId:x=>String(x??'').trim(),resolveNotificationPath:paths.resolveNotificationMessagePath,router:{push:x=>routes.push(x)}};
-  vm.runInNewContext(compile(`const ${declaration.getText(ast)};exports.open=openProfileSocialNotification;`),context);return context.exports.open;
+  vm.runInNewContext(compile(`const ${callback};exports.open=openProfileSocialNotification;`),context);return context.exports.open;
  };
  function Probe(){api=hook({authority,enabled,refreshKey,limit:12});renders.push(api.items.map(n=>n.title).join(" "));cards=[];return api.items.map(n=>React.createElement(Card,{key:n.id,item:{id:n.id,type:'backed_activity_item',notification:n},onOpenNotification:item=>open()(item)}));}
  const root=createRoot(container());const render=()=>root.render(React.createElement(Probe));
@@ -75,7 +84,7 @@ test('actual Profile Activity hook/card/route expire labels on own-viewer hints 
  await h.hint(undefined,1000);await h.advance(100);
  assert.equal(h.calls.length,before+1);assert.doesNotMatch(h.snapshot().text,/Named private-sensitive creator|Selected room title/);assert.equal(h.snapshot().opens,0);
  retained(oldItem);assert.equal(h.routes.length,0,'retained closure resolves the current item, not its old authorization');
- h.open(true)({...oldItem,notification:notice('ended')});assert.equal(h.routes.length,1,'negative control proves the old Profile route bypassed ended/unavailable state');
+ h.open(true)({...oldItem,notification:notice('ended')});assert.equal(h.routes.length,1,'negative control proves removing the live fence bypasses ended/unavailable state');
  await h.hint(undefined,1000);await h.advance(600);assert.equal(h.calls.length,before+1,'source remains single-flight across bursts');
  h.read(async id=>({status:'resolved',subjectUserId:id,items:[],nextCursor:null}));await h.resolve(gate,{status:'unavailable',items:[],nextCursor:null});
  assert.equal(h.api.items.length,0);assert.ok(h.calls.length<=before+2);

@@ -2,7 +2,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { createDatabase, liveSnapshotPath, splitSQL } from './helpers/database-runtime-authority-fixture.mjs';
+import { createDatabase, heldStudioBundleVersions, liveSnapshotPath, splitSQL } from './helpers/database-runtime-authority-fixture.mjs';
+import { seedLiveRoomAuthority, liveFixtureActors, liveFixtureTitle, withLiveRoomActor } from './helpers/live-room-authority-fixture.mjs';
+import { appCompletionStudioDependentFiles } from './helpers/app-completion-migration-inventory.mjs';
+
+// These immutable October before/after controls deliberately replace the
+// historical public resolver. Defer the later API cutover rather than replaying
+// an October function over November's outer wrappers or regranting retired RPCs.
+// The separate final-chain case below applies every successor in source order.
+const liveSuccessorFiles = appCompletionStudioDependentFiles;
+assert.equal(liveSuccessorFiles.length, 9, 'exact held Live/Owner successor bundle is explicitly deferred');
+assert.deepEqual(heldStudioBundleVersions.filter(version => version.startsWith('20261101')).sort(),
+  liveSuccessorFiles.map(file => file.split('_')[0]).sort(), 'historical scope defers exactly the inventoried held successor identities');
 
 const beforeSql = fs.readFileSync(new URL('./fixtures/database-runtime-premium-composition-before.sql', import.meta.url), 'utf8');
 assert.equal(createHash('sha256').update(beforeSql).digest('hex'),
@@ -35,11 +46,13 @@ async function authority(db, n, party = room, generation = session(n)) {
 }
 
 for (const includeHeldStudio of [false, true]) {
-  test(`published Party Room composes restored Premium authority (${includeHeldStudio ? 'with' : 'without'} Studio)`, async t => {
-    const { db, repairSql } = await createDatabase({ overlayLiveDrift: true, applyRepair: true, includeHeldStudio });
+  test(`historical published Party Room repair composes restored Premium authority (${includeHeldStudio ? 'with' : 'without'} Studio)`, async t => {
+    const { db, repairSql, replayReport } = await createDatabase({ overlayLiveDrift: true, applyRepair: true, includeHeldStudio,
+      excludeMigrations: liveSuccessorFiles });
     let checks = 0;
     const check = (value, expected, message) => { assert.deepEqual(value, expected, message); checks++; };
     try {
+      assert.ok(liveSuccessorFiles.every(file => !replayReport.files.includes(file)), 'historical controls precede the versioned API cutover');
       await db.exec(`begin;
         insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
           values ${[1, 2, 3].map(n => `('${user(n)}',false,false,now())`).join(',')};
@@ -219,3 +232,51 @@ for (const includeHeldStudio of [false, true]) {
     } finally { await db.close(); }
   });
 }
+
+test('final Party Room chain preserves repaired authority through versioned publication and listing pause', async () => {
+  const {db, replayReport} = await createDatabase({includeHeldStudio: true, applyRepair: true,
+    repairInMigrationOrder: true, implicitApiGrants: false});
+  const {host, friend, stranger} = liveFixtureActors;
+  const party = 'RUNTIME-FINAL-PREMIUM';
+  const as = (actor, fn, role = 'authenticated') => withLiveRoomActor(db, actor, fn, role);
+  const one = async (sql, args = []) => (await db.query(sql, args)).rows[0];
+  const current = () => one('select * from public.watch_party_rooms where party_id=$1', [party]);
+  const resolve = actor => as(host, () => one('select public.resolve_watch_party_livekit_viewer_authority($1,$2,$3) result',
+    [party, actor.id, actor.session]), 'service_role');
+  const settings = (snapshot, paused = false) => as(host, () => one(`select public.set_watch_party_room_host_settings(
+    $1,$2,$3,$4,'open','public','Current versioned Premium room','platform_title',$5,true,false,$6) result`,
+  [party, snapshot.room_generation, snapshot.host_settings_revision, host.session, liveFixtureTitle, paused]));
+  try {
+    assert.deepEqual(replayReport.files.filter(file => liveSuccessorFiles.includes(file)), [...liveSuccessorFiles],
+      'final proof includes the exact held successors in chronological order');
+    await seedLiveRoomAuthority(db);
+    for (const role of ['anon', 'authenticated', 'service_role']) {
+      assert.equal((await one("select has_function_privilege($1,'public.publish_party_room_discovery(text,text,text,text)','EXECUTE') allowed", [role])).allowed,
+        false, `${role} cannot execute the retired publication entrypoint`);
+    }
+    await assert.rejects(as(host, () => db.query('select public.publish_party_room_discovery($1,$2,$3,$4)',
+      [party, 'platform_title', liveFixtureTitle, host.session])), /permission denied for function publish_party_room_discovery/);
+    await as(host, () => db.query(`insert into public.watch_party_rooms(
+      party_id,host_user_id,title_id,source_type,source_id,room_type,content_access_rule)
+      values($1,$2,$3,'platform_title',$3,'title','premium')`, [party, host.id, liveFixtureTitle]));
+    await as(host, () => db.query('select public.join_watch_party_room_session($1)', [party]));
+    const unpublished = await current();
+    assert.equal((await settings(unpublished)).result.published, true, 'current exact host publishes through versioned settings');
+    await assert.rejects(settings(unpublished), /room_host_settings_conflict/, 'stale settings cannot overwrite current authority');
+    await as(friend, () => db.query('select public.join_watch_party_room_session($1)', [party]));
+    assert.equal((await resolve(friend)).result.allowed, true, 'current exact Premium member retains media admission');
+    assert.equal((await resolve(host)).result.hostAuthority, true, 'current joined publisher retains host authority');
+    assert.deepEqual(authorityShape((await resolve(stranger)).result), roomDenied, 'Premium alone never supplies published-room membership');
+    const allowed = (await resolve(friend)).result;
+    const now = Date.parse((await one('select now()::text value')).value);
+    assert.ok(Date.parse(allowed.expiresAt) > now && Date.parse(allowed.expiresAt) <= now + 30000,
+      'current published-room authority keeps its finite short TTL');
+    await settings(await current(), true);
+    assert.equal((await one('select private.party_room_publication_current($1) current', [party])).current, false,
+      'listing pause withdraws current publication');
+    assert.equal((await resolve(friend)).result.allowed, true, 'listing pause preserves the canonical joined-host admission proof');
+    assert.deepEqual(authorityShape((await resolve(stranger)).result), roomDenied, 'pause grants no missing membership');
+    await db.query("update auth.sessions set not_after=now()-interval '1 second' where id=$1", [host.session]);
+    assert.deepEqual(authorityShape((await resolve(friend)).result), roomDenied, 'expired bound host session retires paused admission too');
+  } finally { await db.close(); }
+});

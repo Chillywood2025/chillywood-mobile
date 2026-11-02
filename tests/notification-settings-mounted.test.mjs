@@ -186,7 +186,7 @@ test('mounted authority oracle rejects an extra transport listener and tracks re
   const m = await mount(t);
   m.assertMountedAuthorityListeners();
   const release = m.authority.subscribeToAccountSessionAuthority(() => {});
-  assert.throws(() => m.assertMountedAuthorityListeners(), /only the current mounted screen subscriptions/);
+  assert.throws(() => m.assertMountedAuthorityListeners(), /only the current screen and shared-picker subscriptions/);
   release();
   m.assertMountedAuthorityListeners();
   await m.replace(owner('session-b'));
@@ -199,9 +199,10 @@ test('mounted authority oracle rejects an extra transport listener and tracks re
 
 test('unmount removes authority and foreground listeners and stale callbacks cannot dispatch', async t => {
   const m = await mount(t), messages = m.toggle('Messages'), register = m.button('Register Device');
-  // Notification ownership and retained Profile-removal intent each own an
-  // authority subscription; both must be released on unmount.
-  assert.equal(m.state.authoritySubscriptions, 2);
+  // Notification, retained Profile-removal intent and the actual shared picker
+  // each own one subscription; all three must be released on unmount.
+  m.assertMountedAuthorityListeners();
+  assert.equal(m.state.authoritySubscriptions, 3);
   await m.unmount();
   assert.equal(m.state.authoritySubscriptions, 0);
   assert.equal(m.appListeners.size, 0);
