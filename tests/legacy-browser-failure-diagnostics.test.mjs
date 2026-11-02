@@ -1,6 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarizeLegacyBrowserFailure } from "./assurance/helpers/legacy-paired-browser-harness.mjs";
+import { summarizeLegacyBrowserFailure, summarizeLegacyIceConfiguration } from "./assurance/helpers/legacy-paired-browser-harness.mjs";
+
+test("ICE diagnostics retain policy and scheme counts without server URLs or credentials", () => {
+  const configuration = { iceTransportPolicy: "relay", iceServers: [
+    { urls: ["stun:private.example", "turns:private.example?transport=tcp"], username: "secret-user", credential: "secret-password" },
+    { urls: "turn:another-private.example" },
+  ] };
+  const before = structuredClone(configuration);
+  assert.deepEqual(summarizeLegacyIceConfiguration(configuration), {
+    serverCount: 2, schemes: { stun: 1, stuns: 0, turn: 1, turns: 1, other: 0 }, iceTransportPolicy: "relay",
+  });
+  assert.deepEqual(configuration, before);
+  assert.deepEqual(summarizeLegacyIceConfiguration(), {
+    serverCount: 0, schemes: { stun: 0, stuns: 0, turn: 0, turns: 0, other: 0 }, iceTransportPolicy: "default",
+  });
+  assert.equal(JSON.stringify(summarizeLegacyIceConfiguration(configuration)).includes("private"), false);
+  assert.equal(JSON.stringify(summarizeLegacyIceConfiguration(configuration)).includes("secret"), false);
+});
 
 test("failure diagnostics put current peer and received-media proof before bounded historical events", () => {
   const endpoint = {

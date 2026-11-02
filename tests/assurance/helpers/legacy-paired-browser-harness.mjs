@@ -11,6 +11,19 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 
+export function summarizeLegacyIceConfiguration(configuration = {}) {
+  const servers = Array.isArray(configuration.iceServers) ? configuration.iceServers : [];
+  const schemes = { stun: 0, stuns: 0, turn: 0, turns: 0, other: 0 };
+  for (const server of servers) {
+    for (const url of Array.isArray(server.urls) ? server.urls : [server.urls]) {
+      const scheme = typeof url === "string" ? url.split(":", 1)[0].toLowerCase() : "other";
+      schemes[["stun", "stuns", "turn", "turns"].includes(scheme) ? scheme : "other"] += 1;
+    }
+  }
+  return { serverCount: servers.length, schemes,
+    iceTransportPolicy: ["all", "relay"].includes(configuration.iceTransportPolicy) ? configuration.iceTransportPolicy : "default" };
+}
+
 // Put current proof inputs before historical events: Node/CI can truncate a
 // large thrown error before it reaches the endpoint state that actually failed.
 // This changes diagnostics only; callers evaluate the original full snapshot.
@@ -311,6 +324,7 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd(), aut
     "communication", "accountSessionAuthority", "accountBoundSupabaseMutation", "entitlementAuthority", "roomRules", "performancePolicy",
   ].map((name) => [`./${name}`, compile(read(`_lib/${name}.ts`), `${name}.ts`)])) : null;
   return `${authenticatedBackend ? read("node_modules/@supabase/supabase-js/dist/umd/supabase.js") : ""}\n(() => {
+    const summarizeLegacyIceConfiguration = ${summarizeLegacyIceConfiguration.toString()};
     const sources = ${JSON.stringify(modules)};
     const cache = {};
     const require = (name) => {
@@ -537,6 +551,16 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         if (!observed.has(channel)) {
           observed.add(channel);
           for (const operation of ["track", "send", "subscribe"]) channel[operation] = observeOperation(`sdk.${operation}`, channel[operation]);
+          const originalOn = channel.on;
+          channel.on = function (type, filter, callback) {
+            if (type !== "broadcast") return originalOn.call(this, type, filter, callback);
+            return originalOn.call(this, type, filter, function (...args) {
+              const payload = args[0]?.payload;
+              hub.events.push({ kind: "authenticated-receive", event: filter?.event, userId,
+                roomId: payload?.roomId, generation: payload?.membershipGeneration, at: performance.now() });
+              return Reflect.apply(callback, this, args);
+            });
+          };
         }
         return channel;
       };
@@ -556,7 +580,18 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         constructor(config) {
           super(config); endpoint.peers.push(this);
           this.fixturePeerId = ++hub.peerSerial; this.remoteDescriptionApplications = 0;
-          this.addEventListener("icecandidate", (event) => hub.events.push({ kind: "ice-candidate", userId, present: !!event.candidate }));
+          this.fixtureIceConfiguration = summarizeLegacyIceConfiguration(config);
+          this.addEventListener("icecandidate", (event) => hub.events.push({ kind: "ice-candidate", userId,
+            peerId: this.fixturePeerId, roomId: hub.roomId, present: !!event.candidate,
+            candidateType: event.candidate?.type ?? null, at: performance.now() }));
+          this.addEventListener("icecandidateerror", (event) => hub.events.push({ kind: "ice-gathering-error",
+            userId, peerId: this.fixturePeerId, roomId: hub.roomId,
+            errorCode: Number.isInteger(event.errorCode) ? event.errorCode : null, at: performance.now() }));
+          for (const eventName of ["iceconnectionstatechange", "icegatheringstatechange", "connectionstatechange", "signalingstatechange"]) {
+            this.addEventListener(eventName, () => hub.events.push({ kind: "peer-state", userId,
+              peerId: this.fixturePeerId, roomId: hub.roomId, event: eventName, connection: this.connectionState,
+              ice: this.iceConnectionState, gathering: this.iceGatheringState, signaling: this.signalingState, at: performance.now() }));
+          }
           this.addEventListener("track", (event) => {
             if (event.track.kind === "audio") {
               const receiver = audioReceiverFactory(event.track);
@@ -586,6 +621,20 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         async createOffer(options) {
           this.observePeerOperation("createOffer");
           return super.createOffer(options);
+        }
+        async addIceCandidate(candidate) {
+          const entry = { kind: "ice-application", userId, peerId: this.fixturePeerId, roomId: hub.roomId,
+            at: performance.now(), phase: "started", remoteType: this.remoteDescription?.type ?? null };
+          hub.events.push(entry);
+          try {
+            const result = await super.addIceCandidate(candidate);
+            hub.events.push({ ...entry, phase: "resolved", at: performance.now() });
+            return result;
+          } catch (error) {
+            hub.events.push({ ...entry, phase: "rejected", at: performance.now(),
+              error: ["TypeError", "InvalidStateError", "OperationError"].includes(error?.name) ? error.name : "other" });
+            throw error;
+          }
         }
         addTrack(track, ...streams) {
           const sender = super.addTrack(track, ...streams);
@@ -651,7 +700,8 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       const broadcast = communication.broadcastCommunicationRoomSignal;
       communication.broadcastCommunicationRoomSignal = async (input) => {
         const result = await broadcast(input);
-        hub.events.push({ kind: "authenticated-broadcast", event: input.event, sender: userId });
+        hub.events.push({ kind: "authenticated-broadcast", event: input.event, sender: userId,
+          roomId: input.roomId, generation: input.expectedMembershipGeneration, confirmed: result === true, at: performance.now() });
         return result;
       };
     }
@@ -746,6 +796,31 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSampleRate: receiver.context.sampleRate, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
+    async transportDiagnostics() {
+      // Failure-only native stats: never expose candidate addresses, SDP,
+      // credentials, URLs, or arbitrary browser report fields.
+      return Promise.all(hub.endpoints.flatMap((endpoint) => endpoint.peers.map(async (peer) => {
+        const result = { userId: endpoint.userId, peerId: peer.fixturePeerId, configuration: peer.fixtureIceConfiguration,
+          localCandidates: 0, remoteCandidates: 0, candidateTypes: { local: {}, remote: {} }, pairs: [], error: null };
+        if (peer.connectionState === "closed") return result;
+        try {
+          for (const report of (await peer.getStats()).values()) {
+            if (report.type === "local-candidate") result.localCandidates += 1;
+            if (report.type === "remote-candidate") result.remoteCandidates += 1;
+            if (["local-candidate", "remote-candidate"].includes(report.type)) {
+              const counts = result.candidateTypes[report.type === "local-candidate" ? "local" : "remote"];
+              const type = ["host", "srflx", "prflx", "relay"].includes(report.candidateType) ? report.candidateType : "other";
+              counts[type] = (counts[type] ?? 0) + 1;
+            }
+            if (report.type === "candidate-pair") result.pairs.push({ state: report.state,
+              nominated: report.nominated === true, requestsSent: report.requestsSent ?? 0,
+              responsesReceived: report.responsesReceived ?? 0, bytesSent: report.bytesSent ?? 0,
+              bytesReceived: report.bytesReceived ?? 0 });
+          }
+        } catch { result.error = "getStats failed"; }
+        return result;
+      })));
+    },
     async replaceLegacyPresenceMetadata(userId) {
       if (hub.backend) throw new Error("Legacy metadata injection belongs only to the in-memory compatibility fixture");
       const channels = hub.channels.filter((channel) => channel.active && channel.endpoint.userId === userId

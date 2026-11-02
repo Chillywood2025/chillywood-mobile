@@ -53,6 +53,7 @@ const diagnostics = (state) => redact(JSON.stringify({
   presenceTrackCounts: state?.presenceTrackCounts,
   realtimeSystemErrors: state?.realtimeSystemErrors,
   operationResults: state?.operationResults,
+  transportDiagnostics: state?.transportDiagnostics,
   endpoints: state?.endpoints?.map((endpoint) => ({
     userId: endpoint.userId, instanceId: endpoint.instanceId, channelState: endpoint.channelState,
     error: endpoint.error, mediaControlError: endpoint.mediaControlError, appState: endpoint.appState, cameraEnabled: endpoint.cameraEnabled,
@@ -132,6 +133,14 @@ async function main() {
       state = await read();
       if (predicate(state)) return state;
       await pause(100);
+    }
+    state.transportDiagnostics = await page.evaluate(() => window.__pairedCall.transportDiagnostics());
+    // Separate records preserve the complete chronology without a single
+    // oversized error line burying the current endpoint evidence. Synthetic
+    // fixture identities only; no SDP, candidate strings, or raw wire frames.
+    for (const event of state.events.filter((event) => ["peer-operation", "peer-state", "ice-candidate",
+      "ice-application", "ice-gathering-error", "authenticated-broadcast", "authenticated-receive"].includes(event.kind))) {
+      console.error(`Authenticated peer failure timeline: ${redact(JSON.stringify(event))}`);
     }
     throw new Error(`${label}: ${diagnostics(state)}`);
   };
