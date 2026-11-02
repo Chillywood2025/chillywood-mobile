@@ -44,6 +44,37 @@ The telemetry module exports `createClipExportTelemetryAdapter()` with:
   evidence bound to worker, session, profile and expiry; metrics cannot certify it.
 - Optional `close()`.
 
+Worker samples carry independent `diskObservedAtMs` alongside
+`tempAvailableBytes`. Only a successful disk collection sets that timestamp;
+progress, outcome, heartbeat-envelope and DB snapshot clocks cannot renew it.
+Missing, future or stale disk timestamps leave resource health unknown, even
+when CPU, memory and progress observations are fresh. Unavailable reads clear
+both disk value and timestamp. Fresh authoritative zero-job inventory can still
+support safe idle draining; resource uncertainty never invents busy jobs or
+authorizes new paid capacity.
+
+The built-in cgroup sampler reports **leaf-only** limits:
+`memoryLimitScope: 'leaf-cgroup-only'`, `effectiveMemoryConstraintKnown: false`,
+and null `effectiveMemoryLimitBytes`, `effectiveMemoryAvailableHeadroomBytes`
+and general `memoryAvailableHeadroomBytes`. Its separately named
+`leafMemoryAvailableHeadroomBytes` is not effective host headroom. A namespace
+can hide tighter ancestors, and sibling consumption can exhaust parent capacity.
+
+A separately qualified telemetry adapter must supply
+`memoryLimitScope: 'qualified-effective-cgroup-v2-hierarchy'`,
+`effectiveMemoryConstraintKnown: true`, and measured positive
+`effectiveMemoryLimitBytes` plus nonnegative
+`effectiveMemoryAvailableHeadroomBytes` no greater than that limit. The matching
+worker/session/profile isolation qualification must also explicitly attest the
+same effective-hierarchy scope and known flag, with current checked/expiry times.
+Qualification must account for all effective constraints, including hidden host
+ancestors and sibling usage; setting a healthy flag is not a substitute.
+Growth uses effective pressure (`1 - effective headroom / effective limit`), not
+leaf usage divided by leaf limit. For example, a 3-GiB leaf using 1 GiB is not
+spare capacity when its 1.2-GiB ancestor uses 1.1 GiB. This source supplies no
+effective-host qualification or real adapter; leaf-only evidence fails growth
+closed. A bounded cold-start probe is not permission for subsequent fleet growth.
+
 Collector SQL uses repeatable-read/read-only bounded snapshots, 10-second
 statement and 2-second lock limits. External adapter calls must separately honor
 cancellation and qualified finite timeouts; SQL limits do not bound their code.

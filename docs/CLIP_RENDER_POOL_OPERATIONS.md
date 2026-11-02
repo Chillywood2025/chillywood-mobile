@@ -57,6 +57,28 @@ including when all slots are occupied; unavailable samples remain unknown.
 RAM/CPU cgroup ceilings are safeguards, not dynamic local capacity admission or
 measured minimum hardware requirements. Qualify each concurrency/resource override.
 
+Disk telemetry must include the actual successful read's `diskObservedAtMs`.
+Cached free bytes carried by a later progress/outcome event keep their original
+timestamp; a fresh event or database read does not mean a new disk measurement.
+Unknown reads clear both fields. Before enabling growth, verify stale/unknown
+disk evidence fails closed while fresh zero-job inventory can still drain safely.
+
+The supplied sampler's `memoryLimitBytes` is explicitly leaf-only, not the
+effective worker limit: it reports `memoryLimitScope: 'leaf-cgroup-only'` and
+`effectiveMemoryConstraintKnown: false`. Effective limit/headroom remain null.
+`leafMemoryAvailableHeadroomBytes` is only leaf arithmetic. A tighter parent or
+busy sibling can exhaust memory while that leaf appears mostly empty; cgroup
+namespaces can hide those constraints. Do not treat this sample as host proof.
+
+Activation requires a separately qualified adapter to measure the effective
+hierarchy, including hidden ancestors/siblings, and provide current
+`effectiveMemoryLimitBytes` and `effectiveMemoryAvailableHeadroomBytes` with
+`memoryLimitScope: 'qualified-effective-cgroup-v2-hierarchy'` and
+`effectiveMemoryConstraintKnown: true`. The worker/session/profile-bound,
+unexpired isolation qualification must attest the same scope and known flag.
+Unknown effective hierarchy blocks growth. The built-in sampler does not make
+this attestation; actual effective-host qualification remains unresolved.
+
 Before activation prove real private create-only upload/readback, scanner
 progression, owner-only review and cancellation/source-change/lease-loss fencing
 with authorized synthetic media. SQL fixtures, modeled native UI and unit tests
