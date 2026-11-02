@@ -60,3 +60,46 @@ and iOS. Full exact-head Required Validation remains a merge gate. No provider
 setup, credential changes, tester enrollment, deployment or release is part of
 this checkpoint. Rollback is to remove the new UI mount/adapter deployment;
 existing unknown executions must retain their isolated reconciliation records.
+
+## Commissioning checklist (not performed by this source task)
+
+As of 2026-11-02 this adapter's actual deployment, test keys, dedicated webhook,
+connected test account, tester qualification and installed-device results are
+**unverified**, not enabled/ready by inference from passing unit tests.
+
+1. Read deployed migration history and exact function/source identity; compare
+   the companion migration and both new Edge functions to the reviewed commit.
+2. Read effective test control, exact active tester/session and live-money,
+   cashout and payout switches. All live switches must remain OFF. Never change
+   global live flags to make a test pass or enroll testers under source approval.
+3. Privately verify the dedicated test credential is configured without printing
+   it, the platform account identity matches qualification, and the connected
+   account is test mode. Read recipient transfer capability, manual payout
+   schedule, US/USD and the exact external destination's supported method.
+   Qualification expiry and exclusive-writer/provider evidence must be genuine,
+   not copied from disposable fixtures or fabricated from a UI preview.
+4. Verify signed test webhook routing and its dedicated secret through approved
+   provider tooling. Check account/execution binding, duplicate delivery,
+   out-of-order delivery, signature rejection and test/live mismatch rejection.
+   If any prerequisite requires mutation, obtain the relevant separate authority.
+5. On each separately identified internal Android and iOS installed build,
+   complete a real store sandbox purchase from the actual contextual buyer
+   screen. Verify access derives from provider-backed receipt authority; then
+   verify the creator's sandbox earnings source and immutable simulated
+   deduction policy. Do not infer real taxes, real provider fees or payable
+   production balance from those simulated amounts.
+6. From channel-settings payout readiness, review and reserve the exact test
+   quote, continue the same request through funding and payout, and read actual
+   test provider objects/current status. A test transfer is not a bank payout;
+   a test payout reported paid is not a real bank deposit or live-readiness proof.
+7. Exercise purchase refund/revocation before dispatch, after funding and after
+   test-paid; verify holds, reversal/return evidence and no duplicate reservation.
+   Inject lost dispatch response and replay the same request: the SQL unknown
+   stage must issue provider GETs only. Exercise failed/late payout events,
+   empty recovery lookup, fee mismatch, expired qualification and revoked tester
+   or session. Preserve unresolved states rather than presenting success.
+8. Retain redacted independent database/provider observations and platform-specific
+   screen evidence for every transition. No private provider payloads, account
+   identifiers, tokens or secrets belong in committed diagnostics. Record failed,
+   skipped and never-run cases explicitly. Full Required Validation and this
+   commissioning evidence are separate gates; neither substitutes for the other.

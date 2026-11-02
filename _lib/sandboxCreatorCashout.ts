@@ -58,7 +58,7 @@ export async function advanceSandboxCreatorCashout(row: SandboxCashoutRecord) {
     method: "POST", headers: { Authorization: `Bearer ${row.subject.accessToken}`, apikey: SUPABASE_ANON_KEY,
       "Content-Type": "application/json", "x-chillywood-platform": Platform.OS },
     body: JSON.stringify({ request_id: row.requestId }), signal: AbortSignal.timeout(75000),
-  });
+  }).catch(() => { throw Error("Test payout response was lost. Reconcile this request; do not submit another payout."); });
   assertAccountBoundSupabaseMutationSubjectCurrent(row.subject);
   if (!response.ok) throw Error("Test payout needs reconciliation. Refresh this request; do not submit another payout.");
   const result = record(await response.json(), row.subject);
