@@ -132,17 +132,25 @@ export function deriveClipExportHealth({nowMs,observedAtMs,inventory,workers,out
   const worker=latest.get(id);
   if(!worker||!fresh(worker.observedAtMs)||!finite(worker.lastHeartbeatAtMs)||worker.lastHeartbeatAtMs>nowMs){incomplete=true;continue;}
   if(!fresh(worker.lastHeartbeatAtMs)){faultyWorkers.add(id);staleHeartbeat=true;continue;}
-  if(!integer(worker.capacity,1,8)||!integer(worker.activeJobs,0,8)||!finite(worker.tempAvailableBytes)){incomplete=true;continue;}
+  // Progress/CPU events may carry cached disk data: only the disk read's own
+  // timestamp establishes freshness. DB/envelope clocks cannot refresh it.
+  if(!integer(worker.capacity,1,8)||!integer(worker.activeJobs,0,8)||!finite(worker.tempAvailableBytes)
+   ||!fresh(worker.diskObservedAtMs)||worker.diskObservedAtMs>worker.observedAtMs){incomplete=true;continue;}
   const memory=worker.workerCgroup;
   if(!memory||memory.available!==true||!fresh(memory.observedAtMs)||memory.scope!=='current-process-cgroup-v2-including-descendants'
-   ||!integer(memory.memoryCurrentBytes)||!integer(memory.memoryLimitBytes,1)||!integer(memory.oomEvents?.oomKill)){incomplete=true;continue;}
+   ||!integer(memory.memoryCurrentBytes)||!integer(memory.memoryLimitBytes,1)||!integer(memory.oomEvents?.oomKill)
+   ||memory.effectiveMemoryConstraintKnown!==true||memory.memoryLimitScope!=='qualified-effective-cgroup-v2-hierarchy'
+   ||!integer(memory.effectiveMemoryLimitBytes,1)||!integer(memory.effectiveMemoryAvailableHeadroomBytes,0,memory.effectiveMemoryLimitBytes)){
+   incomplete=true;continue;
+  }
   const previousWorker=previous.get(id);
   const prior=previousWorker?.sessionId===worker.sessionId?previousWorker?.workerCgroup:null;
   const oomIncreased=prior&&integer(prior.oomEvents?.oomKill)&&memory.oomEvents.oomKill>prior.oomEvents.oomKill;
   // Active jobs already reserved disk before admission; their legitimate input
   // and output files can use that reservation without making the host faulty.
   const diskExhausted=worker.tempAvailableBytes<512*1024**2||(worker.activeJobs===0&&worker.tempAvailableBytes<11*1024**3);
-  if(oomIncreased||memory.memoryCurrentBytes/memory.memoryLimitBytes>=0.85||diskExhausted){faultyWorkers.add(id);continue;}
+  const effectivePressure=1-memory.effectiveMemoryAvailableHeadroomBytes/memory.effectiveMemoryLimitBytes>=0.85;
+  if(oomIncreased||effectivePressure||memory.memoryCurrentBytes/memory.memoryLimitBytes>=0.85||diskExhausted){faultyWorkers.add(id);continue;}
   if(memory.oomEvents.oomKill>0&&!prior){incomplete=true;continue;}
   if(prior&&memory.oomEvents.oomKill<prior.oomEvents?.oomKill){incomplete=true;continue;}
   if(worker.activeJobs>0){

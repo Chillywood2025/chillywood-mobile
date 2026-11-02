@@ -10,7 +10,8 @@ function fixture(){
  observation:{observedAtMs:now,queuedJobs:100,oldestQueueAgeSeconds:180,activeWorkers:1,activeJobs:1,
   health:{observedAtMs:now,status:'healthy',failureClass:null,crashLoop:false,staleHeartbeat:false,progressing:true,saturated:true},
   renderAttempts:2,renderFailures:0,permanentInputFailures:0,sourceOrCancelFailures:0,
-  qualifiedWorkerMemory:{observedAtMs:now,isolated:true,scope:'current-process-cgroup-v2-including-descendants',currentBytes:100,limitBytes:1000,oomEventsDelta:0},
+  qualifiedWorkerMemory:{observedAtMs:now,isolated:true,scope:'current-process-cgroup-v2-including-descendants',currentBytes:100,limitBytes:1000,oomEventsDelta:0,
+   effectiveMemoryConstraintKnown:true,memoryLimitScope:'qualified-effective-cgroup-v2-hierarchy'},
   windowSeconds:300,arrivalRatePerMinute:10,completedJobs:2,totalRenderSeconds:120},state:{}};
 }
 function advance(f,ms=31000){
@@ -110,4 +111,17 @@ test('invalid or future persisted planning state cannot fast-forward hysteresis'
  for(const state of [{highSamples:4},{lowSamples:6},{lastChangeAtMs:1000001},{lastRecommendationAtMs:NaN}]){
   const f=fixture();f.state=state;assert.equal(sample(f).reason,'invalid_planning_state');
  }
+});
+
+test('growth needs qualified effective hierarchy while idle drain does not require healthy resource telemetry',()=>{
+ for(const change of [m=>m.effectiveMemoryConstraintKnown=false,m=>m.memoryLimitScope='leaf-cgroup-only']){
+  const f=fixture();change(f.observation.qualifiedWorkerMemory);
+  assert.equal(sample(f).reason,'fresh_isolated_worker_memory_qualification_required');
+ }
+ const f=fixture();f.observation.qualifiedWorkerMemory.currentBytes=1100;f.observation.qualifiedWorkerMemory.limitBytes=1200;
+ assert.equal(sample(f).reason,'worker_memory_pressure_requires_review');
+ const idle=fixture();Object.assign(idle.observation,{activeJobs:0,queuedJobs:0,oldestQueueAgeSeconds:0,qualifiedWorkerMemory:null});
+ idle.observation.health.status='unknown';
+ for(let n=0;n<5;n++){if(n){idle.nowMs+=31000;idle.observation.observedAtMs=idle.nowMs;}const result=sample(idle);
+  assert.equal(result.action,n===4?'recommend-drain':'hold');}
 });

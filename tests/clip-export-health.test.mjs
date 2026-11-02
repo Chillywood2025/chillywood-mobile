@@ -111,6 +111,33 @@ test('throughput is measured only from deduplicated completed outcomes with vali
  assert.equal(derive({...raw,outcomes:[]}).completedJobs,0);assert.equal(derive({...raw,outcomes:[]}).totalRenderSeconds,0);
 });
 
+test('fresh CPU/RAM/progress cannot refresh cached or unavailable disk evidence',()=>{
+ for(const diskObservedAtMs of [undefined,null,now-90001,now+1]){
+  const raw=evidence();raw.workers[0].diskObservedAtMs=diskObservedAtMs;
+  const health=derive(raw);assert.equal(health.classification,'unknown');
+  assert.equal(health.activeJobs,1,'resource uncertainty preserves authoritative busy inventory');
+ }
+ const idle=evidence({activeJobs:0});idle.workers[0].diskObservedAtMs=null;
+ assert.equal(derive(idle).activeJobs,0,'fresh zero-job inventory remains usable for safe idle retirement');
+ assert.equal(derive(idle).classification,'unknown');
+});
+
+test('leaf-only or unknown memory hierarchy never claims healthy effective capacity',()=>{
+ for(const alter of [m=>m.effectiveMemoryConstraintKnown=false,m=>m.memoryLimitScope='leaf-cgroup-only',
+  m=>m.effectiveMemoryLimitBytes=null,m=>m.effectiveMemoryAvailableHeadroomBytes=null,
+  m=>m.effectiveMemoryAvailableHeadroomBytes=m.effectiveMemoryLimitBytes+1]){
+  const raw=evidence();alter(raw.workers[0].workerCgroup);assert.equal(derive(raw).classification,'unknown');
+ }
+});
+
+test('tight ancestor and sibling consumption override apparently spare leaf memory',()=>{
+ const raw=evidence(),memory=raw.workers[0].workerCgroup;
+ Object.assign(memory,{memoryLimitBytes:3*1024**3,memoryCurrentBytes:1024**3,
+  effectiveMemoryLimitBytes:Math.round(1.2*1024**3),effectiveMemoryAvailableHeadroomBytes:Math.round(0.1*1024**3)});
+ const health=derive(raw);assert.equal(health.classification,'isolated_worker_fault');
+ assert.equal(health.health.failureClass,'worker');assert.equal(health.activeJobs,1);
+});
+
 test('real local HTTP auth/storage failures flow through transport, classifier and default controller without spending',{timeout:30000},async()=>{
  const dir=await mkdtemp(path.join(tmpdir(),'clip-health-http-'));let gets=0;
  const server=createServer((request,response)=>{gets++;response.writeHead(Number(request.url.slice(1))).end('fixture');});

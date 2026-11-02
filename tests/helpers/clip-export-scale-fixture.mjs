@@ -35,7 +35,7 @@ export function scaleFixture(){
    jobId:`completed-${f.now}`,status:'completed',elapsedMs:60000,observedAtMs:f.now}];
   return {observedAtMs:f.now,queuedJobs:idle?0:100,oldestQueueAgeSeconds:idle?0:180,windowSeconds:300,arrivalRatePerMinute:10,
    healthEvidence,qualifiedWorkerMemory:{observedAtMs:f.now,isolated:true,scope:'current-process-cgroup-v2-including-descendants',
-    currentBytes:100,limitBytes:1000,oomEventsDelta:0}};
+    currentBytes:100,limitBytes:1000,oomEventsDelta:0,effectiveMemoryConstraintKnown:true,memoryLimitScope:'qualified-effective-cgroup-v2-hierarchy'}};
  };
  f.fault=()=>{const evidence=f.evidence();evidence.dependencies[0].outcome='unavailable';return {healthEvidence:evidence};};
  f.executor={async capabilities(){return f.capabilities();},

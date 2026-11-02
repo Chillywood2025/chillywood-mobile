@@ -84,6 +84,7 @@ export function planClipExportCapacity({enabled=false,nowMs,approvedProfile,obse
  if(systemicFailureRate>=POLICY.maxRenderFailureRate)return reject('systemic_render_failure_rate_requires_review');
  const memory=o.qualifiedWorkerMemory;
  if(!memory||memory.isolated!==true||memory.scope!=='current-process-cgroup-v2-including-descendants'
+  ||memory.effectiveMemoryConstraintKnown!==true||memory.memoryLimitScope!=='qualified-effective-cgroup-v2-hierarchy'
   ||!fresh(memory.observedAtMs,nowMs)||!integer(memory.currentBytes,0,Number.MAX_SAFE_INTEGER)
   ||!integer(memory.limitBytes,1,Number.MAX_SAFE_INTEGER)||!integer(memory.oomEventsDelta,0,Number.MAX_SAFE_INTEGER))return reject('fresh_isolated_worker_memory_qualification_required');
  if(memory.oomEventsDelta>0)return reject('worker_oom_requires_qualification_review');
