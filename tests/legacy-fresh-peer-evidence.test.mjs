@@ -30,9 +30,9 @@ for (const [name, corrupt] of [
   });
 }
 
-test("authenticated repeat gate requires four sequential full lifecycles without weakening media predicates", () => {
+test("authenticated repeat gate requires five sequential full lifecycles without weakening media predicates", () => {
   const source = fs.readFileSync(new URL("../scripts/test-chilly-chat-real-peer-http.mjs", import.meta.url), "utf8");
-  const loop = source.slice(source.indexOf("for (let cycle = 1; cycle <= 4; cycle += 1)"), source.indexOf("  } catch (error) {\n    failed = true;"));
+  const loop = source.slice(source.indexOf("for (let cycle = 1; cycle <= 5; cycle += 1)"), source.indexOf("  } catch (error) {\n    failed = true;"));
   assert.ok(loop.includes("createAcceptedCall(`FRESH${cycle}`)"));
   assert.ok(loop.includes("hasMedia(endpoint) && hasIsolatedLegacyFreshPeerEvidence"));
   assert.ok(loop.includes("advances(endpoint, freshInitial.endpoints.find"));
@@ -41,4 +41,13 @@ test("authenticated repeat gate requires four sequential full lifecycles without
   assert.ok(loop.indexOf("await endAndProve(fresh)") < loop.indexOf("beforeEnd = freshAdvanced"));
   assert.equal(loop.includes("catch"), false, "a failed case must exit, not retry the cycle");
   assert.ok(source.includes("const wait = async (predicate, label, timeout = 20_000)"));
+  assert.ok(source.includes("assert.equal(allocations.length, 6"));
+  assert.ok(source.includes("assert.equal(invitations.length, 6"));
+  assert.ok(source.includes("timestampSpan(allocations) < 600_000"));
+  assert.ok(source.includes("timestampSpan(invitations) < 300_000"));
+  assert.ok(source.includes('receipt.target_status === "accepted" && receipt.actor_user_id === users[1]'));
+  assert.ok(source.includes('receipt.target_status === "ended" && receipt.actor_user_id === users[0]'));
+  assert.ok(source.includes('assert.equal(endedRoom.status, "ended")'));
+  assert.equal(/from\("abuse_rate_limit_events"\)\s*\.(?:insert|update|delete|upsert)/u.test(source), false,
+    "completion-credit evidence must not mutate the rate ledger");
 });
