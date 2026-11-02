@@ -23,6 +23,10 @@ export type PrefundedTipReads = {
   transfer: ScopedTipProviderRead; destinationPayment: ScopedTipProviderRead;
   connectedCredit: ScopedTipProviderRead;
 };
+// Transport/budget errors and an otherwise valid pending credit do not establish
+// a source loss. They still cannot furnish the fresh probe required for payout.
+export const prefundedTipEvidenceRequiresHold = (error: unknown) => error instanceof Error
+  && /^prefunded_tip_(checkout_invalid|payment_intent_invalid|charge_invalid|transfer_invalid|destination_payment_invalid|connected_credit_invalid)$/.test(error.message);
 const fail = (reason: string): never => { throw Error(`prefunded_tip_${reason}`); };
 const id = (value: unknown, prefix: string) => typeof value === "string" && new RegExp(`^${prefix}_[A-Za-z0-9]+$`).test(value);
 const uuid = (value: unknown) => typeof value === "string" && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value);
@@ -62,11 +66,14 @@ export function normalizePrefundedTipEvidence(s: PrefundedTipSource, reads: Pref
   if (pi.object !== "payment_intent" || pi.id !== s.paymentIntentId || pi.livemode !== false
     || pi.status !== "succeeded" || pi.amount !== s.amountMinor || pi.amount_received !== s.amountMinor
     || pi.currency !== s.currency || pi.transfer_data?.destination !== s.connectedAccountId
+    || (pi.transfer_data?.amount != null && pi.transfer_data.amount !== s.amountMinor)
+    || (pi.application_fee_amount != null && pi.application_fee_amount !== 0)
     || !id(pi.latest_charge, "ch") || !metadataMatches(pi, s)) fail("payment_intent_invalid");
   if (charge.object !== "charge" || charge.id !== pi.latest_charge || charge.payment_intent !== pi.id
     || charge.livemode !== false || charge.status !== "succeeded" || charge.paid !== true || charge.captured !== true
     || charge.amount !== s.amountMinor || charge.amount_captured !== s.amountMinor || charge.currency !== s.currency
     || charge.refunded !== false || charge.amount_refunded !== 0 || charge.disputed !== false
+    || charge.application_fee != null || (charge.application_fee_amount != null && charge.application_fee_amount !== 0)
     || charge.transfer_data?.destination !== s.connectedAccountId || !id(charge.transfer, "tr")
     || charge.payment_method_details?.type !== "card") fail("charge_invalid");
   if (transfer.object !== "transfer" || transfer.id !== charge.transfer || transfer.livemode !== false
@@ -78,15 +85,17 @@ export function normalizePrefundedTipEvidence(s: PrefundedTipSource, reads: Pref
     || payment.livemode !== false || payment.status !== "succeeded" || payment.paid !== true || payment.captured !== true
     || payment.amount !== transfer.amount || payment.amount_captured !== transfer.amount || payment.currency !== s.currency
     || payment.refunded !== false || payment.amount_refunded !== 0 || payment.disputed !== false
+    || payment.application_fee != null || (payment.application_fee_amount != null && payment.application_fee_amount !== 0)
     || !id(payment.balance_transaction, "txn")) fail("destination_payment_invalid");
   // transfer.balance_transaction is the PLATFORM DEBIT and is deliberately not
   // used as the destination credit. Accept only the connected payment's own BT.
   if (credit.object !== "balance_transaction" || credit.id !== payment.balance_transaction
     || credit.source !== payment.id || credit.currency !== s.currency || credit.amount !== transfer.amount
     || !minor(credit.fee) || !minor(credit.net) || credit.net <= 0 || credit.net !== credit.amount - credit.fee
-    || credit.status !== "available" || !epoch(credit.available_on) || credit.available_on > observedAt
+    || !["available", "pending"].includes(credit.status) || !epoch(credit.available_on)
     || !["payment", "charge"].includes(credit.type) || credit.exchange_rate != null
     || (credit.balance_type != null && credit.balance_type !== "payments")) fail("connected_credit_invalid");
+  if (credit.status !== "available" || credit.available_on > observedAt) fail("connected_credit_pending");
   return {
     kind: "prefunded_destination_tip" as const, environment: "test" as const, currency: "usd" as const,
     tipId: s.tipId, buyerId: s.buyerId, creatorId: s.creatorId, checkoutRequestId: s.checkoutRequestId,

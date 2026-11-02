@@ -15,18 +15,29 @@ Implemented foundations:
   transfer is evidence, never a cashout funding transfer. `py_` is supported.
 - Fixed-host bounded GET collector; no public endpoint accepts these facts.
 
-**Still required before admission or end-to-end claims:**
-1. Future-only immutable platform binding at atomic checkout reservation. Existing
-   checkout attempts bind recipient but not historical platform; unknown old
-   dispatches must not be retrospectively relabeled.
-2. Forward-only private receipts, allocations, executions, actual payout-cost
-   qualification, observations and returns. Reject funding/reversal SQL claims.
-3. Reuse existing provider-account uniqueness and creator lock, adding tip-row
-   locks before creator advisory locks and durable cross-lane unknown/held-write
-   exclusion. Prove native contention and refund/late-paid holds.
-4. Authorized exact-session server routing and shared sandbox panel states.
-5. Trusted provider readiness, actual sandbox buyer/creator/device flow, and
-   exact-head Required Validation. Current mock fixtures are not provider proof.
+Additional unqualified WIP integration now includes future-only atomic checkout
+platform binding, private receipt/allocation/execution/return/probe tables,
+source/qualification holds, shared execution routing, a GET-only receipt endpoint,
+and a nested exact-session-gated panel. Existing unbound historical attempts are
+not backfilled. The PR653 migration remains unchanged.
 
-No endpoint or SQL adapter currently emits `prefunded_destination`; these helpers
-are dormant. PR653 migration is unchanged. Existing real-money switches remain OFF.
+Connected payout balance-transaction fees and separately billed provider costs
+are distinct. The narrow qualifier requires independently evidenced **approved
+cost-ownership policy** before any platform-absorbed treatment; being billed to
+the platform does not establish that policy. Unknown creator allocation or later
+billing blocks eligibility. No qualification or cost policy is seeded.
+
+**Still required before readiness/end-to-end claims:** native contention proof
+for the new cross-lane/tip locks and identity uniqueness; full frozen-head source
+validation; independent financial-path review; actual provider fee completeness,
+account/writer qualification, webhook and installed-device commissioning.
+Current mocked and disposable SQL fixtures are not actual provider proof.
+
+The owner is considering an alternative **future-only** platform-charge pattern
+to retain actual qualified creator fees before funding. No charge-pattern switch
+has been made or approved by this WIP. Either pattern needs actual settlement
+authority: PR653's simulated deductions cannot substitute for it.
+
+All new execution remains unqualified and deployment/activation is outside this
+checkpoint. Existing real-money switches remain OFF. Do not merge this WIP as a
+completed payment flow or advertise a permanent manual hold as readiness.

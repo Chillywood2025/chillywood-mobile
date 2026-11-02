@@ -16,6 +16,11 @@ export type CashoutContext = {
 };
 export type CashoutStore = {
   read(requestId: string): Promise<CashoutContext>;
+  // Prefunded adapters must refresh canonical source GET evidence and persist a
+  // short-lived, single-use balance observation consumed by the SQL claim.
+  // This hook is server-only, never client-provided qualification.
+  preparePrefundedClaim?(requestId: string, balance: { accountId: string; environment: "test";
+    currency: "usd"; sourceType: "card" | "bank_account"; availableMinor: number; observedAt: number }): Promise<void>;
   claim(requestId: string, stage: "funding" | "payout" | "reversal" | "funding_return"): Promise<{claimed: boolean; token: string}>;
   observe(requestId: string, token: string | null, facts: Record<string, unknown>): Promise<unknown>;
 };
@@ -93,6 +98,8 @@ export function normalizeCashoutPayout(p: Json, c: CashoutContext) {
 export async function runCreatorCashout(requestId: string, store: CashoutStore, secret: string,
   transport: typeof fetch = fetch, now: () => number = Date.now, reconcileOnly = false) {
   const c = await store.read(requestId); validateCashoutContext(c);
+  if (c.fundingMode === "prefunded_destination" && c.phase === "ready" && !reconcileOnly
+    && typeof store.preparePrefundedClaim !== "function") fail("prefunded_source_probe_required");
   if (!new RegExp(`^(sk|rk)_${c.environment}_[A-Za-z0-9]+$`).test(secret)) fail("credential_mode_mismatch");
   const deadline = now() + 60000; let reads = 0;
   const call = async (path: string, accountId: string | null, body?: URLSearchParams, key?: string) => {
@@ -228,7 +235,7 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
         || credit.fee_details.reduce((sum: number, fee: Json) => sum + fee.amount, 0) !== credit.fee)
         fail("prefunded_payout_return_unconfirmed");
       return store.observe(requestId, null, { ...payout, payoutDebit: proof(debit), payoutReturn: proof(credit),
-        returnedMinor: credit.net, retainedProviderFeeMinor: c.grossMinor - credit.net });
+        returnedMinor: credit.net, retainedConnectedFeeMinor: c.grossMinor - credit.net });
     }
     if (payout.status === "paid" && payout.balanceTransactionId && c.inlineKnownZeroQualified === true && c.expectedProviderFeeMinor === 0) {
       const bt = await call(`/v1/balance_transactions/${payout.balanceTransactionId}`, c.accountId);
@@ -292,6 +299,10 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
       : usd?.source_types?.[c.sourceType];
     if (!minor(eligible) || eligible < (c.fundingMode === "prefunded_destination" ? c.grossMinor : c.bankMinor))
       return { status: "waiting_for_connected_balance" };
+    if (c.fundingMode === "prefunded_destination") await store.preparePrefundedClaim!(requestId, {
+      accountId: c.accountId, environment: "test", currency: "usd", sourceType: c.sourceType,
+      availableMinor: eligible, observedAt: Math.floor(now() / 1000),
+    });
   }
   // The claim rechecks switches, original user/session/eligibility/obligations,
   // qualification expiry and request economics after obtaining creator locks.

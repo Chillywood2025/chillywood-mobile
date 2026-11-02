@@ -451,8 +451,14 @@ Deno.serve(async (req): Promise<Response> => {
         "payment_intent_data[transfer_data][destination]": providerAccountId,
         success_url: successUrl,
       };
-    const { data: reserved, error: reserveError } = await adminClient.rpc("reserve_creator_tip_checkout_attempt", {
+    // Bind today's authenticated test platform only while atomically creating
+    // a NEW immutable quote. Old/unknown unbound attempts fail closed in SQL.
+    const platform = await stripeRequest<{ object: string; id: string }>(stripeSecret.secret, "/account");
+    if (platform.object !== "account" || !/^acct_[A-Za-z0-9]+$/.test(platform.id))
+      throw new Error("Test platform identity could not be verified.");
+    const { data: reserved, error: reserveError } = await adminClient.rpc("reserve_platform_bound_test_tip_checkout", {
       p_buyer_id: buyerAuthority.accountId, p_session_id: buyerAuthority.sessionGeneration, p_request_id: requestId,
+      p_platform_account_id: platform.id,
       p_quote: { tipId, creatorId, amountCents, currency, privateNote, providerAccountId,
         capabilityId: normalizeUuid(parsed.value.capability_id), body: requestedBody },
     });
@@ -462,7 +468,8 @@ Deno.serve(async (req): Promise<Response> => {
       ? attempt.externalCapability as Record<string, unknown> : null;
     const androidExternal = externalCapability?.routeKind === "android_external_content_link";
     tipId = normalizeUuid(attempt.tipId);
-    if (!tipId || attempt.requestId !== requestId || attempt.buyerId !== currentUser.id || attempt.creatorId !== creatorId
+    if (!tipId || attempt.platformBound !== true || attempt.platformAccountId !== platform.id
+      || attempt.requestId !== requestId || attempt.buyerId !== currentUser.id || attempt.creatorId !== creatorId
       || attempt.amountCents !== amountCents || attempt.currency !== currency || typeof attempt.body !== "object" || !attempt.body
       || typeof attempt.idempotencyKey !== "string") throw new Error("Tip checkout quote could not be verified.");
     attemptResponse = { requestId, buyerId: currentUser.id, creatorId, amountCents, currency, tipId,

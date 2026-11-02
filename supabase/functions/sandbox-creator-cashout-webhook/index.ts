@@ -21,15 +21,20 @@ Deno.serve(async (req: Request) => {
       if (result.error || !result.data) throw Error("sandbox_database_unavailable");
       return result.data;
     };
+    let prefunded = false;
     const store: CashoutStore = {
       read: async requestId => {
-        const context = await rpc("get_sandbox_creator_cashout_execution_context", { p_request_id: requestId });
+        const original = await admin.client.rpc("get_sandbox_creator_cashout_execution_context", { p_request_id: requestId });
+        prefunded = Boolean(original.error);
+        const context = prefunded ? await rpc("get_sandbox_prefunded_tip_cashout_context", { p_request_id: requestId }) : original.data;
+        if (!context || (prefunded && (context.fundingMode !== "prefunded_destination" || !event.type.startsWith("payout."))))
+          throw Error("sandbox_event_binding_invalid");
         if (context.environment !== "test" || event.data.object.metadata.chillywood_cashout_execution !== context.executionId
           || (event.type.startsWith("payout.") ? event.account !== context.accountId : event.account != null)) throw Error("sandbox_event_binding_invalid");
         return context;
       },
       claim: async () => { throw Error("webhook_cannot_dispatch"); },
-      observe: (requestId, token, facts) => rpc("record_sandbox_creator_cashout_observation", { p_request_id: requestId, p_dispatch_token: token, p_facts: facts }),
+      observe: (requestId, token, facts) => rpc(prefunded ? "record_sandbox_prefunded_tip_cashout_observation" : "record_sandbox_creator_cashout_observation", { p_request_id: requestId, p_dispatch_token: token, p_facts: facts }),
     };
     // Remains available after dispatch is disabled: existing ambiguous attempts
     // still need reconciliation. A callback never creates any provider object.

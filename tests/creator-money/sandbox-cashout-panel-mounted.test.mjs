@@ -22,6 +22,7 @@ async function mount(t,overrides={}){
   if(name==='@react-navigation/native')return {useIsFocused:()=>focused};
   if(name.endsWith('/accountSessionAuthority'))return {getCurrentAccountSessionAuthoritySnapshot:()=>authority,subscribeToAccountSessionAuthority:()=>()=>{}};
   if(name.endsWith('/chillywood-visual-system'))return {CHILLYWOOD_VISUAL:{}};
+  if(name.endsWith('/sandbox-prefunded-tip-panel'))return {SandboxPrefundedTipPanel:()=>{calls.push(['prefunded-mounted']);return null;}};
   return api;
  }};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/monetization/sandbox-creator-cashout-panel.tsx','utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,context);
@@ -107,11 +108,13 @@ test('unknown dispatch with expired qualification retains safe provider reconcil
 test('unknown and denied actual tester reads hide all payout controls and rows',async t=>{
  const pending=deferred(),m=await mount(t,{readSandboxCreatorCashoutHistory:()=>pending.promise});
  assert.match(m.text(),/Checking current internal tester access/);assert.equal(m.button('Review test payout'),undefined);
+ assert.equal(m.calls.some(x=>x[0]==='prefunded-mounted'),false);
  assert.equal([...m.nodes.values()].some(n=>n.type==='TextInput'),false);
  m.api.readSandboxCreatorCashoutHistory=async()=>{throw Error('tester revoked');};
  await m.account({userId:'B',sessionGeneration:'2'});await m.resolve(pending,[m.row]);
  assert.equal(m.button('Review test payout'),undefined);assert.equal(m.button('Continue provider test payout'),undefined);
  assert.match(m.text(),/could not be verified/);assert.ok(m.button('Check internal test access'));
+ assert.equal(m.calls.some(x=>x[0]==='prefunded-mounted'),false);
 });
 test('revocation before confirmation fails closed before submit and clears displayed quote and rows',async t=>{
  const m=await mount(t);await m.amount('100');await m.press(m.button('Review test payout'));

@@ -9,6 +9,11 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('supabase/functions/_share
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText, runtime);
 const normalize = runtime.exports.normalizePrefundedTipEvidence;
+test('transport and pending availability do not permanently declare source loss',()=>{
+ const hold=runtime.exports.prefundedTipEvidenceRequiresHold;
+ for(const reason of ['prefunded_tip_provider_read_unresolved','prefunded_tip_provider_budget_exhausted','prefunded_tip_connected_credit_pending','network error']) assert.equal(hold(new Error(reason)),false);
+ assert.equal(hold(new Error('prefunded_tip_charge_invalid')),true);
+});
 const source = { tipId: 'a0000000-0000-4000-8000-000000000001', buyerId: 'a0000000-0000-4000-8000-000000000002',
   creatorId: 'a0000000-0000-4000-8000-000000000003', checkoutRequestId: 'a0000000-0000-4000-8000-000000000004',
   buyerSessionId: 'a0000000-0000-4000-8000-000000000005', checkoutSessionId: 'cs_test_example', paymentIntentId: 'pi_example',
@@ -69,6 +74,9 @@ for (const [name, mutate] of [
   ['wrong destination', r => { r.transfer.value.destination = 'acct_other'; }],
   ['wrong reverse linkage', r => { r.destinationPayment.value.source_transfer = 'tr_other'; }],
   ['partial capture', r => { r.charge.value.amount_captured = 999; }],
+  ['unexpected checkout application fee', r => { r.paymentIntent.value.application_fee_amount = 1; }],
+  ['unrelated fee withdrawal', r => { r.charge.value.application_fee = 'fee_other'; }],
+  ['partial destination amount', r => { r.paymentIntent.value.transfer_data.amount = 900; }],
   ['partial refund', r => { r.charge.value.amount_refunded = 1; }],
   ['destination refund', r => { r.destinationPayment.value.amount_refunded = 1; }],
   ['dispute', r => { r.charge.value.disputed = true; }],

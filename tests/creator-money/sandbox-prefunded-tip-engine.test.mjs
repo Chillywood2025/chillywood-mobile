@@ -10,7 +10,8 @@ const metadata={chillywood_cashout_execution:c.executionId,chillywood_cashout_re
 const payout=(status='pending')=>({object:'payout',id:'po_tip',livemode:false,amount:990,currency:'usd',destination:c.destinationId,method:'standard',source_type:'card',automatic:false,status,metadata,balance_transaction:'txn_debit',failure_balance_transaction:'txn_return'});
 function harness(context=c, options={}) {
  const calls=[],claims=[],facts=[];
- const store={read:async()=>context,claim:async(id,stage)=>{claims.push(stage);return {claimed:true,token:'b0000000-0000-4000-8000-000000000003'};},observe:async(id,token,f)=>{facts.push(f);return f;}};
+ let probed=false;
+ const store={read:async()=>context,preparePrefundedClaim:options.noProbe?undefined:async(id,balance)=>{assert.equal(balance.accountId,c.accountId);assert.equal(balance.availableMinor,options.balance??1000);probed=true;},claim:async(id,stage)=>{assert.equal(probed,true);claims.push(stage);return {claimed:true,token:'b0000000-0000-4000-8000-000000000003'};},observe:async(id,token,f)=>{facts.push(f);return f;}};
  const transport=async(url,request)=>{
   calls.push({url,request});
   assert.equal(url.includes('/transfers'),false,'payout-only must not read or write funding transfers');
@@ -34,6 +35,7 @@ function harness(context=c, options={}) {
 test('prefunded ready dispatches only one connected payout, reserving actual payout cost',async()=>{
  const h=harness();await h.run();assert.deepEqual(h.claims,['payout']);assert.equal(h.calls.filter(x=>x.request.method==='POST').length,1);
  const insufficient=harness(c,{balance:990});assert.equal((await insufficient.run()).status,'waiting_for_connected_balance');assert.equal(insufficient.claims.length,0);
+ const noProbe=harness(c,{noProbe:true});await assert.rejects(noProbe.run(),/prefunded_source_probe_required/);assert.equal(noProbe.calls.length,0);
 });
 test('prefunded mode rejects every funding/reversal phase and incompatible context before provider access',async()=>{
  for(const patch of [{phase:'prepared'},{phase:'funded'},{phase:'funding_unknown'},{phase:'return_confirmed'},{phase:'reversal_unknown'},{phase:'funding_return_pending'},{phase:'funding_return_unknown'},{phase:'paid'},{phase:'return_pending'},{payoutId:'po_existing'},{environment:'live'},{method:'instant'},{transferId:'tr_source'},{reversalId:'trr_source'},{fundingMode:'typo'}]) {
@@ -48,7 +50,7 @@ test('lost prefunded POST remains GET-only on repeated unknown recovery and canc
 });
 test('prefunded return requires exact connected debit and credit, retains observed fees without transfer reversal',async()=>{
  for(const status of ['failed','canceled']) {
-  const h=harness({...c,phase:'return_pending',payoutId:'po_tip'},{status});const result=await h.run();assert.equal(result.returnedMinor,987);assert.equal(result.retainedProviderFeeMinor,13);assert.equal(h.claims.length,0);assert.equal(h.calls.some(x=>x.request.method==='POST'),false);
+  const h=harness({...c,phase:'return_pending',payoutId:'po_tip'},{status});const result=await h.run();assert.equal(result.returnedMinor,987);assert.equal(result.retainedConnectedFeeMinor,13);assert.equal(h.claims.length,0);assert.equal(h.calls.some(x=>x.request.method==='POST'),false);
  }
  const bad=harness({...c,phase:'return_pending',payoutId:'po_tip'},{badSource:true});await assert.rejects(bad.run(),/prefunded_payout_return_unconfirmed/);assert.equal(bad.facts.length,0);
  const paid=harness({...c,phase:'paid',payoutId:'po_tip'},{status:'paid'});const result=await paid.run();assert.equal(result.payoutDebit.feeMinor,10);assert.equal(result.payoutReturn,undefined);

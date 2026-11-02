@@ -103,7 +103,7 @@ test("tip checkout rejects a session-generation change immediately before Stripe
 test("authoritative buyer readback precedes transaction creation and is revalidated before Stripe mutation", () => {
   const handler = sliceBetween(checkout, "Deno.serve", "} catch (error)");
   const firstAuthority = handler.indexOf("const buyerAuthority = await readBuyerSessionAuthority");
-  const transactionInsert = handler.indexOf('adminClient.rpc("reserve_creator_tip_checkout_attempt"');
+  const transactionInsert = handler.indexOf('adminClient.rpc("reserve_platform_bound_test_tip_checkout"');
   const secondAuthority = handler.indexOf("const currentBuyerAuthority = await readBuyerSessionAuthority");
   const stripeMutation = handler.indexOf('const session = knownSession');
   assert.ok(firstAuthority >= 0);
@@ -116,7 +116,7 @@ test("authoritative buyer readback precedes transaction creation and is revalida
   assert.match(handler, /checkoutCreated: false/u);
   const insert = sliceBetween(
     handler,
-    'adminClient.rpc("reserve_creator_tip_checkout_attempt"',
+    'adminClient.rpc("reserve_platform_bound_test_tip_checkout"',
     'if (reserveError',
   );
   assert.match(insert, /p_buyer_id: buyerAuthority\.accountId/u);

@@ -317,6 +317,9 @@ verify_jwt = false
 [functions.sandbox-creator-cashout]
 verify_jwt = true
 
+[functions.sandbox-prefunded-tip-receipt]
+verify_jwt = true
+
 [functions.sandbox-creator-cashout-webhook]
 # Dedicated test-only signature; GET-only provider reconciliation.
 verify_jwt = false

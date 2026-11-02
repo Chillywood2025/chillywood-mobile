@@ -6,6 +6,7 @@ import { cashoutDollarsToMinor } from "../../_lib/creatorCashoutExecution";
 import { advanceSandboxCreatorCashout, cancelSandboxCreatorCashout, previewSandboxCreatorCashout, readSandboxCreatorCashoutHistory,
   submitSandboxCreatorCashout, SANDBOX_CASHOUT_STATUS, type SandboxCashoutQuote, type SandboxCashoutRecord } from "../../_lib/sandboxCreatorCashout";
 import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
+import { SandboxPrefundedTipPanel } from "./sandbox-prefunded-tip-panel";
 
 const snapshotKey = () => { const value = getCurrentAccountSessionAuthoritySnapshot(); return value && !value.restoreOnly ? JSON.stringify(value) : ""; };
 const money = (value: number | null) => value === null ? "Unverified" : `$${(value / 100).toFixed(2)}`;
@@ -117,5 +118,6 @@ export function SandboxCreatorCashoutPanel() {
         : !["canceled", "returned"].includes(row.status) ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("advance", row)}><Text style={{...title, paddingVertical: 10}}>{["prepared", "funded"].includes(row.status) ? "Continue provider test payout" : ["return_confirmed", "funding_return_pending"].includes(row.status) ? "Continue test funds recovery" : "Reconcile this test payout"}</Text></Pressable> : null}
       {row.canCancel ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("cancel", row)}><Text style={{...title, paddingVertical: 10}}>Cancel test payout</Text></Pressable> : null}
     </View>)}
+    <SandboxPrefundedTipPanel />
   </View>;
 }
