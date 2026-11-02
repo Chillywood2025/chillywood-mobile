@@ -30,7 +30,10 @@ test('whole-worker cgroup observations preserve actual timestamp, lifetime peak,
  assert.equal(value.isolationVerified,false);assert.equal(value.peakScope,'cgroup-lifetime');
  assert.equal(value.observedAtMs,1750000);assert.equal(value.collectionElapsedMs,37);
  assert.equal(value.memoryCurrentBytes,128);assert.equal(value.memoryPeakBytes,512);assert.equal(value.memoryLimitBytes,1024);
- assert.equal(value.memoryAvailableHeadroomBytes,896);assert.deepEqual(value.oomEvents,{oom:3,oomKill:4,oomGroupKill:5});
+ assert.equal(value.leafMemoryAvailableHeadroomBytes,896);assert.equal(value.memoryAvailableHeadroomBytes,null);
+ assert.equal(value.memoryLimitScope,'leaf-cgroup-only');assert.equal(value.effectiveMemoryConstraintKnown,false);
+ assert.equal(value.effectiveMemoryLimitBytes,null);assert.equal(value.effectiveMemoryAvailableHeadroomBytes,null);
+ assert.deepEqual(value.oomEvents,{oom:3,oomKill:4,oomGroupKill:5});
  assert.equal(value.cpuUsageUsec,123456);assert.equal(f.closed.length,f.opens.length);
  assert.equal(Object.hasOwn(value,'rss'),false);
 });
@@ -64,4 +67,20 @@ test('unlimited/missing/malformed measurements remain null, never guessed headro
 test('oversized proc observation is bounded and descriptor is closed',async()=>{
  const f=fixture();f.memberships=['x'.repeat(20000)];
  assert.equal((await readClipExportWorkerResources(f.options)).available,false);assert.equal(f.opens.length,1);assert.equal(f.closed.length,1);
+});
+test('a roomy leaf under a tighter busy parent cannot advertise effective headroom or host capacity, even at a namespaced root',async()=>{
+ // Example hidden/ancestor constraint: parent limit 1.2 GiB, usage 1.1 GiB.
+ // The current-unit reader cannot observe or certify that constraint and must
+ // not describe leaf 3 GiB - 1 GiB as 2 GiB of effective available memory.
+ for(const namespaceRoot of [false,true]){
+  const f=fixture();
+  if(namespaceRoot){f.directory='/sys/fs/cgroup';f.memberships=['0::/\n'];}
+  f.files['memory.max']=String(3*1024**3);f.files['memory.current']=String(1024**3);
+  const value=await readClipExportWorkerResources(f.options);
+  assert.equal(value.available,true);assert.equal(value.memoryLimitBytes,3*1024**3);
+  assert.equal(value.leafMemoryAvailableHeadroomBytes,2*1024**3);
+  assert.equal(value.memoryLimitScope,'leaf-cgroup-only');assert.equal(value.effectiveMemoryConstraintKnown,false);
+  assert.equal(value.memoryAvailableHeadroomBytes,null);assert.equal(value.effectiveMemoryAvailableHeadroomBytes,null);
+  assert.equal(value.effectiveMemoryLimitBytes,null);assert.equal(Object.hasOwn(value,'hostMemoryAvailableBytes'),false);
+ }
 });
