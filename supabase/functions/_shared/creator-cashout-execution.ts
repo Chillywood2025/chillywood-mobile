@@ -2,6 +2,9 @@
  * evidence that the creator's bank received money. All mutations are preceded
  * by a durable SQL dispatch claim. Ambiguous dispatch is GET-only thereafter. */
 export type CashoutContext = {
+  // Omitted only for existing fund-first SQL adapters. A destination-charge
+  // transfer is source evidence, never this saga's funding transferId.
+  fundingMode?: "fund_first" | "prefunded_destination";
   requestId: string; executionId: string; platformAccountId: string;
   accountId: string; destinationId: string; environment: "live" | "test";
   method: "standard" | "instant"; sourceType: "card" | "bank_account";
@@ -46,6 +49,11 @@ export function validateCashoutContext(c: CashoutContext) {
     || c.bankMinor <= 0 || c.bankMinor + c.appFeeMinor + c.expectedProviderFeeMinor !== c.grossMinor
     || (c.method === "standard" && c.appFeeMinor !== 0)
     || c.dispatchKey !== `cw-cashout-${c.executionId}`) fail("context_invalid");
+  if (c.fundingMode !== undefined && !["fund_first", "prefunded_destination"].includes(c.fundingMode)) fail("funding_mode_invalid");
+  if (c.fundingMode === "prefunded_destination" && (c.environment !== "test" || c.method !== "standard"
+    || c.transferId !== null || c.reversalId !== null || c.appFeeMinor !== 0
+    || !["ready", "canceled", "payout_unknown", "payout_pending", "paid", "return_pending", "returned", "needs_review"].includes(c.phase)))
+    fail("prefunded_context_invalid");
 }
 
 export function normalizeCashoutTransfer(t: Json, c: CashoutContext) {
@@ -85,6 +93,10 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
   if (!new RegExp(`^(sk|rk)_${c.environment}_[A-Za-z0-9]+$`).test(secret)) fail("credential_mode_mismatch");
   const deadline = now() + 60000; let reads = 0;
   const call = async (path: string, accountId: string | null, body?: URLSearchParams, key?: string) => {
+    // Defense in depth: even future recovery branches cannot create or reverse
+    // a transfer in payout-only mode. No endpoint currently admits this mode.
+    if (body && c.fundingMode === "prefunded_destination" && (path !== "/v1/payouts" || accountId !== c.accountId))
+      fail("prefunded_write_forbidden");
     if (now() >= deadline || (!body && ++reads > 24)) fail("provider_budget_exhausted");
     const response = await transport(`https://api.stripe.com${path}`, {
       method: body ? "POST" : "GET", redirect: "error", body,
@@ -188,6 +200,33 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
   }
   if (["payout_pending", "paid", "return_pending", "needs_review"].includes(c.phase) && c.payoutId) {
     const payout = normalizeCashoutPayout(await call(`/v1/payouts/${c.payoutId}`, c.accountId), c);
+    if (c.fundingMode === "prefunded_destination" && ["paid", "failed", "canceled"].includes(payout.status)) {
+      // Actual connected-account debit/return facts, not the fund-first lane's
+      // simulated fee policy. Missing/unsettled evidence leaves the allocation held.
+      if (!payout.balanceTransactionId) fail("prefunded_payout_debit_required");
+      const debit = await call(`/v1/balance_transactions/${payout.balanceTransactionId}`, c.accountId);
+      if (debit.object !== "balance_transaction" || debit.id !== payout.balanceTransactionId || debit.source !== payout.objectId
+        || debit.type !== "payout" || debit.currency !== c.currency || debit.amount !== -c.bankMinor
+        || debit.fee !== c.expectedProviderFeeMinor || debit.net !== -c.grossMinor || debit.status !== "available"
+        || !Array.isArray(debit.fee_details) || debit.fee_details.some((fee: Json) => !minor(fee.amount) || fee.currency !== c.currency)
+        || debit.fee_details.reduce((sum: number, fee: Json) => sum + fee.amount, 0) !== debit.fee)
+        fail("prefunded_payout_debit_unconfirmed");
+      const proof = (bt: Json) => ({ transactionId: bt.id, sourceId: bt.source, amountMinor: bt.amount,
+        feeMinor: bt.fee, netMinor: bt.net, currency: bt.currency, status: bt.status, type: bt.type });
+      if (payout.status === "paid") return store.observe(requestId, null, { ...payout, payoutDebit: proof(debit) });
+      if (!payout.failureBalanceTransactionId) fail("prefunded_payout_return_required");
+      const credit = await call(`/v1/balance_transactions/${payout.failureBalanceTransactionId}`, c.accountId);
+      if (credit.object !== "balance_transaction" || credit.id !== payout.failureBalanceTransactionId
+        || credit.id === debit.id || credit.source !== payout.objectId
+        || credit.type !== (payout.status === "canceled" ? "payout_cancel" : "payout_failure")
+        || credit.currency !== c.currency || credit.amount !== c.bankMinor || !minor(credit.fee)
+        || !minor(credit.net) || credit.net !== credit.amount - credit.fee || credit.status !== "available"
+        || !Array.isArray(credit.fee_details) || credit.fee_details.some((fee: Json) => !minor(fee.amount) || fee.currency !== c.currency)
+        || credit.fee_details.reduce((sum: number, fee: Json) => sum + fee.amount, 0) !== credit.fee)
+        fail("prefunded_payout_return_unconfirmed");
+      return store.observe(requestId, null, { ...payout, payoutDebit: proof(debit), payoutReturn: proof(credit),
+        returnedMinor: credit.net, retainedProviderFeeMinor: c.grossMinor - credit.net });
+    }
     if (payout.status === "paid" && payout.balanceTransactionId && c.inlineKnownZeroQualified === true && c.expectedProviderFeeMinor === 0) {
       const bt = await call(`/v1/balance_transactions/${payout.balanceTransactionId}`, c.accountId);
       if (bt.object !== "balance_transaction" || bt.id !== payout.balanceTransactionId || bt.source !== payout.objectId
@@ -212,9 +251,10 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
     // The DB additionally requires bank-return evidence before funds can release.
     return store.observe(requestId, null, transfer);
   }
-  if (!["prepared", "funded", "return_confirmed"].includes(c.phase)) return { status: c.phase };
+  if (!["prepared", "funded", "return_confirmed", "ready"].includes(c.phase)) return { status: c.phase };
+  if (c.phase === "ready" && c.fundingMode !== "prefunded_destination") fail("funding_mode_invalid");
   if (reconcileOnly) return { status: c.phase };
-  const stage = c.phase === "prepared" ? "funding" : c.phase === "funded" ? "payout" : "reversal";
+  const stage = c.phase === "prepared" ? "funding" : ["funded", "ready"].includes(c.phase) ? "payout" : "reversal";
   // Recovery-only sandbox authority never authorizes more than the exact
   // unreversed original test transfer. Partial/operator returns stay held.
   if (stage === "reversal" && c.environment === "test") {
@@ -247,7 +287,8 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
     const eligible = c.method === "instant"
       ? usd?.net_available?.find((entry: Json) => entry.destination === c.destinationId)?.amount
       : usd?.source_types?.[c.sourceType];
-    if (!minor(eligible) || eligible < c.bankMinor) return { status: "waiting_for_connected_balance" };
+    if (!minor(eligible) || eligible < (c.fundingMode === "prefunded_destination" ? c.grossMinor : c.bankMinor))
+      return { status: "waiting_for_connected_balance" };
   }
   // The claim rechecks switches, original user/session/eligibility/obligations,
   // qualification expiry and request economics after obtaining creator locks.
