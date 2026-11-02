@@ -6,7 +6,7 @@ import {createRequire} from 'node:module';
 import {React,ts,textOf,deferred} from '../platform-studio-mounted-harness.mjs';
 const require=createRequire(import.meta.url),{createRoot}=require('react-dom/client');
 async function mount(t,overrides={}){
- let authority={userId:'A',sessionGeneration:'1'},focused=true;const nodes=new Map(),calls=[];
+ let authority={userId:'A',sessionGeneration:'1'},focused=true;const nodes=new Map(),calls=[],timers=new Map();let timerId=0;
  const host=name=>function Host(props){const id=React.useId();nodes.set(id,{type:name,props});React.useLayoutEffect(()=>()=>nodes.delete(id),[id]);return React.Children.toArray(props.children).filter(x=>typeof x==='object');};
  const quote={ready:true,environment:'test',grossMinor:10000,appFeeMinor:0,expectedProviderFeeMinor:10,bankMinor:9990};
  const row={requestId:'request',status:'prepared',environment:'test',bankPaid:false,grossMinor:10000,bankMinor:9990,observedProviderFeeMinor:null,canCancel:true};
@@ -16,7 +16,7 @@ async function mount(t,overrides={}){
   readSandboxCreatorCashoutHistory:async()=>[row],
   advanceSandboxCreatorCashout:async r=>{calls.push(['advance',r]);return {...r,status:'payout_pending'};},
   cancelSandboxCreatorCashout:async r=>{calls.push(['cancel',r]);return {...r,status:'canceled',canCancel:false};},...overrides};
- const context={exports:{},Date,Number,JSON,Error,require:name=>{
+ const context={exports:{},Date,Number,JSON,Error,setTimeout:fn=>{const id=++timerId;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),require:name=>{
   if(name==='react')return React;
   if(name==='react-native')return Object.fromEntries(['View','Text','TextInput','Pressable'].map(n=>[n,host(n)]));
   if(name==='@react-navigation/native')return {useIsFocused:()=>focused};
@@ -28,12 +28,12 @@ async function mount(t,overrides={}){
  const root=createRoot({addEventListener(){},removeEventListener(){},namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:globalThis.document,parentNode:null,tagName:'DIV'});
  const render=()=>React.act(async()=>root.render(React.createElement(context.exports.SandboxCreatorCashoutPanel)));
  await render();t.after(()=>React.act(async()=>root.unmount()));
- return {calls,quote,row,nodes,button:label=>[...nodes.values()].find(n=>n.type==='Pressable'&&textOf(n)===label),
+ return {calls,quote,row,nodes,api,button:label=>[...nodes.values()].find(n=>n.type==='Pressable'&&textOf(n)===label),
   text:()=>[...nodes.values()].filter(n=>n.type==='Text').map(textOf).join('\n'),
   async press(n){assert.ok(n);assert.notEqual(n.props.disabled,true);await React.act(async()=>{void n.props.onPress();});},
   async amount(value){const n=[...nodes.values()].find(n=>n.type==='TextInput');await React.act(async()=>n.props.onChangeText(value));},
   async account(value){authority=value;await render();},async focus(value){focused=value;await render();},
-  async resolve(d,value){await React.act(async()=>d.resolve(value));}};
+  async resolve(d,value){await React.act(async()=>d.resolve(value));},async expire(){await React.act(async()=>{for(const fn of [...timers.values()])fn();});}};
 }
 test('mounted sandbox quote never reports payout success; duplicate confirm reserves once and explicit continuation dispatches',async t=>{
  const m=await mount(t);await m.amount('100');await m.press(m.button('Review test payout'));
@@ -76,7 +76,7 @@ test('expired recovery authority shows exact held reason and read-only refresh, 
  assert.match(m.text(),/fresh, recovery-only authority for this exact execution/);
  assert.match(m.text(),/does not authorize a new payout/);
  assert.equal(m.button('Continue provider test payout'),undefined);assert.equal(m.button('Reconcile this test payout'),undefined);
- await m.press(m.button('Refresh held test payout status'));assert.equal(reads,2);
+ await m.press(m.button('Refresh held test payout status'));assert.equal(reads,3);
  assert.equal(m.calls.filter(x=>x[0]==='advance').length,0);
 });
 test('expired ordinary provider qualification never offers continuation and distinguishes recovery authority',async t=>{
@@ -103,4 +103,31 @@ test('unknown dispatch with expired qualification retains safe provider reconcil
  await m.press(m.button('Refresh test payout history'));
  assert.equal(m.button('Continue provider test payout'),undefined);
  await m.press(m.button('Reconcile this test payout'));assert.equal(m.calls.filter(x=>x[0]==='advance').length,1);
+});
+test('unknown and denied actual tester reads hide all payout controls and rows',async t=>{
+ const pending=deferred(),m=await mount(t,{readSandboxCreatorCashoutHistory:()=>pending.promise});
+ assert.match(m.text(),/Checking current internal tester access/);assert.equal(m.button('Review test payout'),undefined);
+ assert.equal([...m.nodes.values()].some(n=>n.type==='TextInput'),false);
+ m.api.readSandboxCreatorCashoutHistory=async()=>{throw Error('tester revoked');};
+ await m.account({userId:'B',sessionGeneration:'2'});await m.resolve(pending,[m.row]);
+ assert.equal(m.button('Review test payout'),undefined);assert.equal(m.button('Continue provider test payout'),undefined);
+ assert.match(m.text(),/could not be verified/);assert.ok(m.button('Check internal test access'));
+});
+test('revocation before confirmation fails closed before submit and clears displayed quote and rows',async t=>{
+ const m=await mount(t);await m.amount('100');await m.press(m.button('Review test payout'));
+ const confirm=m.button('Confirm sandbox request');m.api.readSandboxCreatorCashoutHistory=async()=>{throw Error('tester expired');};
+ await m.press(confirm);await React.act(async()=>confirm.props.onPress());
+ assert.equal(m.calls.filter(x=>x[0]==='submit').length,0);assert.equal(m.button('Review test payout'),undefined);
+ assert.equal(m.button('Continue provider test payout'),undefined);assert.match(m.text(),/tester expired/);
+});
+test('access lease expiry hides all rows and retains in-flight submit latch until actual settlement',async t=>{
+ const pending=deferred();let submits=0;
+ const m=await mount(t,{submitSandboxCreatorCashout:async()=>{submits++;return pending.promise;}});
+ await m.amount('100');await m.press(m.button('Review test payout'));const confirm=m.button('Confirm sandbox request');
+ await m.press(confirm);assert.equal(submits,1);await m.expire();
+ assert.equal(m.button('Review test payout'),undefined);assert.equal(m.button('Continue provider test payout'),undefined);
+ const access=m.button('Check internal test access');assert.equal(access.props.disabled,true);
+ await React.act(async()=>{confirm.props.onPress();access.props.onPress();});assert.equal(submits,1);
+ await m.resolve(pending,m.row);assert.equal(m.button('Continue provider test payout'),undefined);
+ assert.equal(m.button('Check internal test access').props.disabled,false);assert.match(m.text(),/in-flight request may still be processing/);
 });

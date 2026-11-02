@@ -41,3 +41,11 @@ test('cancellation refuses copied or cross-mode records and binds exact request'
  assert.equal(f.calls.at(-1).name,'cancel_undispatched_sandbox_creator_cashout');
  assert.equal(f.calls.at(-1).args.p_request_id,id);
 });
+test('canonical tester history gate fails closed on false/null/malformed authority responses',async()=>{
+ const f=fixture();
+ for(const denied of [false,null,{},[{...row,environment:'live'}]]){
+  f.result(denied);await assert.rejects(f.api.readSandboxCreatorCashoutHistory());
+ }
+ f.result([]);assert.equal((await f.api.readSandboxCreatorCashoutHistory()).length,0);
+ assert.equal(f.calls.at(-1).name,'list_my_sandbox_creator_cashout_executions');
+});
