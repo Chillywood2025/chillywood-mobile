@@ -1,6 +1,7 @@
 package expo.modules.chillywoodgallerypicker;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 public final class GalleryProcessCacheTest {
@@ -18,10 +19,10 @@ public final class GalleryProcessCacheTest {
       // Repeated module/Activity instances in this process retain both file and ID.
       check(current.equals(GalleryProcessCache.directory(root))); check(active.exists());
       check(GalleryProcessCache.selections.get("opaque").equals(active));
-      Files.writeString(new File(root, "old-process-path").toPath(), current.getAbsolutePath());
+      Files.write(new File(root, "old-process-path").toPath(), current.getAbsolutePath().getBytes(StandardCharsets.UTF_8));
       System.out.println("Gallery cache first process: " + assertions + " JVM assertions passed");
     } else {
-      File previous = new File(Files.readString(new File(root, "old-process-path").toPath()));
+      File previous = new File(new String(Files.readAllBytes(new File(root, "old-process-path").toPath()), StandardCharsets.UTF_8));
       check(previous.exists());
       File current = GalleryProcessCache.directory(root);
       check(!previous.exists()); check(!current.equals(previous)); check(current.isDirectory());
