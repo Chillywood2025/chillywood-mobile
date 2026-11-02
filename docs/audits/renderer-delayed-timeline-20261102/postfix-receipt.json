@@ -1,0 +1,72 @@
+{
+  "sourceSha256": "bc1842731a9061377b030c683c48af41a15abaf734d23fb7bb1a7d32d6c7855d",
+  "purpose": "Fixed six post-fix comparisons of retained failing source; not retry-until-pass",
+  "pairs": [
+    {
+      "index": 0,
+      "error": null,
+      "baselineSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "candidateSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "baselineBytes": 2916000,
+      "candidateBytes": 2916000,
+      "differences": 0,
+      "maxError": 0,
+      "firstDifference": null
+    },
+    {
+      "index": 1,
+      "error": null,
+      "baselineSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "candidateSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "baselineBytes": 2916000,
+      "candidateBytes": 2916000,
+      "differences": 0,
+      "maxError": 0,
+      "firstDifference": null
+    },
+    {
+      "index": 2,
+      "error": null,
+      "baselineSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "candidateSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "baselineBytes": 2916000,
+      "candidateBytes": 2916000,
+      "differences": 0,
+      "maxError": 0,
+      "firstDifference": null
+    },
+    {
+      "index": 3,
+      "error": null,
+      "baselineSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "candidateSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "baselineBytes": 2916000,
+      "candidateBytes": 2916000,
+      "differences": 0,
+      "maxError": 0,
+      "firstDifference": null
+    },
+    {
+      "index": 4,
+      "error": null,
+      "baselineSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "candidateSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "baselineBytes": 2916000,
+      "candidateBytes": 2916000,
+      "differences": 0,
+      "maxError": 0,
+      "firstDifference": null
+    },
+    {
+      "index": 5,
+      "error": null,
+      "baselineSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "candidateSha256": "c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b",
+      "baselineBytes": 2916000,
+      "candidateBytes": 2916000,
+      "differences": 0,
+      "maxError": 0,
+      "firstDifference": null
+    }
+  ]
+}

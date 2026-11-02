@@ -1,0 +1,32 @@
+{
+  "testedLocalCommit": "8505833e0a152612dbc48de8e24d2569b4f9d6d9",
+  "testedRemoteCommit": "34fa66171991eb88509102523a5643250d6a89d5",
+  "testedTree": "14ef1e494b7f25792dc29dd07005b29a1f3d914c",
+  "retainedSourceComparisons": {
+    "pass": 6,
+    "fail": 0
+  },
+  "coreSeekColor": {
+    "pass": 38,
+    "fail": 0
+  },
+  "fullFocused": {
+    "pass": 176,
+    "fail": 0,
+    "skipped": 0,
+    "durationMs": 196197.747137,
+    "command": "flock /tmp/renderer-heavy-tests.lock node --test --test-reporter=tap --test-concurrency=1 tests/clip-export-*.test.mjs tests/clip-render-*.test.mjs tests/clip-workload-supervisor.test.mjs"
+  },
+  "sha256": {
+    "README.md": "bab4e77d5c4da0710c0acb9fb4b595dce9b53c2fa637d44222e956d5515f3494",
+    "fresh-reproducer.tar.gz": "b10eb225e88b8b77da9e818b987aa038c229a8936f6b7d629d0e8de140f9d9c6",
+    "controls.mjs": "fe0024e5fa5026e83db3e0da8838af1fd45b5b946f3a6ed3ecdefec0358ab746",
+    "postfix-focused.tap": "20f47c623f75abf2387eff10eade52e5bf1b0f4481ea784eb2133a9776554ab4",
+    "postfix-receipt.json": "253b313e28743313ca9110ce52000101d165cb00997ef83639c6471025ce514d",
+    "postfix.log": "2a926224ce6fe32f7c9cf7e6a5b71f6eb449accec26ed5ba14d17f14973e34ea",
+    "controls.json": "b689b713305e2aa8d97c479205aa02b458aa4a185b3fc5611ffe607bf364c6c1",
+    "postfix.mjs": "9c4169b6b008197e9ac8199fd4d3e2aaf19f41abfea5370b78a20bebab2da7de",
+    "controls.log": "d1be9278ffc1518bfbe483f1a2e46f104df2c263a9cfd1cfff8fad413ed7df9f",
+    "postfix-core-seek-color.tap": "e782f6c2d09a89bb252a4ac7da52ac055c3cb04834c449406e0bee154f35c3c2"
+  }
+}

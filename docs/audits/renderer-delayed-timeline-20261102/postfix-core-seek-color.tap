@@ -1,0 +1,261 @@
+TAP version 13
+# Subtest: color policy never guesses HDR metadata or claims Dolby Vision qualification
+ok 1 - color policy never guesses HDR metadata or claims Dolby Vision qualification
+  ---
+  duration_ms: 3.167672
+  type: 'test'
+  ...
+# Subtest: HDR capabilities must exist; missing filters fail clearly and cancellation propagates
+ok 2 - HDR capabilities must exist; missing filters fail clearly and cancellation propagates
+  ---
+  duration_ms: 0.970584
+  type: 'test'
+  ...
+# Subtest: real PQ/HLG neutral patches convert to referenced BT709 SDR; watermark stays SDR and original stays intact
+ok 3 - real PQ/HLG neutral patches convert to referenced BT709 SDR; watermark stays SDR and original stays intact
+  ---
+  duration_ms: 5212.109239
+  type: 'test'
+  ...
+# Subtest: actual ffprobe refuses nested playlist and concat inputs despite a video filename
+ok 4 - actual ffprobe refuses nested playlist and concat inputs despite a video filename
+  ---
+  duration_ms: 216.613259
+  type: 'test'
+  ...
+# Subtest: probe bounds reject invalid advertised dimensions/duration without allocating extreme frames
+ok 5 - probe bounds reject invalid advertised dimensions/duration without allocating extreme frames
+  ---
+  duration_ms: 1.103855
+  type: 'test'
+  ...
+# Subtest: direct FFmpeg cancellation rejects after its child closes, not only before spawn
+ok 6 - direct FFmpeg cancellation rejects after its child closes, not only before spawn
+  ---
+  duration_ms: 214.629173
+  type: 'test'
+  ...
+# Subtest: render plans reject invalid ranges, untrusted text, missing watermark and invalid probes
+ok 7 - render plans reject invalid ranges, untrusted text, missing watermark and invalid probes
+  ---
+  duration_ms: 2.034698
+  type: 'test'
+  ...
+# Subtest: portrait rotation and fit produce even bounded dimensions without upscaling
+ok 8 - portrait rotation and fit produce even bounded dimensions without upscaling
+  ---
+  duration_ms: 0.632434
+  type: 'test'
+  ...
+# Subtest: anamorphic framing normalizes display aspect without upscaling or changing unspecified SAR
+ok 9 - anamorphic framing normalizes display aspect without upscaling or changing unspecified SAR
+  ---
+  duration_ms: 0.996924
+  type: 'test'
+  ...
+# Subtest: actual anamorphic fit/center, fill and autorotation preserve display proportions
+ok 10 - actual anamorphic fit/center, fill and autorotation preserve display proportions
+  ---
+  duration_ms: 7642.898828
+  type: 'test'
+  ...
+# Subtest: actual ffmpeg trims, crops, decodes, preserves original and never overwrites
+ok 11 - actual ffmpeg trims, crops, decodes, preserves original and never overwrites
+  ---
+  duration_ms: 825.9642
+  type: 'test'
+  ...
+# Subtest: actual watermark is composited into exported pixels
+ok 12 - actual watermark is composited into exported pixels
+  ---
+  duration_ms: 778.133231
+  type: 'test'
+  ...
+# Subtest: decoded video mismatch diagnostics remain bounded without weakening exact byte equality
+ok 13 - decoded video mismatch diagnostics remain bounded without weakening exact byte equality
+  ---
+  duration_ms: 12.203273
+  type: 'test'
+  ...
+# Subtest: frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+ok 14 - frozen baseline is the recovered pre-seek renderer, not a rewritten comparison
+  ---
+  duration_ms: 11.328098
+  type: 'test'
+  ...
+# Subtest: hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+ok 15 - hybrid seeking stays limited to MOV H264 plus AAC-LC or no audio
+  ---
+  duration_ms: 0.496979
+  type: 'test'
+  ...
+# Subtest: first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+ok 16 - first-packet guard is bounded, fails back for unknown/negative PTS and preserves cancellation
+  ---
+  duration_ms: 1.43236
+  type: 'test'
+  ...
+# Subtest: rebuilt real-media matrix compares exact decoded frames and aligned audio against frozen baseline
+    # Subtest: zero
+    ok 1 - zero
+      ---
+      duration_ms: 1556.920295
+      type: 'test'
+      ...
+    # {"name":"zero","decodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: early-fractional
+    ok 2 - early-fractional
+      ---
+      duration_ms: 1583.430459
+      type: 'test'
+      ...
+    # {"name":"early-fractional","decodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: integer
+    ok 3 - integer
+      ---
+      duration_ms: 1682.231252
+      type: 'test'
+      ...
+    # {"name":"integer","decodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: keyframe
+    ok 4 - keyframe
+      ---
+      duration_ms: 1762.324458
+      type: 'test'
+      ...
+    # {"name":"keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: after-keyframe
+    ok 5 - after-keyframe
+      ---
+      duration_ms: 1708.397273
+      type: 'test'
+      ...
+    # {"name":"after-keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: fractional-late
+    ok 6 - fractional-late
+      ---
+      duration_ms: 1614.641064
+      type: 'test'
+      ...
+    # {"name":"fractional-late","decodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: remainder
+    ok 7 - remainder
+      ---
+      duration_ms: 1506.179035
+      type: 'test'
+      ...
+    # {"name":"remainder","decodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoBytes":2721600,"pcmBytes":180224,"maximumAudioError":0}
+    # Subtest: fit-watermark
+    ok 8 - fit-watermark
+      ---
+      duration_ms: 1607.851837
+      type: 'test'
+      ...
+    # {"name":"fit-watermark","decodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoBytes":1620000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: center
+    ok 9 - center
+      ---
+      duration_ms: 1522.121354
+      type: 'test'
+      ...
+    # {"name":"center","decodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: 24fps
+    ok 10 - 24fps
+      ---
+      duration_ms: 1648.165187
+      type: 'test'
+      ...
+    # {"name":"24fps","decodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: 25fps
+    ok 11 - 25fps
+      ---
+      duration_ms: 1647.824297
+      type: 'test'
+      ...
+    # {"name":"25fps","decodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: ntsc
+    ok 12 - ntsc
+      ---
+      duration_ms: 1922.048022
+      type: 'test'
+      ...
+    # {"name":"ntsc","decodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: vfr
+    ok 13 - vfr
+      ---
+      duration_ms: 1575.844693
+      type: 'test'
+      ...
+    # {"name":"vfr","decodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: sparse
+    ok 14 - sparse
+      ---
+      duration_ms: 1226.212367
+      type: 'test'
+      ...
+    # {"name":"sparse","decodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0}
+    # Subtest: no-audio
+    ok 15 - no-audio
+      ---
+      duration_ms: 1898.848409
+      type: 'test'
+      ...
+    # {"name":"no-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0}
+    # Subtest: positive-pts
+    ok 16 - positive-pts
+      ---
+      duration_ms: 1548.738043
+      type: 'test'
+      ...
+    # {"name":"positive-pts","decodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: mov-delayed-audio
+    ok 17 - mov-delayed-audio
+      ---
+      duration_ms: 1757.889732
+      type: 'test'
+      ...
+    # {"name":"mov-delayed-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":178176,"maximumAudioError":0}
+    # Subtest: delayed-video
+    ok 18 - delayed-video
+      ---
+      duration_ms: 1780.765622
+      type: 'test'
+      ...
+    # {"name":"delayed-video","decodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: webm-opus
+    ok 19 - webm-opus
+      ---
+      duration_ms: 1836.904164
+      type: 'test'
+      ...
+    # {"name":"webm-opus","decodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: phone-rotation
+    ok 20 - phone-rotation
+      ---
+      duration_ms: 1913.643129
+      type: 'test'
+      ...
+    # {"name":"phone-rotation","decodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0}
+    # Subtest: negative-pts-fallback
+    ok 21 - negative-pts-fallback
+      ---
+      duration_ms: 1609.362063
+      type: 'test'
+      ...
+    # {"name":"negative-pts-fallback","decodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}
+    1..21
+ok 17 - rebuilt real-media matrix compares exact decoded frames and aligned audio against frozen baseline
+  ---
+  duration_ms: 47755.707888
+  type: 'test'
+  ...
+# {"evidence":"fresh rebuilt synthetic comparison, not recovered historical receipts","cases":[{"name":"zero","decodedVideoSha256":"e1add940fc9bb5c94d0f405e1229f2c7fec727a6d6a8ecae38c6153f7c4d2087","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"early-fractional","decodedVideoSha256":"cc1b88a5659c3784ca2165b8a5057a00772bb0ec84397a55c35ec0e78014b825","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"integer","decodedVideoSha256":"378bcd6710b2ad99f0e849afcd515e3db3ba03eb48a3713e649531aeafde4269","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"after-keyframe","decodedVideoSha256":"1a57a42b9daebd9abb31fbf58c7b4b62260648cb5c92117b0a74c0e39996b4a2","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"fractional-late","decodedVideoSha256":"f6c5c069fb91c085220b0764b9fc226e422f07a723349855a837878ee4524dbe","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"remainder","decodedVideoSha256":"9f172454b54ac5464f2d1d5d0f33c71459bbd55381d36bdf7630167492d3f0fd","decodedVideoBytes":2721600,"pcmBytes":180224,"maximumAudioError":0},{"name":"fit-watermark","decodedVideoSha256":"0557a8b1e0ca731fb9e4c344697f4d38811e32994a1e0e86aea924fd8178dbd2","decodedVideoBytes":1620000,"pcmBytes":192512,"maximumAudioError":0},{"name":"center","decodedVideoSha256":"cf6834faa675dfafb724dc6248f4d2878af2d7f217e0671f0eab15ee7e5092a4","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"24fps","decodedVideoSha256":"8eeac7fe9b63865ab1d5f09ed601a09674c0f46a2542e380d73e6a6306a72276","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"25fps","decodedVideoSha256":"10d7fd63dbe7a6463c497392a0b75ed318f13ff9c11fadd696a6c224c6e49c27","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"ntsc","decodedVideoSha256":"0e386c858c00446c4794fdda83ae3b9877bbe74aa358b28276fbbeee2c167e6f","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"vfr","decodedVideoSha256":"2f73bc06b2bf1730ed1551de6d9eee8b6a40d59a3b8455abae2e3057180f0239","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"sparse","decodedVideoSha256":"f9f3d57b42d61e4386ebbf87c5c15d9b72b5935f1e112bdfaf401e8ed7988cc5","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"no-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":0,"maximumAudioError":0},{"name":"positive-pts","decodedVideoSha256":"585a02167c7b48fb596b6ec1f134ce963bd3cd4ef7b69e084fea5eaf73872d64","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"mov-delayed-audio","decodedVideoSha256":"9369b3c0c216c4b2009fa6528db72abd856294b3061faea65850340092b5e2e3","decodedVideoBytes":2916000,"pcmBytes":178176,"maximumAudioError":0},{"name":"delayed-video","decodedVideoSha256":"c07a59aad5da4d6ca8223f42d16a94d9c8de04a1bee7bad54218c81aa6d2752b","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"webm-opus","decodedVideoSha256":"032b891d20ca35514b216b70000cb9f14dacf857e7349ea259fae44b73f62f94","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0},{"name":"phone-rotation","decodedVideoSha256":"a222b6dcc9c244c0cc7413e1b0a8529a0a299620cb135e3f2dc69f0cb0c8120e","decodedVideoBytes":5184000,"pcmBytes":192512,"maximumAudioError":0},{"name":"negative-pts-fallback","decodedVideoSha256":"a140e1dee50af28738db2ff3a4098859f70caf29efe4825c387e2604c5b92d5e","decodedVideoBytes":2916000,"pcmBytes":192512,"maximumAudioError":0}]}
+1..17
+# tests 38
+# suites 0
+# pass 38
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 47915.314414
