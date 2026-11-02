@@ -22,9 +22,9 @@ export async function syntheticSource(dir, name, {
     args.push('-f', 'lavfi', '-i', `aevalsrc=0.2*sin(2*PI*(233*t+19*t*t)):s=${audioRate}`);
   }
   if (filter) args.push('-vf', filter, '-fps_mode', 'vfr');
-  // Auto sync can choose CFR and duplicate delayed video back to timestamp zero
-  // (observed with the hosted FFmpeg 6.1 fixture). Preserve the intentional gap,
-  // rather than depending on a muxer/version default to construct this case.
+  // The hosted 6.1 fixture unexpectedly began at zero; forced CFR reproduces
+  // that locally. Auto sync can choose CFR and duplicate the initial gap.
+  // Preserve timestamps instead of relying on a muxer/version default.
   if (sparse || videoDelay) args.push('-fps_mode', 'passthrough');
   args.push('-t', String(seconds), '-c:v', webm ? 'libvpx-vp9' : 'libx264', '-threads', '1', '-g', '300');
   if (webm) args.push('-deadline', 'realtime', '-cpu-used', '8');
