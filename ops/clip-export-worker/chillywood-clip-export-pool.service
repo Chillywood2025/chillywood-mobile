@@ -1,0 +1,33 @@
+[Unit]
+Description=Chi'llywood registered bounded private Clip export pool
+After=network-online.target
+Wants=network-online.target
+Conflicts=chillywood-clip-export.service chillywood-clip-export.timer
+Before=chillywood-clip-export.service chillywood-clip-export.timer
+
+[Service]
+Type=simple
+User=chillywood
+WorkingDirectory=/opt/chillywood/clip-export
+EnvironmentFile=/etc/chillywood/clip-export.env
+Environment=CLIP_EXPORT_WORKER_ENABLED=false
+ExecStart=/usr/bin/node scripts/clip-export-worker-cli.mjs --pool
+# SIGTERM drains; existing jobs retain the unchanged 130-minute job deadline.
+# SIGINT is the explicit immediate-stop path. Never run a timer against this unit.
+TimeoutStopSec=7900
+KillSignal=SIGTERM
+KillMode=mixed
+SendSIGKILL=yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp
+# Conservative one-slot ceilings, NOT measured hardware qualification.
+# Capacity >1 requires an approved, measured resource-limit override as well as
+# the operator-owned database capacity change. There is no paid autoscaler.
+MemoryMax=3G
+CPUQuota=200%
+Restart=no
+
+# No [Install] target: installation/activation is a separate authorized step.

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
+import { clipRenderColorPlan, requireClipHdrCapabilities, isClipSdrOutput } from './clip-render-color.mjs';
 
 const FORMATS = { vertical_9_16: 9 / 16, square_1_1: 1, landscape_16_9: 16 / 9 };
 export const CLIP_RENDER_VERSION = 'clip-render-v1';
@@ -7,6 +8,17 @@ export const CLIP_RENDER_MAX_BYTES = 5 * 1024 ** 3;
 const even = n => Math.max(2, Math.floor(n / 2) * 2);
 const VIDEO_DEMUXERS = 'mov,matroska,webm';
 const IMAGE_DEMUXERS = 'image2,png_pipe,jpeg_pipe,webp_pipe';
+
+export function clipRenderInputSeek(plan, probe) {
+  const video = probe?.streams?.find(stream => stream.codec_type === 'video');
+  const audio = probe?.streams?.find(stream => stream.codec_type === 'audio');
+  // Only this container/codec/profile has passed the decoded-media seek
+  // equivalence fixtures. In particular, Opus seek preroll is not equivalent.
+  // Other accepted inputs retain output-only seeking, not a new rejection.
+  return probe?.format?.format_name?.split(',').includes('mov') && video?.codec_name === 'h264'
+    && (!audio || (audio.codec_name === 'aac' && audio.profile === 'LC'))
+    ? Math.max(0, Math.floor(plan.start) - 1) : 0;
+}
 
 export function normalizeClipRenderEdit(edit) {
   if (!edit || !Object.hasOwn(FORMATS, edit.clip_format) || !['fill', 'fit', 'center'].includes(edit.fit_mode)) throw new Error('invalid_render_format');
@@ -22,6 +34,7 @@ export function normalizeClipRenderEdit(edit) {
 export function buildClipRenderPlan(edit, probe, { watermarkPath = null } = {}) {
   const spec = normalizeClipRenderEdit(edit);
   const stream = probe?.streams?.find(s => s.codec_type === 'video');
+  const color = clipRenderColorPlan(stream);
   const width = Number(stream?.width), height = Number(stream?.height);
   const duration = Number(probe?.format?.duration);
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2 || width > 16384 || height > 16384 ||
@@ -29,7 +42,18 @@ export function buildClipRenderPlan(edit, probe, { watermarkPath = null } = {}) 
   // ffmpeg autorotates by default. Plan using display dimensions, not coded size.
   const rotation = Number(stream?.side_data_list?.find(s => Number.isFinite(Number(s.rotation)))?.rotation ?? stream?.tags?.rotate ?? 0);
   const rotated = Math.abs(rotation % 180) === 90;
-  const sourceW = rotated ? height : width, sourceH = rotated ? width : height;
+  const codedW = rotated ? height : width, codedH = rotated ? width : height;
+  // Crop/scale operate on pixels, not display aspect. Normalize anamorphic
+  // inputs before framing; shrinking one axis avoids inventing source detail.
+  // Autorotation transposes the pixel axes and reciprocates the sample aspect.
+  // Missing/zero SAR denotes unspecified (square) pixels in FFmpeg.
+  const sarParts = String(stream?.sample_aspect_ratio ?? '').split(':').map(Number);
+  const sar = sarParts.length === 2 && sarParts.every(n => Number.isFinite(n) && n > 0)
+    ? sarParts[0] / sarParts[1] : 1;
+  const displaySar = rotated ? 1 / sar : sar;
+  const sourceW = displaySar === 1 ? codedW : even(codedW * Math.min(1, displaySar));
+  const sourceH = displaySar === 1 ? codedH : even(codedH * Math.min(1, 1 / displaySar));
+  const squarePixels = displaySar === 1 ? '' : `scale=${sourceW}:${sourceH},setsar=1,`;
   const end = spec.trim_end_ms === null ? duration : spec.trim_end_ms / 1000;
   const start = spec.trim_start_ms / 1000;
   if (end > duration + 0.05 || start >= end || end - start < 0.1) throw new Error('trim_outside_source');
@@ -42,11 +66,15 @@ export function buildClipRenderPlan(edit, probe, { watermarkPath = null } = {}) 
   const framing = spec.fit_mode === 'fill'
     ? `crop=${even(cropW)}:${even(cropH)},scale=${outW}:${outH}`
     : `scale=${outW}:${outH}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${outW}:${outH}:(ow-iw)/2:(oh-ih)/2:black`;
-  const base = `${framing},setsar=1,fps=30,format=yuv420p`;
+  // Preserve the SDR path byte-for-byte. HDR framing stays high bit depth;
+  // convert before overlay so ordinary SDR marks are not tone-mapped as HDR.
+  const base = color
+    ? `format=yuv420p10le,${squarePixels}${framing},setsar=1,fps=30,${color.filter}`
+    : `${squarePixels}${framing},setsar=1,fps=30,format=yuv420p`;
   const filter = spec.brand_mark_enabled
     ? `[0:v:0]${base}[base];[1:v:0]scale=${even(Math.min(outW * 0.18, 240))}:-2,format=rgba[mark];[base][mark]overlay=W-w-12:H-h-12:shortest=1[out]`
     : `[0:v:0]${base}[out]`;
-  return { width: outW, height: outH, duration: end - start, start, filter, watermark: spec.brand_mark_enabled };
+  return { width: outW, height: outH, duration: end - start, start, filter, watermark: spec.brand_mark_enabled, color };
 }
 
 export function runMediaProcess(binary, args, { signal, timeoutMs = 7_200_000, maxOutputBytes = 1_000_000 } = {}) {
@@ -74,6 +102,22 @@ export async function probeClip(path, options = {}) {
   try { return JSON.parse(raw); } catch { throw new Error('invalid_probe_json'); }
 }
 
+export async function hasSeekableVideoStart(path, options = {}, run = runMediaProcess) {
+  try {
+    // Stream start_time hides negative packets trimmed by MOV edit lists. Those
+    // timelines have not passed seek equivalence, so inspect one video packet
+    // before opting in. Missing/unsupported metadata keeps the legacy path.
+    const raw = await run(options.ffprobe ?? 'ffprobe', ['-v', 'error', '-protocol_whitelist', 'file,pipe',
+      '-format_whitelist', VIDEO_DEMUXERS, '-select_streams', 'v:0', '-read_intervals', '%+#1',
+      '-show_packets', '-show_entries', 'packet=pts_time', '-of', 'json', path], { ...options, timeoutMs: 60_000, maxOutputBytes: 4096 });
+    const timestamp = JSON.parse(raw)?.packets?.[0]?.pts_time;
+    return typeof timestamp === 'string' && timestamp.trim() !== '' && Number.isFinite(Number(timestamp)) && Number(timestamp) >= 0;
+  } catch (error) {
+    if (options.signal?.aborted || error?.message === 'render_canceled') throw error;
+    return false;
+  }
+}
+
 /** Local files only. Caller owns trusted source download, lease and immutable upload. */
 export async function renderClip({ inputPath, outputPath, watermarkPath = null, edit, signal, ffmpeg = 'ffmpeg', ffprobe = 'ffprobe' }) {
   if (inputPath === outputPath || watermarkPath === outputPath) throw new Error('immutable_source_required');
@@ -87,11 +131,24 @@ export async function renderClip({ inputPath, outputPath, watermarkPath = null, 
       || image.width * image.height > 16_777_216) throw new Error('invalid_watermark_probe');
   }
   const plan = buildClipRenderPlan(edit, probe, { watermarkPath });
+  if (plan.color) await requireClipHdrCapabilities(ffmpeg, { signal }, runMediaProcess);
   // Reject playlist/concat demuxers even when a scanned payload lies about MIME.
   // A local-file protocol allowlist alone does not prevent nested file reads.
-  const args = ['-nostdin', '-v', 'error', '-n', '-filter_complex_threads', '2', '-threads', '2', '-protocol_whitelist', 'file,pipe', '-format_whitelist', VIDEO_DEMUXERS, '-i', inputPath];
+  const args = ['-nostdin', '-v', 'error', '-n', '-filter_complex_threads', '2', '-threads', '2', '-protocol_whitelist', 'file,pipe', '-format_whitelist', VIDEO_DEMUXERS];
+  // Seek to an earlier decode point without throwing away its preroll. The
+  // existing fps filter needs those frames (including sparse/VFR frames) before
+  // the exact output trim. Whole seconds preserve its 30 fps timestamp grid;
+  // moving the fractional trim directly to input -ss changes boundary frames.
+  // Retain a full second before the requested cut to warm the AAC-LC decoder,
+  // including cuts immediately after a video keyframe.
+  let inputSeek = clipRenderInputSeek(plan, probe);
+  if (inputSeek > 0 && !await hasSeekableVideoStart(inputPath, { signal, ffprobe })) inputSeek = 0;
+  if (inputSeek > 0) args.push('-ss', String(inputSeek), '-noaccurate_seek');
+  args.push('-i', inputPath);
   if (plan.watermark) args.push('-loop', '1', '-protocol_whitelist', 'file,pipe', '-format_whitelist', IMAGE_DEMUXERS, '-i', watermarkPath);
-  args.push('-ss', String(plan.start), '-t', String(plan.duration), '-filter_complex', plan.filter,
+  const outputSeek = inputSeek > 0 ? ((edit.trim_start_ms ?? 0) - inputSeek * 1000) / 1000 : plan.start;
+  if (plan.color) args.push('-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv');
+  args.push('-ss', String(outputSeek), '-t', String(plan.duration), '-filter_complex', plan.filter,
     '-map', '[out]', '-map', '0:a:0?', '-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-threads', '2',
     '-c:a', 'aac', '-b:a', '128k', '-map_metadata', '-1', '-map_chapters', '-1', '-movflags', '+faststart',
     '-fs', String(CLIP_RENDER_MAX_BYTES), outputPath);
@@ -101,7 +158,10 @@ export async function renderClip({ inputPath, outputPath, watermarkPath = null, 
   const actualDuration = Number(output.format.duration);
   const size = (await stat(outputPath)).size;
   if (video?.width !== plan.width || video?.height !== plan.height || video?.codec_name !== 'h264' ||
+      (plan.color && !isClipSdrOutput(video)) ||
       !Number.isFinite(actualDuration) || Math.abs(actualDuration - plan.duration) > 0.15 || size <= 0 || size >= CLIP_RENDER_MAX_BYTES) throw new Error('render_output_mismatch');
-  await runMediaProcess(ffmpeg, ['-nostdin', '-v', 'error', '-xerror', '-protocol_whitelist', 'file,pipe', '-format_whitelist', VIDEO_DEMUXERS, '-i', outputPath, '-f', 'null', '-'], { signal });
+  // Decoder options precede their input; filter_threads bounds each simple
+  // filter pipeline. These are thread-pool limits, not host CPU/RAM quotas.
+  await runMediaProcess(ffmpeg, ['-nostdin', '-v', 'error', '-xerror', '-filter_threads', '2', '-threads', '2', '-protocol_whitelist', 'file,pipe', '-format_whitelist', VIDEO_DEMUXERS, '-i', outputPath, '-f', 'null', '-'], { signal });
   return { width: plan.width, height: plan.height, durationMs: Math.round(actualDuration * 1000), sizeBytes: size, mimeType: 'video/mp4', workerVersion: CLIP_RENDER_VERSION };
 }
