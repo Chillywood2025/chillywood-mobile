@@ -148,17 +148,23 @@ try{
     assert.equal(event(second.id).status,'suppressed');closePair(f);
   }
 
-  // Equal creator/title is not a deduplication domain. The second actual room
-  // can materialize while the first room's delivery transaction remains open.
+  // Equal creator/title is not a deduplication domain. Hold ONLY room A's real
+  // delivery mutex (and its required source SHARE lock), not a materialization
+  // transaction's independent global Brand-retention mutex. Room B's complete
+  // worker must finish under that held A scope; both real workers then produce
+  // separate notices. This does not claim full writes avoid Brand serialization.
   const independentA=createPair('NATIVE-DEDUP-INDEPENDENT-A'),independentB=createPair('NATIVE-DEDUP-INDEPENDENT-B');
   refresh([independentA.id,independentB.id]);
-  const independentHolder=session(`${auth('service_role')}${prepare(independentA.ordinary)};select 'HOLDER_READY'`);
+  const independentHolder=session(`select party_id from public.watch_party_rooms where party_id=${lit(independentA.id)} for share;
+    select private.room_start_notification_delivery_state(b) from private.room_start_notification_bindings b
+      where b.event_id=${lit(independentA.ordinary.id)};select 'HOLDER_READY'`);
   await until(()=>independentHolder.output().includes('HOLDER_READY'));
   const independentWaiter=session(`${auth('service_role')}${prepare(independentB.ordinary)};select 'INDEPENDENT_FINISHED';commit;`);independentWaiter.child.stdin.end();
   await until(()=>independentWaiter.output().includes('INDEPENDENT_FINISHED'),'independent room completion before holder release');
   assert.equal((await independentWaiter.done).code,0);independentHolder.child.stdin.end('commit;\n');assert.equal((await independentHolder.done).code,0);
+  assert.equal(JSON.parse(rpc(prepare(independentA.ordinary),'service_role')).eligible,true);
   assert.equal(notificationCount(independentA.id),1);assert.equal(notificationCount(independentB.id),1);schedules++;
-  console.log(JSON.stringify({schedule:'distinct rooms sharing creator/title do not block or coalesce'}));closePair(independentA);closePair(independentB);
+  console.log(JSON.stringify({schedule:'distinct room delivery mutexes sharing creator/title do not block or coalesce'}));closePair(independentA);closePair(independentB);
 
   // Exact push ownership is synthetic but fully current: normal SQL ownership,
   // token fingerprint and actual auth.sessions gate; no provider call is made.
@@ -234,9 +240,11 @@ try{
 
   // Rollback-only removal of ONLY the advisory statement. The unmodified
   // first worker commits one legitimate materialization. The mutant second
-  // worker reaches the receipt uniqueness wait instead of the intended mutex,
-  // then sees TWO notices inside its own transaction; its mutation and extra
-  // notice are rolled back. All original source/session/paid/privacy gates run.
+  // worker passes the intended delivery mutex and computes its old unowned
+  // state, then waits on the unchanged Brand guard before notification INSERT.
+  // That later serialization does not refresh the already computed delivery
+  // state: it sees TWO notices after release. Its mutation and extra notice are
+  // rolled back. All source/session/paid/privacy/Brand guards still run.
   const negative=createPair('NATIVE-DEDUP-MUTEX-CONTROL');refresh([negative.id]);
   const signature='private.room_start_notification_delivery_state(private.room_start_notification_bindings)';
   const original=query(`select pg_get_functiondef(${lit(signature)}::regprocedure)`);
@@ -246,7 +254,13 @@ try{
   const bypass=session(`${mutant};${auth('service_role')}${prepare(negative.broadcast)};reset role;
     select 'MUTANT_NOTICES_'||count(*) from public.notifications n join private.room_start_notification_bindings b on b.event_id::text=n.source_id
       where b.party_id=${lit(negative.id)} and b.recipient_user_id=${lit(actors.friend.id)};rollback;`);bypass.child.stdin.end();
-  const edge=await blocked(holder,bypass,'transactionid');holder.child.stdin.end('commit;\n');assert.equal((await holder.done).code,0);
+  const edge=await blocked(holder,bypass,'advisory');
+  assert.equal(query(`select count(*) from pg_locks l join pg_stat_activity w on w.pid=l.pid
+    join pg_stat_activity h on h.application_name=${lit(holder.name)}
+    where w.datname=current_database() and h.datname=current_database() and w.application_name=${lit(bypass.name)}
+      and not l.granted and l.locktype='advisory' and l.classid=176214::oid and l.objid=30::oid and l.objsubid=2
+      and h.pid=any(pg_blocking_pids(w.pid))`),'1','mutant reaches the exact retained Brand lock, not the removed delivery mutex');
+  holder.child.stdin.end('commit;\n');assert.equal((await holder.done).code,0);
   const bypassResult=await bypass.done;assert.equal(bypassResult.code,0,bypassResult.stderr);assert.match(bypassResult.stdout,/MUTANT_NOTICES_2/);
   assert.equal(notificationCount(negative.id),1);assert.equal(query(`select pg_get_functiondef(${lit(signature)}::regprocedure)`),original,'mutex removal rolled back');schedules++;
   console.log(JSON.stringify({schedule:'rollback-only missing mutex reproduces duplicate materialization',...edge}));closePair(negative);

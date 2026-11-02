@@ -9,6 +9,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {seedLiveRoomAuthority,liveFixtureActors as actors,liveFixtureTitle as title} from '../tests/helpers/live-room-authority-fixture.mjs';
 import {approvedOrdinaryBroadcastSQL} from '../tests/helpers/ordinary-broadcast-discovery-fixture.mjs';
+import {waitForNativeSessionMarker} from './lib/native-session-marker.mjs';
 if(process.argv.includes('--help')){console.log('Run after local Supabase reset. Actual lock schedules and CAS negative control in generated disposable clone only.');process.exit(0);}
 assert.equal(process.argv.length,2,'no remote URL or positional arguments accepted');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/m)?.[1];assert.ok(project);
@@ -31,7 +32,7 @@ function session(sql){
   child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);
   const done=new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',code=>resolve({code,stdout,stderr}));});
   child.stdin.write(`set application_name=${lit(name)};set statement_timeout='30s';begin isolation level read committed;${sql};\n`);
-  const s={child,name,done,output:()=>stdout};sessions.push(s);return s;
+  const s={child,name,done,output:()=>stdout,errors:()=>stderr};sessions.push(s);return s;
 }
 async function until(fn){const end=Date.now()+20000;while(Date.now()<end){if(fn())return;await delay(25);}throw Error('actual backend blocking edge not observed');}
 async function race(label,first,second,{error,after,waitEvent}={}){
@@ -222,24 +223,79 @@ try {
     auth('authenticated',actors.friend)+`select public.respond_to_friendship(${lit(actors.follower.id)},'remove')`,
     auth('authenticated',actors.stranger)+`select public.respond_to_friendship(${lit(actors.host.id)},'remove')`,{waitEvent:'advisory'});
   for(const f of attendance.slice(2,4))assert.equal(receipt(f),'0','Circle withdrawal retires third-host attendance receipt');
-  const attendanceHolder=session(`${leave(attendance[4])};select 'HOLDER_READY'`);
+  // Prove this exact still-leased fixture can materialize before introducing
+  // concurrency. Roll back every real preparation/receipt side effect.
+  const attendanceControl=query(`begin;${prepare(attendance[4])};reset role;
+    select 'CONTROL_ATTENDANCE_RECEIPT_'||count(*) from private.room_attendance_hint_receipts
+      where event_id=${lit(attendance[4].event.id)};rollback;`);
+  assert.match(attendanceControl,/(?:^|\n)CONTROL_ATTENDANCE_RECEIPT_1(?:\n|$)/);
+  assert.equal(receipt(attendance[4]),'0','positive materialization control rolled back');
+  // A membership leave also acquires the independent global Brand-retention
+  // mutex, which notification INSERT correctly shares. It cannot demonstrate
+  // removal of ONLY the discovery mutex. Use real actor-recipient Circle loss:
+  // the same receipt predicate depends on this relationship, and no Brand
+  // guard is disabled or altered in either transaction.
+  const attendanceAuthorityLoss=auth('authenticated',attendance[4].viewer)
+    +`select public.respond_to_friendship(${lit(attendance[4].actor.id)},'remove')`;
+  const attendanceMutexSubject=attendance[4].viewer.id;
+  const noBrandMutex=s=>assert.equal(query(`select count(*) from pg_locks l join pg_stat_activity a on a.pid=l.pid
+    where a.datname=current_database() and a.application_name=${lit(s.name)} and l.locktype='advisory' and l.granted
+      and l.classid=176214::oid and l.objid=30::oid and l.objsubid=2`),'0',
+    'Circle authority-loss control must not hold the unrelated Brand-retention mutex');
+  const attendanceControlHolder=session(`${attendanceAuthorityLoss};select 'HOLDER_READY'`);
+  await until(()=>attendanceControlHolder.output().includes('HOLDER_READY'));noBrandMutex(attendanceControlHolder);
+  const attendanceControlWaiter=session(`${prepare(attendance[4])};reset role;
+    select 'CONTROL_ATTENDANCE_RECEIPT_1_AFTER_MUTEX' where exists(
+      select 1 from private.room_attendance_hint_receipts where event_id=${lit(attendance[4].event.id)});rollback;`);
+  attendanceControlWaiter.child.stdin.end();
+  await until(()=>query(`select count(*) from pg_locks l join pg_stat_activity w on w.pid=l.pid
+    join pg_stat_activity h on h.application_name=${lit(attendanceControlHolder.name)}
+    where w.datname=current_database() and h.datname=current_database() and w.application_name=${lit(attendanceControlWaiter.name)}
+      and not l.granted and l.locktype='advisory' and l.classid=190731::oid
+      and l.objid=(hashtext(${lit(attendanceMutexSubject)})::bigint & 4294967295)::oid and l.objsubid=2
+      and h.pid=any(pg_blocking_pids(w.pid))`)==='1');
+  attendanceControlHolder.child.stdin.end('rollback;\n');assert.equal((await attendanceControlHolder.done).code,0);
+  await waitForNativeSessionMarker(attendanceControlWaiter,'CONTROL_ATTENDANCE_RECEIPT_1_AFTER_MUTEX');
+  const attendanceControlResult=await attendanceControlWaiter.done;assert.equal(attendanceControlResult.code,0,attendanceControlResult.stderr);
+  assert.equal(receipt(attendance[4]),'0','real mutex materialization control rolled back');
+  console.log(JSON.stringify({control:'unmodified attendance preparation waits for exact discovery recipient mutex, not Brand mutex'}));
+  const attendanceHolder=session(`${attendanceAuthorityLoss};select 'HOLDER_READY'`);
   await until(()=>attendanceHolder.output().includes('HOLDER_READY'));
+  noBrandMutex(attendanceHolder);
   const attendanceBypass=session(`${lockMutant};${prepare(attendance[4])};reset role;
     select 'MUTANT_ATTENDANCE_RECEIPT_'||count(*) from private.room_attendance_hint_receipts
       where event_id=${lit(attendance[4].event.id)};rollback;`);
   attendanceBypass.child.stdin.end();
-  await until(()=>attendanceBypass.output().includes('MUTANT_ATTENDANCE_RECEIPT_1'));
+  await waitForNativeSessionMarker(attendanceBypass,'MUTANT_ATTENDANCE_RECEIPT_1',{
+    inspect:()=>JSON.parse(query(`select coalesce(jsonb_agg(jsonb_build_object(
+      'session',case when a.application_name=${lit(attendanceHolder.name)} then 'holder' else 'mutant' end,
+      'pid',a.pid,'state',a.state,'waitEventType',a.wait_event_type,'waitEvent',a.wait_event,
+      'blockers',pg_blocking_pids(a.pid))),'[]') from pg_stat_activity a
+      where a.datname=current_database() and a.application_name in(${lit(attendanceHolder.name)},${lit(attendanceBypass.name)})`)),
+  });
   assert.equal(query(`select count(*) from pg_locks l join pg_stat_activity a on a.pid=l.pid
     where a.datname=current_database() and a.application_name=${lit(attendanceHolder.name)} and l.locktype='advisory' and l.granted
-      and l.classid=190731::oid and l.objid=(hashtext(${lit(actors.host.id)})::bigint & 4294967295)::oid and l.objsubid=2`),'1',
-    'removing only the mutex retains a receipt from the pre-leave snapshot while the real retirement transaction is uncommitted');
+      and l.classid=190731::oid and l.objid=(hashtext(${lit(attendanceMutexSubject)})::bigint & 4294967295)::oid and l.objsubid=2`),'1',
+    'removing only the mutex retains a receipt from the pre-Circle-removal snapshot while real authority loss is uncommitted');
   const attendanceBypassResult=await attendanceBypass.done;assert.equal(attendanceBypassResult.code,0,attendanceBypassResult.stderr);
   attendanceHolder.child.stdin.end('rollback;\n');assert.equal((await attendanceHolder.done).code,0);
   assert.equal(receipt(attendance[4]),'0','mutated worker materialization rolled back');
   assert.equal(query(`select pg_get_functiondef(${lit(lockSignature)}::regprocedure)`),lockDefinition);
   assert.equal(count,12);
-  rpc(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,content_access_rule)
-    values('NATIVE-REJOIN',${lit(actors.host.id)},'live','open');select count(*) from public.join_watch_party_room_session('NATIVE-REJOIN')`);
+  const rejoinCreate=`insert into public.watch_party_rooms(party_id,host_user_id,room_type,content_access_rule)
+    values('NATIVE-REJOIN',${lit(actors.host.id)},'live','open')`;
+  const liveFixtureAttempts=Number(query(`select count(*) from public.abuse_rate_limit_events
+    where actor_user_id=${lit(actors.host.id)} and action_key='watch_party_room_create' and target_key='live'
+      and created_at>now()-interval '10 minutes'`));
+  if(liveFixtureAttempts>=5){
+    assert.throws(()=>rpc(rejoinCreate),/rate_limited/,'the real five-create limit is retained between independent fixture cases');
+    // Advance only this disposable synthetic actor/action's prior test window;
+    // never delete receipts, disable its trigger or weaken the production limit.
+    query(`update public.abuse_rate_limit_events set created_at=now()-interval '11 minutes'
+      where actor_user_id=${lit(actors.host.id)} and action_key='watch_party_room_create' and target_key='live'
+        and created_at>now()-interval '10 minutes'`);
+  }
+  rpc(`${rejoinCreate};select count(*) from public.join_watch_party_room_session('NATIVE-REJOIN')`);
   rpc("select count(*) from public.join_watch_party_room_session('NATIVE-REJOIN')",'authenticated',actors.friend);
   rpc("select public.heartbeat_watch_party_room_session('NATIVE-REJOIN','left',false,false)",'authenticated',actors.friend);
   await race('two current-session rejoin requests serialize one new attendance interval',

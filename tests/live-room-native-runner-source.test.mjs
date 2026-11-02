@@ -22,12 +22,29 @@ test('native room authority runner retains independent blocking edges and rollba
     'public.prepare_notification_activity','public.claim_notification_activity_batch',"assert.equal(count,12)",
     'actual worker reached materialization; receipt authority','MUTANT_ATTENDANCE_RECEIPT_1',
     'mutated worker materialization rolled back'])assert.ok(source.includes(marker),marker);
+  for(const marker of ['CONTROL_ATTENDANCE_RECEIPT_1','positive materialization control rolled back',
+    "waitForNativeSessionMarker(attendanceBypass,'MUTANT_ATTENDANCE_RECEIPT_1'",'pg_blocking_pids(a.pid)',
+    'attendanceAuthorityLoss','CONTROL_ATTENDANCE_RECEIPT_1_AFTER_MUTEX','real mutex materialization control rolled back',
+    'not l.granted',"l.classid=190731::oid",'noBrandMutex(attendanceHolder)',
+    'attendanceMutexSubject=attendance[4].viewer.id',
+    'unmodified attendance preparation waits for exact discovery recipient mutex, not Brand mutex'])
+    assert.ok(source.includes(marker),marker);
+  assert.doesNotMatch(source,/attendanceHolder=session\(`\$\{leave\(attendance\[4\]\)\}/,
+    'negative control must not confuse an independent Brand serialization lock with the discovery mutex');
   for(const marker of ["version='20261101210306'",'two current-session rejoin requests serialize one new attendance interval',
-    'original guard must reproduce actual rejoin failure','failed original-guard transaction rolled back','forgedRejoin',"assert.equal(count,13)"])
+    'original guard must reproduce actual rejoin failure','failed original-guard transaction rolled back','forgedRejoin',"assert.equal(count,13)",
+    'assert.throws(()=>rpc(rejoinCreate),/rate_limited/',"action_key='watch_party_room_create' and target_key='live'"])
     assert.ok(source.includes(marker),marker);
   const workflow=fs.readFileSync('.github/workflows/required-validation.yml','utf8');
   const block=workflow.split("<<'NATIVE_PROOFS'")[1]?.split('NATIVE_PROOFS')[0];
   assert.ok(block?.includes('node scripts/test-live-room-host-settings-concurrency.mjs'),'native proof runs inside isolated cron-paused validation boundary');
   assert.ok(block?.includes('SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-room-live-start-dedup-concurrency.mjs'),
     'room-generation dedup contention proof runs after migration replay inside the isolated cron-paused boundary');
+  const dedup=fs.readFileSync('scripts/test-room-live-start-dedup-concurrency.mjs','utf8');
+  for(const marker of ['select private.room_start_notification_delivery_state(b)',
+    "JSON.parse(rpc(prepare(independentA.ordinary),'service_role')).eligible,true",
+    'distinct room delivery mutexes sharing creator/title do not block or coalesce',
+    "blocked(holder,bypass,'advisory')",'l.classid=176214::oid and l.objid=30::oid',
+    'mutant reaches the exact retained Brand lock','MUTANT_NOTICES_2','mutex removal rolled back'])
+    assert.ok(dedup.includes(marker),marker);
 });
