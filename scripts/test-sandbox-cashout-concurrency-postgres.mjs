@@ -53,10 +53,10 @@ try{
  // Separate authenticated connections, real source-domain locks, and observed
  // pg_blocking_pids barriers: elapsed time alone is never concurrency evidence.
  let schedules=0;
- async function race(first,second,outcome='commit'){
+ async function race(first,second,outcome='commit',waiterOutcome='commit'){
   const h=start(`begin;${first}select 'HOLDING';`);
   await until(()=>h.output().includes('HOLDING'),'first operation did not reach lock barrier');
-  const w=start(`begin;${second}commit;`);w.child.stdin.end();
+  const w=start(`begin;${second}${waiterOutcome};`);w.child.stdin.end();
   await until(()=>blocked(h,w),'second operation did not block on the real transaction');
   h.child.stdin.end(`${outcome};\n`);const held=await h.done;assert.equal(held.code,0,held.stderr);
   const waited=await w.done;schedules++;return {held,waited};
@@ -329,6 +329,16 @@ try{
   assert.equal(parse(query(`select private.sandbox_cashout_source(${lit(ledger)},${lit(qualification)});`)).netMinor,189);
   const id=run(a,'authenticated',`select public.request_sandbox_creator_cashout(189,'scheduled',${lit(qualification)},${lit(randomUUID())},0,0,189);`).requestId;
   assert.equal(query(`select money_ledger_id from private.sandbox_cashout_allocations where execution_id=${lit(id)};`),ledger);
+  if(outcome==='rollback'){
+   // Quote-only holder: no processor, ledger mutation or creator advisory lock.
+   // Without the early quote lock in cashout, claim would finish immediately
+   // and pg_blocking_pids would never establish this required barrier.
+   const quoteOnly=await race(`select id from private.creator_${lane}_auction_quotes where id=${lit(quote.id)} for update;`,
+    auth('service_role',a)+claim(id),'commit','rollback');
+   passed(quoteOnly.waited);assert.equal(parse(quoteOnly.waited.stdout).claimed,true);
+   assert.equal(phase(id),'prepared','quote-only waiter rolls back dispatch authority before refund schedule');
+   assert.equal(query(`select dispatch_token is null from private.sandbox_cashout_executions where id=${lit(id)};`),'t');
+  }
   const refund={...evidence,eventId:'evt_refund'+suffix,eventType:'charge.refunded',objectId:'ch_'+suffix,checkoutSessionId:null,outcome:'refunded',refundedAmountMinor:100};
   const {held,waited}=await race(auth('service_role',buyer)+receipt(refund),auth('service_role',a)+claim(id),outcome);
   assert.equal(parse(held.stdout.split('HOLDING')[0]).status,'refunded');
@@ -338,8 +348,8 @@ try{
   invariants(a);
  }
  restore.assertSourceUnchanged();
- assert.equal(schedules,31,'all real-lock schedules executed');
- console.log('PASS native sandbox cashout: 31 actual-lock schedules including canonical event/room auction refunds, mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control/recovery-authority barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
+ assert.equal(schedules,33,'all real-lock schedules executed');
+ console.log('PASS native sandbox cashout: 33 actual-lock schedules including independent event/room quote-only barriers and canonical auction refunds, mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control/recovery-authority barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
 }finally{
  for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end();s.child.kill('SIGTERM');}
  await Promise.allSettled(sessions.map(s=>s.done));
