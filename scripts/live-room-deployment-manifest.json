@@ -585,11 +585,11 @@
     },
     {
       "key": "column:private.discovery_invalidation_outbox:source_transaction",
-      "sha256": "ecb8e4ca9258b4d2e84fcdea5dce7afdf55add5db7b963203ba74e743f51b3da"
+      "sha256": "cb61d622f2b3c7b2532f3a08e0df55be2fee9c93d22d5ab58aad277935867c3f"
     },
     {
       "key": "column:private.discovery_invalidation_worker_config:primary_delivery_enabled",
-      "sha256": "ef942c3f5b385391350b3969e7a51dee3cc45b42b785875d464145bf1580ee9c"
+      "sha256": "086c8246d063c70d5df0806156ec430e479276670d10c8cc875777cf93989704"
     },
     {
       "key": "column:private.party_room_discovery_publications:room_generation",
@@ -601,19 +601,19 @@
     },
     {
       "key": "column:private.room_attendance_hint_receipts:discovery_hint_key",
-      "sha256": "7709720eccfd6dbbb6c27511adcc3050da78692f9cc1ed9bff892fd247299fb3"
+      "sha256": "3973274a113f32f3a42839fcb74fd2117807af9f216e62d3c3330458cd98ae17"
     },
     {
       "key": "column:public.circle_spectator_feed_items:discovery_hint_key",
-      "sha256": "2e5772d2c432d97e2951c675079cd8ca856a1c5f91558079b89e09965211f5f6"
+      "sha256": "3973274a113f32f3a42839fcb74fd2117807af9f216e62d3c3330458cd98ae17"
     },
     {
       "key": "column:public.creator_events:discovery_hint_key",
-      "sha256": "cc0d3b3ffbae598e5b6065c29214fc5c5b5c4d27f8c2baa49e50a6afbf8bb615"
+      "sha256": "3973274a113f32f3a42839fcb74fd2117807af9f216e62d3c3330458cd98ae17"
     },
     {
       "key": "column:public.discovery_feed_items:discovery_hint_key",
-      "sha256": "cdf85dd550812e548a7250983706f64e34ccc2a0879d38dd34c050d79d4d4695"
+      "sha256": "3973274a113f32f3a42839fcb74fd2117807af9f216e62d3c3330458cd98ae17"
     },
     {
       "key": "column:public.room_broadcast_sessions:notification_room_generation",
@@ -629,19 +629,19 @@
     },
     {
       "key": "column:public.titles:party_count_hint_key",
-      "sha256": "73a32f46af49309a0ccb18cf1a6e2faff5a5dce29bf67707aec7ff9eccce4292"
+      "sha256": "ed1b839cbf59627f30b1297767d8989d86139526980dfe25d18b35405231b2c2"
     },
     {
       "key": "column:public.watch_party_rooms:discovery_paused",
-      "sha256": "029536670acc8bf819543eeebb606838192991a60c49f4e58f4a0ecea99d1f06"
+      "sha256": "d65fe85f305f73317d8a7f50de956131cbf95345736cb09cad87730196f2ae4f"
     },
     {
       "key": "column:public.watch_party_rooms:host_settings_revision",
-      "sha256": "e7444cf69824829285b6f381ddb68e715f33157d6e67969edf4051074467b309"
+      "sha256": "e668a61c68ef6a86ba2da31744defaf1d83a0e61fddd063d554ed8aff7663f76"
     },
     {
       "key": "column:public.watch_party_rooms:room_generation",
-      "sha256": "9e0b19fecec51bc1990e373463c88d1a19eb3c9eb9201feda88a9d0a07d3c927"
+      "sha256": "820d159db891541366c75a102c831c75201feffb1fe4f42263c8b5ed1f7fb2c3"
     },
     {
       "key": "constraint:private.discovery_invalidation_outbox:discovery_hint_keys_bounded",
@@ -721,31 +721,31 @@
     },
     {
       "key": "relation:private.circle_discovery_hint_recipients:",
-      "sha256": "f7828930144d3074fa3e057bbc11feffa0af41bf8f8b672fbdf048153e714aa6"
+      "sha256": "35a2b8d944934c3d0e753f84a9bd83dfdd4c7a41838dd242ac627f982b86a807"
     },
     {
       "key": "relation:private.live_stage_discovery_publications:",
-      "sha256": "f9b2b2f54d3115349243ceafc3247f6ef007f7ba67f11debd66aae85918ec327"
+      "sha256": "0290f02716cd5f6d5993dfe8d6d08d21392c468a894f678ffee06bad73232dab"
     },
     {
       "key": "relation:private.party_room_admission_sessions:",
-      "sha256": "ab696b5e8017623af9f8d93160dbf7a71cbf31aa87459304f348afc01be8f4a7"
+      "sha256": "558ef46facfaa4f86d38f7b713dbedcd586760dc35c7fcacb5126f28e0fa65d1"
     },
     {
       "key": "relation:private.room_attendance_hint_receipts:",
-      "sha256": "09df40429685d8adfec97e393d4935435c9365c92983d5484127dc4eea797a07"
+      "sha256": "a014287d47dada310086e755a4a7964500e9607f8fd0c0d98bc78dd6fce949a5"
     },
     {
       "key": "relation:private.room_discovery_host_consents:",
-      "sha256": "1d0c4f4f7d0687d512c446c01b40338f467501b4668fb491b1e0c24fdbc62a54"
+      "sha256": "2f073fb31cd2d1ccb8bef3b2288975dda77663b3cbe8f09a6b2c40b05abec8b2"
     },
     {
       "key": "relation:private.room_start_notification_bindings:",
-      "sha256": "c9d5540e20b310308cb6f3f67715148cd3750bd637cd5253830eaa87353a3a92"
+      "sha256": "afde0f74ed501e580b5b36dcf7c3f191558dfe7b7d522a72bdf383a50346c3bc"
     },
     {
       "key": "relation:private.room_start_notification_deliveries:",
-      "sha256": "ad2e985d0a102f836cd8c45f19033e02219e6679990d797674914b4bc72e96b6"
+      "sha256": "805308029413f41ad8b173e5a6cac242426edf4846571c56400585d12700da81"
     },
     {
       "key": "trigger:auth.sessions:discovery_host_session_after_loss",

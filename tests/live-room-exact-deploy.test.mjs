@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
-import {loadBundle,projectFunctions,splitSQL,readbackSql,finalReadbackSql,buildApplySql,classifyState,deploy,sourceBinding,TOOL,MANIFEST,VERSIONS,diagnosticManagementQuery,safeHelperError,MANAGEMENT_CONTEXT_SQL,validateManagementContext} from '../scripts/live-room-exact-deploy.mjs';
+import {loadBundle,projectFunctions,splitSQL,readbackSql,finalReadbackSql,buildApplySql,classifyState,deploy,sourceBinding,TOOL,MANIFEST,VERSIONS,diagnosticManagementQuery,safeHelperError,MANAGEMENT_CONTEXT_SQL,validateManagementContext,finalContractChecks} from '../scripts/live-room-exact-deploy.mjs';
 
 const bundle=loadBundle();
 const readContext={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
@@ -41,6 +41,8 @@ test('immutable nine-only and eight-file closure, exact ordered function project
   assert.deepEqual(bundle.migrations.map(x=>x.version),VERSIONS);assert.equal(bundle.functions.length,104);
   assert.equal(bundle.migrations.reduce((n,x)=>n+Buffer.byteLength(x.body),0),197812);
   assert.deepEqual(bundle.functions.find(x=>x.signature==='public.publish_live_stage_discovery(text,uuid)').roles,['postgres']);
+  const contracts=finalContractChecks(bundle);assert.equal(contracts.length,185);assert.equal(new Set(contracts.map(x=>x.id)).size,185);
+  for(const c of contracts)assert.match(c.id,/^(?:write_authority|privacy|privateTables|holds|function_\d{3}|schema_\d{3}|history_\d{3})$/u);
   for(const x of bundle.migrations)assert.equal(x.body,fs.readFileSync(x.path,'utf8'));
   assert.throws(()=>projectFunctions([{body:'revoke all on function public.unknown() from public;'}],[]),/UNKNOWN_FUNCTION_ACL_TARGET/);
   assert.throws(()=>projectFunctions([{body:'begin; select 1; commit;'}],[]),/TRANSACTION_CONTROL_FORBIDDEN/);
@@ -177,11 +179,22 @@ test('real nine bodies atomically roll back failures, preserve exact history, an
   assert.equal(classifyState(local,await read()),'ready');
   assert.equal((await db.query('select count(*)::int n from supabase_migrations.schema_migrations')).rows[0].n,1);
   const privacyRegression=sql.replace('-- live-room-postflight',"create policy synthetic_broad_read on public.watch_party_rooms for select to authenticated using(true);\n-- live-room-postflight");
-  await assert.rejects(db.exec(privacyRegression),/live_room_final_catalog_mismatch/);await db.exec('rollback');
+  await assert.rejects(db.exec(privacyRegression),/live_room_final_catalog_mismatch:privacy$/);await db.exec('rollback');
   assert.equal(classifyState(local,await read()),'ready');
   const missingAuthTrigger=sql.replace('-- live-room-postflight','drop trigger discovery_host_session_after_loss on auth.sessions;\n-- live-room-postflight');
-  await assert.rejects(db.exec(missingAuthTrigger),/live_room_final_catalog_mismatch/);await db.exec('rollback');
+  const triggerId=finalContractChecks(local).find(x=>x.target==='trigger:auth.sessions:discovery_host_session_after_loss').id;
+  await assert.rejects(db.exec(missingAuthTrigger),new RegExp('live_room_final_catalog_mismatch:'+triggerId+'$'));await db.exec('rollback');
   assert.equal(classifyState(local,await read()),'ready');
+  const functionId=finalContractChecks(local).find(x=>x.target==='public.can_browse_watch_party_room(text)').id;
+  for(const [injection,id] of [
+    ['revoke execute on function public.can_browse_watch_party_room(text) from authenticated;',functionId],
+    ['update private.discovery_invalidation_worker_config set collecting=false;','holds'],
+    [`delete from supabase_migrations.schema_migrations where version='${VERSIONS[0]}';`,'history_000'],
+    ['set local role supabase_read_only_user;','write_authority'],
+  ]){
+    await assert.rejects(db.exec(sql.replace('-- live-room-postflight',injection+'\n-- live-room-postflight')),new RegExp('live_room_final_catalog_mismatch:'+id+'$'));
+    await db.exec('rollback;set session authorization postgres;');assert.equal(classifyState(local,await read()),'ready');
+  }
   await db.exec('grant execute on function public.publish_live_stage_discovery(text,uuid) to anon');
   await assert.rejects(db.exec(sql),/live_room_baseline_changed/);await db.exec('rollback');
   await db.exec('revoke execute on function public.publish_live_stage_discovery(text,uuid) from anon');
@@ -190,6 +203,21 @@ test('real nine bodies atomically roll back failures, preserve exact history, an
   await db.exec("delete from supabase_migrations.schema_migrations where version='synthetic_drift'");
   await db.exec(buildApplySql(local,await read()));
   const after=await read(),checks=await readFinal();assert.deepEqual(checks,final());assert.equal(classifyState(local,after,checks),'applied');
+  const version=Number((await db.query("select current_setting('server_version_num') n")).rows[0].n);
+  const alterations=[
+    'alter table public.watch_party_rooms alter column discovery_paused drop not null;',
+    'alter table public.watch_party_rooms add constraint synthetic_changed_check check(host_settings_revision>42) not valid;',
+    ...(version>=180000?[
+      'alter table public.watch_party_rooms alter column discovery_paused drop not null;alter table public.watch_party_rooms add constraint synthetic_not_valid not null discovery_paused not valid;',
+      'alter table public.watch_party_rooms alter column discovery_paused drop not null;alter table public.watch_party_rooms add constraint synthetic_no_inherit not null discovery_paused no inherit;',
+    ]:[]),
+  ];
+  for(const alteration of alterations){
+    await db.exec('begin;'+alteration);
+    try{const changed=(await db.exec(finalReadbackSql(local))).at(-1).rows[0].state;assert.equal(changed.schema,false);}
+    finally{await db.exec('rollback');}
+    assert.deepEqual(await readFinal(),final());
+  }
   const records=(await db.query("select version,name,statements from supabase_migrations.schema_migrations where name<>'synthetic_fixture_predecessor' order by version")).rows;
   assert.equal(records.length,9);for(let i=0;i<9;i++)assert.deepEqual(records[i],{version:bundle.migrations[i].version,name:bundle.migrations[i].name,statements:[bundle.migrations[i].body]});
   let writes=0;assert.equal((await deploy({bundle:local,apply:true,query:async(query,readOnly)=>{if(!readOnly)writes++;return query===finalReadbackSql(local)?readFinal():read();}})).status,'already_applied_verified');assert.equal(writes,0);
