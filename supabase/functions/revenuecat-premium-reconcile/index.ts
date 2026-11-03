@@ -110,6 +110,10 @@ const readAllRevenueCatPages = async (
     items.push(...listItems(response));
     const next = toText(response.next_page);
     if (!next) return items;
+    if (strict && safeRevenueCatPath(next, projectId).pathname
+      !== safeRevenueCatPath(firstPath, projectId).pathname) {
+      throw new Error("revenuecat_pagination_scope_invalid");
+    }
     nextPath = next;
   }
   throw new Error("revenuecat_pagination_limit_exceeded");
@@ -262,14 +266,31 @@ export const handler = async (req: Request) => {
     const startsAt = finiteMillis(subscription.current_period_starts_at);
     const expiresAt = finiteMillis(subscription.current_period_ends_at ?? subscription.ends_at);
     if (!startsAt || !expiresAt) throw new Error("revenuecat_subscription_period_invalid");
-    const googleSnapshot = isGoogle ? googlePremiumSnapshot(
-      subscription, product, await readAllRevenueCatPages(
+    const googleTransactions = isGoogle ? await readAllRevenueCatPages(
         apiKey,
         `/v2/projects/${encodeURIComponent(projectId)}/subscriptions/${encodeURIComponent(subscriptionId)}/transactions?limit=100`,
         projectId,
         true,
-      ), userId, now,
+      ) : null;
+    const googleSnapshot = googleTransactions ? googlePremiumSnapshot(
+      subscription, product, googleTransactions, userId, now,
     ) : null;
+    if (googleSnapshot && googleTransactions) {
+      // Product/history reads can race a renewal, transfer, refund or revoke.
+      // Revalidate the same access facts from the exact subscription before
+      // projection. The database still rechecks its locked authority graph.
+      const currentSubscription = await revenueCatGet(
+        apiKey,
+        `/v2/projects/${encodeURIComponent(projectId)}/subscriptions/${encodeURIComponent(subscriptionId)}`,
+        projectId,
+      );
+      const currentSnapshot = googlePremiumSnapshot(
+        currentSubscription, product, googleTransactions, userId, Date.now(),
+      );
+      if (stableJson(currentSnapshot) !== stableJson(googleSnapshot)) {
+        throw new Error("revenuecat_snapshot_changed");
+      }
+    }
     const originalTransactionId = googleSnapshot?.originalTransactionId
       ?? await readOriginalTransactionId(apiKey, projectId, subscription);
     const snapshot = googleSnapshot ?? {
