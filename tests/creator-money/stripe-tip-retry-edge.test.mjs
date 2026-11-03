@@ -24,15 +24,17 @@ const observedPayout=(id='acct_fixture',changes={})=>({
 function harness(compiled=code){
   let handler,attempt=null,authorityReads=0,payoutReads=0,profile='First name',account='acct_fixture',payout={},payoutSequence=null,retryAllowed=true,failAfterAccept=false,recordFailure=false,retiredAt=Infinity,terminal=false;
   const calls=[],bindings=[],sessions=new Map(); let routeAllowed=true,expiryOffset=0,androidExternal=false,bindAllowed=true;
+  let platform='acct_platform',platformBound=true; const platformReads=[];
   const settings={creator_id:creator,tips_enabled:true,status:'active',currency:'usd',min_amount_cents:100,max_amount_cents:50000,provider_charges_enabled:true,provider_payouts_enabled:true};
   const admin={from(table){const q={};for(const method of ['select','eq','in','gte','or','limit','update','insert'])q[method]=()=>q;
     q.update=value=>{if(table==='creator_tip_settings')Object.assign(settings,copy(value));return q;};
     const result=()=>({error:null,count:attempt?1:0,data:table==='platform_money_kill_switches'?{state:q.key==='live_money_enabled'?'off':'sandbox_only'}:table==='creator_tip_settings'?settings:table==='user_profiles'?{display_name:profile}:[]});
     q.eq=(key,value)=>{if(key==='key')q.key=value;return q;};q.maybeSingle=q.single=async()=>result();q.then=(ok,fail)=>Promise.resolve(result()).then(ok,fail);return q;},
-    async rpc(name,args){if(name==='read_creator_tip_checkout_dispatch_authority') return {data:{allowed:routeAllowed},error:null}; if(name==='reserve_creator_tip_checkout_attempt'){
+    async rpc(name,args){if(name==='read_creator_tip_checkout_dispatch_authority') return {data:{allowed:routeAllowed},error:null}; if(name==='reserve_platform_bound_test_tip_checkout'){
+      assert.equal(args.p_platform_account_id,platform);
       if(!attempt)attempt={tipId:args.p_quote.tipId,requestId:args.p_request_id,buyerId:args.p_buyer_id,creatorId:creator,amountCents:300,currency:'usd',status:'pending',body:copy(args.p_quote.body),providerSessionId:null,idempotencyKey:'stable-'+args.p_request_id,
         externalCapability:{routeKind:androidExternal?'android_external_content_link':'external_browser_checkout'}};
-      return {data:{...copy(attempt),retryAllowed},error:null};
+      return {data:{...copy(attempt),retryAllowed,platformBound,platformAccountId:'acct_platform'},error:null};
     }if(name==='bind_google_play_external_checkout'){
       bindings.push(copy(args));
       return bindAllowed?{data:{bindingId:request,routeKind:'android_external_content_link'},error:null}:{data:null,error:{message:'synthetic admission denied'}};
@@ -48,16 +50,24 @@ function harness(compiled=code){
     readCreatorPayoutAccount:async()=>copy(payoutSequence?payoutSequence[Math.min(payoutReads++,payoutSequence.length-1)]:observedPayout(account,payout)),
     storedStripeConfiguration:connect.storedStripeConfiguration,
     readStripeTestSecret:()=>({configured:true,secret:'synthetic-test-secret'}),safeWriteAuditLog:async()=>{},sanitizeErrorMessage:error=>String(error),toText:v=>String(v??'').trim(),
-    fetch:async(url,init)=>{const body=init.body?Object.fromEntries(init.body):null;calls.push({url,method:init.method,key:init.headers['Idempotency-Key'],body});
+    fetch:async(url,init)=>{if(url.endsWith('/account')){assert.equal(init.method,'GET');platformReads.push(url);return Response.json({object:'account',id:platform});}const body=init.body?Object.fromEntries(init.body):null;calls.push({url,method:init.method,key:init.headers['Idempotency-Key'],body});
       const id='cs_test_fixture';let value=sessions.get(id);
       if(init.method==='POST'&&!value){value={id,livemode:false,status:'open',expires_at:Number(body.expires_at)+expiryOffset,payment_intent:'pi_fixture',url:'https://checkout.stripe.com/c/pay/synthetic',client_reference_id:body.client_reference_id,amount_total:Number(body['line_items[0][price_data][unit_amount]']),currency:body['line_items[0][price_data][currency]'],metadata:{chillywood_tip_id:body['metadata[chillywood_tip_id]']}};sessions.set(id,value);}
       if(failAfterAccept){failAfterAccept=false;throw new Error('synthetic transport lost after provider acceptance');}
       return new Response(JSON.stringify(value));},
   };
   vm.runInNewContext(compiled,context,{filename:file});
-  return {calls,bindings,run:async(changes={})=>{const r=await handler(new Request('https://local.invalid',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify({creator_id:creator,amount_cents:300,currency:'usd',request_id:request,...changes})}));return {status:r.status,body:await r.json()};},
+  return {calls,bindings,platformReads,setPlatform:(id,bound=true)=>{platform=id;platformBound=bound;},run:async(changes={})=>{const r=await handler(new Request('https://local.invalid',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify({creator_id:creator,amount_cents:300,currency:'usd',request_id:request,...changes})}));return {status:r.status,body:await r.json()};},
     set:changes=>{if('androidExternal'in changes)androidExternal=changes.androidExternal;if('bindAllowed'in changes)bindAllowed=changes.bindAllowed;if('expiryOffset'in changes)expiryOffset=changes.expiryOffset;if('routeAllowed'in changes)routeAllowed=changes.routeAllowed;if('profile'in changes)profile=changes.profile;if('account'in changes)account=changes.account;if('payout'in changes)payout=changes.payout;if('payoutSequence'in changes){payoutSequence=changes.payoutSequence;payoutReads=0;}if('retryAllowed'in changes)retryAllowed=changes.retryAllowed;if('failAfterAccept'in changes)failAfterAccept=changes.failAfterAccept;if('recordFailure'in changes)recordFailure=changes.recordFailure;if('retiredAt'in changes)retiredAt=changes.retiredAt;if('terminal'in changes)terminal=changes.terminal;},attempt:()=>attempt,settings:()=>copy(settings)};
 }
+
+test('test platform GET must match the immutable SQL binding before any checkout call',async()=>{
+  for(const [id,bound] of [['not_an_account',true],['acct_other',true],['acct_platform',false]]) {
+    const h=harness();h.setPlatform(id,bound);await h.run({platform_account_id:'acct_attacker'});
+    assert.equal(h.platformReads.length,1);assert.equal(h.calls.length,0);
+  }
+  const h=harness();await h.run();assert.equal(h.platformReads.length,1);assert.equal(h.calls[0].method,'POST');
+});
 
 test('Android tip route requires the exact private native binding before provider dispatch',async()=>{
   const h=harness();h.set({androidExternal:true});
