@@ -1,0 +1,855 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "baselineHistory": { "count": 574, "maximum": "20261101215711" },
+  "migrations": [
+    {
+      "path": "supabase/migrations/20261101194927_live_room_host_settings_authority.sql",
+      "sha256": "da046f100ab5e9ed4a3a9cb6701c4be2214c8e27498183bdaf60b7e7b3d14a2b",
+      "bytes": 34277,
+      "version": "20261101194927",
+      "name": "live_room_host_settings_authority"
+    },
+    {
+      "path": "supabase/migrations/20261101194952_live_notification_visibility_recheck.sql",
+      "sha256": "b245acef636754796f4eede185db22d0cd629d93e5f32c87c437eb7725dd6a9b",
+      "bytes": 13341,
+      "version": "20261101194952",
+      "name": "live_notification_visibility_recheck"
+    },
+    {
+      "path": "supabase/migrations/20261101201430_owner_public_identity_boundary.sql",
+      "sha256": "bf42e3c2fa318faac98a9ba5c3332a9cd053af482e8cbbf1bd886830e06db862",
+      "bytes": 3201,
+      "version": "20261101201430",
+      "name": "owner_public_identity_boundary"
+    },
+    {
+      "path": "supabase/migrations/20261101202330_discovery_transactional_primary_hints.sql",
+      "sha256": "f3f0408f4df80ab3104c62a4f3593a6ddd226f3a9776cebe8e9fcf0ed73ae3c1",
+      "bytes": 42857,
+      "version": "20261101202330",
+      "name": "discovery_transactional_primary_hints"
+    },
+    {
+      "path": "supabase/migrations/20261101204701_discovery_scoped_progress_keys.sql",
+      "sha256": "4fba6138afe82149c5bebbdf29aa8cb9fefdcb1257655531c2366bb529b89968",
+      "bytes": 22968,
+      "version": "20261101204701",
+      "name": "discovery_scoped_progress_keys"
+    },
+    {
+      "path": "supabase/migrations/20261101204816_notification_discovery_key_context.sql",
+      "sha256": "568c7ed0fe3ef6c59d3a3c52b5c61e104cfaf72d1a994db872da2c3e5876fcf7",
+      "bytes": 10129,
+      "version": "20261101204816",
+      "name": "notification_discovery_key_context"
+    },
+    {
+      "path": "supabase/migrations/20261101210306_watch_party_rejoin_timestamp_authority.sql",
+      "sha256": "50a33b52d1b196be9486f1938d583143d8b14ba11fd5375e9f69cbb36a6fc46d",
+      "bytes": 4833,
+      "version": "20261101210306",
+      "name": "watch_party_rejoin_timestamp_authority"
+    },
+    {
+      "path": "supabase/migrations/20261101211908_room_listing_pause_preserves_admission.sql",
+      "sha256": "583cb1e503a057caa2de7bde5842a2c7c13eed0121f35d8e589a4f4e63185b16",
+      "bytes": 50001,
+      "version": "20261101211908",
+      "name": "room_listing_pause_preserves_admission"
+    },
+    {
+      "path": "supabase/migrations/20261101214821_room_generation_live_start_delivery_dedup.sql",
+      "sha256": "daa5f1a595bcbc87c11a471893eec5819f4f9e189bf877e5252c25eca346d48c",
+      "bytes": 16205,
+      "version": "20261101214821",
+      "name": "room_generation_live_start_delivery_dedup"
+    }
+  ],
+  "edgeFiles": [
+    {
+      "path": "supabase/functions/_shared/chat-call-livekit-authority.ts",
+      "sha256": "710f7cdeaf27aa0f854fa9e8ac6578b2b5fad36a70d2f498837af2af35d29cfd",
+      "bytes": 4675
+    },
+    {
+      "path": "supabase/functions/_shared/exact-subject-authority.ts",
+      "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231",
+      "bytes": 12066
+    },
+    {
+      "path": "supabase/functions/_shared/live-cost-guard.ts",
+      "sha256": "6740a454a0b7803bf6370787da224106b34a26f7746ed7277a1cab7bad328060",
+      "bytes": 20036
+    },
+    {
+      "path": "supabase/functions/_shared/livekit-routing.ts",
+      "sha256": "72ca07a29bd45f486e673f8dc44b6b4e8456311f4aae3fabc099cfb1b217e55a",
+      "bytes": 20553
+    },
+    {
+      "path": "supabase/functions/_shared/livekit-session-generation.ts",
+      "sha256": "01a3b3528ff8a70a641416f5686c3ae06858f94eb65635899992fcaaac8df0a9",
+      "bytes": 2482
+    },
+    {
+      "path": "supabase/functions/_shared/security-request-context.ts",
+      "sha256": "09b042ef9de5b5e62f7e21c4cdafea1aa77e251b8a2995b4b53784a6fc2c43ff",
+      "bytes": 19111
+    },
+    {
+      "path": "supabase/functions/_shared/watch-party-livekit-authority.ts",
+      "sha256": "cd064d203806a79e03e35ebe67ec2e00facf5df19b62644457d0c771ff52b683",
+      "bytes": 7760
+    },
+    {
+      "path": "supabase/functions/livekit-token/index.ts",
+      "sha256": "85e77fb6f30771fb11be23e46255b766f438e82289311c28a75d4e1c0992583e",
+      "bytes": 57759
+    }
+  ],
+  "baselineObservedAt": "2026-11-03 01:54:08.125645+00",
+  "baselineFunctions": [
+    {
+      "signature": "private.clip_export_safe_status(private.creator_clip_export_jobs)",
+      "name": "private.clip_export_safe_status",
+      "bodySha256": "b0297dde0b28f64338d2b9f326415313f17ddea03e8e194149a34d3f078fc974",
+      "definitionMd5": "33089693089e4bde319b6763a2d10c33",
+      "securityDefiner": false,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "sql",
+      "volatility": "i",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "private.discovery_notification_source(text,text)",
+      "name": "private.discovery_notification_source",
+      "bodySha256": "358b879b31c8c79da45ee26d45cd0fc3a1a0f78a9c30c22e7ad1b588105d841c",
+      "definitionMd5": "ff5a552a4c90fd62f0096f392631ebc2",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "private.enqueue_creator_event_scope_invalidations()",
+      "name": "private.enqueue_creator_event_scope_invalidations",
+      "bodySha256": "59950e84399c9936a7037c6dcef46206ce22bb8675efb826a7ddcfa213be0b2e",
+      "definitionMd5": "6ab82ecb1cfc90405cdc25ce2cf1b4ae",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "trigger"
+    },
+    {
+      "signature": "private.enqueue_discovery_scope_invalidations()",
+      "name": "private.enqueue_discovery_scope_invalidations",
+      "bodySha256": "1eeded2a2318f263bb9dc9d7c6be21dddd4b0fbb1b3ae56e39a248307a58c2f0",
+      "definitionMd5": "d48482dc818fb82cee9d560ac719d949",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "trigger"
+    },
+    {
+      "signature": "private.live_room_join_recipient_allowed(public.watch_party_rooms,uuid,uuid)",
+      "name": "private.live_room_join_recipient_allowed",
+      "bodySha256": "9175cf8bb43add57602cae71af7188e64b4dcad78a1ec763c2ca5a35c9c9d742",
+      "definitionMd5": "a9c3235c72f3adf92b2905ade6ea9188",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "boolean"
+    },
+    {
+      "signature": "private.party_room_metadata_allowed(text,uuid,text)",
+      "name": "private.party_room_metadata_allowed",
+      "bodySha256": "cdb099474d910e9bece7accbd8e0e2dca0505c4585ab32d88f4336ea94d63c20",
+      "definitionMd5": "956cbb2c99d58a2bd0f8a20976c0c066",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "boolean"
+    },
+    {
+      "signature": "private.party_room_publication_current(text)",
+      "name": "private.party_room_publication_current",
+      "bodySha256": "621e08e45ea5075b0ac6f4447eb5085d1d35fab7e593300b5d169a29c1ed2118",
+      "definitionMd5": "cc6e9652ed2bc24e181f30d39300059d",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "boolean"
+    },
+    {
+      "signature": "private.resolve_discovery_notification_activity(public.notification_activity_events)",
+      "name": "private.resolve_discovery_notification_activity",
+      "bodySha256": "444b534417e474fb32c93dd1601c7a2bc750bfbd962681ce2a2a4e2dd0863698",
+      "definitionMd5": "8cb58bb9d9253d8ccc985877564e22dc",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.can_read_watch_party_room_authority(text)",
+      "name": "public.can_read_watch_party_room_authority",
+      "bodySha256": "245787994fa1ac03bdfb8912252958f85c4835d41d027e0449a9f24b9fef217b",
+      "definitionMd5": "ffef3cd4c5af5c95250fd6ba3dc20794",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "language": "sql",
+      "volatility": "s",
+      "returns": "boolean"
+    },
+    {
+      "signature": "public.can_receive_discovery_invalidation(text)",
+      "name": "public.can_receive_discovery_invalidation",
+      "bodySha256": "6847b001551c53ca5a49e6d823c0153138ee89e496cdda9bc9a2a2505e30cb2a",
+      "definitionMd5": "b92205a4001401f9469b6859a8295c48",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "language": "sql",
+      "volatility": "s",
+      "returns": "boolean"
+    },
+    {
+      "signature": "public.claim_creator_clip_export()",
+      "name": "public.claim_creator_clip_export",
+      "bodySha256": "8cfbca3fa5b8de278b6c66e4f572cc6ee4bf4b12801822b52213f7da6a192556",
+      "definitionMd5": "50d7c0b9b36d22096669f7e1f4788222",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.enforce_watch_party_membership_identity()",
+      "name": "public.enforce_watch_party_membership_identity",
+      "bodySha256": "f7afdeb7aed59bf3d1ea593caca321a101b1d6d5ea2f7714427cde5c95a9ba55",
+      "definitionMd5": "ce87cb9ef49dd2b682279dcdd24b580e",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "trigger"
+    },
+    {
+      "signature": "public.fail_creator_clip_export(uuid,uuid,text)",
+      "name": "public.fail_creator_clip_export",
+      "bodySha256": "d8ee071f8734b6d5859610d9b9f09cbc657dae32364daa10ce1c97577c6084b7",
+      "definitionMd5": "adf2d4e5da6aa6a3d1480da954094c68",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "boolean"
+    },
+    {
+      "signature": "public.finish_creator_clip_export(uuid,uuid,text,jsonb)",
+      "name": "public.finish_creator_clip_export",
+      "bodySha256": "6826c61acae44e6fd1d2e8e6a7e5faf05411abc5172704b9b2380df8db5fb643",
+      "definitionMd5": "2d9e8918934d13738b2db8af2eb7cd41",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.flush_discovery_invalidations(integer)",
+      "name": "public.flush_discovery_invalidations",
+      "bodySha256": "9c647836a744d07480caa94229669a4b139e307d783a4ddc8668d90932097eff",
+      "definitionMd5": "271374cf777eaa0ddb78d83be435c756",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.guard_live_stage_discovery_started_authority()",
+      "name": "public.guard_live_stage_discovery_started_authority",
+      "bodySha256": "1c9eeaf7016cb266e989651d24a5e4009a9232360fa0dae0b64157c7ee63015f",
+      "definitionMd5": "021c4f9e894a374d620b6b8add9fd82e",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "trigger"
+    },
+    {
+      "signature": "public.heartbeat_creator_clip_export(uuid,uuid)",
+      "name": "public.heartbeat_creator_clip_export",
+      "bodySha256": "fcacd4d7b58be7ff5cdeca2ddd9902a34cecbd98ee83bb008cad4a808fb5cc58",
+      "definitionMd5": "253ecd72bbead3762e3548cc2b27ebef",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "boolean"
+    },
+    {
+      "signature": "public.join_watch_party_room_session(text,text,text,text,boolean,boolean,boolean)",
+      "name": "public.join_watch_party_room_session",
+      "bodySha256": "6875af738b805be89831f613895a2dd3886bcc1e0aca2b23c6ef50b4ebb1c5b2",
+      "definitionMd5": "be9e5cf9a86f0776bfba2f103b7d43f7",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "setofwatch_party_room_memberships"
+    },
+    {
+      "signature": "public.prepare_notification_activity(uuid,uuid)",
+      "name": "public.prepare_notification_activity",
+      "bodySha256": "d6c5afc2ff8201784c816441ec79ec1895a638cfab990f11dfd8c05a826ad5a3",
+      "definitionMd5": "0c6d528b281b5b7f04ab451d65338a99",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.publish_live_stage_discovery(text,uuid)",
+      "name": "public.publish_live_stage_discovery",
+      "bodySha256": "0f52aaa77a9c7d706eeb4c76589859e2661078e4a0db2e835021dc8aea859f15",
+      "definitionMd5": "de763231730e2650924961ae80f3ea65",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "boolean"
+    },
+    {
+      "signature": "public.publish_party_room_discovery(text,text,text,text)",
+      "name": "public.publish_party_room_discovery",
+      "bodySha256": "695f4c7db77f9be0a40023d8187ffd2482187147859e8fdc745dab682effc673",
+      "definitionMd5": "18801bcf739e8d44438902452a783ce5",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.read_my_notification_display_context(uuid[])",
+      "name": "public.read_my_notification_display_context",
+      "bodySha256": "b13a7a406aaf50b0bbcc95b0ad2b3ca45e98a2ff2425fa9d4651a3a5930e76fe",
+      "definitionMd5": "b4a99bdf397fbc87057c88dd14714702",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.read_public_channel_profile(text)",
+      "name": "public.read_public_channel_profile",
+      "bodySha256": "c3527492dead6dc863861df14d82e4cdb5b99483ca87191fb0079028ce46c06b",
+      "definitionMd5": "67f8a63e0107fe3d07c485e5680c5271",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "language": "sql",
+      "volatility": "s",
+      "returns": "table(user_idtext,usernametext,avatar_indexinteger,display_nametext,avatar_urltext,profile_avatar_media_statustext,profile_avatar_media_flagged_attimestampwithtimezone,taglinetext,channel_layout_presettext,channel_roletext,profile_visibilitytext,public_activity_visibilitytext,follower_surface_enabledboolean,subscriber_surface_enabledboolean,default_watch_party_join_policytext,default_watch_party_reactions_policytext,default_watch_party_content_access_ruletext,default_watch_party_capture_policytext,default_communication_content_access_ruletext,default_communication_capture_policytext,profile_avatar_fit_modetext,profile_avatar_focal_xnumeric,profile_avatar_focal_ynumeric,profile_background_urltext,profile_background_media_statustext,profile_background_media_flagged_attimestampwithtimezone,profile_background_fit_modetext,profile_background_focal_xnumeric,profile_background_focal_ynumeric,profile_background_overlay_strengthnumeric)"
+    },
+    {
+      "signature": "public.read_public_platform_identity(text)",
+      "name": "public.read_public_platform_identity",
+      "bodySha256": "eb6228f822613670220c15195bce16e99a1181ce8ee7313d364e3178d78bd529",
+      "definitionMd5": "f48df2ff7cec6058934cbfb60c8bf3ac",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "language": "sql",
+      "volatility": "s",
+      "returns": "table(user_idtext,usernametext,display_nametext,taglinetext,channel_layout_presettext,channel_roletext,follower_surface_enabledboolean,subscriber_surface_enabledboolean,platform_access_visibilitytext)"
+    },
+    {
+      "signature": "public.request_creator_clip_export(uuid,uuid,jsonb)",
+      "name": "public.request_creator_clip_export",
+      "bodySha256": "feb7f40b66adc1f341f6e302f7b907ec5b2b3cc6747e63ce2333f58ce1176493",
+      "definitionMd5": "a1ee6f963f487b826ad82239f7c43f1b",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.reserve_notification_activity_push(uuid,uuid,uuid)",
+      "name": "public.reserve_notification_activity_push",
+      "bodySha256": "f04fd69195d521128355a11488dcd809752ee7ea3594dc0bb0993d212f060949",
+      "definitionMd5": "1e878a694f7d155b4cc6f91cfb0b8163",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.resolve_watch_party_livekit_pre_reserved_claim(text,uuid,uuid)",
+      "name": "public.resolve_watch_party_livekit_pre_reserved_claim",
+      "bodySha256": "32ed6ebdb6c894c5dcc9c313735efd2a32929856c9f2d4154a28b2ef3b53c380",
+      "definitionMd5": "5a0e97f4344e4f5b64e8b4f95f9de508",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.resolve_watch_party_livekit_viewer_authority(text,uuid,uuid)",
+      "name": "public.resolve_watch_party_livekit_viewer_authority",
+      "bodySha256": "f25bec3fd58e84d82b0992a7713ae0a97d4b65ef535918a79eff19067019f9c2",
+      "definitionMd5": "3200aec54740595fb551354bc399ef3b",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "s",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.set_party_room_discovery(text,text,text,text,text,text)",
+      "name": "public.set_party_room_discovery",
+      "bodySha256": "a41ea92cc7a94a50bb3cf683f10ab6f35d2e88ec96a320dd00a0fd08cf1766a2",
+      "definitionMd5": "ffb56b92474b45294b7d0656bdae699e",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "jsonb"
+    },
+    {
+      "signature": "public.sync_live_stage_discovery(text)",
+      "name": "public.sync_live_stage_discovery",
+      "bodySha256": "32ba741e2af26015bca40a94959e8b0ceadcce0a6f64ae478270c495868412f6",
+      "definitionMd5": "9b5b3d61a5fe6275f2c8d9f8bfaad51a",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "void"
+    },
+    {
+      "signature": "public.sync_spectator_broadcast_discovery(uuid)",
+      "name": "public.sync_spectator_broadcast_discovery",
+      "bodySha256": "a3338ac81e84d18c1e4365f54d1d2488b088735c3e374003a644a73b5718af52",
+      "definitionMd5": "ff4c949d1964d0e13830abb06dabcd81",
+      "securityDefiner": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "language": "plpgsql",
+      "volatility": "v",
+      "returns": "void"
+    }
+  ],
+  "schemaContractOrigin": "Isolated full-schema replay of the exact immutable nine SQL files; catalog metadata only; not production readback.",
+  "schemaContracts": [
+    {
+      "key": "column:private.discovery_invalidation_outbox:hint_keys",
+      "sha256": "36bacb48a1b08223b24297156e45c59d96bbb962dd52233164d397249c9d43fd"
+    },
+    {
+      "key": "column:private.discovery_invalidation_outbox:source_transaction",
+      "sha256": "ecb8e4ca9258b4d2e84fcdea5dce7afdf55add5db7b963203ba74e743f51b3da"
+    },
+    {
+      "key": "column:private.discovery_invalidation_worker_config:primary_delivery_enabled",
+      "sha256": "ef942c3f5b385391350b3969e7a51dee3cc45b42b785875d464145bf1580ee9c"
+    },
+    {
+      "key": "column:private.party_room_discovery_publications:room_generation",
+      "sha256": "a2223db594381bfb0792f9630bc83d684dd4b1c252ba01ea2933d110b13feb3c"
+    },
+    {
+      "key": "column:private.party_room_discovery_publications:settings_revision",
+      "sha256": "dadf87251fb86dec1c37452b9823257f79966a64e00c594bbc1a318c20c70d44"
+    },
+    {
+      "key": "column:private.room_attendance_hint_receipts:discovery_hint_key",
+      "sha256": "7709720eccfd6dbbb6c27511adcc3050da78692f9cc1ed9bff892fd247299fb3"
+    },
+    {
+      "key": "column:public.circle_spectator_feed_items:discovery_hint_key",
+      "sha256": "2e5772d2c432d97e2951c675079cd8ca856a1c5f91558079b89e09965211f5f6"
+    },
+    {
+      "key": "column:public.creator_events:discovery_hint_key",
+      "sha256": "cc0d3b3ffbae598e5b6065c29214fc5c5b5c4d27f8c2baa49e50a6afbf8bb615"
+    },
+    {
+      "key": "column:public.discovery_feed_items:discovery_hint_key",
+      "sha256": "cdf85dd550812e548a7250983706f64e34ccc2a0879d38dd34c050d79d4d4695"
+    },
+    {
+      "key": "column:public.room_broadcast_sessions:notification_room_generation",
+      "sha256": "1688d4e68977006c9d79507f7e2d7520bec0fbf9d673c6702ce5edf5fb15ae9d"
+    },
+    {
+      "key": "column:public.room_broadcast_sessions:notification_room_host",
+      "sha256": "c840cfd95948932c4500daf1743bd85e5a50603ac1fcff4900bf5d9a0c44de35"
+    },
+    {
+      "key": "column:public.room_broadcast_sessions:notification_room_id",
+      "sha256": "7a1108572ccc3453ab5d29347e74809ec0ece8d2805f702db19f0493b11b1409"
+    },
+    {
+      "key": "column:public.titles:party_count_hint_key",
+      "sha256": "73a32f46af49309a0ccb18cf1a6e2faff5a5dce29bf67707aec7ff9eccce4292"
+    },
+    {
+      "key": "column:public.watch_party_rooms:discovery_paused",
+      "sha256": "029536670acc8bf819543eeebb606838192991a60c49f4e58f4a0ecea99d1f06"
+    },
+    {
+      "key": "column:public.watch_party_rooms:host_settings_revision",
+      "sha256": "e7444cf69824829285b6f381ddb68e715f33157d6e67969edf4051074467b309"
+    },
+    {
+      "key": "column:public.watch_party_rooms:room_generation",
+      "sha256": "9e0b19fecec51bc1990e373463c88d1a19eb3c9eb9201feda88a9d0a07d3c927"
+    },
+    {
+      "key": "constraint:private.discovery_invalidation_outbox:discovery_hint_keys_bounded",
+      "sha256": "8507847d8190ece68d31a409b767f60a47615b708d423af189115cbfc88284b6"
+    },
+    {
+      "key": "constraint:private.discovery_invalidation_outbox:discovery_invalidation_outbox_source_table_check",
+      "sha256": "e38666eaaa777aa736f2f88cd0ddd87aed34241138f467fe637692a77ff56aab"
+    },
+    {
+      "key": "constraint:private.discovery_invalidation_outbox:discovery_invalidation_outbox_topic_check",
+      "sha256": "42e719de78c7ddb25f306e44748ce6642a89188585d5210fa4aacc75947a44f8"
+    },
+    {
+      "key": "index:private.circle_discovery_hint_recipients:circle_discovery_hint_host_recipient_idx",
+      "sha256": "ff3e1318eb188dc7e4aa6d878ea8c5645450dd2db05aeac6f99c620a1a1b1d16"
+    },
+    {
+      "key": "index:private.discovery_invalidation_outbox:discovery_invalidation_transaction_topic_idx",
+      "sha256": "cf887cbb46593f1355267411aad32688597f44c42d6833ad5d2b579984e8cd62"
+    },
+    {
+      "key": "index:private.room_attendance_hint_receipts:room_attendance_hint_actor",
+      "sha256": "081fac68bc9c714b4bad76f6abf1a51c9d6e79bcba1c3ebe2334a8580e5e7c98"
+    },
+    {
+      "key": "index:private.room_attendance_hint_receipts:room_attendance_hint_host",
+      "sha256": "186aa53683cfa2d0a0f74e9476dd0f720b627470ca26a880c1d3d4215b8f6097"
+    },
+    {
+      "key": "index:private.room_attendance_hint_receipts:room_attendance_hint_party",
+      "sha256": "7507082e808e140f052bed659810eaeefb306b03b8917fa009b7049bbd5c232a"
+    },
+    {
+      "key": "index:private.room_attendance_hint_receipts:room_attendance_hint_recipient",
+      "sha256": "1d62cf75837250c63522ec5a24d04e021bd693ed4b6668694f7c5c61cd4b3706"
+    },
+    {
+      "key": "index:private.room_start_notification_bindings:room_start_notification_binding_scope",
+      "sha256": "20a8c2733ff9f89a8b59710f80034b9fd9c75a56ed776c61cc4e9f26481e6ea6"
+    },
+    {
+      "key": "policy:public.circle_spectator_feed_items:live_stage_canonical_current_circle",
+      "sha256": "0ad2b44a4f9c4cda63608abe0e4dd05a1067d7b7e29a4ee7605ab7e936c6a241"
+    },
+    {
+      "key": "policy:public.circle_spectator_feed_items:party_room_current_session_circle",
+      "sha256": "bcc72a762353b64cc59b5e892ffb4c7422322aa8bbc8ca16eaed243cb34aa06c"
+    },
+    {
+      "key": "policy:public.circle_spectator_feed_items:spectator_listing_unpaused_circle",
+      "sha256": "f17ac74fa94e3cf2a43073262de37681a4f4ae3366759f3c54ff40fc6e89431d"
+    },
+    {
+      "key": "policy:public.discovery_feed_items:live_stage_canonical_current_public",
+      "sha256": "f4ad1eb02798cd7a808dcbdbc2205787ade52872e0353b3c6fa8d94ab83675c7"
+    },
+    {
+      "key": "policy:public.discovery_feed_items:live_stage_explicit_owner_room",
+      "sha256": "99cf725d96392f65c2c67aa957e6ae6e5526f3176bed28de7c449a323eefdf3e"
+    },
+    {
+      "key": "policy:public.discovery_feed_items:party_room_current_session_public",
+      "sha256": "bcc72a762353b64cc59b5e892ffb4c7422322aa8bbc8ca16eaed243cb34aa06c"
+    },
+    {
+      "key": "policy:public.discovery_feed_items:spectator_listing_unpaused_public",
+      "sha256": "6ea587912bf84ec558670181bbe86053c25f2875a6135677f9bdb3cd4da6b6ca"
+    },
+    {
+      "key": "policy:public.notifications:notifications_live_current_audience",
+      "sha256": "9a332122cd8a5515f21695c7b198a8c19c64ab75cde9bebc7bf6248a77fce3d8"
+    },
+    {
+      "key": "policy:public.watch_party_rooms:watch_party_rooms_scoped_read",
+      "sha256": "69b8ad3b140021069ca331a5a7f8c61303ae9b7e34134fb6a6ae7375fbfef7e1"
+    },
+    {
+      "key": "relation:private.circle_discovery_hint_recipients:",
+      "sha256": "f7828930144d3074fa3e057bbc11feffa0af41bf8f8b672fbdf048153e714aa6"
+    },
+    {
+      "key": "relation:private.live_stage_discovery_publications:",
+      "sha256": "f9b2b2f54d3115349243ceafc3247f6ef007f7ba67f11debd66aae85918ec327"
+    },
+    {
+      "key": "relation:private.party_room_admission_sessions:",
+      "sha256": "ab696b5e8017623af9f8d93160dbf7a71cbf31aa87459304f348afc01be8f4a7"
+    },
+    {
+      "key": "relation:private.room_attendance_hint_receipts:",
+      "sha256": "09df40429685d8adfec97e393d4935435c9365c92983d5484127dc4eea797a07"
+    },
+    {
+      "key": "relation:private.room_discovery_host_consents:",
+      "sha256": "1d0c4f4f7d0687d512c446c01b40338f467501b4668fb491b1e0c24fdbc62a54"
+    },
+    {
+      "key": "relation:private.room_start_notification_bindings:",
+      "sha256": "c9d5540e20b310308cb6f3f67715148cd3750bd637cd5253830eaa87353a3a92"
+    },
+    {
+      "key": "relation:private.room_start_notification_deliveries:",
+      "sha256": "ad2e985d0a102f836cd8c45f19033e02219e6679990d797674914b4bc72e96b6"
+    },
+    {
+      "key": "trigger:auth.sessions:discovery_host_session_after_loss",
+      "sha256": "6af9e9110b0ac29faa3f064f47ebe5a0d42c92144720a55238abef31c863fb1a"
+    },
+    {
+      "key": "trigger:auth.users:discovery_host_account_after_loss",
+      "sha256": "466196c0408eaab24aa0b8871b984ee86849a427ac2b1c07bb9a88a044063b8f"
+    },
+    {
+      "key": "trigger:private.discovery_invalidation_outbox:discovery_hint_keys_before_enqueue",
+      "sha256": "bbbc2ecdd5fb9bae6c96ad764b11f538a111b604745999e5e8ae7d0394a62b3a"
+    },
+    {
+      "key": "trigger:private.discovery_invalidation_outbox:discovery_primary_hint_after_enqueue",
+      "sha256": "d6e75000cdc56f36136c28443557f9f10db68272d750f7cf2135cd21bd9fd758"
+    },
+    {
+      "key": "trigger:private.party_room_discovery_publications:room_attendance_publication_authority_after_change",
+      "sha256": "9997ea5b67ca48313a1dd79ba58e32d941c0098ecc3b63ddccffbf7eecebf0c6"
+    },
+    {
+      "key": "trigger:private.room_attendance_hint_receipts:attendance_hint_key_guard",
+      "sha256": "f963c1aacb77ac9f211e398175a0bc79e3d56301121aa08b691a9d18554238ec"
+    },
+    {
+      "key": "trigger:public.access_grants:discovery_grant_subject_after_change",
+      "sha256": "53fd206b02ffcdd6b0d5857ddc5edbb138f850e85c047ec25f719d9e2733a6f0"
+    },
+    {
+      "key": "trigger:public.channel_audience_blocks:circle_discovery_block_after_write",
+      "sha256": "57ae5db666b549ecaabb02a3a176d4b6b8a6f7241bd586504d1f1e6266424575"
+    },
+    {
+      "key": "trigger:public.circle_spectator_feed_items:circle_discovery_primary_after_write",
+      "sha256": "6db20fadf5c1f7fe09263b6cda62fa1fe8de29516e50926cf18590fea7fdf72f"
+    },
+    {
+      "key": "trigger:public.circle_spectator_feed_items:circle_discovery_primary_before_delete",
+      "sha256": "af8aaa461b981c7c43976ba085fc41e496cb56fbb521a0583d8e3e72ce58770b"
+    },
+    {
+      "key": "trigger:public.circle_spectator_feed_items:discovery_hint_key_guard",
+      "sha256": "fc650a2f33e1212a9f535f5f946610880ffb3f19f5df6a0deb6933872bead21d"
+    },
+    {
+      "key": "trigger:public.creator_events:discovery_hint_key_guard",
+      "sha256": "2f0a60180ed2157484667a8f3a5118c404cc3f82881cab949fa22e7c48f18ffd"
+    },
+    {
+      "key": "trigger:public.discovery_feed_items:discovery_hint_key_guard",
+      "sha256": "47b98c526143f63fe3345a2dff082efe4857c277bacb342d200eb557c1cf333e"
+    },
+    {
+      "key": "trigger:public.notification_activity_events:room_attendance_receipt_after_materialization",
+      "sha256": "61a287d7d898b1b82785bbc24adbd2449e6272ed8c7a04ba12f04d7aba0a0edf"
+    },
+    {
+      "key": "trigger:public.notification_activity_events:room_start_candidate_after_insert",
+      "sha256": "93f07482f77904672cfb6f7c696c0d5f3faa3bffd09c4a6872506f7ded654f9d"
+    },
+    {
+      "key": "trigger:public.person_notification_preferences:person_attendance_preference_after_change",
+      "sha256": "4c3872f185255c25cf8990692f3f74b5ff642736c9465fba8b8ba888c09672b1"
+    },
+    {
+      "key": "trigger:public.platform_role_memberships:discovery_host_owner_role_after_change",
+      "sha256": "6ff1a10759c6af78e5f9e9bd3811be519356dd3ac73c5d43ccfabb35cdbd5ae4"
+    },
+    {
+      "key": "trigger:public.room_broadcast_sessions:broadcast_notification_binding_before_write",
+      "sha256": "3d6d006a3f0feb02c10f4c8e3ca2331c1f97f3188edd9cd8cf4e6562c80d9de2"
+    },
+    {
+      "key": "trigger:public.titles:party_count_hint_key_guard",
+      "sha256": "2bfc8619ebf747c25279f9bfc8251447805384f08d01837bdb8b4e38504945a4"
+    },
+    {
+      "key": "trigger:public.user_entitlements:discovery_entitlement_subject_after_change",
+      "sha256": "b18389f115a2458805ca0ed89403c71a557ff27760948ae4f55397b29f9341a6"
+    },
+    {
+      "key": "trigger:public.user_friendships:circle_discovery_friendship_after_write",
+      "sha256": "21c32df9852a10edeaa1278b2f1c4ad21c71086486a01d48001a8aecf94b2d9e"
+    },
+    {
+      "key": "trigger:public.user_profiles:discovery_profile_subject_after_change",
+      "sha256": "8542c0f4e4efe469673715dca2b89975ebc1820c9cdc1483a66cabb9a7112fff"
+    },
+    {
+      "key": "trigger:public.watch_party_room_memberships:room_attendance_member_authority_after_change",
+      "sha256": "eb926e117e08d815383eba569f892fde93a6ad02c483d6c4631873a6a1a845b2"
+    },
+    {
+      "key": "trigger:public.watch_party_rooms:aaa_watch_party_host_settings",
+      "sha256": "ab38399cef6cf7294fbd212ddf7572c8296422236e9f1b8a0e5207daabe6d23a"
+    },
+    {
+      "key": "trigger:public.watch_party_rooms:room_attendance_room_authority_after_change",
+      "sha256": "cdf2afe430c8075580b5b64b30b599627376f8a6884feae2be55e41bc3e949e0"
+    },
+    {
+      "key": "trigger:public.watch_party_rooms:room_listing_pause_after_change",
+      "sha256": "80f65fc5ec445b86e8e71025665e612470b59226a099b2d1ed7d9e1ee8cc95bf"
+    }
+  ]
+}
