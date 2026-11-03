@@ -137,6 +137,31 @@ for a connectivity probe. Interactive CLI input/output must be captured privatel
 Clack can display verification input even with terminal echo disabled. Send code
 and Return separately through the approved secure flow; never record either.
 
+### Safe failed-plan diagnostics
+
+A failed helper process reports only a static allowlisted error code. The adapter
+accepts at most 512 bytes of the exact helper JSON serialization with only `status`
+and `code`, optionally a strictly validated `context`; unknown codes, extra fields,
+duplicate keys or trailing text become
+`HELPER_DIAGNOSTIC_UNAVAILABLE`. It never relays raw stderr, provider bodies, tokens,
+or arbitrary error messages. HTTP failures are mapped from status numbers to
+fixed categories; known DNS/TLS/timeout failures have separate fixed categories.
+The original SQL, read-only flags, timeouts, role checks and OFF holds are unchanged.
+One additional fixed read-only query returns only boolean facts about known
+current/session roles and transaction read-only status. Unknown roles, extra
+fields, conflicting facts or nonbooleans fail closed. No arbitrary role name or
+SQL input is exposed. Validated context accompanies plan output and later failure
+codes. It is observed through the same API and read-only request mode, but a
+separate request does not prove the subsequent query uses the same DB session.
+Diagnostic availability does not authorize a retry or another token.
+
+A previous `plan_failed` with discarded diagnostics cannot retrospectively prove
+its cause. Successful synthetic-token transport probes do not prove authorized
+SQL execution. A local alternate-role fixture demonstrates that the existing
+postgres identity/default-owner checks fail under a different database role;
+this is conditional evidence, not proof of the production API's selected role.
+Do not relax those guards or retry denied remote role changes on that assumption.
+
 ## Execution sequence after all gates are satisfied
 
 1. Freeze the exact committed helper/manifest/source HEAD; preserve unrelated

@@ -2,12 +2,13 @@
 // Linux-only bridge for ONE newly approved, temporary Supabase CLI login.
 // Never searches credentials, reads keyrings, logs a token, or invokes login.
 import fs from 'node:fs';
+import {Buffer} from 'node:buffer';
 import os from 'node:os';
 import path from 'node:path';
 import {execFile, execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
-import {PROJECT, VERSIONS, TOOL, sourceBinding, loadBundle} from './live-room-exact-deploy.mjs';
+import {PROJECT, VERSIONS, TOOL, sourceBinding, loadBundle, HELPER_ERROR_CODES, validateManagementContext} from './live-room-exact-deploy.mjs';
 
 export const ADAPTER='scripts/live-room-temporary-cli-session.mjs';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -147,15 +148,34 @@ function saveReceipt(handle){
 }
 const publicIdentity=h=>({session:h.receipt.session,tokenName:h.receipt.tokenName,source:h.receipt.source,tree:h.receipt.tree,providerRevocation:'not_performed'});
 function helperProcess(file,args,options){
-  return new Promise(resolve=>execFile(file,args,options,(error,stdout)=>resolve({exitCode:error?1:0,stdout})));
+  return new Promise(resolve=>execFile(file,args,options,(error,stdout,stderr)=>resolve({exitCode:error?1:0,stdout,stderr})));
+}
+export function helperFailureCode(stderr){
+  return helperFailureDiagnostic(stderr).failureCode;
+}
+export function helperFailureDiagnostic(stderr){
+  const unavailable={failureCode:'HELPER_DIAGNOSTIC_UNAVAILABLE'};
+  if(typeof stderr!=='string'||Buffer.byteLength(stderr)>512)return unavailable;
+  try{
+    const value=JSON.parse(stderr);
+    const shape=Object.keys(value??{}).sort().join(',');
+    if(!['code,status','code,context,status'].includes(shape)||value.status!=='blocked'||!HELPER_ERROR_CODES.includes(value.code))return unavailable;
+    const context=shape==='code,context,status'?validateManagementContext(value.context):undefined;
+    const expected={status:'blocked',code:value.code,...(context?{context}:{})};
+    if(stderr===JSON.stringify(expected)+'\n')return {failureCode:value.code,...(context?{context}:{})};
+  }catch{/* never forward untrusted text */}
+  return unavailable;
 }
 function sanitizedHelperResult(stdout,receipt){
+  if(typeof stdout!=='string')return null;
   let result;try{result=JSON.parse(stdout);}catch{return null;}
+  if(stdout.trim()!==JSON.stringify(result))return null;
   const statuses=['plan_ready','already_applied_verified','applied_verified','apply_unconfirmed'];
-  const allowed=['project','source','tree','status','wrote','responseConfirmed','versions','historySha256'];
+  const allowed=['project','source','tree','status','wrote','responseConfirmed','versions','historySha256','context'];
   if(!result||Object.keys(result).some(k=>!allowed.includes(k))||result.project!==PROJECT||result.source!==receipt.source||result.tree!==receipt.tree||!statuses.includes(result.status)||typeof result.wrote!=='boolean'||JSON.stringify(result.versions)!==JSON.stringify(VERSIONS))return null;
   if(result.responseConfirmed!==undefined&&typeof result.responseConfirmed!=='boolean')return null;
   if(result.historySha256!==undefined&&!/^[a-f0-9]{64}$/u.test(result.historySha256))return null;
+  try{validateManagementContext(result.context);}catch{return null;}
   return result;
 }
 export async function runTemporarySession({session,source,apply=false,root=ROOT,checkSource=verifyDeploymentSource,runChild=helperProcess,launchEnvironment=process.env,nodeProxySupported=process.allowedNodeEnvironmentFlags.has('--use-env-proxy'),verifyTrust=verifyPlatformCA}){
@@ -195,7 +215,7 @@ export async function runTemporarySession({session,source,apply=false,root=ROOT,
     if(result&&(child.exitCode!==0&&result.status!=='apply_unconfirmed'))result=null;
     if(result&&((!apply&&!['plan_ready','already_applied_verified'].includes(result.status))||(apply&&result.status==='plan_ready')||result.wrote!==['applied_verified','apply_unconfirmed'].includes(result.status)))result=null;
     h.receipt.lastRun.status=result?.status??(apply?'apply_unconfirmed':'plan_failed');saveReceipt(h);
-    return {...publicIdentity(h),status:result?.status??(apply?'apply_unconfirmed':'plan_failed'),...(result?{helper:result}:{}),cleanupRequired:true};
+    return {...publicIdentity(h),status:result?.status??(apply?'apply_unconfirmed':'plan_failed'),...(result?{helper:result}:helperFailureDiagnostic(child.stderr)),cleanupRequired:true};
   }finally{
     buffer?.fill(0);if(env)delete env.SUPABASE_ACCESS_TOKEN;token=undefined;h.close();
   }
