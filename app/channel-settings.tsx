@@ -1,5 +1,6 @@
 import { CreatorAuctionHeldEarnings } from "../components/monetization/creator-auction-held-earnings";
 import { CreatorCashoutPanel } from "../components/monetization/creator-cashout-panel";
+import { SandboxCreatorCashoutPanel } from "../components/monetization/sandbox-creator-cashout-panel";
 import { SubscriptionPriceRequestStatus } from "../components/monetization/subscription-price-request-status";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { pickDeviceImage } from "../_lib/deviceImagePicker";
@@ -9495,6 +9496,7 @@ export function ChannelStudioScreen() {
       <View testID={testID}>
         {renderSummaryMetricCards(payoutCards)}
         <CreatorCashoutPanel />
+        <SandboxCreatorCashoutPanel />
         <View style={styles.eventEmptyCard}>
           <Text style={styles.eventEmptyTitle}>Cashout not live yet.</Text>
           <Text style={styles.eventEmptyBody}>

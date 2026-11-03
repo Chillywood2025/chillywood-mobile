@@ -17,6 +17,7 @@ export const appCompletionStudioDependentAddedFunctionIdentities = new Map([
   ...liveDiscoveryAddedFunctionIdentities,
 ]);
 export const appCompletionFiles = Object.freeze([
+  '20261102194000_sandbox_creator_cashout_execution.sql',
   "20261101141441_secondary_media_producer_registry.sql",
   "20261101141605_merch_reconciliation_observability.sql",
   "20261101141625_commerce_fee_component_accounting.sql",
@@ -72,6 +73,27 @@ export const appCompletionFiles = Object.freeze([
 ].sort());
 
 export const appCompletionAddedFunctionIdentities = new Map([
+  ['private.sandbox_cashout_recovery_admission/0','private.sandbox_cashout_recovery_admission()'],
+  ['private.sandbox_cashout_recovery_current/2','private.sandbox_cashout_recovery_current(uuid,text)'],
+  ['private.sandbox_cashout_subject_current/2','private.sandbox_cashout_subject_current(uuid,uuid)'],
+  ['private.sandbox_cashout_current_user/0','private.sandbox_cashout_current_user()'],
+  ['private.lock_sandbox_cashout_creator/1','private.lock_sandbox_cashout_creator(uuid)'],
+  ['private.sandbox_cashout_revoke_admission/0','private.sandbox_cashout_revoke_admission()'],
+  ['private.sandbox_cashout_enabled/0','private.sandbox_cashout_enabled()'],
+  ['private.sandbox_cashout_source/2','private.sandbox_cashout_source(uuid,uuid)'],
+  ['private.sandbox_cashout_auction_binding/2','private.sandbox_cashout_auction_binding(uuid,uuid)'],
+  ['private.sandbox_cashout_merch_source/2','private.sandbox_cashout_merch_source(uuid,uuid)'],
+  ['private.sandbox_cashout_summary/1','private.sandbox_cashout_summary(uuid)'],
+  ['private.hold_sandbox_cashout_changed_source/0','private.hold_sandbox_cashout_changed_source()'],
+  ['private.hold_sandbox_cashout_changed_merch/0','private.hold_sandbox_cashout_changed_merch()'],
+  ['public.request_sandbox_creator_cashout/7','request_sandbox_creator_cashout(integer,text,uuid,uuid,integer,integer,integer)'],
+  ['public.get_sandbox_creator_cashout_execution_context/1','get_sandbox_creator_cashout_execution_context(uuid)'],
+  ['public.claim_sandbox_creator_cashout_dispatch/2','claim_sandbox_creator_cashout_dispatch(uuid,text)'],
+  ['public.cancel_undispatched_sandbox_creator_cashout/1','cancel_undispatched_sandbox_creator_cashout(uuid)'],
+  ['public.record_sandbox_creator_cashout_observation/3','record_sandbox_creator_cashout_observation(uuid,uuid,jsonb)'],
+  ['public.get_my_sandbox_creator_cashout_execution/1','get_my_sandbox_creator_cashout_execution(uuid)'],
+  ['public.list_my_sandbox_creator_cashout_executions/0','list_my_sandbox_creator_cashout_executions()'],
+  ['public.preview_sandbox_creator_cashout/2','preview_sandbox_creator_cashout(integer,text)'],
   ...appCompletionStudioDependentAddedFunctionIdentities,
   ...clipExportPoolAddedFunctionIdentities,
   [

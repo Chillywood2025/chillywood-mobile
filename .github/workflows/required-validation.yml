@@ -169,7 +169,7 @@ jobs:
       - name: Run exact role and explicit permission checks
         run: deno test --node-modules-dir=none --no-lock supabase/functions/_shared/exact-subject-authority_test.ts supabase/functions/_shared/platform-role-authority_test.ts
       - name: Typecheck cashout and pending provider reconciliation entry points
-        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/creator-cashout-driver/index.ts supabase/functions/creator-cashout-worker/index.ts supabase/functions/creator-cashout-webhook/index.ts supabase/functions/creator-cashout-fee-import/index.ts supabase/functions/revenuecat-pending-reconcile/index.ts supabase/functions/stripe-connect-live-observation-webhook/index.ts
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/sandbox-creator-cashout/index.ts supabase/functions/sandbox-creator-cashout-webhook/index.ts supabase/functions/creator-cashout-driver/index.ts supabase/functions/creator-cashout-worker/index.ts supabase/functions/creator-cashout-webhook/index.ts supabase/functions/creator-cashout-fee-import/index.ts supabase/functions/revenuecat-pending-reconcile/index.ts supabase/functions/stripe-connect-live-observation-webhook/index.ts
       - name: Typecheck authenticated creator setup and owner tax catalog boundaries
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/stripe-connect-account/index.ts supabase/functions/stripe-connect-onboarding-link/index.ts supabase/functions/stripe-connect-account-sync/index.ts supabase/functions/stripe-tax-category-catalog/index.ts
 
@@ -220,6 +220,7 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-tracking-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-return-cases-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-cashout-execution-concurrency-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-sandbox-cashout-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-commerce-fee-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-clip-export-concurrency-postgres.mjs
           node --test tests/clip-export-pool-native-runner-source.test.mjs

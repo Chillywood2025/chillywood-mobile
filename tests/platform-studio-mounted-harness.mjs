@@ -127,6 +127,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       // Cashout has its own production-panel mounted suite; generic Studio
       // tests here retain that unrelated financial boundary explicitly.
       if(name.endsWith('/creator-cashout-panel'))return {CreatorCashoutPanel:()=>null};
+      if(name.endsWith('/sandbox-creator-cashout-panel'))return {SandboxCreatorCashoutPanel:()=>null};
       if(name.endsWith('/subscription-price-request-status'))return {SubscriptionPriceRequestStatus:()=>null};
       if(name.endsWith('/liveEvents'))return new Proxy(replayPolicy,{get:(target,key)=>{
         if(key in target)return target[key];
