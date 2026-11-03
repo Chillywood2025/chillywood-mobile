@@ -226,10 +226,19 @@ export function schemaTargets(migrations){
   }
   return [...targets.values()].sort((a,b)=>a.key.localeCompare(b.key));
 }
+// PG18 represents ordinary table NOT NULL both in pg_attribute and pg_constraint;
+// PG17 only has pg_attribute. Omit only the fully redundant canonical PG18 row.
+// NOT VALID, NO INHERIT, unenforced or otherwise unusual rows remain fingerprinted.
+const redundantNotNull=c=>`coalesce((${c}.contype='n' and ${c}.convalidated and (to_jsonb(${c})->>'conenforced')::boolean
+ and not ${c}.condeferrable and not ${c}.condeferred and not ${c}.connoinherit and ${c}.conislocal
+ and ${c}.coninhcount=0 and ${c}.conparentid=0 and ${c}.contypid=0 and cardinality(${c}.conkey)=1
+ and exists(select 1 from pg_attribute nn where nn.attrelid=${c}.conrelid and nn.attnum=${c}.conkey[1]
+   and nn.attnum>0 and not nn.attisdropped and nn.attnotnull
+   and pg_get_constraintdef(${c}.oid)='NOT NULL '||quote_ident(nn.attname))),false)`;
 function schemaValue(t){
   const rel=`to_regclass(${literal(t.relation)})`,name=literal(t.name);
   if(t.kind==='column')return `(select jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attacl::text,a.attidentity,a.attgenerated,pg_get_expr(d.adbin,d.adrelid),
-    (select jsonb_agg(jsonb_build_array(c.conname,pg_get_constraintdef(c.oid),c.convalidated) order by c.conname) from pg_constraint c where c.conrelid=a.attrelid and a.attnum=any(c.conkey))) from pg_attribute a left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where a.attrelid=${rel} and a.attname=${name} and a.attnum>0 and not a.attisdropped)`;
+    (select jsonb_agg(jsonb_build_array(c.conname,pg_get_constraintdef(c.oid),c.convalidated) order by c.conname) from pg_constraint c where c.conrelid=a.attrelid and a.attnum=any(c.conkey) and not ${redundantNotNull('c')})) from pg_attribute a left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where a.attrelid=${rel} and a.attname=${name} and a.attnum>0 and not a.attisdropped)`;
   if(t.kind==='constraint')return `(select jsonb_build_array(pg_get_constraintdef(oid),convalidated,condeferrable,condeferred) from pg_constraint where conrelid=${rel} and conname=${name})`;
   if(t.kind==='index')return `(select jsonb_build_array(pg_get_indexdef(i.indexrelid),i.indisvalid,i.indisready,i.indisunique) from pg_index i join pg_class c on c.oid=i.indexrelid where i.indrelid=${rel} and c.relname=${name})`;
   if(t.kind==='trigger')return `(select jsonb_build_array(pg_get_triggerdef(oid),tgenabled,tgisinternal) from pg_trigger where tgrelid=${rel} and tgname=${name})`;
@@ -237,16 +246,16 @@ function schemaValue(t){
   requireThat(t.kind==='relation','SCHEMA_KIND_INVALID');
   return `(select jsonb_build_array(c.relkind,c.relowner::regrole::text,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity,
     (select jsonb_agg(jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attacl::text,a.attidentity,a.attgenerated,pg_get_expr(d.adbin,d.adrelid)) order by a.attnum) from pg_attribute a left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped),
-    (select jsonb_agg(jsonb_build_array(x.conname,pg_get_constraintdef(x.oid),x.convalidated) order by x.conname) from pg_constraint x where x.conrelid=c.oid),
+    (select jsonb_agg(jsonb_build_array(x.conname,pg_get_constraintdef(x.oid),x.convalidated) order by x.conname) from pg_constraint x where x.conrelid=c.oid and not ${redundantNotNull('x')}),
     (select jsonb_agg(jsonb_build_array(pg_get_indexdef(i.indexrelid),i.indisvalid,i.indisready) order by i.indexrelid::regclass::text) from pg_index i where i.indrelid=c.oid)) from pg_class c where c.oid=${rel})`;
 }
 export function schemaContractsSql(bundle){
   return `set local search_path=pg_catalog,public; select jsonb_agg(jsonb_build_object('key',key,'sha256',${hashSQL('value::text')}) order by key) state from (${schemaTargets(bundle.migrations).map(t=>`select ${literal(t.key)} key, ${schemaValue(t)} value`).join(' union all ')}) items;`;
 }
-function schemaCheck(bundle){
+function schemaCheck(bundle,selected){
   const targets=schemaTargets(bundle.migrations),expected=bundle.manifest.schemaContracts;
   requireThat(Array.isArray(expected)&&expected.length===targets.length,'SCHEMA_CONTRACTS_REQUIRED');
-  return targets.map(t=>{const e=expected.find(e=>e.key===t.key);requireThat(e&&/^[a-f0-9]{64}$/u.test(e.sha256),'SCHEMA_CONTRACT_INVALID');return `${hashSQL(`(${schemaValue(t)})::text`)}=${literal(e.sha256)}`;}).join(' and ');
+  return (selected??targets).map(t=>{const e=expected.find(e=>e.key===t.key);requireThat(e&&/^[a-f0-9]{64}$/u.test(e.sha256),'SCHEMA_CONTRACT_INVALID');return `${hashSQL(`(${schemaValue(t)})::text`)}=${literal(e.sha256)}`;}).join(' and ');
 }
 function functionCheck(entries,{baseline=false}={}){
   return entries.map(e=>`exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.oid=pg_catalog.to_regprocedure(${literal(e.signature)}) and ${signatureSQL}=${literal(e.signature)} and p.prokind='f'
@@ -273,6 +282,18 @@ function finalChecks(bundle){
     holds:`${holdsSQL} and (select bool_and(primary_delivery_enabled) from private.discovery_invalidation_worker_config)`};
 }
 const historyMatch=e=>`exists(select 1 from supabase_migrations.schema_migrations m where version=${literal(e.version)} and name=${literal(e.name)} and ${hashSQL('array_to_json(m.statements)::text')}=${literal(e.statementsSha256)})`;
+// Static manifest indexes only, never catalog values. First failed predicate is
+// reported in the DB exception; rollback/transport uncertainty handling is unchanged.
+export function finalContractChecks(bundle){
+  const groups=finalChecks(bundle),id=(kind,index)=>`${kind}_${String(index).padStart(3,'0')}`;
+  return [
+    {id:'write_authority',target:'postgres writable transaction',sql:writeAuthoritySQL},
+    ...bundle.functions.map((entry,index)=>({id:id('function',index),target:entry.signature,sql:functionCheck([entry])})),
+    ...schemaTargets(bundle.migrations).map((target,index)=>({id:id('schema',index),target:target.key,sql:schemaCheck(bundle,[target])})),
+    ...['privacy','privateTables','holds'].map(key=>({id:key,target:key,sql:groups[key]})),
+    ...bundle.migrations.map((entry,index)=>({id:id('history',index),target:entry.version,sql:historyMatch(entry)})),
+  ];
+}
 export function readbackSql(bundle){
   // Final expressions reference new relations/columns, so read them separately
   // only when all immutable target records are present.
@@ -298,14 +319,14 @@ export function classifyState(bundle,state,final){
 }
 export function buildApplySql(bundle,baseline){
   requireThat(classifyState(bundle,baseline)==='ready','APPLY_REQUIRES_ABSENT_TARGETS');
-  const checks=Object.values(finalChecks(bundle)).map(s=>`coalesce((${s}),false)`).join(' and ');
+  const checks=finalContractChecks(bundle);
   return `begin;
 set local search_path=pg_catalog,public;
 set local standard_conforming_strings=on;
 set local lock_timeout='5s';
 set local statement_timeout='45s';
 set local idle_in_transaction_session_timeout='60s';
-do $room_apply$ begin
+do $room_apply$ declare failed_contract text; begin
  if (${writeAuthoritySQL}) is not true then raise exception 'live_room_write_authority_required'; end if;
 perform pg_advisory_xact_lock(hashtextextended('chillywood-live-room-exact-nine-deployment',0));
 lock table supabase_migrations.schema_migrations in share row exclusive mode;
@@ -313,7 +334,10 @@ lock table public.watch_party_rooms,public.watch_party_room_memberships,public.r
  if (${historyHash}=${literal(baseline.historySha256)} and ${catalogHashSQL(bundle)}=${literal(baseline.catalogSha256)} and (${holdsSQL}) and (${defaultACL}) and (${noNewTables}) and (${functionCheck(bundle.manifest.baselineFunctions,{baseline:true})}) and not exists(select 1 from supabase_migrations.schema_migrations where version in (${VERSIONS.map(literal).join(',')}))) is not true then raise exception 'live_room_baseline_changed'; end if;
 ${bundle.migrations.map(e=>`execute ${literal(e.body)};\ninsert into supabase_migrations.schema_migrations(version,name,statements) values(${literal(e.version)},${literal(e.name)},array[${literal(e.body)}]::text[]);`).join('\n')}
 -- live-room-postflight
- if (${writeAuthoritySQL}) is not true or (${checks} and ${bundle.migrations.map(historyMatch).join(' and ')}) is not true then raise exception 'live_room_final_catalog_mismatch'; end if;
+ select case
+${checks.map(check=>` when (${check.sql}) is not true then ${literal(check.id)}`).join('\n')}
+ else null end into failed_contract;
+ if failed_contract is not null then raise exception 'live_room_final_catalog_mismatch:%',failed_contract; end if;
 end $room_apply$;
 notify pgrst,'reload schema';
 commit;`;
