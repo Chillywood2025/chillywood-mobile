@@ -38,13 +38,19 @@ export const HELPER_ERROR_CODES=Object.freeze([
   'MANAGEMENT_HTTP_AUTH_REJECTED','MANAGEMENT_HTTP_FORBIDDEN','MANAGEMENT_HTTP_BAD_REQUEST',
   'MANAGEMENT_HTTP_RATE_LIMITED','MANAGEMENT_HTTP_SERVER_ERROR','MANAGEMENT_HTTP_OTHER',
   'MANAGEMENT_TRANSPORT_DNS','MANAGEMENT_TRANSPORT_TLS','MANAGEMENT_TRANSPORT_TIMEOUT','MANAGEMENT_TRANSPORT_FAILED',
-  'MANAGEMENT_CONTEXT_INVALID','MANAGEMENT_CONTEXT_ROLE_UNKNOWN',
+  'MANAGEMENT_CONTEXT_INVALID','MANAGEMENT_CONTEXT_ROLE_UNKNOWN','MANAGEMENT_READ_CONTEXT_MISMATCH',
 ]);
 export const safeHelperError=e=>HELPER_ERROR_CODES.includes(e?.message)?e.message:'LIVE_ROOM_DEPLOY_BLOCKED';
-export const MANAGEMENT_CONTEXT_SQL=`select pg_catalog.jsonb_build_object(
+const contextSQL=`pg_catalog.jsonb_build_object(
  'currentPostgres',current_user='postgres','currentReadOnly',current_user='supabase_read_only_user',
  'sessionPostgres',session_user='postgres','sessionReadOnly',session_user='supabase_read_only_user',
- 'sessionAdmin',session_user='supabase_admin','transactionReadOnly',pg_catalog.current_setting('transaction_read_only')='on') state;`;
+ 'sessionAdmin',session_user='supabase_admin','transactionReadOnly',pg_catalog.current_setting('transaction_read_only')='on')`;
+export const MANAGEMENT_CONTEXT_SQL=`select ${contextSQL} state;`;
+export function validateReadContext(value){
+  const context=validateManagementContext(value);
+  requireThat(context.currentReadOnly&&context.sessionReadOnly&&context.transactionReadOnly,'MANAGEMENT_READ_CONTEXT_MISMATCH');
+  return context;
+}
 export function validateManagementContext(value){
   const keys=['currentPostgres','currentReadOnly','sessionPostgres','sessionReadOnly','sessionAdmin','transactionReadOnly'];
   requireThat(value&&Object.keys(value).sort().join(',')===[...keys].sort().join(',')&&keys.every(k=>typeof value[k]==='boolean'),'MANAGEMENT_CONTEXT_INVALID');
@@ -243,7 +249,7 @@ function schemaCheck(bundle){
   return targets.map(t=>{const e=expected.find(e=>e.key===t.key);requireThat(e&&/^[a-f0-9]{64}$/u.test(e.sha256),'SCHEMA_CONTRACT_INVALID');return `${hashSQL(`(${schemaValue(t)})::text`)}=${literal(e.sha256)}`;}).join(' and ');
 }
 function functionCheck(entries,{baseline=false}={}){
-  return entries.map(e=>`exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where ${signatureSQL}=${literal(e.signature)} and p.prokind='f'
+  return entries.map(e=>`exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.oid=pg_catalog.to_regprocedure(${literal(e.signature)}) and ${signatureSQL}=${literal(e.signature)} and p.prokind='f'
     and ${hashSQL('p.prosrc')}=${literal(e.bodySha256)} and p.prosecdef=${e.securityDefiner} and p.proconfig=${textArray(e.config)}
     and p.proowner::regrole::text=${literal(e.owner)} and ${rolesSQL}=${textArray(e.roles??aclRoles(e.acl))}
     and p.provolatile=${literal(e.volatility)} and (select lanname from pg_language where oid=p.prolang)=${literal(e.language)}
@@ -253,10 +259,10 @@ function functionCheck(entries,{baseline=false}={}){
 }
 const newTables=['room_discovery_host_consents','live_stage_discovery_publications','circle_discovery_hint_recipients','room_attendance_hint_receipts','party_room_admission_sessions','room_start_notification_bindings','room_start_notification_deliveries'];
 const noNewTables=newTables.map(t=>`to_regclass('private.${t}') is null`).join(' and ');
-const defaultACL=`not exists(select 1 from pg_default_acl where defaclrole=(select oid from pg_roles where rolname=current_user) and defaclobjtype='f' and defaclnamespace in (0,(select oid from pg_namespace where nspname='private')))
- and (select count(*)=1 and bool_and((select array_agg(x.grantee::regrole::text order by x.grantee::regrole::text) from aclexplode(defaclacl) x where x.privilege_type='EXECUTE' and not x.is_grantable)=array['anon','authenticated','postgres','service_role']::text[]) from pg_default_acl where defaclrole=(select oid from pg_roles where rolname=current_user) and defaclobjtype='f' and defaclnamespace=(select oid from pg_namespace where nspname='public'))`;
-export const holdsSQL=`current_user='postgres'
- and (select count(*)=4 and bool_and(case when key='stripe_connect_enabled' then state='sandbox_only' else state='off' end) from public.platform_money_kill_switches where key in ('live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled'))
+const defaultACL=`not exists(select 1 from pg_default_acl where defaclrole=(select oid from pg_roles where rolname='postgres') and defaclobjtype='f' and defaclnamespace in (0,(select oid from pg_namespace where nspname='private')))
+ and (select count(*)=1 and bool_and((select array_agg(x.grantee::regrole::text order by x.grantee::regrole::text) from aclexplode(defaclacl) x where x.privilege_type='EXECUTE' and not x.is_grantable)=array['anon','authenticated','postgres','service_role']::text[]) from pg_default_acl where defaclrole=(select oid from pg_roles where rolname='postgres') and defaclobjtype='f' and defaclnamespace=(select oid from pg_namespace where nspname='public'))`;
+const writeAuthoritySQL=`current_user='postgres' and current_setting('transaction_read_only')='off'`;
+export const holdsSQL=`(select count(*)=4 and bool_and(case when key='stripe_connect_enabled' then state='sandbox_only' else state='off' end) from public.platform_money_kill_switches where key in ('live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled'))
  and (select count(*)=1 and bool_and(enabled and collecting) from private.discovery_invalidation_worker_config)
  and (select count(*)=1 and bool_and(not enabled) from private.creator_clip_export_worker)
  and (select count(*)=1 and bool_and(not capture_enabled and not media_staging_enabled and not text_expiry_enabled and not media_expiry_enabled and not activation_ready and not legacy_object_deletes_blocked) from private.deleted_content_retention_settings)`;
@@ -270,7 +276,7 @@ const historyMatch=e=>`exists(select 1 from supabase_migrations.schema_migration
 export function readbackSql(bundle){
   // Final expressions reference new relations/columns, so read them separately
   // only when all immutable target records are present.
-  return `set local search_path=pg_catalog,public; select jsonb_build_object('schema',1,'database',current_database(),
+  return `set local search_path=pg_catalog,public; select jsonb_build_object('schema',1,'database',current_database(),'context',${contextSQL},
  'historySha256',${historyHash},'catalogSha256',${catalogHashSQL(bundle)},'holds',(${holdsSQL}),
  'historyCount',(select count(*) from supabase_migrations.schema_migrations),'historyMaximum',(select max(version) from supabase_migrations.schema_migrations),
  'baselineFunctions',(${functionCheck(bundle.manifest.baselineFunctions,{baseline:true})}),'defaults',(${defaultACL}),
@@ -278,15 +284,17 @@ export function readbackSql(bundle){
  'targets',coalesce((select jsonb_agg(jsonb_build_object('version',version,'name',name,'statementsSha256',${hashSQL('array_to_json(m.statements)::text')}) order by version) from supabase_migrations.schema_migrations m where version in (${VERSIONS.map(literal).join(',')})),'[]'::jsonb)) state;`;
 }
 export function finalReadbackSql(bundle){
-  return `set local search_path=pg_catalog,public; select jsonb_build_object(${Object.entries(finalChecks(bundle)).flatMap(([k,v])=>[literal(k),`coalesce((${v}),false)`]).join(',')}) state;`;
+  return `set local search_path=pg_catalog,public; select jsonb_build_object('context',${contextSQL},${Object.entries(finalChecks(bundle)).flatMap(([k,v])=>[literal(k),`coalesce((${v}),false)`]).join(',')}) state;`;
 }
 export function classifyState(bundle,state,final){
+  validateReadContext(state?.context);
   requireThat(state?.schema===1&&state.database==='postgres'&&/^[a-f0-9]{64}$/u.test(state.historySha256??'')&&/^[a-f0-9]{64}$/u.test(state.catalogSha256??'')&&Array.isArray(state.targets),'READBACK_INVALID');
   requireThat(state.holds===true,'PRODUCTION_HOLDS_MISMATCH');
   requireThat(state.historyCount===bundle.manifest.baselineHistory.count+(state.targets.length?9:0)&&state.historyMaximum===bundle.manifest.baselineHistory.maximum,'HISTORY_INVENTORY_MISMATCH');
   if(state.targets.length===0){requireThat(state.baselineFunctions===true&&state.defaults===true&&state.objectsAbsent===true,'BASELINE_CONTRACT_MISMATCH');return 'ready';}
   requireThat(state.targets.length===9&&bundle.migrations.every(e=>state.targets.some(a=>a.version===e.version&&a.name===e.name&&a.statementsSha256===e.statementsSha256)),'PARTIAL_OR_DIFFERENT_HISTORY');
-  requireThat(final&&Object.keys(final).sort().join(',')==='functions,holds,privacy,privateTables,schema'&&Object.values(final).every(v=>v===true),'FINAL_CATALOG_MISMATCH');return 'applied';
+  validateReadContext(final?.context);
+  requireThat(final&&Object.keys(final).sort().join(',')==='context,functions,holds,privacy,privateTables,schema'&&Object.entries(final).every(([k,v])=>k==='context'||v===true),'FINAL_CATALOG_MISMATCH');return 'applied';
 }
 export function buildApplySql(bundle,baseline){
   requireThat(classifyState(bundle,baseline)==='ready','APPLY_REQUIRES_ABSENT_TARGETS');
@@ -298,13 +306,14 @@ set local lock_timeout='5s';
 set local statement_timeout='45s';
 set local idle_in_transaction_session_timeout='60s';
 do $room_apply$ begin
+ if (${writeAuthoritySQL}) is not true then raise exception 'live_room_write_authority_required'; end if;
 perform pg_advisory_xact_lock(hashtextextended('chillywood-live-room-exact-nine-deployment',0));
 lock table supabase_migrations.schema_migrations in share row exclusive mode;
 lock table public.watch_party_rooms,public.watch_party_room_memberships,public.room_broadcast_sessions,public.discovery_feed_items,public.circle_spectator_feed_items,public.creator_events,public.titles,private.discovery_invalidation_worker_config,private.discovery_invalidation_outbox,public.platform_money_kill_switches,private.creator_clip_export_worker,private.deleted_content_retention_settings in share row exclusive mode;
- if ${historyHash}<>${literal(baseline.historySha256)} or ${catalogHashSQL(bundle)}<>${literal(baseline.catalogSha256)} or not (${holdsSQL}) or not (${defaultACL}) or not (${noNewTables}) or not (${functionCheck(bundle.manifest.baselineFunctions,{baseline:true})}) or exists(select 1 from supabase_migrations.schema_migrations where version in (${VERSIONS.map(literal).join(',')})) then raise exception 'live_room_baseline_changed'; end if;
+ if (${historyHash}=${literal(baseline.historySha256)} and ${catalogHashSQL(bundle)}=${literal(baseline.catalogSha256)} and (${holdsSQL}) and (${defaultACL}) and (${noNewTables}) and (${functionCheck(bundle.manifest.baselineFunctions,{baseline:true})}) and not exists(select 1 from supabase_migrations.schema_migrations where version in (${VERSIONS.map(literal).join(',')}))) is not true then raise exception 'live_room_baseline_changed'; end if;
 ${bundle.migrations.map(e=>`execute ${literal(e.body)};\ninsert into supabase_migrations.schema_migrations(version,name,statements) values(${literal(e.version)},${literal(e.name)},array[${literal(e.body)}]::text[]);`).join('\n')}
 -- live-room-postflight
- if not (${checks} and ${bundle.migrations.map(historyMatch).join(' and ')}) then raise exception 'live_room_final_catalog_mismatch'; end if;
+ if (${writeAuthoritySQL}) is not true or (${checks} and ${bundle.migrations.map(historyMatch).join(' and ')}) is not true then raise exception 'live_room_final_catalog_mismatch'; end if;
 end $room_apply$;
 notify pgrst,'reload schema';
 commit;`;
@@ -331,8 +340,13 @@ async function main(){
   const binding=sourceBinding(ROOT,source),bundle=loadBundle(ROOT,source);
   let context;
   try{
-    const query=diagnosticManagementQuery(process.env.SUPABASE_ACCESS_TOKEN);
-    context=validateManagementContext(await query(MANAGEMENT_CONTEXT_SQL,true));
+    const request=diagnosticManagementQuery(process.env.SUPABASE_ACCESS_TOKEN);
+    context=validateManagementContext(await request(MANAGEMENT_CONTEXT_SQL,true));
+    const query=async(sql,readOnly)=>{
+      const state=await request(sql,readOnly);
+      if(readOnly){context=undefined;context=validateManagementContext(state?.context);validateReadContext(context);}
+      return state;
+    };
     const result=await deploy({bundle,apply:rest.includes('--apply'),query,recheckSource:()=>{sourceBinding(ROOT,source);requireThat(JSON.stringify(loadBundle(ROOT,source).sourceFiles)===JSON.stringify(bundle.sourceFiles),'SOURCE_BYTES_CHANGED');}});
     process.stdout.write(JSON.stringify({project:PROJECT,...binding,status:result.status,wrote:result.wrote,responseConfirmed:result.responseConfirmed,versions:VERSIONS,historySha256:(result.after??result.before)?.historySha256,context})+'\n');
     if(!['plan_ready','already_applied_verified','applied_verified'].includes(result.status))process.exitCode=1;

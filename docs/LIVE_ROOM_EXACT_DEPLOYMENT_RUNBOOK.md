@@ -146,21 +146,41 @@ duplicate keys or trailing text become
 `HELPER_DIAGNOSTIC_UNAVAILABLE`. It never relays raw stderr, provider bodies, tokens,
 or arbitrary error messages. HTTP failures are mapped from status numbers to
 fixed categories; known DNS/TLS/timeout failures have separate fixed categories.
-The original SQL, read-only flags, timeouts, role checks and OFF holds are unchanged.
+Read-only flags, timeouts, immutable migration bytes and OFF holds are unchanged.
 One additional fixed read-only query returns only boolean facts about known
 current/session roles and transaction read-only status. Unknown roles, extra
 fields, conflicting facts or nonbooleans fail closed. No arbitrary role name or
 SQL input is exposed. Validated context accompanies plan output and later failure
 codes. It is observed through the same API and read-only request mode, but a
 separate request does not prove the subsequent query uses the same DB session.
+The full baseline and final catalog SELECTs therefore each include their own role
+and transaction facts. Each must report both current and session identity as
+`supabase_read_only_user` and a read-only transaction. Unknown roles, postgres
+readbacks, or writable readbacks fail closed. Default ACLs are inspected for the
+explicit deployment owner `postgres`, never for the reader. The atomic write DO
+independently requires actual `current_user = 'postgres'` and a writable transaction
+before locks or migration bodies and again at postcheck. A successful read cannot
+authorize a write under a different identity.
 Diagnostic availability does not authorize a retry or another token.
 
 A previous `plan_failed` with discarded diagnostics cannot retrospectively prove
 its cause. Successful synthetic-token transport probes do not prove authorized
-SQL execution. A local alternate-role fixture demonstrates that the existing
-postgres identity/default-owner checks fail under a different database role;
-this is conditional evidence, not proof of the production API's selected role.
-Do not relax those guards or retry denied remote role changes on that assumption.
+SQL execution. A later authorized diagnostic observed the read-only current/session
+role and transaction, followed by a transport timeout on the full readback. The
+earlier failure's cause remains unknown. Exact OID lookup now narrows each function
+contract check before retaining all original signature/body/ACL assertions. Local
+full-fixture equivalence and query-plan tests qualify this bounded optimization,
+not its performance on production. No timeout was lengthened and no contract was
+removed. Do not retry denied remote role changes.
+
+### CLI telemetry
+
+Every isolated official CLI invocation sets `SUPABASE_TELEMETRY_DISABLED=1` and
+`DO_NOT_TRACK=1` explicitly. The pinned 2.109.1 runtime checks these before creating
+its PostHog client and substitutes no-op analytics, also skipping telemetry state
+updates and trace writes. The minimal CLI environment enforces both regardless
+of inherited values. Do not remove them for login, metadata checks, or Edge
+deployment; no telemetry recipient is authorized by deployment permission.
 
 ## Execution sequence after all gates are satisfied
 

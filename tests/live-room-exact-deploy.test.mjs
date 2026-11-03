@@ -9,9 +9,10 @@ import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 import {loadBundle,projectFunctions,splitSQL,readbackSql,finalReadbackSql,buildApplySql,classifyState,deploy,sourceBinding,TOOL,MANIFEST,VERSIONS,diagnosticManagementQuery,safeHelperError,MANAGEMENT_CONTEXT_SQL,validateManagementContext} from '../scripts/live-room-exact-deploy.mjs';
 
 const bundle=loadBundle();
-const ready=()=>({schema:1,database:'postgres',historySha256:'a'.repeat(64),catalogSha256:'b'.repeat(64),historyCount:574,historyMaximum:'20261101215711',holds:true,baselineFunctions:true,defaults:true,objectsAbsent:true,targets:[]});
+const readContext={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
+const ready=()=>({schema:1,database:'postgres',context:{...readContext},historySha256:'a'.repeat(64),catalogSha256:'b'.repeat(64),historyCount:574,historyMaximum:'20261101215711',holds:true,baselineFunctions:true,defaults:true,objectsAbsent:true,targets:[]});
 const applied=()=>({...ready(),historyCount:583,targets:bundle.migrations.map(({version,name,statementsSha256})=>({version,name,statementsSha256}))});
-const final=()=>({functions:true,holds:true,privacy:true,privateTables:true,schema:true});
+const final=()=>({context:{...readContext},functions:true,holds:true,privacy:true,privateTables:true,schema:true});
 const context={currentPostgres:true,currentReadOnly:false,sessionPostgres:true,sessionReadOnly:false,sessionAdmin:false,transactionReadOnly:true};
 
 test('management diagnostics preserve request and expose only finite HTTP or transport categories',async()=>{
@@ -54,7 +55,7 @@ test('read-only/idempotent, all partial or changed boundaries fail before writes
   let writes=0;
   const query=async(_sql,readOnly)=>{if(!readOnly)writes++;return ready();};
   assert.equal((await deploy({bundle,query})).status,'plan_ready');assert.equal(writes,0);
-  for(const bad of [{...ready(),holds:false},{...ready(),defaults:false},{...ready(),baselineFunctions:false},{...ready(),objectsAbsent:false},{...applied(),targets:applied().targets.slice(1)}]){
+  for(const bad of [{...ready(),context},{...ready(),context:{...readContext,transactionReadOnly:false}},{...ready(),context:{...readContext,currentReadOnly:false}},{...ready(),holds:false},{...ready(),defaults:false},{...ready(),baselineFunctions:false},{...ready(),objectsAbsent:false},{...applied(),targets:applied().targets.slice(1)}]){
     await assert.rejects(deploy({bundle,apply:true,query:async(sql,readOnly)=>{if(!readOnly)writes++;return sql===finalReadbackSql(bundle)?final():bad;}}));
   }
   assert.equal(writes,0);
@@ -89,8 +90,13 @@ test('committed exact HEAD and immutable Git inputs are required; dirty/untracke
   catch(e){assert.equal(e.status,1);assert.equal(e.stdout,'');assert.equal(e.stderr,JSON.stringify({status:'blocked',code:'MANAGEMENT_HTTP_AUTH_REJECTED'})+'\n');}
   for(const holds of [true,false]){
     fs.writeFileSync(mock,`globalThis.fetch=async(url,options)=>{const q=JSON.parse(options.body);if(q.read_only!==true)throw Error('unexpected write');return new Response(JSON.stringify([{state:q.query===${JSON.stringify(MANAGEMENT_CONTEXT_SQL)}?${JSON.stringify(context)}:${JSON.stringify({...ready(),holds})}}]),{status:200});};`);
-    try{const stdout=execFileSync(process.execPath,['--import',mock,path.join(dir,TOOL),'--source',source],{cwd:dir,env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:dir,SUPABASE_ACCESS_TOKEN:'synthetic-token'},encoding:'utf8',stdio:'pipe'});assert.equal(holds,true);const actual=JSON.parse(stdout);assert.equal(actual.status,'plan_ready');assert.deepEqual(actual.context,context);}
-    catch(e){assert.equal(holds,false);assert.equal(e.status,1);assert.equal(e.stderr,JSON.stringify({status:'blocked',code:'PRODUCTION_HOLDS_MISMATCH',context})+'\n');}
+    try{const stdout=execFileSync(process.execPath,['--import',mock,path.join(dir,TOOL),'--source',source],{cwd:dir,env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:dir,SUPABASE_ACCESS_TOKEN:'synthetic-token'},encoding:'utf8',stdio:'pipe'});assert.equal(holds,true);const actual=JSON.parse(stdout);assert.equal(actual.status,'plan_ready');assert.deepEqual(actual.context,readContext);}
+    catch(e){assert.equal(holds,false);assert.equal(e.status,1);assert.equal(e.stderr,JSON.stringify({status:'blocked',code:'PRODUCTION_HOLDS_MISMATCH',context:readContext})+'\n');}
+  }
+  for(const observed of [context,{...readContext,currentReadOnly:false}]){
+    fs.writeFileSync(mock,`globalThis.fetch=async(url,options)=>new Response(JSON.stringify([{state:JSON.parse(options.body).query===${JSON.stringify(MANAGEMENT_CONTEXT_SQL)}?${JSON.stringify(readContext)}:${JSON.stringify({...ready(),context:observed})}}]),{status:200});`);
+    try{execFileSync(process.execPath,['--import',mock,path.join(dir,TOOL),'--source',source],{cwd:dir,env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:dir,SUPABASE_ACCESS_TOKEN:'synthetic-token'},encoding:'utf8',stdio:'pipe'});assert.fail('full readback role must control admission');}
+    catch(e){assert.equal(e.status,1);const error=JSON.parse(e.stderr);assert.equal(error.code,observed===context?'MANAGEMENT_READ_CONTEXT_MISMATCH':'MANAGEMENT_CONTEXT_ROLE_UNKNOWN');assert.deepEqual(error.context,observed===context?context:undefined);}
   }
   assert.throws(()=>sourceBinding(dir,'0'.repeat(40)),/SOURCE_HEAD_MISMATCH/);
   fs.appendFileSync(path.join(dir,bundle.migrations[0].path),'\n-- uncommitted bytes');
@@ -100,7 +106,7 @@ test('committed exact HEAD and immutable Git inputs are required; dirty/untracke
   assert.throws(()=>loadBundle(dir),/MANIFEST_INVALID/);
 });
 
-test('real nine bodies atomically roll back failures, preserve exact history, and verify final closure',{timeout:180000},async t=>{
+test('real nine bodies atomically roll back failures, preserve exact history, and verify final closure',{timeout:300000},async t=>{
   const excluded=[...bundle.migrations.map(x=>x.path.split('/').at(-1)),'20261102093836_creator_clip_export_bounded_pool.sql','20261102094308_creator_clip_scale_lifecycle_ledger.sql','20261102194000_sandbox_creator_cashout_execution.sql'];
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,excludeMigrations:excluded});t.after(()=>db.close());
   // Synthetic local configuration aligns the approved live hold contract. No
@@ -111,21 +117,61 @@ test('real nine bodies atomically roll back failures, preserve exact history, an
     update private.discovery_invalidation_worker_config set enabled=true,collecting=true,token_sha256=repeat('a',64);
     update public.platform_money_kill_switches set state=case when key='stripe_connect_enabled' then 'sandbox_only' else 'off' end where key in ('live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled');`);
   const local={...bundle,manifest:{...bundle.manifest,baselineHistory:{count:1,maximum:'20261101215711'}}};
-  const read=async()=> (await db.exec(readbackSql(local))).at(-1).rows[0].state;
-  const readFinal=async()=> (await db.exec(finalReadbackSql(local))).at(-1).rows[0].state;
+  await db.exec(`create role supabase_read_only_user bypassrls;
+    grant usage on schema public,private,auth,supabase_migrations to supabase_read_only_user;
+    grant select on all tables in schema public,private,supabase_migrations to supabase_read_only_user;`);
+  const asReadOnly=async sql=>{
+    await db.exec('set session authorization supabase_read_only_user;begin read only;');
+    try{return await db.exec(sql);}finally{await db.exec('rollback;set session authorization postgres;');}
+  };
+  const read=async()=> (await asReadOnly(readbackSql(local))).at(-1).rows[0].state;
+  const readFinal=async()=> (await asReadOnly(finalReadbackSql(local))).at(-1).rows[0].state;
   const before=await read();assert.equal(classifyState(local,before),'ready');
   const postgresContext=validateManagementContext((await db.query(MANAGEMENT_CONTEXT_SQL)).rows[0].state);assert.equal(postgresContext.currentPostgres,true);
-  // Conditional local reproduction only: a read-only API role would fail the
-  // existing postgres identity/default-owner gates despite catalog grants.
-  // This does not assert which role the production generic API selected.
-  await db.exec(`begin;create role supabase_read_only_user bypassrls;
-    grant usage on schema public,private,auth,supabase_migrations to supabase_read_only_user;
-    grant select on all tables in schema public,private,supabase_migrations to supabase_read_only_user;
-    set role supabase_read_only_user;`);
-  try{const alternate=await read();assert.equal(alternate.holds,false);assert.equal(alternate.defaults,false);assert.throws(()=>classifyState(local,alternate),/PRODUCTION_HOLDS_MISMATCH/);const observed=validateManagementContext((await db.query(MANAGEMENT_CONTEXT_SQL)).rows[0].state);assert.equal(observed.currentReadOnly,true);assert.equal(observed.currentPostgres,false);assert.equal(observed.sessionPostgres,true);}
-  finally{await db.exec('reset role;rollback;');}
+  assert.deepEqual(before.context,readContext);assert.equal(before.defaults,true);
+  // Retain every original contract expression; only add exact indexed OID lookup.
+  const optimized=readbackSql(local),originalShape=optimized.replaceAll(/p\.oid=pg_catalog\.to_regprocedure\('[^']+'\) and /gu,'');
+  const originalStart=performance.now(),original=(await asReadOnly(originalShape)).at(-1).rows[0].state,originalMs=performance.now()-originalStart;
+  const optimizedStart=performance.now(),indexed=await read(),indexedMs=performance.now()-optimizedStart;
+  assert.deepEqual(indexed,original);
+  t.diagnostic(`Full read-only fixture equivalent output: original shape ${originalMs.toFixed(1)}ms; indexed shape ${indexedMs.toFixed(1)}ms`);
+  const explain=(await asReadOnly('set local search_path=pg_catalog,public;explain (analyze,format json) '+optimized.split(';').slice(1).join(';'))).at(-1).rows[0]['QUERY PLAN'];
+  assert.match(JSON.stringify(explain),/pg_proc_oid_index/);
+  // OID lookup must not substitute a same-named overload or hide contract drift.
+  const target='public.publish_live_stage_discovery(text,uuid)';
+  const definition=(await db.query(`select pg_get_functiondef('${target}'::regprocedure) definition`)).rows[0].definition;
+  const equivalent=async expected=>{
+    const indexedState=await read(),scanState=(await asReadOnly(originalShape)).at(-1).rows[0].state;
+    assert.deepEqual(indexedState,scanState);assert.equal(indexedState.baselineFunctions,expected);
+  };
+  await db.exec('create function public.publish_live_stage_discovery(integer) returns integer language sql as $$select $1$$;');
+  await equivalent(true);
+  await db.exec('alter function '+target+' rename to synthetic_missing_publication;');
+  await equivalent(false);
+  await db.exec('alter function public.synthetic_missing_publication(text,uuid) rename to publish_live_stage_discovery;drop function public.publish_live_stage_discovery(integer);');
+  assert.match(definition,/\$function\$/u);
+  await db.exec(definition.replace('$function$','$function$\n-- synthetic body drift\n'));
+  await equivalent(false);await db.exec(definition);
+  await db.exec('grant execute on function '+target+' to anon;');
+  await equivalent(false);await db.exec('revoke execute on function '+target+' from anon;');
+  await db.exec('alter function '+target+" set search_path='public';");
+  await equivalent(false);await db.exec(definition);
+  assert.deepEqual(await read(),before);
+  // Defaults belong to the deployment owner, never the API reader.
+  await db.exec('alter default privileges for role supabase_read_only_user in schema public grant execute on functions to anon;');
+  assert.equal((await read()).defaults,true);
+  await db.exec('alter default privileges for role postgres in schema public revoke execute on functions from anon;');
+  assert.equal((await read()).defaults,false);
+  await db.exec('alter default privileges for role postgres in schema public grant execute on functions to anon;');
   assert.deepEqual(await read(),before);
   const sql=buildApplySql(local,before);
+  await db.exec('set session authorization supabase_read_only_user;');
+  try{await assert.rejects(db.exec(sql),/live_room_write_authority_required/);}finally{await db.exec('rollback;set session authorization postgres;');}
+  assert.deepEqual(await read(),before);
+  await assert.rejects(db.exec(sql.replace('begin;','begin read only;')),/live_room_write_authority_required/);await db.exec('rollback');
+  await db.exec('update private.discovery_invalidation_worker_config set collecting=false;');
+  await assert.rejects(db.exec(sql),/live_room_baseline_changed/);await db.exec('rollback');
+  await db.exec('update private.discovery_invalidation_worker_config set collecting=true;');
   const broken=sql.replace(bundle.migrations[4].body.replaceAll("'","''"),()=>"do $$begin raise exception ''synthetic_middle_failure'';end$$;");
   await assert.rejects(db.exec(broken),/synthetic_middle_failure/);await db.exec('rollback');
   assert.equal(classifyState(local,await read()),'ready');
