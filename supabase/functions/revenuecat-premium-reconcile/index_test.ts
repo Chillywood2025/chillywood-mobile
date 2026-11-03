@@ -55,6 +55,7 @@ const fixture = () => {
         id: "GPA.0000-0000-0000-00000..0",
         purchased_at: now - 120_000,
         product_store_identifier: "premium_subscription:monthly",
+        effective_expiration_date: now + 600_000,
       },
     ] as Row[],
   };
@@ -68,6 +69,7 @@ type Options = ReturnType<typeof fixture> & {
   malformedTransactions?: boolean;
   nextPage?: unknown;
   transactionPages?: Row[][];
+  finalSubscription?: Row;
   projection?: Row;
   projectionError?: string;
 };
@@ -167,6 +169,10 @@ const run = async (options: Options) => {
       ) return response(options.product);
       if (
         url.pathname ===
+          `/v2/projects/projFixture/subscriptions/${options.subscription.id}`
+      ) return response(options.finalSubscription ?? options.subscription);
+      if (
+        url.pathname ===
           `/v2/projects/projFixture/subscriptions/${options.subscription.id}/transactions`
       ) {
         const pageItems = options.transactionPages?.[transactionPage++] ??
@@ -258,6 +264,41 @@ Deno.test("Google transaction bare SKU corroborates product; exact base plan com
   const result = await run(input);
   equal(result.status, 200);
   equal(projections(result)[0].args.p_provider_base_plan_id, "monthly");
+});
+
+for (const expiration of [undefined, null, "123456", 1, Number.MAX_SAFE_INTEGER]) {
+  Deno.test(`Google Restore rejects missing or conflicting effective transaction expiry: ${String(expiration)}`, async () => {
+    const input = fixture();
+    input.transactions[1].effective_expiration_date = expiration;
+    const result = await run(input);
+    equal(result.status, 409);
+    equal(projections(result).length, 0);
+  });
+}
+
+for (const [field, value] of [
+  ["customer_id", OTHER], ["original_customer_id", OTHER],
+  ["product_id", "prodOther"], ["environment", "production"],
+  ["store", "app_store"], ["pending_payment", true],
+  ["gives_access", false], ["status", "expired"],
+  ["current_period_ends_at", 1], ["store_subscription_identifier", "changed"],
+] as const) {
+  Deno.test(`Google Restore rejects subscription changes during provider reads: ${field}`, async () => {
+    const input = fixture();
+    const result = await run({
+      ...input, finalSubscription: { ...input.subscription, [field]: value },
+    });
+    equal(result.status, 409);
+    equal(projections(result).length, 0);
+  });
+}
+
+Deno.test("Google Restore verifies the exact subscription after history and before projection", async () => {
+  const input = fixture();
+  const result = await run(input);
+  equal(result.status, 200);
+  assert(result.providerUrls.at(-1)?.endsWith("/subscriptions/subGoogle"),
+    "final exact subscription read missing");
 });
 
 Deno.test("Google Restore reads every transaction page before choosing its exact bound period", async () => {
@@ -362,6 +403,7 @@ for (
     "latest-date",
     "latest-product",
     "wrong-project-page",
+    "wrong-subscription-page",
     "pagination-limit",
     "nonstring-page",
     "whitespace-page",
@@ -389,6 +431,10 @@ for (
       input.nextPage =
         "/v2/projects/other/subscriptions/subGoogle/transactions";
     }
+    if (change === "wrong-subscription-page") {
+      input.nextPage =
+        "/v2/projects/projFixture/subscriptions/other/transactions";
+    }
     if (change === "pagination-limit") {
       input.nextPage =
         "/v2/projects/projFixture/subscriptions/subGoogle/transactions?starting_after=repeat";
@@ -402,6 +448,10 @@ for (
     const result = await run(input);
     equal(result.status, 409);
     equal(projections(result).length, 0);
+    if (change === "wrong-subscription-page") {
+      assert(!result.providerUrls.some((url) => url.includes("/subscriptions/other/")),
+        "pagination escaped the selected subscription before failing");
+    }
   });
 }
 
