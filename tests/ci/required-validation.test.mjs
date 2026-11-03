@@ -97,6 +97,12 @@ test("source validation runs on source lifecycle events, not draft readiness", (
   const workflow = parse(fs.readFileSync(".github/workflows/required-validation.yml", "utf8"));
   assert.deepEqual(workflow.on.pull_request.branches, ["main"]);
   assert.deepEqual(workflow.on.pull_request.types, ["opened", "synchronize", "reopened"]);
+  const admits = ({ action, pull_request }) => workflow.on.pull_request.types.includes(action)
+    && workflow.on.pull_request.branches.includes(pull_request.base.ref);
+  assert.equal(admits({ action: "opened", pull_request: { draft: true, base: { ref: "feature" } } }), false);
+  assert.equal(admits({ action: "edited", changes: { base: { ref: { from: "feature" } } }, pull_request: { base: { ref: "main" } } }), false);
+  assert.equal(admits({ action: "ready_for_review", pull_request: { draft: false, base: { ref: "main" } } }), false);
+  assert.equal(admits({ action: "reopened", pull_request: { draft: true, base: { ref: "main" } } }), true);
   for (const job of Object.values(workflow.jobs)) {
     assert.doesNotMatch(job.if ?? "", /draft/);
   }
@@ -347,6 +353,12 @@ test("publisher derives the owner-author exception only from trusted repository 
   };
   assert.equal(isVerifiedRepositoryOwnerAuthor(claimedByContributor), false);
   assert.ok(evaluateWorkflowSnapshot(claimedByContributor).findings.includes("VALIDATION_POLICY_REVIEW_REQUIRED"));
+  for (const draft of [true, false]) {
+    assert.ok(evaluateWorkflowSnapshot({ ...claimedByContributor, pull: { ...claimedByContributor.pull, draft } }).findings.includes("VALIDATION_POLICY_REVIEW_REQUIRED"));
+  }
+  // A later eligible review only takes effect when the publisher is reevaluated.
+  const reviewed = { ...claimedByContributor, reviews: [{ id: 101, state: "APPROVED", author_association: "COLLABORATOR", user: { login: "reviewer" }, commit_id: head, submitted_at: "2026-11-03T16:00:00Z" }] };
+  assert.equal(evaluateWorkflowSnapshot(reviewed).ok, true);
 
   const sameLoginWrongId = { ...snapshot, pull: { ...snapshot.pull, user: { ...snapshot.pull.user, id: 999 } } };
   assert.equal(isVerifiedRepositoryOwnerAuthor(sameLoginWrongId), false);
