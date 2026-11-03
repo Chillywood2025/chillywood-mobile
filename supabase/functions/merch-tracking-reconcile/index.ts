@@ -1,13 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createAdminClient, jsonResponse, readOptionalEnv} from "../_shared/stripe-connect.ts";
-import {hashTrackingBody, normalizeTracking, readExistingShippoTracking, type TrackingJob} from "../_shared/merch-tracking.ts";
-
-async function bounded<T>(work: PromiseLike<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try { return await Promise.race([Promise.resolve(work), new Promise<T>((_, reject) => {
-    timer = setTimeout(() => reject(new Error("tracking_database_deadline")), 5000);
-  })]); } finally { if (timer) clearTimeout(timer); }
-}
+import {boundedTrackingDatabase, hashTrackingBody, normalizeTracking, readExistingShippoTracking, type TrackingJob} from "../_shared/merch-tracking.ts";
 
 Deno.serve(async (req: Request) => {
   const deadline = Date.now() + 75000;
@@ -25,7 +18,7 @@ Deno.serve(async (req: Request) => {
   if (!configured.configured) return jsonResponse(503, {error: "tracking_not_configured"});
   const admin = configured.client;
   try {
-  const claimed = await bounded(admin.rpc("claim_merch_tracking_jobs", {p_limit: 5, p_environment: environment}));
+  const claimed = await boundedTrackingDatabase(admin.rpc("claim_merch_tracking_jobs", {p_limit: 5, p_environment: environment}));
   if (claimed.error || !Array.isArray(claimed.data) || claimed.data.length > 5) return jsonResponse(503, {error: "tracking_queue_unavailable"});
   let completed = 0;
   for (const job of claimed.data as TrackingJob[]) {
@@ -42,7 +35,7 @@ Deno.serve(async (req: Request) => {
       facts = {status: "UNKNOWN", carrier: job.carrier, tracking_number: job.tracking_number,
         test: environment === "sandbox", review_reason: "carrier_unavailable"};
     }
-    const result = await bounded(admin.rpc("complete_merch_tracking_job", {p_assignment_id: job.id,
+    const result = await boundedTrackingDatabase(admin.rpc("complete_merch_tracking_job", {p_assignment_id: job.id,
       p_lease: job.lease, p_facts: facts, p_registered: false}));
     if (!result.error && result.data && result.data.stale !== true) completed++;
   }
