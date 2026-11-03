@@ -93,6 +93,15 @@ test("missing run association after merge skips reporting without granting valid
   }
 });
 
+test("source validation runs on source lifecycle events, not draft readiness", () => {
+  const workflow = parse(fs.readFileSync(".github/workflows/required-validation.yml", "utf8"));
+  assert.deepEqual(workflow.on.pull_request.branches, ["main"]);
+  assert.deepEqual(workflow.on.pull_request.types, ["opened", "synchronize", "reopened"]);
+  for (const job of Object.values(workflow.jobs)) {
+    assert.doesNotMatch(job.if ?? "", /draft/);
+  }
+});
+
 test("runtime authority repair requires native lock-queue proof in the database job", () => {
   const workflow = parse(fs.readFileSync(".github/workflows/required-validation.yml", "utf8"));
   const command = "SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-database-runtime-authority-concurrency.mjs";
@@ -319,6 +328,14 @@ test("publisher derives the owner-author exception only from trusted repository 
   const accepted = evaluateWorkflowSnapshot(snapshot);
   assert.equal(accepted.ok, true);
   assert.equal(accepted.policyAuthorization, "VERIFIED_REPOSITORY_OWNER_AUTHOR");
+
+  // Readiness must not invalidate already-complete exact-head/base evidence.
+  for (const draft of [true, false]) {
+    const current = { ...snapshot, pull: { ...snapshot.pull, draft } };
+    assert.deepEqual(evaluateWorkflowSnapshot(current), accepted);
+    assert.throws(() => evaluateWorkflowSnapshot({ ...current, pull: { ...current.pull, head: { sha: sha("c") } } }), /VALIDATION_WORKFLOW_HEAD_STALE/);
+    assert.throws(() => evaluateWorkflowSnapshot({ ...current, pull: { ...current.pull, base: { ...current.pull.base, sha: sha("c") } } }), /VALIDATION_WORKFLOW_BASE_STALE/);
+  }
 
   const claimedByContributor = {
     ...snapshot,
