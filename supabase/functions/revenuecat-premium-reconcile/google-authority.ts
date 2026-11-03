@@ -89,6 +89,8 @@ export const googlePremiumSnapshot = (
     ![parts[0], storeProduct].includes(
       String(current.product_store_identifier),
     ) ||
+    !millis(current.effective_expiration_date) ||
+    current.effective_expiration_date !== subscription.current_period_ends_at ||
     (sorted.length > 1 && sorted[1].purchased_at === original.purchased_at) ||
     (sorted.length > 1 &&
       sorted[sorted.length - 2].purchased_at === current.purchased_at)
