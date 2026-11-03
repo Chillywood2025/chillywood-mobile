@@ -55,9 +55,9 @@ export function trustedProxyEnvironment(inherited=process.env,verifyTrust=verify
 export function requireNodeProxySupport(supported=process.allowedNodeEnvironmentFlags.has('--use-env-proxy')){
   requireThat(supported,'NODE_ENV_PROXY_UNSUPPORTED');
 }
-export function temporaryCliEnvironment(home,inherited=process.env){
+export function temporaryCliEnvironment(home,inherited=process.env,verifyTrust=verifyPlatformCA){
   requireThat(sessionPath(path.basename(home))===home,'SESSION_ID_INVALID');
-  return {HOME:home,SUPABASE_HOME:path.join(home,'.supabase'),SUPABASE_NO_KEYRING:'1',PATH:'/usr/local/bin:/usr/bin:/bin',LANG:'C.UTF-8',LC_ALL:'C.UTF-8',...trustedProxyEnvironment(inherited)};
+  return {HOME:home,SUPABASE_HOME:path.join(home,'.supabase'),SUPABASE_NO_KEYRING:'1',SUPABASE_TELEMETRY_DISABLED:'1',DO_NOT_TRACK:'1',PATH:'/usr/local/bin:/usr/bin:/bin',LANG:'C.UTF-8',LC_ALL:'C.UTF-8',...trustedProxyEnvironment(inherited,verifyTrust)};
 }
 const fdPath=(fd,name)=>`/proc/self/fd/${fd}/${name}`;
 const identity=s=>({dev:String(s.dev),ino:String(s.ino)});

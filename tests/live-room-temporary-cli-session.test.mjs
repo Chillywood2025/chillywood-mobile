@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {createTemporarySession,runTemporarySession,cleanupTemporarySession,trustedProxyEnvironment,requireNodeProxySupport,verifyPlatformCA,PLATFORM_CA,helperFailureCode} from '../scripts/live-room-temporary-cli-session.mjs';
+import {createTemporarySession,runTemporarySession,cleanupTemporarySession,trustedProxyEnvironment,temporaryCliEnvironment,requireNodeProxySupport,verifyPlatformCA,PLATFORM_CA,helperFailureCode} from '../scripts/live-room-temporary-cli-session.mjs';
 import {PROJECT,VERSIONS} from '../scripts/live-room-exact-deploy.mjs';
 
 // All tokens here are synthetic strings. No CLI login, keyring, HTTP, or real
@@ -138,6 +138,14 @@ test('transport accepts only current matching platform proxy aliases and pinned 
   for(const key of ['NODE_OPTIONS','NODE_TLS_REJECT_UNAUTHORIZED','SSL_CERT_DIR','CURL_CA_BUNDLE','SUPABASE_API_URL','SUPABASE_API_HOST','SUPABASE_CLI_BINARY_OVERRIDE'])assert.throws(()=>trustedProxyEnvironment({...proxyFixture(),[key]:'attacker'},()=>{}),/OVERRIDE_FORBIDDEN/);
   for(const key of ['NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','REQUESTS_CA_BUNDLE'])assert.throws(()=>trustedProxyEnvironment({...proxyFixture(),[key]:'/tmp/attacker.crt'},()=>{}),/CA_ALIASES_INVALID/);
   assert.throws(()=>trustedProxyEnvironment(proxyFixture(),()=>{throw Error('PLATFORM_CA_HASH_INVALID');}),/HASH_INVALID/);
+});
+
+test('isolated CLI always opts out before launch regardless of inherited telemetry settings',t=>{
+  const session=fixture(t,{token:false});let checked=0;
+  const env=temporaryCliEnvironment(session.home,{...proxyFixture(),SUPABASE_TELEMETRY_DISABLED:'0',DO_NOT_TRACK:'0',SUPABASE_TELEMETRY_POSTHOG_HOST:'https://attacker.invalid',SUPABASE_TELEMETRY_DEBUG:'1'},()=>checked++);
+  assert.equal(checked,1);assert.equal(env.SUPABASE_TELEMETRY_DISABLED,'1');assert.equal(env.DO_NOT_TRACK,'1');
+  assert.equal(env.SUPABASE_TELEMETRY_POSTHOG_HOST,undefined);assert.equal(env.SUPABASE_TELEMETRY_DEBUG,undefined);
+  assert.equal(env.SUPABASE_ACCESS_TOKEN,undefined);assert.equal(env.SUPABASE_NO_KEYRING,'1');
 });
 
 test('unsupported Node or altered transport fails before source, token access, or child launch',async()=>{

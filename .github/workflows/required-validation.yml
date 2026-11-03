@@ -3,7 +3,12 @@ name: Chi'llywood Source Validation
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    # Drafts receive full validation. Readiness alone changes no source or base.
+    # After retargeting a PR to main, close/reopen it to validate the new base.
+    # Do not reuse an old-base result; title/body edits intentionally do not run CI.
+    # If policy validation failed pending eligible review, rerun source validation
+    # after review. Marking ready neither retries checks nor grants merge authority.
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
