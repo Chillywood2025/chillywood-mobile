@@ -20,13 +20,21 @@ export async function readBoundedTrackingBody(body: ReadableStream<Uint8Array> |
       if (timedOut) throw new Error("tracking_body_deadline");
       if (done) break;
       length += value.byteLength;
-      if (length > 256000) { await reader.cancel(); throw new Error("payload_too_large"); }
+      // Cancellation is best-effort cleanup. Its underlying source promise may
+      // never settle; awaiting it would defeat the body deadline on overflow.
+      if (length > 256000) throw new Error("payload_too_large");
       chunks.push(value);
     }
   } finally { clearTimeout(timer); void reader.cancel().catch(() => {}); reader.releaseLock(); }
   const bytes = new Uint8Array(length); let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   return new TextDecoder("utf-8", {fatal: true}).decode(bytes);
+}
+export async function boundedTrackingDatabase<T>(work: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([Promise.resolve(work), new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("tracking_database_deadline")), 5000);
+  })]); } finally { if (timer) clearTimeout(timer); }
 }
 export const hashTrackingBody = async (v: string) => Array.from(new Uint8Array(await crypto.subtle.digest(
   "SHA-256", new TextEncoder().encode(v)))).map(b => b.toString(16).padStart(2, "0")).join("");

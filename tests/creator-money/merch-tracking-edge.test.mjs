@@ -56,6 +56,26 @@ test('stalled tracking body is cancelled and cannot block a worker or webhook in
  assert.equal(cancelled,true);
 });
 
+test('oversized and stalled bodies remain bounded when underlying cancellation never settles or rejects',async()=>{
+ for(const mode of ['oversized','stalled'])for(const cancellation of ['pending','rejected']) {
+  let cancelled=0;
+  const body=new ReadableStream({
+   start(controller){if(mode==='oversized')controller.enqueue(new Uint8Array(256001));},
+   pull:()=>new Promise(()=>{}),
+   cancel(){cancelled++;return cancellation==='pending'?new Promise(()=>{}):Promise.reject(Error('cleanup failed'));},
+  });
+  let timer;
+  try {
+   const outcome=await Promise.race([
+    tracking.readBoundedTrackingBody(body,5).then(()=> 'unexpected_success',error=>error.message),
+    new Promise(resolve=>{timer=setTimeout(()=>resolve('body_still_pending'),100);}),
+   ]);
+   assert.equal(outcome,mode==='oversized'?'payload_too_large':'tracking_body_deadline',`${mode}/${cancellation}`);
+   assert.equal(cancelled,1);assert.equal(body.locked,false);
+  } finally {clearTimeout(timer);}
+ }
+});
+
 test('production worker is explicit, exact-mode claimed, live-key-only and rejects missing provider mode',async()=>{
  let worker;const calls=[],requests=[];
  const env={MERCH_TRACKING_ENVIRONMENT:'production',MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_LIVE_TOKEN:'shippo_live_fixture'};
@@ -79,7 +99,8 @@ test('durable signed callback only enqueues hint, while authenticated worker GET
  let webhook,worker;const calls=[],requests=[];
  const env={MERCH_SHIPPO_WEBHOOK_SECRET:'fixture-hmac',MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_TEST_TOKEN:'shippo_test_fixture'};
  const job={id:'assignment',order_id:'order',lease:'lease',carrier:'usps',tracking_number:'ABC12345',provider_account:'managed_fixture',registration_state:'pending',environment:'sandbox'};
- const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?[job]:{},error:null};}};
+ const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?[job]:
+  name==='receive_merch_tracking_hint'?{accepted:true,duplicate:false}:{},error:null};}};
  const shared={createAdminClient:()=>({configured:true,client:admin}),jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),readOptionalEnv:k=>env[k]};
  const provider=loadTracking('_shared/merch-tracking.ts',{fetch:async(url,options)=>{
   requests.push({url,options});return new Response(JSON.stringify({carrier:'usps',tracking_number:'ABC12345',test:true,
@@ -103,6 +124,70 @@ test('durable signed callback only enqueues hint, while authenticated worker GET
   assert.equal(calls.at(-1).args.p_registered,false,'GET never fabricates registration evidence');
   assert.equal(requests[0].options.body,undefined);
  }
+});
+
+test('signed callback requires an explicit SQL receipt and keeps database failures retryable',async()=>{
+ const secret='synthetic-signing-secret';
+ const raw=JSON.stringify({event:'track_updated',data:{carrier:'usps',tracking_number:'ABC12345',test:true}});
+ const now=Math.floor(Date.now()/1000);
+ const signature=`t=${now},v1=${createHmac('sha256',secret).update(`${now}.${raw}`).digest('hex')}`;
+ const cases=[
+  ['accepted',{data:{accepted:true,duplicate:false},error:null},200],
+  ['duplicate',{data:{accepted:true,duplicate:true},error:null},200],
+  ['ignored',{data:{accepted:false},error:null},200],
+  ['missing',{data:null,error:null},503],
+  ['empty',{data:{},error:null},503],
+  ['ambiguous_duplicate',{data:{accepted:true},error:null},503],
+  ['provider_error',{data:null,error:{message:'private database error'}},503],
+  ['rejected',null,503],
+  ['stalled',null,503],
+ ];
+ for(const [name,result,status] of cases) {
+  let handler;const calls=[];
+  const shared={readOptionalEnv:k=>k==='MERCH_SHIPPO_WEBHOOK_SECRET'?secret:undefined,
+   jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),createAdminClient:()=>({configured:true,client:{rpc:(rpc,args)=>{
+    calls.push({rpc,args});
+    if(name==='rejected')return Promise.reject(Error('private database error'));
+    if(name==='stalled')return new Promise(()=>{});
+    return Promise.resolve(result);
+   }}})};
+  const provider=loadTracking('_shared/merch-tracking.ts',{timer:(fn,ms)=>setTimeout(fn,Math.min(ms,5))});
+  loadTracking('merch-tracking-webhook/index.ts',{Deno:{serve:h=>handler=h},modules:{'../_shared/stripe-connect.ts':shared,'../_shared/merch-tracking.ts':provider}});
+  let timer;
+  try {
+   const response=await Promise.race([
+    handler(new Request('https://fixture.test',{method:'POST',body:raw,headers:{'shippo-auth-signature':signature}})),
+    new Promise(resolve=>{timer=setTimeout(()=>resolve(null),100);}),
+   ]);
+   assert.ok(response,`${name} must settle within the database deadline`);assert.equal(response.status,status,name);
+   const body=await response.json();
+   if(status===200){assert.equal(body.accepted,result.data.accepted);assert.equal(body.financialAuthority,false);}
+   else assert.deepEqual(body,{error:'tracking_receipt_unavailable'});
+   assert.equal(calls.length,1);assert.equal(calls[0].rpc,'receive_merch_tracking_hint');
+   assert.equal(calls[0].args.p_hash,await tracking.hashTrackingBody(raw));
+  } finally {clearTimeout(timer);}
+ }
+});
+
+test('lost callback receipt retries the identical durable identity without a second logical hint',async()=>{
+ let handler,resolveFirst;const calls=[],inbox=new Set();
+ const secret='synthetic-signing-secret';
+ const raw=JSON.stringify({event:'track_updated',data:{carrier:'usps',tracking_number:'ABC12345',test:true}});
+ const now=Math.floor(Date.now()/1000);
+ const signature=`t=${now},v1=${createHmac('sha256',secret).update(`${now}.${raw}`).digest('hex')}`;
+ const shared={readOptionalEnv:k=>k==='MERCH_SHIPPO_WEBHOOK_SECRET'?secret:undefined,
+  jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),createAdminClient:()=>({configured:true,client:{rpc:(name,args)=>{
+   calls.push({name,args});const duplicate=inbox.has(args.p_hash);inbox.add(args.p_hash);
+   if(calls.length===1)return new Promise(resolve=>{resolveFirst=resolve;});
+   return Promise.resolve({data:{accepted:true,duplicate},error:null});
+  }}})};
+ const provider=loadTracking('_shared/merch-tracking.ts',{timer:(fn,ms)=>setTimeout(fn,Math.min(ms,5))});
+ loadTracking('merch-tracking-webhook/index.ts',{Deno:{serve:h=>handler=h},modules:{'../_shared/stripe-connect.ts':shared,'../_shared/merch-tracking.ts':provider}});
+ const request=()=>new Request('https://fixture.test',{method:'POST',body:raw,headers:{'shippo-auth-signature':signature}});
+ assert.equal((await handler(request())).status,503);
+ assert.equal((await handler(request())).status,200);
+ resolveFirst({data:{accepted:true,duplicate:false},error:null});await Promise.resolve();
+ assert.equal(inbox.size,1);assert.equal(calls.length,2);assert.deepEqual(calls[0],calls[1]);
 });
 test('tracking worker aggregate deadline stops admissions and stale acknowledgements are incomplete',async()=>{
  for(const stale of [false,true]){
