@@ -164,8 +164,8 @@ export async function observeStripeFeeReport(context: ReportContext, secret: str
         return value;
       }), deadline]);
       if (!response.ok) fail("provider_read_failed");
-      if (!response.body) fail("file_body_missing");
-      reader = response.body.getReader();
+      const body = response.body ?? fail("file_body_missing");
+      reader = body.getReader();
       const chunks: Uint8Array[] = []; let size = 0;
       for (;;) {
         const { done, value } = await Promise.race([reader.read(), deadline]);

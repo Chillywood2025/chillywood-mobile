@@ -17,6 +17,14 @@ const context = { accountId: 'acct_fixture', environment: 'test', reportRunId: '
 const header = 'fee_transaction_id,incurred_by,incurred_by_type,amount,tax,currency,product,suite,feature_name,settled_via';
 const row = 'fee_one,ch_fixture,charge,0.10,0.01,usd,Tax,Revenue,Automatic tax,balance';
 const csv = `${header}\n${row}\n`;
+test('fee report adapter passes strict standalone TypeScript checking', () => {
+  const program = ts.createProgram(['supabase/functions/_shared/stripe-fee-report-evidence.ts'], {
+    noEmit: true, strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
+    lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'], types: [],
+  });
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(diagnostics.length, 0, diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n'));
+});
 test('transfer fee reports bind funding only, do not claim zero or accept mixed payout context',()=>{
  const {chargeId,refundIds,...base}=context;const transfer={...base,transferId:'tr_fixture'};
  const output=normalize(`${header}\nfee_transfer,tr_fixture,transfer,0.12,0.03,usd,Connect,Payments,Transfer,balance\n${row}`,transfer);
@@ -204,6 +212,16 @@ test('fee read deadline timers are cleared on success and malformed provider JSO
   assert.equal(clock.active.size, 0);
   await assert.rejects(clock.observe(context, 'rk_test_fixture', async () => new Response('{')));
   assert.equal(clock.active.size, 0);
+});
+test('missing fee response bodies fail closed and clear their deadline timer', async () => {
+  for (const stage of ['account', 'report', 'csv']) {
+    const clock = deadlineObserver(), f = fixture();
+    await assert.rejects(clock.observe(context, 'rk_test_fixture', async (url, options) => {
+      const target = stage === 'account' ? url.endsWith('/account') : stage === 'report' ? url.includes('/reporting/') : url.includes('files.stripe.com');
+      return target ? new Response(null) : f.transport(url, options);
+    }), /stripe_fee_evidence_file_body_missing/);
+    assert.equal(clock.active.size, 0);
+  }
 });
 test('report normalizer cannot modify the tax readiness hard gate', () => {
   const sql = fs.readFileSync('supabase/migrations/20261031033820_commerce_tax_readiness.sql', 'utf8');
