@@ -1,16 +1,39 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {Buffer} from 'node:buffer';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
-import {loadBundle,projectFunctions,splitSQL,readbackSql,finalReadbackSql,buildApplySql,classifyState,deploy,sourceBinding,TOOL,MANIFEST,VERSIONS} from '../scripts/live-room-exact-deploy.mjs';
+import {loadBundle,projectFunctions,splitSQL,readbackSql,finalReadbackSql,buildApplySql,classifyState,deploy,sourceBinding,TOOL,MANIFEST,VERSIONS,diagnosticManagementQuery,safeHelperError,MANAGEMENT_CONTEXT_SQL,validateManagementContext} from '../scripts/live-room-exact-deploy.mjs';
 
 const bundle=loadBundle();
 const ready=()=>({schema:1,database:'postgres',historySha256:'a'.repeat(64),catalogSha256:'b'.repeat(64),historyCount:574,historyMaximum:'20261101215711',holds:true,baselineFunctions:true,defaults:true,objectsAbsent:true,targets:[]});
 const applied=()=>({...ready(),historyCount:583,targets:bundle.migrations.map(({version,name,statementsSha256})=>({version,name,statementsSha256}))});
 const final=()=>({functions:true,holds:true,privacy:true,privateTables:true,schema:true});
+const context={currentPostgres:true,currentReadOnly:false,sessionPostgres:true,sessionReadOnly:false,sessionAdmin:false,transactionReadOnly:true};
+
+test('management diagnostics preserve request and expose only finite HTTP or transport categories',async()=>{
+  const secret='synthetic-private-error';
+  for(const [status,code] of [[400,'BAD_REQUEST'],[401,'AUTH_REJECTED'],[403,'FORBIDDEN'],[429,'RATE_LIMITED'],[500,'SERVER_ERROR'],[503,'SERVER_ERROR'],[418,'OTHER']]){
+    let called=0,consumed=0;
+    const query=diagnosticManagementQuery('synthetic-token',async(url,options)=>{
+      called++;assert.equal(url,'https://api.supabase.com/v1/projects/bmkkhihfbmsnnmcqkoly/database/query');assert.equal(options.method,'POST');assert.deepEqual(JSON.parse(options.body),{query:'SELECT 1',read_only:true});
+      return {ok:false,status,body:{cancel:async()=>{}},text:async()=>{consumed++;return secret;}};
+    });
+    await assert.rejects(query('SELECT 1',true),new RegExp('^Error: MANAGEMENT_HTTP_'+code+'$'));assert.equal(called,1);assert.equal(consumed,0);
+  }
+  for(const [error,expected] of [[{cause:{code:'EAI_AGAIN'}},'DNS'],[{cause:{code:'SELF_SIGNED_CERT_IN_CHAIN'}},'TLS'],[{name:'TimeoutError'},'TIMEOUT'],[{cause:{code:secret}},'FAILED']]){
+    await assert.rejects(diagnosticManagementQuery('synthetic-token',async()=>{throw error;})('SELECT 1',true),new RegExp('^Error: MANAGEMENT_TRANSPORT_'+expected+'$'));
+  }
+  const value=await diagnosticManagementQuery('synthetic-token',async()=>new Response(JSON.stringify([{state:ready()}]),{status:200}))('SELECT 1',true);
+  assert.deepEqual(value,ready());
+  assert.equal(safeHelperError(Error('ARBITRARY_UPPERCASE_SECRET')),'LIVE_ROOM_DEPLOY_BLOCKED');
+  assert.equal(safeHelperError(Error('PRODUCTION_HOLDS_MISMATCH')),'PRODUCTION_HOLDS_MISMATCH');
+  assert.deepEqual(validateManagementContext(context),context);
+  for(const changed of [{...context,extra:true},{...context,currentPostgres:'true'},{...context,currentPostgres:false},{...context,currentReadOnly:true},{...context,sessionPostgres:false}])assert.throws(()=>validateManagementContext(changed),/MANAGEMENT_CONTEXT_INVALID|MANAGEMENT_CONTEXT_ROLE_UNKNOWN/);
+});
 
 test('immutable nine-only and eight-file closure, exact ordered function projection',()=>{
   assert.equal(bundle.migrations.length,9);assert.equal(bundle.sourceFiles.length,18);
@@ -60,6 +83,15 @@ test('committed exact HEAD and immutable Git inputs are required; dirty/untracke
   assert.throws(()=>sourceBinding(dir,git('rev-parse','HEAD')));
   git('add',TOOL);git('commit','-qm','synthetic tool');const source=git('rev-parse','HEAD');
   assert.equal(sourceBinding(dir,source).source,source);assert.equal(loadBundle(dir,source).functions.length,104);
+  const mock=path.join(dir,'synthetic-network.mjs');
+  fs.writeFileSync(mock,`globalThis.fetch=async()=>new Response('synthetic-provider-secret',{status:401});`);
+  try{execFileSync(process.execPath,['--import',mock,path.join(dir,TOOL),'--source',source],{cwd:dir,env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:dir,SUPABASE_ACCESS_TOKEN:'synthetic-token'},encoding:'utf8',stdio:'pipe'});assert.fail('actual helper must reject');}
+  catch(e){assert.equal(e.status,1);assert.equal(e.stdout,'');assert.equal(e.stderr,JSON.stringify({status:'blocked',code:'MANAGEMENT_HTTP_AUTH_REJECTED'})+'\n');}
+  for(const holds of [true,false]){
+    fs.writeFileSync(mock,`globalThis.fetch=async(url,options)=>{const q=JSON.parse(options.body);if(q.read_only!==true)throw Error('unexpected write');return new Response(JSON.stringify([{state:q.query===${JSON.stringify(MANAGEMENT_CONTEXT_SQL)}?${JSON.stringify(context)}:${JSON.stringify({...ready(),holds})}}]),{status:200});};`);
+    try{const stdout=execFileSync(process.execPath,['--import',mock,path.join(dir,TOOL),'--source',source],{cwd:dir,env:{PATH:'/usr/local/bin:/usr/bin:/bin',HOME:dir,SUPABASE_ACCESS_TOKEN:'synthetic-token'},encoding:'utf8',stdio:'pipe'});assert.equal(holds,true);const actual=JSON.parse(stdout);assert.equal(actual.status,'plan_ready');assert.deepEqual(actual.context,context);}
+    catch(e){assert.equal(holds,false);assert.equal(e.status,1);assert.equal(e.stderr,JSON.stringify({status:'blocked',code:'PRODUCTION_HOLDS_MISMATCH',context})+'\n');}
+  }
   assert.throws(()=>sourceBinding(dir,'0'.repeat(40)),/SOURCE_HEAD_MISMATCH/);
   fs.appendFileSync(path.join(dir,bundle.migrations[0].path),'\n-- uncommitted bytes');
   assert.equal(loadBundle(dir,source).migrations[0].body,bundle.migrations[0].body);
@@ -82,6 +114,17 @@ test('real nine bodies atomically roll back failures, preserve exact history, an
   const read=async()=> (await db.exec(readbackSql(local))).at(-1).rows[0].state;
   const readFinal=async()=> (await db.exec(finalReadbackSql(local))).at(-1).rows[0].state;
   const before=await read();assert.equal(classifyState(local,before),'ready');
+  const postgresContext=validateManagementContext((await db.query(MANAGEMENT_CONTEXT_SQL)).rows[0].state);assert.equal(postgresContext.currentPostgres,true);
+  // Conditional local reproduction only: a read-only API role would fail the
+  // existing postgres identity/default-owner gates despite catalog grants.
+  // This does not assert which role the production generic API selected.
+  await db.exec(`begin;create role supabase_read_only_user bypassrls;
+    grant usage on schema public,private,auth,supabase_migrations to supabase_read_only_user;
+    grant select on all tables in schema public,private,supabase_migrations to supabase_read_only_user;
+    set role supabase_read_only_user;`);
+  try{const alternate=await read();assert.equal(alternate.holds,false);assert.equal(alternate.defaults,false);assert.throws(()=>classifyState(local,alternate),/PRODUCTION_HOLDS_MISMATCH/);const observed=validateManagementContext((await db.query(MANAGEMENT_CONTEXT_SQL)).rows[0].state);assert.equal(observed.currentReadOnly,true);assert.equal(observed.currentPostgres,false);assert.equal(observed.sessionPostgres,true);}
+  finally{await db.exec('reset role;rollback;');}
+  assert.deepEqual(await read(),before);
   const sql=buildApplySql(local,before);
   const broken=sql.replace(bundle.migrations[4].body.replaceAll("'","''"),()=>"do $$begin raise exception ''synthetic_middle_failure'';end$$;");
   await assert.rejects(db.exec(broken),/synthetic_middle_failure/);await db.exec('rollback');

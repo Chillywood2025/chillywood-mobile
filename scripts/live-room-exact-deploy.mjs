@@ -16,6 +16,66 @@ export const VERSIONS=Object.freeze(['20261101194927','20261101194952','20261101
 const EDGE_PATHS=Object.freeze(['_shared/chat-call-livekit-authority.ts','_shared/exact-subject-authority.ts','_shared/live-cost-guard.ts','_shared/livekit-routing.ts','_shared/livekit-session-generation.ts','_shared/security-request-context.ts','_shared/watch-party-livekit-authority.ts','livekit-token/index.ts'].map(x=>'supabase/functions/'+x));
 const EXPECTED_HASHES=Object.freeze(['da046f100ab5e9ed4a3a9cb6701c4be2214c8e27498183bdaf60b7e7b3d14a2b','b245acef636754796f4eede185db22d0cd629d93e5f32c87c437eb7725dd6a9b','bf42e3c2fa318faac98a9ba5c3332a9cd053af482e8cbbf1bd886830e06db862','f3f0408f4df80ab3104c62a4f3593a6ddd226f3a9776cebe8e9fcf0ed73ae3c1','4fba6138afe82149c5bebbdf29aa8cb9fefdcb1257655531c2366bb529b89968','568c7ed0fe3ef6c59d3a3c52b5c61e104cfaf72d1a994db872da2c3e5876fcf7','50a33b52d1b196be9486f1938d583143d8b14ba11fd5375e9f69cbb36a6fc46d','583cb1e503a057caa2de7bde5842a2c7c13eed0121f35d8e589a4f4e63185b16','daa5f1a595bcbc87c11a471893eec5819f4f9e189bf877e5252c25eca346d48c']);
 const requireThat=(ok,code)=>{if(!ok)throw Error(code);};
+// Diagnostic vocabulary is static: neither provider bodies nor arbitrary error
+// messages (including uppercase strings) are trusted output.
+export const HELPER_ERROR_CODES=Object.freeze([
+  'APPLY_REQUIRES_ABSENT_TARGETS','ARGUMENT_INVALID','BASELINE_CONTRACT_MISMATCH',
+  'BASELINE_FUNCTION_INVENTORY_INVALID','BASELINE_HISTORY_INVENTORY_INVALID',
+  'EDGE_CLOSURE_INVALID','EDGE_HASH_MISMATCH','EDGE_SCOPE_INVALID',
+  'EMPTY_FUNCTION_SEARCH_PATH_REQUIRED','EXACT_SOURCE_REQUIRED','EXPLICIT_BASELINE_ACL_REQUIRED',
+  'FINAL_CATALOG_MISMATCH','FINAL_FUNCTION_INVENTORY_INVALID','FUNCTION_DROP_FORBIDDEN',
+  'FUNCTION_REPLACEMENT_PRECONDITION','HISTORY_INVENTORY_MISMATCH','LIVE_ROOM_DEPLOY_BLOCKED',
+  'MANIFEST_INVALID','MIGRATION_HASH_MISMATCH','MIGRATION_SCOPE_INVALID','PARTIAL_OR_DIFFERENT_HISTORY',
+  'PRODUCTION_HOLDS_MISMATCH','READBACK_INVALID','RENAME_DESTINATION_EXISTS',
+  'SCHEMA_CONTRACTS_REQUIRED','SCHEMA_CONTRACT_INVALID','SCHEMA_KIND_INVALID','SCHEMA_TARGET_INVENTORY_INVALID',
+  'SOURCE_BYTES_CHANGED','SOURCE_FILE_NOT_COMMITTED','SOURCE_HEAD_MISMATCH','TOOL_NOT_COMMITTED',
+  'TRACKED_SOURCE_DIRTY','TRANSACTION_CONTROL_FORBIDDEN','UNBALANCED_SIGNATURE',
+  'UNKNOWN_FUNCTION_ACL_TARGET','UNKNOWN_RENAME_TARGET','UNSUPPORTED_BASELINE_ACL',
+  'UNSUPPORTED_FUNCTION_ACL','UNSUPPORTED_FUNCTION_ALTER','UNSUPPORTED_FUNCTION_ARGUMENT',
+  'UNSUPPORTED_FUNCTION_CONFIG','UNSUPPORTED_FUNCTION_DEFINITION','UNSUPPORTED_FUNCTION_LANGUAGE',
+  'UNSUPPORTED_TRIGGER_TARGET','UNTERMINATED_SQL','SUPABASE_ACCESS_TOKEN_REQUIRED',
+  'MANAGEMENT_REQUEST_FAILED','MANAGEMENT_RESPONSE_TOO_LARGE','MANAGEMENT_RESPONSE_INVALID','MANAGEMENT_READBACK_INVALID',
+  'MANAGEMENT_HTTP_AUTH_REJECTED','MANAGEMENT_HTTP_FORBIDDEN','MANAGEMENT_HTTP_BAD_REQUEST',
+  'MANAGEMENT_HTTP_RATE_LIMITED','MANAGEMENT_HTTP_SERVER_ERROR','MANAGEMENT_HTTP_OTHER',
+  'MANAGEMENT_TRANSPORT_DNS','MANAGEMENT_TRANSPORT_TLS','MANAGEMENT_TRANSPORT_TIMEOUT','MANAGEMENT_TRANSPORT_FAILED',
+  'MANAGEMENT_CONTEXT_INVALID','MANAGEMENT_CONTEXT_ROLE_UNKNOWN',
+]);
+export const safeHelperError=e=>HELPER_ERROR_CODES.includes(e?.message)?e.message:'LIVE_ROOM_DEPLOY_BLOCKED';
+export const MANAGEMENT_CONTEXT_SQL=`select pg_catalog.jsonb_build_object(
+ 'currentPostgres',current_user='postgres','currentReadOnly',current_user='supabase_read_only_user',
+ 'sessionPostgres',session_user='postgres','sessionReadOnly',session_user='supabase_read_only_user',
+ 'sessionAdmin',session_user='supabase_admin','transactionReadOnly',pg_catalog.current_setting('transaction_read_only')='on') state;`;
+export function validateManagementContext(value){
+  const keys=['currentPostgres','currentReadOnly','sessionPostgres','sessionReadOnly','sessionAdmin','transactionReadOnly'];
+  requireThat(value&&Object.keys(value).sort().join(',')===[...keys].sort().join(',')&&keys.every(k=>typeof value[k]==='boolean'),'MANAGEMENT_CONTEXT_INVALID');
+  requireThat(Number(value.currentPostgres)+Number(value.currentReadOnly)===1&&Number(value.sessionPostgres)+Number(value.sessionReadOnly)+Number(value.sessionAdmin)===1,'MANAGEMENT_CONTEXT_ROLE_UNKNOWN');
+  return Object.fromEntries(keys.map(k=>[k,value[k]]));
+}
+export function safeHelperFailure(error){
+  const failure={status:'blocked',code:safeHelperError(error)};
+  if(error?.context){try{failure.context=validateManagementContext(error.context);}catch{/* no unvalidated facts */}}
+  return failure;
+}
+export function diagnosticManagementQuery(token,fetcher=fetch){
+  return managementQuery(token,async(...args)=>{
+    let response;
+    try{response=await fetcher(...args);}catch(e){
+      const code=e?.cause?.code;
+      if(['EAI_AGAIN','ENOTFOUND'].includes(code))throw Error('MANAGEMENT_TRANSPORT_DNS');
+      if(['SELF_SIGNED_CERT_IN_CHAIN','DEPTH_ZERO_SELF_SIGNED_CERT','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','ERR_TLS_CERT_ALTNAME_INVALID','UNABLE_TO_GET_ISSUER_CERT_LOCALLY'].includes(code))throw Error('MANAGEMENT_TRANSPORT_TLS');
+      if(['TimeoutError','AbortError'].includes(e?.name)||['ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT'].includes(code))throw Error('MANAGEMENT_TRANSPORT_TIMEOUT');
+      throw Error('MANAGEMENT_TRANSPORT_FAILED');
+    }
+    if(!response.ok){
+      // Never consume, log or classify a provider error body.
+      const status=response.status;
+      const code=status===401?'MANAGEMENT_HTTP_AUTH_REJECTED':status===403?'MANAGEMENT_HTTP_FORBIDDEN':status===400?'MANAGEMENT_HTTP_BAD_REQUEST':status===429?'MANAGEMENT_HTTP_RATE_LIMITED':status>=500&&status<=599?'MANAGEMENT_HTTP_SERVER_ERROR':'MANAGEMENT_HTTP_OTHER';
+      try{await response.body?.cancel();}catch{/* no response details escape */}
+      throw Error(code);
+    }
+    return response;
+  });
+}
 export const sha256=s=>createHash('sha256').update(s).digest('hex');
 const literal=s=>`'${String(s).replaceAll("'","''")}'`;
 const hashSQL=s=>`encode(sha256(convert_to(${s},'UTF8')),'hex')`;
@@ -269,8 +329,13 @@ async function main(){
   requireThat(args.filter(x=>x==='--source').length===1,'EXACT_SOURCE_REQUIRED');const index=args.indexOf('--source'),source=args[index+1],rest=args.filter((_,i)=>i!==index&&i!==index+1);
   requireThat(rest.length===0||(rest.length===1&&rest[0]==='--apply'),'ARGUMENT_INVALID');
   const binding=sourceBinding(ROOT,source),bundle=loadBundle(ROOT,source);
-  const result=await deploy({bundle,apply:rest.includes('--apply'),query:managementQuery(process.env.SUPABASE_ACCESS_TOKEN),recheckSource:()=>{sourceBinding(ROOT,source);requireThat(JSON.stringify(loadBundle(ROOT,source).sourceFiles)===JSON.stringify(bundle.sourceFiles),'SOURCE_BYTES_CHANGED');}});
-  process.stdout.write(JSON.stringify({project:PROJECT,...binding,status:result.status,wrote:result.wrote,responseConfirmed:result.responseConfirmed,versions:VERSIONS,historySha256:(result.after??result.before)?.historySha256})+'\n');
-  if(!['plan_ready','already_applied_verified','applied_verified'].includes(result.status))process.exitCode=1;
+  let context;
+  try{
+    const query=diagnosticManagementQuery(process.env.SUPABASE_ACCESS_TOKEN);
+    context=validateManagementContext(await query(MANAGEMENT_CONTEXT_SQL,true));
+    const result=await deploy({bundle,apply:rest.includes('--apply'),query,recheckSource:()=>{sourceBinding(ROOT,source);requireThat(JSON.stringify(loadBundle(ROOT,source).sourceFiles)===JSON.stringify(bundle.sourceFiles),'SOURCE_BYTES_CHANGED');}});
+    process.stdout.write(JSON.stringify({project:PROJECT,...binding,status:result.status,wrote:result.wrote,responseConfirmed:result.responseConfirmed,versions:VERSIONS,historySha256:(result.after??result.before)?.historySha256,context})+'\n');
+    if(!['plan_ready','already_applied_verified','applied_verified'].includes(result.status))process.exitCode=1;
+  }catch(e){throw {message:safeHelperError(e),context};}
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(e=>{process.stderr.write(JSON.stringify({status:'blocked',code:/^[A-Z_]+$/u.test(e?.message??'')?e.message:'LIVE_ROOM_DEPLOY_BLOCKED'})+'\n');process.exitCode=1;});
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(e=>{process.stderr.write(JSON.stringify(safeHelperFailure(e))+'\n');process.exitCode=1;});
