@@ -17,6 +17,7 @@ export const appCompletionStudioDependentAddedFunctionIdentities = new Map([
   ...liveDiscoveryAddedFunctionIdentities,
 ]);
 export const appCompletionFiles = Object.freeze([
+  '20261103005000_native_production_ingress_observations.sql',
   '20261102194000_sandbox_creator_cashout_execution.sql',
   "20261101141441_secondary_media_producer_registry.sql",
   "20261101141605_merch_reconciliation_observability.sql",
@@ -73,6 +74,8 @@ export const appCompletionFiles = Object.freeze([
 ].sort());
 
 export const appCompletionAddedFunctionIdentities = new Map([
+  ['private.assert_creator_native_dispatch_environment/1','private.assert_creator_native_dispatch_environment(text)'],
+  ['public.record_native_production_ingress_observation/1','record_native_production_ingress_observation(jsonb)'],
   ['private.sandbox_cashout_recovery_admission/0','private.sandbox_cashout_recovery_admission()'],
   ['private.sandbox_cashout_recovery_current/2','private.sandbox_cashout_recovery_current(uuid,text)'],
   ['private.sandbox_cashout_subject_current/2','private.sandbox_cashout_subject_current(uuid,uuid)'],
@@ -867,6 +870,7 @@ export const appCompletionAddedFunctionIdentities = new Map([
 ]);
 
 export const appCompletionReplacedFunctionIdentities = new Map([
+  ['public.begin_creator_money_checkout/2','begin_creator_money_checkout(uuid,uuid)'],
   ["public.read_public_channel_profile/1", "read_public_channel_profile(text)"],
   ["public.read_public_platform_identity/1", "read_public_platform_identity(text)"],
   ...liveDiscoveryReplacedFunctionIdentities,
