@@ -420,13 +420,20 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         // Delivery is independent of send acknowledgement, like Realtime.
         // Preserve the admission stamped when the relay accepted this packet,
         // including packets delayed across a later same-user app restart.
-        setTimeout(() => channel.emit("broadcast", message.event, { payload: clone(message.payload) }), 0);
+        setTimeout(() => {
+          this.events.push({ kind: "relay-delivery", event: message.event, sender: sender.userId,
+            receiver: channel.endpoint.userId, roomId: message.roomId, payloadRoomId: message.payload.roomId,
+            channelRoomId: channel.topic.replace(/^comm-room-/, ""), generation: message.payload.membershipGeneration,
+            active: channel.active, at: performance.now() });
+          channel.emit("broadcast", message.event, { payload: clone(message.payload) });
+        }, 0);
       }
     },
     async deliver(input, sender) {
       if (input.userId && input.userId !== sender.userId) throw new Error("browser signal account identity changed");
       const message = membershipStore.signal({ ...input, userId: sender.userId });
-      this.events.push({ kind: "broadcast", event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration, at: performance.now() });
+      this.events.push({ kind: "broadcast", event: message.event, sender: sender.userId,
+        roomId: message.roomId, payloadRoomId: message.payload.roomId, generation: message.payload.membershipGeneration, at: performance.now() });
       if (this.dropAnswers && message.event === "webrtc:answer") return true;
       if (this.holdNext?.userId === sender.userId && this.holdNext.event === message.event) {
         this.holdNext = null;
@@ -453,6 +460,11 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     }
     on(type, filter, callback) { this.handlers.push({ type, filter, callback }); return this; }
     emit(type, event, payload) {
+      if (type === "broadcast") hub.events.push({ kind: "in-memory-receive", event,
+        userId: this.endpoint.userId, roomId: hub.roomId, payloadRoomId: payload?.payload?.roomId,
+        channelRoomId: this.topic.replace(/^comm-room-/, ""), generation: payload?.payload?.membershipGeneration,
+        active: this.active, handlerCount: this.handlers.filter((h) => h.type === type && (h.filter.event === event || h.filter.event === "*")).length,
+        at: performance.now() });
       for (const handler of this.handlers.filter((h) => h.type === type && (h.filter.event === event || h.filter.event === "*"))) {
         try { Promise.resolve(handler.callback(payload)).catch((error) => hub.errors.push(String(error.stack ?? error))); }
         catch (error) { hub.errors.push(String(error.stack ?? error)); }
@@ -572,7 +584,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         observePeerOperation(operation, description) {
           // Observe real browser SDP calls without replacing their settlement
           // or exposing SDP. Track IDs belong only to synthetic test capture.
-          hub.events.push({ kind: "peer-operation", userId, peerId: this.fixturePeerId, operation,
+          hub.events.push({ kind: "peer-operation", userId, peerId: this.fixturePeerId, peerRoomId: this.fixtureRoomId, roomId: hub.roomId, operation,
             ...(description ? { descriptionType: description.type } : {}), signaling: this.signalingState,
             senders: this.getSenders().map(({ track }) => track ? { trackId: track.id, kind: track.kind, state: track.readyState, enabled: track.enabled } : null),
             at: performance.now() });
@@ -580,16 +592,17 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         constructor(config) {
           super(config); endpoint.peers.push(this);
           this.fixturePeerId = ++hub.peerSerial; this.remoteDescriptionApplications = 0;
+          this.fixtureRoomId = hub.roomId;
           this.fixtureIceConfiguration = summarizeLegacyIceConfiguration(config);
           this.addEventListener("icecandidate", (event) => hub.events.push({ kind: "ice-candidate", userId,
-            peerId: this.fixturePeerId, roomId: hub.roomId, present: !!event.candidate,
+            peerId: this.fixturePeerId, peerRoomId: this.fixtureRoomId, roomId: hub.roomId, present: !!event.candidate,
             candidateType: event.candidate?.type ?? null, at: performance.now() }));
           this.addEventListener("icecandidateerror", (event) => hub.events.push({ kind: "ice-gathering-error",
             userId, peerId: this.fixturePeerId, roomId: hub.roomId,
             errorCode: Number.isInteger(event.errorCode) ? event.errorCode : null, at: performance.now() }));
           for (const eventName of ["iceconnectionstatechange", "icegatheringstatechange", "connectionstatechange", "signalingstatechange"]) {
             this.addEventListener(eventName, () => hub.events.push({ kind: "peer-state", userId,
-              peerId: this.fixturePeerId, roomId: hub.roomId, event: eventName, connection: this.connectionState,
+              peerId: this.fixturePeerId, peerRoomId: this.fixtureRoomId, roomId: hub.roomId, event: eventName, connection: this.connectionState,
               ice: this.iceConnectionState, gathering: this.iceGatheringState, signaling: this.signalingState, at: performance.now() }));
           }
           this.addEventListener("track", (event) => {
@@ -623,7 +636,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
           return super.createOffer(options);
         }
         async addIceCandidate(candidate) {
-          const entry = { kind: "ice-application", userId, peerId: this.fixturePeerId, roomId: hub.roomId,
+          const entry = { kind: "ice-application", userId, peerId: this.fixturePeerId, peerRoomId: this.fixtureRoomId, roomId: hub.roomId,
             at: performance.now(), phase: "started", remoteType: this.remoteDescription?.type ?? null };
           hub.events.push(entry);
           try {

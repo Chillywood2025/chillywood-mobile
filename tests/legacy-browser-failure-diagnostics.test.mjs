@@ -1,7 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { summarizeLegacyBrowserFailure, summarizeLegacyIceConfiguration } from "./assurance/helpers/legacy-paired-browser-harness.mjs";
-import { collectLegacyFailureTransportDiagnostics } from "./assurance/helpers/legacy-failure-transport-diagnostics.mjs";
+import { collectLegacyFailureTransportDiagnostics, summarizeLegacyPeerFailureTimeline } from "./assurance/helpers/legacy-failure-transport-diagnostics.mjs";
+import fs from "node:fs";
+
+test("complete peer timeline retains delivery scope and chronology but drops raw SDP, candidates and credentials", () => {
+  const events = Array.from({ length: 250 }, (_, at) => ({ kind: "relay-delivery", at,
+    event: "webrtc:ice", sender: "bob", receiver: "alice", roomId: "BROWSER-CALL-2",
+    payloadRoomId: "BROWSER-CALL-2", channelRoomId: "BROWSER-CALL-1", generation: "generation-2",
+    active: false, candidate: "private-address", description: { sdp: "private-sdp" }, credential: "secret" }));
+  const before = structuredClone(events), result = summarizeLegacyPeerFailureTimeline(events);
+  assert.equal(result.length, 250, "do not truncate away the first ICE evidence");
+  assert.equal(result[0].at, 0); assert.equal(result[249].at, 249);
+  assert.equal(result[0].payloadRoomId, "BROWSER-CALL-2");
+  assert.equal(result[0].channelRoomId, "BROWSER-CALL-1");
+  assert.equal(result[0].active, false);
+  assert.doesNotMatch(JSON.stringify(result), /private|secret|credential|sdp/);
+  assert.deepEqual(events, before);
+  assert.deepEqual(summarizeLegacyPeerFailureTimeline([{ kind: "raw-wire-frame", payload: "secret" }]), []);
+  assert.equal(summarizeLegacyPeerFailureTimeline([{ kind: "broadcast", generation: "eyJ.private.jwt" }])[0].generation, undefined);
+});
+
+test("Product timeout diagnostics remain failure-only, bounded, and preserve original failure description", () => {
+  const source = fs.readFileSync(new URL("../scripts/test-chilly-chat-real-peer-integration.mjs", import.meta.url), "utf8");
+  const wait = source.slice(source.indexOf("const wait = async"), source.indexOf("const receivedAudio"));
+  assert.ok(wait.includes("timeout = 20_000"));
+  assert.ok(wait.indexOf("if (predicate(state)) return state") < wait.indexOf("collectLegacyFailureTransportDiagnostics("));
+  assert.ok(wait.includes("summarizeLegacyPeerFailureTimeline(state?.events)"));
+  assert.ok(wait.includes("throw new Error(`${description}"));
+});
 
 test("failure-only transport collection returns native evidence without modification", async () => {
   const evidence = [{ peerId: 4, localCandidates: 2, remoteCandidates: 0 }];
