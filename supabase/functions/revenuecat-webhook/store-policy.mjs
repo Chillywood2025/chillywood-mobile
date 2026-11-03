@@ -1,6 +1,26 @@
 const normalizeText = (value) => String(value ?? "").trim();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Evidence-only scope. app_id identifies a RevenueCat dashboard app, not its
+ * project or store account. Project context never comes from payload metadata. */
+export function nativeProductionIngressFacts(event, context) {
+  if (context.creatorMoney !== true || context.premium === true
+    || (event?.environment !== "PRODUCTION" && event?.environment !== "production")
+    || !["APP_STORE", "PLAY_STORE"].includes(event?.store)) return null;
+  const text = value => typeof value === "string" && value.length > 0 && value.length <= 512
+    && value === value.trim() && !/[\u0000-\u001f\u007f]/u.test(value) ? value : null;
+  const userId = text(context.userId);
+  return {
+    canonicalReceiptId: text(context.canonicalReceiptId),
+    providerEventId: text(context.eventId), rawPayloadHash: text(context.rawPayloadHash),
+    provider: event.store === "APP_STORE" ? "revenuecat_app_store" : "revenuecat_google_play",
+    environment: "production", eventType: text(context.eventType),
+    reportedAppId: text(event.app_id), configuredProjectId: text(context.configuredProjectId),
+    reportedProductId: text(context.productId), originalTransactionId: text(context.originalTransactionId),
+    transactionId: text(event.transaction_id), userId: userId && UUID_PATTERN.test(userId) ? userId.toLowerCase() : null,
+  };
+}
+
 export const REVENUECAT_STORES = Object.freeze({
   APP_STORE: "APP_STORE",
   MAC_APP_STORE: "MAC_APP_STORE",

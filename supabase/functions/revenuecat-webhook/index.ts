@@ -21,6 +21,7 @@ import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.t
 import { creatorMoneyNotificationCopy, notificationDisplayText } from "../_shared/notification-display-labels.ts";
 import {
   isSafeStoreMapping,
+  nativeProductionIngressFacts,
   isVerifiedRevenueCatTransferPolicy,
   resolveRevenueCatTransferUserId,
   resolveRevenueCatTransferUsers,
@@ -1982,6 +1983,29 @@ const reserveRevenueCatWebhookIngress = async (
   return { eventId, rawPayloadHash, duplicateEvent: result.duplicateEvent };
 };
 
+// Post-processing observation, not a gate in front of terminal cleanup. Missing
+// or expired qualification records unqualified facts without suppressing a
+// refund/revocation. Native production-intent admission remains prohibited.
+const recordNativeProductionIngress = async (
+  adminClient: SupabaseClientLike, event: RevenueCatEvent, rawBody: string, canonicalReceiptId: string | null,
+) => {
+  if (!canonicalReceiptId || normalizeMoneyAccessEnvironment(event.environment) !== "production"
+    || hasPremiumSignal(event)) return;
+  const facts = nativeProductionIngressFacts(event, {
+    creatorMoney: true, canonicalReceiptId, premium: false, configuredProjectId: readOptionalEnv("REVENUECAT_PROJECT_ID"),
+    eventId: await resolveEventId(event, rawBody), rawPayloadHash: await hashText(rawBody),
+    eventType: normalizeEventType(event.type), productId: resolveProductId(event),
+    originalTransactionId: resolveOriginalTransactionId(event), userId: resolveUserId(event),
+  });
+  if (!facts) return;
+  const { data, error } = await adminClient.rpc("record_native_production_ingress_observation", { p_facts: facts });
+  if (error || !["recorded", "duplicate", "out_of_scope"].includes(toText(data?.status)) || data?.financialAuthority !== false) {
+    // Canonical lifecycle effects remain committed. Retry observation through
+    // the existing idempotent lifecycle; do not log private normalized facts.
+    throw new Error("Native production ingress observation unavailable.");
+  }
+};
+
 const writePremiumEntitlementFromRevenueCatEvent = async (
   adminClient: SupabaseClientLike,
   event: RevenueCatEvent,
@@ -2528,6 +2552,9 @@ Deno.serve(async (req) => {
           event,
           rawBody,
         );
+        if (terminalWrite.domain === "creator_money") {
+          await recordNativeProductionIngress(adminConfig.client, event, rawBody, terminalWrite.providerEventId);
+        }
         await createLiveWatchPartyTerminalNotifications(adminConfig.client, {
           buyerUserId: resolveUserId(event), eventType: terminalEventType, terminal: terminalWrite,
         });
@@ -2605,6 +2632,8 @@ Deno.serve(async (req) => {
           normalizeMoneyAccessEnvironment(event.environment),
           "supported_store_identity_required",
         );
+
+      await recordNativeProductionIngress(adminConfig.client, event, rawBody, dynamicWrite.providerEventId);
 
       await writeProviderReadinessAudit(adminConfig.client, {
         provider: "revenuecat",
