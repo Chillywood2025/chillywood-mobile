@@ -3,20 +3,21 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {createTemporarySession,runTemporarySession,cleanupTemporarySession,trustedProxyEnvironment,requireNodeProxySupport,verifyPlatformCA,PLATFORM_CA} from '../scripts/live-room-temporary-cli-session.mjs';
+import {createTemporarySession,runTemporarySession,cleanupTemporarySession,trustedProxyEnvironment,requireNodeProxySupport,verifyPlatformCA,PLATFORM_CA,helperFailureCode} from '../scripts/live-room-temporary-cli-session.mjs';
 import {PROJECT,VERSIONS} from '../scripts/live-room-exact-deploy.mjs';
 
 // All tokens here are synthetic strings. No CLI login, keyring, HTTP, or real
 // credential access occurs. Every file is created in this test's fresh HOME.
 const binding={source:'1'.repeat(40),tree:'2'.repeat(40)};
 const syntheticToken='sbp_'+'0'.repeat(40);
+const context={currentPostgres:true,currentReadOnly:false,sessionPostgres:true,sessionReadOnly:false,sessionAdmin:false,transactionReadOnly:true};
 function fixture(t,{token=true}={}){
   const session=createTemporarySession(binding);t.after(()=>fs.rmSync(session.home,{recursive:true,force:true}));
   const tokenPath=path.join(session.home,'.supabase/access-token');
   if(token)fs.writeFileSync(tokenPath,syntheticToken+'\n',{mode:0o600,flag:'wx'});
   return {...session,tokenPath,receipt:()=>JSON.parse(fs.readFileSync(path.join(session.home,'room-session.json'),'utf8'))};
 }
-const helperResult=(status='plan_ready')=>({project:PROJECT,...binding,status,wrote:['applied_verified','apply_unconfirmed'].includes(status),versions:VERSIONS,historySha256:'3'.repeat(64)});
+const helperResult=(status='plan_ready')=>({project:PROJECT,...binding,status,wrote:['applied_verified','apply_unconfirmed'].includes(status),versions:VERSIONS,historySha256:'3'.repeat(64),context});
 const proxyFixture=()=>Object.fromEntries([...['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy'].map(k=>[k,'http://127.0.0.1:12345']),...['NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','REQUESTS_CA_BUNDLE'].map(k=>[k,PLATFORM_CA])]);
 const options=s=>({session:s.session,source:s.source,checkSource:()=>binding,launchEnvironment:proxyFixture(),nodeProxySupported:true,verifyTrust:()=>{}});
 
@@ -155,4 +156,23 @@ test('platform CA validation rejects writable mounts, replacement ancestry and c
   assert.throws(()=>verifyPlatformCA({...mock(),readFileSync:()=> '1 0 0:1 / /usr rw - overlay overlay rw'}),/MOUNT_INVALID/);
   assert.throws(()=>verifyPlatformCA({...mock(),readFileSync:()=> '1 0 0:1 / /usr ro - overlay overlay ro\n2 1 0:2 / /usr/local ro - overlay overlay ro'}),/MOUNT_INVALID/);
   assert.throws(()=>verifyPlatformCA({...mock(),fstatSync:()=>({uid:1000,mode:0o644,size:1310,isFile:()=>true})}),/FILE_INVALID/);
+});
+
+test('only exact finite helper failure JSON survives; arbitrary uppercase or secret-bearing stderr never escapes',async t=>{
+  const safe=JSON.stringify({status:'blocked',code:'MANAGEMENT_HTTP_AUTH_REJECTED'})+'\n';
+  assert.equal(helperFailureCode(safe),'MANAGEMENT_HTTP_AUTH_REJECTED');
+  for(const stderr of [undefined,'',syntheticToken,'X'.repeat(513),JSON.stringify({status:'blocked',code:'UNRECOGNIZED_UPPERCASE_SECRET'})+'\n',JSON.stringify({status:'blocked',code:syntheticToken})+'\n',JSON.stringify({status:'blocked',code:'MANAGEMENT_HTTP_AUTH_REJECTED',token:syntheticToken})+'\n',safe+syntheticToken,'{"status":"blocked","code":"'+syntheticToken+'","code":"MANAGEMENT_HTTP_AUTH_REJECTED"}\n']){
+    assert.equal(helperFailureCode(stderr),'HELPER_DIAGNOSTIC_UNAVAILABLE');
+    const s=fixture(t);const result=await runTemporarySession({...options(s),runChild:async()=>({exitCode:1,stdout:'',stderr})});
+    assert.equal(result.status,'plan_failed');assert.equal(result.failureCode,'HELPER_DIAGNOSTIC_UNAVAILABLE');assert.equal(JSON.stringify(result).includes(syntheticToken),false);
+  }
+  const s=fixture(t);const result=await runTemporarySession({...options(s),runChild:async()=>({exitCode:1,stdout:'',stderr:safe})});
+  assert.equal(result.status,'plan_failed');assert.equal(result.failureCode,'MANAGEMENT_HTTP_AUTH_REJECTED');
+  const contextual=JSON.stringify({status:'blocked',code:'PRODUCTION_HOLDS_MISMATCH',context:{...context,currentPostgres:false,currentReadOnly:true}})+'\n';
+  const c=fixture(t);const actual=await runTemporarySession({...options(c),runChild:async()=>({exitCode:1,stdout:'',stderr:contextual})});
+  assert.equal(actual.failureCode,'PRODUCTION_HOLDS_MISMATCH');assert.equal(actual.context.currentReadOnly,true);
+  for(const changed of [{...context,token:syntheticToken},{...context,currentPostgres:'true'},{...context,currentPostgres:false},{...context,currentReadOnly:true},{...context,sessionPostgres:false}]){
+    assert.equal(helperFailureCode(JSON.stringify({status:'blocked',code:'PRODUCTION_HOLDS_MISMATCH',context:changed})+'\n'),'HELPER_DIAGNOSTIC_UNAVAILABLE');
+    const d=fixture(t);const invalid=await runTemporarySession({...options(d),runChild:async()=>({exitCode:0,stdout:JSON.stringify({...helperResult(),context:changed})})});assert.equal(invalid.status,'plan_failed');
+  }
 });
