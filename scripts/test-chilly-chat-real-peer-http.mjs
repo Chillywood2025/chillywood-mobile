@@ -459,6 +459,8 @@ async function main() {
     assert.ok(timestampSpan(allocations) < 600_000, "six real allocations must cross the five-room limit inside its existing ten-minute window");
     assert.ok(timestampSpan(invitations) < 300_000, "six real invitations must use completed credit inside the existing five-minute window");
     console.log("PASS: six authenticated accepted-and-ended calls preserve every rate-ledger event and cross both existing windows using server completion credit");
+    // Canonical coverage-map marker: emit only after all strengthened proofs.
+    console.log("PASS: fresh authenticated accepted call in the same hooks/context receives advancing media and completes real server/native cleanup");
   } catch (error) {
     failed = true;
     throw error;

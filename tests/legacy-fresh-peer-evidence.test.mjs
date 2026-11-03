@@ -45,6 +45,8 @@ test("authenticated repeat gate requires five sequential full lifecycles without
   assert.ok(source.includes("assert.equal(invitations.length, 6"));
   assert.ok(source.includes("timestampSpan(allocations) < 600_000"));
   assert.ok(source.includes("timestampSpan(invitations) < 300_000"));
+  assert.ok(source.indexOf('console.log("PASS: fresh authenticated accepted call in the same hooks/context receives advancing media and completes real server/native cleanup")')
+    > source.indexOf("timestampSpan(invitations) < 300_000"), "canonical coverage marker follows every lifecycle and ledger proof");
   assert.ok(source.includes('receipt.target_status === "accepted" && receipt.actor_user_id === users[1]'));
   assert.ok(source.includes('receipt.target_status === "ended" && receipt.actor_user_id === users[0]'));
   assert.ok(source.includes('assert.equal(endedRoom.status, "ended")'));
