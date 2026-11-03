@@ -65,9 +65,16 @@ Required Validation on the final helper, adapter, manifest and runbook first.
 2. Use only the verified official CLI **2.109.1** executable for the new login.
    The receipt records the required version; it does not verify an executable.
    The operator must verify the actual pinned executable's `--version` output.
+   Invoke absolute `process.execPath` with `--use-env-proxy` and the exact pinned
+   npm package's absolute `dist/supabase.js` entry for version, login and Edge
+   commands. The installed entry resolves and invokes its platform executable;
+   preserve that official resolution. Do not rely on an npm `.bin` shebang finding
+   Node in the minimal PATH, widen PATH, or enable SUPABASE_CLI_BINARY_OVERRIDE.
    Supply a clean, allowlisted process environment: the returned HOME,
    `SUPABASE_HOME=HOME/.supabase`, `SUPABASE_NO_KEYRING=1`, and ordinary PATH/locale
-   settings. Do not inherit an access token, host, profile, preload, or binary
+   settings, plus only the verified platform transport below. Construct this
+   environment with `temporaryCliEnvironment(HOME)` from the source-bound adapter.
+   Do not inherit an access token, host, profile, preload, or binary
    override. Use the receipt's exact token name for `login --no-browser --name`.
    The [pinned credential layer](https://github.com/supabase/cli/blob/v2.109.1/apps/cli/src/legacy/auth/legacy-credentials.layer.ts)
    explicitly supports no-keyring mode and the fallback location. Do not use
@@ -96,6 +103,39 @@ Required Validation on the final helper, adapter, manifest and runbook first.
    revocation. Do not use a broad CLI logout/keyring deletion. If the process
    dies, use the preparation receipt to identify the token; never substitute a
    different saved credential. Ephemeral HOME contents can disappear on reset.
+
+### Existing executor transport only
+
+The cloud executor requires its existing HTTP proxy and certificate trust bundle.
+An empty environment is not transport-equivalent. The adapter accepts only four
+matching inherited HTTP/HTTPS proxy aliases with a canonical credential-free
+`http://127.0.0.1:<port>` URL. The platform changes this port for each command;
+snapshot it inside that command, never in a session receipt, repository setting,
+or caller-supplied URL. ALL_PROXY, NO_PROXY and their lowercase aliases are not
+forwarded. This trusts the tool-injected launch environment: it does not identify
+the owner of an arbitrary same-user loopback listener or defend against a hostile
+parent process. Never launch it with user-controlled environment overrides.
+
+Only the existing `/usr/local/share/ca-certificates/nebula-dns.crt` may be passed
+as NODE_EXTRA_CA_CERTS and SSL_CERT_FILE. All three inherited platform CA aliases
+must name that exact path. Before token access, verify its 1310-byte SHA256
+`ab6933a81e6f0d142e6d5f58ed465589d899a523c2752055761af11d4ee38f2b`, uid65534,
+mode0644, no symlink, protected uid65534/mode0755 ancestors, and enclosing `/usr`
+read-only mount without intervening mounts. This preserves an already-installed
+platform trust artifact; it installs no CA and never disables certificate
+verification. A changed artifact or environment is a stop requiring new review.
+Do not print certificate contents, inherited environment values, or proxy details.
+
+The Node helper child explicitly uses `--use-env-proxy`; the adapter checks runtime
+support before reading credentials. Node20 CI can exercise synthetic tests but
+does not establish production transport support. Verify the actual Node runtime
+(qualified executor: Node24.22.1) and official CLI2.109.1 separately. Neither a
+generic fetch nor successful version output proves CLI login redemption works.
+Credential-free transport probes must use this exact sanitized environment,
+retain TLS checks, and report only status/error categories. Never use a real token
+for a connectivity probe. Interactive CLI input/output must be captured privately:
+Clack can display verification input even with terminal echo disabled. Send code
+and Return separately through the approved secure flow; never record either.
 
 ## Execution sequence after all gates are satisfied
 

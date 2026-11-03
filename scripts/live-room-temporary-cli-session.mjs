@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFile, execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
 import {PROJECT, VERSIONS, TOOL, sourceBinding, loadBundle} from './live-room-exact-deploy.mjs';
 
 export const ADAPTER='scripts/live-room-temporary-cli-session.mjs';
@@ -17,6 +18,46 @@ const CLI_VERSION='2.109.1';
 const requireThat=(ok,code)=>{if(!ok)throw Error(code);};
 const codeOf=e=>/^[A-Z_]+$/u.test(e?.message??'')?e.message:'TEMPORARY_SESSION_BLOCKED';
 const flags=fs.constants;
+export const PLATFORM_CA='/usr/local/share/ca-certificates/nebula-dns.crt';
+const PLATFORM_CA_HASH='ab6933a81e6f0d142e6d5f58ed465589d899a523c2752055761af11d4ee38f2b';
+export function verifyPlatformCA(io=fs){
+  for(const directory of ['/usr','/usr/local','/usr/local/share','/usr/local/share/ca-certificates']){
+    const s=io.lstatSync(directory);
+    requireThat(s.isDirectory()&&!s.isSymbolicLink()&&s.uid===65534&&(s.mode&0o7777)===0o755,'PLATFORM_CA_ANCESTRY_INVALID');
+  }
+  const mounts=io.readFileSync('/proc/self/mountinfo','utf8').trim().split('\n').map(line=>line.split(' '));
+  const covering=mounts.filter(fields=>PLATFORM_CA===fields[4]||PLATFORM_CA.startsWith(fields[4]+'/')).sort((a,b)=>b[4].length-a[4].length);
+  requireThat(covering[0]?.[4]==='/usr'&&covering[0][5].split(',').includes('ro'),'PLATFORM_CA_MOUNT_INVALID');
+  const fd=io.openSync(PLATFORM_CA,flags.O_RDONLY|flags.O_NOFOLLOW);
+  try{
+    const s=io.fstatSync(fd);
+    requireThat(s.isFile()&&s.uid===65534&&(s.mode&0o7777)===0o644&&s.size===1310,'PLATFORM_CA_FILE_INVALID');
+    const bytes=io.readFileSync(fd);
+    requireThat(createHash('sha256').update(bytes).digest('hex')===PLATFORM_CA_HASH,'PLATFORM_CA_HASH_INVALID');
+  }finally{io.closeSync(fd);}
+}
+// The executor injects a new loopback proxy for each command. This trusts the
+// current launch environment, not arbitrary loopback listeners or caller URLs.
+// Never persist the route, inherit bypass lists, or relax destination TLS.
+export function trustedProxyEnvironment(inherited=process.env,verifyTrust=verifyPlatformCA){
+  const forbidden=['NODE_OPTIONS','NODE_TLS_REJECT_UNAUTHORIZED','SSL_CERT_DIR','CURL_CA_BUNDLE','SUPABASE_API_URL','SUPABASE_API_HOST','SUPABASE_CLI_BINARY_OVERRIDE'];
+  requireThat(forbidden.every(k=>inherited[k]===undefined),'TRANSPORT_OVERRIDE_FORBIDDEN');
+  const aliases=['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy'];
+  const values=aliases.map(k=>inherited[k]);
+  requireThat(values.every(v=>typeof v==='string')&&values.every(v=>v===values[0]),'PLATFORM_PROXY_ALIASES_INVALID');
+  const match=/^http:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})\/?$/u.exec(values[0]);
+  requireThat(match&&Number(match[1])<=65535,'PLATFORM_PROXY_ROUTE_INVALID');
+  requireThat(['NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','REQUESTS_CA_BUNDLE'].every(k=>inherited[k]===PLATFORM_CA),'PLATFORM_CA_ALIASES_INVALID');
+  verifyTrust();
+  return Object.freeze({HTTP_PROXY:values[0],HTTPS_PROXY:values[0],NODE_EXTRA_CA_CERTS:PLATFORM_CA,SSL_CERT_FILE:PLATFORM_CA});
+}
+export function requireNodeProxySupport(supported=process.allowedNodeEnvironmentFlags.has('--use-env-proxy')){
+  requireThat(supported,'NODE_ENV_PROXY_UNSUPPORTED');
+}
+export function temporaryCliEnvironment(home,inherited=process.env){
+  requireThat(sessionPath(path.basename(home))===home,'SESSION_ID_INVALID');
+  return {HOME:home,SUPABASE_HOME:path.join(home,'.supabase'),SUPABASE_NO_KEYRING:'1',PATH:'/usr/local/bin:/usr/bin:/bin',LANG:'C.UTF-8',LC_ALL:'C.UTF-8',...trustedProxyEnvironment(inherited)};
+}
 const fdPath=(fd,name)=>`/proc/self/fd/${fd}/${name}`;
 const identity=s=>({dev:String(s.dev),ino:String(s.ino)});
 const sameIdentity=(s,id)=>String(s.dev)===id?.dev&&String(s.ino)===id?.ino;
@@ -117,8 +158,10 @@ function sanitizedHelperResult(stdout,receipt){
   if(result.historySha256!==undefined&&!/^[a-f0-9]{64}$/u.test(result.historySha256))return null;
   return result;
 }
-export async function runTemporarySession({session,source,apply=false,root=ROOT,checkSource=verifyDeploymentSource,runChild=helperProcess}){
+export async function runTemporarySession({session,source,apply=false,root=ROOT,checkSource=verifyDeploymentSource,runChild=helperProcess,launchEnvironment=process.env,nodeProxySupported=process.allowedNodeEnvironmentFlags.has('--use-env-proxy'),verifyTrust=verifyPlatformCA}){
   requireThat(typeof apply==='boolean','APPLY_FLAG_INVALID');
+  requireNodeProxySupport(nodeProxySupported);
+  const proxy=trustedProxyEnvironment(launchEnvironment,verifyTrust);
   const binding=checkSource(source,root),h=openSession(session,source);
   let token,env,buffer;
   try{
@@ -141,11 +184,11 @@ export async function runTemporarySession({session,source,apply=false,root=ROOT,
       h.receipt.applyAttempted=true;
     }
     h.receipt.lastRun={mode:apply?'apply':'plan',status:'started',startedAt:new Date().toISOString()};saveReceipt(h);
-    // No inherited API host, profile, preload, credential, proxy, or executable
-    // override. Token exists only in this process memory and the child env.
-    env={HOME:h.home,PATH:'/usr/local/bin:/usr/bin:/bin',LANG:'C.UTF-8',LC_ALL:'C.UTF-8',SUPABASE_ACCESS_TOKEN:token};
+    // Only the validated executor proxy survives. No bypass, API host, custom
+    // CA, TLS, profile, preload or executable override. Token stays private.
+    env={HOME:h.home,PATH:'/usr/local/bin:/usr/bin:/bin',LANG:'C.UTF-8',LC_ALL:'C.UTF-8',...proxy,SUPABASE_ACCESS_TOKEN:token};
     let child;
-    try{child=await runChild(process.execPath,[path.join(root,TOOL),'--source',source,...(apply?['--apply']:[])],{
+    try{child=await runChild(process.execPath,['--use-env-proxy',path.join(root,TOOL),'--source',source,...(apply?['--apply']:[])],{
       cwd:root,env,encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:210000,maxBuffer:32768,killSignal:'SIGTERM',windowsHide:true});}
     catch{child={exitCode:1,stdout:''};}
     let result=sanitizedHelperResult(child.stdout,h.receipt);

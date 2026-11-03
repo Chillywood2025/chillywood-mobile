@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {createTemporarySession,runTemporarySession,cleanupTemporarySession} from '../scripts/live-room-temporary-cli-session.mjs';
+import {createTemporarySession,runTemporarySession,cleanupTemporarySession,trustedProxyEnvironment,requireNodeProxySupport,verifyPlatformCA,PLATFORM_CA} from '../scripts/live-room-temporary-cli-session.mjs';
 import {PROJECT,VERSIONS} from '../scripts/live-room-exact-deploy.mjs';
 
 // All tokens here are synthetic strings. No CLI login, keyring, HTTP, or real
@@ -17,7 +17,8 @@ function fixture(t,{token=true}={}){
   return {...session,tokenPath,receipt:()=>JSON.parse(fs.readFileSync(path.join(session.home,'room-session.json'),'utf8'))};
 }
 const helperResult=(status='plan_ready')=>({project:PROJECT,...binding,status,wrote:['applied_verified','apply_unconfirmed'].includes(status),versions:VERSIONS,historySha256:'3'.repeat(64)});
-const options=s=>({session:s.session,source:s.source,checkSource:()=>binding});
+const proxyFixture=()=>Object.fromEntries([...['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy'].map(k=>[k,'http://127.0.0.1:12345']),...['NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','REQUESTS_CA_BUNDLE'].map(k=>[k,PLATFORM_CA])]);
+const options=s=>({session:s.session,source:s.source,checkSource:()=>binding,launchEnvironment:proxyFixture(),nodeProxySupported:true,verifyTrust:()=>{}});
 
 test('fresh private preparation records only one nonsecret identity before any token exists',t=>{
   const s=fixture(t,{token:false});assert.equal(fs.existsSync(s.tokenPath),false);
@@ -32,7 +33,8 @@ test('only the fresh token enters minimal child environment, never argv or recei
   const s=fixture(t);let called=0;
   const result=await runTemporarySession({...options(s),runChild:async(file,args,config)=>{
     called++;assert.equal(file,process.execPath);assert.equal(config.env.SUPABASE_ACCESS_TOKEN,syntheticToken);
-    assert.deepEqual(Object.keys(config.env).sort(),['HOME','LANG','LC_ALL','PATH','SUPABASE_ACCESS_TOKEN']);
+    assert.deepEqual(Object.keys(config.env).sort(),['HOME','HTTPS_PROXY','HTTP_PROXY','LANG','LC_ALL','NODE_EXTRA_CA_CERTS','PATH','SSL_CERT_FILE','SUPABASE_ACCESS_TOKEN']);
+    assert.equal(args[0],'--use-env-proxy');assert.equal(config.env.NO_PROXY,undefined);assert.equal(config.env.ALL_PROXY,undefined);
     assert.equal(config.env.HOME,s.home);assert.equal(JSON.stringify(args).includes(syntheticToken),false);assert.equal(args.includes('--apply'),false);
     assert.equal(config.env.SUPABASE_API_URL,undefined);assert.equal(config.env.NODE_OPTIONS,undefined);
     return {exitCode:0,stdout:JSON.stringify(helperResult())};
@@ -119,4 +121,38 @@ test('cleanup removes only the validated new local file and preserves revocation
 test('CLI rejects token/path/host overrides without printing their values',()=>{
   try{execFileSync(process.execPath,['scripts/live-room-temporary-cli-session.mjs','run','--token',syntheticToken],{encoding:'utf8',stdio:'pipe'});assert.fail('must reject');}
   catch(error){assert.equal(String(error.stderr).includes(syntheticToken),false);assert.match(String(error.stderr),/ARGUMENT_INVALID/);assert.equal(String(error.stdout),'');}
+});
+
+test('transport accepts only current matching platform proxy aliases and pinned CA aliases',()=>{
+  const input={...proxyFixture(),ALL_PROXY:'socks5h://attacker.invalid:1',NO_PROXY:'*',SUPABASE_ACCESS_TOKEN:syntheticToken};
+  let verified=0;const result=trustedProxyEnvironment(input,()=>verified++);
+  assert.equal(verified,1);assert.equal(Object.isFrozen(result),true);
+  assert.deepEqual(Object.keys(result).sort(),['HTTPS_PROXY','HTTP_PROXY','NODE_EXTRA_CA_CERTS','SSL_CERT_FILE']);
+  input.HTTPS_PROXY='http://127.0.0.1:54321';assert.equal(result.HTTPS_PROXY,'http://127.0.0.1:12345');
+  assert.throws(()=>trustedProxyEnvironment(input,()=>{}),/ALIASES_INVALID/);
+  for(const value of ['http://attacker.invalid:12345','https://127.0.0.1:12345','http://user:secret@127.0.0.1:12345','http://127.0.0.1:12345/path','http://127.0.0.1:12345?x','http://127.0.0.1:12345#x','http://127.0.0.1:65536','http://127.0.0.1:0','http://127.0.0.1:0123','http://127.1:12345']){
+    const env=proxyFixture();for(const key of ['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy'])env[key]=value;
+    assert.throws(()=>trustedProxyEnvironment(env,()=>{}),/ROUTE_INVALID/);
+  }
+  for(const key of ['NODE_OPTIONS','NODE_TLS_REJECT_UNAUTHORIZED','SSL_CERT_DIR','CURL_CA_BUNDLE','SUPABASE_API_URL','SUPABASE_API_HOST','SUPABASE_CLI_BINARY_OVERRIDE'])assert.throws(()=>trustedProxyEnvironment({...proxyFixture(),[key]:'attacker'},()=>{}),/OVERRIDE_FORBIDDEN/);
+  for(const key of ['NODE_EXTRA_CA_CERTS','SSL_CERT_FILE','REQUESTS_CA_BUNDLE'])assert.throws(()=>trustedProxyEnvironment({...proxyFixture(),[key]:'/tmp/attacker.crt'},()=>{}),/CA_ALIASES_INVALID/);
+  assert.throws(()=>trustedProxyEnvironment(proxyFixture(),()=>{throw Error('PLATFORM_CA_HASH_INVALID');}),/HASH_INVALID/);
+});
+
+test('unsupported Node or altered transport fails before source, token access, or child launch',async()=>{
+  const checkSource=()=>assert.fail('must not inspect source or credentials');
+  await assert.rejects(runTemporarySession({session:'invalid',source:binding.source,checkSource,nodeProxySupported:false}),/NODE_ENV_PROXY_UNSUPPORTED/);
+  await assert.rejects(runTemporarySession({session:'invalid',source:binding.source,checkSource,nodeProxySupported:true,launchEnvironment:{}}),/ALIASES_INVALID/);
+  assert.throws(()=>requireNodeProxySupport(false),/NODE_ENV_PROXY_UNSUPPORTED/);requireNodeProxySupport(true);
+});
+
+test('platform CA validation rejects writable mounts, replacement ancestry and changed artifact',()=>{
+  const goodStat={uid:65534,mode:0o755,isDirectory:()=>true,isSymbolicLink:()=>false};
+  const mock=()=>({lstatSync:()=>goodStat,readFileSync:(p)=>p==='/proc/self/mountinfo'?'1 0 0:1 / /usr ro - overlay overlay ro':'bad',openSync:()=>1,fstatSync:()=>({uid:65534,mode:0o644,size:1310,isFile:()=>true}),closeSync:()=>{}});
+  assert.throws(()=>verifyPlatformCA(mock()),/HASH_INVALID/);
+  assert.throws(()=>verifyPlatformCA({...mock(),lstatSync:()=>({...goodStat,uid:1000})}),/ANCESTRY_INVALID/);
+  assert.throws(()=>verifyPlatformCA({...mock(),lstatSync:()=>({...goodStat,isSymbolicLink:()=>true})}),/ANCESTRY_INVALID/);
+  assert.throws(()=>verifyPlatformCA({...mock(),readFileSync:()=> '1 0 0:1 / /usr rw - overlay overlay rw'}),/MOUNT_INVALID/);
+  assert.throws(()=>verifyPlatformCA({...mock(),readFileSync:()=> '1 0 0:1 / /usr ro - overlay overlay ro\n2 1 0:2 / /usr/local ro - overlay overlay ro'}),/MOUNT_INVALID/);
+  assert.throws(()=>verifyPlatformCA({...mock(),fstatSync:()=>({uid:1000,mode:0o644,size:1310,isFile:()=>true})}),/FILE_INVALID/);
 });
