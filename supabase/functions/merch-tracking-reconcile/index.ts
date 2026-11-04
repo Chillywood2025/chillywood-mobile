@@ -37,7 +37,14 @@ Deno.serve(async (req: Request) => {
     }
     const result = await boundedTrackingDatabase(admin.rpc("complete_merch_tracking_job", {p_assignment_id: job.id,
       p_lease: job.lease, p_facts: facts, p_registered: false}));
-    if (!result.error && result.data && result.data.stale !== true) completed++;
+    // The RPC returns the committed assignment projection, not a bare success
+    // flag. Empty/malformed or wrong-shipment receipts cannot prove completion
+    // to the parent driver. A timed-out commit remains safe under its lease.
+    const receipt = result.data;
+    if (!result.error && receipt && typeof receipt === "object" && !Array.isArray(receipt)
+      && (receipt.stale === undefined || receipt.stale === false) && receipt.assigned === true
+      && receipt.carrier === job.carrier && receipt.trackingNumber === job.tracking_number
+      && receipt.financialAuthority === false) completed++;
   }
   return jsonResponse(completed === claimed.data.length ? 200 : 503,
     {claimed: claimed.data.length, completed, financialAuthority: false});
