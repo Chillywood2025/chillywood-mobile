@@ -15,14 +15,15 @@ export function projectStripeHistoryFacts(path:string,value:unknown):Json{
  const pathname=new URL(path,'https://api.stripe.com').pathname;
  if(pathname==='/v1/account')return fields(value,['id','object']);
  if(/^\/v1\/checkout\/sessions\/cs_(test|live)_/.test(pathname))return {...fields(value,['id','object','livemode','mode','status','payment_status','client_reference_id','currency','amount_total','payment_intent']),
-  metadata:object(value.metadata)?fields(value.metadata,['chillywood_order_id','buyer_user_id','environment','rail','auction_quote_id','settlement_contract_id','settlement_policy','provider_product_id']):value.metadata,
+  metadata:object(value.metadata)?fields(value.metadata,['chillywood_order_id','buyer_user_id','environment','rail','auction_quote_id','settlement_contract_id','settlement_policy','provider_product_id','chillywood_tip_id','fan_user_id','creator_user_id']):value.metadata,
   automatic_tax:object(value.automatic_tax)?fields(value.automatic_tax,['enabled','status']):value.automatic_tax,
-  total_details:object(value.total_details)?fields(value.total_details,['amount_tax']):value.total_details};
+  total_details:object(value.total_details)?fields(value.total_details,['amount_tax','amount_discount','amount_shipping']):value.total_details};
  if(/^\/v1\/payment_intents\/pi_/.test(pathname))return fields(value,['id','object','livemode','status','currency','amount','amount_received','latest_charge','transfer_data','application_fee_amount','on_behalf_of']);
  if(/^\/v1\/charges\/ch_/.test(pathname))return fields(value,['id','object','livemode','payment_intent','paid','captured','currency','amount','amount_captured','disputed','amount_refunded','refunded','balance_transaction']);
  if(/^\/v1\/balance_transactions\/txn_/.test(pathname))return fields(value,['id','object','source','type','currency','amount','fee','net','status']);
  if(pathname==='/v1/refunds')return {...fields(value,['object','has_more']),data:Array.isArray(value.data)?value.data.map(v=>{
-  if(!object(v))throw Error('history_shape_invalid');return {...fields(v,['id','object','charge','payment_intent','currency','status','amount']),balance_transaction:object(v.balance_transaction)?fields(v.balance_transaction,['id','object','source','type','currency','amount','fee','net','status']):v.balance_transaction};}):value.data};
+  if(!object(v))throw Error('history_shape_invalid');return {...fields(v,['id','object','charge','payment_intent','currency','status','amount']),
+   ...(Object.hasOwn(v,'balance_transaction')?{balance_transaction:object(v.balance_transaction)?fields(v.balance_transaction,['id','object','source','type','currency','amount','fee','net','status']):v.balance_transaction}:{})};}):value.data};
  if(pathname==='/v1/tax/associations/find')return {...fields(value,['id','object','payment_intent']),
   tax_transaction_attempts:Array.isArray(value.tax_transaction_attempts)?value.tax_transaction_attempts.map(v=>{
    if(!object(v))throw Error('history_shape_invalid');return {...fields(v,['source','status']),committed:object(v.committed)?fields(v.committed,['transaction']):v.committed};}):value.tax_transaction_attempts};

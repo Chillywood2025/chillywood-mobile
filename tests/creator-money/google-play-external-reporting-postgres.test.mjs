@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
+import {loadGoogleRefundModule,googleRefundFixture,googleHistoryClient,googleVerificationCheckpoint} from '../helpers/google-refund-tax-history-fixture.mjs';
 const {googlePrice}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-external-reporting.ts');
 
 test('private Google obligations lease/reconcile idempotently without financial authority or fabricated tax', {timeout:240000}, async()=>{
@@ -165,11 +166,88 @@ test('private Google obligations lease/reconcile idempotently without financial 
       charge_id:'ch_taxed',currency:'usd',gross_minor:237,tax_minor:19,refunded_minor:100,tax_reversal_minor:8,
       refunds:[{id:'re_taxed',amount:100}],refund_tax_evidence:{provenance:'stripe_tax_association_get_v1',association_id:'taxa_taxed',
        original_tax_transaction_id:'tax_original',payment_intent_id:'pi_taxed',currency:'usd',gross_minor:237,original_tax_minor:19,
-       refunded_minor:100,tax_reversal_minor:8,refunds:[{refund_id:'re_taxed',refund_minor:100,tax_reversal_minor:8,tax_transaction_id:'tax_reversal'}]}};
+       refunded_minor:100,tax_reversal_minor:8,refunds:[{refund_id:'re_taxed',refund_minor:100,tax_reversal_minor:8,tax_transaction_id:'tax_taxed'}]}};
     const record=facts=>one('select public.record_google_refund_tax_evidence($1,$2)',[taxContext.transaction_id,facts]);
     await assert.rejects(()=>record({...taxFacts,checkout_id:'cs_test_wrong'}),/binding_invalid/);
     await assert.rejects(()=>record({...taxFacts,refund_tax_evidence:null}),/binding_invalid/);
-    assert.equal(await record(taxFacts),true);
+    const beginHistory=(account='acct_platform')=>one('select public.begin_google_refund_tax_history($1,$2)',[taxContext.transaction_id,account]);
+    let historyLease=await beginHistory();assert.equal((await beginHistory()).busy,true,'one live history lease per exact transaction');
+    const historyFixture=googleRefundFixture({context:taxContext,refunds:[{id:'re_taxed',amount:100,tax:8}],
+      charge:'ch_taxed',association:'taxa_taxed',original:'tax_original'});
+    const checkpoint=await googleVerificationCheckpoint(historyFixture);
+    const saveHistory=(saved=checkpoint,facts=null,lease=historyLease)=>one('select public.save_google_refund_tax_history($1,$2,$3,$4,$5)',
+      [taxContext.transaction_id,lease.generation,lease.lease,saved,facts]);
+    const evidenceCount=()=>one('select count(*)::int from private.stripe_refund_tax_evidence');
+    const blockedCount=()=>one("select count(*)::int from private.google_play_external_report_outbox where transaction_id=$1 and state='blocked_tax'",[taxContext.transaction_id]);
+    assert.deepEqual(await saveHistory(),{status:'history_pending',financialAuthority:false});
+    assert.equal(await evidenceCount(),0,'partial history never ingests tax proof');assert.equal(await blockedCount(),2);
+    assert.equal(await one("select count(*)::int from private.google_play_external_report_outbox where transaction_id=$1 and operation='refund' and canonical_receipt is not null",[taxContext.transaction_id]),0);
+    const oldLease=historyLease;historyLease=await beginHistory();
+    assert.equal(historyLease.generation,oldLease.generation);assert.notEqual(historyLease.lease,oldLease.lease);
+    assert.deepEqual(historyLease.checkpoint,checkpoint,'new lease resumes the durable prefix');
+    await assert.rejects(()=>saveHistory(checkpoint,null,oldLease),/stale_lease/);
+    const withRollback=async(sql,assertion,args=[])=>{
+      await db.exec('begin');try{await db.query(sql,args);await assertion();}finally{await db.exec('rollback');}
+    };
+    await withRollback("update private.google_refund_tax_history set lease_until=clock_timestamp()-interval '1 second' where transaction_id=$1",
+      ()=>assert.rejects(()=>saveHistory(),/source_changed/),[taxContext.transaction_id]);
+    for(const change of ["provider_payment_intent_id='pi_changed'","provider_account_id='acct_changed'","provider_environment='live'"]){
+      await withRollback(`update public.creator_tip_transactions set ${change} where id=$1`,
+        ()=>assert.rejects(()=>saveHistory(),/source_changed|context_required/),[taxed]);
+    }
+    await assert.rejects(()=>beginHistory('invalid-account'),/account_mismatch/);
+    await withRollback('update private.google_refund_tax_history set lease_until=null where transaction_id=$1',async()=>{
+      const changed=await beginHistory('acct_other');assert.notEqual(changed.generation,historyLease.generation);
+      assert.deepEqual(changed.checkpoint,{});await assert.rejects(()=>saveHistory(),/stale_lease/);
+    },[taxContext.transaction_id]);
+    await withRollback(`update private.google_refund_tax_history set lease_until=null,
+      checkpoint=jsonb_set(checkpoint,'{verificationStartedAt}',to_jsonb(floor(extract(epoch from clock_timestamp()-interval '7 hours')*1000)))
+      where transaction_id=$1`,async()=>{
+      const expired=await beginHistory();assert.notEqual(expired.generation,historyLease.generation);
+      assert.deepEqual(expired.checkpoint,{},'expired verification never resumes with newly fresh completion');
+    },[taxContext.transaction_id]);
+    await withRollback("update private.google_play_external_report_outbox set state='pending' where transaction_id=$1 and state='blocked_tax'",async()=>{
+      assert.equal((await beginHistory()).eligible,false,'history cannot create its own financial refund obligation');
+    },[taxContext.transaction_id]);
+    const {reconcileGoogleRefundTax}=loadGoogleRefundModule();
+    const verified=googleHistoryClient({context:taxContext,checkpoint});
+    await reconcileGoogleRefundTax(verified.client,taxContext,'sk_test_synthetic','acct_platform',historyFixture.transport);
+    const completeInput=verified.calls.find(call=>call.name==='save_google_refund_tax_history').args;
+    assert.deepEqual(completeInput.p_facts,taxFacts);
+    const completeCheckpoint=completeInput.p_checkpoint;
+    for(const invalid of [
+      {...completeCheckpoint,cursor:0},
+      {...completeCheckpoint,verificationStartedAt:Date.now()-7*60*60*1000},
+      {...completeCheckpoint,entries:completeCheckpoint.entries.map(e=>({...e,observedAt:0}))},
+    ])await assert.rejects(()=>saveHistory(invalid,taxFacts),/complete_proof_required/);
+    for(const invalid of [{...taxFacts,account_id:'acct_wrong'},{...taxFacts,environment:'live'}])
+      await assert.rejects(()=>saveHistory(completeCheckpoint,invalid),/complete_proof_required/);
+    await assert.rejects(()=>saveHistory(completeCheckpoint,{...taxFacts,refund_tax_evidence:null}),/binding_invalid/);
+    assert.equal(await evidenceCount(),0);assert.equal(await blockedCount(),2);
+    // Force a failure after the existing evidence recorder has run, proving the
+    // checkpoint completion, immutable evidence and outbox update are atomic.
+    await db.exec(`create function public.fixture_reject_google_history_complete() returns trigger language plpgsql as $$
+      begin if new.completed then raise exception 'synthetic_history_commit_failure';end if;return new;end $$;
+      create trigger fixture_reject_google_history_complete before update on private.google_refund_tax_history
+      for each row execute function public.fixture_reject_google_history_complete();`);
+    try{await assert.rejects(()=>saveHistory(completeCheckpoint,taxFacts),/synthetic_history_commit_failure/);}
+    finally{await db.exec('drop trigger fixture_reject_google_history_complete on private.google_refund_tax_history;drop function public.fixture_reject_google_history_complete()');}
+    assert.equal(await evidenceCount(),0,'failed final checkpoint save rolls back evidence');assert.equal(await blockedCount(),2);
+    assert.equal(await one('select completed from private.google_refund_tax_history where transaction_id=$1',[taxContext.transaction_id]),false);
+    const completion=await saveHistory(completeCheckpoint,taxFacts);
+    assert.deepEqual(completion,{status:'history_complete',evidenceRecorded:true,financialAuthority:false});
+    assert.deepEqual(await saveHistory(completeCheckpoint,taxFacts),completion,'same completed lease is idempotent');
+    assert.equal(await evidenceCount(),1);assert.equal(await blockedCount(),1);
+    await assert.rejects(()=>saveHistory(completeCheckpoint,taxFacts,{...historyLease,lease:randomUUID()}),/stale_lease/);
+    const security=(await db.query("select relrowsecurity,relforcerowsecurity from pg_class where oid='private.google_refund_tax_history'::regclass")).rows[0];
+    assert.deepEqual(security,{relrowsecurity:true,relforcerowsecurity:true});
+    for(const role of ['anon','authenticated','service_role']){
+      assert.equal(await one("select has_table_privilege($1,'private.google_refund_tax_history','select')",[role]),false);
+      assert.equal(await one("select has_table_privilege($1,'private.google_refund_tax_history','insert')",[role]),false);
+      assert.equal(await one("select has_function_privilege($1,'private.lock_google_refund_tax_history_context(uuid)','execute')",[role]),false);
+      for(const signature of ['public.begin_google_refund_tax_history(uuid,text)','public.save_google_refund_tax_history(uuid,uuid,uuid,jsonb,jsonb)'])
+        assert.equal(await one('select has_function_privilege($1,$2,\'execute\')',[role,signature]),role==='service_role');
+    }
     assert.equal(await record(taxFacts),false,'immutable retry does not requeue or multiply reporting obligations');
     assert.equal(await one("select count(*)::int from private.google_play_external_report_outbox where transaction_id=$1 and state='reported' and operation='refund'",[taxContext.transaction_id]),0,'ingestion is not a Google receipt');
     job=await claim();assert.equal(job.report.refundPreTaxMinor,92);assert.equal(job.report.remainingPreTaxMinor,126);assert.equal(job.report.remainingTaxMinor,11);
