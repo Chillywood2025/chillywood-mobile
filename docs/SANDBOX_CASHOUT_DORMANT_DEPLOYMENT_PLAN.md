@@ -102,9 +102,14 @@ A separately source-reviewed executor must be qualified after tip and ingress. I
    Forward-only corrections require a new reviewed migration. Do not drop schema
    or delete migration history as rollback.
 
-The offline helper intentionally does not emit executable apply SQL until these
-requirements are implemented and validated. Passing its focused tests does not
-qualify a deployment executor, full database suite or native concurrency proof.
+The offline helper does not emit executable apply SQL. A separate
+[exact executor](SANDBOX_CASHOUT_EXACT_DEPLOYMENT_RUNBOOK.md) now implements the
+bounded transaction and readback, with its committed production manifest still
+**unqualified**. Its apply command fails before transport until a separately
+reviewed source change binds the real ordered predecessor receipts and fresh
+baseline. Neither the offline packet nor a synthetic test manifest can qualify
+deployment. Focused tests do not replace the full selected database suite or
+native concurrency proof.
 
 ## Dormant endpoint rollout and evidence
 
