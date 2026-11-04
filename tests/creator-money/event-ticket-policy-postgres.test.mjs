@@ -37,6 +37,15 @@ test('approved ticket schedule policy runs through real purchase, revisions, cho
     const choice=(actor,event,purchase,revision,value)=>as(actor,'select public.respond_creator_event_schedule_change($1,$2,$3,$4) result',[event,purchase,revision,value]);
     const move=(event,seconds,zone=null)=>as('creator',`select public.manage_creator_event_lifecycle(id,'reschedule',updated_at,starts_at+make_interval(secs=>$2),null,$3,'New schedule',false) result from public.creator_events where id=$1`,[event,seconds,zone]);
     const cancel=(event)=>as('creator',`select public.manage_creator_event_lifecycle(id,'cancel',updated_at,null,null,null,'Canceled by creator',false) result from public.creator_events where id=$1`,[event]);
+    // Isolate the cumulative-delay boundary from event-local date changes.
+    // The shared now()+7 days fixture can start just before local midnight,
+    // when even a 29:59 delay correctly requires a choice. Keep this event at
+    // future local noon, preserving its duration before any sale terms exist.
+    await db.query(`with schedule as (
+      select (date_trunc('day',now() at time zone time_zone)+interval '7 days 12 hours') at time zone time_zone as starts_at
+      from public.creator_events where id=$1
+    ) update public.creator_events e set starts_at=s.starts_at,ends_at=s.starts_at+(e.ends_at-e.starts_at)
+      from schedule s where e.id=$1`,[events.show1]);
     const event=events.show1,offer=await configure(event),intent=await buy('buyer1',offer);
     check((await pay('buyer1',intent,'ticket-policy-paid')).status,'processed','real atomic receipt issues ticket');
     let result=await policy('buyer1',event,intent.id);
@@ -142,6 +151,10 @@ test('approved ticket schedule policy runs through real purchase, revisions, cho
     check(legacyKeep.history[0].schedule.timeZone,'America/New_York','explicit legacy acceptance binds the known current schedule zone');
 
     const cases=[
+      // Reproduce the midnight CI fixture failure: a sub-threshold delay is
+      // material if it crosses the event's local date, but not at local noon.
+      ['2026-11-11T04:51Z','America/New_York','2026-11-11T05:20:59Z','America/New_York',true],
+      ['2026-11-11T17:00Z','America/New_York','2026-11-11T17:29:59Z','America/New_York',false],
       ['2026-11-01T05:00Z','America/New_York','2026-11-01T05:29:59Z','America/New_York',false],
       ['2026-11-01T05:00Z','America/New_York','2026-11-01T05:30Z','America/New_York',true],
       ['2026-11-01T05:30Z','America/New_York','2026-11-01T06:30Z','America/New_York',true],
