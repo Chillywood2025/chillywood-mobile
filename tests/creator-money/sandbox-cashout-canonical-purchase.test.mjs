@@ -77,13 +77,13 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
    assert.equal((await scalar('select private.sandbox_cashout_source($1,$2)',[renewed.ledgerEventId,qualification]))?.netMinor,simulatedNet(499));
    assert.equal((await process('RENEWAL')).ledgerEventId,renewed.ledgerEventId,'renewal replay must not earn twice');
    receipts.push({platform,purchased,renewed,process});
-   // Existing Android tip catalog is 99 cents but creator tips require >=100;
-   // do not invent a SKU or bypass recipient-scoped catalog admission.
-   if(platform==='android') continue;
+   // Existing Android99 is admitted exactly despite legacy min100 metadata.
+   // No new SKU or provider qualification is invented.
    await claim(buyers[index],sessions[index],platform);
    const tip=await scalar(platform==='ios'
     ? "select public.create_ios_app_store_purchase_intent('com.chillywood.tip.tier2','creator_tip',$1,'{}')"
     : "select public.create_money_purchase_intent('creator_tip_sandbox_099','creator_tip',$1,'{}')",[host]);
+   assert.equal(tip.amountMinor,platform==='ios'?299:99);
    assert.equal((await scalar('select public.begin_creator_money_checkout($1,gen_random_uuid())',[tip.id])).startAuthorized,true);
    await service();
    const tipProcess=type=>scalar(`select public.${fn}($1,$2,$3,$4,'sandbox',now(),null,$5,'usd',repeat('b',64),$6,null)`,
@@ -95,7 +95,7 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
     from public.money_access_ledger_events m join public.provider_events p on p.id=m.provider_event_id
     left join public.monetization_products c on c.id=m.product_id left join public.money_purchase_intents i on i.id::text=m.metadata->>'purchase_intent_id' where m.id=$1`,[tipped.ledgerEventId]);
    assert.equal(tipSource?.netMinor,simulatedNet(tip.amountMinor,true),`canonical tip waives only platform deduction, never simulated tax/provider costs: ${JSON.stringify(tipBinding)}`);
-   assert.equal(tipSource.netMinor,273,'299 gross tip minus 15 tax, 9 provider, 2 fixed; no 60 platform fee');
+   assert.equal(tipSource.netMinor,platform==='ios'?273:89,'tip subtracts simulated tax/provider costs, never platform commission');
    // Real-SQL negative control reproduces the original blanket platform fee in
    // this disposable transaction, then restores the reviewed helper atomically.
    const sourceDefinition=await scalar("select pg_get_functiondef('private.sandbox_cashout_source(uuid,uuid)'::regprocedure)");
@@ -105,15 +105,18 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
    try{
     await db.exec(blanketPlatform);
     const incorrect=await scalar('select private.sandbox_cashout_source($1,$2)',[tipped.ledgerEventId,qualification]);
-    assert.equal(incorrect?.netMinor,213,'old blanket formula incorrectly subtracts another60 from a299 tip');
+    assert.equal(incorrect?.netMinor,simulatedNet(tip.amountMinor),'old blanket formula incorrectly subtracts platform commission');
     assert.notEqual(incorrect.netMinor,tipSource.netMinor);
    }finally{await db.exec('rollback');}
    const tipLedger=(await db.query('select * from public.money_access_ledger_events where id=$1',[tipped.ledgerEventId])).rows[0];
+   assert.equal(tipLedger.amount_minor,platform==='ios'?299:99);
+   assert.equal(tipLedger.environment,'sandbox');assert.equal(tipLedger.payable_state,'not_payable');
    // Future offer availability/pricing cannot rewrite the consumed receipt's
    // original economics or revoke its historical no-commission tip identity.
    await db.exec('begin');
    try{
-    await db.query("update public.monetization_product_store_mappings set status='disabled',reference_price_minor=999 where id::text=$1",[tipBinding.intent.metadata.store_mapping_id]);
+    if(platform==='ios') await db.query("update public.monetization_product_store_mappings set status='disabled',reference_price_minor=999 where id::text=$1",[tipBinding.intent.metadata.store_mapping_id]);
+    else await db.query("update public.monetization_products set status='disabled',metadata=jsonb_set(metadata,'{price_tier}','\"999\"'::jsonb) where id=$1",[tipBinding.product.id]);
     await db.query('update public.creator_tip_settings set min_amount_cents=500 where creator_id=$1',[host]);
     const historical=await scalar('select private.sandbox_cashout_source($1,$2)',[tipLedger.id,qualification]);
     assert.deepEqual(historical,tipSource,'unpublishing/repricing current offer preserves exact historical tip net and hash');
@@ -123,7 +126,7 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
     ['source kind',"update public.money_access_ledger_events set source_type='paid_content' where id=$1",[tipLedger.id]],
     ['ledger product','update public.money_access_ledger_events set product_id=$2 where id=$1',[tipLedger.id,ledger.product_id]],
     ['provider product','update public.provider_events set product_id=$2 where id=$1',[tipLedger.provider_event_id,ledger.product_id]],
-    ['provider rail',"update public.provider_events set provider='revenuecat_google_play' where id=$1",[tipLedger.provider_event_id]],
+    ['provider rail',"update public.provider_events set provider=$2 where id=$1",[tipLedger.provider_event_id,platform==='ios'?'revenuecat_google_play':'revenuecat_app_store']],
     ['provider intent linkage',"update public.provider_events set metadata=jsonb_set(metadata,'{purchase_intent_id}',to_jsonb(gen_random_uuid()::text)) where id=$1",[tipLedger.provider_event_id]],
     ['provider transaction linkage',"update public.provider_events set metadata=jsonb_set(metadata,'{original_transaction_id}','\"different-canonical-original\"'::jsonb) where id=$1",[tipLedger.provider_event_id]],
    ]){

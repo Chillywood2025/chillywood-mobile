@@ -417,8 +417,10 @@ test("mounted tip chooser does not advertise unmapped amounts or another buyer's
   const h = await mountTip(t, { catalogBuyer: "previous-buyer" });
   assert.equal(h.node("tip-confirm-button").props.disabled, true);
   const bounds = await mountTip(t, { tipStatus: { minAmountCents: 100 } });
-  assert.equal(bounds.node("tip-amount-option"), undefined, "Android99 must not appear selectable below creator minimum");
-  assert.equal(bounds.node("tip-confirm-button").props.disabled, true);
+  assert.ok(bounds.node("tip-amount-option"), "existing Android99 remains selectable despite legacy creator presets");
+  assert.equal(bounds.node("tip-confirm-button").props.disabled, false);
+  await bounds.press("tip-confirm-button");
+  assert.equal(bounds.purchases[0].amountCents, 99);
   const staleCreator = await mountTip(t, { tipStatus: { creatorId: "old-creator" } });
   assert.equal(staleCreator.node("tip-confirm-button").props.disabled, true);
 });

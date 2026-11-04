@@ -105,9 +105,7 @@ export function TipSheet({
     void readCreatorSupportedPrices("creator_tip", creatorId).then(result => {
       if (!active || contextRef.current !== key) return;
       const prices = result.status === "resolved" && result.subjectUserId === user?.id
-        ? result.prices.filter(price => isCreatorTipStorePriceSupported(price)
-          && (Platform.OS === "ios" || (price.amountMinor >= (tipStatus?.minAmountCents ?? 100)
-            && price.amountMinor <= (tipStatus?.maxAmountCents ?? 50000)))) : [];
+        ? result.prices.filter(price => isCreatorTipStorePriceSupported(price)) : [];
       setCatalog({ key, prices, loading: false, unavailable: result.status !== "resolved" || prices.length === 0 });
       if (prices[0]) setSelectedAmount(prices[0].amountMinor);
     });
@@ -236,15 +234,13 @@ export function TipSheet({
     });
     return () => { active = false; };
   }, [amountCents, contextKey, creatorId, customAmountText, visible]);
-  const minAmount = Platform.OS === "ios" ? amounts[0] ?? 99 : tipStatus?.minAmountCents ?? 100;
-  const maxAmount = Platform.OS === "ios" ? amounts.at(-1) ?? 999 : tipStatus?.maxAmountCents ?? 50000;
+  // Legacy creator preset bounds do not limit an exact supported store price.
   const amountValid = !catalogLoading && supportedPrices.some(price => price.amountMinor === amountCents) && (Platform.OS === "ios"
     ? selectedIosProduct != null
       && Number.isInteger(amountCents)
       && amountCents > 0
     : Number.isInteger(amountCents)
-      && amountCents >= minAmount
-      && amountCents <= maxAmount);
+      && amountCents > 0);
   const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
   // Tester mode changes copy only. Exact server-normalized creator authority
   // remains mandatory before any store purchase can be attempted.
