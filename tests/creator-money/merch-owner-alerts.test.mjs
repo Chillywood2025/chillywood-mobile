@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {createNotificationActivityHandler} from '../../supabase/functions/_shared/notification-activity-worker.mjs';
 
 test('actual owner alerts deduplicate, deliver in app, honor preferences, recheck role and report recovery without money', {timeout:240000}, async()=>{
  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});
@@ -34,6 +35,32 @@ test('actual owner alerts deduplicate, deliver in app, honor preferences, rechec
   const recovered=(await db.query(`select * from public.notifications where user_id=$1 order by created_at desc,id desc limit 1`,[owner])).rows[0];
   assert.match(recovered.title,/recovered/);assert.deepEqual(recovered.target_context.alertCodes,[]);
   assert.equal(await one(`select (private.resolve_notification_activity(e)->>'eligible')::boolean from public.notification_activity_events e where id=$1`,[event.id]),false,'obsolete alert suppressed before push');
+  // Exercise the real alert outbox and service RPCs through the actual worker.
+  // A lease can expire before finish commits: in-app delivery remains durable,
+  // but the worker must not report that its pending push work is complete.
+  await db.exec(`insert into public.notification_activity_worker_config(singleton,enabled,token_sha256)
+   values(true,true,encode(extensions.digest('owner-alert-fixture','sha256'),'hex'))
+   on conflict(singleton) do update set enabled=excluded.enabled,token_sha256=excluded.token_sha256`);
+  const recoveryEvent=await one('select id from public.notification_activity_events where notification_id=$1',[recovered.id]);
+  let expireBeforeFinish=true;
+  const worker=createNotificationActivityHandler({adminClient:{rpc:async(name,args)=>{
+   if(name==='finish_notification_activity'&&expireBeforeFinish){
+    assert.equal(args.p_event_id,recoveryEvent);
+    await db.query("update public.notification_activity_events set lease_until=now()-interval '1 second' where id=$1",[recoveryEvent]);
+   }
+   await db.exec('set role service_role');
+   try{
+    const result=await db.query(`select public.${name}(${Object.keys(args).map((key,i)=>`${key}=>$${i+1}`).join(',')}) value`,Object.values(args));
+    return {data:name==='claim_notification_activity_batch'?result.rows.map(row=>row.value):result.rows[0].value,error:null};
+   }finally{await db.exec('reset role');}
+  }},fetchImpl:async()=>{throw Error('token-free fixture must not send to a provider');}});
+  const request=()=>new Request('https://fixture.invalid/activity',{method:'POST',headers:{'x-chillywood-activity-token':'owner-alert-fixture'}});
+  assert.deepEqual(await(await worker(request())).json(),{status:'review_or_retry_pending',completed:0,accepted:0,unresolved:1});
+  assert.equal(await one('select status from public.notification_activity_events where id=$1',[recoveryEvent]),'leased');
+  expireBeforeFinish=false;
+  assert.deepEqual(await(await worker(request())).json(),{status:'ok',completed:1,accepted:0,unresolved:0});
+  assert.equal(await one('select status from public.notification_activity_events where id=$1',[recoveryEvent]),'complete');
+  assert.equal(await one('select count(*)::int from public.notifications where user_id=$1',[owner]),2,'retry does not duplicate in-app incident/recovery alerts');
   await db.query(`update public.platform_role_memberships set status='revoked' where user_id=$1 and role='owner'`,[owner]);
   assert.equal(await one(`select (private.resolve_notification_activity(e)->>'eligible')::boolean from public.notification_activity_events e where notification_id=$1`,[recovered.id]),false,'removed owner cannot receive delayed push');
   assert.equal(await one('select count(*)::int from public.money_access_ledger_events'),money);

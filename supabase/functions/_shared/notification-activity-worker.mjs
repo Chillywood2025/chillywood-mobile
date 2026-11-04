@@ -4,6 +4,9 @@ const reply = (status, body) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json' },
 });
 const knownErrors = new Set(['DeviceNotRegistered', 'MessageTooBig', 'MessageRateExceeded', 'InvalidCredentials']);
+// These prepare results commit terminal suppression. Stale leases and room
+// starts waiting for another delivery still leave work outstanding.
+const terminalPreparationReasons = new Set(['source_or_preference_changed', 'room_start_already_delivered']);
 
 // Covers both fetch and response-body consumption, including an implementation
 // that ignores abort. A timeout after reservation is an unknown delivery.
@@ -69,17 +72,29 @@ export function createNotificationActivityHandler({ adminClient, fetchImpl = fet
       }
       const started = now();
       const claims = await rpc('claim_notification_activity_batch', { p_limit: 10 });
-      if (!Array.isArray(claims)) throw new Error('invalid_claim_result');
+      if (!Array.isArray(claims) || claims.length > 10) throw new Error('invalid_claim_result');
       let completed = 0;
       let unresolved = 0;
       let accepted = 0;
-      for (const claim of claims.slice(0, 10)) {
-        if (now() - started > 55_000) break;
+      for (const [index, claim] of claims.entries()) {
+        if (now() - started > 55_000) {
+          unresolved += claims.length - index;
+          break;
+        }
         const fence = { p_event_id: claim.eventId, p_lease_token: claim.leaseToken };
         try {
           const plan = await rpc('prepare_notification_activity', fence);
-          if (plan?.eligible !== true) continue;
-          const tokens = Array.isArray(plan.tokenIds) ? [...new Set(plan.tokenIds)].slice(0, 10) : [];
+          if (plan?.eligible !== true) {
+            if (plan?.eligible !== false || !terminalPreparationReasons.has(plan.reason)) unresolved += 1;
+            continue;
+          }
+          // A missing or truncated token list is not evidence that no push is
+          // needed. Never finish an event on an unconfirmed preparation result.
+          if (!Array.isArray(plan.tokenIds) || plan.tokenIds.length > 10
+            || plan.tokenIds.some(tokenId => typeof tokenId !== 'string' || !tokenId.trim())) {
+            throw new Error('invalid_preparation_result');
+          }
+          const tokens = [...new Set(plan.tokenIds)];
           for (let i = 0; i < tokens.length; i += 5) {
             if (now() - started > 55_000) throw new Error('worker_budget');
             const outcomes = await Promise.allSettled(tokens.slice(i, i + 5).map(async (tokenId) => {
@@ -99,6 +114,7 @@ export function createNotificationActivityHandler({ adminClient, fetchImpl = fet
             if (outcomes.some((outcome) => outcome.status === 'rejected')) throw new Error('token_work_unconfirmed');
           }
           if (await rpc('finish_notification_activity', fence) === true) completed += 1;
+          else unresolved += 1;
         } catch {
           // Unreserved tokens can retry after the lease. Reserved tokens cannot.
           // Other recipients still receive their independently fenced work.
