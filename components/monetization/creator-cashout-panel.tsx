@@ -56,7 +56,9 @@ export function CreatorCashoutPanel() {
   if(!key||!focused)return null;
   const current=state.key===key?state:null, busy=current?.busy===true;
   const text={color:CHILLYWOOD_VISUAL.textMuted}, title={color:CHILLYWOOD_VISUAL.textPrimary};
-  const change=()=>{displayedQuote.current=null;generation.current++;latch.current=false;setState(previous=>({...previous,key,quote:null,busy:false,notice:""}));};
+  // Native edits may already be queued when disabled/editable props change.
+  // Keep the action latch and its receipt current until the request settles.
+  const change=()=>{if(latch.current)return false;displayedQuote.current=null;generation.current++;setState(previous=>({...previous,key,quote:null,busy:false,notice:""}));return true;};
   return <View testID="creator-cashout-execution" style={{padding:12,gap:10,borderRadius:12,backgroundColor:CHILLYWOOD_VISUAL.glassBackground,borderColor:CHILLYWOOD_VISUAL.glassBorder,borderWidth:1}}>
     <Text accessibilityRole="header" style={title}>Cashout requests</Text>
     <Text style={text}>Standard app fee: $0. Instant app fee: 2% of the amount requested, rounded up to the next cent. Provider costs are separate. Availability is checked on the server.</Text>
@@ -67,8 +69,8 @@ export function CreatorCashoutPanel() {
       {current.policy.status.accepted?<Text style={text}>These fee terms are accepted.</Text>:<Pressable accessibilityRole="button" disabled={busy} onPress={()=>void run("accept")}><Text style={{...title,paddingVertical:10}}>I accept these creator fee terms</Text></Pressable>}
       {current.policy.status.adjustments.map(adjustment=><Text key={adjustment.id} style={text}>{adjustment.reason}: {money(adjustment.amountCents)} · {new Date(adjustment.createdAt).toLocaleDateString()}</Text>)}
     </View>:null}
-    <TextInput accessibilityLabel="Cashout amount in dollars" keyboardType="decimal-pad" editable={!busy} value={amount} onChangeText={value=>{change();setAmount(value);}} placeholder="Amount in USD" placeholderTextColor={CHILLYWOOD_VISUAL.textMuted} style={{...title,padding:10,borderWidth:1,borderColor:CHILLYWOOD_VISUAL.glassBorder,borderRadius:8}} />
-    <View style={{flexDirection:"row",gap:18}}>{(["scheduled","instant"] as const).map(value=><Pressable key={value} accessibilityRole="radio" accessibilityState={{checked:method===value,disabled:busy}} disabled={busy} onPress={()=>{change();setMethod(value);}}><Text style={title}>{method===value?"● ":"○ "}{value==="scheduled"?"Standard":"Instant"}</Text></Pressable>)}</View>
+    <TextInput accessibilityLabel="Cashout amount in dollars" keyboardType="decimal-pad" editable={!busy} value={amount} onChangeText={value=>{if(change())setAmount(value);}} placeholder="Amount in USD" placeholderTextColor={CHILLYWOOD_VISUAL.textMuted} style={{...title,padding:10,borderWidth:1,borderColor:CHILLYWOOD_VISUAL.glassBorder,borderRadius:8}} />
+    <View style={{flexDirection:"row",gap:18}}>{(["scheduled","instant"] as const).map(value=><Pressable key={value} accessibilityRole="radio" accessibilityState={{checked:method===value,disabled:busy}} disabled={busy} onPress={()=>{if(change())setMethod(value);}}><Text style={title}>{method===value?"● ":"○ "}{value==="scheduled"?"Standard":"Instant"}</Text></Pressable>)}</View>
     <Pressable accessibilityRole="button" disabled={busy||current?.policy?.status.accepted!==true||current.policy.status.negativeAdjustmentCents>0} onPress={()=>void run("quote")}><Text style={{...title,paddingVertical:10}}>Review cashout fees</Text></Pressable>
     {current?.quote?<View style={{gap:5}}>
       <Text style={text}>Requested: {money(current.quote.grossMinor)} · App fee: {money(current.quote.appFeeMinor)}</Text>
