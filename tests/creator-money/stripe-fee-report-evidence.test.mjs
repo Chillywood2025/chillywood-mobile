@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { Buffer } from 'node:buffer';
 import { webcrypto } from 'node:crypto';
 import ts from 'typescript';
 
-const runtime = { exports: {}, AbortSignal, TextDecoder, crypto: webcrypto };
+const runtime = { exports: {}, AbortSignal, AbortController, TextDecoder, crypto: webcrypto, setTimeout, clearTimeout };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('supabase/functions/_shared/stripe-fee-report-evidence.ts', 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText, runtime);
@@ -16,6 +17,14 @@ const context = { accountId: 'acct_fixture', environment: 'test', reportRunId: '
 const header = 'fee_transaction_id,incurred_by,incurred_by_type,amount,tax,currency,product,suite,feature_name,settled_via';
 const row = 'fee_one,ch_fixture,charge,0.10,0.01,usd,Tax,Revenue,Automatic tax,balance';
 const csv = `${header}\n${row}\n`;
+test('fee report adapter passes strict standalone TypeScript checking', () => {
+  const program = ts.createProgram(['supabase/functions/_shared/stripe-fee-report-evidence.ts'], {
+    noEmit: true, strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
+    lib: ['lib.es2022.d.ts', 'lib.dom.d.ts'], types: [],
+  });
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(diagnostics.length, 0, diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n'));
+});
 test('transfer fee reports bind funding only, do not claim zero or accept mixed payout context',()=>{
  const {chargeId,refundIds,...base}=context;const transfer={...base,transferId:'tr_fixture'};
  const output=normalize(`${header}\nfee_transfer,tr_fixture,transfer,0.12,0.03,usd,Connect,Payments,Transfer,balance\n${row}`,transfer);
@@ -135,6 +144,84 @@ test('provider network exception cannot yield a partial fee result', async () =>
     if (url.includes('files.stripe.com')) throw new Error('synthetic network interruption');
     return f.transport(url, options);
   }));
+});
+function deadlineObserver() {
+  const active = new Set();
+  const runtime = { exports: {}, AbortSignal, AbortController, TextDecoder, crypto: webcrypto,
+    setTimeout: (callback, milliseconds) => {
+      assert.equal(milliseconds, 15000);
+      const timer = setTimeout(() => { active.delete(timer); callback(); }, 20);
+      active.add(timer); return timer;
+    },
+    clearTimeout: timer => { clearTimeout(timer); active.delete(timer); },
+  };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('supabase/functions/_shared/stripe-fee-report-evidence.ts', 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText, runtime);
+  return { observe: runtime.exports.observeStripeFeeReport, active };
+}
+test('fee report reads bound stalled headers, JSON and CSV bodies without waiting for cancellation', { timeout: 2000 }, async () => {
+  for (const stall of ['headers', 'account', 'report', 'csv']) {
+    const clock = deadlineObserver(), f = fixture();
+    let signal, response, canceled = 0;
+    const transport = async (url, options) => {
+      const target = stall === 'headers' || (stall === 'account' && url.endsWith('/account'))
+        || (stall === 'report' && url.includes('/reporting/')) || (stall === 'csv' && url.includes('files.stripe.com'));
+      if (!target) return f.transport(url, options);
+      signal = options.signal;
+      if (stall === 'headers') return new Promise(() => {});
+      response = new Response(new ReadableStream({
+        pull: () => new Promise(() => {}), cancel: () => { canceled++; return new Promise(() => {}); },
+      }));
+      return response;
+    };
+    await assert.rejects(clock.observe(context, 'rk_test_fixture', transport), /provider_read_deadline/);
+    assert.equal(signal.aborted, true); assert.equal(clock.active.size, 0);
+    if (response) { assert.equal(canceled, 1); assert.equal(response.body.locked, false); }
+  }
+});
+test('a late fee response is canceled without progressing to another provider request', async () => {
+  const clock = deadlineObserver(); let resolve, calls = 0, canceled = 0;
+  const pending = clock.observe(context, 'rk_test_fixture', () => { calls++; return new Promise(r => { resolve = r; }); });
+  await assert.rejects(pending, /provider_read_deadline/);
+  const response = new Response(new ReadableStream({ cancel: () => { canceled++; return Promise.reject(Error('synthetic cancellation failure')); } }));
+  resolve(response); await new Promise(r => setImmediate(r));
+  assert.equal(calls, 1); assert.equal(canceled, 1); assert.equal(clock.active.size, 0);
+});
+test('fee metadata and CSV byte limits fail promptly even when cancellation never settles', async () => {
+  for (const stage of ['account', 'report', 'csv']) {
+    const clock = deadlineObserver(), f = fixture(); let response, canceled = 0;
+    const transport = async (url, options) => {
+      const target = stage === 'account' ? url.endsWith('/account') : stage === 'report' ? url.includes('/reporting/') : url.includes('files.stripe.com');
+      if (!target) return f.transport(url, options);
+      const size = stage === 'csv' ? Buffer.byteLength(csv) + 1 : 2_000_001;
+      response = new Response(new ReadableStream({
+        start: controller => controller.enqueue(new Uint8Array(size)),
+        cancel: () => { canceled++; return new Promise(() => {}); },
+      }));
+      return response;
+    };
+    await assert.rejects(clock.observe(context, 'rk_test_fixture', transport),
+      stage === 'csv' ? /file_size_mismatch/ : /provider_body_limit/);
+    assert.equal(canceled, 1); assert.equal(response.body.locked, false); assert.equal(clock.active.size, 0);
+  }
+});
+test('fee read deadline timers are cleared on success and malformed provider JSON', async () => {
+  const clock = deadlineObserver(), f = fixture();
+  assert.equal((await clock.observe(context, 'rk_test_fixture', f.transport)).financialAuthority, false);
+  assert.equal(clock.active.size, 0);
+  await assert.rejects(clock.observe(context, 'rk_test_fixture', async () => new Response('{')));
+  assert.equal(clock.active.size, 0);
+});
+test('missing fee response bodies fail closed and clear their deadline timer', async () => {
+  for (const stage of ['account', 'report', 'csv']) {
+    const clock = deadlineObserver(), f = fixture();
+    await assert.rejects(clock.observe(context, 'rk_test_fixture', async (url, options) => {
+      const target = stage === 'account' ? url.endsWith('/account') : stage === 'report' ? url.includes('/reporting/') : url.includes('files.stripe.com');
+      return target ? new Response(null) : f.transport(url, options);
+    }), /stripe_fee_evidence_file_body_missing/);
+    assert.equal(clock.active.size, 0);
+  }
 });
 test('report normalizer cannot modify the tax readiness hard gate', () => {
   const sql = fs.readFileSync('supabase/migrations/20261031033820_commerce_tax_readiness.sql', 'utf8');

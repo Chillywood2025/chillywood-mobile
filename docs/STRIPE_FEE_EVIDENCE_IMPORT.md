@@ -29,6 +29,12 @@ CSV, and fingerprints the original bytes with SHA-256. The script creates a new
 real contexts or evidence. No secret, raw CSV, download URL or unrelated row data
 is written to the artifact.
 
+Every provider GET owns a 15-second deadline through the entire response body,
+with a 2 MB ceiling for account/report metadata and the existing exact file-size
+bound for CSV. A stalled transport or stream cancellation cannot keep the
+import pending indefinitely. Timeout, malformed JSON and size failures produce
+no partial observation; a late response is canceled rather than resumed.
+
 The report requires `fee_transaction_id`, `incurred_by`, `incurred_by_type`,
 `amount`, `tax`, `currency`, `product`, `suite`, `feature_name`, and `settled_via`.
 An optional `account_id` must agree on every row. Unmatched object rows are

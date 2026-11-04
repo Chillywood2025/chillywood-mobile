@@ -146,16 +146,49 @@ export async function observeStripeFeeReport(context: ReportContext, secret: str
   // Validate every context field before even contacting the provider.
   normalizeStripeFeeReport(required.join(","), context);
   if (!new RegExp(`^(sk|rk)_${context.environment}_[A-Za-z0-9]+$`).test(secret)) fail("credential_mode_mismatch");
-  const get = async (url: string) => {
-    const response = await transport(url, { method: "GET", redirect: "error",
-      headers: { Authorization: `Bearer ${secret}`, "Stripe-Version": "2026-10-28.endive" },
-      signal: AbortSignal.timeout(15000) });
-    if (!response.ok) fail("provider_read_failed");
-    return response;
+  const get = async (url: string, expectedSize?: number) => {
+    // Own the full header/body deadline, including transports which do not
+    // settle on abort. Cleanup must not wait for an unresponsive stream cancel.
+    const controller = new AbortController();
+    const deadline = new Promise<never>((_, reject) => controller.signal.addEventListener("abort",
+      () => reject(new Error("stripe_fee_evidence_provider_read_deadline")), { once: true }));
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let response: Response | undefined, reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      response = await Promise.race([Promise.resolve().then(async () => {
+        if (controller.signal.aborted) fail("provider_read_deadline");
+        const value = await transport(url, { method: "GET", redirect: "error",
+          headers: { Authorization: `Bearer ${secret}`, "Stripe-Version": "2026-10-28.endive" },
+          signal: controller.signal });
+        if (controller.signal.aborted) { void value.body?.cancel().catch(() => {}); fail("provider_read_deadline"); }
+        return value;
+      }), deadline]);
+      if (!response.ok) fail("provider_read_failed");
+      const body = response.body ?? fail("file_body_missing");
+      reader = body.getReader();
+      const chunks: Uint8Array[] = []; let size = 0;
+      for (;;) {
+        const { done, value } = await Promise.race([reader.read(), deadline]);
+        if (done) break;
+        size += value.byteLength;
+        if (size > (expectedSize ?? 2_000_000) || size > 2_000_000)
+          fail(expectedSize === undefined ? "provider_body_limit" : "file_size_mismatch");
+        chunks.push(value);
+      }
+      if (expectedSize !== undefined && size !== expectedSize) fail("file_size_mismatch");
+      const bytes = new Uint8Array(size); let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+      return bytes;
+    } finally {
+      clearTimeout(timer);
+      if (reader) { void reader.cancel().catch(() => {}); reader.releaseLock(); }
+      else { void response?.body?.cancel().catch(() => {}); }
+    }
   };
-  const account = await (await get("https://api.stripe.com/v1/account")).json();
+  const json = async (url: string) => JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await get(url)));
+  const account = await json("https://api.stripe.com/v1/account");
   if (account?.object !== "account" || account.id !== context.accountId) fail("account_mismatch");
-  const run = await (await get(`https://api.stripe.com/v1/reporting/report_runs/${context.reportRunId}`)).json();
+  const run = await json(`https://api.stripe.com/v1/reporting/report_runs/${context.reportRunId}`);
   if (run?.object !== "reporting.report_run" || run.id !== context.reportRunId || run.livemode !== (context.environment === "live")
     || run.report_type !== context.reportType || run.status !== "succeeded" || run.error !== null
     || !Number.isSafeInteger(run.succeeded_at) || run.succeeded_at <= 0) fail("report_unqualified");
@@ -168,25 +201,7 @@ export async function observeStripeFeeReport(context: ReportContext, secret: str
   const expectedUrl = `https://files.stripe.com/v1/files/${context.fileId}/contents`;
   if (file?.object !== "file" || file.id !== context.fileId || file.type !== "csv"
     || file.url !== expectedUrl || !Number.isSafeInteger(file.size) || file.size < 1 || file.size > 2_000_000) fail("file_binding_invalid");
-  const response = await get(expectedUrl);
-  const stream = response.body;
-  if (!stream) throw new Error("stripe_fee_evidence_file_body_missing");
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > file.size || size > 2_000_000) fail("file_size_mismatch");
-      chunks.push(value);
-    }
-  } finally { await reader.cancel(); reader.releaseLock(); }
-  if (size !== file.size) fail("file_size_mismatch");
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  const bytes = await get(expectedUrl, file.size);
   const csv = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   const normalized = normalizeStripeFeeReport(csv, context);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
