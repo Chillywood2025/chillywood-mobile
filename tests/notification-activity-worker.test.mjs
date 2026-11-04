@@ -36,7 +36,7 @@ test('explicit unregistered-device ticket is a definite failure', async () => {
   })) }), { status: 'failed', errorCode: 'DeviceNotRegistered' });
 });
 
-function harness(overrides = {}) {
+function harness(overrides = {}, options = {}) {
   const calls = []; let sends = 0;
   const adminClient = { rpc: async (name, args) => {
     calls.push([name, args]);
@@ -51,7 +51,7 @@ function harness(overrides = {}) {
     return { data: result[name], error: null };
   } };
   const handler = createNotificationActivityHandler({ adminClient, deadlineMs: 20,
-    fetchImpl: async () => { sends++; return ticket(); } });
+    fetchImpl: async () => { sends++; return ticket(); }, ...options });
   return { handler, calls, sends: () => sends };
 }
 test('authentication precedes any source read or provider action', async () => {
@@ -83,7 +83,7 @@ test('uncertain reservation response never sends and never releases reservation'
   assert.equal(h.calls.some(([name]) => name === 'finish_notification_activity'), false);
 });
 test('source or preference suppression sends nothing', async () => {
-  const h = harness({ prepare_notification_activity: () => ({ data: { eligible: false } }) });
+  const h = harness({ prepare_notification_activity: () => ({ data: { eligible: false, reason: 'source_or_preference_changed' } }) });
   await h.handler(request()); assert.equal(h.sends(), 0); assert.equal(h.calls.length, 3);
 });
 test('completion storage failure leaves lease recoverable and continues next recipient', async () => {
@@ -101,4 +101,61 @@ test('duplicate token IDs cannot duplicate sends', async () => {
 });
 test('deadline includes deferred operation rejection', async () => {
   await assert.rejects(withActivityDeadline(() => { throw new Error('test failure'); }, 20), /test failure/);
+});
+
+for (const finish of [false, null, {}, 'true']) {
+  test(`unconfirmed event completion stays pending: ${JSON.stringify(finish)}`, async () => {
+    const h = harness({ finish_notification_activity: () => ({ data: finish }) });
+    const body = await (await h.handler(request())).json();
+    assert.equal(h.sends(), 1);
+    assert.deepEqual(body, { status: 'review_or_retry_pending', completed: 0, accepted: 1, unresolved: 1 });
+  });
+}
+
+for (const plan of [null, {}, { eligible: false },
+  { eligible: false, reason: 'stale_lease' }, { eligible: false, reason: 'room_start_delivery_pending' },
+  { eligible: true }, { eligible: true, tokenIds: null }, { eligible: true, tokenIds: ['token-one', null] },
+  { eligible: true, tokenIds: Array.from({ length: 11 }, (_, i) => `token-${i}`) }]) {
+  test(`unconfirmed preparation cannot finish or report healthy: ${JSON.stringify(plan)}`, async () => {
+    const h = harness({ prepare_notification_activity: () => ({ data: plan }) });
+    const body = await (await h.handler(request())).json();
+    assert.deepEqual(body, { status: 'review_or_retry_pending', completed: 0, accepted: 0, unresolved: 1 });
+    assert.equal(h.sends(), 0);
+    assert.equal(h.calls.some(([name]) => name === 'finish_notification_activity'), false);
+  });
+}
+
+for (const reason of ['source_or_preference_changed', 'room_start_already_delivered']) {
+  test(`confirmed terminal suppression remains healthy: ${reason}`, async () => {
+    const h = harness({ prepare_notification_activity: () => ({ data: { eligible: false, reason } }) });
+    assert.deepEqual(await (await h.handler(request())).json(), { status: 'ok', completed: 0, accepted: 0, unresolved: 0 });
+    assert.equal(h.sends(), 0);
+    assert.equal(h.calls.some(([name]) => name === 'finish_notification_activity'), false);
+  });
+}
+
+for (const beforeFirst of [true, false]) {
+  test(`budget exhaustion reports every untouched claim, before first=${beforeFirst}`, async () => {
+    let now = 0;
+    const h = harness({
+      claim_notification_activity_batch: () => {
+        if (beforeFirst) now = 55_001;
+        return { data: [1, 2, 3].map(i => ({ eventId: `event-${i}`, leaseToken: `lease-${i}` })) };
+      },
+      finish_notification_activity: () => { now = 55_001; return { data: true }; },
+    }, { now: () => now });
+    const body = await (await h.handler(request())).json();
+    assert.deepEqual(body, { status: 'review_or_retry_pending', completed: beforeFirst ? 0 : 1,
+      accepted: beforeFirst ? 0 : 1, unresolved: beforeFirst ? 3 : 2 });
+    assert.equal(h.sends(), beforeFirst ? 0 : 1);
+    assert.equal(h.calls.filter(([name]) => name === 'prepare_notification_activity').length, beforeFirst ? 0 : 1);
+  });
+}
+
+test('oversized claims fail closed before preparing or sending a partial batch', async () => {
+  const h = harness({ claim_notification_activity_batch: () => ({ data:
+    Array.from({ length: 11 }, (_, i) => ({ eventId: `event-${i}`, leaseToken: `lease-${i}` })) }) });
+  assert.equal((await h.handler(request())).status, 503);
+  assert.equal(h.sends(), 0);
+  assert.equal(h.calls.length, 2);
 });
