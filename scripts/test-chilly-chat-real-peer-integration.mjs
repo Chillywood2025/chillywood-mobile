@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { createRequire } from "node:module";
 import { buildLegacyPairedBrowserBundle, createLegacyBrowserSilenceObservation, summarizeLegacyBrowserFailure } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
+import { collectLegacyFailureTransportDiagnostics, summarizeLegacyPeerFailureTimeline } from "../tests/assurance/helpers/legacy-failure-transport-diagnostics.mjs";
 
 const require = createRequire(new URL("../tests/integration/real-peer-browser/package.json", import.meta.url));
 const { chromium } = require("./node_modules/playwright");
@@ -26,7 +27,13 @@ const wait = async (page, predicate, description, timeout = 20_000, read = () =>
     if (predicate(state)) return state;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`${description}\n${JSON.stringify(summarizeLegacyBrowserFailure(state), null, 2)}`);
+  const transportDiagnostics = await collectLegacyFailureTransportDiagnostics(
+    () => page.evaluate(() => window.__pairedCall?.transportDiagnostics()),
+  );
+  for (const event of summarizeLegacyPeerFailureTimeline(state?.events)) {
+    console.error(`Product peer failure timeline: ${JSON.stringify(event)}`);
+  }
+  throw new Error(`${description}\n${JSON.stringify({ ...summarizeLegacyBrowserFailure(state), transportDiagnostics }, null, 2)}`);
 };
 const receivedAudio = (endpoint) => endpoint.audioReceivers.filter((receiver) => receiver.connection === "connected");
 const pcmValue = (endpoint, name) => receivedAudio(endpoint).reduce((sum, receiver) => sum + (!receiver.error && Number.isFinite(receiver[name]) ? receiver[name] : Number.NaN), 0);
