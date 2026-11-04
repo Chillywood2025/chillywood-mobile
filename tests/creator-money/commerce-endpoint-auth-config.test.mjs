@@ -107,16 +107,17 @@ test('reporter settings never bypass its dedicated credential or independently a
   for (const entry of cases) {
     const calls = []; let handler;
     const env = { GOOGLE_PLAY_EXTERNAL_REPORTER_WORKER_SECRET: secret, GOOGLE_PLAY_EXTERNAL_REPORTING_ENABLED: 'true',
-      GOOGLE_PLAY_EXTERNAL_LICENSE_TEST_MODE: 'true', GOOGLE_PLAY_EXTERNAL_REPORTER_SERVICE_ACCOUNT_JSON: 'synthetic-only', ...entry.env };
+      GOOGLE_PLAY_EXTERNAL_LICENSE_TEST_MODE: 'true', GOOGLE_PLAY_EXTERNAL_REPORTER_SERVICE_ACCOUNT_JSON: 'synthetic-only',
+      STRIPE_SECRET_KEY: 'sk_test_synthetic', STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID: 'acct_synthetic', ...entry.env };
     load('google-play-external-reporter/index.ts', { Deno: { serve: fn => { handler = fn; } }, modules: {
       '../_shared/stripe-connect.ts': {
         readOptionalEnv: name => env[name], jsonResponse: (status, body) => new Response(JSON.stringify(body), { status }),
         createAdminClient: () => { calls.push('admin'); throw Error('unexpected privileged client'); },
       },
       '../_shared/merch-observation-budget.ts': load('_shared/merch-observation-budget.ts'),
-      '../_shared/google-refund-tax-reconciliation.ts': load('_shared/google-refund-tax-reconciliation.ts', { modules: {
-        './stripe-refund-tax-evidence.ts': load('_shared/stripe-refund-tax-evidence.ts'),
-      } }),
+      '../_shared/google-refund-tax-history.ts': { reconcileGoogleRefundTax: async () => {
+        calls.push('tax-history'); throw Error('unexpected tax history reconciliation');
+      } },
       '../_shared/google-play-reporter-oauth.ts': { googlePlayReporterAccessToken: async () => { calls.push('oauth'); throw Error('unexpected OAuth'); } },
       '../_shared/google-play-external-reporting.ts': { submitExternalReport: async () => { calls.push('provider'); throw Error('unexpected provider'); } },
     } });
@@ -128,7 +129,7 @@ test('reporter settings never bypass its dedicated credential or independently a
         method: entry.method ?? 'POST', headers: auth === null ? {} : { authorization: auth },
       }));
       assert.equal(response.status, entry.status);
-      assert.deepEqual(calls, [], 'invalid credential/setup must stop before admin, OAuth or provider work');
+      assert.deepEqual(calls, [], 'invalid credential/setup must stop before admin, tax history, OAuth or provider work');
     } finally { globalThis.fetch = originalFetch; }
   }
 });
