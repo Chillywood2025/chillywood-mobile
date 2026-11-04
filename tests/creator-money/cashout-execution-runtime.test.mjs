@@ -110,6 +110,30 @@ test('provider timeout after durable claim keeps dispatch unknown and no compens
  const f=fixture();await assert.rejects(run(f.c.requestId,f.store,'rk_live_fixture',async(url,opt)=>{if(opt.method==='POST')throw Error('connection lost after dispatch');return f.transport(url,opt);}),/connection lost/);
  assert.deepEqual(f.claims,['funding']);assert.equal(f.observed.length,0);
 });
+for(const status of [200,400,429,500])test(`provider ${status} response cleanup cannot hang or authorize duplicate funding`,async()=>{
+ const f=fixture();let canceled=0,posts=0,timer;
+ const claim=f.store.claim;
+ f.store.claim=async(...args)=>{const result=await claim(...args);if(result.claimed)f.c.phase='funding_unknown';return result;};
+ const transport=async(url,opt)=>{
+  if(opt.method==='POST'){
+   posts++;
+   return new Response(new ReadableStream({
+    start(controller){controller.enqueue(new Uint8Array(status===200?500001:1));},
+    cancel(){canceled++;return new Promise(()=>{});},
+   }),{status});
+  }
+  return f.transport(url,opt);
+ };
+ try {
+  await assert.rejects(Promise.race([run(f.c.requestId,f.store,'rk_live_fixture',transport),
+   new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('test_cleanup_blocked')),500);})]),
+  status===200?/cashout_body_too_large/:/cashout_provider_request_unresolved/);
+ } finally {clearTimeout(timer);}
+ assert.equal(canceled,1);assert.equal(posts,1);assert.deepEqual(f.claims,['funding']);assert.equal(f.observed.length,0);
+ await run(f.c.requestId,f.store,'rk_live_fixture',transport);
+ assert.equal(posts,1);assert.deepEqual(f.claims,['funding']);assert.equal(f.observed.length,1);
+ assert.equal(f.observed[0].facts.kind,'transfer','recovery observes the original transfer without another POST');
+});
 test('zero claim authorizes no POST',async()=>{
  const f=fixture();f.store.claim=async()=>({claimed:false,token:null});await run(f.c.requestId,f.store,'rk_live_fixture',f.transport);
  assert.ok(f.calls.every(x=>x.options.method==='GET'));
