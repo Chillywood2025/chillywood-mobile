@@ -22,6 +22,14 @@ test('actual SQL fee feed and exact-session tip comparison stay unknown until qu
       await db.exec(`set role ${role}`);
     };
     const read=(amount=299)=>one("select public.get_creator_tip_route_costs($1,$2,'ios')",[creator.user_id,amount]);
+    await claims();
+    const android99=await one("select public.get_creator_tip_route_costs($1,99,'android')",[creator.user_id]);
+    assert.ok(android99.routes.some(r=>r.provider==='google_play'),'existing Android99 is eligible independent of legacy min100');
+    assert.ok(android99.routes.every(r=>r.fees===null),'catalog eligibility does not fabricate fee evidence');
+    for(const amount of [1,98,100,123]) {
+      const unsupported=await one("select public.get_creator_tip_route_costs($1,$2,'android')",[creator.user_id,amount]);
+      assert.equal(unsupported.routes.some(r=>r.provider==='google_play'),false,'unmapped amount must not round to99');
+    }
     await claims();let quote=await read();
     const subject={buyerId:buyer.user_id,sessionId:buyer.session_id,creatorId:creator.user_id,amountMinor:299,currency:'usd',platform:'ios',environment:'test'};
     assert.equal(quote.completeCandidateSet,true);assert.equal(quote.unresolvedPayment,false);

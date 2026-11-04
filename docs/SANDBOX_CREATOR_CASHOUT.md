@@ -182,7 +182,7 @@ storefront, catalog, receipt/access and installed Android/iOS commissioning proo
 | Existing paid lane | Cashout-source integration evidence |
 | --- | --- |
 | Channel subscription | Apple/Google canonical initial purchase, renewal, duplicate and refund fixtures passed |
-| Native store tips | iOS one-time canonical fixture passed; Android existing99¢ SKU is below enforced100¢ floor and remains unavailable |
+| Native store tips | Existing exact iOS and Android sandbox catalog prices are eligible independently of legacy creator preset bounds; canonical fixtures remain synthetic, not installed-device proof |
 | External Stripe tips | Not admitted: existing destination-charge transfer already funds connected account; adding another funding transfer would duplicate it |
 | Paid content | Apple/Google paid-video canonical processor, net, full reservation, replay and refund fixture |
 | Fixed event tickets | Apple/Google actual ticket reservation, checkout-time evidence, processor, net/reservation/replay/refund |
@@ -205,12 +205,13 @@ transactions are not covered by a universal race-safety claim.
 
 ### Existing tip route limitations
 
-The Android native mapping `creator_tip_sandbox_099` is 99 cents, whereas the
-existing creator tip schema and settings RPC enforce at least 100 cents. This is
-a source policy/catalog mismatch, not an asserted Stripe minimum. Existing iOS
-299/499/999-cent mappings can satisfy the floor. Do not lower policy or invent
-Google product mappings to pass a test; higher genuine Google catalog evidence
-or an explicitly approved pricing-policy decision is required.
+The Android native mapping `creator_tip_sandbox_099` is 99 cents. Native tip
+eligibility now uses the exact existing store catalog, not the legacy creator
+settings' 100-cent preset floor or maximum. Historical settings and receipts are
+unchanged. Buyer-entered amounts are never rounded or substituted: an unmapped
+native amount remains unavailable, while a separately qualified external route
+retains its own verified provider limits and explicit checkout action. No new
+SKU, provider qualification, money switch or payout authority is created.
 
 External Stripe tip checkout uses `transfer_data.destination` and separate
 `creator_tip_transactions`/`monetization_webhook_events` accounting. Those tips

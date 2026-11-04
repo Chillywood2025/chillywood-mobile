@@ -17,6 +17,9 @@ export const appCompletionStudioDependentAddedFunctionIdentities = new Map([
   ...liveDiscoveryAddedFunctionIdentities,
 ]);
 export const appCompletionFiles = Object.freeze([
+  // Depends on the October catalog/subscription and tip fee implementations;
+  // historical commerce checkpoints exclude this successor with this bundle.
+  '20261104032615_native_tip_catalog_amount_policy.sql',
   '20261103005000_native_production_ingress_observations.sql',
   '20261102194000_sandbox_creator_cashout_execution.sql',
   "20261101141441_secondary_media_producer_registry.sql",
@@ -870,6 +873,9 @@ export const appCompletionAddedFunctionIdentities = new Map([
 ]);
 
 export const appCompletionReplacedFunctionIdentities = new Map([
+  ['public.list_creator_supported_prices_pre_subscription_binding/4','list_creator_supported_prices_pre_subscription_binding(text,text,text,uuid)'],
+  ['public.create_money_purchase_intent_pre_protected_video_closeout/4','create_money_purchase_intent_pre_protected_video_closeout(text,text,uuid,jsonb)'],
+  ['private.read_creator_tip_route_costs_for_subject/5','private.read_creator_tip_route_costs_for_subject(uuid,uuid,uuid,integer,text)'],
   ['public.begin_creator_money_checkout/2','begin_creator_money_checkout(uuid,uuid)'],
   ["public.read_public_channel_profile/1", "read_public_channel_profile(text)"],
   ["public.read_public_platform_identity/1", "read_public_platform_identity(text)"],
