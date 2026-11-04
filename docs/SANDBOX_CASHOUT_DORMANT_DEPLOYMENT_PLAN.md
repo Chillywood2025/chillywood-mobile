@@ -104,12 +104,13 @@ A separately source-reviewed executor must be qualified after tip and ingress. I
 
 The offline helper does not emit executable apply SQL. A separate
 [exact executor](SANDBOX_CASHOUT_EXACT_DEPLOYMENT_RUNBOOK.md) now implements the
-bounded transaction and readback, with its committed production manifest still
-**unqualified**. Its apply command fails before transport until a separately
-reviewed source change binds the real ordered predecessor receipts and fresh
-baseline. Neither the offline packet nor a synthetic test manifest can qualify
-deployment. Focused tests do not replace the full selected database suite or
-native concurrency proof.
+bounded transaction and readback. Its committed manifest binds the independently
+reviewed November 4 post-predecessor baseline and ordered successful receipts;
+see the [sanitized evidence](audits/sandbox-cashout-baseline-20261104.json).
+Application still requires current exact preflight, validated frozen source and
+action authority. Neither this offline packet nor a synthetic test manifest
+qualifies deployment. Focused tests do not replace the full selected database
+suite or native concurrency proof.
 
 ## Dormant endpoint rollout and evidence
 

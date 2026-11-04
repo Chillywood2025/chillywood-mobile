@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "scope": "Source qualification of the exact disabled sandbox schema baseline; no sandbox deployment, endpoint rollout, activation or provider operation.",
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "observedAt": "2026-11-04T22:50:39.638Z",
+  "observationMeaning": "Client UTC observation after successful bounded read; not a write or server commit timestamp.",
+  "baselineSource": "c4b3c7f223c1c4cc2ad2e6c85c5c5e9524f3d9ef",
+  "baselineTree": "89ded2d843c3ffe0d99ef54c2faaf035a8ad335d",
+  "baselineArtifact": {
+    "name": "sandbox-live-baseline-c4b3c7f2.json",
+    "sha256": "c910ccabaadd8b10d3ef586521f4fdb2bfa550c089d9f607f5a3a82e6d41b739",
+    "querySha256": "e89f43b5d4e94f0b060507ebb3c99b159998a314caac2b060c5cc0a6f9812b38",
+    "statementTimeoutMs": 20000,
+    "readOnly": true,
+    "productionMutation": false,
+    "independentlyReviewed": true
+  },
+  "baseline": {
+    "historyCount": 585,
+    "historyMaximum": "20261104032615",
+    "originalHistorySha256": "8ef39413e785edf6381b2d52f4c427415a4528e15314e2419c19a4e181ba5310",
+    "predecessorHistorySha256": "da70c6b4e914bc1488b063ec922d3997ca4d2328945e4f657dcee0c045f01c58",
+    "existingCatalogSha256": "c7db6581aab5e30d4ac17ceab634aef67cf01495a48e75446588e72da605a291",
+    "guardedDataSha256": "3312af262ec950a5f9246e0504ca613a3e38383e5202336c92c831a189482c29"
+  },
+  "baselineReads": {
+    "observedAt": ["2026-11-04T22:50:37.243Z", "2026-11-04T22:50:39.638Z"],
+    "identicalStates": true,
+    "context": {
+      "sessionAdmin": false,
+      "currentPostgres": false,
+      "currentReadOnly": true,
+      "sessionPostgres": false,
+      "sessionReadOnly": true,
+      "transactionReadOnly": true
+    },
+    "tip": true,
+    "ingress": true,
+    "controls": true,
+    "addedAbsent": true,
+    "addedInventory": false,
+    "targets": []
+  },
+  "predecessorReceipts": [
+    {
+      "project": "bmkkhihfbmsnnmcqkoly",
+      "version": "20261104032615",
+      "name": "native_tip_catalog_amount_policy",
+      "migrationSha256": "f18d738818dcc68ab6ff61f737a4755be4dcc4fd02846249c01647c1f5d3fc2b",
+      "status": "applied_verified",
+      "source": "3914c3c1532b1aca1ae865af9eae5e307a5fd6a9",
+      "tree": "14b61f96773ef879fc923d0460895c98a517569f",
+      "appliedAt": "2026-11-04T16:46:13Z",
+      "timestampMeaning": "UTC clock observed after confirmed application; not an independently measured database commit timestamp"
+    },
+    {
+      "project": "bmkkhihfbmsnnmcqkoly",
+      "version": "20261103005000",
+      "name": "native_production_ingress_observations",
+      "migrationSha256": "f18382b2899ed69a3e422538f451f11f1519b53b1ce780d12221cbeb50a48efe",
+      "status": "applied_verified",
+      "source": "c4b3c7f223c1c4cc2ad2e6c85c5c5e9524f3d9ef",
+      "tree": "89ded2d843c3ffe0d99ef54c2faaf035a8ad335d",
+      "appliedAt": "2026-11-04T21:57:48Z",
+      "timestampMeaning": "UTC observation after confirmed apply response; not independently measured server commit timestamp"
+    }
+  ],
+  "receiptArtifacts": [
+    {
+      "name": "ordered-prerequisite-deployment-evidence.json",
+      "sha256": "66a4b368e144c826e061f8843828a3463f8f57826b98127184203b92ddc32379",
+      "selectedSection": "tip",
+      "independentReadback": "already_applied_verified",
+      "note": "Only its successful tip section is used. Its older ingress section records a rolled-back failure and is not a successful receipt."
+    },
+    {
+      "name": "ingress-application-receipt-c4b3c7f2.json",
+      "sha256": "8e493945e9c7637901a3cf393d0f00ce0626b35d6d95930d696aa4984a9fde46",
+      "responseConfirmed": true
+    }
+  ],
+  "webhook": {
+    "artifact": "postdeployment-verification-20261104224645828.json",
+    "artifactSha256": "b61cb05ef03ecebae4fe24514e43cd4bcf65b912809efd67bed8688a56ab866e",
+    "observedAt": "2026-11-04T22:46:45.828Z",
+    "source": "c4b3c7f223c1c4cc2ad2e6c85c5c5e9524f3d9ef",
+    "tree": "89ded2d843c3ffe0d99ef54c2faaf035a8ad335d",
+    "name": "revenuecat-webhook",
+    "version": 94,
+    "status": "ACTIVE",
+    "verifyJwt": false,
+    "fileCount": 7,
+    "bundleSha256": "e87885032e97cbfaa70fc1c76ed8530369243ede4024e32623a8c147e34b3971",
+    "allBytesAndHashesVerified": true
+  },
+  "sourceDataPolicy": "Volatile source-data hashes are not committed as baseline. The executor measures them afresh at preflight and binds that observation through the transaction and readback.",
+  "holds": "Discovery enabled, collecting and primary delivery on; live money, payouts and cashout off; provider/creator/native gates sandbox-only.",
+  "remainingRequirements": [
+    "Exact-head source review and Required Validation, frozen merged source, current successful preflight and action authority before application.",
+    "Separate bounded native full-transaction performance evidence; baseline qualification is not performance or provider qualification.",
+    "After schema application, independent exact history/catalog readback plus disabled control and empty financial tables.",
+    "Separate dormant endpoint rollout and finite provider commissioning; no creator qualification, test funding or payout is authorized by this artifact."
+  ]
+}
