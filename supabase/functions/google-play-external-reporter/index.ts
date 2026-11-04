@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createAdminClient, jsonResponse, readOptionalEnv } from "../_shared/stripe-connect.ts";
 import { googlePlayReporterAccessToken } from "../_shared/google-play-reporter-oauth.ts";
 import { submitExternalReport } from "../_shared/google-play-external-reporting.ts";
-import { observeGoogleRefundTax, type GoogleRefundTaxContext } from "../_shared/google-refund-tax-reconciliation.ts";
+import type { GoogleRefundTaxContext } from "../_shared/google-refund-tax-reconciliation.ts";
+import { reconcileGoogleRefundTax } from "../_shared/google-refund-tax-history.ts";
 import { createMerchObservationBudget } from "../_shared/merch-observation-budget.ts";
 
 async function sameSecret(actual: string, expected: string) {
@@ -44,13 +45,7 @@ Deno.serve(async req => {
           const key = context.feature === "creator_tip" ? tipKey : auctionKey;
           const account = context.feature === "creator_tip" ? tipAccount : auctionAccount;
           if (key && account) {
-            const facts = await budget.run(() => observeGoogleRefundTax(context, key, account, budget.transport));
-            if (facts) {
-              const saved = await budget.run(() => admin.client.rpc("record_google_refund_tax_evidence", {
-                p_transaction_id: context.transaction_id, p_facts: facts,
-              }), 5000);
-              if (saved.error) throw Error("refund_tax_commit_failed");
-            }
+            await budget.run(() => reconcileGoogleRefundTax(admin.client, context, key, account, budget.transport));
           }
         }
       } catch {

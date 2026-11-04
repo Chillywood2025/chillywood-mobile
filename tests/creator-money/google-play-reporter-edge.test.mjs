@@ -13,8 +13,9 @@ function harness({enabled=true,result={status:'unknown',reason:'synthetic_lost_r
   if(tax){env.STRIPE_SECRET_KEY='sk_test_synthetic';env.STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID='acct_platform';}
   const require=name=>{
     if(name.startsWith('jsr:'))return {};
-    if(name.endsWith('google-refund-tax-reconciliation.ts'))return {observeGoogleRefundTax:async()=>{
-      calls.push({name:'observe-tax'});if(taxFails)throw Error('synthetic-provider-unavailable');return {synthetic:'provider-bound-facts'};
+    if(name.endsWith('google-refund-tax-history.ts'))return {reconcileGoogleRefundTax:async(_client,context,key,account)=>{
+      calls.push({name:'reconcile-tax',context,key,account});if(taxFails)throw Error('synthetic-checkpoint-save-unavailable');
+      return {status:'history_pending',financialAuthority:false};
     }};
     if(name.endsWith('merch-observation-budget.ts'))return loadPureTypeScriptModule('supabase/functions/_shared/merch-observation-budget.ts');
     if(name.endsWith('stripe-connect.ts'))return {
@@ -55,7 +56,9 @@ test('configured worker reconciles tax before report claim; unresolved tax does 
  for(const taxFails of [false,true]){
   const h=harness({tax:true,taxFails});assert.equal((await h.send()).status,200);
   const names=h.calls.map(c=>c.name);assert.ok(names.indexOf('claim_google_refund_tax_context')<names.indexOf('claim_google_play_external_report'));
-  assert.equal(names.includes('record_google_refund_tax_evidence'),!taxFails);
+  assert.equal(names.includes('reconcile-tax'),true);
+  assert.equal(names.includes('record_google_refund_tax_evidence'),false,'endpoint cannot bypass resumable lease/checkpoint authority');
+  const tax=h.calls.find(c=>c.name==='reconcile-tax');assert.equal(tax.key,'sk_test_synthetic');assert.equal(tax.account,'acct_platform');
   assert.ok(names.includes('finish_google_play_external_report'));
  }
 });

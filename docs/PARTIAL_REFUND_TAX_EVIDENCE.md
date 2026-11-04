@@ -30,8 +30,14 @@ them and makes no Stripe refund, tax reversal, payout or registration request.
    transaction per run using the same provider adapter and stored financial
    context. It reuses existing test-mode Stripe keys and account configuration.
    The claim backs off five minutes and respects the shared 75-second/64-GET
-   observation budget. Errors preserve the blocked obligation and do not stop
-   unrelated ready reporting work.
+   observation budget. A private, source/account-bound checkpoint resumes large
+   histories across runs. Every fact is collected and independently verified;
+   the final run re-reads mutable payment/refund/association boundaries. Only a
+   completed snapshot and current generation/lease can atomically record tax
+   evidence. Missing associations and invalid snapshots restart collection.
+   Errors preserve the blocked obligation and do not stop unrelated ready
+   reporting work. This checkpoint successor requires its own forward migration
+   and matching reporter deployment; source tests are not deployment evidence.
 6. Only the matching cumulative financial outbox obligation becomes ready.
    No refund obligation is invented by tax evidence. A proven newer cumulative
    refund may cover older blocked-tax obligations, but only after Google's
@@ -90,8 +96,14 @@ overrides. If the returned current-tax balance differs from the verified Stripe
 allocation, the reporter retains `needs_review`; it must not rewrite either
 provider's evidence. Real provider rounding/interoperability must be qualified.
 
-Histories exceeding the shared read/time budget remain incomplete, not silently
-truncated. A resumable provider snapshot path is a separate capacity workstream.
+Histories exceeding one shared read/time budget remain incomplete, not silently
+truncated. Merchandise, auction and Google tax collection can resume within the
+existing per-run budget. Google checkpoints are private, service-only and fenced
+by the exact source, account, generation and expiring lease. Verification must
+finish within six hours; oversized or changing histories remain blocked. A
+partial checkpoint cannot create tax evidence, refund obligations, a Google
+receipt or financial authority. No authenticated export acquisition path is
+introduced by this capacity repair.
 
 ## Primary provider references
 
