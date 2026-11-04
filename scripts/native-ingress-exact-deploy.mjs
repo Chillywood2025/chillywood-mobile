@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {sha256,diagnosticManagementQuery,validateReadContext,HELPER_ERROR_CODES} from './live-room-exact-deploy.mjs';
+import {sha256,diagnosticManagementQuery,validateReadContext,HELPER_ERROR_CODES,redundantNotNull} from './live-room-exact-deploy.mjs';
 import {loadBundle as loadTipBundle,FUNCTIONS as TIP_FUNCTIONS,DATA_TABLES,dataHashSQL,holdsSQL,TOOL as TIP_TOOL,MANIFEST as TIP_MANIFEST,MIGRATION as TIP_MIGRATION,VERSION as TIP_VERSION,NAME as TIP_NAME} from './native-tip-exact-deploy.mjs';
 
 export const PROJECT='bmkkhihfbmsnnmcqkoly';
@@ -53,13 +53,16 @@ export const invariantsHashSQL=`(select ${hashSQL("coalesce(jsonb_agg(item order
  union all select jsonb_build_array('role',rolname,rolsuper,rolinherit,rolbypassrls) from pg_roles where rolname in ('postgres','anon','authenticated','service_role')
  union all select jsonb_build_array('membership',roleid::regrole::text,member::regrole::text,admin_option) from pg_auth_members
  ) guarded_catalog)`;
-export const addedCatalogHashSQL=`(select ${hashSQL("coalesce(jsonb_agg(item order by item::text)::text,'[]')")} from (
+// The new schema contract is compared across PG17/PG18 and libc/ICU fixtures.
+// Nullability remains in the column contract; only its redundant PG18 row is omitted.
+// Keep the separately captured original baseline/history/data digests unchanged.
+export const addedCatalogHashSQL=`(select ${hashSQL("coalesce(jsonb_agg(item order by item::text collate \"C\")::text,'[]')")} from (
  select jsonb_build_array('function',n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),pg_get_functiondef(p.oid),p.proacl::text,p.proowner::regrole::text) item from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.oid in (${addedFunctionOids})
  union all select jsonb_build_array('relation',c.oid::regclass::text,c.relkind,c.relowner::regrole::text,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity) from pg_class c where c.oid in (${addedRelationOids})
  union all select jsonb_build_array('column',a.attrelid::regclass::text,a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attacl::text,pg_get_expr(d.adbin,d.adrelid)) from pg_attribute a left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where a.attrelid in (${addedRelationOids}) and a.attnum>0 and not a.attisdropped
  union all select jsonb_build_array('policy',polrelid::regclass::text,polname,polcmd,polpermissive,(select array_agg(r::regrole::text order by r::regrole::text) from unnest(polroles) r),pg_get_expr(polqual,polrelid),pg_get_expr(polwithcheck,polrelid)) from pg_policy where polrelid in (${addedRelationOids})
  union all select jsonb_build_array('trigger',tgrelid::regclass::text,tgname,pg_get_triggerdef(oid),tgenabled) from pg_trigger where tgrelid in (${addedRelationOids}) and not tgisinternal
- union all select jsonb_build_array('constraint',conrelid::regclass::text,conname,pg_get_constraintdef(oid),convalidated) from pg_constraint where conrelid in (${addedRelationOids})
+ union all select jsonb_build_array('constraint',conrelid::regclass::text,conname,pg_get_constraintdef(oid),convalidated) from pg_constraint c where conrelid in (${addedRelationOids}) and not ${redundantNotNull('c')}
  union all select jsonb_build_array('index',indrelid::regclass::text,pg_get_indexdef(indexrelid),indisvalid,indisready) from pg_index where indrelid in (${addedRelationOids})
  ) added_catalog)`;
 const absentSQL=[...ADDED_TABLES.map(r=>`to_regclass(${literal(r)}) is null`),...ADDED_FUNCTIONS.map(r=>`to_regprocedure(${literal(r)}) is null`)].join(' and ');

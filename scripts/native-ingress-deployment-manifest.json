@@ -13,7 +13,7 @@
   },
   "invariantsSha256": "e31f39dadc47497f37533da68e8184679079bc7d57de47d8f3fb7ebf10a4ca1e",
   "dataSha256": "19ef7076d6c77ec370e63fd8d3a861a991224a35db7a3e53700b39882d183370",
-  "addedCatalogSha256": "573616081f5e04606b1b7a99653b1d06eadcce0347e53729db66183a6cd5bbac",
+  "addedCatalogSha256": "027af2cfe25285f55d7eeb40b1f8ee4e51225c3926fef20e820643b48983e04f",
   "edge": {
     "name": "revenuecat-webhook",
     "verifyJwt": false,

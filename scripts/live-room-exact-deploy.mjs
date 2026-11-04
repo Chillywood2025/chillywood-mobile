@@ -229,7 +229,7 @@ export function schemaTargets(migrations){
 // PG18 represents ordinary table NOT NULL both in pg_attribute and pg_constraint;
 // PG17 only has pg_attribute. Omit only the fully redundant canonical PG18 row.
 // NOT VALID, NO INHERIT, unenforced or otherwise unusual rows remain fingerprinted.
-const redundantNotNull=c=>`coalesce((${c}.contype='n' and ${c}.convalidated and (to_jsonb(${c})->>'conenforced')::boolean
+export const redundantNotNull=c=>`coalesce((${c}.contype='n' and ${c}.convalidated and (to_jsonb(${c})->>'conenforced')::boolean
  and not ${c}.condeferrable and not ${c}.condeferred and not ${c}.connoinherit and ${c}.conislocal
  and ${c}.coninhcount=0 and ${c}.conparentid=0 and ${c}.contypid=0 and cardinality(${c}.conkey)=1
  and exists(select 1 from pg_attribute nn where nn.attrelid=${c}.conrelid and nn.attnum=${c}.conkey[1]

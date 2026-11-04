@@ -30,6 +30,15 @@ names or ignoring unrelated existing triggers. It preserves all other old
 functions, relations, columns, constraints, indexes, policies, schema ownership,
 ACLs, roles and memberships in the `public`, `private` and `auth` schemas.
 
+Catalog fingerprints sort their outer item arrays with `C` ordering and apply
+the existing narrowly bounded PostgreSQL 17/18 NOT NULL normalization. Column nullability and nonredundant
+constraints remain checked. Expected added-schema evidence must compare the
+unchanged migration on native PostgreSQL 17 and PGlite 18; a PGlite-only hash
+must not certify the native deployment. Guarded/source data fingerprints also
+use `C` ordering, so the still-unqualified baseline must be captured fresh with
+this exact tooling. No old baseline or fabricated predecessor receipt is reused.
+Nested policy-role array ordering is unchanged; the added schema has no policies.
+
 ## Complete the evidence before qualification
 
 1. Confirm the actual exact native-tip deployment, followed by the actual exact
@@ -56,6 +65,13 @@ ACLs, roles and memberships in the `public`, `private` and `auth` schemas.
 
 The local SQL test may construct a synthetic qualified bundle in memory. That
 bundle never updates the production manifest and never qualifies deployed state.
+
+Before application, obtain bounded native PostgreSQL performance evidence
+representative of the current catalog, source-data volume and load. A local
+PGlite catalog read took about 34 seconds; this does not establish production
+timing or safe completion of the full transaction within its unchanged
+45-second statement limit. Preserve all guards and timeouts and record remaining
+uncertainty as a deployment blocker.
 
 ## Read-only inspection and exact apply
 
@@ -113,10 +129,18 @@ this executor proves provider delivery, actual fees/tax or installed app behavio
 
 ```sh
 node --test tests/sandbox-cashout-exact-deploy.test.mjs tests/sandbox-cashout-exact-deploy-postgres.test.mjs
+node scripts/test-deployment-catalog-portability.mjs --output /tmp/catalog-portability-UNIQUE
 ```
 
-The disposable SQL rehearsal checks exact schema and grants, prerequisite order,
+The disposable PGlite SQL rehearsal checks exact schema and grants, prerequisite order,
 old-catalog/source preservation, failure rollback, history identity and drift.
 Fake-transport tests check no-write admission and uncertain-result handling.
 These do not substitute for selected Required Validation or native PostgreSQL
 transaction/concurrency qualification at the frozen source head.
+The catalog portability command uses a new output directory and the already
+cached pinned PostgreSQL 17.6 image in a disposable container with network disabled,
+no ports or host mounts, tmpfs storage, and cleanup. Its artifact compares every
+added-schema component against PGlite 18, retains the original raw fixture hashes
+as dependency controls, and records rejection of nullability, CHECK/FK/UNIQUE/
+primary-key, trigger, ACL and RLS changes. It is catalog-only evidence;
+`--pglite-only` explicitly omits native verification and cannot qualify deployment.

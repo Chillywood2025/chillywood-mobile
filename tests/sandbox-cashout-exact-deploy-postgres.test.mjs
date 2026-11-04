@@ -115,6 +115,19 @@ test('synthetic live-era replay proves exact dormant transaction, schema/ACL dri
  await db.exec('grant select on private.sandbox_cashout_qualifications to service_role');
  const grantDrift=await read();assert.throws(()=>classifyState(local,grantDrift),/FINAL_CATALOG_MISMATCH/);
  await db.exec('revoke select on private.sandbox_cashout_qualifications from service_role');
+ for(const mutation of [
+  'alter table private.sandbox_cashout_qualifications alter column verified_at drop not null',
+  'alter table private.sandbox_cashout_qualifications add constraint fixture_expiry_finite check(isfinite(expires_at))',
+ ]){
+  await db.exec('begin;');
+  try{
+   await db.exec(mutation);
+   const drift=(await db.exec(readbackSql(bundle))).at(-1).rows[0].state;
+   drift.context={...after.context};
+   assert.throws(()=>classifyState(local,drift),/FINAL_CATALOG_MISMATCH/);
+  }finally{await db.exec('rollback;');}
+  assert.equal(classifyState(local,await read()),'applied');
+ }
  const internal=(await db.query("select tgname,tgrelid::regclass::text relation from pg_trigger where tgisinternal and tgconstraint in(select oid from pg_constraint where conrelid='private.sandbox_cashout_allocations'::regclass) order by tgname limit 1")).rows[0];
  await db.exec(`alter table ${internal.relation} disable trigger "${internal.tgname.replaceAll('"','""')}"`);
  const internalDrift=await read();assert.throws(()=>classifyState(local,internalDrift),/FINAL_CATALOG_MISMATCH/);

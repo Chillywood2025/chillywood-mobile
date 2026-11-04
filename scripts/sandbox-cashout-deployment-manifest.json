@@ -13,7 +13,7 @@
     "baseline": null,
     "predecessorReceipts": []
   },
-  "addedCatalogSha256": "0b3bb66ea620551f8ed95acc0d0d431f8bfeaa77ba861c0b50c8f9f271f8e5ad",
+  "addedCatalogSha256": "1b9dfdfb5b5b6d7c71ccd0012b284d89990f7faab93a2a1df4b4e588e785165d",
   "edges": [
     {
       "name": "sandbox-creator-cashout",

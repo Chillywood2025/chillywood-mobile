@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {sha256,diagnosticManagementQuery,validateReadContext,HELPER_ERROR_CODES} from './live-room-exact-deploy.mjs';
+import {sha256,diagnosticManagementQuery,validateReadContext,HELPER_ERROR_CODES,redundantNotNull} from './live-room-exact-deploy.mjs';
 import {loadBundle as loadIngress,CLOSURE as INGRESS_CLOSURE,VERSION as INGRESS_VERSION,NAME as INGRESS_NAME,HASH as INGRESS_HASH,DISPATCH,addedCatalogHashSQL as ingressCatalogSQL} from './native-ingress-exact-deploy.mjs';
 import {VERSION as TIP_VERSION,NAME as TIP_NAME,HASH as TIP_HASH,FUNCTIONS as TIP_FUNCTIONS,DATA_TABLES,holdsSQL} from './native-tip-exact-deploy.mjs';
 import {collectSourceBundle} from '../ops/creator-backend-rollout/prepare-edge.mjs';
@@ -26,7 +26,7 @@ const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const requireThat=(ok,code)=>{if(!ok)throw Error(code);};
 const literal=x=>`'${String(x).replaceAll("'","''")}'`;
 const hashSQL=x=>`encode(sha256(convert_to(${x},'UTF8')),'hex')`;
-const digest=sql=>`(select ${hashSQL("coalesce(jsonb_agg(item order by item::text)::text,'[]')")} from (${sql}) items)`;
+const digest=sql=>`(select ${hashSQL("coalesce(jsonb_agg(item order by item::text collate \"C\")::text,'[]')")} from (${sql}) items)`;
 const git=(root,...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const newRelations=TABLES.map(x=>`coalesce(to_regclass(${literal(x)}),0)`).join(',');
 const functionNames=FUNCTIONS.map(x=>literal(x.slice(0,x.indexOf('(')))).join(',');
@@ -40,7 +40,7 @@ const catalogSQL=added=>`
  select jsonb_build_array('function',n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),pg_get_functiondef(p.oid),p.proacl::text,p.proowner::regrole::text) item from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private','auth') and p.prokind in ('f','p') and ${added?'':'not '}(${functionFilter})
  union all select jsonb_build_array('relation',n.nspname,c.relname,c.relkind,c.relowner::regrole::text,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity,c.reloptions,c.relpersistence,c.relreplident,c.relispartition,pg_get_expr(c.relpartbound,c.oid),case when c.relkind in ('v','m') then pg_get_viewdef(c.oid,true) else null end) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private','auth') and c.relkind in ('r','p','v','m','S') and c.oid ${added?'':'not '}in (${newRelations})
  union all select jsonb_build_array('column',a.attrelid::regclass::text,a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attacl::text,a.attidentity,a.attgenerated,pg_get_expr(d.adbin,d.adrelid)) from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where n.nspname in ('public','private','auth') and a.attnum>0 and not a.attisdropped and c.relkind in ('r','p','v','m','S') and a.attrelid ${added?'':'not '}in (${newRelations})
- union all select jsonb_build_array('constraint',co.conrelid::regclass::text,co.conname,pg_get_constraintdef(co.oid),co.convalidated) from pg_constraint co join pg_namespace n on n.oid=co.connamespace where n.nspname in ('public','private','auth') and co.conrelid<>0 and co.conrelid ${added?'':'not '}in (${newRelations})
+ union all select jsonb_build_array('constraint',co.conrelid::regclass::text,co.conname,pg_get_constraintdef(co.oid),co.convalidated) from pg_constraint co join pg_namespace n on n.oid=co.connamespace where n.nspname in ('public','private','auth') and co.conrelid<>0 and co.conrelid ${added?'':'not '}in (${newRelations}) and not ${redundantNotNull('co')}
  union all select jsonb_build_array('index',i.indrelid::regclass::text,pg_get_indexdef(i.indexrelid),i.indisvalid,i.indisready) from pg_index i join pg_class c on c.oid=i.indrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private','auth') and i.indrelid ${added?'':'not '}in (${newRelations})
  union all select jsonb_build_array('policy',p.polrelid::regclass::text,p.polname,p.polcmd,p.polpermissive,(select array_agg(r::regrole::text order by r::regrole::text) from unnest(p.polroles) r),pg_get_expr(p.polqual,p.polrelid),pg_get_expr(p.polwithcheck,p.polrelid)) from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','private','auth') and p.polrelid ${added?'':'not '}in (${newRelations})
  union all select ${triggerItem} from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace left join pg_constraint co on co.oid=t.tgconstraint where n.nspname in ('public','private','auth') and ${added?'':'not '}(${addedTrigger})
