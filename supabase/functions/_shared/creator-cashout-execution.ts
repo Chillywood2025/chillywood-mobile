@@ -34,7 +34,13 @@ export async function readCashoutBody(body: ReadableStream<Uint8Array> | null, m
     const bytes = new Uint8Array(size); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } finally { clearTimeout(timer); await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  } finally {
+    clearTimeout(timer);
+    // Underlying cleanup can remain pending after cancellation closes reads.
+    // It must not suppress the bounded result or delay durable reconciliation.
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
 }
 export function validateCashoutContext(c: CashoutContext) {
   if (!c || !uuid(c.requestId) || !uuid(c.executionId) || !objectId(c.platformAccountId, "acct")
@@ -93,7 +99,12 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
         ...(body ? { "Content-Type": "application/x-www-form-urlencoded", "Idempotency-Key": key! } : {}) },
       signal: AbortSignal.timeout(Math.max(1, Math.min(12000, deadline - now()))),
     });
-    if (!response.ok) fail("provider_request_unresolved");
+    if (!response.ok) {
+      // A failed HTTP response does not prove that no money moved. Dispose of
+      // its unused body without waiting or weakening the unknown-dispatch hold.
+      void response.body?.cancel().catch(() => {});
+      fail("provider_request_unresolved");
+    }
     const raw = await readCashoutBody(response.body, 500000, Math.max(1, Math.min(10000, deadline - now())));
     return JSON.parse(raw) as Json;
   };
