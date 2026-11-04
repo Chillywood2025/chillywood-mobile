@@ -346,3 +346,23 @@ Source validation authorizes none of those live operations. Local PGlite tests
 cover SQL lifecycle/ACLs; the required hosted Database job additionally runs
 independent-backend claim/dispatch contention and a mandatory unsafe-replay
 mutation control in disposable PostgreSQL clones, never against providers.
+
+## Media-worker outcome integrity
+
+The R2 media and abandoned-stage batches accept only their current SQL claim
+blockers and the shared read-claim blockers. Unknown, intermediate, obsolete or
+cross-protocol statuses fail the pass before provider access or successful
+worker heartbeats. The media allowlist includes the terminal outcomes delegated
+to `cleanup_expired_deleted_attachment_source`; ordinary holds and reference
+blockers remain visible completed-pass outcomes, not claims of physical absence.
+
+Queue UUIDs are deduplicated case-insensitively before any claim. Provider body
+disposal is best effort: stalled, rejected or synchronously failing cancellation
+cannot suppress the subsequent HEAD observation or durable result receipt. The
+existing exact binding, retired-key fence, response-status evidence and receipt
+checks remain required. Neither a DELETE acknowledgement nor a 404 observation
+guarantees permanent physical absence.
+
+These source checks do not qualify real storage or recovery, enable expiry,
+schedule a worker, or authorize deletion. Those operational proofs and approval
+boundaries remain separate.
