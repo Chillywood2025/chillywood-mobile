@@ -120,3 +120,113 @@ test('provider or receipt failure cannot refresh a successful worker heartbeat',
   assert.ok(!calls.includes('record_deleted_content_worker_heartbeat'));
  }
 });
+
+const protocols=[{
+ kind:'media',run:runDeletedMediaExpiryBatch,
+ list:'list_deleted_content_media_expiry_work',claim:'claim_deleted_content_media_expiry',
+ read:'read_deleted_content_media_expiry_claim',record:'record_deleted_content_media_expiry_result',
+ claimStatuses:['disabled','source_busy','not_finalized','missing_deletion_record','not_due','held',
+  'unsupported_or_live_reference','unsupported_soft_source','parent_deletion_unproven','source_live_or_changed'],
+ crossProtocolStatus:'finalized',
+},{
+ kind:'stage',run:runDeletedStageCleanupBatch,
+ list:'list_deleted_content_stage_cleanup_work',claim:'reconcile_deleted_content_stage',
+ read:'read_deleted_content_stage_cleanup_claim',record:'record_deleted_content_stage_cleanup_result',
+ claimStatuses:['disabled','source_busy','absent','original_provenance_required','finalized','not_due',
+  'attached_requires_explicit_content_delete','original_parent_provenance_required','held','unsupported_or_live_reference'],
+ crossProtocolStatus:'not_finalized',
+}];
+function protocolFixture(protocol,overrides={}) {
+ const calls=[];
+ const rpc=async(name,args)=>{
+  calls.push({name,args});
+  const values={
+   [protocol.list]:{enabled:true,stageIds:[stage]},
+   [protocol.claim]:{status:'claimed',claimId:claim},
+   [protocol.read]:{status:'authorized',...binding},
+   [protocol.record]:{status:args.p_result,permanentlyAbsent:false},
+   ...overrides,
+  };
+  return {data:values[name],error:null};
+ };
+ return {rpc,calls};
+}
+for(const protocol of protocols) {
+ test(`${protocol.kind} preserves every current SQL claim and read blocker without provider calls`,async()=>{
+  for(const [name,statuses] of [[protocol.claim,protocol.claimStatuses],
+   [protocol.read,['disabled','absent','retirement_proof_changed']]]) {
+   for(const status of statuses) {
+    const f=protocolFixture(protocol,{[name]:{status}});
+    assert.deepEqual(await protocol.run(f.rpc,()=>{throw Error('must not reach provider');}),{
+     enabled:true,results:[{status}],
+    });
+    assert.equal(f.calls.at(-1).name,name);
+    assert.equal(f.calls.some(call=>call.name===protocol.record),false);
+   }
+  }
+ });
+ test(`${protocol.kind} rejects unknown, intermediate and cross-protocol status replies`,async()=>{
+  for(const [name,statuses] of [
+   [protocol.claim,['','future_status','failed','authorized','observed_absent',protocol.crossProtocolStatus,
+    'retirement_protocol_unavailable','retirement_claim_denied']],
+   [protocol.read,['','future_status','failed','claimed','held','observed_absent']],
+  ]) {
+   for(const status of statuses) {
+    const f=protocolFixture(protocol,{[name]:{status}});
+    await assert.rejects(protocol.run(f.rpc,()=>{throw Error('must not reach provider');}),
+     name===protocol.claim?/retired_media_claim_invalid/:/retired_media_binding_invalid/);
+    assert.equal(f.calls.at(-1).name,name);
+    assert.equal(f.calls.some(call=>call.name===protocol.record),false);
+   }
+  }
+ });
+ test(`${protocol.kind} rejects UUID case aliases before any claim or provider call`,async()=>{
+  const mixedCase='abcdefab-abcd-4abc-8abc-abcdefabcdef';
+  const f=protocolFixture(protocol,{[protocol.list]:{enabled:true,stageIds:[mixedCase,mixedCase.toUpperCase()]}});
+  await assert.rejects(protocol.run(f.rpc,()=>{throw Error('must not reach provider');}),/retired_media_work_invalid/);
+  assert.deepEqual(f.calls.map(call=>call.name),[protocol.list]);
+ });
+ test(`${protocol.kind} unknown outcomes cannot refresh successful worker heartbeats`,async()=>{
+  for(const name of [protocol.claim,protocol.read]) {
+   const f=protocolFixture(protocol,{[name]:{status:'future_status'}}),calls=[];
+   await assert.rejects(runDeletedContentRetentionWorker(async(rpcName,args)=>{
+    calls.push(rpcName);
+    if(rpcName.startsWith('list_')&&rpcName!==protocol.list)return {data:{enabled:false},error:null};
+    return f.rpc(rpcName,args);
+   },()=>{throw Error('must not reach R2');},()=>{throw Error('must not reach Brand');}),/retired_media_.*_invalid/);
+   assert.equal(calls.some(call=>call.includes('heartbeat')),false);
+   assert.equal(calls.at(-1),name);
+  }
+ });
+ test(`${protocol.kind} stream cancellation never delays or changes provider acknowledgements`,async()=>{
+  for(const at of ['DELETE','HEAD']) {
+   for(const cancellation of ['pending','rejected','throws','locked']) {
+    for(const headStatus of [200,404]) {
+     const f=protocolFixture(protocol),methods=[],cancelled=[];let release,timer,reader;
+     const waiting=new Promise(resolve=>{release=resolve;});
+     try {
+      const work=protocol.run(f.rpc,async(_binding,method)=>{
+       methods.push(method);
+       if(method!==at)return new Response(null,{status:method==='DELETE'?204:headStatus});
+       const body=new ReadableStream({cancel(){
+        cancelled.push(method);
+        return cancellation==='pending'?waiting:cancellation==='rejected'?Promise.reject(Error('synthetic-private-cancel')):undefined;
+       }});
+       if(cancellation==='throws')body.cancel=()=>{cancelled.push(method);throw Error('synthetic-private-cancel');};
+       const response=new Response(body,{status:method==='DELETE'?200:headStatus});
+       if(cancellation==='locked')reader=response.body.getReader();
+       return response;
+      });
+      const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('cleanup blocked audit receipt')),500);});
+      const result=await Promise.race([work,deadline]);
+      const status=headStatus===404?'observed_absent':'delete_acknowledged';
+      assert.deepEqual(result,{enabled:true,results:[{status}]},`${at} ${cancellation} HEAD ${headStatus}`);
+      assert.deepEqual(methods,['DELETE','HEAD']);
+      assert.deepEqual(cancelled,cancellation==='locked'?[]:[at]);
+      assert.deepEqual(f.calls.at(-1),{name:protocol.record,args:{p_claim_id:claim,p_result:status}});
+     } finally {clearTimeout(timer);release();reader?.releaseLock();}
+    }
+   }
+  }
+ });
+}
