@@ -28,6 +28,7 @@ async function mount(t,overrides={}){
  const render=()=>React.act(async()=>root.render(React.createElement(context.exports.CreatorCashoutPanel)));
  await render();t.after(()=>React.act(async()=>root.unmount()));
  return {calls,quote,api,nodes,button:label=>[...nodes.values()].find(n=>n.type==='Pressable'&&textOf(n)===label),
+  radio:label=>[...nodes.values()].find(n=>n.type==='Pressable'&&n.props.accessibilityRole==='radio'&&textOf(n).endsWith(label)),
   async press(n){assert.ok(n);assert.notEqual(n.props.disabled,true);await React.act(async()=>{void n.props.onPress();});},
   async amount(value){const n=[...nodes.values()].find(n=>n.type==='TextInput');await React.act(async()=>n.props.onChangeText(value));},
   async account(value){authority=value;await render();},async focus(value){focused=value;await render();},
@@ -73,4 +74,61 @@ test('funded cancellation says bank canceled and funds still held, never claims 
  const rendered=[...m.nodes.values()].map(textOf).join(' ');
  assert.match(rendered,/Funds remain held/);assert.match(rendered,/app cashout fee will/);
  assert.equal(m.button('Cancel bank payout'),undefined);
+});
+for(const edit of ['amount','method'])test(`queued ${edit} change cannot unlock an in-flight cashout cancellation`,async t=>{
+ const pending=deferred();let cancels=0;
+ const row={requestId:'request',status:'prepared',canCancel:true,grossMinor:10000,bankMinor:9800,observedProviderFeeMinor:null};
+ const m=await mount(t,{readCreatorCashoutHistory:async()=>[row],cancelQualifiedCreatorCashout:async()=>{cancels++;return pending.promise;}});
+ await m.amount('100');await m.press(m.button('Refresh cashout history'));
+ const cancel=m.button('Cancel before funds are sent');
+ const input=[...m.nodes.values()].find(n=>n.type==='TextInput');
+ const instant=[...m.nodes.values()].find(n=>n.type==='Pressable'&&textOf(n).includes('Instant'));
+ await m.press(cancel);
+ // Native events already queued before disabled/editable props changed must
+ // not release the synchronous action latch or discard its eventual receipt.
+ await React.act(async()=>{
+  if(edit==='amount')input.props.onChangeText('99');else instant.props.onPress();
+  void cancel.props.onPress();
+ });
+ assert.equal(cancels,1);
+ assert.equal([...m.nodes.values()].find(n=>n.type==='TextInput').props.value,'100');
+ assert.equal(m.radio('Standard').props.accessibilityState.checked,true);
+ assert.equal(m.button('Cancel before funds are sent').props.disabled,true);
+ await m.resolve(pending,{...row,status:'canceled',canCancel:false});
+ assert.equal(m.button('Cancel before funds are sent'),undefined);
+ assert.match([...m.nodes.values()].map(textOf).join(' '),/Canceled before funds were sent/);
+});
+for(const edit of ['amount','method'])for(const outcome of ['accepted','unknown'])test(`queued ${edit} change preserves pending cashout ${outcome} outcome`,async t=>{
+ const pending=deferred();let submits=0;
+ const m=await mount(t,{submitQualifiedCreatorCashout:async()=>{submits++;return pending.promise;}});
+ await m.press(m.button('Review creator fee terms'));await m.amount('100');await m.press(m.button('Review cashout fees'));
+ const confirm=m.button('Confirm this cashout request');
+ const input=[...m.nodes.values()].find(n=>n.type==='TextInput');
+ const instant=m.radio('Instant');
+ // Include the interval before React commits the disabled props. The latch,
+ // not a visual button state, must keep both callbacks from changing inputs.
+ await React.act(async()=>{
+  void confirm.props.onPress();
+  if(edit==='amount')input.props.onChangeText('99');else instant.props.onPress();
+  void confirm.props.onPress();
+ });
+ assert.equal(submits,1);
+ assert.equal([...m.nodes.values()].find(n=>n.type==='TextInput').props.value,'100');
+ assert.equal([...m.nodes.values()].find(n=>n.type==='TextInput').props.editable,false);
+ assert.equal(m.radio('Standard').props.accessibilityState.checked,true);
+ assert.equal(m.button('Confirm this cashout request').props.disabled,true);
+ if(outcome==='accepted'){
+  await m.resolve(pending,{requestId:'request',status:'prepared',grossMinor:10000,bankMinor:9990,observedProviderFeeMinor:null});
+  assert.match([...m.nodes.values()].map(textOf).join(' '),/Request accepted\. This does not mean the bank has received your money/);
+  assert.equal(m.button('Confirm this cashout request'),undefined);
+ }else{
+  await React.act(async()=>pending.reject(Error('Request outcome unknown. Refresh history.')));
+  assert.match([...m.nodes.values()].map(textOf).join(' '),/Request outcome unknown\. Refresh history\./);
+  assert.equal(m.button('Confirm this cashout request').props.disabled,false);
+ }
+ assert.equal([...m.nodes.values()].find(n=>n.type==='TextInput').props.editable,true);
+ await m.amount('99');await m.press(m.radio('Instant'));
+ assert.equal([...m.nodes.values()].find(n=>n.type==='TextInput').props.value,'99');
+ assert.equal(m.radio('Instant').props.accessibilityState.checked,true);
+ assert.equal(m.button('Confirm this cashout request'),undefined);
 });
