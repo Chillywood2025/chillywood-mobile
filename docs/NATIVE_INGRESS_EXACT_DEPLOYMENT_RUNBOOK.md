@@ -27,6 +27,15 @@ those bodies in the invariant digest permits the reviewed tip-first sequence
 without inventing a live post-tip observation. Their metadata remains guarded.
 Native's expected added catalog was independently measured by local SQL replay.
 
+The added-catalog fingerprint sorts its outer item array with explicit `C`
+ordering and omits only the canonical PostgreSQL 18 NOT NULL constraint rows already represented by each
+column's `attnotnull`. PostgreSQL 17 has no such constraint rows. Unvalidated,
+unenforced, inherited or otherwise noncanonical constraints remain fingerprinted,
+as do all real CHECK/foreign-key/UNIQUE/primary-key constraints, triggers, grants
+and RLS. The added schema has no policies; nested policy-role ordering is not
+changed by this repair. This normalization preserves the original migration bytes and the separately captured
+baseline/history/data digests; it does not qualify a changed baseline.
+
 The migration creates three empty, owner-only, append-only, FORCE-RLS tables and
 two functions. Observations have `financial_authority=false`; API roles cannot
 issue qualifications. It also changes exactly one existing checkout body to
@@ -61,6 +70,13 @@ holds. `plan_ready` is not applied. Any drift requires investigation and a
 reviewed manifest refresh, not relaxed assertions or automatic regeneration.
 
 ## Authorized schema application and readback
+
+Before application or retry, obtain bounded native PostgreSQL performance
+evidence representative of the current catalog, guarded data and load. A local
+PGlite catalog read took about 34 seconds; that is neither a production timing
+nor proof that the complete transaction fits the unchanged 45-second statement
+limit. Preserve all guards and timeouts, report measured headroom and uncertainty,
+and keep deployment blocked until this operational qualification is satisfied.
 
 Only after the preceding checks and explicit authority, append `--apply` to the
 same command. Source is rechecked immediately before one bounded transaction:
@@ -123,3 +139,15 @@ starts without all five pending migrations, applies tip only, then native only.
 It is synthetic SQL proof, not native-lock contention or provider/device proof.
 Run the existing two `tests/creator-money/native-production-ingress*` suites too.
 Full exact-head Required Validation remains required before source qualification.
+
+Run `node scripts/test-deployment-catalog-portability.mjs --output /tmp/catalog-portability-UNIQUE`
+with a new output directory to compare every added-catalog component on PGlite 18
+and native PostgreSQL 17.6 with ICU. It requires the script's pinned image already
+cached locally; it never pulls an image. Its unique container has no network,
+ports or host mounts, stores its database in tmpfs, and is removed after success,
+error, or handled SIGINT/SIGTERM interruption.
+The JSON artifact distinguishes engine versions/locales and records nullability,
+CHECK/FK/UNIQUE/primary-key, trigger, ACL, RLS and FORCE-RLS drift rejection, plus
+PostgreSQL 18-only noncanonical NOT NULL cases. `--pglite-only` is partial evidence
+and cannot establish cross-version agreement. This catalog fixture does not
+execute money/provider behavior or qualify a production baseline.

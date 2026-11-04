@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "migration": {
+    "version": "20261102194000",
+    "name": "sandbox_creator_cashout_execution",
+    "sha256": "a41152e19ab73a959a514a8495f5b00dc9c4ff50f436fb15e16c908ac2483e46"
+  },
+  "qualification": {
+    "status": "unqualified",
+    "reason": "Requires ordered actual tip and ingress applied readbacks, fresh complete post-predecessor baseline and independent source review.",
+    "observedAt": null,
+    "baseline": null,
+    "predecessorReceipts": []
+  },
+  "addedCatalogSha256": "1b9dfdfb5b5b6d7c71ccd0012b284d89990f7faab93a2a1df4b4e588e785165d",
+  "edges": [
+    {
+      "name": "sandbox-creator-cashout",
+      "verify_jwt": true,
+      "files": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/sandbox-creator-cashout/index.ts",
+          "sha256": "e995c77216de0aaefd041ffacabc7742bf3349a71e78066d8cd9a65e9aa65007"
+        }
+      ]
+    },
+    {
+      "name": "sandbox-creator-cashout-webhook",
+      "verify_jwt": false,
+      "files": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/sandbox-creator-cashout-webhook/index.ts",
+          "sha256": "a15a72b6c33f7af20c0548c3119d281569b1ac4f2ba0fd9e906636a6f933138a"
+        }
+      ]
+    }
+  ]
+}

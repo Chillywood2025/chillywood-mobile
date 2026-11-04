@@ -123,6 +123,21 @@ test('live-era then exact tip: native-only atomic transaction, rollback, grants 
   const changedGrant=await read();assert.throws(()=>classifyState(local,changedGrant),/FINAL_CATALOG_MISMATCH/);
   await db.exec('revoke select on private.native_production_ingress_qualifications from service_role');
   assert.equal(classifyState(local,await read()),'applied');
+  // Portable catalog normalization must retain actual nullability and real
+  // constraints, rather than merely ignoring every NOT NULL/constraint row.
+  for(const mutation of [
+    'alter table private.native_production_ingress_observations alter column event_type drop not null',
+    'alter table private.native_production_ingress_observations add constraint fixture_event_type_nonempty check(length(event_type)>0)',
+  ]){
+    await db.exec('begin;');
+    try{
+      await db.exec(mutation);
+      const drift=(await db.exec(readbackSql(bundle))).at(-1).rows[0].state;
+      drift.context={...context};
+      assert.throws(()=>classifyState(local,drift),/FINAL_CATALOG_MISMATCH/);
+    }finally{await db.exec('rollback;');}
+    assert.equal(classifyState(local,await read()),'applied');
+  }
   await db.query("update supabase_migrations.schema_migrations set statements=array['changed tip'] where version=$1",[TIP_VERSION]);
   const changedTip=await read();assert.throws(()=>classifyState(local,changedTip),/EXACT_TIP_PREREQUISITE_REQUIRED/);
   await db.query('update supabase_migrations.schema_migrations set statements=$2 where version=$1',[TIP_VERSION,[bundle.tip.body]]);
