@@ -12,6 +12,8 @@ export function loadTracking(file,{Deno={},modules={},fetch=globalThis.fetch,clo
  return module.exports;
 }
 const tracking=loadTracking('_shared/merch-tracking.ts');
+const completedProjection=job=>({assigned:true,carrier:job.carrier,trackingNumber:job.tracking_number,
+ status:'UNKNOWN',confidence:'unverified',reviewReason:'carrier_unavailable',deliveryAt:null,providerConfigured:true,financialAuthority:false});
 test('carrier dates, identity and HMAC are explicit; no unsigned or replayed evidence',async()=>{
  await assert.rejects(tracking.readBoundedTrackingBody(new Response('a'.repeat(256001)).body),/payload_too_large/);
  const raw=JSON.stringify({carrier:'usps',tracking_number:'ABC12345',test:true,address_to:{zip:'12345',country:'US'},
@@ -80,7 +82,7 @@ test('production worker is explicit, exact-mode claimed, live-key-only and rejec
  let worker;const calls=[],requests=[];
  const env={MERCH_TRACKING_ENVIRONMENT:'production',MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_LIVE_TOKEN:'shippo_live_fixture'};
  const job={id:'fixture',order_id:'order',lease:'lease',carrier:'usps',tracking_number:'ABC12345',provider_account:'managed_live_fixture',registration_state:'unknown',environment:'production'};
- const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?[job]:{},error:null};}};
+ const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?[job]:completedProjection(job),error:null};}};
  const shared={createAdminClient:()=>({configured:true,client:admin}),jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),readOptionalEnv:k=>env[k]};
  const provider=loadTracking('_shared/merch-tracking.ts',{fetch:async(url,options)=>{
   requests.push({url,options});return new Response(JSON.stringify({carrier:'usps',tracking_number:'ABC12345',test:false}));
@@ -100,7 +102,7 @@ test('durable signed callback only enqueues hint, while authenticated worker GET
  const env={MERCH_SHIPPO_WEBHOOK_SECRET:'fixture-hmac',MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_TEST_TOKEN:'shippo_test_fixture'};
  const job={id:'assignment',order_id:'order',lease:'lease',carrier:'usps',tracking_number:'ABC12345',provider_account:'managed_fixture',registration_state:'pending',environment:'sandbox'};
  const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?[job]:
-  name==='receive_merch_tracking_hint'?{accepted:true,duplicate:false}:{},error:null};}};
+  name==='receive_merch_tracking_hint'?{accepted:true,duplicate:false}:completedProjection(job),error:null};}};
  const shared={createAdminClient:()=>({configured:true,client:admin}),jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),readOptionalEnv:k=>env[k]};
  const provider=loadTracking('_shared/merch-tracking.ts',{fetch:async(url,options)=>{
   requests.push({url,options});return new Response(JSON.stringify({carrier:'usps',tracking_number:'ABC12345',test:true,
@@ -195,7 +197,7 @@ test('tracking worker aggregate deadline stops admissions and stale acknowledgem
   const env={MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_TEST_TOKEN:'shippo_test_fixture'};
   const jobs=Array.from({length:5},(_,i)=>({id:'assignment'+i,order_id:'order'+i,lease:'lease'+i,carrier:'usps',tracking_number:'ABC12345'+i,provider_account:'managed_fixture',registration_state:'unknown',environment:'sandbox'}));
   const shared={readOptionalEnv:k=>env[k],jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
-   calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?jobs:{stale},error:null};
+   calls.push({name,args});return {data:name==='claim_merch_tracking_jobs'?jobs:{...completedProjection(jobs.find(job=>job.id===args.p_assignment_id)),stale},error:null};
   }}})};
   const provider={...tracking,readExistingShippoTracking:async(job)=>{requests.push(job.id);now+=30000;return '{}';},normalizeTracking:async()=>({status:'UNKNOWN',test:true})};
   loadTracking('merch-tracking-reconcile/index.ts',{clock:{now:()=>now},Deno:{serve:h=>handler=h},modules:{'../_shared/stripe-connect.ts':shared,'../_shared/merch-tracking.ts':provider}});
@@ -204,6 +206,51 @@ test('tracking worker aggregate deadline stops admissions and stale acknowledgem
   assert.equal(requests.length,2);assert.equal(calls.filter(c=>c.name==='complete_merch_tracking_job').length,2);
   assert.equal(body.financialAuthority,false);
  }
+});
+
+test('tracking completion needs the exact committed assignment projection, not a truthy SQL response',async()=>{
+ const job={id:'assignment',order_id:'order',lease:'lease',carrier:'usps',tracking_number:'ABC12345',provider_account:'managed_fixture',registration_state:'unknown',environment:'sandbox'};
+ const committed=completedProjection(job);
+ for(const [name,receipt,expected] of [
+  ['committed',committed,200],['missing',null,503],['empty',{},503],['string','ok',503],['array',[],503],
+  ['stale',{...committed,stale:true},503],['unassigned',{...committed,assigned:false},503],
+  ['ambiguous stale',{...committed,stale:'false'},503],['missing assigned',{...committed,assigned:undefined},503],
+  ['wrong carrier',{...committed,carrier:'ups'},503],['wrong tracking',{...committed,trackingNumber:'OTHER12345'},503],
+  ['financial authority',{...committed,financialAuthority:true},503],['missing authority',{...committed,financialAuthority:undefined},503],
+ ]) {
+  let handler;const completions=[];
+  const env={MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_TEST_TOKEN:'shippo_test_fixture'};
+  const shared={readOptionalEnv:k=>env[k],jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
+   if(name==='claim_merch_tracking_jobs')return {data:[job],error:null};
+   completions.push(args);return {data:receipt,error:null};
+  }}})};
+  const provider={...tracking,readExistingShippoTracking:async()=>{throw Error('provider unavailable');}};
+  loadTracking('merch-tracking-reconcile/index.ts',{Deno:{serve:h=>handler=h},modules:{'../_shared/stripe-connect.ts':shared,'../_shared/merch-tracking.ts':provider}});
+  const response=await handler(new Request('https://fixture.test',{method:'POST',headers:{authorization:'Bearer fixture-worker'}}));
+  assert.equal(response.status,expected,name);
+  assert.deepEqual(await response.json(),{claimed:1,completed:expected===200?1:0,financialAuthority:false},name);
+  assert.equal(completions.length,1);assert.equal(completions[0].p_assignment_id,job.id);assert.equal(completions[0].p_lease,job.lease);
+ }
+});
+
+test('the actual parent driver cannot treat an empty tracking completion receipt as a healthy refresh',async()=>{
+ let worker,driver;
+ const job={id:'assignment',order_id:'order',lease:'lease',carrier:'usps',tracking_number:'ABC12345',provider_account:'managed_fixture',environment:'sandbox'};
+ const env={SUPABASE_URL:'https://fixture.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'fixture-service',MERCH_TRACKING_WORKER_SECRET:'fixture-worker',MERCH_SHIPPO_TEST_TOKEN:'shippo_test_fixture'};
+ const shared={readOptionalEnv:k=>env[k],jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),createAdminClient:()=>({configured:true,client:{rpc:async(name)=>{
+  if(name==='claim_merch_reconciliation_batch')return {data:{claimed:true,runId:'00000000-0000-4000-8000-000000000001',jobs:[]},error:null};
+  if(name==='claim_merch_tracking_jobs')return {data:[job],error:null};
+  assert.equal(name,'complete_merch_tracking_job');return {data:{},error:null};
+ }}})};
+ const provider={...tracking,readExistingShippoTracking:async()=>{throw Error('provider unavailable');}};
+ loadTracking('merch-tracking-reconcile/index.ts',{Deno:{serve:h=>worker=h},modules:{'../_shared/stripe-connect.ts':shared,'../_shared/merch-tracking.ts':provider}});
+ loadTracking('merch-reconciliation-driver/index.ts',{Deno:{serve:h=>driver=h},modules:{'../_shared/stripe-connect.ts':shared},fetch:async(url,options)=>{
+  assert.equal(url,'https://fixture.supabase.co/functions/v1/merch-tracking-reconcile');
+  return worker(new Request(url,options));
+ }});
+ const response=await driver(new Request('https://fixture.test',{method:'POST',headers:{authorization:'Bearer fixture-service'},body:'{}'}));
+ assert.equal(response.status,200);
+ const body=await response.json();assert.equal(body.trackingComplete,false);assert.equal(body.financialAuthority,false);
 });
 
 test('consume-only handler preserves unknown delivery on missing, failed, malformed, oversized or stalled GET',async()=>{
@@ -219,7 +266,7 @@ test('consume-only handler preserves unknown delivery on missing, failed, malfor
   }});
   const shared={readOptionalEnv:k=>env[k],jsonResponse:(s,b)=>new Response(JSON.stringify(b),{status:s}),createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
    if(name==='claim_merch_tracking_jobs')return {data:[job],error:null};
-   completions.push(args);return {data:{},error:null};
+   completions.push(args);return {data:completedProjection(job),error:null};
   }}})};
   loadTracking('merch-tracking-reconcile/index.ts',{Deno:{serve:h=>worker=h},modules:{'../_shared/stripe-connect.ts':shared,'../_shared/merch-tracking.ts':provider}});
   await worker(new Request('https://fixture.test',{method:'POST',headers:{authorization:'Bearer fixture-worker'}}));
