@@ -646,6 +646,26 @@ export async function readPlatformBrandStudio(ownerUserId: string, options?: { t
   return createBundle(profile, assets);
 }
 
+// A saved clip may reference a mark older than the recent Brand library or no
+// longer selected by the current Platform design. Resolve that exact selection.
+export async function readClipPlatformBrandAsset(ownerUserId: string, assetId: string): Promise<PlatformBrandAsset | null> {
+  const owner = toText(ownerUserId), id = toText(assetId);
+  if (!owner || !id) return null;
+  const { data, error } = await supabase.from("platform_brand_assets")
+    .select(PLATFORM_BRAND_ASSET_SELECT)
+    .eq("id", id)
+    .eq("owner_user_id", owner)
+    .in("asset_type", ["watermark", "logo", "avatar"])
+    .eq("asset_state", "published")
+    .in("moderation_status", ["clean", "reported"])
+    .eq("scan_status", "clean")
+    .is("deleted_at", null)
+    .maybeSingle()
+    .returns<PlatformBrandAssetRow | null>();
+  if (error) throw new Error("The saved Clip brand mark could not be loaded.");
+  return data ? parseAsset(data) : null;
+}
+
 export async function readPlatformBrandReviewQueue(limit = 24): Promise<PlatformBrandAsset[]> {
   const safeLimit = Math.max(1, Math.min(50, Math.floor(Number(limit) || 24)));
   const { data, error } = await supabase

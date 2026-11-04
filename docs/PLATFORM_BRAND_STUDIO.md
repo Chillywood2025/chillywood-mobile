@@ -1,6 +1,53 @@
 # Platform Brand Studio
 
-Updated: 2026-10-15
+Updated: 2026-11-04
+
+## Current Hero Reel and watermark source behavior
+
+This section supersedes the historical descriptions below that call Hero Reel
+or watermark selection unavailable. It describes source behavior, not a live
+renderer activation or an installed-device certification.
+
+- In Platform Studio → Brand → Hero Media, creators can choose their own Hero
+  Reel. The upload helper accepts MP4, MOV and WebM up to 250 MiB. Public
+  playback requires clean scanning, eligible moderation and Publish Changes.
+  Visitors explicitly choose Play; audio starts muted. Playback pauses when the
+  route loses focus or the app backgrounds, does not autoplay, and disallows
+  picture-in-picture and external playback. A completed reel replays from the
+  start on the next Play tap; interrupted playback resumes in place.
+- In Brand → Avatar and Logo → Choose Watermark, creators can upload their own
+  image design. JPG, PNG and WebP are accepted up to 20 MiB; HEIC/HEIF images are
+  normalized before uploading. Uploading alone does not publish the asset or
+  bypass its existing safety checks.
+- Clip Studio → Platform Brand enables an approved, published, clean-scanned
+  watermark, logo or avatar for a new selection, preferring the watermark.
+  Existing clips retain the exact mark they previously selected, including
+  older marks outside the recent 50-asset Brand library. A missing, unavailable
+  or no-longer-approved selection is never silently substituted. Save and
+  Publish stay blocked until the creator explicitly turns that mark off or
+  reopens the clip after the same approved mark becomes available again.
+  Turning the option back on explicitly selects the current approved mark.
+- Export Video burns the selected mark into a separate rendered draft. It
+  does not modify the original video or retroactively watermark existing public
+  videos. The export worker remains subject to its separate activation and
+  qualified-capacity gates; this repair does not activate or provision it.
+
+The source repair covers `/channel-settings` Clip/Brand and the Hero Reel
+component used by `/channel/[userId]`. It preserves shared Studio layout,
+account/session isolation, clean-scan/publication gates, original media and all
+provider/activation controls. Both iOS and Android use the shared code; native
+decoder, installed interaction and real renderer output qualification remain
+separate. Regressions exercise unavailable/unsafe marks, old assets, unrelated
+metadata saves, explicit removal/reselection, delayed target/session changes,
+completion/replay, background/blur and native error boundaries:
+
+- `node --test tests/clip-brand-selection-mounted.test.mjs`
+- `node --test tests/platform-hero-reel-mounted.test.mjs`
+- `node scripts/guard-platform-brand-studio-policy.mjs`
+
+Mounted tests execute production React code with controlled native/network
+boundaries. Rollback is an ordinary source revert without a database migration;
+there is no release, provider-setting change or server commissioning here.
 
 ## Upload registration ordering repair (October 23, 2026)
 

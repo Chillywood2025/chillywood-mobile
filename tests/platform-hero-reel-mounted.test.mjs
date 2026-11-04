@@ -8,16 +8,16 @@ import { React, ts, ROOT } from './platform-studio-mounted-harness.mjs';
 const require = createRequire(path.join(ROOT,'package.json'));
 const { createRoot } = require('react-dom/client');
 
-test('production Hero Reel pauses on blur/background, removes listeners, and handles native errors without autoplay',async()=>{
- const nodes=new Map(),listeners=new Map();let focusCleanup,background,plays=0,pauses=0,removed=0,releaseError=false;
- const player={play(){if(releaseError)throw new Error('released');plays++;},pause(){pauses++;},addListener(name,fn){listeners.set(name,fn);return {remove(){removed++;listeners.delete(name);}};}};
+for (const failureMode of ['native status', 'released replay']) test(`production Hero Reel resumes interruptions, replays completion only on tap, and safely handles ${failureMode}`,async()=>{
+ const nodes=new Map(),listeners=new Map();let focusCleanup,focusSetup,background,plays=0,replays=0,pauses=0,removed=0,releaseError=false;
+ const player={currentTime:0,play(){if(releaseError)throw new Error('released');plays++;},replay(){if(releaseError)throw new Error('released');replays++;this.currentTime=0;},pause(){pauses++;},addListener(name,fn){listeners.set(name,fn);return {remove(){removed++;listeners.delete(name);}};}};
  const host=name=>function Host(props){const id=React.useId();nodes.set(id,{name,props});React.useEffect(()=>()=>nodes.delete(id),[id]);return React.createElement(React.Fragment,null,...React.Children.toArray(props.children).filter(x=>typeof x==='object'));};
  const AppState={currentState:'active',addEventListener(_event,fn){background=fn;return {remove(){removed++;}};}};
  const exports={};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(ROOT,'components/creator-media/PlatformHeroReel.tsx'),'utf8'),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,{exports,require(name){
   if(name==='react')return React;
   if(name==='react-native')return {AppState,StyleSheet:{create:x=>x},Text:host('Text'),View:host('View'),TouchableOpacity:host('Button')};
-  if(name==='expo-router')return {useFocusEffect:cb=>React.useEffect(()=>{focusCleanup=cb();return focusCleanup;},[cb])};
+  if(name==='expo-router')return {useFocusEffect:cb=>React.useEffect(()=>{focusSetup=cb;focusCleanup=cb();return ()=>focusCleanup();},[cb])};
   if(name==='expo-video')return {VideoView:host('VideoView'),useVideoPlayer(source,setup){assert.equal(source.useCaching,false);const initialized=React.useRef(false);if(!initialized.current){setup(player);initialized.current=true;}return player;}};
   throw new Error(name);
  }});
@@ -36,8 +36,37 @@ test('production Hero Reel pauses on blur/background, removes listeners, and han
   await React.act(async()=>stalePlay());assert.equal(plays,1,'retained play callback cannot play after blur');
   const beforeNative=pauses;await React.act(async()=>listeners.get('playingChange')({isPlaying:true}));
   assert.equal(pauses,beforeNative+1,'native play event after blur is immediately paused');
-  await React.act(async()=>listeners.get('statusChange')({status:'error'}));assert.equal(button(),undefined);
+  await React.act(async()=>{focusCleanup=focusSetup();});
+  assert.equal(plays,1,'refocus never autoplays');
+  player.currentTime=4;
+  await React.act(async()=>button().props.onPress());
+  assert.equal(plays,2);assert.equal(replays,0);assert.equal(player.currentTime,4,'interrupted playback resumes without rewinding');
+  await React.act(async()=>button().props.onPress());
+  await React.act(async()=>button().props.onPress());
+  assert.equal(plays,3);assert.equal(player.currentTime,4,'ordinary pause/resume preserves progress');
+  const complete=async()=>{player.currentTime=10;await React.act(async()=>{listeners.get('playingChange')({isPlaying:false});listeners.get('playToEnd')();});};
+  await complete();
+  assert.match(button().props.accessibilityLabel,/^Play /);assert.equal(replays,0,'completion never autoplays');
+  await React.act(async()=>button().props.onPress());
+  assert.equal(replays,1);assert.equal(player.currentTime,0,'completed reel explicitly replays from the beginning');
+  await complete();
+  const completedPlay=button().props.onPress;
+  await React.act(async()=>focusCleanup());
+  await React.act(async()=>completedPlay());assert.equal(replays,1,'completion does not bypass the blur guard');
+  await React.act(async()=>{focusCleanup=focusSetup();});assert.equal(replays,1,'refocusing an ended reel does not replay it');
+  await React.act(async()=>button().props.onPress());assert.equal(replays,2,'completed reel can be replayed repeatedly');
+  await complete();
+  await React.act(async()=>{AppState.currentState='background';background('background');});
+  await React.act(async()=>button().props.onPress());assert.equal(replays,2,'completion does not bypass the background guard');
+  await React.act(async()=>{AppState.currentState='active';background('active');});assert.equal(replays,2,'foregrounding an ended reel does not replay it');
+  await React.act(async()=>button().props.onPress());assert.equal(replays,3);
+  if(failureMode==='released replay'){
+   await complete();releaseError=true;
+   await React.act(async()=>button().props.onPress());
+   assert.equal(replays,3,'released-player replay is caught without another successful playback');
+  }else await React.act(async()=>listeners.get('statusChange')({status:'error'}));
+  assert.equal(button(),undefined);
   assert.ok(all().some(n=>n.name==='Text'&&String(n.props.children).includes('could not play')));
  }finally{await React.act(async()=>root.unmount());}
- assert.equal(removed,3);assert.equal(listeners.size,0);
+ assert.equal(removed,4);assert.equal(listeners.size,0);
 });

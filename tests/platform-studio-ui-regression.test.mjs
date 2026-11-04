@@ -45,7 +45,7 @@ const video = (id, visibility = "draft") => ({ id, ownerId: "owner", title: `Vid
 const metadata = id => ({ clipFormat: "vertical_9_16", fitMode: "fill", trimStartMs: null, trimEndMs: null, titleOverlayText: `Overlay ${id}`, titleOverlaySubtitle: "", titleOverlayPosition: "bottom", titleOverlayStyle: "clean", templatePreset: "clean", brandMarkEnabled: false, brandAssetId: null });
 function clipFixture() {
   const requests = new Map();
-  const h = fixture({ clipEditor: {}, clipLoading: false, clipLoadError: null, clipSaveState: "idle", clipSavedVideoId: null, clipNotice: null, selectedClipVideoFile: null, selectedClipCoverFile: null, selectedVideoFile: null }, {
+  const h = fixture({ clipEditor: {}, clipSelectedBrandAsset: null, clipLoading: false, clipLoadError: null, clipSaveState: "idle", clipSavedVideoId: null, clipNotice: null, selectedClipVideoFile: null, selectedClipCoverFile: null, selectedVideoFile: null }, {
     clipEditorGenerationRef: { current: 0 }, clipCoverPickerInFlightRef: { current: false }, creatorVideoPickerInFlightRef: { current: false }, clipSaveInFlightRef: { current: false }, videoEditor: { title: "old paid editor", description: "" }, openStudioTab: noop,
     readClipStudioEdit: id => { const gate = deferred(); requests.set(id, gate); return gate.promise; }, readCreatorVideoForPlayer: async id => ({ playbackUrl: `loaded:${id}` }),
   });
