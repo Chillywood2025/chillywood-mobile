@@ -287,6 +287,7 @@ import {
   normalizePlatformBrandThemePreset,
   publishPlatformBrandProfile,
   readPlatformBrandStudio,
+  readClipPlatformBrandAsset,
   readPlatformBrandAssetRemovalStatus,
   resolveBrandPublishReadbackStatus,
   removePlatformBrandAsset,
@@ -1551,6 +1552,7 @@ export function ChannelStudioScreen() {
   const sourceVideoEventPrefillRef = useRef<string | null>(null);
   const spotlightRouteAppliedRef = useRef<string | null>(null);
   const [clipEditor, setClipEditor] = useOwnedPickedMediaState<ClipStudioEditorState>(createEmptyClipStudioEditorState(), editor => editor.localCoverFile?.uri === editor.coverPreviewUrl ? editor.localCoverFile : null);
+  const [clipSelectedBrandAsset, setClipSelectedBrandAsset] = useState<PlatformBrandAsset | null>(null);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useOwnedPickedMediaState<CreatorVideoFile | null>(null);
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useOwnedPickedMediaState<CreatorVideoFile | null>(null);
   const selectedClipVideoAuthorityRef = useRef<ReturnType<typeof getCurrentAccountSessionAuthoritySnapshot>>(null);
@@ -2857,6 +2859,7 @@ export function ChannelStudioScreen() {
     setClipLoadError(null);
     setSelectedVideoFile(null);
     setClipEditor(createEmptyClipStudioEditorState());
+    setClipSelectedBrandAsset(null);
     setSelectedClipVideoFile(null);
     setSelectedClipCoverFile(null);
     setClipSaveState("idle");
@@ -2869,6 +2872,7 @@ export function ChannelStudioScreen() {
     if (clipSaveInFlightRef.current) return;
     const generation = ++clipEditorGenerationRef.current;
     clipUploadAttemptRef.current = null;
+    setClipSelectedBrandAsset(null);
     setClipLoading(true);
     setClipLoadError(null);
     setClipEditor({
@@ -2891,7 +2895,7 @@ export function ChannelStudioScreen() {
       readClipStudioEdit(video.id, { throwOnUnavailable: true }),
       readCreatorVideoForPlayer(video.id).catch(() => null),
     ])
-      .then(([edit, previewVideo]) => {
+      .then(async ([edit, previewVideo]) => {
         if (generation !== clipEditorGenerationRef.current) return;
         if (!edit) {
           setClipEditor((current) => ({
@@ -2902,6 +2906,11 @@ export function ChannelStudioScreen() {
           setClipNotice("Clip Studio is ready. Existing videos keep their public state until you save or publish.");
           return;
         }
+        const selectedMark = edit.brandMarkEnabled && edit.brandAssetId
+          ? await readClipPlatformBrandAsset(String(user?.id ?? ""), edit.brandAssetId).catch(() => null)
+          : null;
+        if (generation !== clipEditorGenerationRef.current) return;
+        setClipSelectedBrandAsset(selectedMark);
         setClipEditor((current) => ({
           ...current,
           videoPreviewUrl: previewVideo?.playbackUrl || current.videoPreviewUrl,
@@ -4342,7 +4351,7 @@ export function ChannelStudioScreen() {
 
     if (clipEditor.brandMarkEnabled && !approvedClipBrandAsset) {
       setClipSaveState("save_failed");
-      setClipNotice("Use Platform brand is available after a published approved avatar or logo exists in Brand Studio.");
+      setClipNotice("This clip's saved brand mark is unavailable. Turn it off in Platform Brand before saving, or reopen the clip after restoring the approved mark.");
       logClipStudioUi("clip_save_draft_failed", { reason: "brand_mark_unavailable", targetVisibility });
       return;
     }
@@ -5537,14 +5546,28 @@ export function ChannelStudioScreen() {
         ? "Ready to publish"
         : brandPublished ? "Published" : "Draft changes";
   const approvedClipBrandAsset = useMemo(
-    () => [platformBranding?.watermark, platformBranding?.logo, platformBranding?.avatar].find((asset) => (
-      !!asset
-      && asset.assetState === "published"
-      && ["clean", "reported"].includes(asset.moderationStatus)
-      && asset.scanStatus === "clean"
-      && !asset.deletedAt
-    )) ?? null,
-    [platformBranding?.avatar, platformBranding?.logo, platformBranding?.watermark],
+    () => {
+      const currentMarks = [platformBranding?.watermark, platformBranding?.logo, platformBranding?.avatar];
+      const eligible = (asset?: PlatformBrandAsset | null): asset is PlatformBrandAsset => !!asset
+        && asset.ownerUserId === user?.id
+        && ["watermark", "logo", "avatar"].includes(asset.assetType)
+        && asset.assetState === "published"
+        && ["clean", "reported"].includes(asset.moderationStatus)
+        && asset.scanStatus === "clean"
+        && !asset.deletedAt
+        && !confirmedBrandRemovalIds?.has(asset.id);
+      // An enabled clip owns an exact mark selection. A newer Platform design
+      // must not silently replace it in either the preview or the saved edit.
+      // A later Brand refresh may still invalidate that exact selection. Missing
+      // recent-list entries alone say nothing about an older saved mark.
+      if (clipEditor.brandMarkEnabled && [...(platformBranding?.assets ?? []), ...currentMarks]
+        .some((asset) => asset?.id === clipEditor.brandAssetId && !eligible(asset))) return null;
+      const candidates = clipEditor.brandMarkEnabled
+        ? [clipSelectedBrandAsset].filter((asset) => asset?.id === clipEditor.brandAssetId)
+        : currentMarks;
+      return candidates.find(eligible) ?? null;
+    },
+    [clipEditor.brandAssetId, clipEditor.brandMarkEnabled, clipSelectedBrandAsset, confirmedBrandRemovalIds, platformBranding?.assets, platformBranding?.avatar, platformBranding?.logo, platformBranding?.watermark, user?.id],
   );
   const publishedVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
   const circleVideoCount = creatorVideos.filter((video) => video.visibility === "circle").length;
@@ -6005,7 +6028,7 @@ export function ChannelStudioScreen() {
             : titleOverlayValidation
               ? titleOverlayValidation
               : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
-                ? "Publish and approve a Platform avatar or logo before using the brand mark."
+                ? "This clip's saved brand mark is unavailable. Turn it off in Platform Brand before saving."
                 : "";
     const clipPublishRequirement = clipLoading ? "Loading this video's saved settings..." : clipLoadError ? clipLoadError : !hasWorkingVideo
       ? "Choose a video before publishing."
@@ -6015,7 +6038,9 @@ export function ChannelStudioScreen() {
           ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
           : titleOverlayValidation
             ? titleOverlayValidation
-            : "";
+            : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
+              ? "This clip's saved brand mark is unavailable. Turn it off in Platform Brand before publishing."
+              : "";
     const previewAspectRatio = clipEditor.clipFormat === "square_1_1"
       ? 1
       : clipEditor.clipFormat === "landscape_16_9"
@@ -6400,7 +6425,8 @@ export function ChannelStudioScreen() {
                 <Text style={styles.permissionCopy}>Save your edit, then Export Video to permanently apply trim and frame to a new draft. Publishing the original does not apply these changes.</Text>
                 <ClipExportPanel key={`${user?.id}:${clipEditorGenerationRef.current}:${clipEditor.editingVideoId}`}
                   videoId={clipEditor.editingVideoId} ownerId={String(user?.id ?? "")}
-                  saved={clipSaveState === "saved" && !clipSaving && !clipLoading && !clipLoadError}
+                  saved={clipSaveState === "saved" && !clipSaving && !clipLoading && !clipLoadError
+                    && (!clipEditor.brandMarkEnabled || !!approvedClipBrandAsset)}
                   edit={buildClipStudioEditPatch()} onReview={id => router.push({ pathname: "/channel-settings", params: { videoId: id } })} />
               </>
             ),
@@ -6432,6 +6458,9 @@ export function ChannelStudioScreen() {
                   onChangeText={(text) => updateClipEditor({ description: text })}
                   multiline
                 />
+                {clipEditor.brandMarkEnabled && !approvedClipBrandAsset ? (
+                  <Text style={styles.permissionCopy}>{clipSaveDraftRequirement}</Text>
+                ) : null}
                 <View style={styles.eventActionRow}>
                   <TouchableOpacity
                     style={[styles.eventPrimaryButton, isPrimaryClipActionDisabled && styles.eventPrimaryButtonDisabled]}
@@ -6479,36 +6508,46 @@ export function ChannelStudioScreen() {
           {renderClipAccordion({
             id: "brand",
             title: "Platform Brand",
-            summary: "Preview a safe Platform logo mark when available.",
-            status: brandMarkReady ? "Ready" : "Coming later",
+            summary: "Choose a safe Platform mark for the preview and export.",
+            status: brandMarkReady ? "Ready" : clipEditor.brandMarkEnabled ? "Unavailable" : "Not set",
             statusTone: brandMarkReady ? "default" : "muted",
-            children: brandMarkReady ? (
+            children: brandMarkReady || clipEditor.brandMarkEnabled ? (
               <>
                 <TouchableOpacity
+                  testID="clip-brand-mark-toggle"
+                  accessibilityRole="checkbox"
+                  accessibilityLabel={clipEditor.brandMarkEnabled ? "Turn off Clip brand mark" : "Use current Platform brand mark"}
+                  accessibilityState={{ checked: clipEditor.brandMarkEnabled, disabled: clipSaving || clipLoading || !!clipLoadError }}
                   style={[styles.legalAcknowledgementRow, clipEditor.brandMarkEnabled && styles.legalAcknowledgementRowActive]}
                   activeOpacity={0.86}
-                  onPress={() => updateClipEditor({
-                    brandMarkEnabled: !clipEditor.brandMarkEnabled,
-                    brandAssetId: !clipEditor.brandMarkEnabled ? approvedClipBrandAsset?.id ?? null : null,
-                  })}
-                  disabled={clipSaving}
+                  onPress={() => {
+                    if (clipLoading || clipLoadError || clipSaveInFlightRef.current) return;
+                    setClipSelectedBrandAsset(clipEditor.brandMarkEnabled ? null : approvedClipBrandAsset);
+                    updateClipEditor({
+                      brandMarkEnabled: !clipEditor.brandMarkEnabled,
+                      brandAssetId: !clipEditor.brandMarkEnabled ? approvedClipBrandAsset?.id ?? null : null,
+                    });
+                  }}
+                  disabled={clipSaving || clipLoading || !!clipLoadError}
                 >
                   <View style={[styles.legalCheckbox, clipEditor.brandMarkEnabled && styles.legalCheckboxActive]}>
                     <Text style={styles.legalCheckboxMark}>{clipEditor.brandMarkEnabled ? "✓" : ""}</Text>
                   </View>
                   <Text style={styles.legalAcknowledgementText}>
-                    Use approved Platform brand mark in Clip Studio preview.
+                    {brandMarkReady ? "Use approved Platform brand mark in preview and export." : "Turn off the unavailable saved brand mark."}
                   </Text>
                 </TouchableOpacity>
                 <Text style={styles.brandPreviewMeta}>
-                  Export Video burns the approved brand mark into the new draft. The original video stays unchanged.
+                  {brandMarkReady
+                    ? "Export Video burns the approved brand mark into the new draft. The original video stays unchanged."
+                    : "The saved mark could not be loaded or is no longer approved. Turn it off to keep editing; turning it on again selects your current approved Platform mark."}
                 </Text>
               </>
             ) : (
               <View style={styles.eventEmptyCard}>
-                <Text style={styles.eventEmptyTitle}>Brand mark coming later</Text>
+                <Text style={styles.eventEmptyTitle}>Brand mark not set</Text>
                 <Text style={styles.eventEmptyBody}>
-                  Publish and approve a Platform avatar or logo in Brand Studio before using it in Clip Studio.
+                  Publish an approved watermark, logo or avatar in Brand Studio before using it in Clip Studio.
                 </Text>
               </View>
             ),

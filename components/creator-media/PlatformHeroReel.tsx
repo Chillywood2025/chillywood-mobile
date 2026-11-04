@@ -9,6 +9,7 @@ export function PlatformHeroReel({ uri, label }: { uri: string; label: string })
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
   const focused = useRef(false);
+  const ended = useRef(false);
   const player = useVideoPlayer({ uri, useCaching: false }, (instance) => {
     instance.loop = false;
     instance.muted = true;
@@ -25,9 +26,16 @@ export function PlatformHeroReel({ uri, label }: { uri: string; label: string })
     });
     const playback = player.addListener("playingChange", (event) => {
       if (event.isPlaying && (!focused.current || AppState.currentState !== "active")) pause();
-      else setPlaying(event.isPlaying);
+      else {
+        if (event.isPlaying) ended.current = false;
+        setPlaying(event.isPlaying);
+      }
     });
-    return () => { background.remove(); status.remove(); playback.remove(); };
+    const completion = player.addListener("playToEnd", () => {
+      ended.current = true;
+      setPlaying(false);
+    });
+    return () => { background.remove(); status.remove(); playback.remove(); completion.remove(); };
   }, [pause, player]);
   if (failed) return <Text style={styles.notice}>Hero Reel could not play. Refresh the Platform to try again.</Text>;
   return <View style={styles.container}>
@@ -37,7 +45,15 @@ export function PlatformHeroReel({ uri, label }: { uri: string; label: string })
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${playing ? "Pause" : "Play"} ${label} Hero Reel`}
       style={styles.action} onPress={() => {
         if (!focused.current || AppState.currentState !== "active") return;
-        if (playing) pause(); else { try { player.play(); setPlaying(true); } catch { setFailed(true); } }
+        if (playing) pause(); else {
+          try {
+            // play() resumes in place; a completed non-looping reel needs an
+            // explicit replay, only after a fresh foreground user gesture.
+            if (ended.current) player.replay(); else player.play();
+            ended.current = false;
+            setPlaying(true);
+          } catch { setFailed(true); }
+        }
       }}>
       <Text style={styles.actionText}>{playing ? "Pause Hero Reel" : "Play Hero Reel"}</Text>
     </TouchableOpacity>
