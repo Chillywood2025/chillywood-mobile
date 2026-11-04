@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "migration": {
+    "version": "20261104032615",
+    "name": "native_tip_catalog_amount_policy",
+    "sha256": "f18d738818dcc68ab6ff61f737a4755be4dcc4fd02846249c01647c1f5d3fc2b"
+  },
+  "baselineHistory": {
+    "count": 583,
+    "maximum": "20261101215711",
+    "sha256": "8ef39413e785edf6381b2d52f4c427415a4528e15314e2419c19a4e181ba5310"
+  },
+  "invariantsSha256": "f0e689b46f1f1d32343f1f57d6a7beaea8557374c29d8cd8887864e6fd887a2d",
+  "dataSha256": "19ef7076d6c77ec370e63fd8d3a861a991224a35db7a3e53700b39882d183370"
+}
