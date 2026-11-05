@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {nativeDriftCases} from './helpers/payout-wrapper-native-drift-fixture.mjs';
 import {loadBundle, readbackSql, classifyState, buildApplySql, deploy, MANIFEST, MIGRATION, VERSION, NAME}
   from '../scripts/sandbox-payout-notification-exact-deploy.mjs';
 
@@ -94,6 +95,33 @@ test('disposable full-schema exact observer deployment preserves history, contro
   await assert.rejects(db.exec(sql), /observer_baseline_changed/); await db.exec('rollback');
   await db.exec('alter view public.observer_fixture_unrelated_view reset (security_invoker)');
   assert.equal(classifyState(bundle, await read()), 'ready');
+  // The native CLI clone may already grant anon SELECT. Exercise both starting
+  // ACLs with the actual wrapper, and prove the historical GRANT is a no-op in
+  // the pre-granted case rather than treating a successful apply as a defect.
+  for(const initiallyGranted of [false,true]) {
+    await db.exec(initiallyGranted?'grant select on public.notifications to anon':'revoke select on public.notifications from anon,public');
+    const aclBefore=await read(),aclBundle=structuredClone(bundle);
+    aclBundle.beforeCatalog=aclBefore.catalog;
+    aclBundle.manifest.baselineInvariantsSha256=aclBefore.invariantsSha256;
+    assert.equal(classifyState(aclBundle,aclBefore),'ready');
+    if(initiallyGranted) {
+      await db.exec('grant select on public.notifications to anon');
+      const noop=await read();
+      assert.deepEqual(noop.catalog,aclBefore.catalog);
+      assert.equal(noop.invariantsSha256,aclBefore.invariantsSha256);
+      assert.equal(classifyState(aclBundle,noop),'ready');
+    }
+    const aclSql=buildApplySql(aclBundle,aclBefore);
+    const fixture=nativeDriftCases(aclBefore).find(c=>c.label==='notification anon SELECT');
+    await db.exec(fixture.mutation);
+    const changed=await read();
+    assert.notEqual(fixture.observe(changed),fixture.observe(aclBefore));
+    assert.throws(()=>classifyState(aclBundle,changed),/BASELINE_CONTRACT_MISMATCH/);
+    await assert.rejects(db.exec(aclSql),/observer_baseline_changed/);await db.exec('rollback');
+  }
+  await db.exec(before.catalog.tables.find(t=>t.name==='public.notifications').anonSelect
+    ?'grant select on public.notifications to anon':'revoke select on public.notifications from anon,public');
+  assert.equal(classifyState(bundle,await read()),'ready');
   // The exact live ledger shape matters too: defaults and triggers could add
   // unreviewed side effects even though the insert names only three columns.
   await db.exec("alter table supabase_migrations.schema_migrations alter column created_by set default 'unexpected'");

@@ -8,6 +8,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {loadBundle,readbackSql,buildApplySql,classifyState,deploy,VERSION,NAME} from './sandbox-payout-notification-exact-deploy.mjs';
+import {nativeDriftCases} from '../tests/helpers/payout-wrapper-native-drift-fixture.mjs';
 
 if(process.argv.includes('--help')){console.log('Prove exact observer deployment and actual lock barriers in an owned local Supabase CLI clone only.');process.exit(0);}
 assert.equal(process.argv.length,2,'no arbitrary target arguments');
@@ -36,7 +37,7 @@ function start(sql){
 }
 async function until(fn,label){const deadline=Date.now()+15000;while(Date.now()<deadline){if(fn())return;await delay(25);}throw Error(label);}
 const blocked=(holder,waiter)=>query(`select exists(select 1 from pg_stat_activity h,pg_stat_activity w where h.datname=current_database() and w.datname=current_database() and h.application_name=${lit(holder.name)} and w.application_name=${lit(waiter.name)} and h.pid=any(pg_blocking_pids(w.pid)));`)==='t';
-const fail=(sql,pattern)=>{const r=docker(args(),sql);assert.notEqual(r.status,0);assert.match(r.stderr,pattern);};
+const fail=(sql,pattern,label='failure injection')=>{const r=docker(args(),sql);assert.notEqual(r.status,0,`${label}: expected rejection, not successful apply`);assert.match(r.stderr,pattern,`${label}: expected guard rejection`);};
 try{
  if(process.env.DOCKER_HOST)assert.match(process.env.DOCKER_HOST,/^(unix|npipe):\/\//u);
  assert.match(success(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker').trim(),/^(unix|npipe):\/\//u);
@@ -75,25 +76,25 @@ try{
  const sql=buildApplySql(bundle,before);
  const stable=state=>{const {observedAt,...rest}=state;return rest;};
  const unchanged=()=>assert.deepEqual(stable(read()),stable(before),'failed attempts leave all observed state unchanged');
- fail(sql.replace('insert into supabase_migrations.schema_migrations','perform 1/0; insert into supabase_migrations.schema_migrations'),/division by zero/);unchanged();
- fail(sql.replace('insert into supabase_migrations.schema_migrations','alter table public.notifications add column observer_unrelated integer; insert into supabase_migrations.schema_migrations'),/observer_postcheck_failed/);unchanged();
- // Rollback-only drift transactions cannot affect other schedules.
- for(const mutation of [
-  "update supabase_migrations.schema_migrations set name=name||'_drift' where version=(select min(version) from supabase_migrations.schema_migrations)",
-  "alter table supabase_migrations.schema_migrations alter column name set default 'unexpected'",
-  'create trigger observer_ledger_drift before insert on supabase_migrations.schema_migrations for each row execute function pg_catalog.suppress_redundant_updates_trigger()',
-  'create rule observer_ledger_rule as on insert to supabase_migrations.schema_migrations do also select 1',
-  'grant select on public.notifications to anon',
-  "update cron.job set schedule='1 minute'",
- ]){
-  fail(sql.replace('do $payout_observer_apply$',`${mutation};do $payout_observer_apply$`),/observer_baseline_changed/);unchanged();
+ fail(sql.replace('insert into supabase_migrations.schema_migrations','perform 1/0; insert into supabase_migrations.schema_migrations'),/division by zero/,'mid-apply execution failure');unchanged();
+ fail(sql.replace('insert into supabase_migrations.schema_migrations','alter table public.notifications add column observer_unrelated integer; insert into supabase_migrations.schema_migrations'),/observer_postcheck_failed/,'unrelated catalog postcheck');unchanged();
+ // Independently prove every negative fixture changes its intended contract.
+ // In particular GRANT is a no-op when the local CLI already grants anon SELECT.
+ // Each probe and rejection rolls back; nothing changes the source database.
+ for(const {label,mutation,observe} of nativeDriftCases(before)){
+  const drift={...parse(query(`begin;${mutation};${readbackSql(bundle)}rollback;`)),context};
+  assert.notDeepEqual(observe(drift),observe(before),`${label}: fixture must change the intended baseline`);
+  assert.throws(()=>classifyState(bundle,drift),undefined,`${label}: read-only preflight must reject drift`);
+  unchanged();
+  console.log(`CHECK native drift rejection: ${label}`);
+  fail(sql.replace('do $payout_observer_apply$',`${mutation};do $payout_observer_apply$`),/observer_baseline_changed/,label);unchanged();
  }
  // Event-trigger creation requires the local platform superuser. Its only
  // target is this owned clone; the wrapper itself still runs as postgres.
  const hookDrift=sql.replace('do $payout_observer_apply$',
   'create function extensions.observer_fixture_hook() returns event_trigger language plpgsql as $$begin return;end$$;create event trigger observer_fixture_hook on ddl_command_end execute function extensions.observer_fixture_hook();set local role postgres;do $payout_observer_apply$');
  const hookResult=admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],hookDrift);
- assert.notEqual(hookResult.status,0);assert.match(hookResult.stderr,/observer_baseline_changed/);unchanged();
+ assert.notEqual(hookResult.status,0,'event hook drift must reject apply');assert.match(hookResult.stderr,/observer_baseline_changed/,'event hook drift must reach baseline guard');unchanged();
  // A real notification-worker table lock blocks deployment. Observe the lock
  // relationship before accepting timeout as proof, then verify atomic rollback.
  const holder=start("begin;update public.notification_activity_events set attempts=attempts where false;select 'HOLDING';");

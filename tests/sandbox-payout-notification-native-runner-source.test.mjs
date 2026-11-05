@@ -11,6 +11,7 @@ test('native exact observer proof is clone-only and exercises rollback and real 
   'perform 1/0','bundle.afterCatalog=parse(query(`begin;${bundle.body}',
   'lock timeout','const fresh=read()','buildApplySql(bundle,fresh)',
   'statements:[bundle.body]','already_applied_verified'])assert.ok(source.includes(marker),marker);
+ for(const marker of ['nativeDriftCases(before)','fixture must change the intended baseline','read-only preflight must reject drift','expected rejection, not successful apply','CHECK native drift rejection:'])assert.ok(source.includes(marker),marker);
  assert.ok(source.includes("query(`select exists(select 1 from supabase_migrations.schema_migrations where version=${lit(VERSION)});`,'postgres')"),'source history is read only');
  const workflow=fs.readFileSync('.github/workflows/required-validation.yml','utf8');
  const native=workflow.split("<<'NATIVE_PROOFS'")[1]?.split('NATIVE_PROOFS')[0];
