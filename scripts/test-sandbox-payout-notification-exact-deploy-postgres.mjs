@@ -8,7 +8,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {loadBundle,readbackSql,buildApplySql,classifyState,deploy,VERSION,NAME} from './sandbox-payout-notification-exact-deploy.mjs';
-import {nativeDriftCases} from '../tests/helpers/payout-wrapper-native-drift-fixture.mjs';
+import {nativeDriftCases,injectBefore,eventHookDriftSql,notificationLockHolderSQL} from '../tests/helpers/payout-wrapper-native-drift-fixture.mjs';
 
 if(process.argv.includes('--help')){console.log('Prove exact observer deployment and actual lock barriers in an owned local Supabase CLI clone only.');process.exit(0);}
 assert.equal(process.argv.length,2,'no arbitrary target arguments');
@@ -76,8 +76,8 @@ try{
  const sql=buildApplySql(bundle,before);
  const stable=state=>{const {observedAt,...rest}=state;return rest;};
  const unchanged=()=>assert.deepEqual(stable(read()),stable(before),'failed attempts leave all observed state unchanged');
- fail(sql.replace('insert into supabase_migrations.schema_migrations','perform 1/0; insert into supabase_migrations.schema_migrations'),/division by zero/,'mid-apply execution failure');unchanged();
- fail(sql.replace('insert into supabase_migrations.schema_migrations','alter table public.notifications add column observer_unrelated integer; insert into supabase_migrations.schema_migrations'),/observer_postcheck_failed/,'unrelated catalog postcheck');unchanged();
+ fail(injectBefore(sql,'insert into supabase_migrations.schema_migrations','perform 1/0; '),/division by zero/,'mid-apply execution failure');unchanged();
+ fail(injectBefore(sql,'insert into supabase_migrations.schema_migrations','alter table public.notifications add column observer_unrelated integer; '),/observer_postcheck_failed/,'unrelated catalog postcheck');unchanged();
  // Independently prove every negative fixture changes its intended contract.
  // In particular GRANT is a no-op when the local CLI already grants anon SELECT.
  // Each probe and rejection rolls back; nothing changes the source database.
@@ -87,17 +87,16 @@ try{
   assert.throws(()=>classifyState(bundle,drift),undefined,`${label}: read-only preflight must reject drift`);
   unchanged();
   console.log(`CHECK native drift rejection: ${label}`);
-  fail(sql.replace('do $payout_observer_apply$',`${mutation};do $payout_observer_apply$`),/observer_baseline_changed/,label);unchanged();
+  fail(injectBefore(sql,'do $payout_observer_apply$',`${mutation};`),/observer_baseline_changed/,label);unchanged();
  }
  // Event-trigger creation requires the local platform superuser. Its only
  // target is this owned clone; the wrapper itself still runs as postgres.
- const hookDrift=sql.replace('do $payout_observer_apply$',
-  'create function extensions.observer_fixture_hook() returns event_trigger language plpgsql as $$begin return;end$$;create event trigger observer_fixture_hook on ddl_command_end execute function extensions.observer_fixture_hook();set local role postgres;do $payout_observer_apply$');
+ const hookDrift=eventHookDriftSql(sql);
  const hookResult=admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],hookDrift);
  assert.notEqual(hookResult.status,0,'event hook drift must reject apply');assert.match(hookResult.stderr,/observer_baseline_changed/,'event hook drift must reach baseline guard');unchanged();
  // A real notification-worker table lock blocks deployment. Observe the lock
  // relationship before accepting timeout as proof, then verify atomic rollback.
- const holder=start("begin;update public.notification_activity_events set attempts=attempts where false;select 'HOLDING';");
+ const holder=start(notificationLockHolderSQL);
  await until(()=>holder.output().includes('HOLDING'),'worker lock holder not ready');
  const waiter=start(sql);waiter.child.stdin.end();
  await until(()=>blocked(holder,waiter),'deployment did not wait on worker table lock');
@@ -106,7 +105,7 @@ try{
  // Release-before-timeout schedule must complete without disabling worker cron.
  const fresh=read();assert.equal(classifyState(bundle,fresh),'ready');
  const retrySql=buildApplySql(bundle,fresh);
- const holder2=start("begin;update public.notification_activity_events set attempts=attempts where false;select 'HOLDING';");
+ const holder2=start(notificationLockHolderSQL);
  await until(()=>holder2.output().includes('HOLDING'),'second worker lock holder not ready');
  const waiter2=start(retrySql);waiter2.child.stdin.end();
  await until(()=>blocked(holder2,waiter2),'second deployment did not wait on worker');

@@ -1,5 +1,19 @@
 // Disposable native/WASM fixtures only. Choose an actual privilege change from
 // the observed clone, which can have Supabase's implicit API grants enabled.
+import assert from 'node:assert/strict';
+
+// Replacement strings interpret $$, $&, $` and $'. SQL is literal data here.
+// Require exactly one anchor and use a callback so dollar-quoted bodies survive.
+export function injectBefore(sql,anchor,prefix) {
+ assert.equal(sql.split(anchor).length,2,'fixture injection requires exactly one anchor');
+ return sql.replace(anchor,()=>prefix+anchor);
+}
+export function eventHookDriftSql(sql) {
+ return injectBefore(sql,'do $payout_observer_apply$',
+  'create function extensions.observer_fixture_hook() returns event_trigger language plpgsql as $$begin return;end$$;create event trigger observer_fixture_hook on ddl_command_end execute function extensions.observer_fixture_hook();set local role postgres;');
+}
+export const notificationLockHolderSQL="begin;update public.notification_activity_events set attempts=attempts where false;select 'HOLDING';";
+
 export function nativeDriftCases(before) {
  const notificationTable=state=>state.catalog.tables.find(t=>t.name==='public.notifications');
  const anonSelect=notificationTable(before)?.anonSelect;

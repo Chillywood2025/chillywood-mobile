@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import {injectBefore,eventHookDriftSql} from './helpers/payout-wrapper-native-drift-fixture.mjs';
+
+test('native SQL injection preserves every JavaScript replacement metacharacter literally',()=>{
+ const prefix="$$ $& $` $'";
+ assert.equal(injectBefore('before ANCHOR after','ANCHOR',prefix),`before ${prefix}ANCHOR after`);
+ assert.throws(()=>injectBefore('missing','ANCHOR',prefix),/exactly one anchor/);
+ assert.throws(()=>injectBefore('ANCHOR ANCHOR','ANCHOR',prefix),/exactly one anchor/);
+ assert.ok(eventHookDriftSql('begin;do $payout_observer_apply$ begin end $payout_observer_apply$;commit;').includes('as $$begin return;end$$;'));
+});
 
 test('native exact observer proof is clone-only and exercises rollback and real lock barriers',()=>{
  const source=fs.readFileSync('scripts/test-sandbox-payout-notification-exact-deploy-postgres.mjs','utf8');
@@ -12,6 +21,9 @@ test('native exact observer proof is clone-only and exercises rollback and real 
   'lock timeout','const fresh=read()','buildApplySql(bundle,fresh)',
   'statements:[bundle.body]','already_applied_verified'])assert.ok(source.includes(marker),marker);
  for(const marker of ['nativeDriftCases(before)','fixture must change the intended baseline','read-only preflight must reject drift','expected rejection, not successful apply','CHECK native drift rejection:'])assert.ok(source.includes(marker),marker);
+ assert.ok(source.includes('eventHookDriftSql(sql)'));
+ assert.equal((source.match(/start\(notificationLockHolderSQL\)/gu)??[]).length,2);
+ assert.ok(!source.includes('.replace('),'all runner injections must use the literal callback helper');
  assert.ok(source.includes("query(`select exists(select 1 from supabase_migrations.schema_migrations where version=${lit(VERSION)});`,'postgres')"),'source history is read only');
  const workflow=fs.readFileSync('.github/workflows/required-validation.yml','utf8');
  const native=workflow.split("<<'NATIVE_PROOFS'")[1]?.split('NATIVE_PROOFS')[0];
