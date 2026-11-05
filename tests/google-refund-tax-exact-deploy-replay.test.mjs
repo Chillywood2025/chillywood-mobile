@@ -14,6 +14,7 @@ test('exact tip, ingress and sandbox order precedes additive refund deployment; 
     'independently measured exact added catalog, not a hash learned from the apply response');
   const predecessorPaths=PREDECESSORS.map(p=>`supabase/migrations/${p.version}_${p.name}.sql`);
   const excluded=[MIGRATION,...predecessorPaths,
+    'supabase/migrations/20261105010859_sandbox_cashout_status_notifications.sql',
     'supabase/migrations/20261102093836_creator_clip_export_bounded_pool.sql',
     'supabase/migrations/20261102094308_creator_clip_scale_lifecycle_ledger.sql'].map(p=>path.basename(p));
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,

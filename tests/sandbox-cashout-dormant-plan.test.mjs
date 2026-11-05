@@ -72,6 +72,7 @@ test('CLI is offline, refuses apply/overwrites, and writes only review artifacts
 test('metadata-only preflight executes on live-era schema and keeps existing data unchanged',{timeout:300000},async t=>{
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,excludeMigrations:[
     path.basename(MIGRATION),'20261102093836_creator_clip_export_bounded_pool.sql',
+    '20261105010859_sandbox_cashout_status_notifications.sql', // Depends on the intentionally absent sandbox execution.
     '20261102094308_creator_clip_scale_lifecycle_ledger.sql','20261103005000_native_production_ingress_observations.sql',
   ]});t.after(()=>db.close());
   await db.exec(`create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);
