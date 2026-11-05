@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync, spawnSync} from 'node:child_process';
 import {loadBundle, classifyState, buildApplySql, deploy, sourceBinding,
-  readbackSql, CLOSURE, VERSION, NAME, HASH, TOOL, MANIFEST, MIGRATION}
+  readbackSql, lockTables, requireWriteCapabilities, safeError, EXECUTION_CONTRACT, CLOSURE, VERSION, NAME, HASH, TOOL, MANIFEST, MIGRATION}
   from '../scripts/sandbox-payout-notification-exact-deploy.mjs';
 
 const bundle = loadBundle();
@@ -15,7 +15,9 @@ const ready = () => ({...structuredClone(bundle.manifest.baseline),
   context: context(), serverVersion: '17.6', historyCount: bundle.manifest.baselineHistory.count,
   priorHistorySHA256: bundle.manifest.baselineHistory.sha256, observerHistory: [],
   catalog: structuredClone(bundle.beforeCatalog), invariantsSha256: bundle.manifest.baselineInvariantsSha256,
-  hooksSha256: bundle.manifest.baselineHooksSha256});
+  hooksSha256: bundle.manifest.baselineHooksSha256,
+  cronReadCapability: true,
+  writeCapabilities: lockTables(bundle).map(table => ({table, canLock: true}))});
 const applied = () => ({...ready(), historyCount: bundle.manifest.baselineHistory.count + 1,
   observerHistory: [{version: VERSION, name: NAME, statementsSHA256: bundle.statementsSha256}],
   catalog: structuredClone(bundle.afterCatalog)});
@@ -80,6 +82,71 @@ test('exact already-applied state reconciles without a write', async () => {
     assert.equal(result.status, 'already_applied_verified');
     assert.equal(result.wrote, false); assert.equal(writes, 0);
   }
+});
+
+test('strict complete writer capability inventory gates absent target only', async () => {
+  assert.equal(lockTables(bundle).length, 26);
+  assert.equal(lockTables(bundle).includes('cron.job'), false);
+  assert.deepEqual(lockTables(bundle), [...new Set(lockTables(bundle))].sort());
+  const locked = buildApplySql(bundle, ready()).match(/lock table ([^;]+) in share row exclusive mode;/u)?.[1].split(',');
+  assert.deepEqual(locked, lockTables(bundle), 'apply SQL locks exactly the reviewed 26 relations and not cron');
+  requireWriteCapabilities(bundle, ready());
+  const cases = [
+    [s => {delete s.writeCapabilities;}, 'WRITE_CAPABILITY_READBACK_INVALID'],
+    [s => {s.writeCapabilities.pop();}, 'WRITE_CAPABILITY_READBACK_INVALID'],
+    [s => {s.writeCapabilities.reverse();}, 'WRITE_CAPABILITY_READBACK_INVALID'],
+    [s => {s.writeCapabilities[0].canLock = 'true';}, 'WRITE_CAPABILITY_READBACK_INVALID'],
+    [s => {s.writeCapabilities[0].extra = true;}, 'WRITE_CAPABILITY_READBACK_INVALID'],
+    [s => {s.writeCapabilities[1] = s.writeCapabilities[0];}, 'WRITE_CAPABILITY_READBACK_INVALID'],
+    [s => {s.cronReadCapability = false;}, 'CRON_JOB_READ_CAPABILITY_REQUIRED'],
+    [s => {s.writeCapabilities[0].canLock = false;}, 'WRITE_LOCK_CAPABILITY_REQUIRED'],
+  ];
+  for (const [mutate, code] of cases) {
+    const state = ready(); mutate(state);
+    for (const apply of [false, true]) {
+      let writes = 0;
+      await assert.rejects(deploy({bundle, apply, query: async (_sql, readOnly) => {
+        if (!readOnly) writes++; return state;
+      }}), {message: code});
+      assert.equal(writes, 0);
+    }
+    const after = applied(); mutate(after);
+    assert.equal((await deploy({bundle, apply: true, query: async (_sql, readOnly) => {
+      assert.equal(readOnly, true); return after;
+    }})).status, 'already_applied_verified');
+  }
+});
+
+test('uncertain write diagnostics expose only exact allowlisted codes and never resend', async () => {
+  for (const [writeError, readError, expectedWrite, expectedRead] of [
+    ['CRON_JOB_READ_CAPABILITY_REQUIRED', 'WRITE_LOCK_CAPABILITY_REQUIRED', 'CRON_JOB_READ_CAPABILITY_REQUIRED', 'WRITE_LOCK_CAPABILITY_REQUIRED'],
+    ['private database detail secret_canary', 'private response secret_canary', 'PAYOUT_NOTIFICATION_DEPLOY_BLOCKED', 'PAYOUT_NOTIFICATION_DEPLOY_BLOCKED'],
+    ['CRON_JOB_READ_CAPABILITY_REQUIRED\nsecret_canary', 'WRITE_LOCK_CAPABILITY_REQUIRED secret_canary', 'PAYOUT_NOTIFICATION_DEPLOY_BLOCKED', 'PAYOUT_NOTIFICATION_DEPLOY_BLOCKED'],
+  ]) {
+    const calls = [];
+    const result = await deploy({bundle, apply: true, query: async (_sql, readOnly) => {
+      calls.push(readOnly);
+      if (calls.length === 1) return ready();
+      throw Error(readOnly ? readError : writeError);
+    }});
+    assert.deepEqual(calls, [true, false, true]);
+    assert.equal(result.status, 'apply_unconfirmed');
+    assert.equal(result.writeFailureCode, expectedWrite);
+    assert.equal(result.readbackFailureCode, expectedRead);
+    assert.doesNotMatch(JSON.stringify(result), /secret_canary/);
+  }
+  assert.equal(safeError({code: '42501', message: 'private SQL details'}), 'PAYOUT_NOTIFICATION_DEPLOY_BLOCKED');
+  let calls = 0;
+  const reconciled = await deploy({bundle, apply: true, query: async (_sql, readOnly) => {
+    calls++;
+    if (calls === 1) return ready();
+    if (!readOnly) throw Error('CRON_JOB_READ_CAPABILITY_REQUIRED');
+    return applied();
+  }});
+  assert.equal(reconciled.status, 'applied_verified');
+  assert.equal(reconciled.writeFailureCode, 'CRON_JOB_READ_CAPABILITY_REQUIRED');
+  assert.equal(reconciled.readbackFailureCode, undefined);
+  assert.equal(calls, 3);
 });
 
 test('confirmed and unknown writes receive exact readback once, never automatic resubmission', async () => {
@@ -164,6 +231,11 @@ test('CLI rejects alternate migration, force, and baseline substitutions before 
   assert.equal(packet.version, VERSION);
   assert.equal(packet.sha256, HASH);
   assert.equal(packet.readbackSql, readbackSql(bundle));
+  assert.deepEqual(packet.executionContract, EXECUTION_CONTRACT);
+  assert.equal(EXECUTION_CONTRACT.applicationAndHistoryLocks, 26);
+  assert.equal(EXECUTION_CONTRACT.cron, 'observed_not_locked');
+  assert.equal(EXECUTION_CONTRACT.independentCronEditsExcluded, false);
+  assert.equal(EXECUTION_CONTRACT.freshDeploymentApprovalRequired, true);
   assert.doesNotMatch(offline.stdout + offline.stderr, /NETWORK_CALLED|synthetic-secret-canary/);
   for (const extra of [['--migration', 'other.sql'], ['--version', '20261106000000'], ['--baseline', 'x.json'],
     ['--force'], ['--apply', '--apply'], ['--source', source]]) {

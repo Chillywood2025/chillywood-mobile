@@ -13,6 +13,13 @@ export function eventHookDriftSql(sql) {
   'create function extensions.observer_fixture_hook() returns event_trigger language plpgsql as $$begin return;end$$;create event trigger observer_fixture_hook on ddl_command_end execute function extensions.observer_fixture_hook();set local role postgres;');
 }
 export const notificationLockHolderSQL="begin;update public.notification_activity_events set attempts=attempts where false;select 'HOLDING';";
+export const observerBarrierKey=77005010859;
+export function observerBarrierSql(sql,anchor,{outsideDo=false}={}) {
+ const pause=outsideDo
+  ?`set local lock_timeout='0';select pg_advisory_xact_lock(${observerBarrierKey});set local lock_timeout='5s';`
+  :`perform set_config('lock_timeout','0',true);perform pg_advisory_xact_lock(${observerBarrierKey});perform set_config('lock_timeout','5s',true);`;
+ return injectBefore(sql,anchor,pause);
+}
 
 export function nativeDriftCases(before) {
  const notificationTable=state=>state.catalog.tables.find(t=>t.name==='public.notifications');

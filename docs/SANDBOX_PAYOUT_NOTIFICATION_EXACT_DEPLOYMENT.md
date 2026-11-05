@@ -50,9 +50,56 @@ Selected catalog matching does not establish total source/live schema parity.
 
 ## Execution and reconciliation
 
+### Changed concurrency contract: fresh deployment approval required
+
+The managed production `cron.job` is owned by `supabase_admin`. The deployment
+writer `postgres` has SELECT but no UPDATE, DELETE, TRUNCATE or MAINTAIN privilege
+on that table. The earlier procedure attempted an unsupported strong lock and
+failed before the migration body. This revised procedure makes no permission or
+role change and does not retry that attempt. Its offline packet and execution
+receipt label cron as `observed_not_locked`, with
+`independentCronEditsExcluded: false` and `freshDeploymentApprovalRequired: true`.
+Prior approval for the stronger guarantee must not be reused for execution.
+
+All 26 original application, control and migration-history relations retain
+their SHARE ROW EXCLUSIVE locks. Read-only preflight checks the intended writer's
+schema usage and strong-lock capabilities on those relations, plus SELECT/USAGE
+for cron. The transaction checks capabilities again before acquiring locks.
+The immutable migration, selected catalog and history contracts are unchanged.
+It contains no schedule, provider, credential or activation operation.
+
+Cron is read before and after DDL, and rows visible to the transaction's writer
+remain included in the observed data digest. Visible independent cron edits cause rollback when seen by an
+in-transaction check. **Cron is not frozen:** an independent privileged owner/API
+can change cron after the final observation and before commit, or immediately
+after commit. Such a change does not have to abort the observer transaction.
+Readback can therefore find exact committed observer history alongside drift in
+the notification worker's schedule, active flag or command hash. That is an unconfirmed outcome requiring reconciliation, never a reason
+to resubmit the migration. Do not describe matching snapshots as exclusion of
+all concurrent external schedule edits.
+The complete visible cron-row digest is transaction-local, not persisted into
+post-commit readback. Unrelated cron edits or other fields outside the selected
+worker schedule readback may therefore be absent from post-commit diagnostics.
+
+The application locks serialize canonical notification worker configuration and
+disable operations at their worker-config write, preventing their config/cron
+mutation while this transaction holds the lock. Configure can inspect Vault and
+create a missing token before reaching that write: the application lock does
+**not** exclude all earlier side effects of another actor's configure call.
+Tests use an existing, explicitly synthetic clone token and roll back the
+competing calls. Independent cron-owner edits bypass this application lock.
+
+This narrower guarantee is not equivalent to cron immutability. ACCESS SHARE,
+advisory locks and SERIALIZABLE do not restore the excluded guarantee: independent
+writers need not cooperate, and a one-way serializable dependency can commit.
+Review and fresh approval must explicitly accept the concurrent external cron
+edit risk. No production grant, role change, cron disable or provider operation
+is part of this procedure.
+
 Immediately before applying, obtain fresh read-only history, selected catalog,
 control, worker, cron, and data observations. Drift or a partial target blocks
-the operation. The wrapper locks its guarded tables with bounded timeouts and
+the operation. The wrapper locks its explicit 26 application/control/history
+relations with bounded timeouts and
 rechecks inside the transaction. DDL, exact version/name/single-statement-array
 history insertion, and postchecks commit together or roll back together.
 
@@ -60,6 +107,10 @@ An already-applied exact target is reconciled read-only. A lost or failed write
 response is followed by exact readback, never automatic resubmission. An
 unconfirmed result is not success and is not permission to retry: independently
 reconcile target history/body, catalog, old history, controls, and data first.
+Write and reconciliation failures retain only finite allowlisted diagnostic codes
+in `writeFailureCode` and `readbackFailureCode`. Arbitrary error messages, SQL,
+HTTP bodies and credentials are never included. A classified error does not by
+itself establish whether a transaction committed.
 
 No Edge upload, provider call, credential/config change, cashout activation,
 backfill, synthetic notification, mobile build, or OTA is included. Do not stop
@@ -92,6 +143,13 @@ of the local Supabase CLI database, never a production target. It is wired into
 the required Database CI job. It uses real PostgreSQL locks held by a synthetic
 worker-table transaction; this is not proof of execution by the scheduled
 activity worker. Local WASM checks do not substitute for that native CI result.
+The native fixture models the managed cron owner and SELECT-only deployment role
+without granting it cron write privileges. It tests success under that actual
+capability boundary, canonical worker configuration/disable contention, rollback
+when an independent cron edit is visible, and a deterministic after-final-check
+edit that can commit alongside the observer. The last test proves the documented
+limitation rather than claiming to prevent it. Read-only already-applied
+reconciliation remains possible without application strong-lock capability.
 
 Operational proof remains separate: an authentically qualified sandbox provider
 flow, the selected account's current login and bound phone registration, the
