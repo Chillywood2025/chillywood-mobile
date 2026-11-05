@@ -21,6 +21,7 @@ test('synthetic live-era replay proves exact dormant transaction, schema/ACL dri
   path.basename(MIGRATION),path.basename(TIP_MIGRATION),path.basename(INGRESS_MIGRATION),
   '20261102093836_creator_clip_export_bounded_pool.sql','20261102094308_creator_clip_scale_lifecycle_ledger.sql',
   '20261104120922_google_refund_tax_history_checkpoints.sql',
+  '20261105010859_sandbox_cashout_status_notifications.sql', // Keep this later observer out of the original deployment checkpoint.
  ]});t.after(()=>db.close());
  await db.exec(`create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);
   insert into supabase_migrations.schema_migrations select (20000000000000+i)::text,'synthetic_predecessor_'||i,array['select 1;'] from generate_series(1,582) i;

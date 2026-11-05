@@ -73,6 +73,7 @@ test('uncertain write is reconciled without retry or new provider operation',asy
 
 test('live-era then exact tip: native-only atomic transaction, rollback, grants and immutable history',{timeout:300000},async t=>{
   const excluded=[path.basename(MIGRATION),path.basename(TIP_MIGRATION),'20261102093836_creator_clip_export_bounded_pool.sql','20261102094308_creator_clip_scale_lifecycle_ledger.sql','20261102194000_sandbox_creator_cashout_execution.sql'];
+  excluded.push('20261105010859_sandbox_cashout_status_notifications.sql'); // Depends on the intentionally absent sandbox execution.
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:excluded});t.after(()=>db.close());
   await db.exec(`create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);
     insert into supabase_migrations.schema_migrations values('20261101215711','synthetic_fixture_predecessor',array['select 1;']);

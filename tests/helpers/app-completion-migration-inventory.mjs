@@ -17,6 +17,7 @@ export const appCompletionStudioDependentAddedFunctionIdentities = new Map([
   ...liveDiscoveryAddedFunctionIdentities,
 ]);
 export const appCompletionFiles = Object.freeze([
+  '20261105010859_sandbox_cashout_status_notifications.sql',
   '20261104120922_google_refund_tax_history_checkpoints.sql',
   // Depends on the October catalog/subscription and tip fee implementations;
   // historical commerce checkpoints exclude this successor with this bundle.
@@ -78,6 +79,10 @@ export const appCompletionFiles = Object.freeze([
 ].sort());
 
 export const appCompletionAddedFunctionIdentities = new Map([
+  ['private.sandbox_cashout_notification_state/1','private.sandbox_cashout_notification_state(text)'],
+  ['private.enqueue_sandbox_cashout_notification/0','private.enqueue_sandbox_cashout_notification()'],
+  ['private.resolve_account_notification_before_sandbox_cashout/1','private.resolve_account_notification_before_sandbox_cashout(notification_activity_events)'],
+  ['public.reserve_notification_activity_push_before_sandbox_cashout/3','reserve_notification_activity_push_before_sandbox_cashout(uuid,uuid,uuid)'],
   ['private.lock_google_refund_tax_history_context/1','private.lock_google_refund_tax_history_context(uuid)'],
   ['public.begin_google_refund_tax_history/2','begin_google_refund_tax_history(uuid,text)'],
   ['public.save_google_refund_tax_history/5','save_google_refund_tax_history(uuid,uuid,uuid,jsonb,jsonb)'],

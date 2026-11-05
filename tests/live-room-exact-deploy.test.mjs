@@ -110,6 +110,7 @@ test('committed exact HEAD and immutable Git inputs are required; dirty/untracke
 
 test('real nine bodies atomically roll back failures, preserve exact history, and verify final closure',{timeout:300000},async t=>{
   const excluded=[...bundle.migrations.map(x=>x.path.split('/').at(-1)),'20261102093836_creator_clip_export_bounded_pool.sql','20261102094308_creator_clip_scale_lifecycle_ledger.sql','20261102194000_sandbox_creator_cashout_execution.sql'];
+  excluded.push('20261105010859_sandbox_cashout_status_notifications.sql'); // Depends on the intentionally absent sandbox execution.
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,excludeMigrations:excluded});t.after(()=>db.close());
   // Synthetic local configuration aligns the approved live hold contract. No
   // provider network, real users, secrets, or production fixtures are accessed.

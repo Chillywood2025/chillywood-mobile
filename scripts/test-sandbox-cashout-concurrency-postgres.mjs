@@ -34,6 +34,7 @@ try{
  assert.match(success(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker').trim(),/^(unix|npipe):\/\//u);
  assert.ok(success(docker(['ps','--filter','label=com.supabase.cli.project','--format','{{.Names}}']),'CLI discovery').trim().split('\n').includes(container));
  assert.equal(query("select exists(select 1 from supabase_migrations.schema_migrations where version='20261102194000');",'postgres'),'t');
+ assert.equal(query("select exists(select 1 from supabase_migrations.schema_migrations where version='20261105010859');",'postgres'),'t','reset must include sandbox cashout notifications');
  success(docker(['exec',container,'createdb','-U','postgres','-T','template0',database]),'create owned clone');cloned=true;
  query('create schema vault;create extension supabase_vault with schema vault;');
  const dump=admin(['pg_dump','-U','supabase_admin','--exclude-extension=pg_cron','--exclude-extension=supabase_vault','--exclude-extension=pg_graphql','--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
@@ -130,6 +131,18 @@ try{
   assert.equal(query(`select count(*) from public.platform_money_kill_switches where key in ('live_money_enabled','payouts_enabled','cashout_enabled') and state='off';`),'3');
   assert.equal(query(`select count(*) from private.sandbox_cashout_allocations a join public.money_access_ledger_events m on m.id=a.money_ledger_id where m.currency<>'usd' or m.environment<>'sandbox';`),'0');
   assert.equal(query(`select count(*) from public.money_access_ledger_events where creator_id=${lit(a.creator)} and environment='sandbox' and payable_state='payable';`),'0');
+  // Every winning phase transaction emits exactly one current milestone;
+  // rolled-back attempts and repeated dispatch/observation cannot duplicate it.
+  assert.equal(query(`select count(*) from private.sandbox_cashout_executions x where creator_id=${lit(a.creator)} and
+   (select count(*) from public.notification_activity_events n where n.event_kind='sandbox_cashout_status_updated'
+    and n.source_id=x.id::text and n.recipient_user_id=x.creator_id
+    and n.context->>'state'=private.sandbox_cashout_notification_state(x.phase))<>1;`),'0','one current cashout notification per committed execution');
+  assert.equal(query(`select count(*) from (select n.source_id,n.context->>'state' from public.notification_activity_events n
+   where n.event_kind='sandbox_cashout_status_updated' and n.recipient_user_id=${lit(a.creator)}
+   group by n.source_id,n.context->>'state' having count(*)>1) duplicates;`),'0','concurrent cashout notification deduplication');
+  assert.equal(query(`select count(*) from public.notification_activity_events n join private.sandbox_cashout_executions x on n.source_id=x.id::text
+   where x.creator_id=${lit(a.creator)} and x.phase='prepared' and n.event_kind='sandbox_cashout_status_updated'
+   and n.context->>'state'='processing';`),'0','rolled-back dispatch cannot leave a processing notification');
  }
  function funded(a){
   const id=run(a,'authenticated',request(a)).requestId;
@@ -254,6 +267,8 @@ try{
   const proof={kind:'reversal',objectId:'trr_'+randomUUID().replaceAll('-',''),transferId:a.transfer,amountMinor:8991,accountId:a.accountId,environment:'test'};
   const returned=await race(auth('service_role',a)+observe(id,proof),auth('service_role',a)+observe(id,proof));passed(returned.waited);
   assert.equal(phase(id),'returned');
+  assert.equal(query(`select count(*) from public.notification_activity_events where event_kind='sandbox_cashout_status_updated'
+   and source_id=${lit(id)} and context->>'state'='returned';`),'1','concurrent terminal observations emit one returned notification');
   assert.equal(query(`select count(*)||':'||sum(released_minor)||':'||sum(retained_fixture_cost_minor) from private.sandbox_cashout_simulated_return_accounting where execution_id=${lit(id)};`),'2:9175:25');
   assert.equal(run(a,'authenticated',`select public.preview_sandbox_creator_cashout(9275,'instant');`).availableMinor,9274);
   const late=docker(args(),`begin;${auth('service_role',a)}${observe(id,{...payout,status:'pending'})}commit;`);
