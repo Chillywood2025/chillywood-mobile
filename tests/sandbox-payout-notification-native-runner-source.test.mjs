@@ -21,6 +21,15 @@ test('native exact observer proof is clone-only and exercises rollback and real 
   'lock timeout','const fresh=read()','buildApplySql(bundle,fresh)',
   'statements:[bundle.body]','already_applied_verified'])assert.ok(source.includes(marker),marker);
  for(const marker of ['nativeDriftCases(before)','fixture must change the intended baseline','read-only preflight must reject drift','expected rejection, not successful apply','CHECK native drift rejection:'])assert.ok(source.includes(marker),marker);
+ for(const marker of ['create schema cron authorization supabase_admin','grant select on cron.job to postgres',
+  'assert.equal(before.cronReadCapability,true)','assert.equal(before.writeCapabilities.length,26)',
+  'fixture must reproduce platform-owned SELECT-only cron without changing cluster roles',
+  'public.configure_notification_activity_worker','public.disable_notification_activity_worker',
+  'synthetic-native-observer-fixture-only','canonical config operation did not block on deployment',
+  'independent cron edit before postcheck','independent cron edit after final observation',
+  'late independent cron edit does not prevent observer commit','classifyState(bundle,lateState)',
+  'independent cron edits are not serialized'])assert.ok(source.includes(marker),marker);
+ assert.ok(!source.includes('grant update on cron.job'),'SELECT-only cron must suffice; never widen fixture write grants');
  assert.ok(source.includes('eventHookDriftSql(sql)'));
  assert.equal((source.match(/start\(notificationLockHolderSQL\)/gu)??[]).length,2);
  assert.ok(!source.includes('.replace('),'all runner injections must use the literal callback helper');

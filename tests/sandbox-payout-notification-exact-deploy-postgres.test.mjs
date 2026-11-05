@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
-import {nativeDriftCases,eventHookDriftSql,notificationLockHolderSQL} from './helpers/payout-wrapper-native-drift-fixture.mjs';
+import {nativeDriftCases,eventHookDriftSql,notificationLockHolderSQL,observerBarrierSql} from './helpers/payout-wrapper-native-drift-fixture.mjs';
 import {loadBundle, readbackSql, classifyState, buildApplySql, deploy, MANIFEST, MIGRATION, VERSION, NAME}
   from '../scripts/sandbox-payout-notification-exact-deploy.mjs';
 
@@ -87,6 +87,15 @@ test('disposable full-schema exact observer deployment preserves history, contro
   assert.equal(Object.values(held.at(-1).rows[0])[0],'HOLDING');
   await db.exec('rollback');
   assert.equal(classifyState(bundle,await read()),'ready');
+  // Execute each exact native barrier composition with no competing holder.
+  // This proves SQL syntax and placement; native CI supplies the real races.
+  assert.ok(sql.endsWith('commit;'));
+  const rollbackSql=sql.slice(0,-'commit;'.length)+'rollback;';
+  for(const [anchor,options] of [['preserved_data:=',{}],['insert into supabase_migrations.schema_migrations',{}],["notify pgrst,'reload schema';",{outsideDo:true}]]) {
+    await db.exec(observerBarrierSql(rollbackSql,anchor,options));
+    assert.equal(classifyState(bundle,await read()),'ready');
+    assert.deepEqual((await db.query('select * from supabase_migrations.schema_migrations order by version')).rows,priorHistory);
+  }
   // Force a failure after the exact DDL has executed, before its ledger insert.
   const midFailure = sql.replace('insert into supabase_migrations.schema_migrations',
     "raise exception 'synthetic_mid_apply_failure'; insert into supabase_migrations.schema_migrations");

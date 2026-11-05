@@ -15,6 +15,7 @@ export const HASH='032e549b053e368eef177e23579cd2f6a6db6bce34a908b68ba6ac82b4edb
 export const MIGRATION=`supabase/migrations/${VERSION}_${NAME}.sql`;
 export const TOOL='scripts/sandbox-payout-notification-exact-deploy.mjs';
 export const MANIFEST='scripts/sandbox-payout-notification-deployment-manifest.json';
+export const EXECUTION_CONTRACT=Object.freeze({applicationAndHistoryLocks:26,cron:'observed_not_locked',independentCronEditsExcluded:false,freshDeploymentApprovalRequired:true});
 const CONTRACT='scripts/sandbox-payout-notification-contract';
 export const CLOSURE=Object.freeze([TOOL,MANIFEST,MIGRATION,`${CONTRACT}/catalog.sql`,`${CONTRACT}/readiness.sql`,`${CONTRACT}/before.json`,`${CONTRACT}/after.json`,'scripts/live-room-exact-deploy.mjs','scripts/studio-rolling-deploy.mjs']);
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -64,7 +65,19 @@ export function loadBundle(root=ROOT,source){
  requireThat(beforeCatalog.functions.length===92&&afterCatalog.functions.length===96&&isDeepStrictEqual(beforeCatalog.tables,afterCatalog.tables),'MANIFEST_INVALID');
  return {manifest,body,beforeCatalog,afterCatalog,catalogQuery:read(`${CONTRACT}/catalog.sql`).trim().replace(/;$/u,''),readinessQuery:read(`${CONTRACT}/readiness.sql`).replace(/^begin transaction read only;\s*set local search_path=pg_catalog,public;\s*/u,'').replace(/;\s*rollback;\s*$/u,''),statementsSha256:sha256(JSON.stringify([body]))};
 }
-export function readbackSql(bundle){return `set local search_path=pg_catalog,public;select r.state||jsonb_build_object('context',${contextSQL},'catalog',c.contracts,'invariantsSha256',${invariantsSQL},'hooksSha256',${hooksSQL}) state from (${bundle.readinessQuery}) r cross join (${bundle.catalogQuery}) c;`;}
+export const lockTables=bundle=>[...guardedTables(bundle).filter(t=>t!=='cron.job'),'supabase_migrations.schema_migrations'].sort();
+// PostgreSQL 17/18 accepts MAINTAIN or table UPDATE/DELETE/TRUNCATE for
+// SHARE ROW EXCLUSIVE. SELECT alone cannot acquire this lock. Inspect the
+// intended writer's privileges while retaining the read-only management role.
+export const writeCapabilitiesSQL=bundle=>`(select jsonb_agg(jsonb_build_object('table',name,'canLock',coalesce(has_schema_privilege('postgres',split_part(name,'.',1),'USAGE') and has_table_privilege('postgres',to_regclass(name),'UPDATE,DELETE,TRUNCATE,MAINTAIN'),false)) order by name collate "C") from (values ${lockTables(bundle).map(t=>`(${literal(t)})`).join(',')}) targets(name))`;
+export const cronReadCapabilitySQL=`coalesce(has_schema_privilege('postgres','cron','USAGE') and has_table_privilege('postgres',to_regclass('cron.job'),'SELECT'),false)`;
+export function readbackSql(bundle){return `set local search_path=pg_catalog,public;select r.state||jsonb_build_object('context',${contextSQL},'catalog',c.contracts,'invariantsSha256',${invariantsSQL},'hooksSha256',${hooksSQL},'writeCapabilities',${writeCapabilitiesSQL(bundle)},'cronReadCapability',${cronReadCapabilitySQL}) state from (${bundle.readinessQuery}) r cross join (${bundle.catalogQuery}) c;`;}
+export function requireWriteCapabilities(bundle,state){
+ const capabilities=state?.writeCapabilities,expected=lockTables(bundle);
+ requireThat(Array.isArray(capabilities)&&capabilities.length===expected.length&&capabilities.every((c,i)=>c&&Object.keys(c).sort().join(',')==='canLock,table'&&c.table===expected[i]&&typeof c.canLock==='boolean'),'WRITE_CAPABILITY_READBACK_INVALID');
+ requireThat(state.cronReadCapability===true,'CRON_JOB_READ_CAPABILITY_REQUIRED');
+ requireThat(capabilities.every(c=>c.canLock),'WRITE_LOCK_CAPABILITY_REQUIRED');
+}
 const baselineKeys=bundle=>Object.keys(bundle.manifest.baseline);
 export function classifyState(bundle,state){
  validateReadContext(state?.context);
@@ -73,20 +86,24 @@ export function classifyState(bundle,state){
  requireThat(state.hooksSha256===bundle.manifest.baselineHooksSha256,'BASELINE_CONTRACT_MISMATCH');
  requireThat(state.priorHistorySHA256===bundle.manifest.baselineHistory.sha256&&state.historyCount===bundle.manifest.baselineHistory.count+state.observerHistory.length,'HISTORY_INVENTORY_MISMATCH');
  requireThat(baselineKeys(bundle).every(k=>isDeepStrictEqual(state[k],bundle.manifest.baseline[k])),'BASELINE_CONTRACT_MISMATCH');
- if(state.observerHistory.length===0){requireThat(isDeepStrictEqual(state.catalog,bundle.beforeCatalog),'PARTIAL_OR_DIFFERENT_CATALOG');return 'ready';}
+ if(state.observerHistory.length===0){requireThat(isDeepStrictEqual(state.catalog,bundle.beforeCatalog),'PARTIAL_OR_DIFFERENT_CATALOG');requireWriteCapabilities(bundle,state);return 'ready';}
  requireThat(isDeepStrictEqual(state.observerHistory,[{version:VERSION,name:NAME,statementsSHA256:bundle.statementsSha256}]),'PARTIAL_OR_DIFFERENT_HISTORY');
  requireThat(isDeepStrictEqual(state.catalog,bundle.afterCatalog),'FINAL_CATALOG_MISMATCH');return 'applied';
 }
 export function guardedTables(bundle){return [...new Set([...bundle.beforeCatalog.tables.map(t=>t.name),'public.platform_money_kill_switches','private.discovery_invalidation_worker_config','private.creator_clip_export_worker','private.deleted_content_retention_settings','cron.job'])].sort();}
 export function buildApplySql(bundle,before){
  requireThat(classifyState(bundle,before)==='ready','APPLY_REQUIRES_ABSENT_TARGETS');
+ // Cron stays in the observed digest, but is deliberately not locked. This
+ // detects visible drift, not an external edit after the final observation.
  const tables=guardedTables(bundle),data=digest(tables.map(t=>`select jsonb_build_array(${literal(t)},to_jsonb(t)) item from ${t} t`).join(' union all '));
  const common=`s->>'priorHistorySHA256'=${literal(bundle.manifest.baselineHistory.sha256)} and ${baselineKeys(bundle).map(k=>`s->${literal(k)}=${literal(JSON.stringify(bundle.manifest.baseline[k]))}::jsonb`).join(' and ')} and ${invariantsSQL}=${literal(before.invariantsSha256)} and ${hooksSQL}=${literal(bundle.manifest.baselineHooksSha256)}`;
  return `begin;set local search_path=pg_catalog,public;set local standard_conforming_strings=on;set local lock_timeout='5s';set local statement_timeout='45s';set local idle_in_transaction_session_timeout='60s';
  do $payout_observer_apply$ declare s jsonb; preserved_data text; begin
  if current_user<>'postgres' or current_setting('transaction_read_only')<>'off' then raise exception 'observer_write_authority_required';end if;
+ if exists(select 1 from jsonb_array_elements(${writeCapabilitiesSQL(bundle)}) c where (c->>'canLock')::boolean is not true) then raise exception 'observer_write_lock_capability_required';end if;
+ if (${cronReadCapabilitySQL}) is not true then raise exception 'observer_cron_read_capability_required';end if;
  perform pg_advisory_xact_lock(hashtextextended('chillywood-payout-notification-exact-deployment',0));
- lock table ${[...tables,'supabase_migrations.schema_migrations'].sort().join(',')} in share row exclusive mode;
+ lock table ${lockTables(bundle).join(',')} in share row exclusive mode;
  select state into s from (${bundle.readinessQuery}) r;
  if (${common} and (s->>'historyCount')::integer=${bundle.manifest.baselineHistory.count} and s->'observerHistory'='[]'::jsonb and (select contracts from (${bundle.catalogQuery}) c)=${literal(JSON.stringify(bundle.beforeCatalog))}::jsonb) is not true then raise exception 'observer_baseline_changed';end if;
  preserved_data:=${data};
@@ -100,20 +117,20 @@ export async function deploy({bundle,apply=false,query,recheckSource=()=>{}}){
  const before=await query(readbackSql(bundle),true),mode=classifyState(bundle,before);
  if(mode==='applied')return {status:'already_applied_verified',wrote:false};
  if(!apply)return {status:'plan_ready',wrote:false};
- recheckSource();let responseConfirmed=false;
- try{await query(buildApplySql(bundle,before),false);responseConfirmed=true;}catch{/* Unknown outcome: read once; never resubmit. */}
- try{const after=await query(readbackSql(bundle),true);if(classifyState(bundle,after)==='applied'&&after.invariantsSha256===before.invariantsSha256)return {status:'applied_verified',wrote:true,responseConfirmed};}catch{/* No SQL, credentials, payloads or provider errors escape. */}
- return {status:'apply_unconfirmed',wrote:true,responseConfirmed};
+ recheckSource();let responseConfirmed=false;const diagnostics={};
+ try{await query(buildApplySql(bundle,before),false);responseConfirmed=true;}catch(e){diagnostics.writeFailureCode=safeError(e);/* Unknown outcome: read once; never resubmit. */}
+ try{const after=await query(readbackSql(bundle),true);if(classifyState(bundle,after)==='applied'&&after.invariantsSha256===before.invariantsSha256)return {status:'applied_verified',wrote:true,responseConfirmed,...diagnostics};}catch(e){diagnostics.readbackFailureCode=safeError(e);/* Only finite allowlisted codes escape. */}
+ return {status:'apply_unconfirmed',wrote:true,responseConfirmed,...diagnostics};
 }
-export const safeError=e=>[...HELPER_ERROR_CODES,'PARTIAL_OR_DIFFERENT_CATALOG'].includes(e?.message)?e.message:'PAYOUT_NOTIFICATION_DEPLOY_BLOCKED';
+export const safeError=e=>[...HELPER_ERROR_CODES,'PARTIAL_OR_DIFFERENT_CATALOG','WRITE_CAPABILITY_READBACK_INVALID','CRON_JOB_READ_CAPABILITY_REQUIRED','WRITE_LOCK_CAPABILITY_REQUIRED'].includes(e?.message)?e.message:'PAYOUT_NOTIFICATION_DEPLOY_BLOCKED';
 async function main(){
  requireThat(fileURLToPath(import.meta.url)===path.join(ROOT,TOOL),'TOOL_NOT_COMMITTED');
  const args=process.argv.slice(2);
- if(args.length===1&&args[0]==='--help'){process.stdout.write('Usage: node scripts/sandbox-payout-notification-exact-deploy.mjs --source FULL_COMMIT_SHA [--check | --apply]\nDefault: offline review packet. --check: read-only live preflight. --apply: separately authorized exact migration only; no retries, provider calls, activation or backfill.\n');return;}
+ if(args.length===1&&args[0]==='--help'){process.stdout.write('Usage: node scripts/sandbox-payout-notification-exact-deploy.mjs --source FULL_COMMIT_SHA [--check | --apply]\nDefault: offline review packet. --check: read-only live preflight. --apply: separately authorized exact migration only; no retries, provider calls, activation or backfill.\nLocks 26 application/history relations. Cron is observed, not frozen; fresh approval of concurrent independent cron-edit risk is required.\n');return;}
  requireThat(args.filter(x=>x==='--source').length===1,'EXACT_SOURCE_REQUIRED');const i=args.indexOf('--source'),source=args[i+1],rest=args.filter((_,j)=>j!==i&&j!==i+1);
  requireThat(rest.length===0||(rest.length===1&&['--check','--apply'].includes(rest[0])),'ARGUMENT_INVALID');
  const binding=sourceBinding(ROOT,source),bundle=loadBundle(ROOT,source);
- const identity={project:PROJECT,...binding,version:VERSION,name:NAME,sha256:HASH};
+ const identity={project:PROJECT,...binding,version:VERSION,name:NAME,sha256:HASH,executionContract:EXECUTION_CONTRACT};
  if(!rest.length){process.stdout.write(JSON.stringify({...identity,status:'offline_review_only',wrote:false,readbackSql:readbackSql(bundle)})+'\n');return;}
  const result=await deploy({bundle,apply:rest[0]==='--apply',query:diagnosticManagementQuery(process.env.SUPABASE_ACCESS_TOKEN),recheckSource:()=>{sourceBinding(ROOT,source);loadBundle(ROOT,source);}});
  process.stdout.write(JSON.stringify({...identity,...result})+'\n');if(result.status==='apply_unconfirmed')process.exitCode=1;
