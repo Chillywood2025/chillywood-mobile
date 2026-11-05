@@ -1,11 +1,13 @@
 # Exact dormant sandbox cashout deployment
 
-The executor is implemented, but its committed production manifest is
-**unqualified**. No production baseline has been inferred from a local fixture or
-the earlier 583-entry snapshot. The CLI cannot apply this migration until a
-separately reviewed source change qualifies that manifest with actual evidence.
-This work does not deploy endpoints, configure credentials, qualify a creator,
-enable sandbox dispatch, or operate a payment provider.
+The committed manifest qualifies the exact disabled schema against the live
+baseline observed on November 4, 2026 at `22:50:39.638Z`, after the ordered tip and
+ingress applications and verified RevenueCat webhook v94. The
+[sanitized evidence](audits/sandbox-cashout-baseline-20261104.json) records the six
+baseline fields, source/tree identities, two identical read-only observations,
+receipt provenance and webhook verification. The sandbox schema was absent at
+that observation; source qualification does not apply it, deploy endpoints,
+configure credentials, qualify a creator, enable dispatch or operate a provider.
 
 ## Fixed scope
 
@@ -35,11 +37,24 @@ the existing narrowly bounded PostgreSQL 17/18 NOT NULL normalization. Column nu
 constraints remain checked. Expected added-schema evidence must compare the
 unchanged migration on native PostgreSQL 17 and PGlite 18; a PGlite-only hash
 must not certify the native deployment. Guarded/source data fingerprints also
-use `C` ordering, so the still-unqualified baseline must be captured fresh with
-this exact tooling. No old baseline or fabricated predecessor receipt is reused.
+use `C` ordering. The committed baseline was captured with this exact tooling;
+any requalification requires a fresh observation. No old baseline or fabricated
+predecessor receipt is reused.
 Nested policy-role array ordering is unchanged; the added schema has no policies.
 
-## Complete the evidence before qualification
+## Evidence and requalification
+
+The recorded application observations are tip at `16:46:13Z`, then ingress at
+`21:57:48Z`; the webhook was verified at `22:46:45.828Z`. Receipt `appliedAt` values
+retain the original post-response UTC observation times and `timestampMeaning`;
+they are not invented server commit times. Only the successful tip section of the
+older combined receipt is used. Its failed ingress attempt is excluded in favor
+of the later successful ingress receipt.
+
+The six committed fields describe history, existing catalog and guarded settings.
+`sourceDataSha256` is deliberately not committed: each current preflight measures
+the volatile source rows and binds that observation through application and
+readback. A changed committed contract requires this review sequence again:
 
 1. Confirm the actual exact native-tip deployment, followed by the actual exact
    native-ingress deployment, using their existing canonical executors. Retain
@@ -63,8 +78,10 @@ Nested policy-role array ordering is unchanged; the added schema has no policies
 5. Freeze the merged, validated commit and verify current late-sentinel findings
    before executing the named production operation under its action authority.
 
-The local SQL test may construct a synthetic qualified bundle in memory. That
-bundle never updates the production manifest and never qualifies deployed state.
+Refusal tests and the CLI fixture explicitly construct an unqualified manifest;
+the CLI fixture commits it before selecting its source SHA. The local SQL test
+uses an independent unqualified clone before constructing its synthetic qualified
+bundle. These fixtures never update the real manifest or qualify deployed state.
 
 Before application, obtain bounded native PostgreSQL performance evidence
 representative of the current catalog, source-data volume and load. A local
@@ -81,11 +98,11 @@ From a clean checkout containing the reviewed tool and complete helper closure:
 node scripts/sandbox-cashout-exact-deploy.mjs --source FULL_MERGED_COMMIT_SHA
 ```
 
-The default is read-only and returns a concrete prerequisite or unqualified
-status until the evidence is complete. The manifest in this change makes
-`--apply` fail before transport or credential use. After real qualification,
-`plan_ready` still means no write occurred. Existing partial objects or incorrect
-history are never treated as an invitation to repair them automatically.
+The default is read-only. With the qualified manifest it returns `plan_ready`
+only when the current state matches all committed contracts and prerequisites;
+this still means no write occurred. An unqualified manifest's apply command fails
+before transport or credential use. Existing partial objects or incorrect history
+are never treated as an invitation to repair them automatically.
 
 Only with a qualified manifest, current clean exact source, successful preflight
 and action authority may the same command include `--apply`. It sends at most

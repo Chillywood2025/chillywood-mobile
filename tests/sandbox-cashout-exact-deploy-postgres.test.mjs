@@ -1,15 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
-import {loadBundle,readbackSql,seedReadbackSql,classifyState,buildApplySql,deploy,MIGRATION,VERSION,NAME,PROJECT} from '../scripts/sandbox-cashout-exact-deploy.mjs';
+import {loadBundle,readbackSql,seedReadbackSql,classifyState,buildApplySql,deploy,MANIFEST,MIGRATION,VERSION,NAME,PROJECT} from '../scripts/sandbox-cashout-exact-deploy.mjs';
 import {TABLES,FUNCTIONS,TRIGGERS,AUTHENTICATED_FUNCTIONS,SERVICE_FUNCTIONS} from '../scripts/sandbox-cashout-deployment-contract.mjs';
 import {VERSION as TIP_VERSION,NAME as TIP_NAME,HASH as TIP_HASH,MIGRATION as TIP_MIGRATION} from '../scripts/native-tip-exact-deploy.mjs';
 import {VERSION as INGRESS_VERSION,NAME as INGRESS_NAME,HASH as INGRESS_HASH,MIGRATION as INGRESS_MIGRATION} from '../scripts/native-ingress-exact-deploy.mjs';
 
 test('synthetic live-era replay proves exact dormant transaction, schema/ACL drift and rollback',{timeout:300000},async t=>{
- const bundle=loadBundle();
- assert.equal(bundle.manifest.qualification.status,'unqualified','production manifest must remain unqualified');
+ const committedBundle=loadBundle(),committedManifestBytes=fs.readFileSync(MANIFEST,'utf8');
+ t.after(()=>{
+  assert.equal(fs.readFileSync(MANIFEST,'utf8'),committedManifestBytes,'synthetic qualification must not change the real manifest');
+  assert.deepEqual(loadBundle().manifest,committedBundle.manifest);
+ });
+ const bundle=structuredClone(committedBundle);
+ bundle.manifest.qualification={status:'unqualified',reason:'Synthetic negative-test fixture only.',observedAt:null,baseline:null,predecessorReceipts:[]};
+ assert.equal(bundle.manifest.qualification.status,'unqualified');
  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:[
   path.basename(MIGRATION),path.basename(TIP_MIGRATION),path.basename(INGRESS_MIGRATION),
   '20261102093836_creator_clip_export_bounded_pool.sql','20261102094308_creator_clip_scale_lifecycle_ledger.sql',
@@ -138,5 +145,5 @@ test('synthetic live-era replay proves exact dormant transaction, schema/ACL dri
  await db.exec('update private.sandbox_cashout_control set enabled=false');
  await db.query("update supabase_migrations.schema_migrations set statements=array['tampered'] where version=$1",[VERSION]);
  const historyDrift=await read();assert.throws(()=>classifyState(local,historyDrift),/PARTIAL_OR_DIFFERENT_HISTORY/);
- assert.equal(loadBundle().manifest.qualification.status,'unqualified','test qualification must not escape its disposable bundle');
+ assert.deepEqual(loadBundle().manifest,committedBundle.manifest,'test qualification must not escape its disposable bundle');
 });

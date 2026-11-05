@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Exact dormant schema only. The committed production manifest is unqualified.
+// Exact dormant schema only. Apply requires a qualified committed baseline.
 // No credential setup, Edge upload, provider operation, activation or write retry.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -154,7 +154,7 @@ export async function deploy({bundle,apply=false,query,recheckSource=()=>{}}){
 const ERRORS=[...HELPER_ERROR_CODES,'SANDBOX_BASELINE_UNQUALIFIED','ORDERED_PREDECESSOR_RECEIPTS_REQUIRED','PARTIAL_SANDBOX_OBJECTS','DORMANT_SEED_MISMATCH'];
 export const safeError=e=>ERRORS.includes(e?.message)?e.message:'SANDBOX_DEPLOY_BLOCKED';
 async function main(){
- const args=process.argv.slice(2);if(args.length===1&&args[0]==='--help'){process.stdout.write('Usage: node scripts/sandbox-cashout-exact-deploy.mjs --source FULL_COMMIT_SHA [--apply]\nDefault read-only; committed production baseline is unqualified. No baseline override, snapshot qualification, Edge/provider operation, activation or write retry.\n');return;}
+ const args=process.argv.slice(2);if(args.length===1&&args[0]==='--help'){process.stdout.write('Usage: node scripts/sandbox-cashout-exact-deploy.mjs --source FULL_COMMIT_SHA [--apply]\nDefault read-only; apply requires a qualified committed baseline and exact current preflight. No baseline override, snapshot qualification, Edge/provider operation, activation or write retry.\n');return;}
  requireThat(args.filter(x=>x==='--source').length===1,'EXACT_SOURCE_REQUIRED');const i=args.indexOf('--source'),source=args[i+1],rest=args.filter((_,j)=>j!==i&&j!==i+1);requireThat(rest.length===0||(rest.length===1&&rest[0]==='--apply'),'ARGUMENT_INVALID');
  const binding=sourceBinding(ROOT,source),bundle=loadBundle(ROOT,source);if(rest.includes('--apply'))requireQualification(bundle);
  const result=await deploy({bundle,apply:rest.includes('--apply'),query:diagnosticManagementQuery(process.env.SUPABASE_ACCESS_TOKEN),recheckSource:()=>{sourceBinding(ROOT,source);loadBundle(ROOT,source);}});

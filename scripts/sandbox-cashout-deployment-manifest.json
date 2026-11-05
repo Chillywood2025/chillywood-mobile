@@ -7,11 +7,41 @@
     "sha256": "a41152e19ab73a959a514a8495f5b00dc9c4ff50f436fb15e16c908ac2483e46"
   },
   "qualification": {
-    "status": "unqualified",
-    "reason": "Requires ordered actual tip and ingress applied readbacks, fresh complete post-predecessor baseline and independent source review.",
-    "observedAt": null,
-    "baseline": null,
-    "predecessorReceipts": []
+    "status": "qualified",
+    "reason": "Independently reviewed actual ordered predecessor receipts and two identical post-webhook baseline reads; scope is the exact disabled schema only. See docs/audits/sandbox-cashout-baseline-20261104.json.",
+    "observedAt": "2026-11-04T22:50:39.638Z",
+    "baseline": {
+      "historyCount": 585,
+      "historyMaximum": "20261104032615",
+      "originalHistorySha256": "8ef39413e785edf6381b2d52f4c427415a4528e15314e2419c19a4e181ba5310",
+      "predecessorHistorySha256": "da70c6b4e914bc1488b063ec922d3997ca4d2328945e4f657dcee0c045f01c58",
+      "existingCatalogSha256": "c7db6581aab5e30d4ac17ceab634aef67cf01495a48e75446588e72da605a291",
+      "guardedDataSha256": "3312af262ec950a5f9246e0504ca613a3e38383e5202336c92c831a189482c29"
+    },
+    "predecessorReceipts": [
+      {
+        "project": "bmkkhihfbmsnnmcqkoly",
+        "version": "20261104032615",
+        "name": "native_tip_catalog_amount_policy",
+        "migrationSha256": "f18d738818dcc68ab6ff61f737a4755be4dcc4fd02846249c01647c1f5d3fc2b",
+        "status": "applied_verified",
+        "source": "3914c3c1532b1aca1ae865af9eae5e307a5fd6a9",
+        "tree": "14b61f96773ef879fc923d0460895c98a517569f",
+        "appliedAt": "2026-11-04T16:46:13Z",
+        "timestampMeaning": "UTC clock observed after confirmed application; not an independently measured database commit timestamp"
+      },
+      {
+        "project": "bmkkhihfbmsnnmcqkoly",
+        "version": "20261103005000",
+        "name": "native_production_ingress_observations",
+        "migrationSha256": "f18382b2899ed69a3e422538f451f11f1519b53b1ce780d12221cbeb50a48efe",
+        "status": "applied_verified",
+        "source": "c4b3c7f223c1c4cc2ad2e6c85c5c5e9524f3d9ef",
+        "tree": "89ded2d843c3ffe0d99ef54c2faaf035a8ad335d",
+        "appliedAt": "2026-11-04T21:57:48Z",
+        "timestampMeaning": "UTC observation after confirmed apply response; not independently measured server commit timestamp"
+      }
+    ]
   },
   "addedCatalogSha256": "1b9dfdfb5b5b6d7c71ccd0012b284d89990f7faab93a2a1df4b4e588e785165d",
   "edges": [

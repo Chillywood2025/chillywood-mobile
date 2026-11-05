@@ -1,9 +1,10 @@
-import test from 'node:test';
+import test, {after} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync, spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {
   loadBundle, requireQualification, classifyState, buildApplySql, deploy,
   sourceBinding, safeError, readbackSql, seedReadbackSql, CLOSURE,
@@ -17,15 +18,29 @@ import {
 } from '../scripts/native-ingress-exact-deploy.mjs';
 
 const bundle = loadBundle();
+const committedManifestBytes = fs.readFileSync(MANIFEST, 'utf8');
+after(() => {
+  assert.equal(fs.readFileSync(MANIFEST, 'utf8'), committedManifestBytes, 'fixtures must not change the real manifest');
+  assert.deepEqual(loadBundle().manifest, bundle.manifest);
+});
 const context = () => ({
   currentPostgres: false, currentReadOnly: true, sessionPostgres: false,
   sessionReadOnly: true, sessionAdmin: false, transactionReadOnly: true,
 });
 const hash = character => character.repeat(64);
 
-// These fabricated contracts are exclusively transport fixtures. The committed
-// manifest remains unqualified; neither the CLI nor a production snapshot can
-// install these values or turn them into actual deployment evidence.
+// Refusal tests explicitly remove qualification from an independent bundle.
+// Neither fixture can modify the committed, evidence-qualified manifest.
+function unqualifiedBundle() {
+  const local = structuredClone(bundle);
+  local.manifest.qualification = {
+    status: 'unqualified', reason: 'Synthetic negative-test fixture only.',
+    observedAt: null, baseline: null, predecessorReceipts: [],
+  };
+  return local;
+}
+
+// These fabricated qualified contracts are exclusively transport fixtures.
 function qualifiedBundle() {
   const local = structuredClone(bundle);
   local.manifest.addedCatalogSha256 = hash('d');
@@ -70,7 +85,7 @@ const applied = () => ({
 });
 const dormant = () => ({context: context(), dormantSeed: true});
 
-function sourceFixture(t) {
+function sourceFixture(t, {unqualified = false} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sandbox-exact-source-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
   const git = (...args) => execFileSync('git', args, {cwd: dir, encoding: 'utf8', stdio: 'pipe'}).trim();
@@ -82,12 +97,41 @@ function sourceFixture(t) {
     fs.mkdirSync(path.dirname(path.join(dir, file)), {recursive: true});
     fs.copyFileSync(file, path.join(dir, file));
   }
+  if (unqualified) fs.writeFileSync(path.join(dir, MANIFEST), JSON.stringify(unqualifiedBundle().manifest, null, 2) + '\n');
   git('add', '.');
   git('commit', '-m', 'synthetic source closure');
   return {dir, git, source: git('rev-parse', 'HEAD')};
 }
 
-test('production manifest remains unqualified and apply cannot send a write', async () => {
+test('committed dormant baseline matches reviewed evidence and plans without writing', async () => {
+  const evidence = JSON.parse(fs.readFileSync('docs/audits/sandbox-cashout-baseline-20261104.json', 'utf8'));
+  const qualification = bundle.manifest.qualification;
+  assert.equal(qualification.status, 'qualified');
+  assert.deepEqual(requireQualification(bundle), evidence.baseline);
+  assert.deepEqual(qualification.predecessorReceipts, evidence.predecessorReceipts);
+  assert.equal(qualification.observedAt, evidence.observedAt);
+  assert.equal(createHash('sha256').update(readbackSql(bundle)).digest('hex'), evidence.baselineArtifact.querySha256);
+  assert.deepEqual(Object.keys(qualification.baseline).sort(), [
+    'historyCount', 'historyMaximum', 'originalHistorySha256', 'predecessorHistorySha256', 'existingCatalogSha256', 'guardedDataSha256',
+  ].sort());
+  assert.equal(evidence.baselineReads.identicalStates, true);
+  assert.ok(Date.parse(evidence.webhook.observedAt) > Date.parse(qualification.predecessorReceipts[1].appliedAt));
+  assert.ok(Date.parse(qualification.observedAt) > Date.parse(evidence.webhook.observedAt));
+  const reads = evidence.baselineReads;
+  const state = {...ready(), ...evidence.baseline, context: reads.context, tip: reads.tip,
+    ingress: reads.ingress, controls: reads.controls, addedAbsent: reads.addedAbsent,
+    addedInventory: reads.addedInventory, targets: reads.targets};
+  const calls = [];
+  const plan = await deploy({bundle, query: async (sql, readOnly) => {calls.push({sql, readOnly}); return state;}});
+  assert.equal(plan.status, 'plan_ready');
+  assert.equal(plan.wrote, false);
+  assert.deepEqual(calls, [{sql: readbackSql(bundle), readOnly: true}]);
+  // Source-data observations remain fresh per attempt, never a committed baseline.
+  for (const digest of [hash('e'), hash('f')]) assert.ok(buildApplySql(bundle, {...state, sourceDataSha256: digest}).includes(`='${digest}'`));
+});
+
+test('explicit unqualified fixture cannot send an apply write', async () => {
+  const bundle = unqualifiedBundle();
   assert.equal(bundle.manifest.qualification.status, 'unqualified');
   assert.equal(bundle.manifest.qualification.baseline, null);
   assert.deepEqual(bundle.manifest.qualification.predecessorReceipts, []);
@@ -109,6 +153,7 @@ test('production manifest remains unqualified and apply cannot send a write', as
 });
 
 test('default operation reports exact prerequisites without qualification or writes', async () => {
+  const bundle = unqualifiedBundle();
   for (const [state, expected] of [
     [beforeTip(), 'blocked_until_exact_tip_deployment'],
     [afterTip(), 'blocked_until_exact_native_ingress_deployment'],
@@ -288,7 +333,8 @@ test('source closure rejects changed, missing and uncommitted files without acce
 });
 
 test('CLI has no caller qualification or baseline override and unqualified apply cannot contact transport', t => {
-  const {dir, source} = sourceFixture(t);
+  const {dir, source} = sourceFixture(t, {unqualified: true});
+  assert.equal(loadBundle(dir, source).manifest.qualification.status, 'unqualified', 'negative fixture must be committed before its source SHA is selected');
   fs.symlinkSync(path.resolve('node_modules'), path.join(dir, 'node_modules'), 'dir');
   const guard = path.join(dir, 'deny-network.mjs');
   fs.writeFileSync(guard, "globalThis.fetch=async()=>{process.stderr.write('NETWORK_CALLED');throw Error('network-call-forbidden');};\n");
