@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "baselineInvariantsSha256": "4c31fd7d48fe53159d5d3ecb9d170bc066d303da1a4a2482e40bf3ca117ca995",
+  "baselineHooksSha256": "f8f4bc5c1170a81bc8c3a982afe4daa20251f5c56cc1dab4f1a31e36a16aaf15",
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "migration": {
+    "version": "20261105010859",
+    "name": "sandbox_cashout_status_notifications",
+    "path": "supabase/migrations/20261105010859_sandbox_cashout_status_notifications.sql",
+    "sha256": "032e549b053e368eef177e23579cd2f6a6db6bce34a908b68ba6ac82b4edb0dc",
+    "statementsSHA256": "02743b665e88ca76c4a0927c40a5e0ef7dd7530c7b837a4c1b49d799c9e9ff8a"
+  },
+  "baselineHistory": {
+    "count": 586,
+    "sha256": "f50756dbebc7d524e019607aa6ac59912fb619778275e1c9486f14200cea3af5"
+  },
+  "baseline": {
+    "ledgerRulesAbsent": true,
+    "discovery": {
+      "enabled": true,
+      "collecting": true,
+      "primaryDeliveryEnabled": true
+    },
+    "moneySwitches": {
+      "tips_enabled": "sandbox_only",
+      "merch_enabled": "sandbox_only",
+      "cashout_enabled": "off",
+      "payouts_enabled": "off",
+      "live_money_enabled": "off",
+      "ads_revenue_enabled": "off",
+      "money_center_visible": "on",
+      "paid_content_enabled": "sandbox_only",
+      "sponsorships_enabled": "off",
+      "digital_sales_enabled": "sandbox_only",
+      "stripe_connect_enabled": "sandbox_only",
+      "creator_balance_visible": "on",
+      "provider_webhooks_enabled": "sandbox_only",
+      "watch_party_seats_enabled": "sandbox_only",
+      "tax_kyc_collection_enabled": "sandbox_only",
+      "watch_party_tickets_enabled": "sandbox_only",
+      "creator_monetization_enabled": "sandbox_only",
+      "revenuecat_app_store_enabled": "sandbox_only",
+      "live_watch_party_seats_enabled": "sandbox_only",
+      "revenuecat_google_play_enabled": "sandbox_only",
+      "creator_revenue_imports_enabled": "off",
+      "live_watch_party_access_enabled": "sandbox_only"
+    },
+    "workerEnabled": true,
+    "observerEvents": 0,
+    "sandboxEnabled": false,
+    "workerSchedule": [
+      {
+        "active": true,
+        "schedule": "10 seconds",
+        "commandSHA256": "5613ff410c82dedb75e20b139d709d7abc5c3a89f80249b3aa76809cbb427c26"
+      }
+    ],
+    "observerPushRows": 0,
+    "observerInAppRows": 0,
+    "sandboxExecutions": 0,
+    "sandboxPredecessor": {
+      "name": "sandbox_creator_cashout_execution",
+      "version": "20261102194000",
+      "statementsSHA256": "04cbf919a146b91f6c31e0e8bb227c0da1aca711e0c86af78d11dcbba07b6217"
+    },
+    "workerConfigSHA256": "e54605be6fe77e3eaf12132e4bbd5cf874350f9f3fdda0d51945ce9874ca0293",
+    "sandboxQualifications": 0
+  },
+  "evidence": {
+    "invariantsObservedAt": "2026-11-05T02:28:25Z",
+    "hooksObservedAt": "2026-11-05T02:32:00Z",
+    "ledgerShape": "version text NOT NULL PRIMARY KEY; statements text[]; name text; created_by text; idempotency_key text UNIQUE; rollback text[]. No defaults, identity/generated columns or noninternal triggers. Bound by the catalog digest.",
+    "observedAt": "2026-11-05T02:18:32.604564+00:00",
+    "productSource": "02ef935b36de181b087d7f770dcc91a802816dc5",
+    "selectedParity": "92 functions, 20/21 source table contracts; measured anon SELECT on notification_preferences is preserved, not repaired. No total-schema parity claim."
+  }
+}
