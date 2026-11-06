@@ -9,6 +9,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {commerceSeedAdapter} from '../tests/helpers/automatic-commerce-fixture.mjs';
 import {seedCurrentEventCommerceCreator} from '../tests/helpers/current-event-commerce-fixture.mjs';
+import {runTipCommerceGateRaces} from './lib/tip-commerce-gate-races.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset. Only generated local clone is written; no remote URLs accepted.');process.exit(0);
@@ -152,12 +153,15 @@ try{
   const denied=docker(args(),call(who,invalid.sql,invalid.role));
   assert.notEqual(denied.status,0);assert.match(denied.stderr,/tip_buyer_authority_required/);
   verify(who,action,null,tip,'stripe_connect');
+  const gateChecks=await runTipCommerceGateRaces({query,session,until,lit,actors});
+  assert.equal(gateChecks,16);
   assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants,'tip attempts never remove or modify any exact inherited grant row');
   assert.ok(query(accessGrantsSnapshotSql)===raceAccessGrants,'tip attempts never add, remove or modify access grants');
   assert.equal(query("select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors where kind like 'buyer%')"),
     '0','Free tip buyers never gain content access from attempts');
   assert.equal(checks,9);
   console.log('Tip actions: 9 observed native PostgreSQL advisory-lock races plus invalid-session rejection; synthetic providers only.');
+  console.log('Tip entry gates: 16 additional observed canonical gate schedules, including retired receipts and both transaction outcomes.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');}
