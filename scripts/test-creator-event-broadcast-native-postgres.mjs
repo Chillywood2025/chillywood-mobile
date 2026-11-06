@@ -3,6 +3,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {execFileSync,spawn} from 'node:child_process';
+import {commerceSeedAdapter} from '../tests/helpers/automatic-commerce-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../tests/helpers/current-event-commerce-fixture.mjs';
 
 const container=process.argv.find(arg=>arg.startsWith('--container='))?.slice(12);
 const database=process.argv.find(arg=>arg.startsWith('--database='))?.slice(11);
@@ -18,6 +20,7 @@ const parallel=input=>new Promise((resolve,reject)=>{
 });
 if(!process.argv.includes('--prepared')) {
   sql(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+  await seedCurrentEventCommerceCreator(commerceSeedAdapter(sql),{premium:false});
   sql(fs.readFileSync('tests/fixtures/event-broadcast-producer-authority.sql','utf8'));
 }
 assert.equal(Number(sql('select count(*) from event_reservation_fixture.broadcast_assertions')),33);

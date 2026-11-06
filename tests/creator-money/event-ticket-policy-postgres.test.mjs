@@ -4,15 +4,17 @@ import test from 'node:test';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {client} from './event-ticket-policy-fixture.mjs';
+import {seedQualifiedCommerceCreator} from '../helpers/automatic-commerce-fixture.mjs';
 
 test('approved ticket schedule policy runs through real purchase, revisions, choices, notices and history', {timeout:600_000}, async t=>{
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});
+  const {db,replayReport}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   let checks=0;
   const check=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const actors=Object.fromEntries((await db.query('select kind,user_id,session_id from event_reservation_fixture.actors')).rows.map(a=>[a.kind,a]));
+    await seedQualifiedCommerceCreator(db,{id:actors.creator.user_id,session:actors.creator.session_id});
     const events=Object.fromEntries((await db.query('select name,id from event_reservation_fixture.events')).rows.map(e=>[e.name,e.id]));
     const as=async(actor,query,params=[])=>{
       await db.exec('begin');

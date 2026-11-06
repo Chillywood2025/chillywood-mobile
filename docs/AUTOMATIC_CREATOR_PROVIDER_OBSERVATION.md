@@ -15,7 +15,10 @@ created by these migrations. Enabling the queue is a separate operational act.
 
 One claim per minute processes at most five Premium creators in the current
 money mode. Persistent due ordering and skip-locked leases avoid preference for
-new accounts. Five jobs run concurrently, with at most twenty GET requests per
+new accounts. Expired-lease maintenance also skips locked job rows and handles
+at most 25 rows per invocation. The control/rate-limit row and authority table
+locks still serialize work; this is not a claim that the whole call cannot wait.
+Five jobs run concurrently, with at most twenty GET requests per
 invocation, response size limits and timeouts. Healthy observations are due
 again after five minutes. Two-minute leases require exact tokens. Failures and
 expired unknown writes back off for 1, 2, 4, 8, then 10 minutes. Unknown database
@@ -42,6 +45,14 @@ not_connected; live observation does not fill all legacy readiness fields.
 Absent qualified tax/sanctions evidence and active payout terms, strict
 eligibility therefore remains pending. Do not turn fixtures into qualification
 or claim that a successful observer enables creator money.
+
+Test and live accounts prove their own mode-specific readiness through their
+immutable account binding and matching observation. The older shared creator
+eligibility record keeps its live-account pointer after a live account exists;
+that pointer does not choose the account for sandbox access. Its false readiness
+flags and fraud/admin holds still block both modes. Existing data cannot safely
+distinguish a provider-derived false flag from an explicit operator restriction,
+so switching modes never clears or ignores one.
 
 ## Account deletion and private retention
 

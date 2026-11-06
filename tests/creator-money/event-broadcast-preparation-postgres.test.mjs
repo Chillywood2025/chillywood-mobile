@@ -4,7 +4,7 @@ import test from 'node:test';
 import { createDatabase } from '../helpers/database-runtime-authority-fixture.mjs';
 
 test('event broadcast preparation executes full production SQL with exact host, Premium and nonplayable source binding', {timeout:240_000}, async t => {
-  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   let step='fixture',checks=0;
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(a,b,message)=>{assert.deepEqual(a,b,message);checks++;};

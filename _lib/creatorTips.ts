@@ -56,6 +56,7 @@ export type CreatorTipSettings = {
 
 export type CreatorTipPublicStatus = {
   canTip: boolean;
+  nativeSandboxAvailable: boolean;
   status: CreatorTipStatus | "unknown";
   reason: string;
   creatorId: string | null;
@@ -199,6 +200,7 @@ const toTipSettings = (row: Record<string, unknown>): CreatorTipSettings => ({
 
 const unavailablePublicTipStatus = (reason: string): CreatorTipPublicStatus => ({
   canTip: false,
+  nativeSandboxAvailable: false,
   status: "unknown",
   reason,
   creatorId: null,
@@ -245,10 +247,7 @@ export const normalizePublicTipStatus = (
     : typeof row.defaultAmountCents === "number" && Number.isSafeInteger(row.defaultAmountCents)
       ? row.defaultAmountCents
       : 0;
-  const exactReady = row.canTip === true
-    && row.reason === "ready"
-    && row.status === "active"
-    && CREATOR_TIP_UUID_PATTERN.test(expectedCreatorId)
+  const exactSubject = CREATOR_TIP_UUID_PATTERN.test(expectedCreatorId)
     && creatorId === expectedCreatorId
     && row.currency === "usd"
     && minAmountCents >= 100
@@ -260,11 +259,19 @@ export const normalizePublicTipStatus = (
     && row.providerEnvironment === "test"
     && row.testMode === true
     && row.liveMoneyEnabled === false;
+  const exactReady = row.canTip === true && row.reason === "ready" && row.status === "active" && exactSubject;
+  const nativePlatforms = row.nativeSandboxPlatforms && typeof row.nativeSandboxPlatforms === "object"
+    && !Array.isArray(row.nativeSandboxPlatforms) ? row.nativeSandboxPlatforms as Record<string, unknown> : {};
+  const nativeSandboxAvailable = exactSubject && row.nativeSandboxAvailable === true
+    && row.nativeSandboxEnvironment === "sandbox" && row.nativeFinancialAuthority === false
+    && (row.status === "active" || row.status === "setup_incomplete")
+    && (Platform.OS === "ios" || Platform.OS === "android") && nativePlatforms[Platform.OS] === true;
   if (row.canTip === true && !exactReady) {
     return unavailablePublicTipStatus("malformed_tip_authority");
   }
   return {
     canTip: exactReady,
+    nativeSandboxAvailable,
     status: (toText(row.status) || "unknown") as CreatorTipPublicStatus["status"],
     reason: toText(row.reason) || "tips_unavailable",
     creatorId: CREATOR_TIP_UUID_PATTERN.test(creatorId) && creatorId === expectedCreatorId ? creatorId : null,

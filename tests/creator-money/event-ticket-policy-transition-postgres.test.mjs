@@ -2,20 +2,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 const migration='20261027085819_creator_event_ticket_schedule_policy.sql';
 const dependentMigration='20261027094021_creator_event_replay_deadline_remedy.sql';
 const lockOrderMigration='20261028214433_creator_replay_observation_lock_order.sql';
 const commitOrderMigration='20261029044327_creator_replay_observation_commit_order.sql';
 test('policy migration preserves real pre-policy delivered, unknown and explicit remedy history', {timeout:600_000}, async t=>{
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,dependentMigration,lockOrderMigration,commitOrderMigration]});
+  const {db,replayReport}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,dependentMigration,lockOrderMigration,commitOrderMigration]});
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+    await seedCurrentEventCommerceCreator(db,{premium:false});
     await db.exec(fs.readFileSync('tests/fixtures/event-broadcast-producer-authority.sql','utf8'));
     const shared=fs.readFileSync('tests/fixtures/event-ticket-delivery-policy.sql','utf8');
     const marker='-- Delivery scenario assertions begin.';
     assert.equal(shared.split(marker).length,2,'shared setup boundary must remain unambiguous');
     await db.exec(shared.split(marker)[0]);
+    await seedCurrentEventCommerceCreator(db,{premium:false,kind:'delivery_creator'});
     await db.exec(fs.readFileSync('tests/fixtures/event-ticket-policy-transition-before.sql','utf8'));
     await db.exec(fs.readFileSync(`supabase/migrations/${migration}`,'utf8'));
     await db.exec(fs.readFileSync(`supabase/migrations/${dependentMigration}`,'utf8'));

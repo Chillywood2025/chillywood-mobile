@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {commerceSeedAdapter,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../tests/helpers/automatic-commerce-fixture.mjs';
 
 if(process.argv.includes('--help')) {
   console.log('Run after local Supabase reset: node scripts/test-event-auction-concurrency-postgres.mjs. SUPABASE_DB_CONTAINER may name a local supabase_db_* CLI container. Only generated disposable clone is written.');
@@ -51,6 +52,9 @@ try {
   query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
   query("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+  query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
+  await seedQualifiedCommerceCreator(commerceSeedAdapter(query),actors.creator,{providerAccountId:'acct_fixture'});
+  await assertBuyerHasNoPremium(commerceSeedAdapter(query),actors.buyer1);
   const events=JSON.parse(query('select jsonb_object_agg(name,id) from event_reservation_fixture.events'));
   const claims=(who,role='authenticated')=>`set local role ${role};set local request.jwt.claims=${literal(JSON.stringify({role,sub:actors[who].id,session_id:actors[who].session}))};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const call=(who,sql,role)=>`begin;${claims(who,role)}select ${sql};commit;`;
@@ -58,7 +62,6 @@ try {
   const configure=name=>rpc('creator',`public.configure_paid_creator_event_sale('${events[name]}','One virtual ticket',99,1,'sandbox','UTC',now()-interval '1 hour',now()+interval '1 day')`);
   const create=(name,o)=>`public.create_creator_event_auction('${events[name]}','${o.termsRevisionId}',100,25,now()+interval '1 hour',now()+interval '2 hours','test')`;
   const offer=configure('show1');const auction=rpc('creator',create('show1',offer));
-  query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
   const cap=query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,platform,storefront,storefront_country,route_kind,currency,
     environment,payment_method,min_amount_minor,max_amount_minor,provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)
     values('event_auction','${actors.creator.id}','acct_fixture','ios','UNITED_STATES','US','external_browser_checkout','usd','test','card',50,100000,

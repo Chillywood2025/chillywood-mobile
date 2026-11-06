@@ -5,6 +5,20 @@ import test from 'node:test';
 import {webcrypto} from 'node:crypto';
 import ts from 'typescript';
 
+test('merch admission errors explain current mode without requiring tester grants or buyer Premium', async () => {
+ for (const [message, expected] of [
+  ['sandbox_tester_required', /Ordinary buyers do not need a tester grant/],
+  ['merch_mode_unavailable', /unavailable in the current payment mode/],
+  ['merch_creator_not_ready', /not ready to accept orders in the current payment mode/],
+ ]) {
+  const h = harness({ reply: { checkoutCreated: false, message } });
+  await assert.rejects(h.api.launchMerchCheckout({ productId: 'product', quantity: 1, attemptId: 'attempt' }), error => {
+   assert.match(error.message, expected); assert.doesNotMatch(error.message, /approved sandbox testers|Premium required|accept sandbox orders/); return true;
+  });
+  assert.equal(h.opened.length, 0);
+ }
+});
+
 test('known fee metadata remains nonfinal and fails closed for unsafe amounts or unsupported policy',()=>{
  const h=harness();
  const known={policyVersion:'known_costs_future_unpaid_adjustments_v1',knownFeeMinor:36,knownCreatorShareMinor:778,

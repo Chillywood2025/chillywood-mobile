@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "source": "f77cd8c2aebfbfc6a9b6986c14e5fc4887548a52",
+  "scope": "Test-only original dormant sandbox deployment closure; no current source or deployment qualification.",
+  "files": [
+    {
+      "path": "scripts/sandbox-cashout-exact-deploy.mjs",
+      "sha256": "63a452740086e58478d0c873b6b58a145306a503579e703c883acc6595e5e64c"
+    },
+    {
+      "path": "scripts/sandbox-cashout-deployment-manifest.json",
+      "sha256": "bbeeed1e15177639fa087f2305576101aa98e243281fc13b3bd707a44222ec95"
+    },
+    {
+      "path": "supabase/migrations/20261102194000_sandbox_creator_cashout_execution.sql",
+      "sha256": "a41152e19ab73a959a514a8495f5b00dc9c4ff50f436fb15e16c908ac2483e46"
+    },
+    {
+      "path": "scripts/sandbox-cashout-deployment-contract.mjs",
+      "sha256": "a818c89414fb128b7c010174bb5c16a2eaecaf6013b24337298f0d1cd08cbe65"
+    },
+    {
+      "path": "ops/creator-backend-rollout/prepare-edge.mjs",
+      "sha256": "1f7b5ae8c5a79c16eee5653be76853c5651cb146039ff250fd0b9ede24c6695a"
+    },
+    {
+      "path": "package.json",
+      "sha256": "5f93a815d0d52eb587ea90231ddcd2511e2e79c55f619a5d61336bcf59727792"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "223cd834339b10a095a96b57ec22aa1d237ab892bf1006f6698913ee86373ece"
+    },
+    {
+      "path": "scripts/native-ingress-exact-deploy.mjs",
+      "sha256": "e0022e8b24c5aec454090cf3e27b4e2d65509f3e88f0ca66cff9f0533857b97c"
+    },
+    {
+      "path": "scripts/native-ingress-deployment-manifest.json",
+      "sha256": "3603e6c4e26e1b0cef9126b0bd0f737fd17ab1e694970e6ab5a2a689180a68cd"
+    },
+    {
+      "path": "supabase/migrations/20261103005000_native_production_ingress_observations.sql",
+      "sha256": "f18382b2899ed69a3e422538f451f11f1519b53b1ce780d12221cbeb50a48efe"
+    },
+    {
+      "path": "scripts/native-tip-exact-deploy.mjs",
+      "sha256": "0a3811bc00187f5fc627fca9a750160cf8351be6c2ebd2c66d556923d81eadf8"
+    },
+    {
+      "path": "scripts/native-tip-deployment-manifest.json",
+      "sha256": "2d8bfb60f57464ac36d1178bfa6be427e0b309ecc7fb348fd5143b0674b94db7"
+    },
+    {
+      "path": "supabase/migrations/20261104032615_native_tip_catalog_amount_policy.sql",
+      "sha256": "f18d738818dcc68ab6ff61f737a4755be4dcc4fd02846249c01647c1f5d3fc2b"
+    },
+    {
+      "path": "scripts/live-room-exact-deploy.mjs",
+      "sha256": "b5cfaa7d99ac0a60b36e096ccff47f8c4121a602a6a4ca19c838e8dfa8032f83"
+    },
+    {
+      "path": "scripts/studio-rolling-deploy.mjs",
+      "sha256": "69a0adcd07fed3be612013b08dc7366ae68e307be921b590a7578ea932015eba"
+    },
+    {
+      "path": "supabase/functions/revenuecat-webhook/index.ts",
+      "sha256": "b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935"
+    },
+    {
+      "path": "supabase/functions/revenuecat-webhook/store-policy.mjs",
+      "sha256": "45b282c4b88b76551158c6fb7f03bbe7bd6c60f85a2766b6ece71755fea487e4"
+    },
+    {
+      "path": "supabase/functions/_shared/provider-readiness.ts",
+      "sha256": "54ab9950029568afaf071b33daa1d93d001f96721c2545c3d1fbde3b88f40c5f"
+    },
+    {
+      "path": "supabase/functions/_shared/notification-payload.mjs",
+      "sha256": "6e8ccc4d1fb59ddc62af421af38ae786b1f0b0f4e525637bcca16e3dd74e8eeb"
+    },
+    {
+      "path": "supabase/functions/_shared/expo-push-receipts.ts",
+      "sha256": "20ba1d704bfc1d02ff591ea1c4917f0bb834d37518c0a9c4d38db11fb6fb5be6"
+    },
+    {
+      "path": "supabase/functions/_shared/expo-push-receipt-policy.mjs",
+      "sha256": "28a5ec1060af8e0339ebf279d55f83699e306175a08682234f52dda1c89ca341"
+    },
+    {
+      "path": "supabase/functions/_shared/notification-display-labels.ts",
+      "sha256": "78efba5706811729385a4d2e606d9adb1a8b89458bdb1c3808042d8b5b03085e"
+    },
+    {
+      "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+      "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3",
+      "snapshot": "creator-cashout-execution.ts.txt"
+    },
+    {
+      "path": "supabase/functions/_shared/exact-subject-authority.ts",
+      "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+    },
+    {
+      "path": "supabase/functions/_shared/stripe-connect.ts",
+      "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551",
+      "snapshot": "stripe-connect.ts.txt"
+    },
+    {
+      "path": "supabase/functions/sandbox-creator-cashout/index.ts",
+      "sha256": "e995c77216de0aaefd041ffacabc7742bf3349a71e78066d8cd9a65e9aa65007"
+    },
+    {
+      "path": "supabase/functions/sandbox-creator-cashout-webhook/index.ts",
+      "sha256": "a15a72b6c33f7af20c0548c3119d281569b1ac4f2ba0fd9e906636a6f933138a"
+    }
+  ]
+}

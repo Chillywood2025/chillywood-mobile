@@ -59,6 +59,6 @@ test('creator first live publication requires exact reviewed revision, current m
  const nativeQuery=async sql=>{const results=await db.exec(sql);const row=results.at(-1)?.rows?.[0];return row?String(Object.values(row)[0]):'';};
  const nativeAuth=()=>`set local request.jwt.claims='${JSON.stringify({role:'authenticated',sub:actors.creator.user_id,session_id:actors.creator.session_id})}';set local role authenticated;`;
  await runMerchPublicationRaces({query:nativeQuery,actors:{creator:{id:actors.creator.user_id,session:actors.creator.session_id}},lit:v=>`'${String(v).replaceAll("'","''")}'`,auth:nativeAuth,
- race:async(_name,first,second,expected)=>{await nativeQuery(`begin;${first}commit;`);await assert.rejects(nativeQuery(`begin;${second}commit;`),expected.error);await db.exec('rollback');}});
+ race:async(_name,first,second,expected)=>{await nativeQuery(`begin;${first}${expected.afterBlocked??''}commit;`);await assert.rejects(nativeQuery(`begin;${second}commit;`),expected.error);await db.exec('rollback');}});
  for(const role of ['anon','service_role'])assert.equal(await one("select has_function_privilege($1,'public.confirm_creator_merch_live_publication(uuid)','execute')",[role]),false);
 }));

@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('exact event playback uses actual purchase, original terms, current session and protected source SQL', {timeout:240_000}, async t=>{
   const replayPolicyMigration='20261027085833_creator_event_explicit_replay_terms.sql';
   // This fixture intentionally purchases the historical window that began
   // during the live show, then verifies that the forward policy preserves it.
-  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[replayPolicyMigration]});
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[replayPolicyMigration]});
   let step='fixture';let checks=0;
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(actual,expected,message)=>{assert.deepEqual(actual,expected,message);checks++;};
@@ -17,6 +18,7 @@ test('exact event playback uses actual purchase, original terms, current session
   const isolate=async(fn)=>{await db.exec('begin');try{await fn();}finally{await db.exec('rollback');}};
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const host=actors.find(a=>a.kind==='creator'),buyer=actors.find(a=>a.kind==='buyer16'),other=actors.find(a=>a.kind==='buyer17');
     const event=await one("select id from event_reservation_fixture.events where name='show16'");

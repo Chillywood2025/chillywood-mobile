@@ -245,6 +245,14 @@ export async function runCreatorCashout(requestId: string, store: CashoutStore, 
   const settings = await call(`/v1/accounts/${c.accountId}`, null);
   if (settings.id !== c.accountId || settings.settings?.payouts?.schedule?.interval !== "manual"
     || settings.country !== "US" || settings.default_currency !== "usd") fail("manual_payout_schedule_required");
+  // Explicit provider denial overrides an otherwise active V2 capability.
+  // Live money additionally requires affirmative, current payout readiness.
+  // Omitted test-only fields retain isolated qualification; neither mode may
+  // bypass the checks above or the exact durable claim below.
+  if (settings.payouts_enabled === false
+    || (typeof settings.requirements?.disabled_reason === "string" && settings.requirements.disabled_reason.length > 0))
+    fail("account_payouts_disabled");
+  if (c.environment === "live" && settings.payouts_enabled !== true) fail("account_payouts_unqualified");
   const destination = await call(`/v1/accounts/${c.accountId}/external_accounts/${c.destinationId}`, null);
   if (destination.id !== c.destinationId || destination.account !== c.accountId || destination.currency !== "usd"
     || destination.country !== "US" || !Array.isArray(destination.available_payout_methods)

@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {commerceSeedAdapter,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../tests/helpers/automatic-commerce-fixture.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset. Writes only a generated local clone. No remote URLs or provider calls.');process.exit(0);
@@ -52,6 +53,8 @@ try{
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore owned clone');
   query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+  await seedQualifiedCommerceCreator(commerceSeedAdapter(query),actors.creator);
+  await assertBuyerHasNoPremium(commerceSeedAdapter(query),actors.buyer1);
   const auth=(who='creator',role='authenticated')=>`set local role ${role};set local request.jwt.claims=${json({role,sub:actors[who].id,session_id:actors[who].session}).replace(/::jsonb$/u,'')};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const tx=(sql,role='service_role',who='creator')=>`begin;${auth(who,role)}select ${sql};commit;`;
   const rpc=(sql,role='service_role',who='creator')=>parsed(query(tx(sql,role,who)));

@@ -9,8 +9,11 @@ const declaration = () => ({ version: 'adult-us-creator-v1', declared18Plus: tru
 const row = a => ({ ...a, authoritative: true, declaration: declaration(), accountStatus: 'ACTIVE', moderationState: 'CLEAR' });
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 function client() {
+  const eligibility = { exports: {} };
+  new Function('exports', 'module', ts.transpileModule(fs.readFileSync('_lib/creatorEligibility.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(eligibility.exports, eligibility);
   const state = { authority: owner(), calls: [], result: null, held: null, denied: null, captureHeld: null };
   const mocks = {
+    './creatorEligibility': eligibility.exports,
     './accountSessionAuthority': { getCurrentAccountSessionAuthoritySnapshot: () => state.authority, sameAccountSessionAuthority: same },
     './accountBoundSupabaseMutation': {
       captureAccountBoundSupabaseMutationSubject: async () => { if (state.captureHeld) await state.captureHeld; return { authority: state.authority, accessToken: 'fixture-token' }; },

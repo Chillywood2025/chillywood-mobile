@@ -27,8 +27,10 @@ reviews or churn their authority versions.
 Provider observations are account-bound and fresh. They never supply independent
 tax or sanctions proof. The canonical test account adapter writes tax_status as
 not_connected, and the live observer does not fill all legacy verified fields.
-Independent wave1 tax/sanctions evidence remains separate and mandatory for normal
-creator money authority. Missing payout legal document configuration is a platform
+Independent wave1 tax/sanctions evidence remains separate and mandatory for live
+financial authority. The strict one-argument financial predicate retains its
+verification requirements and also requires current creator Premium. Missing
+payout legal document configuration is a platform
 setup blocker, not a request for individual owner approval. This patch supplies no
 legal documents, tax certifications, sanctions certificates or new authority to
 assert them. A safe deployment requires resolving those global evidence and legal
@@ -37,13 +39,40 @@ sources separately, not changing unknown values to true.
 The dormant observer and its separate operational prerequisites are documented in
 [AUTOMATIC_CREATOR_PROVIDER_OBSERVATION.md](AUTOMATIC_CREATOR_PROVIDER_OBSERVATION.md).
 
+## Separate Sandbox creator capability
+
+The readback reports a separate sandboxCapability with environment sandbox and
+financialAuthority false. Unknown live tax, sanctions, KYC or payout evidence is
+not promoted to verified. The normal eligibility state stays pending and
+canCreateMoneyExposure stays false. The UI accepts Sandbox tool access only from
+the current server readback bound to the exact signed-in account and session.
+
+Only consumers with their own authoritative stored sandbox/test mode use the
+separate capability. It requires current mode-appropriate Premium, account and
+legal authority, adult US declaration/known facts, clear moderation, no explicit
+negative independent evidence, and no fraud/admin hold. Live money, payouts and
+cashout must all be explicitly off. Production-only publication, tax setup and
+financial paths retain their strict guards; global mode alone never relabels a
+production operation as Sandbox.
+
+Store simulations still bind the exact sandbox catalog, provider event, purchase
+intent and original transaction. Their access is sandbox_only and their ledger
+is not_payable. Physical merchandise test checkout selects a test secret and
+rejects live-mode responses. Native App Store/Play test tips need no Connect
+account. Their separate server-native capability never changes external canTip
+or setup status. External Stripe test tipping selects the test Connect account
+even when a separate live account exists, and retains its actual provider
+readiness checks. Missing live-only compliance is not a reason to require an owner grant,
+but a provider-required test capability that is genuinely unavailable still
+blocks that specific flow. Global test feature switches remain authoritative.
+
 ## Isolated test cashout exception
 
 The retained sandbox cashout simulator uses its own test-only provider qualification
 and exclusively sandbox source ledger allocations. It requires Premium creator
 session authority, declared/known adult US eligibility, current legal acceptance,
-clear moderation, and no explicit tax/sanctions disqualification or account/fraud
-hold. Unknown live tax/sanctions evidence does not prevent this isolated test flow.
+clear moderation, and no explicit independent tax/sanctions/provider/KYC/payout disqualification or
+account/fraud hold. Unknown live tax/sanctions evidence does not prevent this isolated test flow.
 It never establishes live compliance or a real payable balance.
 
 Its Edge entrypoint requires a test-mode key and an enabled sandbox execution
@@ -63,10 +92,28 @@ New fraud holds and terminal quarantines need insertion fences as well as row
 locks. Native PostgreSQL tests, not sequential database emulation, must prove
 blocking order and refresh/dispatch races.
 
+The shared dispatch fence takes short-lived table SHARE locks on provider,
+eligibility and observation authority as well as canonical subject fences. This
+also covers a disqualifying row that did not exist when admission began. These
+locks can briefly serialize otherwise unrelated authority updates. Provider
+network requests never run inside the database transaction. Hosted native
+validation must establish the blocking order; the sequential SQL fixtures only
+establish the final authorization results.
+
 Owned positively-undispatched abort and historical cashout status remain usable
 after creator membership expiry. Current actor account/session restrictions still
 apply. Proven reversal and funding-return recovery retain their own independent
 qualification and idempotency checks rather than depending on new-sale switches.
+
+Already-purchased viewer delivery is separate from new-sale admission. Exact
+nonrefunded receipt, source, captured mode and finite access terms still bind.
+Creator Premium expiry, logout, stale payout observations or a later money-mode
+switch do not revoke those paid rights. Current account, moderation, age/market,
+sanctions, legal invalidation and fraud/admin restrictions still deny delivery.
+Retained legal acceptance is checked against current required documents without
+requiring the seller to stay logged in. Host authoring and new checkout keep
+their current Premium and mode requirements. Paid-order shipping/support actions
+likewise retain their exact current actor checks without becoming new sales.
 
 ## Release boundary
 

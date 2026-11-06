@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {harness,buyer,session,product} from '../helpers/merch-checkout-edge-harness.mjs';
 import {runMerchLiveCheckoutRaces} from '../../scripts/lib/merch-live-checkout-races.mjs';
-import {seedQualifiedCommerceCreator,seedSyntheticStrictCreatorProvider} from '../helpers/automatic-commerce-fixture.mjs';
+import {seedQualifiedCommerceCreator} from '../helpers/automatic-commerce-fixture.mjs';
 test('live merchandise exact mode/account/quote chain remains dormant and preserves unknown holds',{timeout:240000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
@@ -28,10 +28,7 @@ test('live merchandise exact mode/account/quote chain remains dormant and preser
   await service();await one(`select public.wave1_evaluate_creator_eligibility($1,'{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR","market":"UNITED_STATES","rolloutEligible":false,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','dispatch-fixture','local_pgtap')`,[host]);
   // Ordinary free buyers require neither beta nor tester membership.
   await root();
-  await seedQualifiedCommerceCreator(db,{id:host,session:hs},{environment:'production'});
-  await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
-  // Authoring starts in sandbox before this fixture explicitly promotes live.
-  await seedQualifiedCommerceCreator(db,{id:host,session:hs},{environment:'sandbox',premium:false});
+  await seedQualifiedCommerceCreator(db,{id:host,session:hs});
   await claim(host,hs);await one('select public.save_creator_merch_product_with_tracking($1,$$Test$$,$$Physical only$$,null,1000,20,$$published$$,null,$$tracked$$)',[product]);
 
   await root();await db.query("update public.merch_products set environment='production',status='active' where id=$1",[product]);
@@ -40,9 +37,20 @@ test('live merchandise exact mode/account/quote chain remains dormant and preser
   await root();
   // Synthetic local qualifications only; nothing is sent to a provider.
   await db.exec("update public.platform_money_kill_switches set state='on' where key in('merch_enabled','live_money_enabled')");
-  await seedSyntheticStrictCreatorProvider(db,{id:host,session:hs},{environment:'production'});
+  await seedQualifiedCommerceCreator(db,{id:host,session:hs},{environment:'production'});
   await db.exec("insert into public.provider_readiness_status(provider,capability,status,environment,is_live_money_enabled,proof_source,proof_summary,last_checked_at) values('stripe','platform_commerce','active','production',true,'synthetic','synthetic',now()) on conflict(provider,capability,environment) do update set status='active',is_live_money_enabled=true,proof_source='synthetic',proof_summary='synthetic',last_checked_at=now()");
   await db.exec("insert into private.merch_live_checkout_qualifications values('acct_fixture',repeat('a',64),repeat('b',64),repeat('c',64),now()+interval '1 hour',null)");
+  await db.exec('begin');
+  try {
+   // One statement, not just one transaction: statement_timestamp() otherwise
+   // advances between queries and would hide the retained stale-clock bug.
+   await db.exec(`do $passive_qualification$ begin
+    update private.merch_live_checkout_qualifications set qualified_until=clock_timestamp()+interval '100 milliseconds' where account_id='acct_fixture';
+    if private.merch_live_checkout_ready() is not true then raise exception 'qualification_not_current_before_sleep';end if;
+    perform pg_sleep(0.15);
+    if private.merch_live_checkout_ready() is not false then raise exception 'qualification_expiry_used_statement_start';end if;
+    end $passive_qualification$;`);
+  }finally{await db.exec('rollback');}
   await db.query(`insert into private.commerce_tax_qualifications(feature,product_id,account_id,environment,permitted_scope,platform_scope,
    full_permitted_scope_reviewed,professional_basis_reference,coverage_evidence_reference,collection_mode,liability_type,tax_code,tax_behavior,
    registration_evidence_reference,provider_settings_evidence_reference,provider_product_evidence_reference,provider_verified_at,provider_expires_at,expires_at,enabled)
@@ -55,7 +63,8 @@ test('live merchandise exact mode/account/quote chain remains dormant and preser
   const actor={p_buyer_id:buyer,p_session_id:session,p_attempt_id:key,p_request:{productId:product,quantity:1,variantId:null,trackingMode:'tracked',unitPriceMinor:1000,currency:'usd'}};
   assert.equal((await rpc('transition_merch_checkout_dispatch',{...actor,p_action:'abort'})).data.aborted,false);
   await root();await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
-  const denied=await rpc('transition_merch_checkout_dispatch',{...actor,p_action:'dispatch'});assert.match(denied.error.message,/unqualified/);
+  const denied=await rpc('transition_merch_checkout_dispatch',{...actor,p_action:'dispatch'});
+  assert.equal(denied.error,null);assert.equal(denied.data.authorized,false);
   // Accepted callbacks continue settling after the sales switch is stopped.
   await root();const policy=await one('select policy_id from private.commerce_tax_checkout_bindings where identity_id=$1',[o.id]);
   const facts={event_livemode:true,object_livemode:true,verified_environment:'production',provider_account_id:'acct_fixture',event_account_id:null,
@@ -84,13 +93,13 @@ test('live merchandise exact mode/account/quote chain remains dormant and preser
   await claim(buyer,session);const orders=await one("select list_my_merch_orders('buyer',null,20,null)");assert.ok(JSON.stringify(orders).includes(o.id));
   // Execute the native runner's exact fixture SQL sequentially to catch schema
   // drift. This is explicitly NOT concurrency proof; hosted PostgreSQL observes
-  // actual independent-backend blocking edges for these same four schedules.
+  // actual independent-backend blocking edges for these same schedules.
   await root();const literal=value=>`'${String(value).replaceAll("'","''")}'`;
   const nativeQuery=async sql=>{await root();const rows=(await db.exec(sql)).at(-1)?.rows;return rows?.length?String(Object.values(rows.at(-1))[0]):'';};
   const nativeAuth=()=>`set local role service_role;set local request.jwt.claim.role='service_role';set local request.jwt.claims=${literal(JSON.stringify({role:'service_role',sub:buyer,session_id:session}))};`;
   const nativeTx=async sql=>{await root();await db.exec('begin');try{const rows=(await db.exec(sql)).at(-1)?.rows;await db.exec('commit');return rows?.length?Object.values(rows.at(-1))[0]:null;}catch(e){await db.exec('rollback');throw e;}};
-  await runMerchLiveCheckoutRaces({query:nativeQuery,auth:nativeAuth,actors:{buyer2:{id:buyer,session},creator:{id:host}},lit:literal,json:x=>literal(JSON.stringify(x))+'::jsonb',
-   race:async(_label,a,b,{error}={})=>{const first=await nativeTx(a);if(error){await assert.rejects(nativeTx(b),error);return{first};}return{first,second:await nativeTx(b)};}});
+  await runMerchLiveCheckoutRaces({query:nativeQuery,auth:nativeAuth,actors:{buyer2:{id:buyer,session},creator:{id:host}},lit:literal,json:x=>literal(JSON.stringify(x))+'::jsonb',sequentialReplay:true,
+   race:async(_label,a,b,{error,afterBlocked=''}={})=>{const first=await nativeTx(a+afterBlocked);if(error){await assert.rejects(nativeTx(b),error);return{first};}return{first,second:await nativeTx(b)};}});
   for(const role of ['anon','authenticated']){await db.exec(`reset role;set role ${role}`);await assert.rejects(one("select bind_merch_checkout_provider($1,'production','acct_fixture')",[o.id]),/permission denied/);}
  }finally{await db.close();}
 });

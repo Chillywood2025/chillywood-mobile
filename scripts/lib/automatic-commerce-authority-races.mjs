@@ -6,7 +6,8 @@ import {commerceSeedAdapter,seedQualifiedCommerceCreator,seedCommerceBuyer} from
 export async function runAutomaticCommerceAuthorityRaces({query,race,lit}) {
  const db=commerceSeedAdapter(query);
  for(const kind of ['seller ban','new covering quarantine','new hold row'])for(const changeFirst of [true,false]) {
-  const creator=await seedQualifiedCommerceCreator(db,undefined,{environment:'production'}),buyer=await seedCommerceBuyer(db);
+  await query("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
+  const creator=await seedQualifiedCommerceCreator(db),buyer=await seedCommerceBuyer(db);
   const product=randomUUID(),attempt=randomUUID();
   const auth=`set local role service_role;set local request.jwt.claims=${lit(JSON.stringify({role:'service_role',sub:buyer.id,session_id:buyer.session}))};`;
   await query(`update public.platform_money_kill_switches set state='sandbox_only' where key='merch_enabled';
@@ -23,7 +24,7 @@ export async function runAutomaticCommerceAuthorityRaces({query,race,lit}) {
   let change;
   if(kind==='seller ban')change=`update auth.users set banned_until=clock_timestamp()+interval '1 day' where id=${lit(creator.id)};`;
   else if(kind==='new covering quarantine')change=`insert into public.revenuecat_terminal_authority_quarantines(provider_scope,environment_scope,user_id,event_type,raw_payload_hash,reason)
-    values('revenuecat_google_play','production',${lit(creator.id)},'REFUND',${lit(createHash('sha256').update(randomUUID()).digest('hex'))},'synthetic_native_fixture');`;
+    values('revenuecat_google_play','sandbox',${lit(creator.id)},'REFUND',${lit(createHash('sha256').update(randomUUID()).digest('hex'))},'synthetic_native_fixture');`;
   else {
    const prior=JSON.parse(await query(`select to_jsonb(e) from public.creator_payout_eligibility_records e where creator_user_id=${lit(creator.id)}`));
    // Remove BEFORE either backend starts: no existing eligibility row can

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator,seedSyntheticStrictCreatorProvider,assertBuyerHasNoPremium} from './helpers/automatic-commerce-fixture.mjs';
 
 test('synthetic verified Stripe auction receipts preserve exact paid access and financial history', {timeout:180000}, async()=>{
   const realDateNow=Date.now; let clockOffset=0;
@@ -13,6 +14,13 @@ test('synthetic verified Stripe auction receipts preserve exact paid access and 
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const rows=async s=>(await db.query(s)).rows;
     const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
+    await seedQualifiedCommerceCreator(db,{id:actors.creator.user_id,session:actors.creator.session_id},{providerAccountId:'acct_fixture'});
+    const membershipRows={
+      'public.access_grants':(await rows("select id from public.access_grants where grant_type='premium'")).map(row=>row.id),
+      'public.money_access_ledger_events':(await rows("select l.id from public.money_access_ledger_events l join public.monetization_products p on p.id=l.product_id where p.product_type='premium_subscription'")).map(row=>row.id),
+    };
+    for(const actor of Object.values(actors).filter(a=>a.kind.startsWith('buyer')))
+      await assertBuyerHasNoPremium(db,{id:actor.user_id});
     const events=Object.fromEntries((await rows('select * from event_reservation_fixture.events')).map(a=>[a.name,a.id]));
     const lit=x=>`'${String(x).replaceAll("'","''")}'`;
     const rpc=async(actor,expression,role='authenticated')=>{
@@ -58,7 +66,7 @@ test('synthetic verified Stripe auction receipts preserve exact paid access and 
       amountMinor:237,currency:'usd',outcome:'paid',refundedAmountMinor:null,providerProductId:'prod_AuctionFixture',...extra});
     const receive=(e,hash=createHash('sha256').update(JSON.stringify(e)).digest('hex'))=>rpc('buyer1',
       `public.process_stripe_event_auction_receipt(${lit(JSON.stringify(e))}::jsonb,'${hash}')`,'service_role');
-    const count=async(table,where='true')=>Number((await rows(`select count(*) n from ${table} where ${where}`))[0].n);
+    const count=async(table,where='true')=>Number((await rows(`select count(*) n from ${table} where (${where})${membershipRows[table]?.length?` and id not in (${membershipRows[table].map(lit).join(',')})`:''}`))[0].n);
     const s=await prepare('show1');
     await assert.rejects(()=>db.exec(`update public.monetization_products set provider_product_id='wrong' where id='${product}'`),/bound_auction_product_identity_immutable/);
     assert.equal(await count('public.access_grants'),0,'winner and checkout claim are not paid access');
@@ -176,6 +184,10 @@ test('synthetic verified Stripe auction receipts preserve exact paid access and 
     clockOffset=61*60*1000;Date.now=()=>realDateNow()+clockOffset;
     const after=Number((await rows('select extract(epoch from clock_timestamp())*1000 as n'))[0].n);
     assert.ok(after-before>=clockOffset,'PGlite clock_timestamp actually advances with the isolated JS clock');
+    // Keep independent provider readiness current while isolating late-ticket
+    // inventory behavior. This is synthetic observation, not real verification.
+    const refreshCreator=()=>seedSyntheticStrictCreatorProvider(db,{id:actors.creator.user_id},{providerAccountId:'acct_fixture'});
+    await refreshCreator();
     assert.equal((await rpc('buyer7','public.wave1_session_authority_readback()')).state,'ACTIVE','fixture session survives real authority checks after clock advance');
     assert.equal((await receive(evidence(lateCase,'LateButAvailable'))).status,'fulfilled','D1 late exact award reclaims its own still-available seat');
     assert.equal(Number((await rows(`select public.event_ticket_inventory_internal('${events.show7}') n`))[0].n),1,'late fulfillment never double-counts reservation and auction hold');
@@ -186,6 +198,7 @@ test('synthetic verified Stripe auction receipts preserve exact paid access and 
       'sandbox','active',now()-interval '1 minute',now()+interval '1 day',now(),999,'usd',repeat('a',64),'NORMAL',
       'google_play','android',null,'${premium.id}','auction-host-original')`,'service_role')).status,'processed');
     clockOffset=121*60*1000;
+    await refreshCreator();
     const broadcast=await rpc('creator',`public.prepare_creator_event_broadcast('${events.show6}')`);
     await db.exec(`insert into private.creator_event_broadcast_approvals(creator_id,creator_event_id,rights_status,max_minutes,expires_at,
       private_origin,approved_by,approved_session_id) values('${actors.creator.user_id}','${events.show6}','creator_owned',120,
@@ -211,6 +224,7 @@ test('synthetic verified Stripe auction receipts preserve exact paid access and 
     assert.equal(live.allowed,true);assert.equal(live.kind,'live');
     assert.equal((await rpc('buyer8',`public.resolve_creator_event_destination('${events.show6}')`)).allowed,false);
     clockOffset=181*60*1000;
+    await refreshCreator();
     await producer('COMPLETE'); await lifecycle('end');
     const destination=await rpc('buyer6',`public.resolve_creator_event_destination('${events.show6}')`);
     assert.equal(destination.allowed,true);assert.equal(destination.kind,'replay','D3 paid award follows original explicit replay contract');

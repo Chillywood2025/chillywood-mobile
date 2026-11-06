@@ -679,6 +679,15 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
   assert.equal(normalizer.normalizePublicTipStatus({ ...exactTipStatus, suggestedAmountsCents: [0] }, CREATOR_ID).canTip, false);
   assert.equal(normalizer.normalizePublicTipStatus({ ...exactTipStatus, maxAmountCents: 50001 }, CREATOR_ID).canTip, false);
   assert.equal(normalizer.normalizePublicTipStatus({ ...exactTipStatus, suggestedAmountsCents: [100, 200, 300, 400, 500, 600, 700] }, CREATOR_ID).canTip, false);
+  const nativeOnly={...exactTipStatus,canTip:false,status:'setup_incomplete',reason:'setup_incomplete',
+    nativeSandboxAvailable:true,nativeSandboxEnvironment:'sandbox',nativeFinancialAuthority:false,
+    nativeSandboxPlatforms:{ios:true,android:true}};
+  assert.equal(normalizer.normalizePublicTipStatus(nativeOnly,CREATOR_ID).nativeSandboxAvailable,true);
+  assert.equal(normalizer.normalizePublicTipStatus(nativeOnly,CREATOR_ID).canTip,false,'native availability does not invent external readiness');
+  for(const change of [{creatorId:SOURCE_ID},{providerEnvironment:'live'},{liveMoneyEnabled:true},{testMode:false},
+    {nativeSandboxEnvironment:'production'},{nativeFinancialAuthority:true},{nativeSandboxPlatforms:{ios:true}},
+    {nativeSandboxAvailable:'true'},{status:'blocked'},{status:'paused'}])
+    assert.equal(normalizer.normalizePublicTipStatus({...nativeOnly,...change},CREATOR_ID).nativeSandboxAvailable,false,JSON.stringify(change));
 
   const loadTipRuntime = ({ requestedUserId = VIEWER_ID, authUserId = VIEWER_ID, intent = {}, subjectStable = true }) => {
     let productReads = 0;
@@ -771,9 +780,10 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
 
   const channelSource = readFileSync("app/channel/[userId].tsx", "utf8");
   assert.doesNotMatch(channelSource, /tipStatus\?\.canTip === true \|\| sandboxTesterActive/u);
-  assert.match(channelSource, /const canRenderTip = viewerPurchaseMode && tipStatus\?\.canTip === true/u);
+  assert.match(channelSource, /const canRenderTip = viewerPurchaseMode && \(tipStatus\?\.canTip === true \|\| tipStatus\?\.nativeSandboxAvailable === true\)/u);
   const tipSheetSource = readFileSync("components/monetization/tip-sheet.tsx", "utf8");
-  assert.match(tipSheetSource, /const canTipInSandbox = tipStatus\?\.canTip === true/u);
+  assert.match(tipSheetSource, /const canTipExternally = tipStatus\?\.canTip === true/u);
+  assert.match(tipSheetSource, /tipStatus\.nativeSandboxAvailable === true/u);
   assert.doesNotMatch(tipSheetSource, /const canTipInSandbox = sandboxTester \|\|/u);
 
   const subscriptionSource = readFileSync("_lib/channelSubscriptions.ts", "utf8");

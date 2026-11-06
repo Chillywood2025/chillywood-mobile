@@ -51,6 +51,7 @@ type TipSheetProps = {
   creatorAvatarUrl?: string | null;
   sourceSurface: string;
   tipStatus: CreatorTipPublicStatus | null;
+  // Retained caller compatibility only; admission never identifies payment mode.
   sandboxTester?: boolean;
   onClose: () => void;
 };
@@ -71,7 +72,6 @@ export function TipSheet({
   creatorAvatarUrl,
   sourceSurface,
   tipStatus,
-  sandboxTester = false,
   onClose,
 }: TipSheetProps) {
   const router = useRouter();
@@ -241,13 +241,24 @@ export function TipSheet({
       && amountCents > 0
     : Number.isInteger(amountCents)
       && amountCents > 0);
-  const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
-  // Tester mode changes copy only. Exact server-normalized creator authority
-  // remains mandatory before any store purchase can be attempted.
-  const canTipInSandbox = tipStatus?.canTip === true && tipStatus.creatorId === creatorId;
+  const selectedStorePrices = supportedPrices.filter(price => price.amountMinor === amountCents
+    && (Platform.OS !== "ios" || price.providerProductId === selectedIosProduct?.productId));
+  // Ordinary purchase admission is not evidence of payment mode. Only show
+  // no-charge copy for this creator's exact selected test quote/catalog route.
+  const showSandboxCopy = tipStatus?.creatorId === creatorId && tipStatus.testMode === true
+    && tipStatus.providerEnvironment === "test" && tipStatus.liveMoneyEnabled === false
+    && (customQuote ? customQuote.environment === "test"
+      : selectedStorePrices.length > 0 && selectedStorePrices.every(price => price.environment === "sandbox"));
+  // Exact server-normalized creator authority remains mandatory before any
+  // store purchase can be attempted, independently of the payment-mode copy.
+  const canTipExternally = tipStatus?.canTip === true && tipStatus.creatorId === creatorId;
+  const canTipWithStore = (Platform.OS === "ios" || Platform.OS === "android")
+    && tipStatus?.creatorId === creatorId
+    && (tipStatus.canTip === true || tipStatus.nativeSandboxAvailable === true);
+  const canTipInSandbox = canTipExternally || canTipWithStore;
 
   const startCustomCheckout = async (selection?: CreatorTipPaymentSelection) => {
-    if (!visibleRef.current || contextRef.current !== contextKey || !user?.id || (!customQuote && !androidCustomCheckout && !selection) || !canTipInSandbox || !checkoutLatchRef.current.tryAcquire()) return;
+    if (!visibleRef.current || contextRef.current !== contextKey || !user?.id || (!customQuote && !androidCustomCheckout && !selection) || !canTipExternally || !checkoutLatchRef.current.tryAcquire()) return;
     const key = contextKey;
     const generation = presentationRef.current.generation;
     const current = () => mountedRef.current && visibleRef.current && contextRef.current === key
@@ -297,7 +308,7 @@ export function TipSheet({
       return;
     }
 
-    if (!canTipInSandbox) {
+    if (!canTipWithStore) {
       setNotice("Tips are unavailable for this creator right now.");
       return;
     }
@@ -440,7 +451,7 @@ export function TipSheet({
               : <Text style={styles.secondaryButtonText}>Your tip: {formatMonetizationCurrency(amountCents, "usd")} USD. Your app store and the server must verify eligibility and payment limits before checkout opens. Your amount will not be changed.</Text>}
             <TouchableOpacity testID="tip-custom-stripe-checkout" accessibilityRole="button"
               accessibilityLabel={`Continue with Stripe test checkout for ${formatMonetizationCurrency(amountCents, "usd")}`}
-              disabled={busy || !canTipInSandbox} accessibilityState={{ disabled: busy || !canTipInSandbox, busy }}
+              disabled={busy || !canTipExternally} accessibilityState={{ disabled: busy || !canTipExternally, busy }}
               style={styles.secondaryButton} onPress={() => { void startCustomCheckout(); }}>
               <Text style={styles.secondaryButtonText}>Continue with Stripe test checkout · {formatMonetizationCurrency(amountCents, "usd")}</Text>
             </TouchableOpacity>
@@ -508,13 +519,13 @@ export function TipSheet({
 
           <TouchableOpacity
             activeOpacity={0.88}
-            disabled={busy || !amountValid || !canTipInSandbox}
-            style={[styles.primaryButton, (busy || !amountValid || !canTipInSandbox) && styles.primaryButtonDisabled]}
+            disabled={busy || !amountValid || !canTipWithStore}
+            style={[styles.primaryButton, (busy || !amountValid || !canTipWithStore) && styles.primaryButtonDisabled]}
             onPress={() => { void startCheckout(); }}
             testID="tip-confirm-button"
             accessibilityRole="button"
             accessibilityLabel={`Tip ${creatorName || "creator"} ${formatMonetizationCurrency(amountCents, tipStatus?.currency ?? "usd")}. This supports the creator and does not unlock access.`}
-            accessibilityState={{ disabled: busy || !amountValid || !canTipInSandbox, busy }}
+            accessibilityState={{ disabled: busy || !amountValid || !canTipWithStore, busy }}
           >
             <ChillywoodPrimaryActionFill radius={14} />
             {busy ? (

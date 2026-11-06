@@ -2387,10 +2387,10 @@ export function ChannelStudioScreen() {
     try {
       await refreshSandboxTesterExperience();
       setSandboxSetupState("complete");
-      setSandboxSetupNotice("Sandbox tester status refreshed. Live money and payouts remain off.");
+      setSandboxSetupNotice("Sandbox setup status refreshed. This check does not enable live money or payouts.");
     } catch {
       setSandboxSetupState("failed");
-      setSandboxSetupNotice("Sandbox tester status could not be refreshed right now.");
+      setSandboxSetupNotice("Sandbox setup status could not be refreshed right now.");
     } finally {
       setSandboxSetupBusy(false);
     }
@@ -2473,7 +2473,7 @@ export function ChannelStudioScreen() {
     setSandboxSetupNotice(
       blockers.length
         ? `Sandbox setup is partially ready: ${completed.length} flow${completed.length === 1 ? "" : "s"} ready. ${blockers.slice(0, 2).join(" ")} Live money: Off. Payouts: Off.`
-        : "Sandbox tester offers are ready. Test mode only. No real charges, creator earnings, payouts, withdrawals, or cash-out.",
+        : "Sandbox offers are ready. Test mode only. No real charges, creator earnings, payouts, withdrawals, or cash-out.",
     );
         })(),
         new Promise<never>((_, reject) => {
@@ -8321,7 +8321,7 @@ export function ChannelStudioScreen() {
         value: providerStatusLabel(tipsProviderReadiness, tipFeatureStatus === "Setup mode" ? "Setup mode" : "Setup needed"),
         body: summarizeProviderReadiness(
           tipsProviderReadiness,
-          `${storeProviderName} tester tips use ${storeProviderPair} sandbox. Stripe is reserved for physical merch and payout readiness.`,
+          `${storeProviderName} test tips use ${storeProviderPair} sandbox. Stripe is reserved for physical merch and payout readiness.`,
         ),
         tone: getProviderReadinessTone(tipsProviderReadiness),
       },
@@ -8574,7 +8574,7 @@ export function ChannelStudioScreen() {
         configured: tipSetupSaved,
         blocker: tipSetupSaved ? undefined : "Tips are not enabled yet.",
         description: tipSetupSaved
-          ? "Testers can send a sandbox tip. No money moves."
+          ? "Eligible buyers can send a sandbox tip. No money moves."
           : "Run setup to turn on the sandbox tip flow.",
         scopeKey: "creator_tip",
         statusLabel: tipSetupSaved ? "Ready" : "Needs setup",
@@ -8590,9 +8590,9 @@ export function ChannelStudioScreen() {
           ? undefined
           : latestPublicSandboxVideo
             ? "Run setup to attach a sandbox paid-video offer."
-            : "Publish a creator video before testers can unlock paid video.",
+            : "Publish a creator video before buyers can unlock paid video.",
         description: hasPaidVideoOffer
-          ? "Testers can unlock one public creator video in sandbox mode."
+          ? "Eligible buyers can unlock one public creator video in sandbox mode."
           : latestPublicSandboxVideo
             ? "A public video exists. Run setup to attach a sandbox unlock."
             : "Paid video needs a public safe creator video first.",
@@ -8614,9 +8614,9 @@ export function ChannelStudioScreen() {
         configured: hasPaidWatchPartyOffer,
         blocker: hasPaidWatchPartyOffer
           ? undefined
-          : "Create a Party Room before testers can get a Party Room Pass.",
+          : "Create a Party Room before buyers can get a Party Room Pass.",
         description: hasPaidWatchPartyOffer
-          ? "Testers can get a sandbox Party Room Pass for one exact Party Room."
+          ? "Eligible buyers can get a sandbox Party Room Pass for one exact Party Room."
           : "Party Room Pass needs a Party Room target.",
         scopeKey: "watch_party_ticket",
         statusLabel: hasPaidWatchPartyOffer ? "Ready" : "Blocked",
@@ -8637,7 +8637,7 @@ export function ChannelStudioScreen() {
           ? undefined
           : "Create a creator event first, or run setup to create the sandbox event demo.",
         description: hasPaidEventOffer
-          ? "Testers can get a sandbox Event Pass."
+          ? "Eligible buyers can get a sandbox Event Pass."
           : "Event Pass needs a creator event and sandbox offer.",
         scopeKey: "event_pass",
         statusLabel: hasPaidEventOffer ? "Ready" : "Needs setup",
@@ -8653,7 +8653,7 @@ export function ChannelStudioScreen() {
         configured: hasChannelSubscriptionOffer,
         blocker: hasChannelSubscriptionOffer ? undefined : "No sandbox subscription offer.",
         description: hasChannelSubscriptionOffer
-          ? "Testers can subscribe to this creator's Platform in sandbox mode. This is not Chi'llywood Premium."
+          ? "Eligible buyers can subscribe to this creator's Platform in sandbox mode. This is not Chi'llywood Premium."
           : "Run setup to create the sandbox Platform Subscription.",
         scopeKey: "channel_subscription",
         statusLabel: hasChannelSubscriptionOffer ? "Ready" : "Needs setup",
@@ -8667,7 +8667,7 @@ export function ChannelStudioScreen() {
         configured: hasVipPassOffer,
         blocker: hasVipPassOffer ? undefined : "No sandbox VIP offer.",
         description: hasVipPassOffer
-          ? "Testers can get creator-specific VIP in sandbox mode. It does not unlock Premium or other creators."
+          ? "Eligible buyers can get creator-specific VIP in sandbox mode. It does not unlock Premium or other creators."
           : "Run setup to create the sandbox VIP pass.",
         scopeKey: "vip_pass",
         statusLabel: hasVipPassOffer ? "Ready" : "Needs setup",
@@ -8705,19 +8705,19 @@ export function ChannelStudioScreen() {
         body: `${sandboxConfiguredCount} of ${sandboxTesterOfferCards.length} flows ready.`,
       },
       {
-        label: "Grant tester",
-        status: sandboxTesterRows.length > 0 ? "Done" : "Needs action",
-        body: sandboxTesterRows.length > 0 ? `Active testers: ${sandboxTesterRows.length}` : "No active testers.",
+        label: "Check buyer eligibility",
+        status: sandboxTesterActive ? "Done" : "Needs action",
+        body: "Use a current signed-in account. Ordinary buyers can remain Free; no tester grant is needed.",
       },
       {
         label: "Test flows",
-        status: sandboxConfiguredCount === sandboxTesterOfferCards.length && sandboxTesterRows.length > 0 ? "Ready" : "Not started",
-        body: "Use a non-owner tester account on the Play-installed app.",
+        status: sandboxConfiguredCount === sandboxTesterOfferCards.length && sandboxTesterActive ? "Ready" : "Not started",
+        body: "Use an ordinary non-owner account on the store-installed app.",
       },
       {
-        label: "Revoke tester",
+        label: "Verify safety boundaries",
         status: "Not started",
-        body: "After proof, revoke the tester and confirm sandbox CTAs disappear.",
+        body: "Confirm real payments and payouts stay off. Internal tester grants do not control ordinary purchase eligibility.",
       },
     ] as const;
     const scopeForFeatureKey = (key: MonetizationFeatureKey): MoneyScopeKey => {
@@ -9419,7 +9419,7 @@ export function ChannelStudioScreen() {
     };
     const renderMoneyCenterOverviewContent = () => (
       <View testID="money-center-overview-panel">
-        <CreatorEligibilityDeclarationPanel key={JSON.stringify(studioAuthority)} />
+        <CreatorEligibilityDeclarationPanel key={`creator-declaration:${JSON.stringify(studioAuthority)}`} />
         {creatorEarningsBalances?.authorityQuarantined ? (
           <Text style={styles.eventEmptyBody} testID="money-center-authority-quarantined-copy">
             Financial balances are temporarily unavailable while provider authority is under review. Payouts remain locked.
@@ -9994,7 +9994,7 @@ export function ChannelStudioScreen() {
                     <Text style={styles.summaryLabel}>Next Step</Text>
                     <Text style={styles.summaryValue}>{sandboxNextStep}</Text>
                     <Text style={styles.summaryBody}>
-                      {hasOwnerOperatorStudioAccess ? "Owner setup mode." : sandboxTesterActive ? "Tester access active." : "No tester access on this account."}
+                      {hasOwnerOperatorStudioAccess ? "Owner setup mode." : sandboxTesterActive ? "Current account eligibility confirmed." : "Current account eligibility could not be confirmed."}
                     </Text>
                   </View>
                 </View>
@@ -10018,7 +10018,7 @@ export function ChannelStudioScreen() {
                           {renderStudioStatusPill(card.statusLabel, card.configured ? "default" : card.statusLabel === "Blocked" ? "warning" : "muted")}
                         </View>
                       </View>
-                      <Text style={styles.summaryValue}>{card.configured ? "Tester visible" : card.statusLabel}</Text>
+                      <Text style={styles.summaryValue}>{card.configured ? "Test offer configured" : card.statusLabel}</Text>
                       <Text style={styles.summaryBody}>{card.description}</Text>
                       <Text style={styles.eventEmptyBody}>Sandbox only · No payouts</Text>
                       {card.blocker ? <Text style={styles.noticeText}>{card.blocker}</Text> : null}

@@ -21,8 +21,18 @@ const observedPayout=(id='acct_fixture',changes={})=>({
   provider_losses_collector:'platform',provider_requirements_collection:'stripe',provider_configuration_observed_at:'2026-10-27T00:00:00Z',
   provider_configuration_account_id:id,onboarding_status:'ready_for_payouts',charges_enabled:true,payouts_enabled:true,...changes,
 });
+const payoutClient=rows=>({from(table){
+  assert.equal(table,'creator_payout_accounts');
+  let selected=copy(rows);
+  const q={select:()=>q,eq:(key,value)=>{selected=selected.filter(row=>row[key]===value);return q;},
+    in:(key,values)=>{selected=selected.filter(row=>values.includes(row[key]));return q;},
+    order:(key,{ascending})=>{selected.sort((a,b)=>String(a[key]).localeCompare(String(b[key]))*(ascending?1:-1));return q;},
+    limit:value=>{selected=selected.slice(0,value);return q;},
+    maybeSingle:async()=>({data:selected[0]??null,error:null})};return q;
+}});
 function harness(compiled=code){
   let handler,attempt=null,authorityReads=0,payoutReads=0,profile='First name',account='acct_fixture',payout={},payoutSequence=null,retryAllowed=true,failAfterAccept=false,recordFailure=false,retiredAt=Infinity,terminal=false;
+  let payoutAccounts=null;
   const calls=[],bindings=[],sessions=new Map(); let routeAllowed=true,expiryOffset=0,androidExternal=false,bindAllowed=true;
   const settings={creator_id:creator,tips_enabled:true,status:'active',currency:'usd',min_amount_cents:100,max_amount_cents:50000,provider_charges_enabled:true,provider_payouts_enabled:true};
   const admin={from(table){const q={};for(const method of ['select','eq','in','gte','or','limit','update','insert'])q[method]=()=>q;
@@ -45,7 +55,11 @@ function harness(compiled=code){
     Deno:{serve:fn=>{handler=fn;}},createClient:()=>({rpc:async()=>({data:++authorityReads>=retiredAt?null:{authoritative:true,state:'ACTIVE',restoreOnly:false,userId:buyer,accountId:buyer,sessionGeneration:session},error:null})}),
     authenticateRequest:async()=>({user:{id:buyer,email:'synthetic@example.invalid'}}),createAuthClient:()=>({supabaseAnonKey:'synthetic',supabaseUrl:'https://synthetic.invalid'}),createAdminClient:()=>({configured:true,client:admin}),
     jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status}),notConfiguredPayload:()=>({}),optionsResponse:()=>new Response('ok'),parseJsonPayload:async req=>({value:await req.json()}),
-    readCreatorPayoutAccount:async()=>copy(payoutSequence?payoutSequence[Math.min(payoutReads++,payoutSequence.length-1)]:observedPayout(account,payout)),
+    readCreatorPayoutAccount:async(_client,subject,environment)=>{
+      assert.equal(environment,'test','initial and pre-dispatch reads must explicitly bind the test account');
+      if(payoutAccounts)return connect.readCreatorPayoutAccount(payoutClient(payoutAccounts),subject,environment);
+      return copy(payoutSequence?payoutSequence[Math.min(payoutReads++,payoutSequence.length-1)]:observedPayout(account,payout));
+    },
     storedStripeConfiguration:connect.storedStripeConfiguration,
     readStripeTestSecret:()=>({configured:true,secret:'synthetic-test-secret'}),safeWriteAuditLog:async()=>{},sanitizeErrorMessage:error=>String(error),toText:v=>String(v??'').trim(),
     fetch:async(url,init)=>{const body=init.body?Object.fromEntries(init.body):null;calls.push({url,method:init.method,key:init.headers['Idempotency-Key'],body});
@@ -56,8 +70,29 @@ function harness(compiled=code){
   };
   vm.runInNewContext(compiled,context,{filename:file});
   return {calls,bindings,run:async(changes={})=>{const r=await handler(new Request('https://local.invalid',{method:'POST',headers:{Authorization:'Bearer synthetic'},body:JSON.stringify({creator_id:creator,amount_cents:300,currency:'usd',request_id:request,...changes})}));return {status:r.status,body:await r.json()};},
-    set:changes=>{if('androidExternal'in changes)androidExternal=changes.androidExternal;if('bindAllowed'in changes)bindAllowed=changes.bindAllowed;if('expiryOffset'in changes)expiryOffset=changes.expiryOffset;if('routeAllowed'in changes)routeAllowed=changes.routeAllowed;if('profile'in changes)profile=changes.profile;if('account'in changes)account=changes.account;if('payout'in changes)payout=changes.payout;if('payoutSequence'in changes){payoutSequence=changes.payoutSequence;payoutReads=0;}if('retryAllowed'in changes)retryAllowed=changes.retryAllowed;if('failAfterAccept'in changes)failAfterAccept=changes.failAfterAccept;if('recordFailure'in changes)recordFailure=changes.recordFailure;if('retiredAt'in changes)retiredAt=changes.retiredAt;if('terminal'in changes)terminal=changes.terminal;},attempt:()=>attempt,settings:()=>copy(settings)};
+    set:changes=>{if('payoutAccounts'in changes)payoutAccounts=changes.payoutAccounts;if('androidExternal'in changes)androidExternal=changes.androidExternal;if('bindAllowed'in changes)bindAllowed=changes.bindAllowed;if('expiryOffset'in changes)expiryOffset=changes.expiryOffset;if('routeAllowed'in changes)routeAllowed=changes.routeAllowed;if('profile'in changes)profile=changes.profile;if('account'in changes)account=changes.account;if('payout'in changes)payout=changes.payout;if('payoutSequence'in changes){payoutSequence=changes.payoutSequence;payoutReads=0;}if('retryAllowed'in changes)retryAllowed=changes.retryAllowed;if('failAfterAccept'in changes)failAfterAccept=changes.failAfterAccept;if('recordFailure'in changes)recordFailure=changes.recordFailure;if('retiredAt'in changes)retiredAt=changes.retiredAt;if('terminal'in changes)terminal=changes.terminal;},attempt:()=>attempt,settings:()=>copy(settings)};
 }
+
+test('test tip admission and dispatch select the test account when a live account also exists',async()=>{
+  const testAccount=observedPayout('acct_testBound');
+  const liveAccount=observedPayout('acct_liveBound',{provider_environment:'live'});
+  const rows=[liveAccount,testAccount];
+  assert.equal((await connect.readCreatorPayoutAccount(payoutClient(rows),creator)).provider_account_id,'acct_liveBound','mode-neutral readers keep their existing preference');
+  assert.equal((await connect.readCreatorPayoutAccount(payoutClient(rows),creator,'test')).provider_account_id,'acct_testBound');
+  assert.equal((await connect.readCreatorPayoutAccount(payoutClient(rows),creator,'live')).provider_account_id,'acct_liveBound');
+  const h=harness();h.set({payoutAccounts:rows});const result=await h.run();
+  assert.equal(result.body.checkoutCreated,true);assert.equal(h.calls.length,1);
+  assert.equal(h.calls[0].body['payment_intent_data[transfer_data][destination]'],'acct_testBound');
+  assert.equal(JSON.stringify(h.calls).includes('acct_liveBound'),false,'live recipient never enters the frozen provider request');
+});
+
+test('test tip admission never falls back to the live account when the test account is missing',async()=>{
+  const rows=[observedPayout('acct_liveOnly',{provider_environment:'live'})];
+  assert.equal(await connect.readCreatorPayoutAccount(payoutClient(rows),creator,'test'),null);
+  const h=harness();h.set({payoutAccounts:rows});const result=await h.run();
+  assert.equal(result.status,403);assert.equal(result.body.error,'provider_not_ready');
+  assert.equal(h.attempt(),null);assert.equal(h.calls.length,0);
+});
 
 test('Android tip route requires the exact private native binding before provider dispatch',async()=>{
   const h=harness();h.set({androidExternal:true});

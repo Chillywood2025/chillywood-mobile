@@ -693,13 +693,17 @@ const accountMetadata = (
     },
   });
 
-export const readCreatorPayoutAccount = async (adminClient: SupabaseClientLike, creatorUserId: string) => {
+export const readCreatorPayoutAccount = async (
+  adminClient: SupabaseClientLike,
+  creatorUserId: string,
+  providerEnvironment?: "test" | "live",
+) => {
   const { data, error } = await adminClient
     .from("creator_payout_accounts")
     .select("*")
     .eq("creator_user_id", creatorUserId)
     .eq("provider", DB_PROVIDER)
-    .in("provider_environment", ["live", "test"])
+    .in("provider_environment", providerEnvironment ? [providerEnvironment] : ["live", "test"])
     .order("provider_environment", { ascending: true })
     .limit(1)
     .maybeSingle();

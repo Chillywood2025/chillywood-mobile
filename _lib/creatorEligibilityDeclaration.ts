@@ -1,5 +1,6 @@
 import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
+import { parseCreatorEligibilityReadback, type CreatorEligibilityDecision } from "./creatorEligibility";
 
 export const CREATOR_DECLARATION_VERSION = "adult-us-creator-v1";
 export const CREATOR_US_REGIONS = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
@@ -7,6 +8,7 @@ export type CreatorDeclarationInput = { declared18Plus: boolean; residesInUS: bo
 export type CreatorDeclarationReadback = {
   declaration: { version: string; declared18Plus: true; countryCode: "US"; regionCode: string; source: "self_declaration"; declaredAt: string } | null;
   pending: string[];
+  eligibility: CreatorEligibilityDecision;
 };
 const record = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 export function parseCreatorDeclarationReadback(value: unknown, expected: AccountSessionAuthorityBinding): CreatorDeclarationReadback | null {
@@ -27,7 +29,7 @@ export function parseCreatorDeclarationReadback(value: unknown, expected: Accoun
     ["platformCapability", "Platform availability"], ["creatorRole", "Premium creator eligibility"],
   ] as const).filter(([key]) => row[key] !== true).map(([, label]) => label as string);
   if (row.accountStatus !== "ACTIVE" || row.moderationState !== "CLEAR") pending.push("Account or moderation restrictions");
-  return { declaration, pending };
+  return { declaration, pending, eligibility: parseCreatorEligibilityReadback(row, expected) };
 }
 
 export function creatorDeclarationErrorMessage(error: unknown) {

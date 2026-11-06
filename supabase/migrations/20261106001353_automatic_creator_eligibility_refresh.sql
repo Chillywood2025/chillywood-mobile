@@ -44,8 +44,8 @@ language sql stable security definer set search_path='' as $$
   and nullif(btrim(a.disabled_reason),'') is null
   and a.requirements_currently_due='[]'::jsonb and a.requirements_past_due='[]'::jsonb
   and a.requirements_eventually_due='[]'::jsonb
-  and a.last_provider_sync_at between now()-interval '15 minutes' and now()
-  and a.provider_configuration_observed_at between now()-interval '15 minutes' and now()
+  and a.last_provider_sync_at between clock_timestamp()-interval '15 minutes' and clock_timestamp()
+  and a.provider_configuration_observed_at between clock_timestamp()-interval '15 minutes' and clock_timestamp()
   and a.provider_configuration_account_id=a.provider_account_id and a.provider_configuration_status='match'
   and a.provider_expected_configuration_key=case when p_environment='production'
     then 'stripe_connect_live_express_recipient_controller_v1' else 'stripe_connect_test_express_controller_v1' end
@@ -63,10 +63,15 @@ revoke all on function private.ordinary_creator_provider_ready(uuid,text) from p
 
 create function private.lock_ordinary_creator_subject(p_creator uuid,p_session uuid,p_environment text) returns void
 language plpgsql security definer set search_path='' as $$
+declare current_mode text;
 begin
  perform 1 from auth.users where id=p_creator for share;
  perform 1 from auth.sessions where id=p_session and user_id=p_creator for share;
  perform private.lock_ordinary_commerce_premium_subjects(array[p_creator]);
+ select case when state='on' then 'production' else 'sandbox' end into current_mode
+ from public.platform_money_kill_switches where key='live_money_enabled' for share;
+ if current_mode is null or current_mode is distinct from p_environment
+ then raise exception 'creator_mode_changed' using errcode='42501'; end if;
  perform pg_advisory_xact_lock(hashtextextended('wave1-creator:'||p_creator::text,0));
  if private.ordinary_commerce_subject_current(p_creator,p_session,p_environment) is not true
  then raise exception 'creator_session_premium_required' using errcode='42501'; end if;
@@ -192,6 +197,15 @@ begin
  perform private.lock_ordinary_creator_subject(u,s,mode);
  perform private.refresh_ordinary_creator_eligibility(u);
  r:=public.wave1_creator_eligibility_readback_pre_automatic();
+ -- Never project a retained VERIFIED row as current authority if the mode,
+ -- Premium period or provider freshness changed while this read was waiting.
+ if r->>'state'='VERIFIED' and (
+  private.ordinary_commerce_subject_current(u,s,
+   case when exists(select 1 from public.platform_money_kill_switches where key='live_money_enabled' and state='on') then 'production' else 'sandbox' end) is not true
+  or public.wave1_creator_money_subject_authorized_internal(u) is not true) then
+  r:=r||jsonb_build_object('state','PENDING_VERIFICATION','canCreateMoneyExposure',false,
+   'reasonCodes',jsonb_build_array('current_creator_evidence_required'));
+ end if;
  select * into d from private.creator_eligibility_declarations where creator_id=u order by id desc limit 1;
  return r||jsonb_build_object('rollout','AUTOMATIC_PREMIUM_UNITED_STATES','declaration',
  case when d.id is null then null else jsonb_build_object('version',d.declaration_version,

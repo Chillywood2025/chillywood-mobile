@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSession } from "../../_lib/session";
+import { canUseCreatorSandboxTools } from "../../_lib/creatorEligibility";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { CREATOR_US_REGIONS, creatorDeclarationErrorMessage, readCreatorEligibilityDeclaration, readCreatorPayoutLegalStatus, saveCreatorEligibilityDeclaration, type CreatorDeclarationReadback } from "../../_lib/creatorEligibilityDeclaration";
 
@@ -25,6 +26,7 @@ export function CreatorEligibilityDeclarationPanel() {
     // Settlement while away clears the transport lock, not inactive UI state.
     // Reflect that lock on return without releasing an outstanding operation.
     setBusy(flight.current);
+    setSaved(null);
     setAdult(false); setUS(false); setRegion(""); setNotice(""); setLegal("Payout terms: not yet checked.");
     rerender(n => n + 1);
     return () => {
@@ -56,6 +58,9 @@ export function CreatorEligibilityDeclarationPanel() {
   const cancel = () => {
     if (!current()) return;
     lifecycle.current = { identity, active: true };
+    // A repeated empty-form cancel can leave every form value unchanged.
+    // Render the new lease even then, so current controls retire the old one.
+    rerender(n => n + 1);
     request.current++; setAdult(false); setUS(false); setRegion("");
     setNotice(flight.current ? "Form canceled. A submitted save may still complete. Refresh after it finishes to check saved information." : "Form canceled. Your previously saved declaration has not been removed.");
   };
@@ -74,6 +79,8 @@ export function CreatorEligibilityDeclarationPanel() {
       <Pressable testID="creator-declaration-cancel" accessibilityRole="button" style={styles.button} onPress={cancel}><Text style={styles.body}>Cancel form</Text></Pressable>
     </View>
     {notice ? <Text style={styles.body} accessibilityLiveRegion="polite">{notice}</Text> : null}
+    {current() && value?.eligibility && canUseCreatorSandboxTools(value.eligibility) && value.eligibility.state !== "VERIFIED"
+      ? <Text style={styles.body}>Sandbox creator tools ready; live verification pending. Test activity does not authorize live charges, payable earnings, or payouts.</Text> : null}
     {value ? <Text style={styles.body}>Outstanding checks: {value.pending.length ? value.pending.join(", ") : "Review current provider and platform status before any money action."}</Text> : null}
     <Text style={styles.body}>{legal}</Text>
     <Text style={styles.body}>A saved declaration never enables live charges, payouts, or cashout by itself.</Text>

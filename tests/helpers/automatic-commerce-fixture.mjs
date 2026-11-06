@@ -76,12 +76,13 @@ export async function assertBuyerHasNoPremium(db,actor) {
 
 // Intentionally synthetic complete facts, including tax and sanctions that the
 // real adapter does NOT verify. This is test input, never readiness evidence.
-export async function seedSyntheticStrictCreatorProvider(db,actor,{environment='sandbox',providerAccountId}={}) {
+export async function seedSyntheticStrictCreatorProvider(db,actor,{environment='sandbox',providerAccountId,platformAccountId='acct_syntheticPlatform'}={}) {
   assert.ok(['sandbox','production'].includes(environment));
   const mode=environment==='production'?'live':'test',account=providerAccountId??`acct_${mode}${actor.id.replaceAll('-','')}`;
   assert.match(account,/^acct_[A-Za-z0-9]+$/u);
   const key=mode==='live'?'stripe_connect_live_express_recipient_controller_v1':'stripe_connect_test_express_controller_v1';
-  const observation={accountId:account,platformAccountId:'acct_syntheticPlatform',environment:'live',modeVerified:true,
+  assert.match(platformAccountId,/^acct_[A-Za-z0-9]+$/u);
+  const observation={accountId:account,platformAccountId,environment:'live',modeVerified:true,
     v2Dashboard:'express',v2FeesCollector:'application',v2LossesCollector:'application',source:'authenticated_stripe_get_v1_v2',
     pendingVerification:[],requirementsComplete:true,recipientTransfers:'active',payoutSchedule:'manual'};
   await db.query(`insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,
@@ -112,10 +113,10 @@ export async function seedSyntheticStrictCreatorProvider(db,actor,{environment='
   assert.equal(ready,true,'synthetic complete provider facts satisfy strict current predicate');
 }
 
-export async function seedQualifiedCommerceCreator(db,actor=commerceActor(),{environment='sandbox',premium=true}={}) {
+export async function seedQualifiedCommerceCreator(db,actor=commerceActor(),{environment='sandbox',premium=true,providerAccountId,platformAccountId}={}) {
   if(premium)await seedCommerceCreator(db,actor,{environment});
   await acceptCommerceCreatorTerms(db,actor);
-  await seedSyntheticStrictCreatorProvider(db,actor,{environment});
+  await seedSyntheticStrictCreatorProvider(db,actor,{environment,providerAccountId,platformAccountId});
   // Independent trusted local-test facts, NOT derived from a provider response.
   await db.query(`select public.wave1_evaluate_creator_eligibility($1::uuid,
     '{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR",

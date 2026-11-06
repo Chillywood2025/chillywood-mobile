@@ -1,18 +1,27 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
-import {createDatabase} from './database-runtime-authority-fixture.mjs';
+import {createDatabase,splitSQL} from './database-runtime-authority-fixture.mjs';
 import {seedCommerceCreator,seedSyntheticStrictCreatorProvider} from './automatic-commerce-fixture.mjs';
 
 // Synthetic disposable full-schema fixture. No external provider or hosted writes.
-export async function withQualifiedAuctionFixture({mode='live',lane='event',sourceKind='stage_reserved_seat'}={},use=async()=>{}) {
+export async function withQualifiedAuctionFixture({mode='live',lane='event',sourceKind='stage_reserved_seat',declaredCreator=false}={},use=async()=>{}) {
  const rawMode=mode==='live'?'production':'sandbox';
  const feature=lane==='event'?'event_auction':'room_seat_auction';
  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
  const rows=async(sql,args=[])=>(await db.query(sql,args)).rows;
  const lit=x=>`'${String(x).replaceAll("'","''")}'`;
  try{
-  await db.exec(fs.readFileSync(new URL('../fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
+  let actorFixture=fs.readFileSync(new URL('../fixtures/event-reservation-authority.sql',import.meta.url),'utf8');
+  if(declaredCreator){
+   assert.equal(mode,'test','ordinary declaration fixture never claims live qualification');
+   const statements=splitSQL(actorFixture);
+   const retained=statements.filter(statement=>!statement.includes('insert into public.sandbox_monetization_testers')
+    &&!statement.includes('select public.wave1_evaluate_creator_eligibility'));
+   assert.equal(statements.length-retained.length,2,'remove only the legacy allowlist and synthetic VERIFIED fixture statements');
+   actorFixture=retained.join('\n');
+  }
+  await db.exec(actorFixture);
   // Disposable local fixture only; never a credential, provider account or launch approval.
   let recipientFixture=fs.readFileSync(new URL('../fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8');
   if(mode==='live'){
@@ -33,7 +42,7 @@ export async function withQualifiedAuctionFixture({mode='live',lane='event',sour
   // Premium production processing opens only isolated fixture controls; retain
   // this fixture's explicit activation boundary below for auction assertions.
   if(mode==='live')await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
-  await seedSyntheticStrictCreatorProvider(db,creatorActor,{environment:rawMode,providerAccountId:'acct_fixture'});
+  await seedSyntheticStrictCreatorProvider(db,creatorActor,{environment:rawMode,providerAccountId:'acct_fixture',platformAccountId:'acct_platform'});
   const event=(await rows("select id from event_reservation_fixture.events where name='show1'"))[0].id;
   const rpc=async(actor,expression,role='authenticated')=>{
    const a=actors[actor];try{
@@ -42,6 +51,13 @@ export async function withQualifiedAuctionFixture({mode='live',lane='event',sour
     return r.flatMap(x=>x.rows).at(-1).result;
    }catch(e){await db.exec('rollback');throw e;}
   };
+  if(declaredCreator){
+   const declaration=await rpc('creator',"public.declare_creator_money_eligibility(true,'US','CA')");
+   assert.equal(declaration.state,'PENDING_VERIFICATION');
+   assert.equal(declaration.taxComplete,null);assert.equal(declaration.sanctionsClear,null);
+   assert.equal(declaration.canCreateMoneyExposure,false);assert.equal(declaration.sandboxCapability.canUseCreatorTools,true);
+   assert.equal((await rows('select count(*)::int count from public.sandbox_monetization_testers'))[0].count,0);
+  }
   assert.equal((await rows("select private.auction_checkout_mode_allowed('live') allowed"))[0].allowed,false);
   const cap=(await rows(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,platform,storefront,storefront_country,
    route_kind,currency,environment,payment_method,min_amount_minor,max_amount_minor,provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)

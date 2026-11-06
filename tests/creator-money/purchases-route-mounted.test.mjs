@@ -220,6 +220,49 @@ function tipPrice(overrides = {}) {
     provider: "revenuecat_google_play", platform: "android", environment: "sandbox", currency: "usd", status: "sandbox", ...overrides };
 }
 
+test("mounted tip no-charge copy follows the selected test route, never ordinary admission", async t => {
+  const testStatus = { creatorId: "creator", canTip: true, testMode: true, providerEnvironment: "test", liveMoneyEnabled: false };
+  const badge = h => [...h.nodes.values()].find(node => node.type === "MoneyStatusChip" && /No real charge/.test(node.props.label));
+  for (const platform of ["ios", "android"]) {
+    const prices = [tipPrice(platform === "ios" ? { provider: "revenuecat_app_store", platform, providerProductId: "com.chillywood.tip.tier1" } : {})];
+    const h = await mountTip(t, { platform, prices, tipStatus: testStatus });
+    assert.ok(badge(h), `${platform} exact selected Sandbox price has test copy`);
+    for (const status of [
+      { ...testStatus, testMode: false, providerEnvironment: "live", liveMoneyEnabled: true },
+      { ...testStatus, providerEnvironment: "unknown" },
+      { ...testStatus, liveMoneyEnabled: true },
+      { ...testStatus, creatorId: "different-creator" },
+      null,
+    ]) {
+      await h.render({ sandboxTester: true, tipStatus: status });
+      assert.equal(badge(h), undefined, `${platform} ordinary admission cannot imply no real charge`);
+    }
+    await h.render({ sandboxTester: false, tipStatus: testStatus });
+    assert.ok(badge(h), "verified Sandbox copy does not need a tester/admission flag");
+    await h.typeAmount("2.37");
+    assert.equal(badge(h), undefined, "an unverified custom amount does not inherit the prior store price's test copy");
+    assert.equal(h.purchases.length, 0); assert.equal(h.external.length, 0);
+  }
+  const production = await mountTip(t, { prices: [tipPrice({ environment: "production", status: "active" })], tipStatus: testStatus });
+  await production.render({ sandboxTester: true });
+  assert.equal(badge(production), undefined, "unsupported production catalog does not acquire test copy");
+});
+
+test("mounted tip no-charge copy waits for a current catalog or exact custom test quote", async t => {
+  const testStatus = { creatorId: "creator", canTip: true, testMode: true, providerEnvironment: "test", liveMoneyEnabled: false };
+  const badge = h => [...h.nodes.values()].find(node => node.type === "MoneyStatusChip" && /No real charge/.test(node.props.label));
+  const pending = deferred();
+  const h = await mountTip(t, { reader: () => pending.promise, tipStatus: testStatus,
+    customQuote: async () => ({ environment: "test", capabilityId: "synthetic", amountCents: 237, minAmountMinor: 50, maxAmountMinor: 100000 }) });
+  await h.render({ sandboxTester: true });
+  assert.equal(badge(h), undefined, "loading catalog and ordinary admission prove no payment mode");
+  await h.resolve(pending, { status: "resolved", subjectUserId: "buyer", prices: [tipPrice()] });
+  assert.ok(badge(h));
+  await h.typeAmount("2.37");
+  assert.match(badge(h).props.label, /Test checkout/, "exact custom test quote provides its own payment mode");
+  assert.equal(h.purchases.length, 0); assert.equal(h.external.length, 0);
+});
+
 test("tip cost comparison is read-only and discards stale amount/session responses", async t => {
   const old=deferred(), calls=[];
   const h=await mountTip(t,{routeCosts:async(...args)=>{calls.push(args);return calls.length===1?old.promise:{message:'Current comparison unavailable'};}});
@@ -423,6 +466,23 @@ test("mounted tip chooser does not advertise unmapped amounts or another buyer's
   assert.equal(bounds.purchases[0].amountCents, 99);
   const staleCreator = await mountTip(t, { tipStatus: { creatorId: "old-creator" } });
   assert.equal(staleCreator.node("tip-confirm-button").props.disabled, true);
+});
+
+test('native-only Sandbox tip capability enables store checkout while external controls stay disabled',async t=>{
+ for(const platform of ['ios','android']) {
+  const prices=[tipPrice(platform==='ios'?{provider:'revenuecat_app_store',platform:'ios',providerProductId:'com.chillywood.tip.tier1'}:{})];
+  const h=await mountTip(t,{platform,prices,nativeSupported:true,iosSupported:true,
+    tipStatus:{canTip:false,nativeSandboxAvailable:true,status:'setup_incomplete'},
+    customQuote:async()=>({capabilityId:'synthetic',amountCents:237,minAmountMinor:50,maxAmountMinor:100000})});
+  assert.equal(h.node('tip-confirm-button').props.disabled,false);
+  await h.press('tip-confirm-button');assert.equal(h.purchases.length,1);assert.equal(h.external.length,0);
+  await h.typeAmount('2.37');
+  assert.equal(h.node('tip-custom-stripe-checkout').props.disabled,true);
+  await React.act(async()=>h.node('tip-custom-stripe-checkout').props.onPress());
+  assert.equal(h.external.length,0,'even a stale external button callback cannot consume native-only authority');
+ }
+ const wrong=await mountTip(t,{tipStatus:{canTip:false,nativeSandboxAvailable:true,creatorId:'other-creator'}});
+ assert.equal(wrong.node('tip-confirm-button').props.disabled,true);
 });
 
 test("mounted native tip chooser exposes a fresh qualified additional Android amount without forcing99",async t=>{

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator,seedSyntheticStrictCreatorProvider,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 for(const implicitApiGrants of [false,true]) test(`iOS exact storefront observation admission retains qualification and session guards (${implicitApiGrants})`,{timeout:240000},async()=>{
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants});
@@ -12,6 +13,8 @@ for(const implicitApiGrants of [false,true]) test(`iOS exact storefront observat
       await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(a=>a.kind==='buyer1'),creator=actors.find(a=>a.kind==='creator');
+    await seedQualifiedCommerceCreator(db,{id:creator.user_id,session:creator.session_id},{providerAccountId:'acct_fixture'});
+    await assertBuyerHasNoPremium(db,{id:buyer.user_id});
     await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',sub:buyer.user_id,session_id:buyer.session_id})]);
     const source=randomUUID();
     const admit=(country='USA',amount=237)=>one("select public.admit_ios_external_session('creator_tip',$1,$2,$3,$4,1)",[creator.user_id,amount,source,country]);
@@ -61,6 +64,8 @@ test('iOS final-thirty-minute admission resumes bound checkout but cannot create
       await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(a=>a.kind==='buyer1'),other=actors.find(a=>a.kind==='buyer2'),creator=actors.find(a=>a.kind==='creator');
+    await seedQualifiedCommerceCreator(db,{id:creator.user_id,session:creator.session_id},{providerAccountId:'acct_fixture'});
+    for(const actor of [buyer,other])await assertBuyerHasNoPremium(db,{id:actor.user_id});
     const cap=randomUUID(),request=randomUUID(),tip=randomUUID();
     await db.query(`insert into private.creator_external_payment_capabilities
       select (jsonb_populate_record(null::private.creator_external_payment_capabilities,to_jsonb(c)||jsonb_build_object(
@@ -83,11 +88,11 @@ test('iOS final-thirty-minute admission resumes bound checkout but cannot create
     Date.now=()=>realDateNow()+20*60*1000;
     assert.ok(Number(await one('select extract(epoch from clock_timestamp())'))-Number(before)>=1199,'only disposable PGlite clock advances');
     await asBuyer(buyer);
-    await assert.rejects(admit(),/external_payment_capability_unavailable/,'twenty-minute-old provider configuration cannot authorize refreshed admission');
+    await assert.rejects(admit(),/ios_external_storefront_observation_required/,'stale creator provider readiness blocks refreshed admission before creating a native observation');
+    await assert.rejects(()=>one("select private.resolve_creator_external_payment_capability($1,$2,'creator_tip',$3,237,'usd','test',$4)",[buyer.user_id,buyer.session_id,creator.user_id,cap]),/external_payment_capability_unavailable/,'twenty-minute-old provider configuration cannot authorize the qualified route');
     // Model a new independent provider observation in this disposable fixture;
     // refreshing native storefront evidence alone must not refresh Connect.
-    await db.query(`update public.creator_payout_accounts set provider_configuration_observed_at=clock_timestamp()
-      where creator_user_id=$1 and provider='stripe_connect' and provider_environment='test' and provider_account_id='acct_fixture'`,[creator.user_id]);
+    await seedSyntheticStrictCreatorProvider(db,{id:creator.user_id},{providerAccountId:'acct_fixture'});
     const refreshed=await admit();assert.equal(refreshed.capabilityId,cap);
     assert.ok(Date.parse(refreshed.expiresAt)<=Date.now()+121000);
     await service();

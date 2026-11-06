@@ -2,8 +2,7 @@
 -- lifecycle and playback RPCs; provider transport and qualification are synthetic.
 create table event_reservation_fixture.replay_deadline_context(context jsonb not null);
 do $$
-declare host event_reservation_fixture.actors;buyer event_reservation_fixture.actors;premium public.monetization_products;
-  event uuid:=gen_random_uuid();offer jsonb;intent jsonb;receipt jsonb;prepared jsonb;source jsonb;server uuid;
+declare host event_reservation_fixture.actors;premium public.monetization_products;receipt jsonb;
 begin
   perform set_config('request.jwt.claims','{"role":"service_role"}',true);
   insert into event_reservation_fixture.actors
@@ -11,7 +10,6 @@ begin
   from(select md5('replay-deadline-creator:'||n::text)::uuid creator_id from generate_series(1,1000)n)candidates
   where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||creator_id::text,20260814),100)=0 limit 1;
   select * into host from event_reservation_fixture.actors where kind='replay_deadline_creator';
-  select * into buyer from event_reservation_fixture.actors where kind='buyer17';
   insert into auth.users(id,is_sso_user,is_anonymous,email,email_confirmed_at) values(host.user_id,false,false,'replay-deadline@example.test',now());
   insert into auth.sessions(id,user_id) values(host.session_id,host.user_id);
   insert into public.sandbox_monetization_testers(user_id,status,note) values(host.user_id::text,'active','Synthetic replay deadline fixture');
@@ -28,6 +26,17 @@ begin
     premium.provider_product_id,premium.provider_base_plan_id,'sandbox','active',now()-interval '1 minute',now()+interval '1 day',now(),999,'usd',
     repeat('c',64),'NORMAL','google_play','android',null,premium.id,'replay-deadline-host-original');
   if receipt->>'status'<>'processed' then raise exception 'replay fixture Premium failed: %',receipt; end if;
+end;$$;
+
+-- Replay deadline scenario begins. Current-schema callers add synthetic strict
+-- provider observation for the separately created host before these real RPCs.
+do $$
+declare host event_reservation_fixture.actors;buyer event_reservation_fixture.actors;
+  event uuid:=gen_random_uuid();offer jsonb;intent jsonb;receipt jsonb;prepared jsonb;source jsonb;server uuid;
+begin
+  select * into host from event_reservation_fixture.actors where kind='replay_deadline_creator';
+  select * into buyer from event_reservation_fixture.actors where kind='buyer17';
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
   insert into public.creator_events(id,host_user_id,event_title,event_type,visibility,status,starts_at,ends_at,time_zone,replay_policy,replay_available_at,replay_expires_at)
   values(event,host.user_id,'Replay deadline fixture','live_first','public','scheduled',clock_timestamp()-interval '2 minutes',clock_timestamp()+interval '1 hour',
     'America/New_York','until_expiration',clock_timestamp()+interval '2 hours',clock_timestamp()+interval '1 day');

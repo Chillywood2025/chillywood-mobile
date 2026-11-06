@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync,spawn} from 'node:child_process';
 import fs from 'node:fs';
+import {commerceSeedAdapter,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../tests/helpers/automatic-commerce-fixture.mjs';
 process.on('uncaughtException',error=>{
   console.error(error.message);
   if(error.where)console.error(error.where);
@@ -19,7 +20,7 @@ if(!embedded) assert.match(container??'',/^chillywood-event-offer-audit-[a-z0-9-
 let database;
 if(embedded){
   const {createDatabase}=await import('../tests/helpers/database-runtime-authority-fixture.mjs');
-  ({db:database}=await createDatabase({includeHeldStudio:true,applyRepair:true}));
+  ({db:database}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true}));
   await database.exec(fs.readFileSync(new URL('../tests/fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
 }
 const args=['exec','-i',container,'psql','-X','-h','/tmp','-U','postgres','-d',databaseName,'-v','ON_ERROR_STOP=1','-Atq'];
@@ -37,6 +38,11 @@ const parallel=input=>new Promise((resolve,reject)=>{
   child.stdin.end(input);
 });
 const actors=JSON.parse(await sql("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+await seedQualifiedCommerceCreator(commerceSeedAdapter(sql),actors.creator);
+// This is a sandbox-only creator. The later live-mode flip must reject the
+// exact sandbox source before any Store start, not mint live creator authority.
+for(const [kind,actor] of Object.entries(actors))if(kind.startsWith('buyer'))await assertBuyerHasNoPremium(commerceSeedAdapter(sql),actor);
+const initialLedgerCount=Number(await sql('select count(*) from public.money_access_ledger_events'));
 const events=JSON.parse(await sql('select jsonb_object_agg(name,id) from event_reservation_fixture.events'));
 const offset=Number(process.argv.find(a=>a.startsWith('--fixture-offset='))?.slice(17)??0);
 assert.ok(Number.isInteger(offset)&&offset>=0&&offset<=12&&offset%3===0);
@@ -132,7 +138,7 @@ try{
   // Simulate a platform activation in this isolated fixture through the real
   // service-authorized guard; no activation guard or application check is removed.
   await sql("begin;set local request.jwt.claim.role='service_role';update public.platform_money_kill_switches set state='on' where key='live_money_enabled';commit;");
-  await rejected('buyer3',`select public.begin_creator_event_checkout('${authority.id}','${uuid(20)}');`,'event_checkout_rail_unavailable');
+  await rejected('buyer3',`select public.begin_creator_event_checkout('${authority.id}','${uuid(20)}');`,'event_reservation_source_unavailable');
   await sql("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
   await sql(`update public.monetization_product_store_mappings set status='disabled' where provider_product_id='${authority.providerProductId}' and environment='sandbox';`);
   await rejected('buyer3',`select public.begin_creator_event_checkout('${authority.id}','${uuid(20)}');`,'event_checkout_price_unavailable');
@@ -152,8 +158,10 @@ try{
   await rejected('buyer3',`select public.begin_creator_event_checkout('${authority.id}','${uuid(20)}');`,'event_checkout_source_unavailable');
   await sql(`update public.creator_events set visibility='public' where id='${events.show3}';
     update public.sandbox_monetization_testers set status='revoked' where user_id='${actors.buyer3.id}';`);
-  await rejected('buyer3',`select public.begin_creator_event_checkout('${authority.id}','${uuid(20)}');`,'sandbox_monetization_tester_required');
-  await sql(`update public.sandbox_monetization_testers set status='active' where user_id='${actors.buyer3.id}';`);
+  check(await read('buyer3','public.resolve_sandbox_monetization_tester()'),true,'free buyer admission does not depend on revoked manual tester membership');
+  await sql(`update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${actors.buyer3.session}';`);
+  await rejected('buyer3',`select public.begin_creator_event_checkout('${authority.id}','${uuid(20)}');`,'buyer_session_authority_required');
+  await sql(`update auth.sessions set not_after=null where id='${actors.buyer3.session}';`);
   check(Number(await sql(`select count(*) from public.event_ticket_reservations where purchase_intent_id='${authority.id}' and checkout_attempt_id is not null`)),0,'all late authority failures leave checkout unstarted');
   await configure('show3',299);
   check((await claim('buyer3',authority,20)).startAuthorized,true,'valid original reserved price survives a newer creator price');
@@ -167,7 +175,7 @@ try{
     check((await claim('buyer1',replacement,30)).startAuthorized,true,'negative control reproduces replacement checkout after expiry');
     check(Number(await sql(`select count(*) from public.event_ticket_reservations where buyer_id='${actors.buyer1.id}' and creator_event_id='${events.show1}' and checkout_attempt_id is not null`)),2,'negative control leaves two started reservations');
   }finally{await sql(definition);}
-  check(Number(await sql('select count(*) from public.money_access_ledger_events')),0,'admission tests create no payment ledger or charge');
+  check(Number(await sql('select count(*) from public.money_access_ledger_events')),initialLedgerCount,'admission tests create no payment ledger or charge beyond the canonical creator Premium seed');
   check(await sql("select has_function_privilege('authenticated','private.event_checkout_resolution_required(uuid,uuid,uuid)','EXECUTE')"),embedded?'false':'f','unresolved-payment helper remains inaccessible to API roles');
   console.log(`Event checkout claims: ${checks} assertions passed; ${embedded?'embedded sequential SQL':'native concurrent PostgreSQL'}; no provider transport.`);
 }finally{await database?.close();}

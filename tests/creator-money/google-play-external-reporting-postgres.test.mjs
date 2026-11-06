@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 import {loadGoogleRefundModule,googleRefundFixture,googleHistoryClient,googleVerificationCheckpoint} from '../helpers/google-refund-tax-history-fixture.mjs';
 const {googlePrice}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-external-reporting.ts');
@@ -16,6 +17,10 @@ test('private Google obligations lease/reconcile idempotently without financial 
     await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(a=>a.kind==='buyer1'), other=actors.find(a=>a.kind==='buyer2'),creator=actors.find(a=>a.kind==='creator');
+    await seedQualifiedCommerceCreator(db,{id:creator.user_id,session:creator.session_id},{providerAccountId:'acct_fixture'});
+    for(const actor of [buyer,other])await assertBuyerHasNoPremium(db,{id:actor.user_id});
+    const initialPremiumGrantIds=(await db.query("select id from public.access_grants where user_id=$1 and grant_type='premium'",[creator.user_id])).rows.map(row=>row.id);
+    assert.ok(initialPremiumGrantIds.length>0,'actual canonical Premium processor supplies only creator membership');
     const cap=randomUUID();
     await db.query(`insert into private.creator_external_payment_capabilities
       select (jsonb_populate_record(null::private.creator_external_payment_capabilities,to_jsonb(c)||$1::jsonb)).*
@@ -255,7 +260,7 @@ test('private Google obligations lease/reconcile idempotently without financial 
     await finish(job,{status:'reported',reason:'synthetic_fixture_only',receipt:receipt(job.report)});
     assert.equal(await one("select reason from private.google_play_external_report_outbox where transaction_id=$1 and cumulative_refund_minor=40",[taxContext.transaction_id]),'covered_by_canonical_cumulative_refund');
     assert.equal(await one("select reported_refund_minor from private.google_play_external_transactions where id=$1",[taxContext.transaction_id]),100);
-    assert.equal(await one('select count(*)::integer from public.access_grants'),0,'opaque token/report does not grant access');
+    assert.equal(await one('select count(*)::integer from public.access_grants where not (id=any($1::uuid[]))',[initialPremiumGrantIds]),0,'opaque token/report does not grant any access beyond the exact initial creator Premium grant');
     assert.equal(await one("select count(*)::integer from public.creator_tip_transactions where payment_status<>'pending'"),0,'report cannot invent a paid charge');
     await assert.rejects(()=>db.query("update private.google_play_external_launch_bindings set external_transaction_token='changed'"),/immutable/);
   } finally {await db.close();}

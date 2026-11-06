@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 test('size/color inventory preserves exact SKU allocations, price snapshots, and creator authority', {timeout:240000}, async t=>{
-  const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false});
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const buyer=randomUUID(),other=randomUUID(),hs=randomUUID(),bs=randomUUID(),os=randomUUID();
   const admin=async()=>{await db.exec('reset role');await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false)`);};
@@ -20,10 +21,15 @@ test('size/color inventory preserves exact SKU allocations, price snapshots, and
       from auth.sessions s cross join public.wave1_legal_document_versions d where s.user_id in($1,$2,$3) and d.active and d.market='UNITED_STATES'
       and (d.capability='account' or (s.user_id=$1 and d.capability in('creator','creator_money')))`,[host,buyer,other]);
     await admin();
-    await one(`select public.wave1_evaluate_creator_eligibility($1,'{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR","market":"UNITED_STATES","rolloutEligible":false,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','merch-fixture','local_pgtap')`,[host]);
-    await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active'),($2,'active')",[buyer,other]);
+    await seedCommerceCreator(db,{id:host,session:hs});
+    for(const id of [buyer,other])await assertBuyerHasNoPremium(db,{id});
+    await db.exec("update public.platform_money_kill_switches set state='sandbox_only' where key='merch_enabled'");
     await db.query("insert into public.platform_role_memberships(user_id,role,status) values($1,'operator','active')",[host]);
     await claim(host,hs);
+    const declared=await one("select public.declare_creator_money_eligibility(true,'US','CA')");
+    assert.equal(declared.state,'PENDING_VERIFICATION');assert.equal(declared.canCreateMoneyExposure,false);
+    assert.equal(declared.taxComplete,null);assert.equal(declared.sanctionsClear,null);
+    assert.equal(declared.sandboxCapability.canUseCreatorTools,true);
 
     const id=randomUUID(), small=randomUUID(), large=randomUUID();
     const save=(args)=>one('select public.save_creator_merch_product_with_tracking($1,$2,$3,$4,$5,$6,$7,$8,$$tracked$$)',args);

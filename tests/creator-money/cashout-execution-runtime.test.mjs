@@ -60,28 +60,110 @@ test('funded cancellation reverses once; unknown and empty recovery are GET-only
  }),/network timeout/);assert.deepEqual(before.claims,['funding_return']);assert.equal(before.observed.length,0);
 });
 const p=()=>({object:'payout',id:'po_bank',livemode:true,amount:9800,currency:'usd',destination:'ba_destination',metadata,method:'instant',source_type:'card',automatic:false,status:'pending',application_fee:null,balance_transaction:'txn_payout',failure_balance_transaction:null});
-function fixture(overrides={}){
+function fixture(overrides={},accountSettings={}){
  const c={...context,...overrides},calls=[],observed=[],claims=[];
+ const livemode=c.environment==='live';
+ const currentTransfer=()=>({...t(),livemode}),currentPayout=()=>({...p(),livemode});
  let claim=true;
  const store={read:async()=>c,claim:async(id,stage)=>{claims.push(stage);const result={claimed:claim,token:'a0000000-0000-4000-8000-000000000003'};claim=false;return result;},
   observe:async(id,token,facts)=>{observed.push({token,facts});return facts;}};
  const transport=async(url,options)=>{
-  calls.push({url,options});assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer rk_live_fixture');
+  calls.push({url,options});assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,`Bearer rk_${c.environment}_fixture`);
   if(url.endsWith('/v1/account'))return Response.json({object:'account',id:'acct_platform'});
-  if(url.includes('/v2/core/accounts/'))return Response.json({id:'acct_creator',livemode:true,configuration:{recipient:{capabilities:{stripe_balance:{stripe_transfers:{status:'active'}}}}},defaults:{responsibilities:{fees_collector:'application',losses_collector:'application'}}});
-  if(url.endsWith('/v1/accounts/acct_creator'))return Response.json({id:'acct_creator',country:'US',default_currency:'usd',settings:{payouts:{schedule:{interval:'manual'}}}});
+  if(url.includes('/v2/core/accounts/'))return Response.json({id:'acct_creator',livemode,configuration:{recipient:{capabilities:{stripe_balance:{stripe_transfers:{status:'active'}}}}},defaults:{responsibilities:{fees_collector:'application',losses_collector:'application'}}});
+  if(url.endsWith('/v1/accounts/acct_creator'))return Response.json({id:'acct_creator',country:'US',default_currency:'usd',payouts_enabled:true,settings:{payouts:{schedule:{interval:'manual'}}},...accountSettings});
   if(url.includes('/external_accounts/'))return Response.json({id:'ba_destination',account:'acct_creator',currency:'usd',country:'US',available_payout_methods:['standard','instant']});
-  if(url.endsWith('/v1/balance'))return Response.json({object:'balance',livemode:true,instant_available:[{currency:'usd',amount:20000,net_available:[{destination:'ba_destination',amount:10000}]}],available:[{currency:'usd',amount:20000,source_types:{card:10000}}]});
-  if(options.method==='POST'&&url.endsWith('/v1/transfers'))return Response.json(t());
-  if(options.method==='POST'&&url.endsWith('/v1/payouts'))return Response.json(p());
-  if(url.includes('/v1/transfers?'))return Response.json({object:'list',data:[t()],has_more:false});
-  if(url.includes('/v1/payouts?'))return Response.json({object:'list',data:[p()],has_more:false});
-  if(url.endsWith('/v1/payouts/po_bank'))return Response.json(p());
-  if(url.endsWith('/v1/transfers/tr_funding'))return Response.json(t());
+  if(url.endsWith('/v1/balance'))return Response.json({object:'balance',livemode,instant_available:[{currency:'usd',amount:20000,net_available:[{destination:'ba_destination',amount:10000}]}],available:[{currency:'usd',amount:20000,source_types:{card:10000}}]});
+  if(options.method==='POST'&&url.endsWith('/v1/transfers'))return Response.json(currentTransfer());
+  if(options.method==='POST'&&url.endsWith('/v1/payouts'))return Response.json(currentPayout());
+  if(url.includes('/v1/transfers?'))return Response.json({object:'list',data:[currentTransfer()],has_more:false});
+  if(url.includes('/v1/payouts?'))return Response.json({object:'list',data:[currentPayout()],has_more:false});
+  if(url.endsWith('/v1/payouts/po_bank'))return Response.json(currentPayout());
+  if(url.endsWith('/v1/transfers/tr_funding'))return Response.json(currentTransfer());
   throw Error(`unexpected request ${url}`);
  };
  return{c,calls,observed,claims,store,transport};
 }
+for(const environment of ['test','live'])for(const phase of ['prepared','funded'])for(const [name,settings] of [
+ ['payouts explicitly disabled',{payouts_enabled:false}],
+ ['disabled reason despite enabled payouts',{payouts_enabled:true,requirements:{disabled_reason:'requirements.past_due'}}],
+ ['disabled reason without legacy payout flag',{payouts_enabled:undefined,requirements:{disabled_reason:'rejected.fraud'}}],
+])test(`${environment} ${phase}: ${name} denies before durable claim or provider write`,async()=>{
+ const f=fixture({environment,phase,transferId:phase==='funded'?'tr_funding':null},settings);
+ await assert.rejects(run(f.c.requestId,f.store,`rk_${environment}_fixture`,f.transport),/cashout_account_payouts_disabled/);
+ assert.deepEqual(f.claims,[]);assert.deepEqual(f.observed,[]);
+ assert.ok(f.calls.every(x=>x.options.method==='GET'));
+ assert.ok(f.calls.at(-1).url.endsWith('/v1/accounts/acct_creator'),'denial precedes destination and balance reads');
+});
+for(const phase of ['prepared','funded'])test(`live ${phase}: unknown actual payout readiness cannot authorize dispatch`,async()=>{
+ for(const payouts_enabled of [undefined,null,'true',1]){
+  const f=fixture({phase,transferId:phase==='funded'?'tr_funding':null},{payouts_enabled});
+  await assert.rejects(run(f.c.requestId,f.store,'rk_live_fixture',f.transport),/cashout_account_payouts_unqualified/);
+  assert.deepEqual(f.claims,[]);assert.deepEqual(f.observed,[]);assert.ok(f.calls.every(x=>x.options.method==='GET'));
+ }
+});
+test('omitted test payout fields retain isolated qualification but cannot replace capability readiness or durable claim',async()=>{
+ for(const phase of ['prepared','funded']){
+  const overrides={environment:'test',phase,transferId:phase==='funded'?'tr_funding':null};
+  const qualified=fixture(overrides,{payouts_enabled:undefined});
+  const result=await run(qualified.c.requestId,qualified.store,'rk_test_fixture',qualified.transport);
+  assert.equal(result.environment,'test');assert.deepEqual(qualified.claims,[phase==='prepared'?'funding':'payout']);
+  assert.equal(qualified.calls.filter(x=>x.options.method==='POST').length,1);
+  const missingCapability=fixture(overrides,{payouts_enabled:undefined});
+  await assert.rejects(run(missingCapability.c.requestId,missingCapability.store,'rk_test_fixture',async(url,options)=>{
+   const response=await missingCapability.transport(url,options);
+   if(!url.includes('/v2/core/accounts/'))return response;
+   const account=await response.json();delete account.configuration.recipient.capabilities.stripe_balance.stripe_transfers.status;
+   return Response.json(account);
+  }),/cashout_account_capability_unqualified/);
+  assert.deepEqual(missingCapability.claims,[]);assert.ok(missingCapability.calls.every(x=>x.options.method==='GET'));
+  const unclaimed=fixture(overrides,{payouts_enabled:undefined});let claims=0;
+  unclaimed.store.claim=async()=>{claims++;return {claimed:false,token:null};};
+  assert.equal((await run(unclaimed.c.requestId,unclaimed.store,'rk_test_fixture',unclaimed.transport)).status,'not_claimed');
+  assert.equal(claims,1);assert.deepEqual(unclaimed.observed,[]);assert.ok(unclaimed.calls.every(x=>x.options.method==='GET'));
+ }
+});
+for(const environment of ['test','live'])test(`${environment}: disabled account does not block GET-only historical reconciliation`,async()=>{
+ for(const phase of ['funding_unknown','payout_unknown','payout_pending','paid','return_pending','needs_review','reversal_unknown']){
+  const payoutId=['payout_pending','paid','return_pending','needs_review'].includes(phase)?'po_bank':null;
+  const f=fixture({environment,phase,transferId:phase==='funding_unknown'?null:'tr_funding',payoutId},
+   {payouts_enabled:false,requirements:{disabled_reason:'requirements.past_due'}});
+  await run(f.c.requestId,f.store,`rk_${environment}_fixture`,f.transport);
+  assert.deepEqual(f.claims,[]);assert.equal(f.observed.length,1);
+  assert.ok(f.calls.every(x=>x.options.method==='GET'));
+  assert.ok(f.calls.every(x=>!x.url.includes('/accounts/')),'historical reads do not depend on current account enablement');
+ }
+});
+for(const environment of ['test','live'])test(`${environment}: disabled account does not trap exact historical principal returns`,async()=>{
+ for(const phase of ['return_confirmed','funding_return_pending','funding_return_unknown']){
+  const f=fixture({environment,phase,transferId:'tr_funding'},
+   {payouts_enabled:false,requirements:{disabled_reason:'requirements.past_due'}});
+  const calls=[];
+  const reversal={object:'transfer_reversal',id:'trr_return',transfer:'tr_funding',amount:9800,currency:'usd',metadata,balance_transaction:'txn_return'};
+  const transport=async(url,options)=>{
+   calls.push({url,options});assert.equal(options.headers['Stripe-Account'],undefined);
+   assert.equal(options.headers.Authorization,`Bearer rk_${environment}_fixture`);
+   if(url.endsWith('/v1/transfers/tr_funding'))return Response.json({...t(),livemode:environment==='live',balance_transaction:'txn_funding',
+    ...(phase==='funding_return_unknown'?{amount_reversed:9800,reversed:true}:{})});
+   if(url.endsWith('/reversals')&&options.method==='POST'){
+    assert.deepEqual(f.claims,[phase==='return_confirmed'?'reversal':'funding_return']);
+    assert.equal(options.body.get('amount'),'9800');
+    assert.equal(options.headers['Idempotency-Key'],`${context.dispatchKey}-${phase==='return_confirmed'?'return':'funding-return'}`);
+    return Response.json(reversal);
+   }
+   if(url.includes('/reversals?'))return Response.json({object:'list',data:[reversal],has_more:false});
+   if(url.endsWith('/balance_transactions/txn_funding'))return Response.json({object:'balance_transaction',id:'txn_funding',source:'tr_funding',amount:-9800,fee:0,net:-9800,currency:'usd',status:'available',type:'transfer'});
+   if(url.endsWith('/balance_transactions/txn_return'))return Response.json({object:'balance_transaction',id:'txn_return',source:'trr_return',amount:9800,fee:0,net:9800,currency:'usd',status:'available',type:'transfer_refund'});
+   return f.transport(url,options);
+  };
+  const result=await run(f.c.requestId,f.store,`rk_${environment}_fixture`,transport);
+  assert.equal(result.kind,phase==='return_confirmed'?'reversal':'funding_return');
+  assert.equal(result.environment,environment);assert.equal(f.observed.length,1);
+  assert.deepEqual(f.claims,phase==='funding_return_unknown'?[]:[phase==='return_confirmed'?'reversal':'funding_return']);
+  assert.equal(calls.filter(x=>x.options.method==='POST').length,phase==='funding_return_unknown'?0:1);
+  assert.ok(calls.every(x=>!x.url.includes('/accounts/')),'returning existing principal does not require new-sale readiness');
+ }
+});
 test('funding retains accepted exact appfee once and does not claim bank payout paid',async()=>{
  const f=fixture();const result=await run(f.c.requestId,f.store,'rk_live_fixture',f.transport);
  assert.equal(result.kind,'transfer');assert.equal(result.amountMinor,9800);assert.equal(result.status,undefined);

@@ -27,6 +27,7 @@ declare c private.creator_provider_observation_control; j private.creator_provid
 begin
  if auth.role() is distinct from 'service_role' then raise exception 'service_role_required'; end if;
  select * into c from private.creator_provider_observation_control where id=true for update;
+ stamp:=clock_timestamp();
  if c.enabled is distinct from true or c.last_claimed_at>stamp-interval '1 minute' then return result; end if;
  update private.creator_provider_observation_control set last_claimed_at=stamp where id=true;
  mode:=case when exists(select 1 from public.platform_money_kill_switches where key='live_money_enabled' and state='on') then 'live' else 'test' end;
@@ -43,11 +44,18 @@ begin
  and a.provider_account_id ~ '^acct_[A-Za-z0-9]+$'
  and private.ordinary_commerce_premium_current(u.id,case mode when 'live' then 'production' else 'sandbox' end)
  on conflict(account_id) do nothing;
- -- Expired/unknown writes are not immediately replayed. Apply bounded backoff.
- update private.creator_provider_observation_jobs set failure_count=least(failure_count+1,30),
- due_at=stamp+make_interval(mins=>least(10,power(2,least(failure_count,4))::integer)),
+ -- An expired job may still be held by an unresolved completion. Skip it
+ -- rather than blocking all healthy claims behind that row. Bound maintenance
+ -- separately from the five provider observations returned by this call.
+ with expired as materialized (
+  select account_id from private.creator_provider_observation_jobs
+  where lease_until<=stamp order by lease_until,account_id limit 25
+  for update skip locked
+ )
+ update private.creator_provider_observation_jobs q set failure_count=least(q.failure_count+1,30),
+ due_at=stamp+make_interval(mins=>least(10,power(2,least(q.failure_count,4))::integer)),
  lease_token=null,lease_until=null,leased_at=null
- where lease_until<=stamp;
+ from expired where q.account_id=expired.account_id and q.lease_until<=stamp;
  for j in select q.* from private.creator_provider_observation_jobs q
  join public.creator_payout_accounts a on a.id=q.account_id
  join auth.users u on u.id::text=a.creator_user_id and u.id=q.creator_id
@@ -81,6 +89,8 @@ begin
  -- Global order: account -> job -> wave1 refresh mutex. Never job -> account.
  select * into a from public.creator_payout_accounts where id=p_account for update;
  select * into j from private.creator_provider_observation_jobs where account_id=p_account for update;
+ -- Never validate a lease against the timestamp from before a lock wait.
+ stamp:=clock_timestamp();
  mode:=case when exists(select 1 from public.platform_money_kill_switches where key='live_money_enabled' and state='on') then 'live' else 'test' end;
  if p_token is null or j.lease_token is null or j.lease_token is distinct from p_token
  or j.lease_until is null or j.leased_at is null or j.lease_until<=stamp
@@ -114,6 +124,8 @@ language plpgsql security definer set search_path='' as $$
 declare n integer; stamp timestamptz:=clock_timestamp();
 begin
  if auth.role() is distinct from 'service_role' then raise exception 'service_role_required'; end if;
+ perform 1 from private.creator_provider_observation_jobs where account_id=p_account for update;
+ stamp:=clock_timestamp();
  update private.creator_provider_observation_jobs set failure_count=least(failure_count+1,30),
  due_at=stamp+make_interval(mins=>least(10,power(2,least(failure_count,4))::integer)),
  lease_token=null,lease_until=null,leased_at=null
@@ -134,6 +146,6 @@ begin
  execute replace(d,needle,$replacement$and exists(select 1 from private.creator_provider_observation_jobs j
    where j.account_id=a.id and j.creator_id=p_creator and j.environment=a.provider_environment
    and j.provider_account_id=a.provider_account_id and j.observed_at=a.provider_configuration_observed_at
-   and j.observed_at=a.last_provider_sync_at and j.observed_at between now()-interval '15 minutes' and now())
+   and j.observed_at=a.last_provider_sync_at and j.observed_at between clock_timestamp()-interval '15 minutes' and clock_timestamp())
   and a.last_provider_sync_at between$replacement$);
 end $patch$;

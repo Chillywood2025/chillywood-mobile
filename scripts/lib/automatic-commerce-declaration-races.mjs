@@ -15,4 +15,8 @@ export async function runAutomaticCommerceDeclarationRaces({query,race,lit}) {
  assert.equal(query(`select count(*) from private.creator_eligibility_declarations where creator_id=${lit(actor.id)}`),'10');
  query(`begin;${auth(peer)}${declaration('TX')}commit;`);
  assert.equal(query(`select count(*) from private.creator_eligibility_declarations where creator_id=${lit(actor.id)}`),'10','same latest evidence is a retry even at quota');
+ await race('mode writer before declaration is rechecked after live-money row wait',
+  "update public.platform_money_kill_switches set state='off' where key='live_money_enabled';select '{}'::jsonb;",
+  auth(peer)+declaration('TX'),{error:/creator_mode_changed/});
+ query("begin;set local request.jwt.claim.role='service_role';update public.platform_money_kill_switches set state='on' where key='live_money_enabled';commit;");
 }

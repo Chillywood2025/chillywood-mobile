@@ -18,6 +18,7 @@ import {
 import { SUPABASE_URL, supabase } from "./supabase";
 import {
   canCreateCreatorMoneyExposure,
+  canUseCreatorSandboxTools,
   parseCreatorEligibilityReadback,
   type CreatorEligibilityDecision,
 } from "./creatorEligibility";
@@ -243,7 +244,7 @@ export async function readMyCreatorEligibilityAuthority(
     || exactText(row.sessionGeneration) !== before.sessionGeneration) {
     return parseCreatorEligibilityReadback(null);
   }
-  return parseCreatorEligibilityReadback(data);
+  return parseCreatorEligibilityReadback(data, before);
 }
 
 export async function assertCreatorMoneyExposureAllowed(
@@ -256,6 +257,14 @@ export async function assertCreatorMoneyExposureAllowed(
   return eligibility;
 }
 
+export async function assertCreatorSandboxToolsAllowed(expectedAuthority: AccountSessionAuthorityBinding) {
+  const eligibility = await readMyCreatorEligibilityAuthority(expectedAuthority);
+  if (!canCreateCreatorMoneyExposure(eligibility) && !canUseCreatorSandboxTools(eligibility)) {
+    throw new Error("Sandbox creator setup is unavailable until current server eligibility is confirmed.");
+  }
+  return eligibility;
+}
+
 const normalizeConfig = (value: unknown): CreatorMonetizationConfig | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
@@ -264,6 +273,8 @@ const normalizeConfig = (value: unknown): CreatorMonetizationConfig | null => {
   const sourceId = toText(row.sourceId);
   const productKey = toText(row.productKey);
   if (!id || !sourceType || !sourceId || !productKey) return null;
+  if (row.environment !== "sandbox" || row.payableState !== "not_payable"
+    || row.productionEnabled !== false || row.payoutEnabled !== false) return null;
   return {
     id,
     creatorId: toText(row.creatorId),
@@ -278,8 +289,8 @@ const normalizeConfig = (value: unknown): CreatorMonetizationConfig | null => {
     environment: "sandbox",
     status: toText(row.status) as CreatorMonetizationConfig["status"],
     payableState: "not_payable",
-    productionEnabled: row.productionEnabled === true,
-    payoutEnabled: row.payoutEnabled === true,
+    productionEnabled: false,
+    payoutEnabled: false,
     createsDigitalAccess: row.createsDigitalAccess === true,
     grantsLiveKitPublish: row.grantsLiveKitPublish === true,
     grantsHostAuthority: row.grantsHostAuthority === true,
@@ -313,7 +324,7 @@ export async function saveCreatorSandboxMonetizationConfig(input: {
   if (tier.sourceType !== input.sourceType) throw new Error("Source type does not match the selected product tier.");
   if (!isValidCreatorMonetizationSourceId(input.sourceId)) throw new Error("Enter a real source UUID before saving.");
 
-  await assertCreatorMoneyExposureAllowed(initiatingAuthority);
+  await assertCreatorSandboxToolsAllowed(initiatingAuthority);
   await currentAuthorityRequired(initiatingAuthority);
   const subject = await captureAccountBoundSupabaseMutationSubject(initiatingAuthority.userId);
   if (!sameAccountSessionAuthority(initiatingAuthority, subject.authority)) {
@@ -366,7 +377,11 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
     throw new Error("Creator purchase authority is unavailable for the current account.");
   }
   const operationAuthority = purchaseSubject.authority;
-  await assertCreatorMoneyExposureAllowed(operationAuthority);
+  if (input.config.environment !== "sandbox" || input.config.payableState !== "not_payable"
+    || input.config.productionEnabled !== false || input.config.payoutEnabled !== false) {
+    throw new Error("Creator sandbox tools require an isolated non-payable sandbox config.");
+  }
+  await assertCreatorSandboxToolsAllowed(operationAuthority);
   await currentAuthorityRequired(operationAuthority);
   const tier = getCreatorSandboxTier(input.config.productKey);
   if (Platform.OS === "ios") {

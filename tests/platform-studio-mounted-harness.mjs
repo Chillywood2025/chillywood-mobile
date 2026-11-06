@@ -55,6 +55,11 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     subscribeToAccountSessionAuthority:()=>noop,
     readCreatorAuthoringPrices:async sourceType=>({status:'resolved',subjectUserId:session.user.id,prices:[{priceKey:'fixture-price',productKey:'fixture-product',amountMinor:['vip_pass','channel_subscription'].includes(sourceType)?499:99,currency:'usd',label:['vip_pass','channel_subscription'].includes(sourceType)?'$4.99':'$0.99',environment:'sandbox',provider:'revenuecat_app_store',providerProductId:'fixture-store-product',platform:'ios',status:'sandbox',providerVerified:false,availablePlatforms:['ios','android'],availabilityLabel:'iOS and Android'}]}),
     sameAccountSessionAuthority:authorityApi.sameAccountSessionAuthority,
+    ...productionFunctions('_lib/creatorEligibilityDeclaration.ts',['CREATOR_US_REGIONS'],{}),
+    creatorDeclarationErrorMessage:()=> 'Refresh before retrying.',
+    readCreatorEligibilityDeclaration:async()=>({declaration:null,pending:[],eligibility:null}),
+    readCreatorPayoutLegalStatus:async()=> 'Payout terms: not yet checked.',
+    saveCreatorEligibilityDeclaration:async()=>{throw Error('Declaration save requires an explicit test fixture');},
     useSession:()=>session,useBetaProgram:()=>({isLoading:false,isActive:true,accessState:{status:'active'}}),getBetaAccessBlockCopy:()=>({title:'Beta required',body:'Blocked'}),
     DEFAULT_APP_CONFIG:config,readAppConfig:async()=>config,resolveFeatureConfig:x=>x.features,resolveBrandingConfig:x=>x.branding,
     readUserProfile:async()=>({username:'Owner',displayName:'Owner',avatarIndex:0,platformAccessVisibility:'public',watchPartyAccessRule:'open',communicationAccessRule:'open'}),normalizeUserProfile:x=>x,saveUserProfile:async x=>x,
@@ -117,6 +122,8 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name.endsWith('/creatorVideoPreview'))return evaluate('_lib/creatorVideoPreview.ts');
       if(name.endsWith('/CreatorContentActionSheet'))return evaluate('components/creator-media/CreatorContentActionSheet.tsx');
       if(name.endsWith('/creatorMonetizationFeatures'))return evaluate('_lib/creatorMonetizationFeatures.ts');
+      if(name.endsWith('/creatorEligibility'))return evaluate('_lib/creatorEligibility.ts');
+      if(name.endsWith('/creator-eligibility-declaration-panel'))return evaluate('components/monetization/creator-eligibility-declaration-panel.tsx');
       if(name.endsWith('/creatorMonetizationRouteTargets'))return evaluate('_lib/creatorMonetizationRouteTargets.ts');
       if(name.endsWith('/eventSchedule'))return evaluate('_lib/eventSchedule.ts');
       if(name.endsWith('/useCreatorAuthoringPrice'))return evaluate('_lib/useCreatorAuthoringPrice.ts');

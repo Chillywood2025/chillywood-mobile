@@ -14,6 +14,8 @@ const owner = (sessionGeneration = 'a', userId = 'creator') => ({ userId, accoun
 const same = (a, b) => !!a && !!b && JSON.stringify(a) === JSON.stringify(b);
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const saved = () => ({ declaration: { regionCode: 'CA', declaredAt: '2026-11-06T00:00:00Z' }, pending: ['Tax information', 'Sanctions review'] });
+const eligibility = { exports: {} };
+new Function('exports', 'module', ts.transpileModule(fs.readFileSync('_lib/creatorEligibility.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(eligibility.exports, eligibility);
 const source = fs.readFileSync(new URL('../components/monetization/creator-eligibility-declaration-panel.tsx', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
@@ -34,6 +36,7 @@ async function mount(t) {
   const state = { authority: owner(), focused: true, saves: [], reads: 0, legalReads: 0, save: null, read: null };
   let tree;
   const mocks = {
+    '../../_lib/creatorEligibility': eligibility.exports,
     react: React,
     'expo-router': { useFocusEffect(fn) { React.useEffect(() => state.focused ? fn() : undefined, [fn, state.focused]); } },
     'react-native': { ...Object.fromEntries(['Pressable', 'Text', 'TextInput', 'View'].map(x => [x,x])), StyleSheet: { create: x => x } },
@@ -57,6 +60,29 @@ async function mount(t) {
   const fill = async () => { await press('adult'); await press('us'); await act(() => control('region').onChangeText('ca')); };
   return { state, act, render, control, press, fill, text: () => walk(tree,n => n.type === 'Text').map(n => n.props.children).flat(Infinity).join(' ') };
 }
+test('mounted Money Center distinguishes branded sandbox readiness from pending live verification', async t => {
+  const h = await mount(t), a = h.state.authority;
+  const decision = eligibility.exports.parseCreatorEligibilityReadback({ ...a, state: 'PENDING_VERIFICATION',
+    authoritative: true, authoritySource: 'automatic_eligibility', accountStatus: 'ACTIVE', moderationState: 'CLEAR',
+    age18Plus: true, market: 'UNITED_STATES', creatorRole: true, legalAccepted: true, platformCapability: true,
+    rolloutEligible: true, taxComplete: null, sanctionsClear: null, providerEligible: null, payoutEligible: null,
+    kycComplete: null, canCreateMoneyExposure: false, canProcessHistoricalObligations: true,
+    minimumAge: 18, rollout: 'AUTOMATIC_PREMIUM_UNITED_STATES', version: 1, evaluatedAt: '2026-11-06T00:00:00Z',
+    sandboxCapability: { environment: 'sandbox', financialAuthority: false, canUseCreatorTools: true },
+  }, a);
+  assert.equal(eligibility.exports.canUseCreatorSandboxTools(decision), true);
+  h.state.read = async () => ({ ...saved(), eligibility: decision });
+  await h.press('refresh');
+  assert.match(h.text(), /Sandbox creator tools ready; live verification pending/);
+  assert.match(h.text(), /Tax information, Sanctions review/);
+  h.state.read = async () => ({ ...saved(), eligibility: { ...decision } });
+  await h.press('refresh');
+  assert.doesNotMatch(h.text(), /Sandbox creator tools ready/);
+  h.state.read = async () => ({ ...saved(), eligibility: decision });
+  await h.press('refresh');
+  h.state.authority = owner('rotated'); await h.render();
+  assert.doesNotMatch(h.text(), /Sandbox creator tools ready/);
+});
 test('mounted declaration starts unchecked; territories and repeated taps cannot submit; saved declaration stays after cancel', async t => {
   const h = await mount(t);
   assert.equal(h.control('adult').accessibilityState.checked, false); assert.equal(h.control('us').accessibilityState.checked, false);
@@ -76,6 +102,13 @@ test('cancel retires pending save callbacks and stale captured controls but does
   assert.doesNotMatch(h.text(),/Saved self-declaration/); assert.equal(h.state.legalReads,0);
   await h.act(stale); assert.equal(h.state.saves.length,1);
   await h.press('refresh'); assert.match(h.text(),/Saved self-declaration/);
+});
+test('repeated empty-form cancel refreshes the lease while stale controls stay retired', async t => {
+  const h=await mount(t), staleRefresh=h.control('refresh').onPress;
+  for(let i=0;i<5;i++) await h.press('cancel');
+  await h.act(staleRefresh); assert.equal(h.state.reads,0);
+  await h.press('refresh'); assert.equal(h.state.reads,1);
+  await h.fill(); await h.press('save'); assert.equal(h.state.saves.length,1);
 });
 for (const kind of ['account', 'generation', 'focus']) test(`pending save and stale controls are fenced on ${kind}`, async t => {
   const h=await mount(t); await h.fill(); const held=deferred(); h.state.save=()=>held.promise;

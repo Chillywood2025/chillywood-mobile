@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {runMerchCheckoutDispatchRaces} from '../../scripts/lib/merch-checkout-dispatch-races.mjs';
-import {seedQualifiedCommerceCreator} from '../helpers/automatic-commerce-fixture.mjs';
+import {commerceActor,seedQualifiedCommerceCreator} from '../helpers/automatic-commerce-fixture.mjs';
 import {runAutomaticCommerceAuthorityRaces} from '../../scripts/lib/automatic-commerce-authority-races.mjs';
+import {runAutomaticCommerceObserverLeaseRaces} from '../../scripts/lib/automatic-commerce-observer-races.mjs';
 
 test('all native checkout fixture SQL executes on full schema; serialized adapter is not contention proof',{timeout:240000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
@@ -12,7 +13,9 @@ test('all native checkout fixture SQL executes on full schema; serialized adapte
   await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false)`);
   await db.exec(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
   const actors=(await db.query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) as actors from event_reservation_fixture.actors")).rows[0].actors;
-  await seedQualifiedCommerceCreator(db,actors.creator,{environment:'production'});
+  actors.creator=commerceActor();
+  await db.exec('delete from public.sandbox_monetization_testers where user_id in(select user_id::text from event_reservation_fixture.actors)');
+  await seedQualifiedCommerceCreator(db,actors.creator);
   const lit=value=>`'${String(value).replaceAll("'","''")}'`;
   const json=value=>`${lit(JSON.stringify(value))}::jsonb`;
   const auth=(who='creator',role='authenticated')=>`set local role ${role};set local request.jwt.claims=${json({role,sub:actors[who].id,session_id:actors[who].session}).replace(/::jsonb$/u,'')};set local request.headers='{"x-chillywood-platform":"ios"}';`;
@@ -36,10 +39,14 @@ test('all native checkout fixture SQL executes on full schema; serialized adapte
    return {first:firstResult,second:secondResult};
   };
   await runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json,sequentialReplay:true});
-  assert.equal(schedules.length,10);
+  assert.equal(schedules.length,12);
   assert.ok(schedules.some(name=>name.includes('retained webhook')));
   assert.ok(schedules.some(name=>name.includes('retained reservation')));
   await runAutomaticCommerceAuthorityRaces({query,race,lit});
-  assert.equal(schedules.length,16);
+  assert.equal(schedules.length,18);
+  const observer=await seedQualifiedCommerceCreator(db,undefined,{environment:'production'});
+  const account=(await db.query('select id from public.creator_payout_accounts where creator_user_id=$1',[observer.id])).rows[0].id;
+  await runAutomaticCommerceObserverLeaseRaces({query,race,lit,account});
+  assert.equal(schedules.length,20);
  }finally{await db.close();}
 });

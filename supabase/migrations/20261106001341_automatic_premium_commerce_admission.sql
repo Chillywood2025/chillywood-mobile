@@ -17,6 +17,8 @@ language sql volatile security definer set search_path='' as $$
  select p_user is not null and p_session is not null and p_environment in ('sandbox','production')
  and exists(select 1 from auth.users u where u.id=p_user and u.deleted_at is null and u.email_confirmed_at is not null
   and coalesce(u.raw_app_meta_data->>'accountDeidentified','false')<>'true')
+ and exists(select 1 from auth.sessions session_row where session_row.id=p_session and session_row.user_id=p_user
+  and (session_row.not_after is null or session_row.not_after>clock_timestamp()))
  and public.creator_tip_buyer_session_authority_internal(p_user,p_session);
 $$;
 create function private.ordinary_commerce_subject_current(p_user uuid,p_session uuid,p_environment text) returns boolean
@@ -191,7 +193,8 @@ language sql volatile set search_path='' as $$
   and e.state not in ('SUSPENDED','REVOKED') and e.account_status='ACTIVE'
   and e.age_18_plus and e.legal_accepted and e.creator_role and e.market='UNITED_STATES'
   and e.moderation_state='CLEAR' and e.platform_capability
-  and e.tax_complete is distinct from false and e.sanctions_clear is distinct from false)
+  and e.tax_complete is distinct from false and e.sanctions_clear is distinct from false
+  and e.provider_eligible is distinct from false and e.kyc_complete is distinct from false and e.payout_eligible is distinct from false)
  and not exists(select 1 from public.creator_payout_eligibility_records e where e.creator_user_id=p_user::text
   and (e.fraud_hold_active or e.admin_review_status in ('pending_review','rejected','on_hold') or e.eligibility_status='on_hold'));
 $$;
@@ -275,6 +278,115 @@ do $patch$ declare d text; n text:=$needle$  if i.environment='sandbox' and not 
  d:=pg_get_functiondef('public.begin_creator_event_checkout(uuid,uuid)'::regprocedure);
  if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: event free buyer current mode'; end if;
  execute replace(d,n,$replacement$  if not private.ordinary_commerce_buyer_current(i.user_id,(i.session_generation)::uuid,i.environment)$replacement$);
+end $patch$;
+
+create function private.ordinary_merch_mode_current(p_environment text) returns boolean
+language sql stable security definer set search_path='' as $$
+ select (p_environment='sandbox' and public.is_money_feature_allowed('merch_enabled',false)
+   and exists(select 1 from public.platform_money_kill_switches where key='live_money_enabled' and state='off'))
+ or (p_environment='production' and private.merch_live_checkout_ready());
+$$;
+revoke all on function private.ordinary_merch_mode_current(text) from public,anon,authenticated,service_role;
+
+-- reservation global mode fence
+do $patch$ declare d text; n text:=$needle$ if not private.ordinary_commerce_buyer_current(auth.uid(),(auth.jwt()->>'session_id')::uuid,p.environment)$needle$; begin
+ d:=pg_get_functiondef('public.reserve_merch_checkout_before_net_share(uuid,integer,uuid,uuid)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: reservation global mode fence'; end if;
+ execute replace(d,n,$replacement$ if not private.ordinary_merch_mode_current(p.environment) then raise exception 'merch_mode_unavailable'; end if;
+ if not private.ordinary_commerce_buyer_current(auth.uid(),(auth.jwt()->>'session_id')::uuid,p.environment)$replacement$);
+end $patch$;
+
+-- product global mode projection
+do $patch$ declare d text; n text:=$needle$'checkoutAvailable',p.publication_status='published'$needle$; begin
+ d:=pg_get_functiondef('public.merch_product_projection_before_variants(public.merch_products)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: product global mode projection'; end if;
+ execute replace(d,n,$replacement$'checkoutAvailable',private.ordinary_merch_mode_current(p.environment) and p.publication_status='published'$replacement$);
+end $patch$;
+
+-- order global mode projection
+do $patch$ declare d text; n text:=$needle$'checkoutResumeAvailable',$needle$; begin
+ d:=pg_get_functiondef('public.merch_order_projection_before_variants(public.merch_orders)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: order global mode projection'; end if;
+ execute replace(d,n,$replacement$'checkoutResumeAvailable',private.ordinary_merch_mode_current(o.environment) and $replacement$);
+end $patch$;
+
+-- dispatch current global mode
+do $patch$ declare d text; n text:=$needle$or (o.environment='sandbox' and not public.is_money_feature_allowed('merch_enabled',false))
+   or (o.environment='production' and not private.merch_live_checkout_ready())$needle$; begin
+ d:=pg_get_functiondef('public.transition_merch_checkout_dispatch(uuid,uuid,uuid,text,jsonb)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: dispatch current global mode'; end if;
+ execute replace(d,n,$replacement$or not private.ordinary_merch_mode_current(o.environment)$replacement$);
+end $patch$;
+
+-- product mode reason
+do $patch$ declare d text; n text:=$needle$'checkoutReason',case$needle$; begin
+ d:=pg_get_functiondef('public.merch_product_projection_before_variants(public.merch_products)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: product mode reason'; end if;
+ execute replace(d,n,$replacement$'checkoutReason',case when not private.ordinary_merch_mode_current(p.environment) then 'Checkout is unavailable in the current payment mode.'$replacement$);
+end $patch$;
+
+-- order mode reason
+do $patch$ declare d text; n text:=$needle$'checkoutResumeReason',case$needle$; begin
+ d:=pg_get_functiondef('public.merch_order_projection_before_variants(public.merch_orders)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: order mode reason'; end if;
+ execute replace(d,n,$replacement$'checkoutResumeReason',case when not private.ordinary_merch_mode_current(o.environment) then 'Checkout is unavailable in the current payment mode. Existing order status remains available.'$replacement$);
+end $patch$;
+
+-- mode neutral product readiness
+do $patch$ declare d text; n text:=$needle$not ready for sandbox checkout$needle$; begin
+ d:=pg_get_functiondef('public.merch_product_projection_before_variants(public.merch_products)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: mode neutral product readiness'; end if;
+ execute replace(d,n,$replacement$not ready for checkout$replacement$);
+end $patch$;
+
+-- mode neutral seller readiness
+do $patch$ declare d text; n text:=$needle$not ready to accept sandbox orders$needle$; begin
+ d:=pg_get_functiondef('public.merch_product_projection_before_variants(public.merch_products)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: mode neutral seller readiness'; end if;
+ execute replace(d,n,$replacement$not ready to accept orders$replacement$);
+end $patch$;
+
+-- sandbox listing current mode
+do $patch$ declare d text; n text:=$needle$or public.resolve_sandbox_monetization_tester())$needle$; begin
+ d:=pg_get_functiondef('public.list_creator_merch_products(uuid,boolean,uuid,integer)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: sandbox listing current mode'; end if;
+ execute replace(d,n,$replacement$or (public.resolve_sandbox_monetization_tester() and private.ordinary_merch_mode_current(environment)))$replacement$);
+end $patch$;
+
+-- live onboarding production membership
+do $patch$ declare d text; n text:=$needle$ select * into t from public.creator_payout_accounts where creator_user_id=p_creator::text and provider='stripe_connect' and provider_environment='test';$needle$; begin
+ d:=pg_get_functiondef('public.get_creator_connect_onboarding_route(uuid,uuid)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: live onboarding production membership'; end if;
+ execute replace(d,n,$replacement$ select * into t from public.creator_payout_accounts where creator_user_id=p_creator::text and provider='stripe_connect' and provider_environment='test';
+ -- Live hosted setup remains production-Premium-only even before live payments turn on.
+ if (p.id is not null or a.id is not null) and not private.ordinary_commerce_subject_current(p_creator,p_session,'production') then
+  return jsonb_build_object('mode','live','status','creator_onboarding_eligibility_required'); end if;$replacement$);
+end $patch$;
+
+-- dispatch final current clock
+do $patch$ declare d text; n text:=$needle$ if p_action='dispatch' then
+  -- Legacy retry$needle$; begin
+ d:=pg_get_functiondef('public.transition_merch_checkout_dispatch(uuid,uuid,uuid,text,jsonb)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: dispatch final current clock'; end if;
+ execute replace(d,n,$replacement$ if p_action='dispatch' then
+  -- Time can expire while waiting for retained product/order/tax locks. Recheck
+  -- at the durable dispatch boundary, not only before those waits.
+  if not private.ordinary_commerce_buyer_current(p_buyer_id,p_session_id,o.environment)
+   or not public.merch_seller_ready_internal(o.creator_id)
+   or not private.ordinary_merch_mode_current(o.environment)
+   or (o.environment='production' and not exists(
+    select 1 from private.merch_checkout_provider_bindings binding
+    where binding.order_id=o.id and binding.account_id is not null
+     and private.merch_live_checkout_ready(binding.account_id)))
+  then return '{"authorized":false,"aborted":false}'::jsonb; end if;
+  -- Legacy retry$replacement$);
+end $patch$;
+
+-- live checkout qualification current clock
+do $patch$ declare d text; n text:=$needle$qualified_until>statement_timestamp()$needle$; begin
+ d:=pg_get_functiondef('private.merch_live_checkout_ready(text)'::regprocedure);
+ if position(n in d)=0 then raise exception 'automatic_commerce_patch_missing: live checkout qualification current clock'; end if;
+ execute replace(d,n,$replacement$qualified_until>clock_timestamp()$replacement$);
 end $patch$;
 
 commit;

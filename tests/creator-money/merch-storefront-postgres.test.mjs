@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 test('merch catalog and orders use real session, creator, stock and participant authority', {timeout:240000}, async t=>{
-  const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false});
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const buyer=randomUUID(),other=randomUUID(),hs=randomUUID(),bs=randomUUID(),os=randomUUID();
   const admin=async()=>{await db.exec('reset role');await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false)`);};
@@ -20,9 +21,14 @@ test('merch catalog and orders use real session, creator, stock and participant 
       from auth.sessions s cross join public.wave1_legal_document_versions d where s.user_id in($1,$2,$3) and d.active and d.market='UNITED_STATES'
       and (d.capability='account' or (s.user_id=$1 and d.capability in('creator','creator_money')))`,[host,buyer,other]);
     await admin();
-    await one(`select public.wave1_evaluate_creator_eligibility($1,'{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR","market":"UNITED_STATES","rolloutEligible":false,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','merch-fixture','local_pgtap')`,[host]);
-    await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[buyer]);
+    await seedCommerceCreator(db,{id:host,session:hs});
+    await db.exec("update public.platform_money_kill_switches set state='sandbox_only' where key='merch_enabled'");
+    for(const id of [buyer,other])await assertBuyerHasNoPremium(db,{id});
     await claim(host,hs);
+    const declared=await one("select public.declare_creator_money_eligibility(true,'US','CA')");
+    assert.equal(declared.state,'PENDING_VERIFICATION');assert.equal(declared.canCreateMoneyExposure,false);
+    assert.equal(declared.taxComplete,null);assert.equal(declared.sanctionsClear,null);
+    assert.equal(declared.sandboxCapability.canUseCreatorTools,true);
     const id=randomUUID();
     const save=(args)=>one('select public.save_creator_merch_product_with_tracking($1,$2,$3,$4,$5,$6,$7,$8,$$tracked$$)',args);
     let product=await save([id,'Test tee','Physical test only',null,1000,2,'published',null]);
@@ -31,11 +37,13 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await assert.rejects(()=>save([id,'Conflict','Physical test only',null,1000,2,'published',null]),/changed_reload/);
     assert.equal((await one('select public.list_creator_merch_products(null,true,null,20)')).products.length,1);
     await claim(other,os);
-    assert.deepEqual((await one('select public.list_creator_merch_products($1)',[host])).products,[],'non-beta buyers cannot discover sandbox listings');
+    assert.equal((await one('select public.list_creator_merch_products($1)',[host])).products[0].checkoutAvailable,true,'ordinary free buyers can discover sandbox listings without beta membership');
     await assert.rejects(()=>save([id,'Stolen','',null,1000,2,'draft',product.updatedAt]),/(not_found|changed_reload)/);
     await assert.rejects(()=>one('select public.reserve_merch_checkout($1,1,$2)',[id,randomUUID()]),/permission denied/);
     await admin();
-    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]),/sandbox_tester_required/);
+    await db.query("update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id=$1",[os]);
+    await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]),/current_session_required/);
+    await db.query('update auth.sessions set not_after=null where id=$1',[os]);
     await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[buyer,os,id,randomUUID()]),/current_session_required/);
     await claim(buyer,bs);
     assert.equal((await one('select public.list_creator_merch_products($1)',[host])).products[0].checkoutAvailable,true);
@@ -80,7 +88,7 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await admin();await db.query('update public.merch_orders set created_at=now() where id=$1',[order.id]);await claim(buyer,bs);
     await assert.rejects(()=>reserve(2),/attempt_conflict/);
     await assert.rejects(()=>reserve(1,randomUUID()),/existing_pending_order/);
-    await admin();await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[other]);
+    await admin();
     await assert.rejects(()=>one('select public.reserve_merch_checkout_dispatch($1,$2,$3,2,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]),/sold_out/);
     const otherOrder=await one('select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,$$tracked$$,1000,$$usd$$)',[other,os,id,randomUUID()]);
     await claim(host,hs);const pageProduct=await save([randomUUID(),'Another product','Physical test only',null,1000,10,'published',null]);
@@ -145,6 +153,7 @@ test('merch catalog and orders use real session, creator, stock and participant 
     await admin();
     assert.equal(await one("select has_function_privilege('anon','public.reserve_merch_checkout(uuid,integer,uuid)','execute')"),false);
     assert.equal(await one("select has_table_privilege('authenticated','public.merch_products','insert')"),false);
+    for(const id of [buyer,other])await assertBuyerHasNoPremium(db,{id});
     t.diagnostic('Real full migrated schema/session/eligibility/RLS; provider transport not invoked. PGlite serialized stock tests are not multi-connection concurrency proof.');
   } finally { await db.close(); }
 });

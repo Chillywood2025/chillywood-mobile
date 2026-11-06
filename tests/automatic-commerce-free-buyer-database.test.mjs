@@ -36,6 +36,21 @@ test('free ordinary buyers can reserve merch, subscription, event and both nativ
   await rpc(creator,"select public.save_creator_merch_product_with_tracking($1,'Ordinary physical item','Physical only',null,1000,5,'published',null,'tracked') value",[product]);
   const merch=await rpc(buyer,"select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,'tracked',1000,'usd') value",[buyer.id,buyer.session,product,randomUUID()],'ios','service_role');
   assert.ok(merch.id);
+  const reserved=async()=>(await db.query('select reserved_quantity n from public.merch_products where id=$1',[product])).rows[0].n;
+  const before=await reserved();
+  for(const state of ['off','live']) {
+   await db.exec('begin');
+   try {
+    await db.exec(`set local request.jwt.claim.role='service_role';set local request.jwt.claims='{"role":"service_role"}';
+      update public.platform_money_kill_switches set state='${state==='off'?'off':'on'}' where key='${state==='off'?'merch_enabled':'live_money_enabled'}';`);
+    // Use exact actor claims inside this rollback-only mode mutation, not a
+    // nested withCommerceActor transaction that could accidentally commit it.
+    await db.query("select set_config('request.jwt.claims',$1,true)",[JSON.stringify({role:'service_role',sub:buyer.id,session_id:buyer.session})]);
+    await db.exec('set local role service_role');
+    await assert.rejects(()=>db.query("select public.reserve_merch_checkout_dispatch($1,$2,$3,1,$4,null,'tracked',1000,'usd')",[buyer.id,buyer.session,product,randomUUID()]),/mode|disabled|unavailable|not_ready|not_active/);
+   }finally{await db.exec('rollback');}
+   assert.equal(await reserved(),before,'blocked global mode cannot allocate inventory');
+  }
   await assertBuyerHasNoPremium(db,buyer);await assertBuyerHasNoPremium(db,android);
   assert.equal((await db.query('select count(*)::int n from public.sandbox_monetization_testers where user_id in($1,$2,$3)',[creator.id,buyer.id,android.id])).rows[0].n,0);
   await assert.rejects(()=>rpc({...buyer,session:android.session},'select public.create_creator_channel_subscription_purchase_intent($1) value',[offer.id]),/session|authority|authenticated/);

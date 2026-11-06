@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from './helpers/automatic-commerce-fixture.mjs';
 
 // Entire production migration chain, real RPCs and grants. No payment transport,
-// replaced SQL functions, privileged client writes, or provider qualification.
+// replaced SQL functions, privileged client writes, or live provider qualification.
 test('single-ticket auction authority, bids, inventory, and award claims', {timeout: 180000}, async () => {
   const {db} = await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true});
   try {
@@ -12,6 +13,13 @@ test('single-ticket auction authority, bids, inventory, and award claims', {time
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const query=async sql=>(await db.query(sql)).rows;
     const actors=Object.fromEntries((await query('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
+    // Current creator authority requires canonical Premium and strict provider
+    // facts. These are disposable synthetic inputs, not provider verification.
+    await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
+    await seedQualifiedCommerceCreator(db,{id:actors.creator.user_id,session:actors.creator.session_id},{providerAccountId:'acct_fixture'});
+    const premiumGrantIds=(await query("select id from public.access_grants where grant_type='premium'")).map(row=>row.id);
+    for(const actor of Object.values(actors).filter(a=>a.kind.startsWith('buyer')))
+      await assertBuyerHasNoPremium(db,{id:actor.user_id});
     const events=Object.fromEntries((await query('select * from event_reservation_fixture.events')).map(e=>[e.name,e.id]));
     const lit=v=>`'${String(v).replaceAll("'","''")}'`;
     const as=async (actor,statement,role='authenticated')=>{
@@ -29,7 +37,7 @@ test('single-ticket auction authority, bids, inventory, and award claims', {time
       `public.create_creator_event_auction('${events[name]}','${offer.termsRevisionId}',100,25,${close},${deadline},'test')`);
     const bid=(buyer,a,amount,request)=>rpc(buyer,`public.place_creator_event_auction_bid('${a.id}',${amount},'${request}',null)`);
     const read=(buyer,a)=>rpc(buyer,`public.read_creator_event_auction('${a.id}')`);
-    const count=async table=>Number((await query(`select count(*) as n from ${table}`))[0].n);
+    const count=async table=>Number((await query(`select count(*) as n from ${table}${table==='public.access_grants'?` where id not in (${premiumGrantIds.map(lit).join(',')})`:''}`))[0].n);
     const inventory=async name=>Number((await query(`select public.event_ticket_inventory_internal('${events[name]}') as n`))[0].n);
 
     const offer=await configure('show1');
@@ -56,7 +64,6 @@ test('single-ticket auction authority, bids, inventory, and award claims', {time
 
     // Synthetic trusted qualification ONLY in this disposable fixture. The
     // production migration seeds no approval or eligible account.
-    await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
     const cap=(await query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,
       platform,storefront,storefront_country,route_kind,currency,environment,payment_method,min_amount_minor,max_amount_minor,
       provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)

@@ -386,7 +386,7 @@ Deno.serve(async (req): Promise<Response> => {
 
     const [initialSettings, payoutAccount, blocked, recentAttempts, creatorDisplayName] = await Promise.all([
       readTipSettings(adminClient, creatorId),
-      readCreatorPayoutAccount(adminClient, creatorId) as Promise<PayoutAccountRow | null>,
+      readCreatorPayoutAccount(adminClient, creatorId, "test") as Promise<PayoutAccountRow | null>,
       hasAudienceBlock(adminClient, creatorId, currentUser.id),
       recentPendingTipAttempts(adminClient, currentUser.id, creatorId),
       readCreatorDisplayName(adminClient, creatorId),
@@ -479,7 +479,7 @@ Deno.serve(async (req): Promise<Response> => {
       message: "Your session changed. Check Purchases for the original attempt before trying again.",
     });
     const knownSession = toText(attempt.providerSessionId);
-    const latestPayout = await readCreatorPayoutAccount(adminClient, creatorId) as PayoutAccountRow | null;
+    const latestPayout = await readCreatorPayoutAccount(adminClient, creatorId, "test") as PayoutAccountRow | null;
     const recipientCurrent = payoutAccountReadyForTip(latestPayout)
       && (attempt.body as Record<string, unknown>)["payment_intent_data[transfer_data][destination]"] === toText(latestPayout?.provider_account_id);
     const { data: dispatchAuthority, error: dispatchAuthorityError } = await adminClient.rpc("read_creator_tip_checkout_dispatch_authority", {

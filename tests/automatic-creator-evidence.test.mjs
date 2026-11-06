@@ -8,7 +8,13 @@ test('real full-schema automatic creator declaration and strict provider evidenc
   const { db } = await createDatabase({ applyRepair: true, repairInMigrationOrder: true, includeHeldStudio: true, implicitApiGrants: false });
   const one = async (sql, args = []) => (await db.query(sql, args)).rows[0];
   try {
-    const creator = await seedCommerceCreator(db);
+    const candidate = { id: randomUUID(), session: randomUUID() };
+    // Select a real non-cohort creator, rather than accidentally exercising the
+    // legacy one-percent allowance and calling that automatic enrollment proof.
+    while ((await one("select mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||$1::text,20260814),100)=0 legacy", [candidate.id])).legacy) {
+      candidate.id = randomUUID();
+    }
+    const creator = await seedCommerceCreator(db, candidate);
     const buyer = await seedCommerceBuyer(db);
     await acceptCommerceCreatorTerms(db, creator);
     const read = (actor = creator) => withCommerceActor(db, actor, async () => (await one('select public.wave1_creator_eligibility_readback() value')).value);
@@ -19,6 +25,14 @@ test('real full-schema automatic creator declaration and strict provider evidenc
     for (const args of [['PR'], ['ca'], ['CA', creator, false], ['CA', creator, true, 'CA'], ['CA', creator, true, 'US', 'wrong']]) {
       await assert.rejects(declare(...args), /creator_declaration_invalid/);
     }
+    await read();
+    await db.query("update public.wave1_creator_eligibility set account_status='UNKNOWN' where creator_user_id=$1", [creator.id]);
+    const oldUnknown = await read();
+    assert.equal(oldUnknown.accountStatus, 'ACTIVE', 'confirmed active auth user fills missing account evidence');
+    assert.equal(oldUnknown.age18Plus, null);
+    assert.equal(oldUnknown.taxComplete, null);
+    assert.equal(oldUnknown.sanctionsClear, null);
+    assert.equal(oldUnknown.canCreateMoneyExposure, false, 'known account never supplies missing personal or compliance evidence');
     const initial = await declare();
     assert.equal(initial.declaration.source, 'self_declaration');
     assert.equal(initial.age18Plus, true);
@@ -83,5 +97,11 @@ test('real full-schema automatic creator declaration and strict provider evidenc
       has_table_privilege('service_role','private.creator_eligibility_declarations','insert') service_insert,
       (select relrowsecurity and relforcerowsecurity from pg_class where oid='private.creator_eligibility_declarations'::regclass) forced`);
     assert.deepEqual(acl, { client_read: false, service_insert: false, forced: true });
+    // A previously read sandbox mode is not usable after the authoritative
+    // switch changes, and sandbox Premium never becomes production Premium.
+    await db.exec("begin;set local request.jwt.claim.role='service_role';update public.platform_money_kill_switches set state='on' where key='live_money_enabled';commit;");
+    await assert.rejects(db.query('select private.lock_ordinary_creator_subject($1,$2,\'sandbox\')', [creator.id, creator.session]), /creator_mode_changed/);
+    assert.equal((await read()).canCreateMoneyExposure, false);
+    await assert.rejects(declare('GA'), /creator_session_premium_required/);
   } finally { await db.close(); }
 });
