@@ -22,7 +22,8 @@ export async function runProviderObservations(client: SupabaseClientLike,
   let gets = 0;
   const bounded: typeof fetch = (input, init) => {
     const url = new URL(String(input));
-    if (init?.method !== "GET" || url.origin !== "https://api.stripe.com" || ++gets > 20)
+    if (!init || !("method" in init) || init.method !== "GET"
+      || url.origin !== "https://api.stripe.com" || ++gets > 20)
       throw Error("provider_observation_read_limit");
     return transport(input, init);
   };
