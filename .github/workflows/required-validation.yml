@@ -185,9 +185,10 @@ jobs:
     if: needs.plan.outputs.database == 'true'
     needs: plan
     runs-on: ubuntu-latest
-    # Core already took 32m27s before the added transfer/tracking/case races.
-    # This is only the job budget, not a relaxed database or lock deadline.
-    timeout-minutes: 50
+    # Expanded native proofs project 53m13s including the measured successful tail.
+    # 20% engineering allowance, rounded up: 65m. See docs/DATABASE_VALIDATION_BUDGET.md.
+    # Aggregate budget only; every script/SQL/lock deadline remains unchanged.
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
