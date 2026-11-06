@@ -1,0 +1,354 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "applicationSource": "abed523a21535d7854b3dbad51f1aa8b70bdb17d",
+  "applicationTree": "808ba06732ae32caac4276465df269ae7a75015a",
+  "baselineSource": "ff1211fab1c5bba31939ab341f1f4ba744b23081",
+  "scope": "Existing eight endpoints only; no provider calls, configuration changes, observer activation or live money.",
+  "endpoints": [
+    {
+      "name": "create-creator-tip-checkout",
+      "verifyJwt": true,
+      "baselineVersion": 38,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/create-creator-tip-checkout/index.ts",
+          "sha256": "05500b59f45235d1140fe6237540125072aa98fa37a3aacb9e7d6974d71a3463"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/create-creator-tip-checkout/index.ts",
+          "sha256": "49147744e5817bf9cb5f6a31e5cab9de14b7f5570ae3510dc7eae9ab082cd642"
+        }
+      ],
+      "functionId": "4e7b1c51-41c1-48ff-869e-cffcb6d4fcd9"
+    },
+    {
+      "name": "creator-cashout-webhook",
+      "verifyJwt": false,
+      "baselineVersion": 2,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/creator-cashout-webhook/index.ts",
+          "sha256": "73ee6875d91738b6ad62b2c6142a613a4486a15cf6bb4fe1f0206f339879ff56"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "cca96d7dd7d4e3a13c5a96320f97ccf766c74f9f2a96bd7509037a2fd09ad715"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/creator-cashout-webhook/index.ts",
+          "sha256": "73ee6875d91738b6ad62b2c6142a613a4486a15cf6bb4fe1f0206f339879ff56"
+        }
+      ],
+      "functionId": "c13b2b58-aefc-4b3d-93f5-bd46aec39096"
+    },
+    {
+      "name": "creator-cashout-worker",
+      "verifyJwt": true,
+      "baselineVersion": 2,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/creator-cashout-worker/index.ts",
+          "sha256": "6aff12d935de6ced904a660d6b20133117c7d14dcb1db9fe35a6fa4182e67a96"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "cca96d7dd7d4e3a13c5a96320f97ccf766c74f9f2a96bd7509037a2fd09ad715"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/creator-cashout-worker/index.ts",
+          "sha256": "6aff12d935de6ced904a660d6b20133117c7d14dcb1db9fe35a6fa4182e67a96"
+        }
+      ],
+      "functionId": "012c81f6-952f-4cde-a2d7-10e367d82c6c"
+    },
+    {
+      "name": "sandbox-creator-cashout-webhook",
+      "verifyJwt": false,
+      "baselineVersion": 1,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/sandbox-creator-cashout-webhook/index.ts",
+          "sha256": "a15a72b6c33f7af20c0548c3119d281569b1ac4f2ba0fd9e906636a6f933138a"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "cca96d7dd7d4e3a13c5a96320f97ccf766c74f9f2a96bd7509037a2fd09ad715"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/sandbox-creator-cashout-webhook/index.ts",
+          "sha256": "a15a72b6c33f7af20c0548c3119d281569b1ac4f2ba0fd9e906636a6f933138a"
+        }
+      ],
+      "functionId": "ae3beb35-edef-4c27-84e9-904b788d71d3"
+    },
+    {
+      "name": "sandbox-creator-cashout",
+      "verifyJwt": true,
+      "baselineVersion": 1,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/sandbox-creator-cashout/index.ts",
+          "sha256": "e995c77216de0aaefd041ffacabc7742bf3349a71e78066d8cd9a65e9aa65007"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "cca96d7dd7d4e3a13c5a96320f97ccf766c74f9f2a96bd7509037a2fd09ad715"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/sandbox-creator-cashout/index.ts",
+          "sha256": "e995c77216de0aaefd041ffacabc7742bf3349a71e78066d8cd9a65e9aa65007"
+        }
+      ],
+      "functionId": "fb055520-7adc-4a0f-859b-d669da3cf7fc"
+    },
+    {
+      "name": "stripe-connect-account",
+      "verifyJwt": false,
+      "baselineVersion": 84,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect-live-onboarding.ts",
+          "sha256": "5cd4fa93025d7bc3b1055654f286157b55e32509f03d06b4d7a49a14897995e1"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/stripe-connect-account/index.ts",
+          "sha256": "09826b4e982b514bab3a1a21634a1b2857eacb4099dac3e5398968ef9570a219"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "cca96d7dd7d4e3a13c5a96320f97ccf766c74f9f2a96bd7509037a2fd09ad715"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect-live-onboarding.ts",
+          "sha256": "5cd4fa93025d7bc3b1055654f286157b55e32509f03d06b4d7a49a14897995e1"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/stripe-connect-account/index.ts",
+          "sha256": "9b247a7ecdab7f5aa0ebe7a9a96f31acb399df9a0dbf546d06a6c9470ce5bc90"
+        }
+      ],
+      "functionId": "90bf6239-c1cd-4ace-b432-f8767d9549a5"
+    },
+    {
+      "name": "stripe-connect-onboarding-link",
+      "verifyJwt": false,
+      "baselineVersion": 84,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "7a8667ed05c5e4f5ef563570df16baecf14e01eb9a51e38d3caf7335729fcea3"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect-live-onboarding.ts",
+          "sha256": "5cd4fa93025d7bc3b1055654f286157b55e32509f03d06b4d7a49a14897995e1"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/stripe-connect-onboarding-link/index.ts",
+          "sha256": "d76cfc1cc5ec4b6c7bb134c131b809ae29459f3b6656e277f7d37f152e6c29d9"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/creator-cashout-execution.ts",
+          "sha256": "cca96d7dd7d4e3a13c5a96320f97ccf766c74f9f2a96bd7509037a2fd09ad715"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect-live-onboarding.ts",
+          "sha256": "5cd4fa93025d7bc3b1055654f286157b55e32509f03d06b4d7a49a14897995e1"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/stripe-connect-onboarding-link/index.ts",
+          "sha256": "50689eb2d504c791380e99f34d4309374c0d1ac85291d040e8c951b18fafea4f"
+        }
+      ],
+      "functionId": "6c1448da-65c2-4f13-9a12-d50e4c4bec8f"
+    },
+    {
+      "name": "stripe-merch-checkout",
+      "verifyJwt": false,
+      "baselineVersion": 43,
+      "baselineFiles": [
+        {
+          "path": "supabase/functions/_shared/commerce-tax-readiness.ts",
+          "sha256": "17c3999001e4cb13215b430e20d9e60d7b496f32d2d6906e1963a37529e7a98d"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551"
+        },
+        {
+          "path": "supabase/functions/stripe-merch-checkout/index.ts",
+          "sha256": "780b1881bc60fb41e7f06ad80d9a37c25076f37b7ca6c2d1e2b8de3b02ae6e33"
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "supabase/functions/_shared/commerce-tax-readiness.ts",
+          "sha256": "17c3999001e4cb13215b430e20d9e60d7b496f32d2d6906e1963a37529e7a98d"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/stripe-merch-checkout/index.ts",
+          "sha256": "d6e5c99034322124d5dfe2fa1f2420d96486fba949d7d755fa41128b687f8f44"
+        }
+      ],
+      "functionId": "d253b293-769f-4d6b-a913-14a3c2878b8d"
+    }
+  ]
+}

@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 // Registration and evidence-contract checks only, not native execution proof.
+test('required tip native runner preserves cross-rail races and adds actual entry-gate schedules',()=>{
+ const runner=readFileSync('scripts/test-tip-cross-rail-concurrency-postgres.mjs','utf8');
+ const helper=readFileSync('scripts/lib/tip-commerce-gate-races.mjs','utf8');
+ for(const marker of ['await runTipCommerceGateRaces({query,session,until,lit,actors})','assert.equal(gateChecks,16)','assert.equal(checks,9)',
+  'raceAccessGrants','inheritedAccessGrantsSql'])assert.ok(runner.includes(marker),marker);
+ for(const marker of ['seedCommerceBuyer(db)','assertBuyerHasNoPremium','public.record_creator_tip_checkout_session',
+  'public.reserve_creator_tip_checkout_attempt','public.process_stripe_tip_webhook_lifecycle',
+  'for(const retired of [false,true])',"for(const outcome of ['commit','rollback'])",'l.classid=176214 and l.objid=32 and l.objsubid=2',
+  'for update nowait','actual RPC owns source row before canonical gate','retired receipt records fact without new admission',
+  "['provider','eligibility']",'assert.notEqual(evidence.holderPid,evidence.waiterPid)'])assert.ok(helper.includes(marker),marker);
+ assert.doesNotMatch(helper,/create or replace function|disable trigger|sequentialReplay/u);
+});
 test('required merch native runner includes automatic authority schedules',()=>{
  const runner=readFileSync('scripts/test-merch-return-cases-concurrency-postgres.mjs','utf8');
  for(const name of ['runAutomaticCommerceObserverRaces','runAutomaticCommerceDeclarationRaces','runMerchCheckoutDispatchRaces'])assert.ok(runner.includes(`await ${name}(`));

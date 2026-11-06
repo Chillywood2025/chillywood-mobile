@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "reviewKind": "Independent bounded-payload implementation and scoped application closure review; not deployment approval, hosted CI or write-transport evidence",
+  "reviewedAt": "2026-11-06T18:22:04.708Z",
+  "contractSemantics": {
+    "serialization": "UTF-8 JSON.stringify(parsed contract with only top-level qualification omitted, original key order preserved)",
+    "sha256": "0a6273084fdde12e41235ddb648caa356cb2f818f0a25316bc54fd6c6fb8b90e"
+  },
+  "sourceHashes": {
+    ".github/workflows/required-validation.yml": "193b277ac2c11e0897ce3c672234fd7bd9b5612015629d8a9d5bb65c8b9925c9",
+    "ops/automatic-commerce-cutover/README.md": "b1bffce6256b3ef0899d259df39e7e3611fe5b903749633a6408d381af37eab3",
+    "ops/automatic-commerce-cutover/bridge.mjs": "894e7ea5b7dbaee82d77e91ac7be9d503b4d9a0f40eaa9e6704decbff3a80486",
+    "ops/automatic-commerce-cutover/catalog.mjs": "2da918c362dc31998af1421c0a7a5357e84741708fff7d69773f498f8e2c8183",
+    "ops/automatic-commerce-cutover/cli.mjs": "fe6febd9766319f66f2551911470d8996a46cb7c3bbabdd42a23fb1fb0206dd1",
+    "ops/automatic-commerce-cutover/cli.test.mjs": "da79708311a6ccb2a94bcfcd0809b9d44d97d2121fa780d53e9cabd4098875a9",
+    "ops/automatic-commerce-cutover/expanded-verification.test-helper.mjs": "1b76f2ef4cdf67b7d87954a826952cb6f86561aa085497c30993bd941b8b509c",
+    "ops/automatic-commerce-cutover/prepare.mjs": "c86a25e0a356c09e6d0cf54519d656bcfb23e8b75641c40b2bfe0d92d1f865b1",
+    "ops/automatic-commerce-cutover/prepare.test.mjs": "d5e0dd1f60479eb507ff42f9549e09b3d91ee2cec243e614a23c45a60d651f54",
+    "ops/automatic-commerce-cutover/qualification-baseline.json": "a72aacc70323ee13e02b7027ee2bdf0b2dcafacdf231abae22b08e2f50245a27",
+    "ops/automatic-commerce-cutover/qualification-native.json": "4b3defbf6368f967b341a7fbd215ce9b3fade58d97516ec42db809e4138dd9bb",
+    "ops/automatic-commerce-cutover/run-native.mjs": "b33b9e1709205f0a277a6e94fd3c472da80b7c01fb4ee2fa4d31571dd4a74d63",
+    "ops/automatic-commerce-cutover/test-full-native.mjs": "14a26407cc9f0e25b0ddf65e334fbedc6cb35c1adf6c37dcfa9345eccae8fd2f",
+    "ops/automatic-commerce-cutover/test-native.mjs": "dcb1941874022fbc00f729f7dfde20ebde72f9996652e7e3e9230bb901102a37",
+    "tests/automatic-commerce-cutover.test.mjs": "8a86bc28ac23b41cc3f316a9f87ed0f76953670bac23201f8cb827e613b202ca"
+  },
+  "scope": {
+    "migrations": 13,
+    "functions": 407,
+    "authorityRelations": 15,
+    "affectedCatalogKeys": 529,
+    "applicationSource": "abed523a21535d7854b3dbad51f1aa8b70bdb17d",
+    "forwardCorrection": "20261106170725"
+  },
+  "findings": [
+    "The bridge raises before original PL/pgSQL DECLARE initializers and handlers; SQL first-statement failure disables inlining. Exact OID, owner, ACL and execution metadata are preserved. The bridge module change adds only an optional source-text renderer, not a different transformation.",
+    "Finalization retains the positive current-database virtual-transaction drain, visibility and prepared-transaction checks, bounded authority/history/control locks and second exact bridge check. Newly arriving direct DML remains governed by the final statement-trigger protocol.",
+    "Function, catalog-key and migration expectations are immutable source-hashed constants. Complete cardinality, unique signatures, LEFT JOIN and IS NOT TRUE preserve rejection of missing or NULL function/history facts. Catalog, history and control observations execute afresh at each precheck, post-lock and post-DDL boundary.",
+    "Flat, codepoint-aware text arrays reconstruct exact Unicode, quotes, backslashes, newlines and dollar-delimiter data. Native tests verify byte counts and server SHA256s. Every generated request is limited to 900000 bytes and each physical line to 2048 UTF-8 bytes; tested maxima are 1803 bytes.",
+    "All thirteen source bodies execute in original ordinality inside one transaction, with original/body byte lengths and server hashes checked before execution and exact array[original_source] history rows. Only exact outer transaction wrappers are removed. Compact generation does not newly introduce dynamic EXECUTE: the prior implementation also executed each body inside one outer DO. Search-path effects and nested DDL/DO are unchanged; no migration resets the timeout or transaction role.",
+    "Bridge, recovery and finalization check complete affected catalog and frozen untouched selected catalog before and after mutation. Native failure injections demonstrate atomic rollback and preservation of original or exact bridged state. Earlier aliases, atomic-rollup components and four held migration lanes are not replayed.",
+    "Readback begins explicit READ COMMITTED/READ ONLY, validates context, acquires the shared operation gate in a separate fail-fast DO, then reads a fresh snapshot while retaining it. Classification requires the gate-held result. Actual emitted bridge and final payloads held before COMMIT reject concurrent readback; commit and rollback cases yield the corresponding fresh committed state.",
+    "Operation-gate synchronization cannot settle a request queued or paused before acquiring that gate. A prior-state snapshot alone is not terminal proof of an uncertain dispatch. No automatic uncertain-write resend, forced drain, history reversal, session revocation or persistent operation journal is introduced.",
+    "Write budgets are 50 seconds per server statement including the outer mutating DO, 3 seconds for locks and 15 seconds idle in transaction. Readback uses a 20-second statement and 15-second idle limit. These are not HTTP or downtime guarantees; the short timeout negative may expire during prechecks, while separate injected DDL failures prove partial rollback.",
+    "The launcher verifies helper and contract bytes before imports and binds preparation to the exact clean committed tooling head. Hidden tracked-file changes are rejected. Unit assertions also bind native proof to current generator, catalog, bridge and full-native-test hashes.",
+    "The two historical comments are preserved from their narrow recorded provenance. Catalog hashing stays in PostgreSQL JSONB, preserving 64-bit sequence values; role-setting values are hashed rather than exported.",
+    "Controls remain the frozen values with live money, payouts and cashout off. Observation control is disabled and declarations/jobs are initially empty. Synthetic fixture history, provider, legal and managed-service facts are not actual provider or legal qualification.",
+    "Storage objects and realtime messages relation/policy bindings are included. This is a selected catalog contract, not exhaustive coverage: enum/domain definitions and extension membership/version metadata are excluded and unchanged by these thirteen bodies."
+  ],
+  "closure": {
+    "status": "passed",
+    "scope": "Conservative static/captured dependency and application-writer review, not a general dynamic-SQL parser or arbitrary privileged-SQL proof",
+    "checks": [
+      "Reviewed recursive function callers, policy/trigger/rewrite dependencies, and all non-system outside-schema call-token and pg_depend inventory for the original 406 functions.",
+      "The added 407th receipt root has no additional function callers or pg_depend dependents in a fresh read-only all-non-system-schema capture.",
+      "Reviewed four EXECUTE-token candidates: three non-executing text matches and one constant bound SELECT, not a computed function dispatch.",
+      "Reviewed 67 direct authority writer/prelock candidates and post-provider callback/FK ancestry. The two confirmed tip omissions are repaired by the separate exact-byte prefix-only forward migration and both are bridged.",
+      "Direct statement writers, row-trigger ancestry, metadata-only profile paths and managed-Auth arrivals are distinguished from app-owned RPC prelocks. No new confirmed omission remains in this scoped inventory."
+    ]
+  },
+  "verification": {
+    "unitTests": 13,
+    "unitCommand": "node --test tests/automatic-commerce-cutover.test.mjs",
+    "unitOutcome": "passed on the listed current source and qualification artifact bytes",
+    "nativeTransitionCases": 9,
+    "fullNativeMigrations": 13,
+    "fullNativeFunctions": 407,
+    "nativeProofSha256": "4b3defbf6368f967b341a7fbd215ce9b3fade58d97516ec42db809e4138dd9bb",
+    "nativeElapsedMs": 105865,
+    "fixturePayloadSha256": {
+      "bridge": "77c3548cc88566fc4a3c43d80c2e6f13c939582a7f5232525b7d34909d199842",
+      "finalize": "74c03a173dde0d11fc97afac3f8e0161f4296884a30d20f31a6fb8963ef25bca",
+      "restore": "23449ec1ab858d74af64d051d6c764d9100ae1f52a8fe9dfee3fb8c36b94d6c7",
+      "readback": "ead1729e1e7017d7df250e38f88d6286c4095607607f34d764f021fc5fc5e5db"
+    },
+    "fixturePayloadBytes": {
+      "bridge": 556895,
+      "finalize": 795894,
+      "restore": 555562,
+      "readback": 580805
+    },
+    "maxPhysicalLineBytes": {
+      "bridge": 1803,
+      "finalize": 1803,
+      "restore": 1803,
+      "readback": 1803
+    },
+    "nativeScope": "Clean PostgreSQL 17.6 source reconstruction with managed-service doubles and synthetic history/control fingerprints. Phase bytes and source hashes are bound by the proof; target payloads remain separately source-bound. No duplicate heavy native run was performed by this reviewer.",
+    "phaseTimings": [
+      {
+        "phase": "bridge-uncertain-rollback",
+        "beforeCommitMs": 3673,
+        "wallMs": 3736,
+        "includesPausedReadbackProbe": true
+      },
+      {
+        "phase": "bridge",
+        "wallMs": 5333
+      },
+      {
+        "phase": "restore",
+        "wallMs": 3771
+      },
+      {
+        "phase": "bridge-uncertain-commit",
+        "beforeCommitMs": 5658,
+        "wallMs": 5745,
+        "includesPausedReadbackProbe": true
+      },
+      {
+        "phase": "finalize-uncertain-rollback",
+        "beforeCommitMs": 6077,
+        "wallMs": 6148,
+        "includesPausedReadbackProbe": true
+      },
+      {
+        "phase": "finalize-uncertain-commit",
+        "beforeCommitMs": 5986,
+        "wallMs": 6052,
+        "includesPausedReadbackProbe": true
+      }
+    ],
+    "tipProof": "Separate full-schema PostgreSQL 17.6 test passes nine preserved cross-rail races plus sixteen new entry-gate schedules; exact predecessor mutants fail observed source-row-before-gate checks.",
+    "compatibilityLimit": "The separate full native-commerce runner setup compatibility suite had all 20 child cases pass but exceeded its unchanged 360000 ms outer deadline in both combined and isolated diagnostics. It is not a passing compatibility result and is not erased by this cutover proof; exact-head hosted Required Validation remains required."
+  },
+  "deploymentPrerequisites": [
+    "Commit the reviewed source and obtain successful exact-head Required Validation; local source/native review is not hosted CI or deployment approval.",
+    "Recheck target identity, exact history/catalog/controls and source binding immediately before action. Arbitrary concurrent administrative DDL remains outside the reviewed application protocol.",
+    "A verified 900000-byte read-only UI probe supports bounded transport acceptance only. It does not prove write behavior, a reliable future response, server footer provenance or permission to accept SQL rewrites. Independently verify each complete prepared buffer hash/length using a fresh clipboard marker, exact project/Primary/postgres context and no selection; reject executable appended content or rewriting options.",
+    "Prepare and verify bridge/final/recovery/readback buffers before installation, retain a present operator and the documented two-minute decision deadline. Per-statement limits do not bound inter-request downtime. Restore only exact bridged state after resolving prior operation outcome, never a partial, unreadable, busy, applied or unresolved-dispatch state.",
+    "Read back through the synchronized source-bound payload after each phase. An original or bridged snapshot does not prove an uncertain pre-gate request cannot start later; do not automatically resend it.",
+    "No production write, provider change, qualification grant, legal declaration or live-money activation is authorized or evidenced by this artifact."
+  ],
+  "blockingImplementationFindings": [],
+  "supersedes": {
+    "reviewSha256": "e5fcb8ca0044ace3cdfd3ce69dcd6464a41b6782c2e73ddf689126f1f6339d7b",
+    "reason": "The prior expanded candidate exceeded the verified SQL Editor request limit. This review replaces it only for the exact bounded-line generator and synchronized-readback bytes listed here."
+  }
+}

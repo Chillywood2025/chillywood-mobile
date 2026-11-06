@@ -7,6 +7,7 @@ import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 import {seedQualifiedCommerceCreator} from './helpers/automatic-commerce-fixture.mjs';
 
 const migration='20261106073240_ordinary_commerce_canonical_lock_prefix.sql';
+const successors=['20261106170725_tip_commerce_gate_entry.sql'];
 const sql=fs.readFileSync(new URL('../supabase/migrations/'+migration,import.meta.url),'utf8');
 const roots=[...sql.slice(sql.indexOf('do $roots$'),sql.indexOf('end $roots$')).matchAll(/^\s+'(public\.[^']+|private\.[^']+)'/gmu)].map(match=>match[1]);
 const tables=['auth.users','auth.sessions','public.account_deletion_requests','public.wave1_legal_acceptances','public.wave1_legal_document_versions',
@@ -23,15 +24,22 @@ test('finite migration retains supported-root and nonblocking observer boundarie
 });
 
 test('exact successor preserves predicates/ACLs and rejects unfenced observation authority without blocking lease-only work',{timeout:180000},async t=>{
- // The sole named omission is this test's before/after subject. All624
- // predecessors replay chronologically, then the actual625th file runs once.
- const {db,replayReport}=await createDatabase({implicitApiGrants:false,excludeMigrations:[migration]});
+ // Preserve the exact before/after checkpoint: later successors cannot run
+ // ahead of this subject. All 624 predecessors replay, then the actual 625th.
+ const excluded=[migration,...successors];
+ assert.deepEqual(fs.readdirSync(new URL('../supabase/migrations/',import.meta.url))
+  .filter(file=>file.endsWith('.sql')&&file>=migration).sort(),excluded,
+  'every later successor requires explicit review before excluding it from this checkpoint');
+ const {db,replayReport}=await createDatabase({implicitApiGrants:false,excludeMigrations:excluded});
  const scalar=async(q,args=[])=>(await db.query(q,args)).rows[0].value;
  const def=signature=>scalar('select pg_get_functiondef($1::regprocedure) value',[signature]);
  const catalog=()=>db.query("select oid,oid::regprocedure::text signature,prosrc,proacl::text,proowner,prosecdef,provolatile,proconfig from pg_proc where pronamespace in('public'::regnamespace,'private'::regnamespace) and prokind='f'");
  const rollback=async action=>{await db.exec('begin');try{return await action();}finally{await db.exec('rollback');}};
  try{
   assert.equal(replayReport.files.length,624);assert.equal(replayReport.files.includes(migration),false);
+  assert.deepEqual(replayReport.excludedMigrations,excluded);
+  assert.ok(replayReport.files.every(file=>file<migration),'only chronological predecessors execute before the subject');
+  assert.deepEqual(replayReport.overlayFiles,[]);
   assert.match(await def('private.lock_ordinary_commerce_dispatch_subjects(uuid,uuid,uuid,text,text)'),/lock table public.creator_payout_accounts/u);
   assert.match(await def('private.lock_ordinary_creator_subject(uuid,uuid,text)'),/from auth\.users where id=p_creator for share/u);
   const before=new Map((await catalog()).rows.map(row=>[row.oid,row]));
