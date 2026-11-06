@@ -7,6 +7,7 @@ import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 import {seedLiveRoomActor} from './helpers/live-room-authority-fixture.mjs';
 
 const migration = '20261106073240_ordinary_commerce_canonical_lock_prefix.sql';
+const tipSuccessor = '20261106170725_tip_commerce_gate_entry.sql';
 const allowed = Object.freeze([
   'profile_avatar_scan_status', 'profile_avatar_scan_provider', 'profile_avatar_scan_result',
   'profile_avatar_scanned_at', 'profile_avatar_scan_error', 'profile_avatar_media_status',
@@ -72,8 +73,8 @@ test('exact profile metadata exception preserves authority, late guards and real
     return fn();
   });
   try {
-    assert.equal(replayReport.files.length,625,'all 624 predecessors and the actual successor execute');
-    assert.equal(replayReport.files.at(-1),migration);
+    assert.equal(replayReport.files.length,626,'all 624 predecessors, the profile gate and the tip successor execute');
+    assert.deepEqual(replayReport.files.slice(-2),[migration,tipSuccessor],'the current chain preserves the exact final migration order');
     assert.deepEqual(replayReport.excludedMigrations,[]);
     assert.deepEqual(replayReport.overlayFiles,[]);
     const columns = (await db.query("select attname from pg_attribute where attrelid='public.user_profiles'::regclass and attnum>0 and not attisdropped order by attnum")).rows.map(row=>row.attname);

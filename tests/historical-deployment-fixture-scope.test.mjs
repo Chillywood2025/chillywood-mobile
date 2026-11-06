@@ -6,8 +6,22 @@ import {createHistoricalDeploymentDatabase} from './helpers/historical-deploymen
 import {POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS} from './helpers/sandbox-cashout-historical-deployment-fixture.mjs';
 import {repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
 
+const source = fs.readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter(file => file.endsWith('.sql')).sort();
+const assertDeferredInventory = files => assert.deepEqual(files,
+  source.filter(file => file >= '20261106001341_automatic_premium_commerce_admission.sql'),
+  'every post-checkpoint successor requires explicit review in the deferred inventory');
+
+test('historical inventory rejects missing, duplicate, reordered or earlier migrations', () => {
+  const files = [...POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS];
+  assertDeferredInventory(files);
+  assert.equal(files.at(-1), '20261106170725_tip_commerce_gate_entry.sql');
+  for (const mutant of [files.slice(0,-1), [...files,files.at(-1)], [...files].reverse(),
+    ['20261105010859_sandbox_cashout_status_notifications.sql',...files]])
+    assert.throws(() => assertDeferredInventory(mutant), assert.AssertionError);
+});
+
 test('historical deployment replay defers only explicit successors and retains chronological repair', async () => {
-  const source = fs.readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter(file => file.endsWith('.sql')).sort();
+  assertDeferredInventory(POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS);
   const target = '20261105010859_sandbox_cashout_status_notifications.sql';
   const excluded = [target, ...POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS];
   assert.ok(excluded.every(file => source.includes(file)), 'every deferred filename is an actual source migration');
