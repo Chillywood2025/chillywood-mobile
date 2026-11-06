@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {commerceSeedAdapter,seedCommerceCreator} from '../../tests/helpers/automatic-commerce-fixture.mjs';
 
-export async function runAutomaticCommerceObserverRaces({query,session,until,race,actors,lit}) {
+// Shared exact input cohort for native SKIP LOCKED and sequential nested-setup
+// regression. These accounts are deliberately UNKNOWN, never qualified MATCH.
+export async function seedAutomaticCommerceObserverFixture({query,lit}) {
  const accounts=Array.from({length:6},()=>randomUUID());
  await query(`update private.creator_provider_observation_control set enabled=true,last_claimed_at=null where id=true;`);
  for(const [index,account] of accounts.entries()) {
@@ -17,7 +19,12 @@ export async function runAutomaticCommerceObserverRaces({query,session,until,rac
   insert into private.creator_provider_observation_jobs(account_id,creator_id,environment,provider_account_id,due_at)
   values(${lit(account)},${lit(creator)},'live',${lit('acct_skiplocked'+account.replaceAll('-',''))},clock_timestamp()-interval '${10-index} minutes');`);
  }
- for(const expired of [false,true]) {
+ return accounts;
+}
+
+// Data-only setup for each real native scenario. Exposing this separately lets
+// preflight exercise both fresh and expired rows without faking a peer backend.
+export async function prepareAutomaticCommerceObserverSkipLockedFixture({query,lit,accounts,expired}) {
  const expiredToken=randomUUID();
  if(expired) await query(`update private.creator_provider_observation_control set last_claimed_at=null where id=true;
   update private.creator_provider_observation_jobs set lease_token=null,leased_at=null,lease_until=null,due_at=clock_timestamp()-interval '5 minutes'
@@ -25,6 +32,13 @@ export async function runAutomaticCommerceObserverRaces({query,session,until,rac
   update private.creator_provider_observation_jobs set lease_token=${lit(expiredToken)},
    leased_at=clock_timestamp()-interval '5 minutes',lease_until=clock_timestamp()-interval '1 minute'
    where account_id=${lit(accounts[0])};`);
+ return expiredToken;
+}
+
+export async function runAutomaticCommerceObserverRaces({query,session,until,race,actors,lit}) {
+ const accounts=await seedAutomaticCommerceObserverFixture({query,lit});
+ for(const expired of [false,true]) {
+ const expiredToken=await prepareAutomaticCommerceObserverSkipLockedFixture({query,lit,accounts,expired});
  const holder=session(`begin;select account_id from private.creator_provider_observation_jobs where account_id=${lit(accounts[0])} for update;
   select jsonb_build_object('holderPid',pg_backend_pid());select 'OBSERVER_HOLDER_READY';`);
  await until(()=>holder.output().includes('OBSERVER_HOLDER_READY'),'observer job lock holder not ready');
@@ -63,7 +77,13 @@ export async function runAutomaticCommerceObserverLeaseRaces({query,race,lit,acc
  await query(`update private.creator_provider_observation_jobs set lease_token=${lit(token)},leased_at=clock_timestamp()-interval '1 minute',
   lease_until=clock_timestamp()+interval '1 hour',previous_observed_at=null,observed_at=null where account_id=${lit(account)};
   update public.creator_payout_accounts set provider_configuration_account_id=provider_account_id,
-   provider_configuration_observed_at=statement_timestamp(),last_provider_sync_at=statement_timestamp() where id=${lit(account)};
+   provider_configuration_observed_at=statement_timestamp(),last_provider_sync_at=statement_timestamp(),
+   -- Observation freshness is not configuration verification. Normalize only
+   -- the existing raw payer, preserving UNKNOWN and all readiness restrictions.
+   provider_fees_payer=case
+    when provider_fees_payer_raw in ('application','application_express','application_custom') then 'platform'
+    when provider_fees_payer_raw='account' then 'account' else 'unknown' end
+   where id=${lit(account)};
   insert into public.platform_admin_audit_logs(action,action_category,target_type,target_id,target_user_id,actor_role,metadata)
   select 'creator_provider_observation_persisted','payout','creator_payout_account',id::text,creator_user_id,'system',
    jsonb_build_object('source','creator-provider-observation-worker','provider_environment',provider_environment)

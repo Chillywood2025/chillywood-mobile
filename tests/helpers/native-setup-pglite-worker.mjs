@@ -8,7 +8,7 @@ import {createDatabase} from './database-runtime-authority-fixture.mjs';
 
 const control=new Int32Array(workerData.control),bytes=new Uint8Array(workerData.bytes);
 const encode=new TextEncoder();
-let db,snapshot;
+let db;
 function reply(value){
  const output=encode.encode(JSON.stringify(value));
  if(output.length>bytes.length)throw Error('native_setup_preflight_response_too_large');
@@ -16,14 +16,16 @@ function reply(value){
 }
 const failure=error=>({error:{message:error.message,code:error.code,where:error.where}});
 try{
- ({db}=await createDatabase());snapshot=await db.dumpDataDir();reply({ready:true});
+ if(workerData.snapshot){
+  db=new PGlite({loadDataDir:workerData.snapshot,extensions:{pgcrypto,pg_trgm}});await db.waitReady;
+ }else{
+  ({db}=await createDatabase());const snapshot=await db.dumpDataDir();
+  workerData.snapshotPort.postMessage({snapshot});workerData.snapshotPort.close();
+ }
+ reply({ready:true});
 }catch(error){reply(failure(error));parentPort.close();throw error;}
 parentPort.on('message',async({action,sql})=>{
  try{
-  if(action==='reset'){
-   await db.close();db=new PGlite({loadDataDir:snapshot,extensions:{pgcrypto,pg_trgm}});await db.waitReady;
-   reply({reset:true});return;
-  }
   if(action==='close'){await db.close();reply({closed:true});parentPort.close();return;}
   if(action!=='query'||typeof sql!=='string')throw Error('invalid_sequential_setup_operation');
   // Every native query() starts a new psql connection. A persistent WASM

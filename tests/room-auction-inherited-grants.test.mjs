@@ -4,13 +4,32 @@ import test from 'node:test';
 import vm from 'node:vm';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 import {seedLiveRoomActor} from './helpers/live-room-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from './helpers/current-event-commerce-fixture.mjs';
 
 const runners=[['room-seat-auction',7],['tip-cross-rail',9]].map(([name,checks])=>{
   const source=fs.readFileSync(`scripts/test-${name}-concurrency-postgres.mjs`,'utf8');
   const snapshotSql=source.match(/const accessGrantsSnapshotSql="([^"]+)";/)?.[1];
   const assertion=source.split('\n').find(line=>line.includes('assert.ok(query(accessGrantsSnapshotSql)===baselineAccessGrants'));
+  const inheritedAssertion=source.split('\n').find(line=>line.includes('assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants'));
+  const raceAssertion=source.split('\n').find(line=>line.includes('assert.ok(query(accessGrantsSnapshotSql)===raceAccessGrants'));
+  const inheritedSqlDeclaration=source.split('\n').find(line=>line.includes('const inheritedAccessGrantsSql='));
+  const additionAssertion=source.split('\n').find(line=>line.includes("'setup adds exactly one creator Premium grant'"));
+  const canonicalAssertion=source.match(/assert.equal\(query\(`select count\(\*\) from public.access_grants g join public.provider_events[\s\S]+?canonical current creator Premium authority'\);/u)?.[0];
+  const context=(ids,creator)=>({assert,accessGrantsSnapshotSql:snapshotSql,inheritedAccessGrantIds:JSON.stringify(ids),actors:{creator:{id:creator}},
+    lit:value=>`'${String(value).replaceAll("'","''")}'`,literal:value=>`'${String(value).replaceAll("'","''")}'`});
   return {name,checks,source,snapshotSql,unchanged(before,after){
     assert.ok(assertion);vm.runInNewContext(assertion,{assert,query:()=>after,accessGrantsSnapshotSql:snapshotSql,baselineAccessGrants:before});
+    assert.ok(raceAssertion);vm.runInNewContext(raceAssertion,{assert,query:()=>after,accessGrantsSnapshotSql:snapshotSql,raceAccessGrants:before});
+  },inheritedSql(ids){
+    assert.ok(inheritedSqlDeclaration);return vm.runInNewContext(inheritedSqlDeclaration+'\ninheritedAccessGrantsSql;',context(ids));
+  },inheritedUnchanged(before,after){
+    assert.ok(inheritedAssertion);vm.runInNewContext(inheritedAssertion,{assert,query:()=>after,inheritedAccessGrantsSql:'actual inherited-row SQL',baselineAccessGrants:before});
+  },additionChecks(ids,creator){
+    return [additionAssertion,canonicalAssertion].map(statement=>{
+      assert.ok(statement);let sql;
+      vm.runInNewContext(statement,{...context(ids,creator),query:value=>{sql=value;return '1';}});
+      return {sql,check:value=>vm.runInNewContext(statement,{...context(ids,creator),query:()=>String(value)})};
+    });
   }};
 });
 
@@ -20,7 +39,12 @@ for(const {name,checks,source,snapshotSql,unchanged} of runners) test(`native ${
   const capture=source.indexOf('const baselineAccessGrants=query(accessGrantsSnapshotSql);');
   assert.ok(capture>source.indexOf("'restore clone'"));
   assert.ok(capture<source.indexOf('tests/fixtures/'));
-  assert.ok(source.includes('where user_id in(select user_id from event_reservation_fixture.actors)'));
+  const seed=source.indexOf('await seedCurrentEventCommerceCreator');
+  assert.ok(source.indexOf('const inheritedAccessGrantIds=')<source.indexOf('tests/fixtures/'));
+  assert.ok(source.indexOf('legacy fixtures never add, remove or modify inherited access grants')<seed);
+  assert.ok(source.indexOf('const raceAccessGrants=')>source.indexOf('the only added grant has canonical current creator Premium authority'));
+  assert.equal(source.split('assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants').length,3,'setup and final inherited checks both remain');
+  assert.ok(source.includes("where user_id in(select user_id from event_reservation_fixture.actors where kind like 'buyer%')"));
   assert.ok(source.includes(`assert.equal(checks,${checks})`));
   assert.ok(source.includes('restore.assertSourceUnchanged()'));
   assert.doesNotMatch(source,/delete from public\.access_grants|truncate[^;]*access_grants/i);
@@ -72,5 +96,36 @@ test('retained Premium grant is inherited; added, removed and same-count modifie
       const changed=await snapshot();assert.equal(JSON.parse(changed).count,2);rejects(baseline,changed);
     }finally{await db.exec('rollback');}
     unchanged(baseline,await snapshot());
+    // Execute the current canonical companion after the legacy fixture checks.
+    // Exactly one creator Premium row may be added, while every inherited row
+    // (even one owned by that creator) remains protected by its original ID.
+    const creator=await scalar("select user_id from event_reservation_fixture.actors where kind='creator'");
+    await seedCurrentEventCommerceCreator(db);
+    const postSeed=(await db.query('select * from public.access_grants order by id')).rows;
+    assert.equal(postSeed.length,rows.length+1);
+    const added=postSeed.filter(row=>!rows.some(prior=>prior.id===row.id));
+    assert.equal(added.length,1);assert.equal(added[0].user_id,creator);assert.equal(added[0].grant_type,'premium');
+    assert.equal(added[0].provider,'revenuecat_google_play');assert.equal(added[0].environment,'sandbox');assert.ok(added[0].provider_event_id);
+    for(const runner of runners){
+      const inheritedSql=runner.inheritedSql(rows.map(row=>row.id));
+      runner.inheritedUnchanged(baseline,await scalar(inheritedSql));
+      const projectedInherited=inheritedSql.replace('from public.access_grants g','from jsonb_populate_recordset(null::public.access_grants,$1::jsonb) g');
+      runner.inheritedUnchanged(baseline,await scalar(projectedInherited,[JSON.stringify(postSeed)]));
+      for(const changed of [added,[{...rows[0],id:'cbe10002-0000-4000-8000-000000000001'},...added],
+        [{...rows[0],status:'revoked'},...added],[{...rows[0],metadata:{fixture_probe:true}},...added],
+        [{...rows[0],user_id:creator},...added]]){
+        const digest=await scalar(projectedInherited,[JSON.stringify(changed)]);
+        assert.throws(()=>runner.inheritedUnchanged(baseline,digest),assert.AssertionError,'legitimate added Premium never hides inherited row deletion/replacement/mutation');
+      }
+      for(const {sql,check} of runner.additionChecks(rows.map(row=>row.id),creator)){
+        check(await scalar(sql));
+        const projected=sql.replace('from public.access_grants g','from jsonb_populate_recordset(null::public.access_grants,$1::jsonb) g');
+        check(await scalar(projected,[JSON.stringify(postSeed)]));
+        const invalid=[...postSeed,{...added[0],id:'cbe10002-0000-4000-8000-000000000002'}];
+        assert.throws(()=>check(2),assert.AssertionError,'actual setup assertion rejects additional grants');
+        const count=await scalar(projected,[JSON.stringify(invalid)]);
+        assert.throws(()=>check(count),assert.AssertionError,'typed extra canonical-looking row is not accepted as a setup baseline');
+      }
+    }
   }finally{await db.close();}
 });

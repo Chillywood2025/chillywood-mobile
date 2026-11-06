@@ -4,6 +4,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {nativeSetupDatabase,nativeSource,nativeSpan,nativeFunction,nativeVariables,executeNativeSetup} from './helpers/native-runner-setup-preflight.mjs';
+import {seedAutomaticCommerceObserverFixture,prepareAutomaticCommerceObserverSkipLockedFixture,runAutomaticCommerceObserverLeaseRaces} from '../scripts/lib/automatic-commerce-observer-races.mjs';
+import {commerceSeedAdapter,seedCommerceCreator,commerceActor} from './helpers/automatic-commerce-fixture.mjs';
 
 const prefix='scripts/test-';
 const eventStart="query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));";
@@ -16,7 +18,11 @@ test('registered native commerce runner setups and late INSERT factories execute
   return result.result;
  };
  const run=(name,...args)=>runPath(prefix+name+'.mjs',...args);
- const check=async(name,fn)=>t.test(name,async()=>{db.reset();await fn();});
+ const workers=new Set();
+ const check=async(name,fn)=>t.test(name,async()=>{
+  const {threadId}=await db.reset();assert.ok(!workers.has(threadId),'each sequential case gets a fresh WASM worker');workers.add(threadId);
+  await fn();
+ });
  try{
   const googleParts=source=>[
    nativeSpan(source,'  const cap=query(',"  const holder=session('google-claim-holder'"),
@@ -46,12 +52,13 @@ test('registered native commerce runner setups and late INSERT factories execute
     assert.equal(query("select count(*) from public.access_grants g join event_reservation_fixture.actors a on a.user_id=g.user_id where a.kind like 'buyer%'"),'0');`);
   });
   await check('room auction native initial fixture and later Party admission setup',async()=>{
+   await seedCommerceCreator(commerceSeedAdapter(db.query),commerceActor());
    await run('room-seat-auction-concurrency-postgres',source=>[
-    nativeSpan(source,'  '+eventStart,'  let checks=0;'),
+    nativeSpan(source,'  const baselineAccessGrants=query(accessGrantsSnapshotSql);','  let checks=0;'),
     nativeSpan(source,'  query("insert into public.titles(',"  await race('Party auction hold"),
    ],`const a=rpc('creator',partyAuction('RACE-PARTY'));assert.ok(a.id);
     const native=rpc('buyer1',partyNative('RACE-PARTY-TWO'));assert.ok(native.id);
-    assert.equal(query(accessGrantsSnapshotSql),baselineAccessGrants);
+    assert.equal(query(inheritedAccessGrantsSql),baselineAccessGrants);assert.equal(query(accessGrantsSnapshotSql),raceAccessGrants);
     assert.equal(query("select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors where kind like 'buyer%')"),'0');`);
   });
   await check('auction transfer actual full payment, ledger, seat attendance and release fixture',async()=>{
@@ -112,14 +119,15 @@ test('registered native commerce runner setups and late INSERT factories execute
    ],`assert.equal(query("select phase from private.sandbox_cashout_executions where id='"+id+"'"),'prepared');invariants(a);`);
   });
   await check('tip cross-rail actual source factories admit Free buyers through each rail',async()=>{
+   await seedCommerceCreator(commerceSeedAdapter(db.query),commerceActor());
    await run('tip-cross-rail-concurrency-postgres',source=>[
-    nativeSpan(source,"  for(const name of ['event-reservation-authority'",'  let checks=0;'),
+    nativeSpan(source,'  const baselineAccessGrants=query(accessGrantsSnapshotSql);','  let checks=0;'),
     ...['quote','external','native','verify'].map(name=>nativeFunction(source,name)),
    ],`const action=randomUUID(),tip=randomUUID(),stripe=external('buyer1',action,tip);rpc('buyer1',stripe.sql,stripe.role);
     verify('buyer1',action,null,tip,'stripe_connect');
     const nativeAction=randomUUID(),appStore=native('buyer2',nativeAction);rpc('buyer2',appStore.sql);
     verify('buyer2',nativeAction,appStore,null,'revenuecat_app_store');
-    assert.equal(query(accessGrantsSnapshotSql),baselineAccessGrants);
+    assert.equal(query(inheritedAccessGrantsSql),baselineAccessGrants);assert.equal(query(accessGrantsSnapshotSql),raceAccessGrants);
     assert.equal(query("select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors where kind like 'buyer%')"),'0');`);
   });
   await check('Connect actual creator, production Premium, callback, bind and observation setup',async()=>{
@@ -145,20 +153,44 @@ test('registered native commerce runner setups and late INSERT factories execute
    ],`reset(2);const w=worker(),f=await enqueue();const job=call(claim(w));assert.equal(job.id,f.job.id);assert.equal(active(),1);
     assert.equal(query("select count(*) from public.access_grants where user_id='"+f.owner+"'"),'0');`);
   });
-  await check('merch observer late exact six production Premium creators, declarations and live account jobs',async()=>{
-   await runPath('scripts/lib/automatic-commerce-observer-races.mjs',source=>[
-    `const lit=value=>"'"+String(value).replaceAll("'","''")+"'";`,
-    nativeSpan(source,' const accounts=Array.from(', ' for(const expired of [false,true])'),
+  await check('merch observer exact UNKNOWN cohort and both fresh/expired native scenario setup',async()=>{
+   await runPath('scripts/lib/automatic-commerce-observer-races.mjs',()=>[
+    `const lit=value=>"'"+String(value).replaceAll("'","''")+"'";
+     const accounts=await seedAutomaticCommerceObserverFixture({query,lit});
+     for(const expired of [false,true]){
+      const token=await prepareAutomaticCommerceObserverSkipLockedFixture({query,lit,accounts,expired});
+      assert.equal(query("select "+(expired?"lease_token="+lit(token)+" and lease_until<clock_timestamp()":"lease_token is null")+" from private.creator_provider_observation_jobs where account_id="+lit(accounts[0])),'t');
+     }`,
    ],`assert.equal(query("select count(*) from private.creator_provider_observation_jobs where account_id in("+accounts.map(lit).join(',')+")"),'6');
-    assert.equal(query("select count(*) from public.creator_payout_accounts where id in("+accounts.map(lit).join(',')+") and private.ordinary_commerce_premium_current(creator_user_id::uuid,'production')"),'6');`);
+    assert.equal(query("select count(*) from public.creator_payout_accounts where id in("+accounts.map(lit).join(',')+") and provider_configuration_status='unknown' and provider_configuration_observed_at is null and private.ordinary_commerce_premium_current(creator_user_id::uuid,'production')"),'6');`,
+   {overrides:{seedAutomaticCommerceObserverFixture,prepareAutomaticCommerceObserverSkipLockedFixture}});
   });
-  await check('merch declaration late exact second-session identity and nine real declarations',async()=>{
+  await check('merch declaration exact quota, stale-mode guard and permitted post-change retry setup',async()=>{
+   const race=async(label,first,second,{error}={})=>{
+    assert.match(label,/distinct exact sessions/u);assert.match(String(error),/creator_declaration_rate_limited/u);
+    const result=db.query('begin;'+first+'commit;');assert.throws(()=>db.query('begin;'+second+'commit;'),error);
+    return {first:JSON.parse(result),second:null};
+   };
    await runPath('scripts/lib/automatic-commerce-declaration-races.mjs',source=>[
     `const lit=value=>"'"+String(value).replaceAll("'","''")+"'";`,
-    nativeSpan(source,' const db=commerceSeedAdapter(query)', ' const result=await race('),
-   ],`assert.equal(query("select count(*) from private.creator_eligibility_declarations where creator_id="+lit(actor.id)),'9');
-    query('begin;'+auth(peer)+declaration('TX')+'commit;');
-    assert.equal(query("select count(*) from private.creator_eligibility_declarations where creator_id="+lit(actor.id)),'10');`);
+    nativeSpan(source,' const db=commerceSeedAdapter(query)', " await race('mode writer before declaration"),
+   ],`assert.equal(query("select count(*) from private.creator_eligibility_declarations where creator_id="+lit(actor.id)),'10');
+    const history=query("select md5(jsonb_agg(to_jsonb(d) order by id)::text) from private.creator_eligibility_declarations d where creator_id="+lit(actor.id));
+    const grants=query("select md5(coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb)::text) from public.access_grants g");
+    query("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
+    // Native enters before the writer commits and must report creator_mode_changed.
+    // This direct stale-mode guard checks that denial, not the native lock wait.
+    assert.throws(()=>query("begin;select private.lock_ordinary_creator_subject("+lit(peer.id)+","+lit(peer.session)+",'production');rollback;"),/creator_mode_changed/u);
+    // A fresh sequential call sees the new mode: production Premium remains valid in Sandbox.
+    assert.equal(query("select private.ordinary_commerce_premium_current("+lit(actor.id)+",'sandbox')"),'t');
+    const retried=JSON.parse(query('begin;'+auth(peer)+declaration('TX')+'commit;'));
+    assert.equal(retried.canCreateMoneyExposure,false);
+    assert.equal(query("select count(*) from private.creator_eligibility_declarations where creator_id="+lit(actor.id)),'10');
+    assert.equal(query("select md5(jsonb_agg(to_jsonb(d) order by id)::text) from private.creator_eligibility_declarations d where creator_id="+lit(actor.id)),history);
+    assert.equal(query("select md5(coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb)::text) from public.access_grants g"),grants);
+    assert.equal(query("select count(*) from public.creator_payout_accounts where creator_user_id="+lit(actor.id)),'0');
+    assert.equal(query("select private.ordinary_creator_provider_ready("+lit(actor.id)+",'sandbox')"),'f');
+    query("begin;set local request.jwt.claim.role='service_role';update public.platform_money_kill_switches set state='on' where key='live_money_enabled';commit;");`,{overrides:{race}});
   });
   await check('merch cutover later direct product INSERT keeps its actual creator and Free buyer',async()=>{
    const context=await run('merch-return-cases-concurrency-postgres',source=>[
@@ -179,13 +211,19 @@ test('registered native commerce runner setups and late INSERT factories execute
    };
    await run('merch-return-cases-concurrency-postgres',source=>[
     nativeSpan(source,'  '+eventStart,'  const opened=await race(').replace(nativeFunction(source,'race'),''),
-   ],`await runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json,sequentialReplay:true});
+   ],`const observerAccounts=await seedAutomaticCommerceObserverFixture({query,lit});
+    for(const expired of [false,true])await prepareAutomaticCommerceObserverSkipLockedFixture({query,lit,accounts:observerAccounts,expired});
+    await runAutomaticCommerceObserverLeaseRaces({query,race,lit,account:observerAccounts[0]});
+    assert.equal(query("select count(*) from public.creator_payout_accounts where id in("+observerAccounts.map(lit).join(',')+") and provider_configuration_status='unknown' and provider_live_observation is null"),'6');
+    query("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
+    await runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json,sequentialReplay:true});
     await runMerchLiveCheckoutRaces({query,race,auth,actors,lit,json,sequentialReplay:true});
     await runMerchPublicationRaces({query,race,auth,actors,lit});
     await runMerchTaxCategoryRaces({query,race,auth,actors,lit});
     await runAutomaticCommerceAuthorityRaces({query,race,lit});
-    assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit,sequentialReplay:true}),113);`,{overrides:{race:sequentialRace}});
-   assert.equal(count,148,'12 checkout + 6 live + 6 publication + 5 category + 6 authority + 113 ordinary sequential operations');
+    assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit,sequentialReplay:true}),113);`,
+   {overrides:{race:sequentialRace,seedAutomaticCommerceObserverFixture,prepareAutomaticCommerceObserverSkipLockedFixture,runAutomaticCommerceObserverLeaseRaces}});
+   assert.equal(count,150,'2 nested observer + 12 checkout + 6 live + 6 publication + 5 category + 6 authority + 113 ordinary sequential operations');
   });
   t.diagnostic('All executed code above is actual native setup/source SQL; independent native schedules remain REQUIRED and unrun here.');
  }finally{await db.close();}

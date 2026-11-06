@@ -1,21 +1,38 @@
 import assert from 'node:assert/strict';
-import {Worker} from 'node:worker_threads';
+import {Worker,MessageChannel,receiveMessageOnPort} from 'node:worker_threads';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 
 export function nativeSetupDatabase(){
  const control=new Int32Array(new SharedArrayBuffer(8)),bytes=new Uint8Array(new SharedArrayBuffer(4*1024*1024));
- const worker=new Worker(new URL('./native-setup-pglite-worker.mjs',import.meta.url),{workerData:{control:control.buffer,bytes:bytes.buffer}});
+ const {port1,port2}=new MessageChannel();
+ const start=(snapshot,snapshotPort)=>new Worker(new URL('./native-setup-pglite-worker.mjs',import.meta.url),{
+  workerData:{control:control.buffer,bytes:bytes.buffer,snapshot,snapshotPort},transferList:snapshotPort?[snapshotPort]:[],
+ });
+ let worker=start(undefined,port2),snapshot;
  const receive=()=>{
   assert.notEqual(Atomics.wait(control,0,0,180_000),'timed-out','sequential fixture database operation timed out');
   const result=JSON.parse(new TextDecoder().decode(bytes.subarray(0,Atomics.load(control,1))));
   if(result.error)throw Object.assign(new Error(result.error.message),result.error,{stderr:result.error.message});
   return result;
  };
- try{assert.equal(receive().ready,true);}catch(error){void worker.terminate();throw error;}
- const request=value=>{Atomics.store(control,0,0);worker.postMessage(value);return receive();};
- return {query:sql=>request({action:'query',sql}).output,reset:()=>request({action:'reset'}),close:async()=>{try{request({action:'close'});}finally{await worker.terminate();}}};
+ try{
+  assert.equal(receive().ready,true);snapshot=receiveMessageOnPort(port1)?.message.snapshot;
+  assert.ok(snapshot instanceof Blob,'one immutable replay snapshot is required');
+ }catch(error){void worker.terminate();throw error;}finally{port1.close();}
+ const request=value=>{assert.ok(worker,'sequential fixture worker is closed');Atomics.store(control,0,0);worker.postMessage(value);return receive();};
+ const close=async()=>{if(!worker)return;const current=worker;try{request({action:'close'});}finally{
+  await current.terminate();worker=null;assert.equal(current.threadId,-1,'prior WASM worker has fully exited');
+ }};
+ return {query:sql=>request({action:'query',sql}).output,reset:async()=>{
+  // A case owns one WASM isolate. Repeated module disposal in the same worker
+  // hit V8's UnregisterWasmAllocation assertion; fully terminate it before
+  // loading the identical replay snapshot in the next independent worker.
+  await close();Atomics.store(control,0,0);worker=start(snapshot);
+  try{assert.equal(receive().ready,true);}catch(error){await worker.terminate();worker=null;throw error;}
+  return {threadId:worker.threadId};
+ },close};
 }
 
 export function nativeSource(file){return fs.readFileSync(new URL(`../../${file}`,import.meta.url),'utf8');}

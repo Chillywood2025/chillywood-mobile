@@ -30,7 +30,9 @@ test('registered native fixtures seed real creator authority before source calls
  assert.ok(cashout.includes('pg_blocking_pids(w.pid)'));
  const tip=read('scripts/test-tip-cross-rail-concurrency-postgres.mjs');
  const tipSeed=tip.indexOf('await seedCurrentEventCommerceCreator');
- assert.ok(tipSeed>0&&tipSeed<tip.indexOf('const baselineAccessGrants='));
+ assert.ok(tip.indexOf('const baselineAccessGrants=')<tip.indexOf('tests/fixtures/'),'inherited snapshot precedes every fixture');
+ assert.ok(tipSeed>0&&tipSeed<tip.indexOf('const raceAccessGrants='),'race snapshot follows canonical creator seed');
+ assert.ok(tip.indexOf('assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants')>tipSeed);
  assert.ok(tip.includes("kind like 'buyer%'"));
  const connect=read('scripts/test-connect-dual-mode-concurrency-postgres.mjs');
  const connectSeed=connect.indexOf("await seedCommerceCreator(commerceSeedAdapter(query),{id:creator,session},{environment:'production'})");
