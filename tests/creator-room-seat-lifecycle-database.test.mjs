@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from './helpers/current-event-commerce-fixture.mjs';
 import {reservedRoomClient} from './helpers/reserved-room-client-runtime.mjs';
 
 test('paid reserved seat retains same-account admission through host approval and rejoin', {timeout:180000}, async()=>{
@@ -15,6 +16,7 @@ test('paid reserved seat retains same-account admission through host approval an
       /creator_room_paid_seat_claim/,'older repair never overwrites the reserved-admission implementation');
     for(const name of ['event-reservation-authority','creator-external-payment-authority'])
       await db.exec(fs.readFileSync(new URL(`./fixtures/${name}.sql`,import.meta.url),'utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const rows=async s=>(await db.query(s)).rows;
     const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
     const lit=x=>`'${String(x).replaceAll("'","''")}'`;

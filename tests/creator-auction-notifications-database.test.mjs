@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from './helpers/current-event-commerce-fixture.mjs';
 
 test('real auction close tick, outbid/winner outbox, stale suppression and dormant scheduling', {timeout:180000}, async()=>{
   const originalNow=Date.now; let offset=0; Date.now=()=>originalNow()+offset;
@@ -12,6 +13,7 @@ test('real auction close tick, outbid/winner outbox, stale suppression and dorma
     await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
     await db.exec(`update public.user_profiles set display_name='Auction Creator',username='auction_creator',profile_access_visibility='public' where user_id='${actors.creator.user_id}';`);
     const event=(await one("select id from event_reservation_fixture.events where name='show1'")).id;

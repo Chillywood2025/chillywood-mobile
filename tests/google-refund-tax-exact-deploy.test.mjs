@@ -4,10 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync,spawnSync} from 'node:child_process';
+import {loadHistoricalRefundBundle,materializeHistoricalRefundClosure,readHistoricalRefundSource} from './helpers/google-refund-tax-historical-deployment-fixture.mjs';
 import {loadBundle,requireQualified,sourceBinding,classifyProbe,classifyState,buildApplySql,deploy,safeError,
   CLOSURE,TOOL,MANIFEST,MIGRATION,VERSION,NAME,HASH,ORIGINAL_HISTORY,PROJECT} from '../scripts/google-refund-tax-exact-deploy.mjs';
 
-const bundle=loadBundle();
+const bundle=loadHistoricalRefundBundle();
 const context={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
 const probe=(count=3)=>({database:'postgres',context:{...context},originalHistorySha256:ORIGINAL_HISTORY.sha256,
   historyCount:583+count,historyMaximum:count?bundle.predecessors[0].version:ORIGINAL_HISTORY.maximum,
@@ -18,6 +19,10 @@ const baseline={historyCount:586,historyMaximum:bundle.predecessors[0].version,h
 const qualified=()=>({...bundle,manifest:{...bundle.manifest,qualification:'independently_reviewed_post_predecessors',postPredecessorBaseline:structuredClone(baseline)}});
 const applied=()=>({...ready(),historyCount:587,historyMaximum:VERSION,addedAbsent:false,addedCatalogSha256:bundle.manifest.addedCatalogSha256,
   targets:[...probe().targets,{version:VERSION,name:NAME,statementsSha256:bundle.statementsSha256}]});
+
+test('historical refund closure does not qualify the changed current Edge implementation',()=>{
+  assert.throws(()=>loadBundle(),/EDGE_HASH_MISMATCH/);
+});
 
 test('pending production qualification cannot reach a writable or read request',async()=>{
   assert.equal(bundle.manifest.postPredecessorBaseline,null);
@@ -95,13 +100,13 @@ test('uncertain write is read back once, never retried; confirmed application is
   assert.equal(result.status,'already_applied_verified');assert.equal(reads,2);assert.equal(result.wrote,false);
 });
 
-test('frozen source closure, runtime JWT and argument guards cannot be bypassed',t=>{
+test('historical frozen source closure, runtime JWT and argument guards cannot be bypassed',t=>{
   assert.equal(bundle.body,fs.readFileSync(MIGRATION,'utf8'));assert.equal(bundle.manifest.migration.sha256,HASH);
   assert.deepEqual(bundle.edge.map(e=>[e.name,e.verifyJwt,e.files.length]),[
     ['google-play-external-reporter',false,10],['stripe-merch-cost-reconcile',true,9],['stripe-auction-cost-reconcile',true,8]]);
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'refund-exact-deploy-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const files=new Set([...CLOSURE,...bundle.edge.flatMap(e=>e.files.map(f=>f.path)),...bundle.revenuecatExpected.files.map(f=>f.path)]);
-  for(const file of files){fs.mkdirSync(path.dirname(path.join(dir,file)),{recursive:true});fs.copyFileSync(file,path.join(dir,file));}
+  materializeHistoricalRefundClosure(dir);
   fs.symlinkSync(path.resolve('node_modules'),path.join(dir,'node_modules'),'dir');
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:'pipe'}).trim();
   git('init');git('config','user.name','Fixture');git('config','user.email','fixture@example.invalid');git('add',...files);git('commit','-m','synthetic source closure');
@@ -114,7 +119,7 @@ test('frozen source closure, runtime JWT and argument guards cannot be bypassed'
   }
   fs.appendFileSync(path.join(dir,MIGRATION),'\n-- changed');assert.throws(()=>sourceBinding(dir,source),/TRACKED_SOURCE_DIRTY/);assert.throws(()=>loadBundle(dir),/MIGRATION_HASH_MISMATCH/);
   fs.writeFileSync(path.join(dir,MIGRATION),bundle.body);
-  const edge=bundle.edge[0].files[0].path;fs.appendFileSync(path.join(dir,edge),'\n// changed');assert.throws(()=>loadBundle(dir),/EDGE_HASH_MISMATCH/);fs.copyFileSync(edge,path.join(dir,edge));
+  const edge=bundle.edge[0].files[0].path;fs.appendFileSync(path.join(dir,edge),'\n// changed');assert.throws(()=>loadBundle(dir),/EDGE_HASH_MISMATCH/);fs.writeFileSync(path.join(dir,edge),readHistoricalRefundSource(edge));
   const configPath=path.join(dir,'supabase/config.toml'),config=fs.readFileSync(configPath,'utf8');
   const section=/\[functions\.google-play-external-reporter\]([\s\S]*?)(?=\n\[|$)/;
   for(const changed of [

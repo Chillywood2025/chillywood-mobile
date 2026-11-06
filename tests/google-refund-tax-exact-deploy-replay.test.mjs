@@ -2,14 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalDeploymentDatabase} from './helpers/historical-deployment-schema-fixture.mjs';
+import {loadHistoricalRefundBundle} from './helpers/google-refund-tax-historical-deployment-fixture.mjs';
 import {
-  loadBundle,probeSql,classifyProbe,readbackSql,classifyState,buildApplySql,deploy,
+  probeSql,classifyProbe,readbackSql,classifyState,buildApplySql,deploy,
   PROJECT,MIGRATION,VERSION,NAME,PREDECESSORS,ADDED_FUNCTIONS,ADDED_TABLES,
 } from '../scripts/google-refund-tax-exact-deploy.mjs';
 
-test('exact tip, ingress and sandbox order precedes additive refund deployment; drift and rollback fail closed', {timeout:300000},async t=>{
-  const bundle=loadBundle();
+test('historical exact tip, ingress and sandbox order precedes additive refund deployment; drift and rollback fail closed', {timeout:300000},async t=>{
+  const bundle=loadHistoricalRefundBundle();
   assert.equal(bundle.manifest.addedCatalogSha256,'39159c6f49dd220468376fa243c4be2b42c859342b92d0e1b916e694458dcba9',
     'independently measured exact added catalog, not a hash learned from the apply response');
   const predecessorPaths=PREDECESSORS.map(p=>`supabase/migrations/${p.version}_${p.name}.sql`);
@@ -17,7 +18,7 @@ test('exact tip, ingress and sandbox order precedes additive refund deployment; 
     'supabase/migrations/20261105010859_sandbox_cashout_status_notifications.sql',
     'supabase/migrations/20261102093836_creator_clip_export_bounded_pool.sql',
     'supabase/migrations/20261102094308_creator_clip_scale_lifecycle_ledger.sql'].map(p=>path.basename(p));
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,
+  const {db}=await createHistoricalDeploymentDatabase({
     implicitApiGrants:false,excludeMigrations:excluded});
   t.after(()=>db.close());
   await db.exec(`set search_path=pg_catalog,public;

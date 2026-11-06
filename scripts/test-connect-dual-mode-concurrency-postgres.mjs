@@ -7,6 +7,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {load,connect,account} from '../tests/creator-money/stripe-connect-observed-fixture.mjs';
+import {commerceSeedAdapter,seedCommerceCreator} from '../tests/helpers/automatic-commerce-fixture.mjs';
 if(process.argv.includes('--help')){console.log('Run real Connect lock schedules in an owned disposable local Supabase clone; no provider traffic.');process.exit(0);}
 assert.equal(process.argv.length,2,'no arbitrary targets');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/mu)?.[1];assert.ok(project);
@@ -47,10 +48,16 @@ try{
  insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
  select '${creator}',public.wave1_sha256('${creator}'),document_key,version,market,'member',capability,'${session}','service_reconciliation' from public.wave1_legal_document_versions where active and market='UNITED_STATES';
  insert into public.wave1_creator_eligibility(creator_user_id,state,account_status,age_18_plus,legal_accepted,creator_role,moderation_state,market,rollout_eligible,platform_capability,provider_eligible,kyc_complete,tax_complete,sanctions_clear,payout_eligible,authority_source,last_operation_key)
- values('${creator}','PENDING_VERIFICATION','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,false,false,false,false,false,'synthetic_fixture','native');
+ values('${creator}','PENDING_VERIFICATION','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,null,null,null,null,null,'synthetic_fixture','native');
  insert into public.creator_payout_accounts(id,creator_user_id,provider,provider_environment,provider_account_id) values('${testId}','${creator}','stripe_connect','test','acct_nativeTest');
  insert into private.creator_connect_onboarding_policy(environment,enabled,platform_account_id,configuration_key,country,currency,return_url,refresh_url,controller_pricing_evidence_hash,hosted_onboarding_evidence_hash,verified_at,expires_at)
  values('live',true,'${platform}','stripe_connect_live_express_recipient_controller_v1','US','usd','https://synthetic.invalid/return','https://synthetic.invalid/refresh',repeat('a',64),repeat('b',64),clock_timestamp(),clock_timestamp()+interval '1 day');`);
+ // Pre-live hosted setup requires genuine production Premium, not a relabeled
+ // sandbox grant. The synthetic canonical event must not supply provider/KYC/
+ // tax readiness. Unknown compliance is NULL, not an explicit denial disguised
+ // as PENDING_VERIFICATION; live money closes before the setup schedules.
+ await seedCommerceCreator(commerceSeedAdapter(query),{id:creator,session},{environment:'production'});
+ query("update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled')");
  // Actual confirmation waits for a callback's account row, then callback must
  // finish without trying to take confirmation's already-held creator mutex.
  const a=start(`begin;select id from public.creator_payout_accounts where id='${testId}' for update;select 'HOLDING';`);

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalDeploymentDatabase} from './helpers/historical-deployment-schema-fixture.mjs';
 import {loadBundle,readbackSql,classifyState,buildApplySql,deploy,sourceBinding,safeError,MANIFEST,MIGRATION,TOOL,VERSION,NAME,HASH,FUNCTIONS} from '../scripts/native-tip-exact-deploy.mjs';
 
 const bundle=loadBundle();
@@ -64,10 +64,10 @@ test('uncertain response is reconciled read-only without duplicate write',async(
   let writes=0;await assert.rejects(deploy({bundle,apply:true,recheckSource:()=>{throw Error('dirty');},query:async(_sql,readOnly)=>{if(!readOnly)writes++;return ready();}}),/dirty/);assert.equal(writes,0);
 });
 
-test('live-era schema: one exact transaction, drift fence, postcheck rollback and immutable history',{timeout:300000},async t=>{
+test('historical live-era schema: one exact transaction, drift fence, postcheck rollback and immutable history',{timeout:300000},async t=>{
   const excluded=[path.basename(MIGRATION),'20261102093836_creator_clip_export_bounded_pool.sql','20261102094308_creator_clip_scale_lifecycle_ledger.sql','20261102194000_sandbox_creator_cashout_execution.sql','20261103005000_native_production_ingress_observations.sql'];
   excluded.push('20261105010859_sandbox_cashout_status_notifications.sql'); // Depends on the intentionally absent sandbox execution.
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,excludeMigrations:excluded});t.after(()=>db.close());
+  const {db}=await createHistoricalDeploymentDatabase({excludeMigrations:excluded});t.after(()=>db.close());
   await db.exec(`create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);
     insert into supabase_migrations.schema_migrations values('20261101215711','synthetic_fixture_predecessor',array['select 1;']);
     update public.platform_money_kill_switches set state=case when key in ('live_money_enabled','payouts_enabled','cashout_enabled') then 'off' else 'sandbox_only' end

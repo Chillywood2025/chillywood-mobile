@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "source": "ff1211fab1c5bba31939ab341f1f4ba744b23081",
+  "scope": "Test-only original Google refund/tax deployment closure; no current source or deployment qualification.",
+  "files": [
+    {
+      "path": "scripts/google-refund-tax-exact-deploy.mjs",
+      "sha256": "2dcf77149709e0838028f2c4ae72e0c6ad0e0bedba5b721d2164f5b2b301fd7e"
+    },
+    {
+      "path": "scripts/google-refund-tax-deployment-manifest.json",
+      "sha256": "d1f9627fbf836747b34ea2a943071c371359f7b5f8331aae3e5559ab90321687"
+    },
+    {
+      "path": "supabase/migrations/20261104120922_google_refund_tax_history_checkpoints.sql",
+      "sha256": "6929bccfbdb7f440afc3b8aa37ab1e9bc4001799e301f23840054eb3ef55a2c9"
+    },
+    {
+      "path": "supabase/config.toml",
+      "sha256": "dedab99868176a48da1d11d8ffee28c066f21821b8f6eb0ed7884d884eafd20d",
+      "snapshot": "tests/fixtures/google-refund-tax-deployment-20261104/config.toml.txt"
+    },
+    {
+      "path": "ops/creator-backend-rollout/prepare-edge.mjs",
+      "sha256": "1f7b5ae8c5a79c16eee5653be76853c5651cb146039ff250fd0b9ede24c6695a"
+    },
+    {
+      "path": "scripts/live-room-exact-deploy.mjs",
+      "sha256": "b5cfaa7d99ac0a60b36e096ccff47f8c4121a602a6a4ca19c838e8dfa8032f83"
+    },
+    {
+      "path": "scripts/studio-rolling-deploy.mjs",
+      "sha256": "69a0adcd07fed3be612013b08dc7366ae68e307be921b590a7578ea932015eba"
+    },
+    {
+      "path": "scripts/native-tip-exact-deploy.mjs",
+      "sha256": "0a3811bc00187f5fc627fca9a750160cf8351be6c2ebd2c66d556923d81eadf8"
+    },
+    {
+      "path": "scripts/native-tip-deployment-manifest.json",
+      "sha256": "2d8bfb60f57464ac36d1178bfa6be427e0b309ecc7fb348fd5143b0674b94db7"
+    },
+    {
+      "path": "scripts/native-ingress-deployment-manifest.json",
+      "sha256": "3603e6c4e26e1b0cef9126b0bd0f737fd17ab1e694970e6ab5a2a689180a68cd"
+    },
+    {
+      "path": "supabase/migrations/20261104032615_native_tip_catalog_amount_policy.sql",
+      "sha256": "f18d738818dcc68ab6ff61f737a4755be4dcc4fd02846249c01647c1f5d3fc2b"
+    },
+    {
+      "path": "supabase/migrations/20261103005000_native_production_ingress_observations.sql",
+      "sha256": "f18382b2899ed69a3e422538f451f11f1519b53b1ce780d12221cbeb50a48efe"
+    },
+    {
+      "path": "supabase/migrations/20261102194000_sandbox_creator_cashout_execution.sql",
+      "sha256": "a41152e19ab73a959a514a8495f5b00dc9c4ff50f436fb15e16c908ac2483e46"
+    },
+    {
+      "path": "supabase/functions/_shared/exact-subject-authority.ts",
+      "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+    },
+    {
+      "path": "supabase/functions/_shared/google-play-external-reporting.ts",
+      "sha256": "e4a2b88c0c1da6186b3e56861432946658d14284e131b45daf76d75fc8cb0927"
+    },
+    {
+      "path": "supabase/functions/_shared/google-play-reporter-oauth.ts",
+      "sha256": "2e5cc619b4d18fbaeb6fc5315439154b1e33ffc338d7ade7420a672e48c26d31"
+    },
+    {
+      "path": "supabase/functions/_shared/google-refund-tax-history.ts",
+      "sha256": "6c73ceb7241085e8891afe996f26a54bc9467035610e4d20d2f2f5baa93dec19"
+    },
+    {
+      "path": "supabase/functions/_shared/google-refund-tax-reconciliation.ts",
+      "sha256": "e2af9aa4d712d3ec7898221c4ebccb11f6d277e7ee10af0a14ac410f2862f730"
+    },
+    {
+      "path": "supabase/functions/_shared/merch-observation-budget.ts",
+      "sha256": "51ea9a2278a2e97afc44803a82dad88c2a0b2ac2fd72f6aa8f9c6528dd64650f"
+    },
+    {
+      "path": "supabase/functions/_shared/stripe-connect.ts",
+      "sha256": "891a9623038e291e61c0bac13a07365f66efb275af9f68603e173cbf8733d551",
+      "snapshot": "tests/fixtures/sandbox-cashout-deployment-20261104/stripe-connect.ts.txt"
+    },
+    {
+      "path": "supabase/functions/_shared/stripe-history-checkpoint.ts",
+      "sha256": "8d9bf829a7d8dc88cc838ee51bacc8cccb9b7820f5cae2c8eba849e4c404b243"
+    },
+    {
+      "path": "supabase/functions/_shared/stripe-refund-tax-evidence.ts",
+      "sha256": "d98403ba574b48f132afd06f0ea6651fda5083bff55e747e2b8d7e8dd54f5921"
+    },
+    {
+      "path": "supabase/functions/google-play-external-reporter/index.ts",
+      "sha256": "ea1bdbf135a4144f4a3fb05621ca59d1568245e7ee83b5ac59a3de85c91ab4c5"
+    },
+    {
+      "path": "supabase/functions/_shared/commerce-fee-accounting-drain.ts",
+      "sha256": "9b50715dfeb05300f4885fcf7a1ffd9ac2e93b683e0465bb1eb899306c542074"
+    },
+    {
+      "path": "supabase/functions/_shared/merch-dispute-observation.ts",
+      "sha256": "4f95626835b341d12216b261a0541a924852cabf00cf82a37278762b3ea09e7b"
+    },
+    {
+      "path": "supabase/functions/_shared/stripe-merch-cost-observation.ts",
+      "sha256": "92ea9ebdcd58abd469f5606e4010ed239742342fb7d890153fccd28eb7875d78"
+    },
+    {
+      "path": "supabase/functions/stripe-merch-cost-reconcile/index.ts",
+      "sha256": "27771dd504d575f0f208930a7972f877839ce338f8e150dc486c112fa41b8a46"
+    },
+    {
+      "path": "supabase/functions/_shared/stripe-auction-cost-observation.ts",
+      "sha256": "7e6344b41d768548333cdd00521356f664fe0ef2de35aa861f9567786f0b297f"
+    },
+    {
+      "path": "supabase/functions/stripe-auction-cost-reconcile/index.ts",
+      "sha256": "962dbedba85aaeac84d4352efbb19eb285c1c1a8970a50910e4cd7f7a87008a6"
+    },
+    {
+      "path": "supabase/functions/revenuecat-webhook/index.ts",
+      "sha256": "b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935"
+    },
+    {
+      "path": "supabase/functions/revenuecat-webhook/store-policy.mjs",
+      "sha256": "45b282c4b88b76551158c6fb7f03bbe7bd6c60f85a2766b6ece71755fea487e4"
+    },
+    {
+      "path": "supabase/functions/_shared/provider-readiness.ts",
+      "sha256": "54ab9950029568afaf071b33daa1d93d001f96721c2545c3d1fbde3b88f40c5f"
+    },
+    {
+      "path": "supabase/functions/_shared/notification-payload.mjs",
+      "sha256": "6e8ccc4d1fb59ddc62af421af38ae786b1f0b0f4e525637bcca16e3dd74e8eeb"
+    },
+    {
+      "path": "supabase/functions/_shared/expo-push-receipts.ts",
+      "sha256": "20ba1d704bfc1d02ff591ea1c4917f0bb834d37518c0a9c4d38db11fb6fb5be6"
+    },
+    {
+      "path": "supabase/functions/_shared/expo-push-receipt-policy.mjs",
+      "sha256": "28a5ec1060af8e0339ebf279d55f83699e306175a08682234f52dda1c89ca341"
+    },
+    {
+      "path": "supabase/functions/_shared/notification-display-labels.ts",
+      "sha256": "78efba5706811729385a4d2e606d9adb1a8b89458bdb1c3808042d8b5b03085e"
+    }
+  ]
+}

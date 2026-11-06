@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalDeploymentDatabase} from './helpers/historical-deployment-schema-fixture.mjs';
 import {nativeDriftCases,eventHookDriftSql,notificationLockHolderSQL,observerBarrierSql} from './helpers/payout-wrapper-native-drift-fixture.mjs';
 import {loadBundle, readbackSql, classifyState, buildApplySql, deploy, MANIFEST, MIGRATION, VERSION, NAME}
   from '../scripts/sandbox-payout-notification-exact-deploy.mjs';
@@ -22,12 +22,12 @@ async function alternateDatabaseFactory() {
   return new PGlite({extensions: {pgcrypto, pg_trgm}});
 }
 
-test('disposable full-schema exact observer deployment preserves history, controls and catalog atomically', {timeout: 300000}, async t => {
+test('historical disposable exact observer deployment preserves history, controls and catalog atomically', {timeout: 300000}, async t => {
   const original = loadBundle(), manifestBytes = fs.readFileSync(MANIFEST, 'utf8');
   t.after(() => assert.equal(fs.readFileSync(MANIFEST, 'utf8'), manifestBytes));
   const bundle = structuredClone(original);
-  const {db} = await createDatabase({includeHeldStudio: true, applyRepair: true,
-    repairInMigrationOrder: true, implicitApiGrants: false, excludeMigrations: [path.basename(MIGRATION)],
+  const {db} = await createHistoricalDeploymentDatabase({
+    implicitApiGrants: false, excludeMigrations: [path.basename(MIGRATION)],
     databaseFactory: process.env.PAYOUT_TEST_PGLITE_DIRECTORY ? alternateDatabaseFactory : null});
   t.after(() => db.close());
   const version = (await db.query('show server_version_num')).rows[0].server_version_num;

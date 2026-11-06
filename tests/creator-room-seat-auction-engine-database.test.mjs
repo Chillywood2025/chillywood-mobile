@@ -2,16 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from './helpers/current-event-commerce-fixture.mjs';
+import {assertBuyerHasNoPremium} from './helpers/automatic-commerce-fixture.mjs';
 
 // Entire production migration chain, real RPCs and grants. No payment transport,
-// replaced SQL functions, privileged client writes, or provider qualification.
+// replaced SQL functions, privileged client writes, or live provider qualification.
 for (const implicitApiGrants of [true,false]) test(`reserved room-session inventory and typed auction authority (implicit grants ${implicitApiGrants})`, {timeout: 180000}, async () => {
   const {db} = await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants});
   try {
     await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
+    // Current authoring needs canonical Premium and synthetic provider facts.
+    // External payment capabilities remain absent until the bid checks below.
+    await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
+    await seedCurrentEventCommerceCreator(db);
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const query=async sql=>(await db.query(sql)).rows;
     const actors=Object.fromEntries((await query('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
+    const premiumGrantSnapshot=(await db.query("select * from public.access_grants where user_id=$1 and grant_type='premium' order by id",[actors.creator.user_id])).rows;
+    assert.equal(premiumGrantSnapshot.length,1,'one exact creator Premium seed grant');
+    const premiumGrantIds=premiumGrantSnapshot.map(row=>row.id);
     const events=Object.fromEntries((await query('select * from event_reservation_fixture.events')).map(e=>[e.name,e.id]));
     const lit=v=>`'${String(v).replaceAll("'","''")}'`;
     const as=async (actor,statement,role='authenticated')=>{
@@ -55,7 +64,6 @@ for (const implicitApiGrants of [true,false]) test(`reserved room-session invent
     assert.equal((await query(`select stage_role from public.watch_party_room_memberships where party_id='RESERVED-STAGE' and user_id='${actors.buyer3.user_id}'`))[0].stage_role,'listener');
     // Synthetic trusted qualification ONLY in this disposable fixture. The
     // production migration seeds no approval or eligible account.
-    await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
     const cap=(await query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,
       platform,storefront,storefront_country,route_kind,currency,environment,payment_method,min_amount_minor,max_amount_minor,
       provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)
@@ -86,7 +94,7 @@ for (const implicitApiGrants of [true,false]) test(`reserved room-session invent
     await assert.rejects(()=>db.exec(`update private.creator_room_seat_auction_bids set amount_minor=200 where request_id='${request}'`),/immutable/);
     await assert.rejects(()=>db.exec(`update private.creator_room_seat_auctions set closes_at=closes_at+interval '1 minute' where id='${auction.id}'`),/auction_terms_immutable/);
     await rejected('buyer1',`public.place_creator_room_seat_auction_bid('${auction.id}',125,gen_random_uuid(),null)`,'auction_bid_below_minimum');
-    assert.equal((await query('select count(*) n from public.access_grants'))[0].n,0,'bids never grant access');
+    assert.equal((await query(`select count(*) n from public.access_grants where id not in (${premiumGrantIds.map(lit).join(',')})`))[0].n,0,'bids never grant access beyond the exact creator Premium seed');
     const short=await create('RESERVED-STAGE-TWO',"clock_timestamp()+interval '1 second'");
     await bid('buyer1',short,100);await new Promise(r=>setTimeout(r,1100));
     const won=await rpc('buyer1',`public.read_creator_room_seat_auction('${short.id}')`);
@@ -108,5 +116,9 @@ for (const implicitApiGrants of [true,false]) test(`reserved room-session invent
     await rejected('creator',`public.create_creator_room_seat_auction('RESERVED-STAGE-TWO','stage_reserved_seat',100,25,
       now()+interval '1 hour',now()+interval '2 hours','test',gen_random_uuid(),'${short.roomSessionId}')`,'room_session_changed');
     assert.equal(Number((await query("select count(*) n from private.creator_room_seat_auctions where party_id='RESERVED-STAGE-TWO'"))[0].n),1);
+    assert.deepEqual((await db.query('select * from public.access_grants where id=any($1::uuid[]) order by id',[premiumGrantIds])).rows,
+      premiumGrantSnapshot,'auction lifecycle never mutates the excluded creator Premium seed');
+    for(const actor of Object.values(actors).filter(actor=>actor.kind.startsWith('buyer')))
+      await assertBuyerHasNoPremium(db,{id:actor.user_id});
   } finally {await db.close();}
 });

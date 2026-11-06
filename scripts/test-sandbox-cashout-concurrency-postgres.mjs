@@ -8,7 +8,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {seedCashoutExecutionFixture,creator,session as actorSession} from '../tests/helpers/cashout-execution-fixture.mjs';
-import {commerceSeedAdapter,seedCommerceCreator} from '../tests/helpers/automatic-commerce-fixture.mjs';
+import {commerceSeedAdapter,seedCommerceCreator,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../tests/helpers/automatic-commerce-fixture.mjs';
 if(process.argv.includes('--help')){console.log('After local Supabase reset, test actual cashout locks in a generated disposable clone. No remote URLs or provider calls.');process.exit(0);}
 assert.equal(process.argv.length,2,'no arbitrary target arguments');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/mu)?.[1];assert.ok(project);
@@ -73,6 +73,9 @@ try{
  async function seed(){
   await db.exec('reset role');
   const a=await seedCashoutExecutionFixture(db,{creatorId:randomUUID(),sessionId:randomUUID(),recipientAccountId:'acct_'+randomUUID().replaceAll('-',''),reserveInitialRequest:false});
+  // The preceding cashout fixture opens synthetic live controls. Close them
+  // BEFORE the canonical sandbox Premium event and every sandbox operation.
+  query("update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled')");
   await seedCommerceCreator(commerceSeedAdapter(query),{id:a.creator,session:a.session});
   // Provider account IDs are globally unique across mode rows. The test-mode
   // binding must be a distinct account, never reuse/convert the live fixture.
@@ -347,6 +350,9 @@ try{
   query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8').replaceAll('event_reservation_fixture',schema).replaceAll('acct_fixture',account));
   const actors=parse(query(`select jsonb_object_agg(kind,jsonb_build_object('creator',user_id,'session',session_id)) from ${schema}.actors;`));
   const a=actors.creator,buyer=actors.buyer1;
+  await seedQualifiedCommerceCreator(commerceSeedAdapter(query),{id:a.creator,session:a.session},{providerAccountId:account});
+  for(const [kind,actor] of Object.entries(actors))if(kind.startsWith('buyer'))
+   await assertBuyerHasNoPremium(commerceSeedAdapter(query),{id:actor.creator});
   query(`update public.creator_events set visibility='public' where id in(select id from ${schema}.events);
    update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled');
    update public.platform_money_kill_switches set state='sandbox_only' where key='stripe_connect_enabled';update private.sandbox_cashout_control set enabled=true;`);
