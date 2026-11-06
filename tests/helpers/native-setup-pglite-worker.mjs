@@ -5,6 +5,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {pg_trgm} from '@electric-sql/pglite/contrib/pg_trgm';
 import {createDatabase} from './database-runtime-authority-fixture.mjs';
+import {splitNativePsqlStatements} from './native-psql-statements.mjs';
 
 const control=new Int32Array(workerData.control),bytes=new Uint8Array(workerData.bytes);
 const encode=new TextEncoder();
@@ -33,7 +34,12 @@ parentPort.on('message',async({action,sql})=>{
   await db.exec(`rollback;reset role;set time zone 'UTC';set statement_timeout='20s';
    select set_config('request.jwt.claims','{}',false),set_config('request.jwt.claim.role','',false),
     set_config('request.jwt.claim.sub','',false),set_config('request.jwt.claim.session_id','',false),set_config('request.headers','{}',false);`);
-  const rows=await db.exec(sql);
+  // psql stdin sends each complete command separately. One db.exec(sql) would
+  // instead give every command a single statement timestamp and implicit
+  // transaction, masking now()/statement_timestamp() ordering bugs. Keep an
+  // explicit BEGIN open across commands, just as the real native transport.
+  const rows=[];
+  for(const statement of splitNativePsqlStatements(sql))rows.push(...await db.exec(statement));
   const output=rows.flatMap(result=>result.rows.map(row=>Object.values(row).map(value=>
    value===null?'':typeof value==='boolean'?(value?'t':'f'):typeof value==='object'?JSON.stringify(value):String(value)).join('|'))).join('\n');
   // Native psql closes after a batch, rolling back any unfinished transaction.

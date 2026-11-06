@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {nativeSetupDatabase,nativeSource} from './helpers/native-runner-setup-preflight.mjs';
-import {seedAutomaticCommerceObserverFixture,prepareAutomaticCommerceObserverSkipLockedFixture,runAutomaticCommerceObserverLeaseRaces} from '../scripts/lib/automatic-commerce-observer-races.mjs';
+import {seedAutomaticCommerceObserverFixture,prepareAutomaticCommerceObserverSkipLockedFixture,prepareAutomaticCommerceObserverLeaseFixture,runAutomaticCommerceObserverLeaseRaces} from '../scripts/lib/automatic-commerce-observer-races.mjs';
 import {commerceSeedAdapter,seedQualifiedCommerceCreator} from './helpers/automatic-commerce-fixture.mjs';
 
 test('registered commerce helper inventory includes nested observer setup and labels native-only boundaries',()=>{
@@ -53,6 +53,28 @@ test('native UNKNOWN observer accounts support nested completion/failure setup w
    // the real constraint. No application function/trigger is replaced.
    assert.throws(()=>query('update public.creator_payout_accounts set provider_configuration_account_id=provider_account_id,provider_configuration_observed_at=statement_timestamp(),last_provider_sync_at=statement_timestamp() where id='+lit(account)),
     /creator_payout_accounts_configuration_observation_check/u);
+   // Recombine the exact shared setup into its old single transaction. psql
+   // command submission must expose the audit default predating observation,
+   // and the real completion must reject without consuming the valid lease.
+   const commands=[];
+   const oldToken=await prepareAutomaticCommerceObserverLeaseFixture({query:sql=>commands.push(sql),lit,account});
+   assert.equal(commands.length,3,'lease, observation and audit use separate committed calls');
+   const rowState=`select jsonb_build_object('account',to_jsonb(a),'job',to_jsonb(j),
+    'audit',(select coalesce(jsonb_agg(to_jsonb(l) order by id),'[]'::jsonb) from public.platform_admin_audit_logs l where l.target_id=a.id::text))
+    from public.creator_payout_accounts a join private.creator_provider_observation_jobs j on j.account_id=a.id where a.id=${lit(account)};`;
+   const beforeInvalid=query(rowState);
+   const invalid=query(commands[0].replace(/commit;$/u,'')+'select pg_sleep(0.02);'+commands.slice(1).join('\n')+rowState+
+    `select jsonb_build_object('auditPredatesObservation',l.created_at<a.provider_configuration_observed_at)
+     from public.platform_admin_audit_logs l join public.creator_payout_accounts a on l.target_id=a.id::text
+     where a.id=${lit(account)} and l.action='creator_provider_observation_persisted';
+     set local role service_role;set local request.jwt.claims='{"role":"service_role"}';
+     select public.complete_creator_provider_observation(${lit(account)},${lit(oldToken)});reset role;`+rowState+'rollback;')
+    .split('\n').filter(line=>line.startsWith('{')).map(line=>JSON.parse(line));
+   assert.equal(invalid.length,4);
+   assert.deepEqual(invalid[1],{auditPredatesObservation:true});
+   assert.deepEqual(invalid[2],{completed:false},'old command ordering is rejected by unchanged production predicate');
+   assert.deepEqual(invalid[3],invalid[0],'rejection leaves full account, audit and valid lease untouched');
+   assert.equal(query(rowState),beforeInvalid,'negative fixture rolls back all evidence');
    const grants=query("select md5(coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb)::text) from public.access_grants g");
    await runAutomaticCommerceObserverLeaseRaces({query,race:sequentialRace,lit,account});
    const observation=id=>JSON.parse(query("select jsonb_build_object('status',a.provider_configuration_status,'raw',a.provider_fees_payer_raw,'payer',a.provider_fees_payer,'proof',a.provider_live_observation,'payable',e.eligible_for_payouts,'providerReady',e.provider_ready) from public.creator_payout_accounts a join public.creator_payout_eligibility_records e on e.payout_account_id=a.id where a.id="+lit(id)));
