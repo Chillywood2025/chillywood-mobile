@@ -18,6 +18,21 @@ const provider=(one=v1(),two=v2(),later=two)=>{
   return Response.json([ {id:context.platformAccountId},two,one,later ][reads++]);
  };return {fetch,requests};
 };
+const disabledReasonCases=[
+ ['missing',undefined,false,false],['false',false,false,false],['true',true,false,false],
+ ['zero',0,false,false],['number',1,false,false],['object',{},false,false],['array',[],false,false],
+ ['empty','',false,false],['spaces','   ',false,false],['whitespace','\t\n',false,false],
+ ['disabled','requirements.past_due',true,false],['clear',null,true,true],
+];
+test('live observer requires explicit null or a nonblank disabled reason',async()=>{
+ for(const [label,reason,complete] of disabledReasonCases){
+  const one=v1();one.requirements.disabled_reason=reason;
+  const p=provider(one),facts=await observeLiveConnectAccount(context,'rk_live_synthetic',p.fetch);
+  assert.equal(p.requests.length,4,label);
+  assert.equal(facts.proof.requirementsComplete,complete,label);
+  assert.equal(facts.disabledReason,typeof reason==='string'?reason:null,label);
+ }
+});
 test('live observer requires authenticated mode/account agreement and only bounded GETs',async()=>{
  const p=provider();const facts=await observeLiveConnectAccount(context,'rk_live_synthetic',p.fetch);
  assert.equal(p.requests.length,4);assert.equal(facts.configurationStatus,'match');assert.equal(facts.proof.modeVerified,true);
@@ -94,6 +109,19 @@ test('actual SQL live observation CAS preserves holds and never grants financial
   await root();
   let summary=await payoutsFor(clientFor(db)).readCreatorPayoutDashboardSummary({creatorUserId:context.creatorId});
   assert.equal(summary.providerReady,true);assert.equal(summary.eligibleForPayouts,false);assert.equal(summary.providerConfigurationStatus,'match');
+  // Start each case ready so malformed observations must actively revoke prior
+  // readiness, not merely leave an initially unverified account unchanged.
+  for(const [label,reason,complete,ready] of disabledReasonCases){
+   await service();c=await read();facts=await observeLiveConnectAccount(c,'rk_live_synthetic',provider().fetch);
+   assert.equal((await record(c,facts)).recorded,true);await root();
+   assert.deepEqual(await one("select jsonb_build_array(kyc_ready,provider_ready,eligible_for_payouts) from public.creator_payout_eligibility_records where creator_user_id=$1",[context.creatorId]),[true,true,false],`${label}: starts provider-ready only`);
+   const oneAccount=v1();oneAccount.requirements.disabled_reason=reason;
+   await service();c=await read();facts=await observeLiveConnectAccount(c,'rk_live_synthetic',provider(oneAccount).fetch);
+   assert.equal(facts.proof.requirementsComplete,complete,label);
+   assert.equal((await record(c,facts)).recorded,true,label);await root();
+   assert.deepEqual(await one("select jsonb_build_array(kyc_ready,provider_ready,eligible_for_payouts) from public.creator_payout_eligibility_records where creator_user_id=$1",[context.creatorId]),[ready,ready,false],label);
+   assert.equal(await one('select onboarding_status from public.creator_payout_accounts where id=$1',[context.rowId]),ready?'ready_for_payouts':'under_review',label);
+  }
   await db.query(`update public.creator_payout_eligibility_records set fraud_hold_active=true,eligibility_status='on_hold' where creator_user_id=$1`,[context.creatorId]);
   await service();c=await read();facts=await observeLiveConnectAccount(c,'rk_live_synthetic',provider().fetch);await record(c,facts);await root();
   summary=await payoutsFor(clientFor(db)).readCreatorPayoutDashboardSummary({creatorUserId:context.creatorId});assert.equal(summary.providerReady,false);assert.equal(summary.fraudHoldActive,true);
