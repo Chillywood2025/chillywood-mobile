@@ -16,8 +16,10 @@ created by these migrations. Enabling the queue is a separate operational act.
 One claim per minute processes at most five Premium creators in the current
 money mode. Persistent due ordering and skip-locked leases avoid preference for
 new accounts. Expired-lease maintenance also skips locked job rows and handles
-at most 25 rows per invocation. The control/rate-limit row and authority table
-locks still serialize work; this is not a claim that the whole call cannot wait.
+at most 25 rows per invocation. The control/rate-limit row still serializes claims;
+this is not a claim that the whole call cannot wait. Lease-only claim and failure
+work stays outside the commerce gate. Authoritative completion and provider
+persistence participate in that gate before acquiring account or job rows.
 Five jobs run concurrently, with at most twenty GET requests per
 invocation, response size limits and timeouts. Healthy observations are due
 again after five minutes. Two-minute leases require exact tokens. Failures and
@@ -35,9 +37,22 @@ readiness expires after fifteen minutes rather than trusting old snapshots.
 The test path executes the existing normalizer and compare-and-swap account
 upsert. The live path executes the existing context, authenticated v1/v2 GET
 observation and compare-and-swap record functions. A truthful system audit
-follows successful persistence. Completion locks account, then job, then the
-creator eligibility mutex. Freshness comes from the actual stored observation
+follows successful persistence. Completion enters the commerce authority gate
+before its account, job and creator-eligibility locks. Freshness comes from the actual stored observation
 and sync timestamps during the exact lease, not a caller-supplied success flag.
+The live observation context's existing 60-second read window is checked again
+after lock waits, before persistence. The original observation timestamp is
+retained; waiting never makes old provider evidence appear new.
+
+The queue's nonblocking exception is defined by the data transition, not by a
+caller flag or function name. A new job has NULL freshness. Lease/backoff changes
+preserve its authority tuple. A binding repair may clear evidence only when the
+old tuple already fails the immutable current account binding. Other binding,
+freshness or deletion changes require an already-held authority gate and fail
+closed otherwise; the row guard never waits for that gate after owning the job
+row. Claims must not let an unbound legacy account abort healthy bound accounts.
+These conditions require executable transition controls as well as native
+completion-versus-SKIP-LOCKED tests.
 
 Provider observation is not evidence of age, sanctions clearance or tax
 qualification. The canonical test adapter explicitly sets tax_status to

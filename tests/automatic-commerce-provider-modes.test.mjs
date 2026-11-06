@@ -24,7 +24,7 @@ test('live then test accounts retain canonical live projection while each mode p
   assert.equal((await common()).payout_account_id,original.payout_account_id);
 
   const mutate=async(sql,args,check)=>{
-   await db.exec('begin');
+   await db.exec('begin;select private.lock_ordinary_commerce_authority_gate()');
    try{await db.query(sql,args);await check();}finally{await db.exec('rollback');}
   };
   for(const [label,sql] of [

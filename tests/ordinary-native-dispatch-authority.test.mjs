@@ -12,8 +12,9 @@ test('ordinary native dispatch final catalog and all race SQL replay; sequential
   const helper=await definition(signature);
   before(helper,"'stripe-tip-buyer-authority-global'","'stripe-tip-buyer-authority-user:'");
   before(helper,"'stripe-tip-buyer-authority-user:'",'private.lock_ordinary_commerce_premium_subjects');
-  before(helper,'private.lock_ordinary_commerce_premium_subjects','lock table public.creator_payout_accounts');
-  before(helper,'lock table public.creator_payout_accounts',"'wave1-creator:'");
+  before(helper,'private.lock_ordinary_commerce_authority_gate',"'stripe-tip-buyer-authority-global'");
+  before(helper,'private.lock_ordinary_commerce_premium_subjects',"'wave1-creator:'");
+  assert.doesNotMatch(helper,/lock table/u,'covered membership uses the canonical writer fence, never inverse relation SHARE');
   assert.doesNotMatch(helper,/from auth\.(users|sessions)|from public\.wave1_legal/u,'never row-lock auth/legal after their writer fences');
   for(const kind of ['money','event']) {
    const body=await definition(`public.begin_creator_${kind}_checkout(uuid,uuid)`);
@@ -63,7 +64,8 @@ test('ordinary native dispatch final catalog and all race SQL replay; sequential
    }
    return {first:firstResult,second:parse(await query(`begin;${second}commit;`))};
   };
-  assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit,sequentialReplay:true}),113);
-  assert.equal(labels.length,113);
+  assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit,sequentialReplay:true}),153);
+  assert.equal(labels.length,153);
+  assert.equal(labels.filter(label=>label.includes('split canonical prefix')).length,39);
  }finally{await db.close();}
 });

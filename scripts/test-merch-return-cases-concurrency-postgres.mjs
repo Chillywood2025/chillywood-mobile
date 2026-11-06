@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {runOrdinaryProfileMetadataRaces} from './lib/ordinary-profile-metadata-races.mjs';
 import {runMerchCheckoutDispatchRaces} from './lib/merch-checkout-dispatch-races.mjs';
 import {runMerchPublicationRaces} from './lib/merch-publication-races.mjs';
 import {runMerchTaxCategoryRaces} from './lib/merch-tax-category-races.mjs';
@@ -76,7 +77,7 @@ try{
   const auth=(who='creator',role='authenticated')=>`set local role ${role};set local request.jwt.claims=${json({role,sub:actors[who].id,session_id:actors[who].session}).replace(/::jsonb$/u,'')};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const tx=(sql,role='service_role',who='creator')=>`begin;${auth(who,role)}select ${sql};commit;`;
   const rpc=(sql,role='service_role',who='creator')=>parsed(query(tx(sql,role,who)));
-  async function race(label,first,second,{error,afterBlocked=''}={}){
+  async function race(label,first,second,{error,afterBlocked='',retentionFence=false,authorityPrefix=false}={}){
     const holder=session(`begin;${first}select 'HOLDER_READY';`);
     await until(()=>holder.output().includes('HOLDER_READY'),`${label}: holder not ready`);
     const waiter=session(`begin;${second}commit;`);waiter.child.stdin.end();
@@ -87,9 +88,21 @@ try{
       'blockers',pg_blocking_pids(w.pid)) from pg_stat_activity w join pg_stat_activity h on h.application_name=${lit(holder.name)}
       where h.datname=current_database() and w.datname=current_database() and w.application_name=${lit(waiter.name)}`));
     assert.notEqual(evidence.holderPid,evidence.waiterPid);assert.ok(evidence.blockers.includes(evidence.holderPid));
+    if(retentionFence||authorityPrefix)assert.equal(query(`select count(*) from pg_locks w join pg_locks h
+      on h.locktype=w.locktype and h.database=w.database and h.classid=w.classid and h.objid=w.objid and h.objsubid=w.objsubid
+      where w.pid=${evidence.waiterPid} and h.pid=${evidence.holderPid} and w.locktype='advisory'
+       and w.classid=176214 and w.objid=32 and w.objsubid=2 and not w.granted and h.granted;`),'1','writer/reader waits at exact commerce authority gate');
+    if(authorityPrefix)assert.equal(query(`select count(*) from pg_locks where pid=${evidence.waiterPid}
+      and locktype='advisory' and granted and not(classid=176214 and objid=32 and objsubid=2);`),'0',
+      'split-prefix writer owns no downstream user/global/Premium/creator advisory while waiting for the entry gate');
     console.log(JSON.stringify({schedule:label,...evidence}));
     holder.child.stdin.end(afterBlocked+'commit;\n');const a=await holder.done;assert.equal(a.code,0,a.stderr);
     const b=await waiter.done;if(error){assert.notEqual(b.code,0);assert.match(b.stderr,error);}else assert.equal(b.code,0,b.stderr);
+    if(retentionFence){
+      assert.notEqual(b.code,0);
+      assert.match(b.stderr,/^ERROR:\s+merch_current_session_required\r?$/mu);
+      assert.match(b.stderr,/PL\/pgSQL function private\.assert_merch_checkout_actor\(uuid,uuid\) line \d+ at RAISE/u);
+    }
     // A verified SQL rejection has no result row. Never manufacture JSON for
     // it or relax the exit/error assertions above; successful sessions still
     // must return parseable JSON before the schedule is counted as passed.
@@ -175,12 +188,14 @@ try{
   await runMerchTaxCategoryRaces({query,race,auth,actors,lit});
   assert.equal(checks,35);
   await runAutomaticCommerceDeclarationRaces({query,race,lit});
-  assert.equal(checks,37);
+  assert.equal(checks,38);
   await runAutomaticCommerceAuthorityRaces({query,race,lit});
-  assert.equal(checks,43);
-  assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit}),113);
-  assert.equal(checks,156);
-  console.log('PASS native: 156 PostgreSQL blocking-edge schedules plus nonblocking observer SKIP LOCKED; includes the original forty-three PostgreSQL blocking-edge schedules and ordinary subscription/event/merch authority writers in both orders, canonical Premium revocation, absent account/hold/legal/deletion rows, passive buyer/seller session and Premium deadlines with current controls, one-use native dispatch and actual source configuration/issuance/tracking RPC interoperation. Synthetic source fixture only.');
+  assert.equal(checks,44);
+  assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit,session,until}),153);
+  assert.equal(checks,197);
+  const profileCounts=await runOrdinaryProfileMetadataRaces({query,lit,session,until});
+  assert.deepEqual(profileCounts,{blocking:90,nonblocking:27});
+  console.log('PASS native: 287 PostgreSQL blocking-edge schedules (197 commerce +90 profile),27 profile nonblocking controls,2 observer SKIP LOCKED controls and1 managed-style Auth tuple control. Retains all156 original commerce schedules with reviewed gate-first outcomes, adds39 partial canonical-prefix interleavings,1 explicit stale-mode denial and1 Auth DELETE/declaration FK schedule. Synthetic source fixture only; no arbitrary external Auth transaction or baseline media deadlock guarantee.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop owned clone');}

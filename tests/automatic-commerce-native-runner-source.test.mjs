@@ -16,7 +16,7 @@ test('required merch native runner includes automatic authority schedules',()=>{
  for(const marker of ['creator Premium revocation','creator Premium grant refund','free buyer ban','free buyer session expiry','result.second.authorized,false','fixture.transition(\'abort\')'])assert.ok(dispatch.includes(marker),marker);
  assert.doesNotMatch(dispatch,/buyer Premium revocation|set.*premium.*true/iu);
  assert.doesNotMatch(runner,/sequentialReplay:true/u,'native never uses sequential denial adapter');
- for(const marker of ['valid pre-expiry completion control','provider completion lease expires while waiting on account','provider failure lease expires while waiting on job','completion.second.completed,false','failure.second.recorded,false','select pg_sleep(2.2)'])assert.ok(observer.includes(marker),marker);
+ for(const marker of ['valid pre-expiry completion control','provider completion lease expires while waiting on canonical account prefix','provider failure lease expires while waiting on job','completion.second.completed,false','failure.second.recorded,false','select pg_sleep(2.2)'])assert.ok(observer.includes(marker),marker);
  for(const marker of ['expiry while dispatch waits on product','finite expiry comes from the canonical Premium processor',"premiumRenewal('2 seconds')",'select pg_sleep(2.2)','sequentialReplay&&subject'])assert.ok(dispatch.includes(marker),marker);
  const live=readFileSync('scripts/lib/merch-live-checkout-races.mjs','utf8');
  assert.ok(runner.includes('await runMerchLiveCheckoutRaces('));
@@ -26,11 +26,16 @@ test('required merch native runner includes automatic authority schedules',()=>{
  const livePreflight=readFileSync('tests/creator-money/merch-live-entrypoints-postgres.test.mjs','utf8');
  assert.ok(livePreflight.includes('sequentialReplay:true'));
  assert.ok(livePreflight.includes('nativeTx(a+afterBlocked)'),'sequential preflight executes the actual expiry SQL before postcommit RPC');
- for(const marker of ['assert.equal(checks,35)','assert.equal(checks,37)','assert.equal(checks,43)','forty-three PostgreSQL blocking-edge schedules'])assert.ok(runner.includes(marker),marker);
- assert.ok(runner.includes('await runOrdinaryNativeDispatchRaces({query,race,lit})'));
- assert.ok(runner.includes('assert.equal(checks,156)'));
+ for(const marker of ['assert.equal(checks,35)','assert.equal(checks,38)','assert.equal(checks,44)','assert.equal(checks,197)'])assert.ok(runner.includes(marker),marker);
+ assert.ok(runner.includes('await runOrdinaryNativeDispatchRaces({query,race,lit,session,until})'));
+ assert.ok(runner.includes('await runOrdinaryProfileMetadataRaces({query,lit,session,until})'));
+ assert.ok(runner.includes('assert.deepEqual(profileCounts,{blocking:90,nonblocking:27})'));
+ assert.match(declaration,/explicit stale production subject is denied after authority gate wait/u);
+ assert.match(runner,/w\.classid=176214 and w\.objid=32 and w\.objsubid=2/u);
  const native=readFileSync('scripts/lib/ordinary-native-dispatch-races.mjs','utf8');
  for(const marker of ['canonical seller Premium expiration','new buyer deletion request','buyer profile role change','new global legal requirement',
   'first restricted provider account','first creator hold','new seller quarantine','sole seller session',"expiresDuringWait?'expiry':'current control'",
   'native_passive_expiry_barrier_was_late','assertBuyerHasNoPremium','historical native attempt readback','actual ${operation} RPC cannot own source before dispatch authority'])assert.ok(native.includes(marker),marker);
+ for(const marker of ['Auth DELETE waits before tuple and actual creator declaration FK','for key share nowait',
+  'revenuecat_premium_transaction_authority_user_id_fkey','Merch reader must not wait on prelocked Auth tuple','idle in transaction'])assert.ok(native.includes(marker),marker);
 });

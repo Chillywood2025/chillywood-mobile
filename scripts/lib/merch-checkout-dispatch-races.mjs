@@ -62,7 +62,7 @@ export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,
  const old=allocation.reserve.replace('reserve_merch_checkout_dispatch','reserve_merch_checkout_for_actor_with_tracking');
  const ownerClaims=auth('buyer1','service_role').replace('set local role service_role;','');
  const interop=await race('retained reservation global latch precedes new reservation buyer lock',
-  "select private.platform_brand_retention_lock();select '{}'::jsonb;",
+  "select private.lock_ordinary_commerce_authority_gate();select private.platform_brand_retention_lock();select '{}'::jsonb;",
   auth('buyer1','service_role')+`select ${allocation.reserve};`,
   {afterBlocked:ownerClaims+`select ${old};`});
  assert.equal(interop.first.id,interop.second.id);assert.equal(await allocation.stock(),'1');
@@ -84,9 +84,10 @@ export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,
  for(const [label,change,restore] of mutations) {
   const fixture=await make(),reserved=await rpc(fixture.reserve);await fixture.bind(reserved.id);
   try {
-   // PGlite executes sequentially and starts with the actor already revoked.
-   // It proves rejection, never fabricates the native after-wait false result.
-   const options=sequentialReplay&&label.startsWith('free buyer')?{error:/merch_current_session_required/}:{};
+   // Gate-first identity writers finish before the initial actor assertion in
+   // both native and sequential execution. Keep the exact early SQL contract;
+   // passive expiry after a source wait below still has its own JSON outcome.
+   const options=label.startsWith('free buyer')?{error:/merch_current_session_required/}:{};
    const result=await race(`${label} before dispatch`,`${change};select '{}'::jsonb;`,
     auth('buyer1','service_role')+`select ${fixture.transition('dispatch')};`,options);
    if(!options.error)assert.equal(result.second.authorized,false,label);

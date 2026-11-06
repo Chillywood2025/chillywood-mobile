@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
 import {commerceSeedAdapter,seedCommerceCreator,seedCommerceBuyer,acceptCommerceCreatorTerms,assertBuyerHasNoPremium} from '../../tests/helpers/automatic-commerce-fixture.mjs';
 
-export async function runOrdinaryNativeDispatchRaces({query,race,lit,sequentialReplay=false,kinds=['subscription','event','merch']}) {
+export async function runOrdinaryNativeDispatchRaces({query,race,lit,session,until,sequentialReplay=false,kinds=['subscription','event','merch']}) {
  const db=commerceSeedAdapter(query);
  const parse=text=>JSON.parse(text.split('\n').findLast(line=>line.startsWith('{')||line.startsWith('[')));
  const claims=(actor,role='authenticated')=>`set local role ${role};set local request.jwt.claims=${lit(JSON.stringify({role,sub:actor.id,session_id:actor.session}))};set local request.headers='{"x-chillywood-platform":"ios"}';`;
@@ -88,19 +88,105 @@ export async function runOrdinaryNativeDispatchRaces({query,race,lit,sequentialR
  for(const kind of kinds)for(const [label,mutation] of mutations)for(const mutationFirst of [true,false]) {
   const f=await setup(kind),change=mutation(f)+"select '{}'::jsonb;",dispatch=f.dispatch(f.attempt);
   const isBuyerChange=label.startsWith('free buyer')||label.startsWith('new buyer');
-  const expectError=mutationFirst&&(kind!=='merch'||(sequentialReplay&&isBuyerChange));
+  // Identity writers enter the same gate before any user/retention lock,
+  // so Merch waits before its initial actor check for ban, deletion AND
+  // session revocation. Passive clock expiry still has its distinct final
+  // JSON contract after the actual source wait below.
+  const expectError=mutationFirst&&(kind!=='merch'||isBuyerChange);
+  const buyerSnapshotSql=kind==='merch'&&mutationFirst&&(isBuyerChange||label==='buyer profile role change')?`select jsonb_build_object(
+   'product',(select to_jsonb(p) from public.merch_products p where id=${lit(f.source)}),
+   'order',(select to_jsonb(o) from public.merch_orders o where id=${lit(f.intent.id)}),
+   'dispatch',(select to_jsonb(d) from private.merch_checkout_dispatch d where order_id=${lit(f.intent.id)}),
+   'grants',(select coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb) from public.access_grants g),
+   'ledger',(select coalesce(jsonb_agg(to_jsonb(e) order by id),'[]'::jsonb) from public.creator_earnings_ledger e))`:null;
+  const buyerSnapshot=buyerSnapshotSql?await query(buyerSnapshotSql):null;
   try {
    const result=await run(`${kind}: ${label} ${mutationFirst?'before dispatch':'after dispatch'}`,mutationFirst?change:dispatch,mutationFirst?dispatch:change,
-    expectError?{error:kind==='merch'?/merch_current_session_required/u:denied}:{});
+    {...(expectError?{error:kind==='merch'?/merch_current_session_required/u:denied}:{}),
+     ...(kind==='merch'&&mutationFirst&&['new buyer deletion request','free buyer ban','free buyer session revocation'].includes(label)?{retentionFence:true}:{})});
    if(!mutationFirst)assert.equal(kind==='merch'?result.first.authorized:result.first.startAuthorized,true);
    else if(!expectError)assert.equal(result.second.authorized,false);
    assert.equal(await query(f.marker),mutationFirst?'0':'1','denial cannot create a new one-use dispatch marker');
+   if(buyerSnapshotSql)assert.equal(await query(buyerSnapshotSql),buyerSnapshot,'buyer denial preserves full product/order/dispatch/grant/earning rows');
    if(label==='canonical seller Premium expiration')assert.equal(await query(`select public.premium_subject_has_finite_authority_internal(${lit(f.creator.id)})`),'f','canonical writer actually removed seller Premium');
    await assertBuyerHasNoPremium(db,f.buyer);
   }finally {
    if(label==='new global legal requirement')await query(`delete from public.wave1_legal_document_versions where document_key='privacy' and version=${lit(f.attempt)} and capability='creator_money';`);
    if(label==='feature control disabled')await query(`update public.platform_money_kill_switches set state='sandbox_only' where key=${lit(kind==='merch'?'merch_enabled':'creator_monetization_enabled')};`);
   }
+ }
+ // Split an ACTUAL reader prefix, not a completed dispatch. B runs the real
+ // writer statement/RPC while A owns only the actual gate root. Native
+ // asserts B waits there WITHOUT holding a downstream advisory, then A must
+ // complete the real dispatch. A user-first/owner-first writer would deadlock
+ // or fail that lock assertion; the old table SHARE cycle also cannot pass.
+ const prefixWriters=new Set(['canonical seller Premium expiration','seller Premium grant refund','seller ban','free buyer ban',
+  'new buyer deletion request','buyer profile role change','first restricted provider account','first creator hold',
+  'creator suspension','feature control disabled','free buyer session revocation','seller legal acceptance invalidation','new global legal requirement']);
+ for(const kind of kinds)for(const [label,mutation] of mutations)if(prefixWriters.has(label)) {
+  const f=await setup(kind);
+  try{
+   const result=await run(`${kind}: split canonical prefix before ${label}`,
+    "select private.lock_ordinary_commerce_authority_gate();select '{}'::jsonb;",mutation(f)+"select '{}'::jsonb;",
+    {authorityPrefix:true,afterBlocked:f.dispatch(f.attempt)});
+   assert.equal(kind==='merch'?result.first.authorized:result.first.startAuthorized,true);
+   assert.equal(await query(f.marker),'1','reader completed once before the blocked writer committed');
+   await assertBuyerHasNoPremium(db,f.buyer);
+  }finally{
+   if(label==='new global legal requirement')await query(`delete from public.wave1_legal_document_versions where document_key='privacy' and version=${lit(f.attempt)} and capability='creator_money';`);
+   if(label==='feature control disabled')await query(`update public.platform_money_kill_switches set state='sandbox_only' where key=${lit(kind==='merch'?'merch_enabled':'creator_monetization_enabled')};`);
+  }
+ }
+ if(kinds.includes('merch')) {
+  // A real declaration INSERT has an Auth FK. A direct DELETE must wait at
+  // its statement gate BEFORE owning the Auth tuple; the holder proves the
+  // FK's KEY SHARE is immediately available and completes the real RPC.
+  // Existing Premium transaction RESTRICT remains an exact deletion denial.
+  const f=await setup('merch');
+  const grantRows=await query('select md5(jsonb_agg(to_jsonb(g) order by id)::text) from public.access_grants g');
+  const declarations=Number(await query(`select count(*) from private.creator_eligibility_declarations where creator_id=${lit(f.creator.id)}`));
+  const result=await run('Auth DELETE waits before tuple and actual creator declaration FK',
+   "select private.lock_ordinary_commerce_authority_gate();select '{}'::jsonb;",
+   `delete from auth.users where id=${lit(f.creator.id)};select '{}'::jsonb;`,
+   {authorityPrefix:true,error:/revenuecat_premium_transaction_authority_user_id_fkey/u,
+    afterBlocked:`select id from auth.users where id=${lit(f.creator.id)} for key share nowait;`+
+     claims(f.creator)+"select public.declare_creator_money_eligibility(true,'US','NY','adult-us-creator-v1');"});
+  assert.equal(result.first.canCreateMoneyExposure,false);
+  assert.equal(Number(await query(`select count(*) from private.creator_eligibility_declarations where creator_id=${lit(f.creator.id)}`)),declarations+1);
+  assert.equal(await query('select md5(jsonb_agg(to_jsonb(g) order by id)::text) from public.access_grants g'),grantRows);
+  assert.equal(await query(f.marker),'0','declaration creates no dispatch marker');
+  await assertBuyerHasNoPremium(db,f.buyer);
+
+  // One precise managed-style prelock control, not a universal Auth theorem.
+  // This already-prepared Merch dispatch has no Auth FK INSERT. It must finish
+  // while a different backend owns the Auth tuple, since current membership
+  // is read under the advisory gate rather than an Auth tuple lock. A later
+  // Auth mutation then joins the gate normally. Declaration FK/pre-delete
+  // transactions remain an explicitly unproved external boundary.
+  const m=await setup('merch');
+  if(sequentialReplay) {
+   assert.equal(parse(await query('begin;'+m.dispatch(m.attempt)+'commit;')).authorized,true);
+   await query(`update auth.users set banned_until=clock_timestamp()+interval '1 day' where id=${lit(m.buyer.id)};`);
+  } else {
+   assert.equal(typeof session,'function');assert.equal(typeof until,'function');
+   const holder=session(`begin;select id from auth.users where id=${lit(m.buyer.id)} for update;select jsonb_build_object('holderPid',pg_backend_pid());select 'AUTH_TUPLE_READY';`);
+   await until(()=>holder.output().includes('AUTH_TUPLE_READY'),'managed-style Auth tuple holder not ready');
+   const waiter=session(`begin;select jsonb_build_object('waiterPid',pg_backend_pid());${m.dispatch(m.attempt)}commit;`);waiter.child.stdin.end();
+   try {
+    await until(()=>waiter.output().includes('"authorized": true'),'Merch reader must not wait on prelocked Auth tuple');
+    const done=await waiter.done;assert.equal(done.code,0,done.stderr);
+    const holderPid=parse(holder.output()).holderPid;
+    const waiterPid=JSON.parse(done.stdout.split('\n').find(line=>line.includes('waiterPid'))).waiterPid;
+    assert.notEqual(holderPid,waiterPid);
+    assert.equal(await query(`select count(*) from pg_stat_activity where pid=${holderPid} and state='idle in transaction'`),'1');
+    assert.equal(parse(done.stdout).authorized,true);
+   } finally {
+    holder.child.stdin.end(`update auth.users set banned_until=clock_timestamp()+interval '1 day' where id=${lit(m.buyer.id)};commit;\n`);
+    const done=await holder.done;assert.equal(done.code,0,done.stderr);
+   }
+  }
+  assert.equal(await query(m.marker),'1');
+  await assertBuyerHasNoPremium(db,m.buyer);
  }
  for(const kind of kinds)for(const subject of ['free buyer session','sole seller session','seller Premium'])for(const expiresDuringWait of [false,true]) {
   const f=await setup(kind);
@@ -147,7 +233,7 @@ export async function runOrdinaryNativeDispatchRaces({query,race,lit,sequentialR
     const expectedUpdatedAt=await query(`select updated_at::text from public.merch_products where id=${lit(f.source)}`);
     sourceCall=claims(f.creator)+`select public.save_creator_merch_product_with_tracking(${lit(f.source)},'Updated ordinary merch','Physical only',null,1000,5,'published',${lit(expectedUpdatedAt)}::timestamptz,'tracked');`;
    }
-   const prefix=(kind==='merch'?'select private.platform_brand_retention_lock();':'')+
+   const prefix='select private.lock_ordinary_commerce_authority_gate();'+(kind==='merch'?'select private.platform_brand_retention_lock();':'')+
     `select private.lock_ordinary_commerce_dispatch_subjects(${lit(f.buyer.id)},${lit(f.buyer.session)},${lit(f.creator.id)},'sandbox',${kind==='merch'?'null':"'revenuecat_app_store'"});select '{}'::jsonb;`;
    const result=prefixFirst
     ?await run(`${kind}: actual ${operation} RPC cannot own source before dispatch authority`,prefix,sourceCall,{afterBlocked:f.dispatch(f.attempt)})

@@ -68,7 +68,7 @@ for(const lane of ['event','room']) test(`purchased ${lane} auction rights survi
     });
     await isolate(async()=>{
       await db.query("update public.creator_payout_accounts set last_provider_sync_at=now()-interval '16 minutes',provider_configuration_observed_at=now()-interval '16 minutes' where creator_user_id=$1",[host.user_id]);
-      await db.query("update private.creator_provider_observation_jobs set observed_at=now()-interval '16 minutes' where creator_id=$1",[host.user_id]);
+      await db.query("with fixture_prefix as materialized(select private.lock_ordinary_commerce_authority_gate()) update private.creator_provider_observation_jobs set observed_at=now()-interval '16 minutes' from fixture_prefix where creator_id=$1",[host.user_id]);
       assert.equal(await one("select private.ordinary_creator_provider_ready($1,'sandbox')",[host.user_id]),false);
       await delivery(true,'provider freshness expiration');
     });

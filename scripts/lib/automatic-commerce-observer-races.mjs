@@ -39,7 +39,7 @@ export async function runAutomaticCommerceObserverRaces({query,session,until,rac
  const accounts=await seedAutomaticCommerceObserverFixture({query,lit});
  for(const expired of [false,true]) {
  const expiredToken=await prepareAutomaticCommerceObserverSkipLockedFixture({query,lit,accounts,expired});
- const holder=session(`begin;select account_id from private.creator_provider_observation_jobs where account_id=${lit(accounts[0])} for update;
+ const holder=session(`begin;select private.lock_ordinary_commerce_authority_gate();select account_id from private.creator_provider_observation_jobs where account_id=${lit(accounts[0])} for update;
   select jsonb_build_object('holderPid',pg_backend_pid());select 'OBSERVER_HOLDER_READY';`);
  await until(()=>holder.output().includes('OBSERVER_HOLDER_READY'),'observer job lock holder not ready');
  const worker=session(`begin;set local role service_role;set local request.jwt.claims='{"role":"service_role"}';
@@ -74,7 +74,7 @@ export async function runAutomaticCommerceObserverLeaseRaces({query,race,lit,acc
  // All completion evidence is valid before the lease expires. A rollback-only
  // successful control ensures a stale-clock implementation cannot pass this
  // schedule merely because some unrelated completion precondition was absent.
- await query(`update private.creator_provider_observation_jobs set lease_token=${lit(token)},leased_at=clock_timestamp()-interval '1 minute',
+ await query(`begin;select private.lock_ordinary_commerce_authority_gate();update private.creator_provider_observation_jobs set lease_token=${lit(token)},leased_at=clock_timestamp()-interval '1 minute',
   lease_until=clock_timestamp()+interval '1 hour',previous_observed_at=null,observed_at=null where account_id=${lit(account)};
   update public.creator_payout_accounts set provider_configuration_account_id=provider_account_id,
    provider_configuration_observed_at=statement_timestamp(),last_provider_sync_at=statement_timestamp(),
@@ -87,15 +87,15 @@ export async function runAutomaticCommerceObserverLeaseRaces({query,race,lit,acc
   insert into public.platform_admin_audit_logs(action,action_category,target_type,target_id,target_user_id,actor_role,metadata)
   select 'creator_provider_observation_persisted','payout','creator_payout_account',id::text,creator_user_id,'system',
    jsonb_build_object('source','creator-provider-observation-worker','provider_environment',provider_environment)
-  from public.creator_payout_accounts where id=${lit(account)};`);
+  from public.creator_payout_accounts where id=${lit(account)};commit;`);
  const complete=`select public.complete_creator_provider_observation(${lit(account)},${lit(token)});`;
  assert.equal(JSON.parse(await query(`begin;${service}${complete}rollback;`)).completed,true,'valid pre-expiry completion control');
  await query(`update private.creator_provider_observation_jobs set lease_until=clock_timestamp()+interval '2 seconds' where account_id=${lit(account)};`);
  const waitPastExpiry=`do $expiry_barrier$ begin if not exists(select 1 from private.creator_provider_observation_jobs
   where account_id=${lit(account)} and lease_until>clock_timestamp()) then raise exception 'observer_expiry_barrier_was_late';end if;
   end $expiry_barrier$;select pg_sleep(2.2);select '{}'::jsonb;`;
- const completion=await race('provider completion lease expires while waiting on account',
-  `select id from public.creator_payout_accounts where id=${lit(account)} for update;select '{}'::jsonb;`,
+ const completion=await race('provider completion lease expires while waiting on canonical account prefix',
+  `select private.lock_ordinary_commerce_authority_gate();select id from public.creator_payout_accounts where id=${lit(account)} for update;select '{}'::jsonb;`,
   service+complete,{afterBlocked:waitPastExpiry});
  assert.equal(completion.second.completed,false);
  assert.ok(['t','true'].includes(await query(`select observed_at is null and lease_token=${lit(token)} from private.creator_provider_observation_jobs where account_id=${lit(account)}`)),'expired completion cannot mint freshness or consume lease');

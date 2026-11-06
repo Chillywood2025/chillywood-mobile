@@ -11,18 +11,22 @@ test('registered commerce helper inventory includes nested observer setup and la
  const observer=nativeSource('scripts/lib/automatic-commerce-observer-races.mjs');
  const preflight=nativeSource('tests/native-commerce-runner-setups.test.mjs');
  const calls=[...new Set([...runner.matchAll(/await (run\w+Race(?:s)?)\(/gu)].map(match=>match[1]))].sort();
- const fullSequential=['runAutomaticCommerceAuthorityRaces','runMerchCheckoutDispatchRaces','runMerchLiveCheckoutRaces',
+ const fullSequential=['runAutomaticCommerceAuthorityRaces','runAutomaticCommerceDeclarationRaces','runMerchCheckoutDispatchRaces','runMerchLiveCheckoutRaces',
   'runMerchPublicationRaces','runMerchTaxCategoryRaces','runOrdinaryNativeDispatchRaces'];
- const partial=['runAutomaticCommerceObserverRaces','runAutomaticCommerceDeclarationRaces','runMerchAdmissionCutoverRace'];
- assert.deepEqual(calls,[...fullSequential,...partial].sort(),'new native helper requires an explicit executable setup coverage decision');
+ const partial=['runAutomaticCommerceObserverRaces','runMerchAdmissionCutoverRace'];
+ const separate=['runOrdinaryProfileMetadataRaces'];
+ assert.deepEqual(calls,[...fullSequential,...partial,...separate].sort(),'new native helper requires an explicit executable setup coverage decision');
  for(const helper of fullSequential)assert.ok(preflight.includes('await '+helper+'('),helper);
  assert.match(observer,/const accounts=await seedAutomaticCommerceObserverFixture\(\{query,lit\}\)/u);
  assert.match(observer,/await runAutomaticCommerceObserverLeaseRaces\(\{query,race,lit,account:accounts\[0\]\}\)/u);
  assert.match(preflight,/await runAutomaticCommerceObserverLeaseRaces\(/u,'nested setup must run on actual UNKNOWN cohort, not stop at its parent');
  // Independent backend/wait semantics intentionally remain in native CI.
  for(const marker of ['OBSERVER_HOLDER_READY','idle in transaction','record.jobs.length,5','expired-lease maintenance'])assert.ok(observer.includes(marker),marker);
- assert.ok(preflight.includes('private.lock_ordinary_creator_subject'),'explicit stale-mode guard is tested without pretending to wait');
- assert.ok(preflight.includes('production Premium remains valid in Sandbox'),'post-change retry must follow actual mode policy');
+ const declaration=nativeSource('scripts/lib/automatic-commerce-declaration-races.mjs');
+ assert.ok(declaration.includes('private.lock_ordinary_creator_subject'),'actual explicit stale-mode helper executes through the full sequential export');
+ assert.match(declaration,/Genuine production\s+\/\/ Premium also permits Sandbox/u,'post-change retry follows actual mode policy without manufacturing legal consent');
+ const profile=nativeSource('tests/ordinary-profile-native-fixture.test.mjs');
+ assert.match(profile,/await runOrdinaryProfileMetadataSequential\(/u,'separate helper SQL/fixture proof is mandatory');
 });
 
 test('native UNKNOWN observer accounts support nested completion/failure setup without gaining provider readiness',{timeout:120000},async()=>{

@@ -17,10 +17,11 @@ test('final commerce functions take retained global and subject locks before sou
    'public.select_creator_merch_tax_category(uuid,uuid,timestamp with time zone,text)',
   ]) {
    const body=await definition(signature);
+   before(body,'perform private.lock_ordinary_commerce_authority_gate();','perform private.platform_brand_retention_lock();');
    before(body,'perform private.platform_brand_retention_lock();','perform public.wave1_assert_current_creator_money_authority_internal();');
   }
   const cashout=await definition('private.lock_sandbox_cashout_creator(uuid)');
-  const sequence=['perform private.platform_brand_retention_lock();',
+  const sequence=['perform private.lock_ordinary_commerce_authority_gate();','perform private.platform_brand_retention_lock();',
    "perform private.lock_ordinary_commerce_dispatch_subjects(p_creator,null,p_creator,'sandbox');",'from public.merch_orders',
    'from private.creator_event_auction_quotes','from private.creator_room_auction_quotes','from public.money_access_ledger_events',"'sandbox-cashout:'"];
   for(let i=1;i<sequence.length;i++)before(cashout,sequence[i-1],sequence[i]);
@@ -30,7 +31,15 @@ test('final commerce functions take retained global and subject locks before sou
   const publication=await definition('private.merch_live_publication_authority(public.merch_products)');
   before(publication,'perform public.wave1_assert_current_creator_money_authority_internal();',"'merch-tax-authority'");
   before(publication,'perform public.wave1_assert_current_creator_money_authority_internal();',"'wave1-creator:'");
-  before(publication,'perform public.wave1_assert_current_creator_money_authority_internal();','lock table public.wave1_creator_eligibility');
+  before(publication,'perform private.lock_ordinary_commerce_authority_gate();','perform public.wave1_assert_current_creator_money_authority_internal();');
+  assert.doesNotMatch(publication,/lock table [^;]*(?:wave1_creator_eligibility|wave1_legal_acceptances|wave1_legal_document_versions|creator_payout_accounts|creator_payout_eligibility_records|platform_money_kill_switches)[^;]*in share mode/u,
+   'covered authority membership never introduces gate-to-RowExclusive relation inversion');
+  assert.match(publication,/lock table private\.merch_tax_categories,private\.merch_tax_category_contexts,[\s\S]*private\.commerce_tax_qualifications in share mode/u,
+   'independent tax/category qualification membership protection remains');
+  for(const relation of ['public.wave1_creator_eligibility','public.wave1_legal_acceptances','public.wave1_legal_document_versions']) {
+   const row=(await db.query("select count(*)::int n from pg_trigger where tgrelid=$1::regclass and tgname='aaa_ordinary_commerce_writer_gate' and tgtype=30",[relation])).rows[0];
+   assert.equal(row.n,1,`${relation}: before-statement gate protects inserts, updates and deletes`);
+  }
   assert.equal((publication.match(/perform public\.wave1_assert_current_creator_money_authority_internal\(\);/gu)??[]).length,1);
   assert.doesNotMatch(await definition('public.wave1_assert_current_creator_money_authority_internal()'),/platform_brand_retention_lock/u,
    'shared non-merch assertion does not introduce a global latch under unrelated feature locks');

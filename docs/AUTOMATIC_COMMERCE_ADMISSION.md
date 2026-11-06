@@ -88,17 +88,44 @@ can be selected through this path.
 New-sale dispatch rechecks current buyer session/account and seller membership,
 provider state, holds, legal requirements, publication and mode controls under
 matching authority locks. Free buyers are not placed under seller Premium locks.
-New fraud holds and terminal quarantines need insertion fences as well as row
-locks. Native PostgreSQL tests, not sequential database emulation, must prove
+New fraud holds and terminal quarantines need insertion fences, not just locks
+on rows that already exist. Native PostgreSQL tests, not sequential SQL tests, must prove
 blocking order and refresh/dispatch races.
 
-The shared dispatch fence takes short-lived table SHARE locks on provider,
-eligibility and observation authority as well as canonical subject fences. This
-also covers a disqualifying row that did not exist when admission began. These
-locks can briefly serialize otherwise unrelated authority updates. Provider
-network requests never run inside the database transaction. Hosted native
-validation must establish the blocking order; the sequential SQL fixtures only
-establish the final authorization results.
+Participating commerce entrypoints take one exclusive transaction advisory gate
+before their existing identity, Premium, provider, creator, retention and source
+locks. Direct authority writes enter before acquiring their target rows.
+Covered authority membership is protected by the same gate, including a first
+disqualifying account or hold. Ordinary admission no longer waits on authority
+tuples or conflicting table SHARE locks while holding the gate. Separate tax and
+other membership fences remain where their writers are not covered by this
+protocol. The gate is lock-only: historical receipt, reconciliation and refund
+entrypoints gain no fresh Premium or new-sale eligibility requirement.
+
+The gate is deliberately exclusive from entry. Nested refreshes and writes must
+not upgrade a shared lock. Authoritative predicates are evaluated in separate
+commands after waits under READ COMMITTED, and time-based expiry is rechecked at
+the final admission point. Existing current-session, mode, legal and provider
+checks remain in addition to the gate.
+
+This is conservative serialization across users, not a throughput optimization.
+A slow source-row wait can delay unrelated participating transactions. Provider
+network requests never run inside a gate-holding database transaction. Realistic
+load and operational capacity must be qualified before enablement. Hosted native
+validation must establish actual blocking, both transaction orders, post-wait
+denials, rollback and idempotency. Sequential fixtures alone cannot prove these
+properties. The supported protocol does not promise freedom from deadlocks for
+arbitrary multi-statement SQL or uninspected external Auth prelocks.
+
+Profile scan metadata has a narrow exception so existing media recovery does not
+join the commerce gate. Only an UPDATE changing the fixed scan/status metadata
+fields and timestamps may use it. Role, user ID, visibility, URLs and every other
+field remain protected. Naming a protected column in an UPDATE still takes the
+gate even if its value is unchanged. A final assert-only check examines the
+actual row after all BEFORE triggers; a late protected change or an unknown new
+field cannot silently use the exception. Media provenance, moderation, retention
+and enqueue triggers are unchanged. This removes a commerce-lock dependency; it
+does not claim to repair every pre-existing media-job concurrency problem.
 
 Owned positively-undispatched abort and historical cashout status remain usable
 after creator membership expiry. Current actor account/session restrictions still

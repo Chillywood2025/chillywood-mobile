@@ -105,9 +105,10 @@ export async function seedSyntheticStrictCreatorProvider(db,actor,{environment='
     provider_losses_collector=excluded.provider_losses_collector,provider_requirements_collection=excluded.provider_requirements_collection,
     provider_live_observation=excluded.provider_live_observation`,
   [actor.id,account,mode,key,JSON.stringify(mode==='live'?observation:null)]);
-  await db.query(`insert into private.creator_provider_observation_jobs(account_id,creator_id,environment,provider_account_id,observed_at)
+  await db.query(`with fixture_prefix as materialized(select private.lock_ordinary_commerce_authority_gate())
+    insert into private.creator_provider_observation_jobs(account_id,creator_id,environment,provider_account_id,observed_at)
     select id,creator_user_id::uuid,provider_environment,provider_account_id,provider_configuration_observed_at
-    from public.creator_payout_accounts where creator_user_id=$1 and provider_environment=$2
+    from public.creator_payout_accounts cross join fixture_prefix where creator_user_id=$1 and provider_environment=$2
     on conflict(account_id) do update set observed_at=excluded.observed_at`,[actor.id,mode]);
   const ready=(await db.query('select private.ordinary_creator_provider_ready($1::uuid,$2) ready',[actor.id,environment])).rows[0]?.ready;
   assert.equal(ready,true,'synthetic complete provider facts satisfy strict current predicate');

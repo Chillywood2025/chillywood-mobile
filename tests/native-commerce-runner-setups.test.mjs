@@ -166,31 +166,16 @@ test('registered native commerce runner setups and late INSERT factories execute
    {overrides:{seedAutomaticCommerceObserverFixture,prepareAutomaticCommerceObserverSkipLockedFixture}});
   });
   await check('merch declaration exact quota, stale-mode guard and permitted post-change retry setup',async()=>{
+   let schedules=0;
+   const parse=text=>JSON.parse(text.split('\n').findLast(line=>line.startsWith('{')));
    const race=async(label,first,second,{error}={})=>{
-    assert.match(label,/distinct exact sessions/u);assert.match(String(error),/creator_declaration_rate_limited/u);
-    const result=db.query('begin;'+first+'commit;');assert.throws(()=>db.query('begin;'+second+'commit;'),error);
-    return {first:JSON.parse(result),second:null};
+    schedules++;const firstResult=parse(db.query('begin;'+first+'commit;'));
+    if(error){assert.throws(()=>db.query('begin;'+second+'commit;'),error,label);return {first:firstResult,second:null};}
+    return {first:firstResult,second:parse(db.query('begin;'+second+'commit;'))};
    };
-   await runPath('scripts/lib/automatic-commerce-declaration-races.mjs',source=>[
-    `const lit=value=>"'"+String(value).replaceAll("'","''")+"'";`,
-    nativeSpan(source,' const db=commerceSeedAdapter(query)', " await race('mode writer before declaration"),
-   ],`assert.equal(query("select count(*) from private.creator_eligibility_declarations where creator_id="+lit(actor.id)),'10');
-    const history=query("select md5(jsonb_agg(to_jsonb(d) order by id)::text) from private.creator_eligibility_declarations d where creator_id="+lit(actor.id));
-    const grants=query("select md5(coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb)::text) from public.access_grants g");
-    query("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
-    // Native enters before the writer commits and must report creator_mode_changed.
-    // This direct stale-mode guard checks that denial, not the native lock wait.
-    assert.throws(()=>query("begin;select private.lock_ordinary_creator_subject("+lit(peer.id)+","+lit(peer.session)+",'production');rollback;"),/creator_mode_changed/u);
-    // A fresh sequential call sees the new mode: production Premium remains valid in Sandbox.
-    assert.equal(query("select private.ordinary_commerce_premium_current("+lit(actor.id)+",'sandbox')"),'t');
-    const retried=JSON.parse(query('begin;'+auth(peer)+declaration('TX')+'commit;'));
-    assert.equal(retried.canCreateMoneyExposure,false);
-    assert.equal(query("select count(*) from private.creator_eligibility_declarations where creator_id="+lit(actor.id)),'10');
-    assert.equal(query("select md5(jsonb_agg(to_jsonb(d) order by id)::text) from private.creator_eligibility_declarations d where creator_id="+lit(actor.id)),history);
-    assert.equal(query("select md5(coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb)::text) from public.access_grants g"),grants);
-    assert.equal(query("select count(*) from public.creator_payout_accounts where creator_user_id="+lit(actor.id)),'0');
-    assert.equal(query("select private.ordinary_creator_provider_ready("+lit(actor.id)+",'sandbox')"),'f');
-    query("begin;set local request.jwt.claim.role='service_role';update public.platform_money_kill_switches set state='on' where key='live_money_enabled';commit;");`,{overrides:{race}});
+   const {runAutomaticCommerceDeclarationRaces}=await import('../scripts/lib/automatic-commerce-declaration-races.mjs');
+   await runAutomaticCommerceDeclarationRaces({query:db.query,race,lit:value=>"'"+String(value).replaceAll("'","''")+"'"});
+   assert.equal(schedules,3,'real quota, fresh post-gate mode retry and explicit stale-mode SQL all execute sequentially');
   });
   await check('merch cutover later direct product INSERT keeps its actual creator and Free buyer',async()=>{
    const context=await run('merch-return-cases-concurrency-postgres',source=>[
@@ -221,9 +206,9 @@ test('registered native commerce runner setups and late INSERT factories execute
     await runMerchPublicationRaces({query,race,auth,actors,lit});
     await runMerchTaxCategoryRaces({query,race,auth,actors,lit});
     await runAutomaticCommerceAuthorityRaces({query,race,lit});
-    assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit,sequentialReplay:true}),113);`,
+    assert.equal(await runOrdinaryNativeDispatchRaces({query,race,lit,sequentialReplay:true}),153);`,
    {overrides:{race:sequentialRace,seedAutomaticCommerceObserverFixture,prepareAutomaticCommerceObserverSkipLockedFixture,runAutomaticCommerceObserverLeaseRaces}});
-   assert.equal(count,150,'2 nested observer + 12 checkout + 6 live + 6 publication + 5 category + 6 authority + 113 ordinary sequential operations');
+   assert.equal(count,190,'2 nested observer + 12 checkout + 6 live + 6 publication + 5 category + 6 authority + 153 ordinary sequential operations, plus one non-concurrent Auth control');
   });
   t.diagnostic('All executed code above is actual native setup/source SQL; independent native schedules remain REQUIRED and unrun here.');
  }finally{await db.close();}
