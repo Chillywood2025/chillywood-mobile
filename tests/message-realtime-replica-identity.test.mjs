@@ -40,8 +40,8 @@ test('actual full replay preserves all unrelated identity, RLS, policy, ACL and 
   ));
   try {
     assert.equal(replayReport.files.includes(migrationName), false, 'start before the actual forward migration');
-    assert.equal(replayReport.files.length + 2, fs.readdirSync(new URL('supabase/migrations/', root)).filter(name => name.endsWith('.sql')).length,
-      'every source migration accounted for, with the runtime repair applied separately and only the new migration excluded');
+    assert.equal(replayReport.files.length + 1, fs.readdirSync(new URL('supabase/migrations/', root)).filter(name => name.endsWith('.sql')).length,
+      'every source migration accounted for, with runtime repair in source order and only the new migration excluded');
     const before = await snapshot();
     assert.deepEqual(before.identities.filter(row => allEight.includes(row.relname)),
       allEight.map(relname => ({ relname, relreplident: 'd' })), 'fresh baseline exposes the preserved source/production mismatch');

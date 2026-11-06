@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/automatic-commerce.inc
 
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
@@ -553,17 +554,6 @@ select set_config('request.jwt.claims','{}',true);
 -- Protected creator-video comments inherit the exact parent commerce boundary.
 -- Build provider-backed VIP and Paid Video authority for the existing current
 -- outsider session, after first proving that neither attachment is public.
-insert into public.wave1_creator_eligibility (
-  creator_user_id,state,account_status,age_18_plus,legal_accepted,
-  creator_role,moderation_state,market,rollout_eligible,platform_capability,
-  provider_eligible,kyc_complete,tax_complete,sanctions_clear,payout_eligible,
-  authority_source,last_operation_key
-) values (
-  'da000000-0000-4000-8000-000000000001','VERIFIED','ACTIVE',true,true,
-  true,'CLEAR','UNITED_STATES',true,true,true,true,true,true,true,
-  'social-storage-protected-fixture','social-storage-protected-creator'
-);
-
 insert into public.wave1_legal_acceptances (
   user_id,subject_hash,document_key,document_version,market,role_key,capability,
   session_generation,authority_source
@@ -578,6 +568,9 @@ from public.wave1_legal_document_versions document
 where document.active
   and document.market='UNITED_STATES'
   and document.capability in ('creator','creator_money');
+
+select pg_temp.seed_creator_premium('da000000-0000-4000-8000-000000000001');
+select pg_temp.declare_sandbox_creator('da000000-0000-4000-8000-000000000001','da000000-0000-4000-8000-000000000101');
 
 insert into public.videos(
   id,owner_id,title,visibility,moderation_status,storage_provider,

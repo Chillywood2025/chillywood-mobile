@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('Stripe checkout retry uses real immutable authority and receipt SQL', {timeout:240_000}, async t=>{
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});let checks=0;
@@ -12,6 +13,7 @@ test('Stripe checkout retry uses real immutable authority and receipt SQL', {tim
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
     await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-capabilities.sql','utf8'));
     await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(x=>x.kind==='buyer1'),other=actors.find(x=>x.kind==='buyer2'),host=actors.find(x=>x.kind==='creator');
     await db.exec("select set_config('request.jwt.claims','{\"role\":\"service_role\"}',false)");

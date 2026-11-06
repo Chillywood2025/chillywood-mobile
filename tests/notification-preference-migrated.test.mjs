@@ -58,6 +58,6 @@ test('preference CAS applies over the full fresh-schema migration chain without 
   await db.query('delete from auth.sessions where id=$1', [session]);
   await assert.rejects(invoke('select public.read_my_notification_preferences() result'), e => e.code === '42501');
   const allMigrations = fs.readdirSync('supabase/migrations').filter(name => name.endsWith('.sql'));
-  assert.equal(replayReport.files.length + 2, allMigrations.length, 'all source migrations, with runtime repair and preference CAS separately applied');
-  t.diagnostic(`${replayReport.files.length} historical migrations plus runtime repair and the new migration executed as actual SQL; managed infrastructure doubles, not native concurrency or deployed proof.`);
+  assert.equal(replayReport.files.length + 1, allMigrations.length, 'all source migrations, with only preference CAS separately applied');
+  t.diagnostic(`${replayReport.files.length} baseline migrations including runtime repair in source order, plus the new migration executed as actual SQL; managed infrastructure doubles, not native concurrency or deployed proof.`);
 });

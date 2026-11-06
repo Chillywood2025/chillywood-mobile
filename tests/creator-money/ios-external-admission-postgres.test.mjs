@@ -88,7 +88,10 @@ test('iOS final-thirty-minute admission resumes bound checkout but cannot create
     Date.now=()=>realDateNow()+20*60*1000;
     assert.ok(Number(await one('select extract(epoch from clock_timestamp())'))-Number(before)>=1199,'only disposable PGlite clock advances');
     await asBuyer(buyer);
-    await assert.rejects(admit(),/ios_external_storefront_observation_required/,'stale creator provider readiness blocks refreshed admission before creating a native observation');
+    const observationsBefore=await one('select count(*)::int from private.ios_external_storefront_observations');
+    assert.equal(await one("select private.ordinary_creator_subject_for_mode($1,'sandbox')",[creator.user_id]),true,'isolated Sandbox tools do not borrow stale Connect readiness');
+    await assert.rejects(admit(),/external_payment_capability_unavailable/,'the exact external route independently rejects stale provider readiness');
+    assert.equal(await one('select count(*)::int from private.ios_external_storefront_observations'),observationsBefore,'failed external admission cannot retain a refreshed native observation');
     await assert.rejects(()=>one("select private.resolve_creator_external_payment_capability($1,$2,'creator_tip',$3,237,'usd','test',$4)",[buyer.user_id,buyer.session_id,creator.user_id,cap]),/external_payment_capability_unavailable/,'twenty-minute-old provider configuration cannot authorize the qualified route');
     // Model a new independent provider observation in this disposable fixture;
     // refreshing native storefront evidence alone must not refresh Connect.

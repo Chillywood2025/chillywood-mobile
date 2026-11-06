@@ -117,6 +117,13 @@ likewise retain their exact current actor checks without becoming new sales.
 
 ## Release boundary
 
+First live merchandise publication keeps the original draft in Sandbox until
+the reviewed transaction finishes its ordinary photo, variant and rights checks.
+Only its existing private transaction/product confirmation context selects strict
+production creator authority for that inner validation. The generic Sandbox
+writer cannot borrow this context. A failed validation rolls back the listing,
+mode, private context and publication receipt together.
+
 This source requires exact-head Required Validation, review and normal protected
 merge. Merge is not deployment, provider configuration, credential provisioning,
 scheduling, release or live-money activation. Controlled synthetic provider facts

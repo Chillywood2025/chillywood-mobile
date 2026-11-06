@@ -1,5 +1,6 @@
 begin;
-select plan(147);
+\ir fixtures/automatic-commerce.inc
+select plan(150);
 
 -- Contract and ACL surface (1-15).
 select has_function('public', 'can_access_chat_thread', array['uuid'], '1. exact chat membership helper exists');
@@ -216,6 +217,12 @@ select throws_ok(
 reset role;
 
 -- Watch-Party sensitive read authority (25-33).
+-- The historical paid-room controls below still exercise strict financial
+-- authority. Supply finite canonical Premium and explicitly synthetic provider
+-- facts only for the creator; every ordinary viewer/buyer stays Free.
+update auth.users set email_confirmed_at=now() where id='a7777777-7777-4777-8777-777777777777';
+select pg_temp.seed_creator_premium('a7777777-7777-4777-8777-777777777777');
+select pg_temp.seed_synthetic_creator_provider('a7777777-7777-4777-8777-777777777777');
 insert into public.wave1_creator_eligibility (
   creator_user_id, state, account_status, age_18_plus, legal_accepted,
   creator_role, moderation_state, market, rollout_eligible,
@@ -737,6 +744,38 @@ select lives_ok(
   $$select public.join_watch_party_room_session('CLOSUREPAID', 'Paid Viewer', null, null, true, true, false)$$,
   '61. ordinary open-room member joins through the canonical RPC'
 );
+reset role;
+savepoint free_live_service_proof;
+set local role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select ok(
+ (proof->>'allowed')::boolean and proof->>'reason'='non_seat_room_authority'
+ and not (proof->>'paidSeatRequired')::boolean and not (proof->>'hostAuthority')::boolean
+ and proof->>'expiresAt' is null
+ and not exists(select 1 from public.paid_watch_party_offers where party_id='CLOSUREPAID')
+ and not exists(select 1 from public.access_grants where user_id='b2222222-2222-4222-8222-222222222222' and grant_type='premium')
+ and not exists(select 1 from public.user_entitlements where user_id='b2222222-2222-4222-8222-222222222222' and entitlement_key='premium'),
+ '61b. no-offer open Live service proof admits a Free viewer without paid or host authority'
+) from (select public.resolve_watch_party_livekit_viewer_authority(
+ 'CLOSUREPAID','b2222222-2222-4222-8222-222222222222','b2222222-2222-4222-8222-222222222201') proof) resolved;
+reset role;
+update auth.sessions set not_after=now()-interval '1 second'
+where id='b2222222-2222-4222-8222-222222222201';
+set local role service_role;
+select is(public.resolve_watch_party_livekit_viewer_authority(
+ 'CLOSUREPAID','b2222222-2222-4222-8222-222222222222','b2222222-2222-4222-8222-222222222201')->>'reason',
+ 'viewer_session_authority_invalid','61c. a no-offer Free viewer still needs the exact current session');
+rollback to free_live_service_proof;
+update auth.users set banned_until=now()+interval '1 hour'
+where id='a7777777-7777-4777-8777-777777777777';
+set local role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select ok(not (public.resolve_watch_party_livekit_viewer_authority(
+ 'CLOSUREPAID','b2222222-2222-4222-8222-222222222222','b2222222-2222-4222-8222-222222222201')->>'allowed')::boolean,
+ '61d. account-restricted host cannot supply even a no-offer Free Live viewer proof');
+rollback to free_live_service_proof;
+release savepoint free_live_service_proof;
+set local role authenticated;
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"b2222222-2222-4222-8222-222222222222"}', true);
 select throws_ok(
   $$select public.heartbeat_watch_party_room_session('CLOSUREPAID','active',false,false,false,null,null,null)$$,

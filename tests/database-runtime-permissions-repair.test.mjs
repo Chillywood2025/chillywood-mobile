@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import { createDatabase, repairMigrationPath } from './helpers/database-runtime-authority-fixture.mjs';
+import { repairMigrationPath } from './helpers/database-runtime-authority-fixture.mjs';
+import { createHistoricalRuntimeDatabase } from './helpers/runtime-authority-historical-fixture.mjs';
 
 const actor = 'e6000000-0000-4000-8000-000000000001';
 const ordinary = 'e6000000-0000-4000-8000-000000000002';
@@ -194,7 +195,7 @@ async function capturedPolicyCases(db, policyName) {
 
 for (const includeHeldStudio of [false, true]) {
 test(`forward permission repair preserves exact callers (held Studio ${includeHeldStudio ? 'present' : 'absent'})`, async (t) => {
-  const fixture = await createDatabase({ overlayLiveDrift: true, applyRepair: false, includeHeldStudio });
+  const fixture = await createHistoricalRuntimeDatabase({ overlayLiveDrift: true, applyRepair: false, includeHeldStudio });
   const db = fixture.db ?? fixture;
   try {
     await seed(db);

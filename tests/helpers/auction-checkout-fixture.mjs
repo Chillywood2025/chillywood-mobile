@@ -72,12 +72,17 @@ export async function withQualifiedAuctionFixture({mode='live',lane='event',sour
    values('${cap}','acct_platform','acct_fixture','${product}','prod_LiveFixture','SYNTHETIC platform ownership','active','${mode}',true,now(),now()+interval '10 minutes');`);
   // Turn on only synthetic disposable database controls to exercise the dormant
   // positive path. No hosted database, provider or real-money operation is used.
-  if(mode==='live') await db.exec(`begin; set local request.jwt.claim.role='service_role'; update public.platform_money_kill_switches set state='on',reason='SYNTHETIC LOCAL TEST ONLY'
-   where key in('live_money_enabled','provider_webhooks_enabled','digital_sales_enabled','creator_monetization_enabled','stripe_connect_enabled'); commit;`);
+  const activateFixtureLiveMode=async()=>{
+   if(mode==='live') await db.exec(`begin; set local request.jwt.claim.role='service_role'; update public.platform_money_kill_switches set state='on',reason='SYNTHETIC LOCAL TEST ONLY'
+    where key in('live_money_enabled','provider_webhooks_enabled','digital_sales_enabled','creator_monetization_enabled','stripe_connect_enabled'); commit;`);
+  };
   let auction,quote;
   if(lane==='event'){
    const offer=await rpc('creator',`public.configure_paid_creator_event_sale('${event}','Virtual show',99,1,'sandbox',
     'America/New_York',now()-interval '1 hour',now()+interval '1 day')`);
+   // Configure the test source while test mode is actually selected. Only the
+   // separately qualified live auction may promote it after mode activation.
+   await activateFixtureLiveMode();
    assert.equal(await rpc('creator',`public.read_creator_auction_creation_mode('event_auction')`),mode);
    await assert.rejects(rpc('creator',`public.create_creator_event_auction('${event}','${randomUUID()}',237,1,clock_timestamp()+interval '600 milliseconds',now()+interval '1 hour','${mode}')`),/revision_required/);
    await assert.rejects(rpc('buyer1',`public.create_creator_event_auction('${event}','${offer.termsRevisionId}',237,1,clock_timestamp()+interval '600 milliseconds',now()+interval '1 hour','${mode}')`));
@@ -105,6 +110,7 @@ export async function withQualifiedAuctionFixture({mode='live',lane='event',sour
     await rpc('creator',`public.set_paid_watch_party_offer('LIVE-AUCTION-FIXTURE','Limited admission',99,1,'sandbox')`);
    }else await db.exec(`insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)
     values('LIVE-AUCTION-FIXTURE','${actors.creator.user_id}','live','open','open',true,'private')`);
+   await activateFixtureLiveMode();
    const setup=await rpc('creator',`public.prepare_creator_room_seat_auction('LIVE-AUCTION-FIXTURE')`);
    if(mode==='live'&&sourceKind==='party_admission'){
     await assert.rejects(rpc('creator',`public.create_creator_room_seat_auction('LIVE-AUCTION-FIXTURE','party_admission',237,1,

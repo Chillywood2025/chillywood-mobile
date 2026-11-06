@@ -3,13 +3,13 @@
 // provider, live migration or credentials. NOT a multi-backend concurrency claim.
 import assert from 'node:assert/strict';
 import {mkdtemp,readdir,rm} from 'node:fs/promises';
-import {basename,join} from 'node:path';
+import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {PGlite} from '@electric-sql/pglite';
 import {loadQualificationModule,fixtureNow,assertProposalUnchanged,existingDatabaseFingerprintSQL,
   qualificationMigrationName,qualificationMigrationSource,fixtureAdmissionClockSQL,
   qualificationCatalogFingerprintSQL,assertClockOnlyCatalogChange} from '../tests/helpers/r2-qualification-fixture.mjs';
-import {createDatabase,splitSQL,repairMigrationPath} from '../tests/helpers/database-runtime-authority-fixture.mjs';
+import {createDatabase,splitSQL} from '../tests/helpers/database-runtime-authority-fixture.mjs';
 const {createQualificationRunStore,validateQualificationState}=loadQualificationModule('r2-disposable-qualification-store.ts');
 const {initialState,runQualification}=loadQualificationModule('r2-disposable-qualification.ts');
 const {DEADLINE,OBJECTS,RUN_ID,manifestHash,sha256}=loadQualificationModule('r2-disposable-qualification-manifest.ts');
@@ -199,9 +199,9 @@ for(const lostOn of [1,2]){
 // doubles. This is not the native Supabase/pgTAP suite or live migration parity.
 // Explicit all-other-migrations baseline, then the exact target ONCE. This
 // preserves before/after existing-object fingerprints without double execution.
-const {db:full,replayReport,repairSql}=await createDatabase({applyRepair:true,includeHeldStudio:true,
+const {db:full,replayReport}=await createDatabase({applyRepair:true,includeHeldStudio:true,
   excludeMigrations:[qualificationMigrationName]});
-const appliedMigrationFiles=[...replayReport.files,basename(repairMigrationPath),qualificationMigrationName].sort();
+const appliedMigrationFiles=[...replayReport.files,qualificationMigrationName].sort();
 try {
   assert.deepEqual(appliedMigrationFiles,(await readdir(new URL('../supabase/migrations/',import.meta.url))).filter(n=>n.endsWith('.sql')).sort(),
     'every migration is accounted for exactly once, including the existing forward repair and new canonical target');
@@ -226,6 +226,6 @@ try {
 assertProposalUnchanged();
 const statementCount=source=>splitSQL(source).filter(s=>!/^\s*(begin|commit)\s*;?\s*$/i.test(s.replace(/--[^\n]*/g,''))).length;
 console.log(JSON.stringify({status:'passed',checks,engine:'PGlite actual PostgreSQL',multiBackendConcurrency:false,syntheticClock:true,
-  schemaReplayFiles:appliedMigrationFiles.length,schemaReplayStatements:replayReport.statements+statementCount(repairSql)+statementCount(qualificationMigrationSource),
+  schemaReplayFiles:appliedMigrationFiles.length,schemaReplayStatements:replayReport.statements+statementCount(qualificationMigrationSource),
   canonicalTargetApplications:1,targetMigration:qualificationMigrationName,baselineExcludedMigrations:replayReport.excludedMigrations,
   managedInfrastructureDoubles:true,pgTap:false,networkCalls:0,liveDatabaseWrites:0}));

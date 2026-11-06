@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/automatic-commerce.inc
 select plan(149);
 
 -- Successor-owned authority surfaces exist and remain service/internal only.
@@ -544,6 +545,14 @@ update public.wave1_legal_document_versions
 set active = true
 where document_key = 'money_terms' and capability = 'creator_money' and market = 'UNITED_STATES';
 
+-- This suite retains strict financial-authority assertions, including loss of
+-- age/legal/provider authority. Canonical finite Premium and fresh synthetic
+-- provider facts complete the creator fixture without granting buyers Premium.
+select pg_temp.seed_creator_premium(creator_id)
+from pg_temp.creator_money_closeout_fixture;
+select pg_temp.seed_synthetic_creator_provider(creator_id)
+from pg_temp.creator_money_closeout_fixture;
+
 do $$
 declare
   v_result jsonb;
@@ -724,7 +733,7 @@ select ok(
   and pg_get_functiondef(
     'public.creator_video_paid_precharge_authority_internal(uuid,text,text,text,integer,text,text)'::regprocedure
   )
-    ilike '%wave1_creator_money_subject_authorized_internal%',
+    ilike '%ordinary_creator_subject_for_mode%',
   'creator restriction closes new channel-subscription and Paid Video precharge authority'
 );
 reset role;
@@ -2927,8 +2936,8 @@ select is(
     'a1000000-0000-4000-8000-000000000003',
     'sandbox-subject@closeout.example'
   ),
-  false,
-  'email-only tester row cannot grant sandbox monetization authority'
+  true,
+  'current ordinary buyer admission does not depend on the rejected email-only tester row'
 );
 reset role;
 select set_config('request.jwt.claims', '{}', true);
@@ -2953,7 +2962,7 @@ select is(
     'sandbox-subject@closeout.example'
   ),
   true,
-  'exact active tester subject with a current session receives sandbox-only authority'
+  'adding an exact tester row does not change ordinary current-session sandbox buyer admission'
 );
 reset role;
 select set_config('request.jwt.claims', '{}', true);

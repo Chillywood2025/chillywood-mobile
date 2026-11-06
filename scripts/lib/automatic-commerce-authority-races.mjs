@@ -36,9 +36,11 @@ export async function runAutomaticCommerceAuthorityRaces({query,race,lit}) {
   const changed=change+"select '{}'::jsonb;";
   const result=await race(`${kind}: ${changeFirst?'mutation before dispatch':'dispatch before mutation'}`,changeFirst?changed:dispatch,changeFirst?dispatch:changed);
   const allowed=(changeFirst?result.second:result.first).authorized;
-  // An absent eligibility row itself fails strict provider readiness. Reverse
-  // insertion order proves fencing and denial, never invents live authority.
-  assert.equal(allowed,!changeFirst&&kind!=='new hold row');
+  // In isolated Sandbox, absence of a live payout-eligibility projection is
+  // unknown evidence, not a disqualification. A newly committed fraud hold
+  // must still deny dispatch; the reverse order proves the insertion fence.
+  // This fixture never authorizes production or establishes payout readiness.
+  assert.equal(allowed,!changeFirst,`${kind}: ${changeFirst?'mutation before dispatch':'dispatch before mutation'}`);
   assert.equal(await query(`select state from private.merch_checkout_dispatch where order_id=${lit(reservation.id)}`),allowed?'dispatched':'prepared');
  }
 }

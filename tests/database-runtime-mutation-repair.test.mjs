@@ -1,11 +1,12 @@
 // Reconstructed after workspace rollback from the reviewed fixture contract.
-// Actual full-schema authority SQL, normal guards and synthetic test subjects.
+// Actual pre-automatic-commerce authority SQL, normal guards and synthetic test subjects.
 // Fault triggers prove transactional rollback; the native runner proves queues.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
-import {createDatabase,repairMigrationPath,merchStorefrontFiles} from './helpers/database-runtime-authority-fixture.mjs';
+import {repairMigrationPath,merchStorefrontFiles} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalRuntimeDatabase} from './helpers/runtime-authority-historical-fixture.mjs';
 import {monetizationAuditFiles} from './helpers/creator-monetization-migration-inventory.mjs';
 import {profileFeedFiles} from './helpers/profile-feed-runtime-inventory.mjs';
 import {discoveryInvalidationFiles} from './helpers/discovery-invalidation-runtime-inventory.mjs';
@@ -134,7 +135,7 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
   // subtract an unexplained count from the full-chain checkpoint.
   const scenarioCommerceFiles=flexibleCommerceFiles.filter(file=>includeHeldStudio||!appCompletionStudioDependentFiles.includes(file));
   const sql=fs.readFileSync(repairMigrationPath,'utf8');
-  const {db,replayReport}=await createDatabase({overlayLiveDrift:true,includeHeldStudio});
+  const {db,replayReport}=await createHistoricalRuntimeDatabase({overlayLiveDrift:true,includeHeldStudio});
   const actor='e8200000-0000-4000-8000-000000000001',session='e8300000-0000-4000-8000-000000000001';
   const id=n=>`e8200000-0000-4000-8000-${String(n).padStart(12,'0')}`;
   const email=n=>`runtime-mutation-${n}@example.test`;

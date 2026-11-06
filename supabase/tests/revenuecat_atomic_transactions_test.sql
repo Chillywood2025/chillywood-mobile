@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/automatic-commerce.inc
 select plan(62);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
@@ -31,44 +32,6 @@ insert into auth.sessions (id, user_id)
 select md5('revenuecat-atomic-session:' || creator_id::text)::uuid, creator_id
 from pg_temp.revenuecat_creator_authority_fixture;
 
-do $$
-declare
-  creator_fixture record;
-  eligibility_result jsonb;
-begin
-  for creator_fixture in
-    select fixture_index, creator_id
-    from pg_temp.revenuecat_creator_authority_fixture
-    order by fixture_index
-  loop
-    select public.wave1_evaluate_creator_eligibility(
-      creator_fixture.creator_id,
-      jsonb_build_object(
-        'accountStatus', 'ACTIVE',
-        'age18Plus', true,
-        'legalAccepted', true,
-        'creatorRole', true,
-        'moderationState', 'CLEAR',
-        'market', 'UNITED_STATES',
-        'rolloutEligible', false,
-        'platformCapability', true,
-        'providerEligible', true,
-        'kycComplete', true,
-        'taxComplete', true,
-        'sanctionsClear', true,
-        'payoutEligible', true,
-        'inputVersions', jsonb_build_object('evaluationSequence', 1)
-      ),
-      'revenuecat-atomic-fixture:' || creator_fixture.fixture_index::text,
-      'local_pgtap'
-    ) into eligibility_result;
-    if eligibility_result->>'state' <> 'VERIFIED' then
-      raise exception 'revenuecat_creator_fixture_not_verified';
-    end if;
-  end loop;
-end;
-$$;
-
 insert into public.wave1_legal_acceptances (
   user_id, subject_hash, document_key, document_version, market,
   role_key, capability, session_generation, authority_source
@@ -90,6 +53,17 @@ where document.active
     ('creator_terms', 'creator'),
     ('money_terms', 'creator_money')
   );
+
+-- Ordinary sandbox creators need finite membership and a real declaration,
+-- not synthetic VERIFIED compliance. All consumable buyers remain Free.
+update auth.users set email_confirmed_at=now()
+where id in (select creator_id from pg_temp.revenuecat_creator_authority_fixture);
+do $$ declare fixture record; begin
+ for fixture in select creator_id from pg_temp.revenuecat_creator_authority_fixture loop
+  perform pg_temp.seed_creator_premium(fixture.creator_id);
+  perform pg_temp.declare_sandbox_creator(fixture.creator_id,md5('revenuecat-atomic-session:'||fixture.creator_id::text)::uuid);
+ end loop;
+end $$;
 
 insert into auth.sessions (id,user_id)
 select md5('revenuecat-buyer-session:'||buyer.id::text)::uuid,buyer.id

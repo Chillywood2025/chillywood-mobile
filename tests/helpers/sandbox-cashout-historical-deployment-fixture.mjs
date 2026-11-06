@@ -27,6 +27,7 @@ export const POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS=Object.freeze([
  '20261106013158_ordinary_native_dispatch_authority.sql',
  '20261106013309_sandbox_paid_access_mode_authority.sql',
  '20261106020217_preserve_purchased_access_delivery.sql',
+ '20261106035132_reviewed_merch_publication_mode.sql',
 ]);
 
 export function readHistoricalCashoutSource(file){

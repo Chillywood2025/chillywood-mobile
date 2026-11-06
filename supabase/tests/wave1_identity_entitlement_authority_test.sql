@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/automatic-commerce.inc
 select plan(77);
 select is((select count(*)::int from pg_class where relnamespace='public'::regnamespace and relname in
   ('wave1_authority_audit_events','wave1_legal_document_versions','wave1_legal_acceptances','wave1_push_installation_ownership','wave1_creator_eligibility')),5,'all Wave 1 authority tables exist');
@@ -24,9 +25,9 @@ select is((select count(*)::int from keys,base where public.wave1_compute_creato
 select ok((public.wave1_compute_creator_eligibility('{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"UNITED_STATES","age18Plus":true,"legalAccepted":true,"creatorRole":true,"rolloutEligible":true,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true}', 'INELIGIBLE')->>'canCreateMoneyExposure')::boolean,'only complete server evidence permits new exposure');
 select ok(not (public.wave1_compute_creator_eligibility('{"moderationState":"SUSPENDED"}', 'VERIFIED')->>'canCreateMoneyExposure')::boolean,'suspension blocks new exposure');
 select ok((public.wave1_compute_creator_eligibility('{"moderationState":"REVOKED"}', 'VERIFIED')->>'canProcessHistoricalObligations')::boolean,'revocation preserves historical obligations');
-create temporary table rollout_fixture as select id from (select md5(n::text)::uuid id from generate_series(1,1000)n)q where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||id::text,20260814),100)=0 limit 1;
+create temporary table rollout_fixture as select id from (select md5(n::text)::uuid id from generate_series(1,1000)n)q where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||id::text,20260814),100)<>0 limit 1;
 insert into auth.users(id,is_sso_user,is_anonymous) select id,false,false from rollout_fixture;
-select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"UNITED_STATES","age18Plus":true,"legalAccepted":true,"creatorRole":true,"rolloutEligible":false,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','rollout-boundary','local_pgtap')->>'state' from rollout_fixture),'VERIFIED','the server overrides caller rollout input only for its one-percent bucket');
+select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"UNITED_STATES","age18Plus":true,"legalAccepted":true,"creatorRole":true,"rolloutEligible":false,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','rollout-boundary','local_pgtap')->>'state' from rollout_fixture),'VERIFIED','automatic eligibility overrides stale rollout input outside the retired one-percent bucket');
 select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"OTHER","inputVersions":{"evaluationSequence":2}}','newer-denial','local_pgtap')->>'state' from rollout_fixture),'INELIGIBLE','a newer creator denial supersedes verified input');
 select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"UNITED_STATES","age18Plus":true,"legalAccepted":true,"creatorRole":true,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','rollout-boundary','local_pgtap')->>'state' from rollout_fixture),'INELIGIBLE','replayed operation cannot overwrite newer creator authority');
 select ok((select (public.wave1_evaluate_creator_eligibility(id,'{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"UNITED_STATES","inputVersions":{"evaluationSequence":1}}','stale-new-key','local_pgtap')->>'staleInput')::boolean from rollout_fixture),'a new key with a stale input sequence is rejected');
@@ -49,52 +50,8 @@ delete from auth.sessions where id='22222222-2222-4222-8222-222222222222';
 select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'session_id','11111111-1111-4111-8111-111111111111')::text from rollout_fixture),true);
 select is(public.wave1_entitlement_authority_readback('premium')->>'state','INACTIVE','no entitlement row is authoritative inactive');
 select is(public.wave1_entitlement_authority_readback('premium')->>'sessionGeneration','11111111-1111-4111-8111-111111111111','entitlement readback binds exact session generation');
-insert into public.provider_events (
-  id,provider_event_id,provider,product_id,product_key,user_id,app_user_id,
-  environment,event_type,status,occurred_at,idempotency_key,raw_payload_hash,metadata
-)
-select
-  '55555555-5555-4555-8555-555555555555','wave1-premium-fixture','revenuecat_app_store',
-  mapping.product_id,product.product_key,fixture.id,fixture.id::text,
-  'sandbox','INITIAL_PURCHASE','processed',now()-interval '1 hour',
-  'INITIAL_PURCHASE:wave1-premium-fixture',repeat('a',64),jsonb_build_object(
-    'provider_product_id',mapping.provider_product_id,
-    'provider_base_plan_id',mapping.provider_base_plan_id,
-    'store_mapping_id',mapping.id,'entitlement_key','premium',
-    'original_transaction_id','wave1-premium-original','provider_payload_stored',false
-  )
-from rollout_fixture fixture
-cross join lateral (
-  select * from public.monetization_product_store_mappings
-  where provider='revenuecat_app_store' and provider_product_id='com.chillywood.premium.monthly'
-    and environment='sandbox' limit 1
-) mapping
-join public.monetization_products product on product.id=mapping.product_id;
-insert into public.revenuecat_premium_transaction_authority (
-  provider,original_transaction_id,user_id,environment,current_product_id,
-  current_provider_product_id,current_provider_base_plan_id,first_event_id,first_event_hash,
-  latest_event_id,latest_event_hash,latest_event_type,latest_occurred_at,latest_event_rank,authority_state
-)
-select
-  event.provider,'wave1-premium-original',event.user_id,event.environment,event.product_id,
-  event.metadata->>'provider_product_id',event.metadata->>'provider_base_plan_id',
-  event.provider_event_id,event.raw_payload_hash,event.provider_event_id,event.raw_payload_hash,
-  event.event_type,event.occurred_at,2,'active'
-from public.provider_events event where event.provider_event_id='wave1-premium-fixture';
-insert into public.user_entitlements(user_id,entitlement_key,status,source,starts_at,expires_at,metadata)
-select id::text,'premium','active','revenuecat',now()-interval '1 day',now()+interval '1 day',jsonb_build_object(
-  'environment','sandbox','revenuecat_event_id','wave1-premium-fixture','revenuecat_event_hash',repeat('a',64)
-) from rollout_fixture;
-insert into public.access_grants (
-  user_id,grant_type,source_type,product_id,provider,provider_event_id,environment,
-  status,starts_at,expires_at,metadata
-)
-select
-  event.user_id,'premium','provider_event',event.product_id,event.provider,event.id,'sandbox',
-  'sandbox_only',now()-interval '1 day',now()+interval '1 day',jsonb_build_object(
-    'authority_granted',false,'provider_payload_stored',false
-  )
-from public.provider_events event where event.provider_event_id='wave1-premium-fixture';
+update auth.users set email_confirmed_at=now() where id in (select id from rollout_fixture);
+select pg_temp.seed_creator_premium(id) from rollout_fixture;
 select is(public.wave1_entitlement_authority_readback('premium')->>'state','ACTIVE','active entitlement grants');
 update public.user_entitlements set status='trialing' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','ACTIVE','trialing entitlement grants');
 update public.user_entitlements set status='grace_period' where entitlement_key='premium'; select is(public.wave1_entitlement_authority_readback('premium')->>'state','GRACE','grace entitlement grants');
@@ -108,6 +65,11 @@ select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus"
 insert into public.account_deletion_requests(user_id,status,delete_after,restore_deadline) select id,'scheduled',now()+interval '30 days',now()+interval '30 days' from rollout_fixture; update auth.users set banned_until=null where id in (select id from rollout_fixture); select is((select state from public.wave1_creator_eligibility where creator_user_id in (select id from rollout_fixture)),'SUSPENDED','lifting one overlapping restriction cannot restore creator authority');
 update public.account_deletion_requests set status='restored',restored_at=now() where user_id in (select id from rollout_fixture) and status='scheduled'; select is((select state from public.wave1_creator_eligibility where creator_user_id in (select id from rollout_fixture)),'PENDING_VERIFICATION','lifting the final restriction requires creator reevaluation'); select is((select public.wave1_evaluate_creator_eligibility(id,'{"accountStatus":"ACTIVE","moderationState":"CLEAR","market":"UNITED_STATES","age18Plus":true,"legalAccepted":true,"creatorRole":true,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":5}}','post-restriction-v5','local_pgtap')->>'state' from rollout_fixture),'VERIFIED','only a newer post-lift evaluation restores creator authority');
 select ok((select (public.wave1_accept_legal_documents((select jsonb_object_agg(document_key,version) from public.wave1_legal_document_versions where active and market='UNITED_STATES'),'UNITED_STATES',id,id,'11111111-1111-4111-8111-111111111111','creator_money')->>'allAccepted')::boolean from rollout_fixture),'creator-money acceptance covers the complete active legal set');
+-- The earlier entitlement-negative probes deliberately revoked this creator's
+-- Premium. Re-establish a NEW canonical finite transaction for the independent
+-- strict creator/legal trigger probes, retaining synthetic complete facts.
+update auth.users set email_confirmed_at=now() where id in (select id from rollout_fixture);
+select pg_temp.seed_creator_premium(id,'restored'),pg_temp.seed_synthetic_creator_provider(id) from rollout_fixture;
 -- Model a pre-quote incomplete historical row to exercise the existing creator
 -- eligibility trigger independently. New purchases must have exact store/source
 -- quotes, and their identity is immutable even after creator eligibility passes.
@@ -162,9 +124,10 @@ select ok(not (select enabled from public.user_push_tokens where install_id='pgt
 select is((select count(*)::int from public.wave1_legal_document_versions where document_key in ('terms','privacy','community_guidelines','creator_terms','money_terms') and market='UNITED_STATES'),5,'five legal documents are independently versioned for the US');
 select is((select count(*)::int from pg_trigger where not tgisinternal and tgname in ('wave1_creator_config_eligibility','wave1_purchase_intent_creator_eligibility','wave1_revoke_push_on_session_delete','wave1_revoke_push_on_account_deletion','wave1_recheck_creator_on_auth_restriction')),5,'server triggers enforce creator eligibility and auth-loss push cleanup');
 select ok(
-  pg_get_functiondef('public.wave1_enforce_creator_money_exposure()'::regprocedure) like '%wave1_creator_money_subject_authorized_internal%'
-  and pg_get_functiondef('public.wave1_creator_money_subject_authorized_internal(uuid)'::regprocedure) like '%is_account_access_restricted%'
-  and pg_get_functiondef('public.wave1_creator_money_subject_authorized_internal(uuid)'::regprocedure) like '%wave1_user_has_active_legal_requirements_internal%',
+  pg_get_functiondef('public.wave1_enforce_creator_money_exposure()'::regprocedure) like '%ordinary_creator_subject_for_mode%'
+  and pg_get_functiondef('private.ordinary_creator_subject_for_mode(uuid,text)'::regprocedure) like '%is_account_access_restricted%'
+  and pg_get_functiondef('private.ordinary_creator_subject_for_mode(uuid,text)'::regprocedure) like '%wave1_user_has_active_legal_requirements_internal%'
+  and pg_get_functiondef('private.ordinary_creator_subject_for_mode(uuid,text)'::regprocedure) like '%wave1_creator_money_subject_authorized_internal%',
   'final creator exposure rechecks current account and exact-session legal authority'
 );
 select ok((select column_default like '%7 years%' from information_schema.columns where table_schema='public' and table_name='wave1_authority_audit_events' and column_name='retention_expires_at'),'audit retention is bounded');

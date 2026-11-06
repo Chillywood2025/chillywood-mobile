@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/automatic-commerce.inc
 
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
@@ -92,14 +93,6 @@ where id in (
   'f2000000-0000-4000-8000-000000000005'
 );
 
-insert into public.wave1_creator_eligibility (
-  creator_user_id,state,account_status,age_18_plus,legal_accepted,
-  creator_role,moderation_state,market,rollout_eligible,platform_capability,
-  provider_eligible,kyc_complete,tax_complete,sanctions_clear,payout_eligible,
-  authority_source,last_operation_key
-) values
-  ('f1000000-0000-4000-8000-000000000001','VERIFIED','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,true,true,true,true,true,'protected-authority-test','protected-creator-a'),
-  ('f1000000-0000-4000-8000-000000000003','VERIFIED','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,true,true,true,true,true,'protected-authority-test','protected-creator-b');
 insert into public.wave1_legal_acceptances (
   user_id,subject_hash,document_key,document_version,market,
   role_key,capability,session_generation,authority_source
@@ -123,6 +116,13 @@ cross join public.wave1_legal_document_versions document
 where document.active
   and document.market='UNITED_STATES'
   and document.capability in ('creator','creator_money');
+
+-- Preserve unknown compliance for ordinary sandbox creator tools. The Premium
+-- event is canonical; neither the Free viewer nor any operator receives it.
+select pg_temp.seed_creator_premium('f1000000-0000-4000-8000-000000000001');
+select pg_temp.declare_sandbox_creator('f1000000-0000-4000-8000-000000000001','f1100000-0000-4000-8000-000000000001');
+select pg_temp.seed_creator_premium('f1000000-0000-4000-8000-000000000003');
+select pg_temp.declare_sandbox_creator('f1000000-0000-4000-8000-000000000003','f1100000-0000-4000-8000-000000000003');
 
 -- Simulate a pre-closure paused paid row without letting setup triggers turn it
 -- into authority. The test exercises the final resolver and RLS definitions.

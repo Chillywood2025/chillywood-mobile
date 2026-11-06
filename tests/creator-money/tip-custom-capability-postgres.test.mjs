@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('real SQL custom tip capability uses trusted eligibility and exact method bounds, never a creator floor', {timeout:240_000}, async t => {
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
@@ -26,6 +27,7 @@ test('real SQL custom tip capability uses trusted eligibility and exact method b
     await deny(()=>resolve());
     await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-capabilities.sql','utf8'));
     await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const bound=await resolve();eq(bound.minAmountMinor,50);eq(bound.maxAmountMinor,100000);eq(bound.platform,'ios');
     eq(bound.routeKind,'external_browser_checkout');eq(bound.storefrontCountry,'US');
     assert.ok(Date.parse(bound.expiresAt)>Date.parse(bound.eligibilityExpiresAt),'short-lived dispatch eligibility is not the provider payment deadline');

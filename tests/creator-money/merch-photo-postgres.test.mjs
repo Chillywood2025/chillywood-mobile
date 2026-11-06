@@ -1,12 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {readdirSync} from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalRuntimeDatabase,runtimeRepairDeferredSuccessors} from '../helpers/runtime-authority-historical-fixture.mjs';
+import {seedCommerceCreator,acceptCommerceCreatorTerms,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
-test('held Studio replay retains draft reference guard without generic photo publication',{timeout:240000},async()=>{
- const {db}=await createDatabase({applyRepair:true,includeHeldStudio:false,implicitApiGrants:false});
+test('historical pre-automatic-commerce held Studio replay retains draft photo reference guards',{timeout:240000},async()=>{
+ // The October photo guards supported the held Studio checkpoint. Current
+ // automatic-commerce migrations require the later Studio/discovery stack;
+ // the full current-schema case below qualifies that separate source chain.
+ const {db,replayReport}=await createHistoricalRuntimeDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:false,implicitApiGrants:false});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
+  assert.deepEqual(replayReport.excludedMigrations,[...runtimeRepairDeferredSuccessors]);
+  assert.equal(replayReport.overlayFiles.length,0);
+  for(const name of runtimeRepairDeferredSuccessors)assert.equal(replayReport.files.includes(name),false);
+  assert.ok(replayReport.files.includes('20261030001043_creator_merch_product_photos.sql'));
   assert.equal(await one("select to_regclass('public.platform_brand_publications') is null"),true);
   assert.equal(await one("select count(*)::int from pg_trigger where tgrelid='public.platform_brand_profiles'::regclass and tgname='aaa_merch_photo_brand_reference' and tgenabled='O'"),1);
   const id=randomUUID(),owner=randomUUID(),viewer=randomUUID(),viewerSession=randomUUID(),product=randomUUID(),key=`${owner}/merch_product_image/${id}.png`;
@@ -48,12 +58,14 @@ test('held Studio replay retains draft reference guard without generic photo pub
 // Entire source migration chain, actual RLS/session/scan/reference functions.
 // PGlite substitutes managed auth/storage catalogs, not business authority.
 test('merch photos preserve real ownership, private scanning, binding and retained references',{timeout:240000},async()=>{
- const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false});
+ const {db,replayReport}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false});
  const owner=randomUUID(),buyer=randomUUID(),session=randomUUID(),buyerSession=randomUUID();
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const admin=async()=>{await db.exec('reset role');await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false)`);};
  const actor=async(user,s)=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claims',$1,false),set_config('request.jwt.claim.role','authenticated',false)",[JSON.stringify({sub:user,session_id:s,role:'authenticated'})]);await db.exec('set role authenticated');};
  try {
+  assert.deepEqual(replayReport.files,readdirSync(new URL('../../supabase/migrations/',import.meta.url)).filter(name=>name.endsWith('.sql')).sort());
+  assert.deepEqual(replayReport.excludedMigrations,[]);assert.deepEqual(replayReport.overlayFiles,[]);
   await admin();
   // Managed Storage infrastructure is catalog-only in this fixture. Model its
   // normal API SELECT grant and RLS switch, without adding/changing any policy.
@@ -65,7 +77,13 @@ test('merch photos preserve real ownership, private scanning, binding and retain
    select s.user_id,public.wave1_sha256(s.user_id::text),d.document_key,d.version,d.market,'member',d.capability,s.id::text,'service_reconciliation'
    from auth.sessions s cross join public.wave1_legal_document_versions d where s.user_id in($1,$2) and d.active and d.market='UNITED_STATES' and d.capability='account'`,[owner,buyer]);
   await db.query("insert into public.platform_role_memberships(user_id,role,status) values($1,'operator','active')",[owner]);
+  await seedCommerceCreator(db,{id:owner,session});
+  await acceptCommerceCreatorTerms(db,{id:owner,session});
   await actor(owner,session);
+  const declared=await one("select public.declare_creator_money_eligibility(true,'US','CA')");
+  assert.equal(declared.state,'PENDING_VERIFICATION');assert.equal(declared.canCreateMoneyExposure,false);
+  assert.equal(declared.taxComplete,null);assert.equal(declared.sanctionsClear,null);
+  assert.equal(declared.sandboxCapability.canUseCreatorTools,true);
   const product=await one("select public.save_creator_merch_product($1,'Photo shirt','Draft',null,1200,3,'draft',null)",[randomUUID()]);
   assert.equal(await one('select public.check_creator_merch_photo_target($1)',[product.id]),true);
   const asset=randomUUID(),key=`${owner}/merch_product_image/${asset}.png`;
@@ -129,6 +147,9 @@ test('merch photos preserve real ownership, private scanning, binding and retain
   await admin();
   await db.query('update public.merch_products set reserved_quantity=1 where id=$1',[product.id]);
   assert.equal(await one('select reserved_quantity from public.merch_products where id=$1',[product.id]),1,'quarantined photo does not block inventory settlement');
+  // Staff moderation permission is not creator-money authority. Keep this
+  // published-edit negative explicit now that ordinary Sandbox tools are open.
+  await db.query('update public.wave1_creator_eligibility set tax_complete=false where creator_user_id=$1',[owner]);
   await actor(owner,session);
   bound=(await one('select public.list_creator_merch_products(null,true)')).products[0];
   await assert.rejects(()=>one('select public.assign_merch_product_photo($1,null,$2)',[product.id,bound.updatedAt]),/creator|legal|authority|eligible|denied/,'published photo changes retain canonical creator-money authority');
@@ -169,25 +190,22 @@ test('merch photos preserve real ownership, private scanning, binding and retain
   // Ordinary creator positive: this subject has NEVER held an operator role.
   // Its finite Premium entitlement is produced by the real receipt processor,
   // not an entitlement/auth function double or a handwritten entitlement row.
-  await db.exec("update public.platform_money_kill_switches set state='sandbox_only' where key in ('revenuecat_google_play_enabled','provider_webhooks_enabled')");
-  const premiumReceipt=await one(`select public.process_revenuecat_premium_event_atomic(
-    'revenuecat_google_play','merch-photo-ordinary-premium','INITIAL_PURCHASE',$1,
-    p.provider_product_id,p.provider_base_plan_id,'sandbox','active',now()-interval '1 minute',
-    now()+interval '1 day',now(),999,'usd',repeat('b',64),'NORMAL','google_play','android',null,p.id,
-    'merch-photo-ordinary-original') from public.monetization_products p
-    where p.provider='revenuecat_google_play' and p.environment='sandbox'
-      and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1`,[buyer]);
-  assert.equal(premiumReceipt.status,'processed');
-  await actor(buyer,buyerSession);
+  const ordinary=await seedCommerceCreator(db);
+  await acceptCommerceCreatorTerms(db,ordinary);
+  await assertBuyerHasNoPremium(db,{id:buyer});
+  await actor(ordinary.id,ordinary.session);
+  const ordinaryDeclared=await one("select public.declare_creator_money_eligibility(true,'US','CA')");
+  assert.equal(ordinaryDeclared.state,'PENDING_VERIFICATION');
+  assert.equal(ordinaryDeclared.sandboxCapability.canUseCreatorTools,true);
   assert.equal(await one("select public.has_platform_role(array['owner','operator'])"),false);
   assert.equal(await one("select public.has_platform_permission('content_moderation') or public.has_platform_permission('reports_review')"),false);
-  assert.equal(await one('select public.has_active_premium_creator_tool_access($1)',[buyer]),true);
+  assert.equal(await one('select public.has_active_premium_creator_tool_access($1)',[ordinary.id]),true);
   const ordinaryProduct=await one("select public.save_creator_merch_product($1,'Ordinary creator photo','Draft',null,1200,2,'draft',null)",[randomUUID()]);
-  const ordinaryPhoto=randomUUID(),ordinaryKey=`${buyer}/merch_product_image/${ordinaryPhoto}.png`;
+  const ordinaryPhoto=randomUUID(),ordinaryKey=`${ordinary.id}/merch_product_image/${ordinaryPhoto}.png`;
   await admin();
   await db.query("insert into storage.objects(id,bucket_id,name,version,metadata) values($1,'platform-brand-assets',$2,'ordinary-v1','{\"size\":79,\"mimetype\":\"image/png\"}')",[randomUUID(),ordinaryKey]);
-  await actor(buyer,buyerSession);
-  await db.query("insert into public.platform_brand_assets(id,owner_user_id,asset_type,storage_object_key,storage_path,mime_type,file_size_bytes) values($1,$2,'merch_product_image',$3,$3,'image/png',79)",[ordinaryPhoto,buyer,ordinaryKey]);
+  await actor(ordinary.id,ordinary.session);
+  await db.query("insert into public.platform_brand_assets(id,owner_user_id,asset_type,storage_object_key,storage_path,mime_type,file_size_bytes) values($1,$2,'merch_product_image',$3,$3,'image/png',79)",[ordinaryPhoto,ordinary.id,ordinaryKey]);
   const ordinaryBound=await one('select public.assign_merch_product_photo($1,$2,$3)',[ordinaryProduct.id,ordinaryPhoto,ordinaryProduct.updatedAt]);
   await assert.rejects(()=>one('select public.approve_creator_merch_photo($1,$2,$3)',[ordinaryProduct.id,ordinaryPhoto,ordinaryBound.updatedAt]),/approval_unavailable/);
   await admin();
@@ -195,22 +213,23 @@ test('merch photos preserve real ownership, private scanning, binding and retain
   await db.query('update public.media_scan_jobs set priority=-2147483648 where id=$1',[ordinaryJob]);
   await one("select public.claim_media_scan_jobs(1,'ordinary-photo-scan')");
   assert.equal((await one("select public.complete_media_scan_job($1,'clean','clamav','fixture','fixture',null,null,1)",[ordinaryJob])).targetPropagationComplete,true);
-  await actor(buyer,buyerSession);
+  await actor(ordinary.id,ordinary.session);
   assert.equal((await one('select public.read_creator_merch_photo_status($1)',[ordinaryProduct.id])).photoCanApprove,true);
   assert.equal((await one('select public.approve_creator_merch_photo($1,$2,$3)',[ordinaryProduct.id,ordinaryPhoto,ordinaryBound.updatedAt])).photoStatus,'ready');
   await admin();
   const creatorReview=(await db.query("select actor_user_id,actor_role,action,before_state->>'moderation_status' as previous,after_state->>'moderation_status' as next from public.platform_brand_asset_review_events where asset_id=$1 and action='approve'",[ordinaryPhoto])).rows;
-  assert.deepEqual(creatorReview,[{actor_user_id:buyer,actor_role:'creator',action:'approve',previous:'pending_review',next:'clean'}],'canonical audit records creator branch, not operator privilege');
+  assert.deepEqual(creatorReview,[{actor_user_id:ordinary.id,actor_role:'creator',action:'approve',previous:'pending_review',next:'clean'}],'canonical audit records creator branch, not operator privilege');
   await actor(owner,session);await one("select public.review_platform_brand_asset($1,'reject','Reviewer rejects ordinary photo')",[ordinaryPhoto]);
-  await actor(buyer,buyerSession);
+  await actor(ordinary.id,ordinary.session);
   await assert.rejects(()=>one('select public.approve_creator_merch_photo($1,$2,$3)',[ordinaryProduct.id,ordinaryPhoto,ordinaryBound.updatedAt]),/approval_unavailable/);
   await assert.rejects(()=>one("select public.review_platform_brand_asset($1,'approve',null)",[ordinaryPhoto]),/merch_photo_approval_unavailable/,'ordinary Premium owner cannot override staff rejection even via generic RPC');
   await admin();
   await db.query("update public.platform_brand_assets set moderation_status='hidden' where id=$1",[ordinaryPhoto]);
-  await actor(buyer,buyerSession);
+  await actor(ordinary.id,ordinary.session);
   await assert.rejects(()=>one('select public.approve_creator_merch_photo($1,$2,$3)',[ordinaryProduct.id,ordinaryPhoto,ordinaryBound.updatedAt]),/approval_unavailable/);
   await assert.rejects(()=>one("select public.review_platform_brand_asset($1,'approve',null)",[ordinaryPhoto]),/merch_photo_approval_unavailable/,'ordinary Premium owner cannot override hidden state');
   await admin();
+  await assertBuyerHasNoPremium(db,{id:buyer});
   for(const signature of [
    'public.save_creator_merch_product_before_photo_lock(uuid,text,text,text,integer,integer,text,timestamptz)',
    'public.configure_creator_merch_variants_before_photo_lock(uuid,text,jsonb,timestamptz)',
