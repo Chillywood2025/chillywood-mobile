@@ -93,5 +93,5 @@ export async function readCreatorPayoutLegalStatus(expected: AccountSessionAutho
   if (!requirements.some(r => r?.documentKey === "payout_terms")) return "Payout terms: platform document configuration is incomplete. This is not a missing acceptance you can resolve here.";
   const requiredKeys = ["terms", "privacy", "community_guidelines", "creator_terms", "money_terms", "payout_terms"];
   if (requirements.length !== requiredKeys.length || requiredKeys.some(key => requirements.filter(r => r?.documentKey === key).length !== 1)) throw new Error("invalid_payout_legal_readback");
-  return requirements.every(r => r?.accepted === true) ? "Payout terms: current acceptance recorded. Other eligibility checks still apply." : "Payout terms: current documents need your acceptance in Tax & Legal.";
+  return requirements.every(r => r?.accepted === true) ? "Payout terms: current acceptance recorded. Other eligibility checks still apply." : "Payout terms: acceptance is required, but this app has no approved payout document or acceptance flow. Payout setup remains blocked.";
 }

@@ -408,6 +408,15 @@ try{
   assert.equal(invoke(buyer,receipt(evidence),'service_role').status,'fulfilled');
   const ledger=query(`select ledger_event_id from private.creator_${lane}_auction_receipts where provider_event_id=${lit(evidence.eventId)};`);
   assert.equal(parse(query(`select private.sandbox_cashout_source(${lit(ledger)},${lit(qualification)});`)).netMinor,189);
+  // This new creator has accepted creator-money terms, not payout terms.
+  // Earlier seed() configured synthetic payout documents for another actor;
+  // neither that actor's acceptance nor provider qualification covers this one.
+  assert.equal(query(`select public.wave1_user_has_active_legal_requirements_internal(${lit(a.creator)},'payout');`),'f');
+  assert.equal(run(a,'authenticated',"select public.preview_sandbox_creator_cashout(189,'scheduled');").reason,'sandbox_origin_creator_required');
+  assert.equal(query("select public.wave1_legal_document_configuration_complete_internal('payout');"),'t','synthetic payout documents must exist; missing configuration is never approval');
+  const payoutTerms=query("select jsonb_object_agg(document_key,version) from public.wave1_legal_document_versions where active and effective_at<=now() and market='UNITED_STATES' and capability in ('account','creator','creator_money','payout');");
+  assert.equal(invoke(a,`select public.wave1_accept_legal_documents(${lit(payoutTerms)}::jsonb,'UNITED_STATES',${lit(a.creator)},${lit(a.creator)},${lit(a.session)},'payout');`).allAccepted,true);
+  assert.equal(query(`select public.wave1_user_has_active_legal_requirements_internal(${lit(a.creator)},'payout');`),'t');
   const id=run(a,'authenticated',`select public.request_sandbox_creator_cashout(189,'scheduled',${lit(qualification)},${lit(randomUUID())},0,0,189);`).requestId;
   assert.equal(query(`select money_ledger_id from private.sandbox_cashout_allocations where execution_id=${lit(id)};`),ledger);
   if(outcome==='rollback'){

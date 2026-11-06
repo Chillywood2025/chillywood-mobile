@@ -65,7 +65,7 @@ test('payout terms distinguish platform configuration from required acceptance w
   assert.match(await api.readCreatorPayoutLegalStatus(owner()), /platform document configuration/);
   state.denied = null;
   state.result = { ...owner(), authoritative: true, capability: 'payout', requirements: ['terms', 'privacy', 'community_guidelines', 'creator_terms', 'money_terms', 'payout_terms'].map(documentKey => ({ documentKey, version: 'v1', state: 'REQUIRED_UNACCEPTED', accepted: false, acceptedAt: null })) };
-  assert.match(await api.readCreatorPayoutLegalStatus(owner()), /need your acceptance/);
+  assert.match(await api.readCreatorPayoutLegalStatus(owner()), /no approved payout document or acceptance flow/);
   state.result.sessionGeneration = 'other'; await assert.rejects(api.readCreatorPayoutLegalStatus(owner()), /invalid/);
   assert.ok(state.calls.every(c => c.fn === 'wave1_legal_requirements_readback'));
 });

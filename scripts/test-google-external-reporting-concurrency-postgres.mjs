@@ -8,6 +8,8 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {loadGoogleRefundModule,googleRefundFixture,googleHistoryClient,googleVerificationCheckpoint} from '../tests/helpers/google-refund-tax-history-fixture.mjs';
+import {commerceSeedAdapter} from '../tests/helpers/automatic-commerce-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../tests/helpers/current-event-commerce-fixture.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset. Only generated local clone is written; no remote URLs accepted.');process.exit(0);
@@ -100,10 +102,18 @@ try{
   // refund-tax SQL tests. Every provider read below is an in-memory GET double.
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority'])
     query(readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
+  // The pending transaction below is a fresh INSERT, not historical recovery:
+  // its real exposure trigger still requires current creator authority.
+  await seedCurrentEventCommerceCreator(commerceSeedAdapter(query));
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+  const taxCap=query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,platform,storefront,storefront_country,
+    route_kind,currency,environment,payment_method,min_amount_minor,max_amount_minor,provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)
+    values('creator_tip','${actors.creator.id}','acct_fixture','android','fixture','US','android_external_content_link','usd','test','card',50,100000,
+      'synthetic only','synthetic only',now(),now()+interval '1 hour',true) returning id;`);
+  query(`insert into private.google_play_external_capability_program_bindings(capability_id,program_id) values('${taxCap}','${program}');`);
   const taxQuote=randomUUID();
   query(`insert into private.google_play_external_launch_bindings(feature,quote_id,buyer_id,session_id,capability_id,program_id,amount_minor,currency,
-    external_transaction_token,token_hash) values('creator_tip','${taxQuote}','${actors.buyer1.id}','${actors.buyer1.session}','${cap}','${program}',237,'usd',
+    external_transaction_token,token_hash) values('creator_tip','${taxQuote}','${actors.buyer1.id}','${actors.buyer1.session}','${taxCap}','${program}',237,'usd',
     'synthetic-native-tax-input','${'c'.repeat(64)}');
     insert into public.creator_tip_transactions(id,sender_id,buyer_account_id,buyer_session_generation,creator_id,tip_amount_cents,total_paid_cents,
       creator_net_cents,currency,provider,provider_environment,provider_account_id,provider_checkout_session_id,provider_payment_intent_id,payment_status)

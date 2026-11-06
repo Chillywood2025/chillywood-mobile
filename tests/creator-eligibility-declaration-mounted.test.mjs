@@ -5,6 +5,7 @@ import test from 'node:test';
 import React from 'react';
 import ts from 'typescript';
 import { createRoot } from 'react-dom/client';
+import { createPolicyHarness, policyDocuments, policyReadback } from './helpers/creator-policy-runtime.mjs';
 const noop = () => {};
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const doc = { addEventListener: noop, removeEventListener: noop, defaultView: globalThis, nodeType: 9 };
@@ -33,15 +34,24 @@ const code = ts.transpileModule(source, {
 const walk = (tree, predicate) => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(n => walk(n,predicate))
   : [...(predicate(tree) ? [tree] : []), ...walk(tree.props?.children, predicate)];
 async function mount(t) {
-  const state = { authority: owner(), focused: true, saves: [], reads: 0, legalReads: 0, save: null, read: null };
+  const state = { authority: owner(), focused: true, saves: [], reads: 0, legalReads: 0, save: null, read: null,
+    termsReads: 0, acceptances: [], accepted: false, accept: null, termsRead: null, navigations: [], updates: [] };
   let tree;
   const mocks = {
     '../../_lib/creatorEligibility': eligibility.exports,
     react: React,
-    'expo-router': { useFocusEffect(fn) { React.useEffect(() => state.focused ? fn() : undefined, [fn, state.focused]); } },
+    'expo-router': { router: { push: path => state.navigations.push(path) }, useFocusEffect(fn) { React.useEffect(() => state.focused ? fn() : undefined, [fn, state.focused]); } },
     'react-native': { ...Object.fromEntries(['Pressable', 'Text', 'TextInput', 'View'].map(x => [x,x])), StyleSheet: { create: x => x } },
     '../../_lib/session': { useSession: () => ({ authority: state.authority }) },
     '../../_lib/accountSessionAuthority': { getCurrentAccountSessionAuthoritySnapshot: () => state.authority, sameAccountSessionAuthority: same },
+    '../../_lib/legalPolicies': policyDocuments,
+    '../../_lib/accountLegalAcceptance': createPolicyHarness().legal,
+    '../../_lib/creatorPolicyAcceptance': {
+      creatorPolicyErrorMessage: () => 'Acceptance could not be confirmed. Refresh before retrying.',
+      readCreatorPolicyRequirements: async () => { state.termsReads++; return state.termsRead ? state.termsRead() : policyReadback(state.authority,state.accepted); },
+      acceptCreatorPolicies: async (authority,displayed,consent,isCurrent) => { state.acceptances.push({authority,displayed,consent,isCurrent});
+        if(state.accept) return state.accept();state.accepted=true;return policyReadback(authority,true); },
+    },
     '../../_lib/creatorEligibilityDeclaration': {
       CREATOR_US_REGIONS: ['CA', 'DC'], creatorDeclarationErrorMessage: () => 'Refresh before retrying.',
       readCreatorEligibilityDeclaration: async () => { state.reads++; return state.read ? state.read() : saved(); },
@@ -53,15 +63,18 @@ async function mount(t) {
   vm.runInNewContext(code, context);
   const root = createRoot(container());
   const act = async fn => React.act(async () => { await fn(); for (let i=0;i<40;i++) await Promise.resolve(); });
-  const render = () => act(() => root.render(React.createElement(context.exports.CreatorEligibilityDeclarationPanel)));
+  const render = () => act(() => root.render(React.createElement(context.exports.CreatorEligibilityDeclarationPanel, {
+    onEligibilityUpdated: async isCurrent => { state.updates.push(isCurrent); if(state.update) await state.update(isCurrent); },
+  })));
   await render(); t.after(() => act(() => root.unmount()));
   const control = id => { const values = walk(tree, n => n.props?.testID === `creator-declaration-${id}`); assert.equal(values.length,1,id); return values[0].props; };
   const press = id => act(() => control(id).onPress());
   const fill = async () => { await press('adult'); await press('us'); await act(() => control('region').onChangeText('ca')); };
-  return { state, act, render, control, press, fill, text: () => walk(tree,n => n.type === 'Text').map(n => n.props.children).flat(Infinity).join(' ') };
+  return { state, act, render, control, press, fill, unmount: () => act(() => root.unmount()), text: () => walk(tree,n => n.type === 'Text').map(n => n.props.children).flat(Infinity).join(' ') };
 }
 test('mounted Money Center distinguishes branded sandbox readiness from pending live verification', async t => {
   const h = await mount(t), a = h.state.authority;
+  h.state.accepted = true;
   const decision = eligibility.exports.parseCreatorEligibilityReadback({ ...a, state: 'PENDING_VERIFICATION',
     authoritative: true, authoritySource: 'automatic_eligibility', accountStatus: 'ACTIVE', moderationState: 'CLEAR',
     age18Plus: true, market: 'UNITED_STATES', creatorRole: true, legalAccepted: true, platformCapability: true,
@@ -75,6 +88,9 @@ test('mounted Money Center distinguishes branded sandbox readiness from pending 
   await h.press('refresh');
   assert.match(h.text(), /Sandbox creator tools ready; live verification pending/);
   assert.match(h.text(), /Tax information, Sanctions review/);
+  h.state.termsRead = async () => { throw Error('unbundled current version'); };
+  await h.press('refresh');assert.doesNotMatch(h.text(), /Sandbox creator tools ready/);
+  h.state.termsRead = null;
   h.state.read = async () => ({ ...saved(), eligibility: { ...decision } });
   await h.press('refresh');
   assert.doesNotMatch(h.text(), /Sandbox creator tools ready/);
@@ -153,4 +169,61 @@ test('refocus before save settlement retains the in-flight lock until actual set
   assert.equal(h.control('refresh').disabled, false);
   assert.doesNotMatch(h.text(), /Saved self-declaration/);
   await h.press('refresh'); assert.equal(h.state.reads, 1);
+});
+
+test('creator terms start unchecked and separate from declaration; explicit consent refreshes real eligibility and parent status', async t => {
+  const h=await mount(t);
+  assert.equal(h.control('creator-terms').accessibilityState.checked,false);
+  assert.equal(h.control('money-terms').accessibilityState.checked,false);
+  assert.equal(h.control('accept-terms').disabled,true);
+  await h.press('accept-terms');assert.equal(h.state.acceptances.length,0);
+  await h.fill();await h.press('save');assert.equal(h.state.acceptances.length,0);
+  assert.equal(h.control('creator-terms').accessibilityState.checked,false);
+  await h.press('creator-terms');await h.press('accept-terms');assert.equal(h.state.acceptances.length,0);
+  await h.press('money-terms');
+  const reads=h.state.reads, updates=h.state.updates.length;
+  await h.press('accept-terms');
+  assert.equal(h.state.acceptances.length,1);assert.equal(h.state.reads,reads+1);assert.equal(h.state.updates.length,updates+1);
+  assert.equal(h.state.updates.at(-1)(),true);
+  assert.match(h.text(),/acceptance is recorded/);assert.match(h.text(),/does not accept payout terms/);
+  assert.equal(h.control('creator-terms').accessibilityState.checked,false);assert.equal(h.control('accept-terms').disabled,true);
+  await h.press('accept-terms');assert.equal(h.state.acceptances.length,1);
+});
+for(const exit of ['cancel','focus','account','session','closed','unmount','review']) test(`creator consent is fenced on ${exit}, including retired controls and submitted receipt`,async t=>{
+  const h=await mount(t);await h.press('refresh');await h.press('creator-terms');await h.press('money-terms');
+  const stale=h.control('accept-terms').onPress,held=deferred();h.state.accept=()=>held.promise;
+  const before=h.state.reads,updates=h.state.updates.length;
+  if(exit==='review') { await h.press('review-creator_terms');assert.deepEqual(h.state.navigations,['/creator-rules']); }
+  else {
+    await h.act(()=>{h.control('accept-terms').onPress();h.control('accept-terms').onPress();});assert.equal(h.state.acceptances.length,1);
+    if(exit==='cancel') {await h.press('cancel');assert.match(h.text(),/may still complete/);}
+    if(exit==='focus') {h.state.focused=false;await h.render();h.state.focused=true;await h.render();assert.equal(h.control('accept-terms').disabled,true);}
+    if(exit==='account') {h.state.authority=owner('b','other');await h.render();}
+    if(exit==='session') {h.state.authority=owner('b');await h.render();}
+    if(exit==='closed') {h.state.authority={...h.state.authority,restoreOnly:true};await h.render();}
+    if(exit==='unmount') await h.unmount();
+  }
+  await h.act(()=>held.resolve(policyReadback(owner(),true)));await h.act(stale);
+  assert.equal(h.state.acceptances.length,exit==='review'?0:1);
+  assert.equal(h.state.reads,before);assert.equal(h.state.updates.length,updates);
+  assert.doesNotMatch(h.text(),/acceptance is recorded/);
+});
+test('creator version/read failure disables acceptance; unknown write outcome requires refresh; confirmed consent survives eligibility refresh failure',async t=>{
+  const h=await mount(t);h.state.termsRead=async()=>{throw Error('version mismatch');};await h.press('refresh');
+  assert.equal(h.control('accept-terms').disabled,true);await h.press('creator-terms');assert.equal(h.control('creator-terms').accessibilityState.checked,false);
+  h.state.termsRead=null;await h.press('refresh');await h.press('creator-terms');await h.press('money-terms');
+  h.state.accept=async()=>{throw Error('unknown outcome');};await h.press('accept-terms');assert.match(h.text(),/could not be confirmed/);assert.equal(h.control('accept-terms').disabled,true);
+  h.state.accept=null;await h.press('refresh');await h.press('creator-terms');await h.press('money-terms');
+  h.state.read=async()=>{throw Error('readback failed');};await h.press('accept-terms');
+  assert.match(h.text(),/acceptance is recorded, but eligibility could not refresh/);
+});
+test('a failed eligibility refresh retires earlier legal status, checked consent and ready banners',async t=>{
+  const h=await mount(t);await h.press('refresh');await h.press('creator-terms');await h.press('money-terms');await h.press('accept-terms');
+  assert.match(h.text(),/acceptance is recorded/);
+  h.state.read=async()=>{throw Error('offline');};await h.press('refresh');
+  assert.doesNotMatch(h.text(),/acceptance is recorded|Sandbox creator tools ready|Saved self-declaration/);
+  assert.match(h.text(),/Current creator documents could not be checked/);assert.equal(h.control('accept-terms').disabled,true);
+  h.state.read=null;h.state.accepted=false;await h.press('refresh');await h.press('creator-terms');await h.press('money-terms');
+  h.state.read=async()=>{throw Error('offline');};await h.press('refresh');
+  assert.equal(h.control('creator-terms').accessibilityState.checked,false);assert.equal(h.control('money-terms').accessibilityState.checked,false);
 });

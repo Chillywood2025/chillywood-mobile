@@ -2142,7 +2142,8 @@ export function ChannelStudioScreen() {
     return fallback;
   };
 
-  const refreshSandboxTesterExperience = useCallback(async () => {
+  const refreshSandboxTesterExperience = useCallback(async (isCurrent: () => boolean = () => true) => {
+    if (!isCurrent()) return;
     if (!user?.id) {
       setSandboxTesterActive(false);
       setSandboxTesterRows([]);
@@ -2183,6 +2184,7 @@ export function ChannelStudioScreen() {
       listSandboxMonetizationTesters().catch(() => []),
     ]);
 
+    if (!isCurrent()) return;
     setCreatorTipSettings(nextTipSettings);
     setCreatorTipTransactions(nextTipTransactions);
     setCreatorPaidVideoOffers(nextPaidVideoOffers);
@@ -9419,7 +9421,7 @@ export function ChannelStudioScreen() {
     };
     const renderMoneyCenterOverviewContent = () => (
       <View testID="money-center-overview-panel">
-        <CreatorEligibilityDeclarationPanel key={`creator-declaration:${JSON.stringify(studioAuthority)}`} />
+        <CreatorEligibilityDeclarationPanel key={`creator-declaration:${JSON.stringify(studioAuthority)}`} onEligibilityUpdated={refreshSandboxTesterExperience} />
         {creatorEarningsBalances?.authorityQuarantined ? (
           <Text style={styles.eventEmptyBody} testID="money-center-authority-quarantined-copy">
             Financial balances are temporarily unavailable while provider authority is under review. Payouts remain locked.
@@ -9906,7 +9908,7 @@ export function ChannelStudioScreen() {
                 {renderSummaryMetricCards(taxLegalCards)}
                 {renderStudioActionRow({
                   title: "Creator monetization policy",
-                  body: "Open creator monetization policy and payout terms.",
+                  body: "Review creator monetization policy. Creator and money terms acceptance is in Overview; payout document setup is separate.",
                   value: "Policy",
                   onPress: () => router.push("/creator-monetization" as Parameters<typeof router.push>[0]),
                 })}
