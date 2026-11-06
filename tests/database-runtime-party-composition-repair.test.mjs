@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { createDatabase, heldStudioBundleVersions, liveSnapshotPath, splitSQL } from './helpers/database-runtime-authority-fixture.mjs';
+import { createHistoricalRuntimeDatabase } from './helpers/runtime-authority-historical-fixture.mjs';
 import { seedLiveRoomAuthority, liveFixtureActors, liveFixtureTitle, withLiveRoomActor } from './helpers/live-room-authority-fixture.mjs';
 import { appCompletionStudioDependentFiles } from './helpers/app-completion-migration-inventory.mjs';
 
@@ -47,7 +48,7 @@ async function authority(db, n, party = room, generation = session(n)) {
 
 for (const includeHeldStudio of [false, true]) {
   test(`historical published Party Room repair composes restored Premium authority (${includeHeldStudio ? 'with' : 'without'} Studio)`, async t => {
-    const { db, repairSql, replayReport } = await createDatabase({ overlayLiveDrift: true, applyRepair: true, includeHeldStudio,
+    const { db, repairSql, replayReport } = await createHistoricalRuntimeDatabase({ overlayLiveDrift: true, applyRepair: true, includeHeldStudio,
       excludeMigrations: liveSuccessorFiles });
     let checks = 0;
     const check = (value, expected, message) => { assert.deepEqual(value, expected, message); checks++; };

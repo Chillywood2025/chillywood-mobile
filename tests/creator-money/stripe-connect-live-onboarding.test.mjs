@@ -3,8 +3,57 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {load,connect,payoutsFor,clientFor} from './stripe-connect-observed-fixture.mjs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCommerceCreator,acceptCommerceCreatorTerms,withCommerceActor} from '../helpers/automatic-commerce-fixture.mjs';
 const cashout=load('supabase/functions/_shared/creator-cashout-execution.ts');
 const onboarding=load('supabase/functions/_shared/stripe-connect-live-onboarding.ts',{'./stripe-connect.ts':connect,'./creator-cashout-execution.ts':cashout});
+test('pre-live Connect policy requires production Premium without bypassing exact session, legal or consent authority',{timeout:240000},async()=>{
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+ const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
+ try{
+  const sandbox=await seedCommerceCreator(db);
+  const production=await seedCommerceCreator(db,undefined,{environment:'production'});
+  await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
+  for(const actor of [sandbox,production]){
+   await acceptCommerceCreatorTerms(db,actor);
+   await withCommerceActor(db,actor,()=>one("select public.declare_creator_money_eligibility(true,'US','CA','adult-us-creator-v1')"));
+  }
+  const route=(actor,session=actor.session)=>withCommerceActor(db,actor,()=>one('select public.get_creator_connect_onboarding_route($1,$2)',[actor.id,session]),'service_role');
+  assert.equal((await route(production)).status,'creator_onboarding_eligibility_required','production Premium does not supply missing payout terms');
+  // Synthetic local legal/policy fixtures only. No hosted configuration or
+  // provider calls are made, and live payments stay off for the entire test.
+  await db.exec("insert into public.wave1_legal_document_versions(document_key,version,market,capability,effective_at) values('payout_terms','synthetic-prelive-mode','UNITED_STATES','payout',now()-interval '1 day')");
+  for(const actor of [sandbox,production])await db.query(`insert into public.wave1_legal_acceptances
+   (user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
+   select $1::uuid,public.wave1_sha256($1::text),document_key,version,market,'member',capability,$2,'service_reconciliation'
+   from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='payout'`,[actor.id,actor.session]);
+  assert.deepEqual(await route(sandbox),{mode:'test'},'sandbox Premium can use eligible test setup');
+  assert.deepEqual(await route(production),{mode:'test'},'production Premium can also use eligible test setup');
+  await db.exec(`insert into private.creator_connect_onboarding_policy(environment,platform_account_id,configuration_key,country,currency,
+   return_url,refresh_url,controller_pricing_evidence_hash,hosted_onboarding_evidence_hash,verified_at,expires_at)
+   values('live','acct_preLiveSynthetic','stripe_connect_live_express_recipient_controller_v1','US','usd',
+   'https://app.example.test/return','https://app.example.test/refresh',repeat('a',64),repeat('b',64),clock_timestamp(),clock_timestamp()+interval '1 day')`);
+  assert.equal((await route(sandbox)).status,'creator_onboarding_eligibility_required','a live policy cannot promote sandbox Premium before activation');
+  assert.equal((await route(production)).status,'not_configured','production Premium does not enable a dormant policy');
+  await db.exec('update private.creator_connect_onboarding_policy set enabled=true');
+  assert.equal((await route(sandbox)).status,'creator_onboarding_eligibility_required');
+  assert.equal((await route(production)).status,'available','proper production Premium reaches qualified live setup while payments remain off');
+  await assert.rejects(route(production,sandbox.session),/creator_session_premium_required/);
+  await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id) values($1,'stripe_connect','test','acct_preLiveTest')",[production.id]);
+  assert.equal((await route(production)).status,'live_setup_confirmation_required','existing test account still requires distinct live-account disclosure');
+  const confirm=disclosure=>withCommerceActor(db,production,()=>one('select public.confirm_creator_connect_live_setup($1,$2,$3)',[production.id,production.session,disclosure]),'service_role');
+  await assert.rejects(confirm('wrong'),/live_setup_disclosure_required/);
+  assert.equal((await confirm('distinct-live-account-v1')).status,'available');
+  await db.query("update public.wave1_legal_acceptances set invalidated_at=clock_timestamp() where user_id=$1 and capability='payout'",[production.id]);
+  assert.equal((await route(production)).status,'creator_onboarding_eligibility_required','current payout legal authority remains mandatory');
+  await db.query("update public.wave1_legal_acceptances set invalidated_at=null where user_id=$1 and capability='payout'",[production.id]);
+  await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment) values($1,'stripe_connect','live')",[production.id]);
+  assert.equal((await route(production)).status,'account_migration_review_required','production Premium cannot supply missing live account binding');
+  await db.query("update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id=$1",[production.session]);
+  await assert.rejects(route(production),/creator_session_premium_required/);
+  assert.equal(await one("select state from public.platform_money_kill_switches where key='live_money_enabled'"),'off');
+  assert.equal(await one('select count(*)::int from private.creator_connect_account_creation'),0,'route/consent calls create no provider attempt');
+ }finally{await db.close();}
+});
 test('app accepts live setup-only responses, sends explicit consent only when reviewed, and still rejects money actions',async()=>{
  let response={mode:'live',liveMoneyAction:false,status:'live_setup_confirmation_required'},body;
  const payouts=payoutsFor({functions:{invoke:async(_name,options)=>{body=options.body;return {data:response,error:null};}}});
@@ -84,20 +133,17 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
  try{
   await db.exec("insert into public.wave1_legal_document_versions(document_key,version,market,capability,effective_at) values('payout_terms','onboarding-fixture','UNITED_STATES','payout',now()-interval '1 day') on conflict do nothing");
   for(const user of users){
-   await db.query('insert into auth.users(id,email_confirmed_at,is_sso_user,is_anonymous) values($1,now(),false,false)',[user.id]);
-   await db.query('insert into auth.sessions(id,user_id) values($1,$2)',[user.sessionGeneration,user.id]);
+   await seedCommerceCreator(db,{id:user.id,session:user.sessionGeneration},{environment:'production'});
    await db.query(`insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
     select $1::uuid,public.wave1_sha256($1::text),document_key,version,market,'member',capability,$2,'service_reconciliation'
-    from public.wave1_legal_document_versions where active and market='UNITED_STATES'`,[user.id,user.sessionGeneration]);
+    from public.wave1_legal_document_versions where active and market='UNITED_STATES' on conflict do nothing`,[user.id,user.sessionGeneration]);
    await db.query(`insert into public.wave1_creator_eligibility(creator_user_id,state,account_status,age_18_plus,legal_accepted,creator_role,moderation_state,market,rollout_eligible,platform_capability,provider_eligible,kyc_complete,tax_complete,sanctions_clear,payout_eligible,authority_source,last_operation_key)
-    values($1,'PENDING_VERIFICATION','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,false,false,false,false,false,'synthetic_fixture','onboarding')`,[user.id]);
+    values($1,'PENDING_VERIFICATION','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,null,null,null,null,null,'synthetic_fixture','onboarding')`,[user.id]);
   }
-  assert.equal((await route(users[0])).reason,'live_setup_required','ordinary creator never defaults to a test account');
-  await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[users[1].id]);
-  assert.equal((await route(users[0])).status,'not_configured','another exact subject tester membership grants nothing');
-  await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[users[0].id]);
-  assert.deepEqual(await route(users[0]),{mode:'test'},'qualified exact-subject tester retains sandbox setup');
-  assert.equal((await route({...users[0],sessionGeneration:users[1].sessionGeneration})).status,'creator_onboarding_eligibility_required','legacy test setup also requires exact current authority');
+  await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
+  assert.deepEqual(await route(users[0]),{mode:'test'},'ordinary Premium creator receives test setup without tester or staff membership');
+  assert.equal(await one('select count(*)::int from public.beta_access_memberships where user_id=$1',[users[0].id]),0);
+  await assert.rejects(route({...users[0],sessionGeneration:users[1].sessionGeneration}),/authority_unavailable/,'test setup requires exact current authority');
   await db.query('update public.wave1_creator_eligibility set age_18_plus=false where creator_user_id=$1',[users[0].id]);
   assert.equal((await route(users[0])).status,'creator_onboarding_eligibility_required','test account writes are not an adult/creator bypass');
   await db.query('update public.wave1_creator_eligibility set age_18_plus=true where creator_user_id=$1',[users[0].id]);
@@ -111,12 +157,18 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
   assert.equal((await route(users[0])).status,'not_configured');assert.equal(posts,0);
   await db.exec('update private.creator_connect_onboarding_policy set enabled=true');
   assert.equal((await route(users[0])).status,'available','onboarding does not circularly require completed provider KYC/tax');
-  for(const [field,value] of [['age_18_plus',false],['legal_accepted',false],['creator_role',false],['rollout_eligible',false]]){
+  assert.deepEqual(await one('select jsonb_build_array(tax_complete,sanctions_clear) from public.wave1_creator_eligibility where creator_user_id=$1',[users[0].id]),[null,null]);
+  await db.query("update public.wave1_legal_acceptances set invalidated_at=clock_timestamp() where user_id=$1 and capability='creator_money'",[users[0].id]);
+  assert.equal((await route(users[0])).status,'creator_onboarding_eligibility_required','legal readiness is derived from current acceptance evidence');
+  await db.query("update public.wave1_legal_acceptances set invalidated_at=null where user_id=$1 and capability='creator_money'",[users[0].id]);
+  await db.query('update public.wave1_creator_eligibility set rollout_eligible=false where creator_user_id=$1',[users[0].id]);
+  assert.equal((await route(users[0])).status,'available','obsolete cohort false does not override current automatic Premium enrollment');
+  for(const [field,value] of [['age_18_plus',false],['creator_role',false]]){
    await db.query(`update public.wave1_creator_eligibility set ${field}=$2 where creator_user_id=$1`,[users[0].id,value]);
    assert.equal((await route(users[0])).status,'creator_onboarding_eligibility_required');
    await db.query(`update public.wave1_creator_eligibility set ${field}=true where creator_user_id=$1`,[users[0].id]);
   }
-  assert.equal((await route({...users[0],sessionGeneration:users[1].sessionGeneration})).status,'creator_onboarding_eligibility_required');
+  await assert.rejects(route({...users[0],sessionGeneration:users[1].sessionGeneration}),/authority_unavailable/);
   await assert.rejects(()=>onboarding.createOrRecoverLiveConnectAccount(client,users[0],'sk_test_synthetic',transport));assert.equal(posts,0);
   const created=await onboarding.createOrRecoverLiveConnectAccount(client,users[0],'rk_live_synthetic',transport);
   assert.equal(created.status,'account_created');assert.equal(posts,1);
@@ -125,7 +177,7 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
   const link=await onboarding.createLiveConnectHostedLink(client,users[0],'rk_live_synthetic',transport);assert.equal(link.status,'link_created');assert.equal(link.onboardingUrlStored,false);
   assert.equal(await one("select count(*)::int from private.creator_connect_hosted_link_requests where to_jsonb(creator_connect_hosted_link_requests)::text like '%connect.stripe.com%'"),0);
   hostedUrl='https://attacker.invalid/setup/secret';await assert.rejects(()=>onboarding.createLiveConnectHostedLink(client,users[0],'rk_live_synthetic',transport),/hosted_link_invalid/);hostedUrl='https://connect.stripe.com/setup/s/synthetic';
-  expireSession=true;await assert.rejects(()=>onboarding.createLiveConnectHostedLink(client,users[0],'rk_live_synthetic',transport),/authority_changed/);expireSession=false;
+  expireSession=true;await assert.rejects(()=>onboarding.createLiveConnectHostedLink(client,users[0],'rk_live_synthetic',transport),/authority_unavailable/);expireSession=false;
   // A response lost after actual creation consumes the durable dispatch; later
   // calls only enumerate/read and bind the exact metadata-matched account.
   loseResponse=true;assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[1],'rk_live_synthetic',transport)).status,'creation_pending');assert.equal(posts,2);
@@ -142,7 +194,7 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
   assert.equal((await onboarding.createOrRecoverLiveConnectAccount(client,users[3],'rk_live_synthetic',transport)).status,'live_setup_confirmation_required');assert.equal(posts,3);
   const consentArgs={p_creator:users[3].id,p_session:users[3].sessionGeneration,p_disclosure:'distinct-live-account-v1'};
   assert.ok((await call('confirm_creator_connect_live_setup',{...consentArgs,p_disclosure:'unreviewed'})).error);
-  assert.equal((await call('confirm_creator_connect_live_setup',{...consentArgs,p_session:users[4].sessionGeneration})).data.status,'creator_onboarding_eligibility_required');
+  assert.ok((await call('confirm_creator_connect_live_setup',{...consentArgs,p_session:users[4].sessionGeneration})).error);
   assert.equal((await call('confirm_creator_connect_live_setup',consentArgs)).data.status,'available');
   await db.exec("update private.creator_connect_onboarding_policy set hosted_onboarding_evidence_hash=repeat('c',64)");
   assert.equal((await route(users[3])).status,'live_setup_confirmation_required','policy edits invalidate prior setup consent');
@@ -181,7 +233,7 @@ test('live onboarding is dormant, exact-session gated, idempotent and recovers u
   assert.equal((await call('claim_creator_connect_account_creation',claimArgs)).data.claimed,true);
   assert.equal((await call('claim_creator_connect_account_creation',claimArgs)).data.claimed,false);
   await db.query('update public.wave1_legal_acceptances set invalidated_at=clock_timestamp() where user_id=$1',[users[6].id]);
-  assert.equal((await route(users[6])).status,'creator_onboarding_eligibility_required');
+  await assert.rejects(route(users[6]),/authority_unavailable/,'invalidated account terms revoke exact-session admission');
   await db.exec("update private.creator_connect_onboarding_policy set verified_at=clock_timestamp()-interval '2 days',expires_at=clock_timestamp()-interval '1 day'");
   assert.equal((await route(users[5])).status,'not_configured');
   assert.equal(await one('select count(*)::int from private.creator_cashout_provider_qualifications'),0);

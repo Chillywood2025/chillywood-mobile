@@ -1,0 +1,325 @@
+project_id = "chillywood-mobile"
+
+# Manually invoked fixed-object qualification. No scheduler or broad cleanup.
+[functions.r2-disposable-qualification]
+verify_jwt = true
+
+[functions.livekit-token]
+verify_jwt = false
+
+[functions.livekit-registry]
+verify_jwt = false
+
+[functions.livekit-heartbeat-monitor]
+verify_jwt = false
+
+[functions.livekit-operator]
+verify_jwt = false
+
+[functions.autonomous-approval-request]
+verify_jwt = false
+
+[functions.money-operator]
+verify_jwt = false
+
+[functions.media-storage]
+verify_jwt = false
+
+[functions.media-scan-private-access]
+verify_jwt = false
+
+[functions.profile-media-public]
+verify_jwt = false
+
+[functions.media-object-storage-migration]
+verify_jwt = false
+
+[functions.premium-media-playback-token]
+verify_jwt = false
+
+[functions.public-creator-video-cards]
+verify_jwt = false
+
+[functions.provider-readiness]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.google-play-webhook]
+verify_jwt = false
+
+[functions.provider-usage-import]
+verify_jwt = false
+
+[functions.provider-billing-reconciliation]
+verify_jwt = false
+
+[functions.revenue-source-import]
+verify_jwt = false
+
+[functions.stripe-connect-account]
+verify_jwt = false
+
+[functions.stripe-connect-onboarding-link]
+verify_jwt = false
+
+[functions.stripe-connect-account-sync]
+verify_jwt = false
+
+[functions.stripe-connect-webhook]
+verify_jwt = false
+
+[functions.stripe-connect-live-observation-webhook]
+verify_jwt = false
+
+[functions.stripe-merch-checkout]
+verify_jwt = false
+
+[functions.stripe-merch-webhook]
+verify_jwt = false
+
+[functions.stripe-connect-transfer-sync]
+verify_jwt = false
+
+[functions.stripe-connect-transfer-create]
+verify_jwt = false
+
+[functions.payout-release-preflight]
+verify_jwt = false
+
+[functions.provider-billing-import-preflight]
+verify_jwt = false
+
+[functions.sponsor-checkout-preflight]
+verify_jwt = false
+
+[functions.sponsor-brand-payment-preflight]
+verify_jwt = false
+
+[functions.sponsor-reporting-fraud-preflight]
+verify_jwt = false
+
+[functions.spectator-broadcast-start]
+verify_jwt = false
+
+[functions.spectator-broadcast-stop]
+verify_jwt = false
+
+[functions.spectator-broadcast-status]
+verify_jwt = false
+
+[functions.spectator-playback]
+verify_jwt = false
+
+[functions.creator-replay-playback]
+verify_jwt = false
+
+[functions.request-save-replay]
+verify_jwt = false
+
+[functions.spectator-start-room]
+verify_jwt = false
+
+[functions.notification-device-tokens]
+verify_jwt = false
+
+[functions.notification-dispatch]
+verify_jwt = false
+
+[functions.notification-operator]
+verify_jwt = false
+
+[functions.release-operator]
+verify_jwt = false
+
+[functions.security-owner-operator]
+verify_jwt = false
+
+[functions.moderation-safety-operator]
+verify_jwt = false
+
+[functions.observability-operator]
+verify_jwt = false
+
+[functions.installed-product-qa-operator]
+verify_jwt = false
+
+[functions.platform-recovery-operator]
+verify_jwt = false
+
+[functions.privacy-compliance-operator]
+verify_jwt = false
+
+[functions.support-success-operator]
+verify_jwt = false
+
+[functions.user-report-intake]
+verify_jwt = false
+
+[functions.search-ranking-integrity-operator]
+verify_jwt = false
+
+[functions.owner-command-operator]
+verify_jwt = false
+
+[functions.chilly-chat-call-dispatch]
+verify_jwt = false
+
+[functions.chilly-chat-call-transition]
+verify_jwt = false
+
+[functions.chilly-chat-call-transition-retry]
+verify_jwt = false
+
+[functions.ios-voip-push-tokens]
+verify_jwt = false
+
+[functions.ios-voip-call-dispatch]
+verify_jwt = false
+
+[functions.admin-live-cost-guard-webhook]
+verify_jwt = false
+
+[functions.admin-live-cost-guard-action]
+verify_jwt = false
+
+[functions.admin-live-ops-fix-center]
+verify_jwt = false
+
+[functions.admin-legal-evidence]
+verify_jwt = false
+
+[functions.admin-owner-controls]
+verify_jwt = false
+
+[functions.cognitive-governance-control]
+verify_jwt = true
+
+[functions.cognitive-owner-approval]
+verify_jwt = true
+
+[functions.cognitive-approved-action-worker]
+verify_jwt = true
+
+[functions.cognitive-independent-evaluator]
+verify_jwt = true
+
+[functions.cognitive-model-router]
+verify_jwt = true
+
+[functions.cognitive-public-research-broker]
+verify_jwt = true
+
+[functions.cognitive-research-evaluator]
+verify_jwt = true
+
+[functions.cognitive-sentinel-collector]
+verify_jwt = true
+
+[functions.cognitive-product-quality-evaluator]
+verify_jwt = true
+
+[functions.cognitive-product-baseline-executor]
+verify_jwt = true
+
+[functions.cognitive-product-quality-triage]
+verify_jwt = true
+
+[functions.cognitive-livekit-experience-collector]
+verify_jwt = true
+
+[functions.cognitive-github-draft-pr-broker]
+verify_jwt = true
+
+[functions.cognitive-level01-scheduler]
+verify_jwt = true
+
+# Authenticated by the dedicated Vault-held activity-worker credential before
+# any claim or provider action. This is not a public notification-send API.
+[functions.notification-activity-worker]
+verify_jwt = false
+
+# Random exact-issued capability is authenticated before any upgrade.
+# This endpoint returns status only and accepts no call mutation commands.
+[functions.ios-native-call-state]
+verify_jwt = false
+
+[functions.stripe-event-auction-checkout]
+verify_jwt = true
+
+[functions.stripe-event-auction-webhook]
+# Stripe cannot supply a Supabase JWT. The dedicated handler verifies the raw
+# body with its dedicated signing secret before the service-only projection.
+verify_jwt = false
+
+[functions.google-play-external-reporter]
+# Dedicated server-only worker credential is verified before any claim or API
+# call. No scheduler, credential, enrollment or provider write is activated here.
+verify_jwt = false
+
+[functions.stripe-room-auction-checkout]
+verify_jwt = true
+
+[functions.stripe-room-auction-webhook]
+# Stripe callbacks carry a dedicated raw-body signing-secret signature, not a
+# Supabase user JWT. The handler rejects missing or invalid signatures.
+verify_jwt = false
+
+[functions.stripe-merch-cost-reconcile]
+# Service-only cost observation, additionally exact server-key authenticated.
+verify_jwt = true
+
+[functions.revenuecat-pending-reconcile]
+# Existing service credential plus JWT verification; private mode gates default OFF.
+verify_jwt = true
+
+[functions.stripe-auction-cost-reconcile]
+# GET-only provider observation with the existing server credential as well.
+verify_jwt = true
+
+[functions.merch-tracking-webhook]
+# Raw-body Shippo HMAC verification; no unsigned notification is accepted.
+verify_jwt = false
+
+[functions.merch-tracking-reconcile]
+# Dedicated server-only worker secret checked by handler. Never a client token.
+verify_jwt = false
+
+[functions.stripe-auction-test-transfer]
+# Disabled unless explicitly configured; exact existing server authority too.
+verify_jwt = true
+
+[functions.merch-reconciliation-driver]
+verify_jwt = true
+
+[functions.auction-observation-driver]
+verify_jwt = true
+
+[functions.auction-approved-automation]
+verify_jwt = true
+[functions.stripe-fee-report-import]
+verify_jwt = true
+
+[functions.creator-cashout-worker]
+verify_jwt = true
+
+[functions.creator-cashout-fee-import]
+verify_jwt = true
+
+[functions.creator-cashout-driver]
+verify_jwt = true
+
+[functions.creator-cashout-webhook]
+# Dedicated raw-body signature plus authenticated current-provider readback.
+verify_jwt = false
+
+[functions.sandbox-creator-cashout]
+verify_jwt = true
+
+[functions.sandbox-creator-cashout-webhook]
+# Dedicated test-only signature; GET-only provider reconciliation.
+verify_jwt = false
+
+[functions.stripe-tax-category-catalog]
+verify_jwt = true

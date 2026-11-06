@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('older cheaper external selection survives exact iOS/Android admission, quote and dispatch; invalid routes never fall back',{timeout:240000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
+  await seedCurrentEventCommerceCreator(db);
   const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
   const buyer=actors.find(a=>a.kind==='buyer1'),other=actors.find(a=>a.kind==='buyer2'),creator=actors.find(a=>a.kind==='creator');
   for(const platform of ['ios','android']) {

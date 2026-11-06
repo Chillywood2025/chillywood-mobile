@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { createDatabase } from '../helpers/database-runtime-authority-fixture.mjs';
+import { seedQualifiedCommerceCreator, assertBuyerHasNoPremium } from '../helpers/automatic-commerce-fixture.mjs';
 
 test('full-schema tax readiness requires reviewed evidence and immutable identity under real database roles', { timeout: 240000 }, async () => {
   const { db } = await createDatabase({ applyRepair: true, repairInMigrationOrder: true, includeHeldStudio: true });
@@ -92,6 +93,8 @@ test('tax-denied auction prepare rolls back checkout claim and settlement contra
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const rows = async sql => (await db.query(sql)).rows;
     const actors = Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a => [a.kind, a]));
+    await seedQualifiedCommerceCreator(db, {id: actors.creator.user_id, session: actors.creator.session_id}, {providerAccountId: 'acct_fixture'});
+    await assertBuyerHasNoPremium(db, {id: actors.buyer1.user_id});
     const events = Object.fromEntries((await rows('select * from event_reservation_fixture.events')).map(a => [a.name, a.id]));
     const lit = value => `'${String(value).replaceAll("'", "''")}'`;
     const rpc = async (actor, expression, role = 'authenticated') => {

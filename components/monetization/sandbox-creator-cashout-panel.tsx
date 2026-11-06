@@ -35,7 +35,7 @@ export function SandboxCreatorCashoutPanel() {
         setState({key, quote: null, rows, busy: false, notice: "", access: "allowed", validUntil: Date.now() + 30000});
     }).catch(() => {
       if (active.current && generation.current === ticket && snapshotKey() === key)
-        setState({key, quote: null, rows: [], busy: false, notice: "Internal test payout access could not be verified for this session.", access: "denied", validUntil: 0});
+        setState({key, quote: null, rows: [], busy: false, notice: "Test payout history access could not be verified for this session.", access: "denied", validUntil: 0});
     });
     return retire;
   }, [key, focused, retire]);
@@ -57,8 +57,8 @@ export function SandboxCreatorCashoutPanel() {
     setState(old => ({...old, key, busy: true, notice: ""}));
     const current = () => active.current && generation.current === ticket && snapshotKey() === key;
     try {
-      // The canonical history RPC verifies current tester/owner and exact session,
-      // unlike build mode or the broader historical sandboxTesterActive flag.
+      // History is bound to the current account and exact session. New requests
+      // separately require eligible Premium creator status and provider qualification.
       const permittedRows = await readSandboxCreatorCashoutHistory();
       if (!current()) return;
       setState(old => ({...old, access: "allowed", validUntil: Date.now() + 30000}));
@@ -67,7 +67,7 @@ export function SandboxCreatorCashoutPanel() {
       } else if (action === "quote") {
         const result = await previewSandboxCreatorCashout(cashoutDollarsToMinor(amount), method);
         if (current()) setState(old => ({...old, quote: result.ready ? result : null,
-          notice: result.ready ? "Review this TEST quote. No provider payout has been sent." : "Test payout unavailable. Tester access, sandbox earnings and provider qualification must be verified."}));
+          notice: result.ready ? "Review this TEST quote. No provider payout has been sent." : "Test payout unavailable. Premium creator eligibility, sandbox earnings and provider qualification must be verified."}));
       } else {
         const result = action === "submit" && quote ? await submitSandboxCreatorCashout(quote)
           : action === "advance" && row ? await advanceSandboxCreatorCashout(row)
@@ -89,13 +89,13 @@ export function SandboxCreatorCashoutPanel() {
   const text = {color: CHILLYWOOD_VISUAL.textMuted}, title = {color: CHILLYWOOD_VISUAL.textPrimary};
   const change = () => { displayed.current = null; generation.current++; latch.current = false; setState(old => ({...old, quote: null, busy: false, notice: ""})); };
   if (!authorized) return <View testID="sandbox-creator-cashout-access" style={{padding: 12, gap: 10}}>
-    <Text accessibilityRole="header" style={title}>Internal test payouts — sandbox only</Text>
-    <Text accessibilityLiveRegion="polite" style={text}>{current?.access === "checking" ? "Checking current internal tester access…" : current?.notice || "Internal test payout access is unavailable for this session."}</Text>
-    {current?.access !== "checking" ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("access")}><Text style={{...title, paddingVertical: 10}}>Check internal test access</Text></Pressable> : null}
+    <Text accessibilityRole="header" style={title}>Test payouts — sandbox only</Text>
+    <Text accessibilityLiveRegion="polite" style={text}>{current?.access === "checking" ? "Checking current account and test payout history…" : current?.notice || "Test payout history is unavailable for this session."}</Text>
+    {current?.access !== "checking" ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => void run("access")}><Text style={{...title, paddingVertical: 10}}>Check test payout access</Text></Pressable> : null}
   </View>;
   return <View testID="sandbox-creator-cashout" style={{padding: 12, gap: 10, borderWidth: 1, borderRadius: 12, borderColor: CHILLYWOOD_VISUAL.glassBorder}}>
-    <Text accessibilityRole="header" style={title}>Internal test payouts — sandbox only</Text>
-    <Text style={text}>For authorized internal testers only. Uses isolated sandbox earnings and a test connected account. No real charges, withdrawals or bank deposits. Live payouts remain off. A preview is not a payout.</Text>
+    <Text accessibilityRole="header" style={title}>Test payouts — sandbox only</Text>
+    <Text style={text}>New test payout requests require eligible Premium creator status, isolated sandbox earnings and a qualified test connected account. Viewing your history does not establish eligibility for a new request. No real charges, withdrawals or bank deposits. A preview is not a payout and does not establish live payout readiness.</Text>
     <Text style={text}>Sandbox earning fees, tax and net amounts use simulated test deductions, not actual provider charges or tax calculations. Test results do not prove live-account readiness.</Text>
     <TextInput accessibilityLabel="Test payout amount in dollars" value={amount} editable={!busy} keyboardType="decimal-pad" placeholder="Test amount in USD" placeholderTextColor={CHILLYWOOD_VISUAL.textMuted} style={{...title, padding: 10}} onChangeText={value => { if (latch.current) return; change(); setAmount(value); }} />
     <View style={{flexDirection: "row", gap: 18}}>{(["scheduled", "instant"] as const).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{checked: method === value, disabled: busy}} disabled={busy} onPress={() => { if (latch.current) return; change(); setMethod(value); }}><Text style={title}>{method === value ? "● " : "○ "}{value === "scheduled" ? "Test standard" : "Test instant"}</Text></Pressable>)}</View>

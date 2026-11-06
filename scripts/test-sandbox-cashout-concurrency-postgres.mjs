@@ -8,6 +8,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {seedCashoutExecutionFixture,creator,session as actorSession} from '../tests/helpers/cashout-execution-fixture.mjs';
+import {commerceSeedAdapter,seedCommerceCreator,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../tests/helpers/automatic-commerce-fixture.mjs';
 if(process.argv.includes('--help')){console.log('After local Supabase reset, test actual cashout locks in a generated disposable clone. No remote URLs or provider calls.');process.exit(0);}
 assert.equal(process.argv.length,2,'no arbitrary target arguments');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/mu)?.[1];assert.ok(project);
@@ -54,12 +55,12 @@ try{
  // Separate authenticated connections, real source-domain locks, and observed
  // pg_blocking_pids barriers: elapsed time alone is never concurrency evidence.
  let schedules=0;
- async function race(first,second,outcome='commit',waiterOutcome='commit'){
+ async function race(first,second,outcome='commit',waiterOutcome='commit',afterBlocked=''){
   const h=start(`begin;${first}select 'HOLDING';`);
   await until(()=>h.output().includes('HOLDING'),'first operation did not reach lock barrier');
   const w=start(`begin;${second}${waiterOutcome};`);w.child.stdin.end();
   await until(()=>blocked(h,w),'second operation did not block on the real transaction');
-  h.child.stdin.end(`${outcome};\n`);const held=await h.done;assert.equal(held.code,0,held.stderr);
+  h.child.stdin.end(`${afterBlocked}${outcome};\n`);const held=await h.done;assert.equal(held.code,0,held.stderr);
   const waited=await w.done;schedules++;return {held,waited};
  }
  const passed=r=>assert.equal(r.code,0,r.stderr);
@@ -72,6 +73,10 @@ try{
  async function seed(){
   await db.exec('reset role');
   const a=await seedCashoutExecutionFixture(db,{creatorId:randomUUID(),sessionId:randomUUID(),recipientAccountId:'acct_'+randomUUID().replaceAll('-',''),reserveInitialRequest:false});
+  // The preceding cashout fixture opens synthetic live controls. Close them
+  // BEFORE the canonical sandbox Premium event and every sandbox operation.
+  query("update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled')");
+  await seedCommerceCreator(commerceSeedAdapter(query),{id:a.creator,session:a.session});
   // Provider account IDs are globally unique across mode rows. The test-mode
   // binding must be a distinct account, never reuse/convert the live fixture.
   a.accountId='acct_test'+randomUUID().replaceAll('-','');
@@ -80,7 +85,6 @@ try{
   query(`reset role;update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled');
    update public.platform_money_kill_switches set state='sandbox_only' where key in ('stripe_connect_enabled','creator_monetization_enabled','provider_webhooks_enabled');
    update private.sandbox_cashout_control set enabled=true;
-   insert into public.sandbox_monetization_testers(user_id,email,status,expires_at) values(${lit(a.creator)},${lit('native-'+a.creator+'@example.test')},'active',now()+interval '1 day');
    insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,country) values(${lit(a.creator)},'stripe_connect','test',${lit(a.accountId)},'US');`);
   a.qualification=query(`insert into private.sandbox_cashout_qualifications(creator_id,platform_account_id,account_id,destination_id,payout_type,source_type,
    provider_fee_bps,provider_fee_fixed_minor,settlement_policy_version,simulated_tax_bps,simulated_platform_bps,simulated_provider_bps,simulated_provider_fixed_minor,
@@ -151,6 +155,19 @@ try{
   assert.equal(run(a,'service_role',observe(id,{kind:'transfer',objectId:a.transfer,amountMinor:8991,reversedMinor:0,fullyReversed:false,accountId:a.accountId,environment:'test'})).status,'funded');
   return id;
  }
+ // Lock-order negative controls: the waiting claimant must not own later
+ // authority or source rows while blocked on the earlier domain. NOWAIT makes
+ // an inversion a deterministic failure rather than a timeout/deadlock guess.
+ for(const blocker of ['retention','Premium owner']){
+  const a=await seed(),merch=seedMerch(a),id=run(a,'authenticated',request(a)).requestId;
+  const owner=`select public.lock_revenuecat_premium_owner_users_internal(${lit(a.creator)},${lit(a.creator)});`;
+  const first=blocker==='retention'?'select private.platform_brand_retention_lock();':owner;
+  const later=(blocker==='retention'?owner+`select creator_user_id from public.wave1_creator_eligibility where creator_user_id=${lit(a.creator)} for update nowait;`:'')+
+   `select id from public.money_access_ledger_events where id=${lit(a.sources[0])} for update nowait;
+    select id from public.merch_orders where id=${lit(merch.id)} for update nowait;`;
+  const {waited}=await race(first,auth('service_role',a)+claim(id),'commit','commit',later);
+  passed(waited);assert.equal(parse(waited.stdout).claimed,true);invariants(a);
+ }
  // Same operation replay and competing operations both wait on real source
  // rows; only one execution owns the two USD allocations after commit.
  for(const sameOperation of [true,false]){
@@ -198,15 +215,61 @@ try{
   invariants(a);
  }
  // Claim/cancel commit and rollback schedules, including duplicate claims.
- for(const mutation of ['session','tester','control'])for(const outcome of ['commit','rollback']){
+ for(const mutation of ['session','creatorPremium','control'])for(const outcome of ['commit','rollback']){
   const a=await seed(),id=run(a,'authenticated',request(a)).requestId;
   const change=mutation==='session'?`update auth.sessions set not_after=now()-interval '1 minute' where id=${lit(a.session)};`
-   :mutation==='tester'?`update public.sandbox_monetization_testers set status='revoked' where user_id=${lit(a.creator)};`
+   :mutation==='creatorPremium'?`update public.user_entitlements set revoked_at=clock_timestamp() where user_id=${lit(a.creator)} and entitlement_key='premium';`
    :'update private.sandbox_cashout_control set enabled=false;';
   const {waited}=await race(change,auth('service_role',a)+claim(id),outcome);
-  if(outcome==='commit'){failed(waited,mutation==='control'?/sandbox_payout_execution_disabled/:/sandbox_origin_tester_required/);assert.equal(phase(id),'prepared');}
+  if(outcome==='commit'){failed(waited,mutation==='control'?/sandbox_payout_execution_disabled/:/sandbox_origin_creator_required/);assert.equal(phase(id),'prepared');}
   else {passed(waited);assert.equal(parse(waited.stdout).claimed,true);assert.equal(phase(id),'funding_unknown');}
   invariants(a);
+ }
+ // New rows must participate in the same authority snapshot as existing rows.
+ // Both commit orders exercise the real claim, not a lock-only stand-in.
+ for(const mutation of ['deletion insertion','profile role','legal insertion','hold insertion','session insertion','legal invalidation'])for(const changeFirst of [true,false]){
+  const a=await seed(),id=run(a,'authenticated',request(a)).requestId,version=randomUUID();
+  query(`insert into public.user_profiles(user_id,username,display_name,channel_role)
+   values(${lit(a.creator)},${lit('cashout_'+a.creator.replaceAll('-','').slice(0,16))},'Synthetic creator','member') on conflict(user_id) do nothing;`);
+  if(mutation==='hold insertion')query(`delete from public.creator_payout_eligibility_records where creator_user_id=${lit(a.creator)};`);
+  const change=mutation==='deletion insertion'?`insert into public.account_deletion_requests(user_id,status,delete_after,restore_deadline) values(${lit(a.creator)},'scheduled',clock_timestamp()+interval '30 days',clock_timestamp()+interval '30 days');`
+   :mutation==='profile role'?`update public.user_profiles set channel_role='creator' where user_id=${lit(a.creator)};`
+   :mutation==='legal insertion'?`insert into public.wave1_legal_document_versions(document_key,version,market,capability,active,effective_at) values('privacy',${lit(version)},'UNITED_STATES','payout',true,clock_timestamp());`
+   :mutation==='hold insertion'?`insert into public.creator_payout_eligibility_records(creator_user_id,fraud_hold_active,eligibility_status) values(${lit(a.creator)},true,'on_hold');`
+   :mutation==='session insertion'?`insert into auth.sessions(id,user_id,not_after) values(${lit(randomUUID())},${lit(a.creator)},clock_timestamp()+interval '1 day');`
+   :`update public.wave1_legal_acceptances set invalidated_at=clock_timestamp() where user_id=${lit(a.creator)} and capability='payout';`;
+  try {
+   const {held,waited}=await race(changeFirst?change:auth('service_role',a)+claim(id),changeFirst?auth('service_role',a)+claim(id):change);
+   if(changeFirst){failed(waited,/sandbox_origin_creator_required/);assert.equal(phase(id),'prepared');}
+   else {passed(waited);assert.equal(parse(held.stdout.split('HOLDING')[0]).claimed,true);assert.equal(phase(id),'funding_unknown');}
+   invariants(a);
+  }finally{if(mutation==='legal insertion')query(`delete from public.wave1_legal_document_versions where document_key='privacy' and version=${lit(version)} and capability='payout';`);}
+ }
+ for(const subject of ['session deadline','Premium deadline']){
+  const a=await seed(),id=run(a,'authenticated',request(a)).requestId;
+  if(subject==='session deadline')query(`update auth.sessions set not_after=clock_timestamp()+interval '2 seconds' where id=${lit(a.session)};`);
+  else {
+   const renewed=parse(query(`select public.process_revenuecat_premium_event_atomic('revenuecat_google_play',${lit('cashout-expiry-'+randomUUID())},'RENEWAL',${lit(a.creator)}::uuid,
+    p.provider_product_id,p.provider_base_plan_id,'sandbox','active',clock_timestamp()-interval '1 day',clock_timestamp()+interval '2 seconds',clock_timestamp(),999,'usd',repeat('a',64),
+    'NORMAL','google_play','android',null,p.id,${lit('live-authority-original-'+a.creator)}) from public.monetization_products p where p.provider='revenuecat_google_play'
+    and p.environment='sandbox' and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1;`));
+   assert.equal(renewed.status,'processed');
+  }
+  const current=subject==='session deadline'?`exists(select 1 from auth.sessions where id=${lit(a.session)} and not_after>clock_timestamp())`
+   :`exists(select 1 from public.user_entitlements where user_id=${lit(a.creator)} and entitlement_key='premium' and expires_at>clock_timestamp())`;
+  const {waited}=await race(`select id from public.money_access_ledger_events where id=${lit(a.sources[0])} for update;`,auth('service_role',a)+claim(id),'commit','commit',
+   `do $barrier$ begin if not (${current}) then raise exception 'cashout_passive_expiry_barrier_was_late';end if;end $barrier$;select pg_sleep(2.2);`);
+  failed(waited,/sandbox_origin_creator_required/);assert.equal(phase(id),'prepared');invariants(a);
+ }
+ // The lock-only prelude must not turn historical cancellation or money return
+ // into a new Premium purchase requirement. A return claim remains one-use.
+ {
+  const a=await seed(),id=funded(a);
+  query(`update public.user_entitlements set revoked_at=clock_timestamp() where user_id=${lit(a.creator)} and entitlement_key='premium';`);
+  assert.equal(run(a,'authenticated',cancel(id)).status,'funding_return_pending');
+  const {held,waited}=await race(auth('service_role',a)+claim(id,'funding_return'),auth('service_role',a)+claim(id,'funding_return'));
+  assert.equal(parse(held.stdout.split('HOLDING')[0]).claimed,true);passed(waited);assert.equal(parse(waited.stdout).claimed,false);
+  assert.equal(phase(id),'funding_return_unknown');invariants(a);
  }
  for(const outcome of ['commit','rollback']){
   const a=await seed(),id=run(a,'authenticated',request(a)).requestId;
@@ -287,6 +350,9 @@ try{
   query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8').replaceAll('event_reservation_fixture',schema).replaceAll('acct_fixture',account));
   const actors=parse(query(`select jsonb_object_agg(kind,jsonb_build_object('creator',user_id,'session',session_id)) from ${schema}.actors;`));
   const a=actors.creator,buyer=actors.buyer1;
+  await seedQualifiedCommerceCreator(commerceSeedAdapter(query),{id:a.creator,session:a.session},{providerAccountId:account});
+  for(const [kind,actor] of Object.entries(actors))if(kind.startsWith('buyer'))
+   await assertBuyerHasNoPremium(commerceSeedAdapter(query),{id:actor.creator});
   query(`update public.creator_events set visibility='public' where id in(select id from ${schema}.events);
    update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled');
    update public.platform_money_kill_switches set state='sandbox_only' where key='stripe_connect_enabled';update private.sandbox_cashout_control set enabled=true;`);
@@ -342,6 +408,15 @@ try{
   assert.equal(invoke(buyer,receipt(evidence),'service_role').status,'fulfilled');
   const ledger=query(`select ledger_event_id from private.creator_${lane}_auction_receipts where provider_event_id=${lit(evidence.eventId)};`);
   assert.equal(parse(query(`select private.sandbox_cashout_source(${lit(ledger)},${lit(qualification)});`)).netMinor,189);
+  // This new creator has accepted creator-money terms, not payout terms.
+  // Earlier seed() configured synthetic payout documents for another actor;
+  // neither that actor's acceptance nor provider qualification covers this one.
+  assert.equal(query(`select public.wave1_user_has_active_legal_requirements_internal(${lit(a.creator)},'payout');`),'f');
+  assert.equal(run(a,'authenticated',"select public.preview_sandbox_creator_cashout(189,'scheduled');").reason,'sandbox_origin_creator_required');
+  assert.equal(query("select public.wave1_legal_document_configuration_complete_internal('payout');"),'t','synthetic payout documents must exist; missing configuration is never approval');
+  const payoutTerms=query("select jsonb_object_agg(document_key,version) from public.wave1_legal_document_versions where active and effective_at<=now() and market='UNITED_STATES' and capability in ('account','creator','creator_money','payout');");
+  assert.equal(invoke(a,`select public.wave1_accept_legal_documents(${lit(payoutTerms)}::jsonb,'UNITED_STATES',${lit(a.creator)},${lit(a.creator)},${lit(a.session)},'payout');`).allAccepted,true);
+  assert.equal(query(`select public.wave1_user_has_active_legal_requirements_internal(${lit(a.creator)},'payout');`),'t');
   const id=run(a,'authenticated',`select public.request_sandbox_creator_cashout(189,'scheduled',${lit(qualification)},${lit(randomUUID())},0,0,189);`).requestId;
   assert.equal(query(`select money_ledger_id from private.sandbox_cashout_allocations where execution_id=${lit(id)};`),ledger);
   if(outcome==='rollback'){
@@ -363,8 +438,8 @@ try{
   invariants(a);
  }
  restore.assertSourceUnchanged();
- assert.equal(schedules,33,'all real-lock schedules executed');
- console.log('PASS native sandbox cashout: 33 actual-lock schedules including independent event/room quote-only barriers and canonical auction refunds, mixed digital/physical reservations, canonical merch refunds, refund/revocation/subject/control/recovery-authority barriers, cancellation commit/rollback, monotonic returns and single release; production gates/accounting unchanged.');
+ assert.equal(schedules,50,'all real-lock schedules executed');
+ console.log('PASS native sandbox cashout: 50 actual-lock schedules including absent deletion/legal/hold/session authority rows in both commit orders, profile-role/legal invalidation, passive session/Premium expiry after source waits, historical return without Premium, independent event/room quote-only barriers, canonical refunds, mixed reservations, control/recovery barriers and monotonic returns; production gates/accounting unchanged.');
 }finally{
  for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end();s.child.kill('SIGTERM');}
  await Promise.allSettled(sessions.map(s=>s.done));

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID, createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import ts from 'typescript';
+import {commerceSeedAdapter,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from './automatic-commerce-fixture.mjs';
 
 // Reuse the actual native runner's fulfilled purchase fixture. Only its SQL
 // transport is adapted to PGlite; this establishes no native concurrency proof.
@@ -52,5 +53,7 @@ export async function createFeeReportAuctionFixture(db) {
  const executable=asyncTransport(source.slice(start,end)+"\nreturn await fixture('FEEEVIDENCE');");
  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
  const literal=value=>`'${String(value).replaceAll("'","''")}'`;
- return new AsyncFunction('query','readFileSync','assert','randomUUID','createHash','delay','literal',executable)(wireQuery(db),readFileSync,assert,randomUUID,createHash,delay,literal);
+ return new AsyncFunction('query','readFileSync','assert','randomUUID','createHash','delay','literal',
+   'commerceSeedAdapter','seedQualifiedCommerceCreator','assertBuyerHasNoPremium',executable)(wireQuery(db),readFileSync,assert,randomUUID,createHash,delay,literal,
+   commerceSeedAdapter,seedQualifiedCommerceCreator,assertBuyerHasNoPremium);
 }

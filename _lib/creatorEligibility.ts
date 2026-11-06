@@ -1,3 +1,5 @@
+import type { AccountSessionAuthorityBinding } from "./accountSessionAuthority";
+
 export const CREATOR_MINIMUM_AGE = 18;
 export const CREATOR_ELIGIBILITY_STATES = [
   "INELIGIBLE",
@@ -32,12 +34,35 @@ export type CreatorEligibilityInputs = {
 export type CreatorEligibilityDecision = {
   authoritative: boolean;
   canCreateMoneyExposure: boolean;
+  canUseSandboxCreatorTools: boolean;
   canProcessHistoricalObligations: true;
   inputs: CreatorEligibilityInputs;
   minimumAge: 18;
   reasonCodes: string[];
   state: CreatorEligibilityState;
+  declaration?: CreatorEligibilityDeclaration | null;
 };
+
+export type CreatorEligibilityDeclaration = {
+  version: "adult-us-creator-v1";
+  declared18Plus: true;
+  countryCode: "US";
+  regionCode: string;
+  source: "self_declaration";
+  declaredAt: string;
+};
+const CREATOR_DECLARATION_REGIONS = new Set(
+  "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" "),
+);
+function parseDeclaration(value: unknown): CreatorEligibilityDeclaration | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.version !== "adult-us-creator-v1" || row.declared18Plus !== true || row.countryCode !== "US"
+    || row.source !== "self_declaration" || typeof row.regionCode !== "string" || !CREATOR_DECLARATION_REGIONS.has(row.regionCode)
+    || typeof row.declaredAt !== "string" || !Number.isFinite(Date.parse(row.declaredAt))) return null;
+  return { version: row.version, declared18Plus: true, countryCode: "US", regionCode: row.regionCode,
+    source: "self_declaration", declaredAt: row.declaredAt };
+}
 
 const REQUIRED_BOOLEAN_INPUTS = [
   "age18Plus",
@@ -59,6 +84,7 @@ const decision = (
 ): CreatorEligibilityDecision => ({
   authoritative: inputs.authority === "SERVER",
   canCreateMoneyExposure: inputs.authority === "SERVER" && state === "VERIFIED",
+  canUseSandboxCreatorTools: false,
   canProcessHistoricalObligations: true,
   inputs,
   minimumAge: CREATOR_MINIMUM_AGE,
@@ -66,6 +92,7 @@ const decision = (
   state,
 });
 const parsedAuthorityDecisions = new WeakSet<CreatorEligibilityDecision>();
+const sandboxAuthorityDecisions = new WeakSet<CreatorEligibilityDecision>();
 const parsedDecision = (...args: Parameters<typeof decision>) => {
   const value = decision(...args); parsedAuthorityDecisions.add(value); return value;
 };
@@ -101,6 +128,11 @@ export const canCreateCreatorMoneyExposure = (value: CreatorEligibilityDecision)
   parsedAuthorityDecisions.has(value) && value.authoritative && value.state === "VERIFIED" && value.canCreateMoneyExposure
 );
 
+export const canUseCreatorSandboxTools = (value: CreatorEligibilityDecision) => (
+  parsedAuthorityDecisions.has(value) && sandboxAuthorityDecisions.has(value)
+  && value.authoritative && value.canUseSandboxCreatorTools
+);
+
 export const canProcessCreatorHistoricalObligation = (
   operation: "audit" | "cleanup" | "refund" | "reversal" | "reconciliation",
 ) => ["audit", "cleanup", "refund", "reversal", "reconciliation"].includes(operation);
@@ -108,10 +140,10 @@ export const canProcessCreatorHistoricalObligation = (
 const toBooleanOrNull = (value: unknown) => typeof value === "boolean" ? value : null;
 const toText = (value: unknown) => String(value ?? "").trim();
 const CREATOR_AUTHORITY_SOURCES = new Set([
-  "money_flow_control", "moderation_safety_operator", "security_owner_operator", "local_pgtap",
+  "money_flow_control", "moderation_safety_operator", "security_owner_operator", "local_pgtap", "automatic_eligibility",
 ]);
 
-export function parseCreatorEligibilityReadback(value: unknown): CreatorEligibilityDecision {
+export function parseCreatorEligibilityReadback(value: unknown, expected?: AccountSessionAuthorityBinding): CreatorEligibilityDecision {
   const row = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
@@ -137,9 +169,34 @@ export function parseCreatorEligibilityReadback(value: unknown): CreatorEligibil
     sanctionsClear: toBooleanOrNull(row.sanctionsClear),
     taxComplete: toBooleanOrNull(row.taxComplete),
   };
+  const capability = row.sandboxCapability && typeof row.sandboxCapability === "object" && !Array.isArray(row.sandboxCapability)
+    ? row.sandboxCapability as Record<string, unknown> : {};
+  const withSandboxCapability = (result: CreatorEligibilityDecision) => {
+    // A convenience boolean or a cloned decision is never an authority token.
+    if (expected?.state === "ACTIVE" && !expected.restoreOnly && authoritative && row.restoreOnly === false
+      && !!expected.userId && expected.accountId === expected.userId && !!expected.sessionGeneration
+      && row.userId === expected.userId && row.accountId === expected.accountId && row.sessionGeneration === expected.sessionGeneration
+      && CREATOR_AUTHORITY_SOURCES.has(toText(row.authoritySource))
+      && Number.isInteger(row.version) && Number(row.version) > 0
+      && typeof row.evaluatedAt === "string" && Number.isFinite(Date.parse(row.evaluatedAt))
+      && row.minimumAge === CREATOR_MINIMUM_AGE && row.rollout === "AUTOMATIC_PREMIUM_UNITED_STATES"
+      && row.canProcessHistoricalObligations === true
+      && (state === "PENDING_VERIFICATION" || state === "VERIFIED")
+      && inputs.accountStatus === "ACTIVE" && inputs.moderationState === "CLEAR"
+      && inputs.age18Plus === true && inputs.market === "UNITED_STATES" && inputs.creatorRole === true
+      && inputs.legalAccepted === true && inputs.platformCapability === true
+      && !REQUIRED_BOOLEAN_INPUTS.some(key => inputs[key] === false)
+      && capability.environment === "sandbox" && capability.financialAuthority === false && capability.canUseCreatorTools === true) {
+      result.canUseSandboxCreatorTools = true;
+      sandboxAuthorityDecisions.add(result);
+    }
+    return result;
+  };
   if (!authoritative || state !== "VERIFIED") {
-    return parsedDecision(inputs, authoritative ? state : "PENDING_VERIFICATION",
+    const result = parsedDecision(inputs, authoritative ? state : "PENDING_VERIFICATION",
       Array.isArray(row.reasonCodes) ? row.reasonCodes.map(toText).filter(Boolean) : ["server_authority_required"]);
+    result.declaration = authoritative ? parseDeclaration(row.declaration) : null;
+    return withSandboxCapability(result);
   }
   const independentlyVerified = evaluateCreatorEligibility(inputs);
   const version = Number(row.version); const evaluatedAt = toText(row.evaluatedAt);
@@ -148,10 +205,12 @@ export function parseCreatorEligibilityReadback(value: unknown): CreatorEligibil
     && !!toText(row.userId) && !!toText(row.sessionGeneration)
     && CREATOR_AUTHORITY_SOURCES.has(toText(row.authoritySource))
     && Number.isInteger(version) && version > 0 && !!evaluatedAt && Number.isFinite(Date.parse(evaluatedAt))
-    && row.minimumAge === CREATOR_MINIMUM_AGE && row.rollout === "CONTROLLED_1_PERCENT_UNITED_STATES";
+    && row.minimumAge === CREATOR_MINIMUM_AGE && row.rollout === "AUTOMATIC_PREMIUM_UNITED_STATES";
   if (independentlyVerified.state !== "VERIFIED" || !verifiedOutputCoherent) {
     return parsedDecision(inputs, "PENDING_VERIFICATION", ["incomplete_verified_readback"]);
   }
-  return parsedDecision(inputs, "VERIFIED",
+  const result = parsedDecision(inputs, "VERIFIED",
     Array.isArray(row.reasonCodes) ? row.reasonCodes.map(toText).filter(Boolean) : ["all_authoritative_inputs_verified"]);
+  result.declaration = parseDeclaration(row.declaration);
+  return withSandboxCapability(result);
 }

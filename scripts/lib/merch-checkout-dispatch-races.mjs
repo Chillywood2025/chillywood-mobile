@@ -2,11 +2,10 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 
-export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json}) {
+export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json,sequentialReplay=false}) {
  const buyer=actors.buyer1.id,session=actors.buyer1.session,creator=actors.creator.id;
- // These actors are fresh in the disposable clone. Do not infer an
- // unconditional user_id conflict target from the partial beta subject index.
- await query(`insert into public.beta_access_memberships(user_id,access_status) values(${lit(buyer)},'active');
+ // Ordinary buyers have no beta/tester membership or Premium entitlement.
+ await query(`update public.platform_money_kill_switches set state='sandbox_only' where key='merch_enabled';
   insert into public.user_profiles(user_id,username,display_name) values(${lit(creator)},'dispatch_race_creator','Creator'),(${lit(buyer)},'dispatch_race_buyer','Buyer') on conflict(user_id) do nothing;`);
  const make=async()=>{
   const product=randomUUID(),attempt=randomUUID();
@@ -63,9 +62,74 @@ export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,
  const old=allocation.reserve.replace('reserve_merch_checkout_dispatch','reserve_merch_checkout_for_actor_with_tracking');
  const ownerClaims=auth('buyer1','service_role').replace('set local role service_role;','');
  const interop=await race('retained reservation global latch precedes new reservation buyer lock',
-  "select private.platform_brand_retention_lock();select '{}'::jsonb;",
+  "select private.lock_ordinary_commerce_authority_gate();select private.platform_brand_retention_lock();select '{}'::jsonb;",
   auth('buyer1','service_role')+`select ${allocation.reserve};`,
   {afterBlocked:ownerClaims+`select ${old};`});
  assert.equal(interop.first.id,interop.second.id);assert.equal(await allocation.stock(),'1');
  assert.equal(await query(`select count(*) from private.merch_checkout_dispatch where order_id=${lit(interop.first.id)}`),'0','no historical provenance inference');
+
+ // Creator authority and free-buyer account/session revocations must serialize
+ // with the actual dispatch, not just with an earlier preflight read. Native
+ // race() proves distinct backends and pg_blocking_pids before the commit.
+ const mutations=[
+  ['creator Premium revocation',`update public.user_entitlements set revoked_at=clock_timestamp() where user_id=${lit(creator)} and entitlement_key='premium'`,
+   `update public.user_entitlements set revoked_at=null where user_id=${lit(creator)} and entitlement_key='premium'`],
+  ['creator Premium grant refund',`update public.access_grants set refunded_at=clock_timestamp() where user_id=${lit(creator)} and grant_type='premium'`,
+   `update public.access_grants set refunded_at=null where user_id=${lit(creator)} and grant_type='premium'`],
+  ['free buyer ban',`update auth.users set banned_until=clock_timestamp()+interval '1 hour' where id=${lit(buyer)}`,
+   `update auth.users set banned_until=null where id=${lit(buyer)}`],
+  ['free buyer session expiry',`update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id=${lit(session)}`,
+   `update auth.sessions set not_after=clock_timestamp()+interval '1 day' where id=${lit(session)}`],
+ ];
+ for(const [label,change,restore] of mutations) {
+  const fixture=await make(),reserved=await rpc(fixture.reserve);await fixture.bind(reserved.id);
+  try {
+   // Gate-first identity writers finish before the initial actor assertion in
+   // both native and sequential execution. Keep the exact early SQL contract;
+   // passive expiry after a source wait below still has its own JSON outcome.
+   const options=label.startsWith('free buyer')?{error:/merch_current_session_required/}:{};
+   const result=await race(`${label} before dispatch`,`${change};select '{}'::jsonb;`,
+    auth('buyer1','service_role')+`select ${fixture.transition('dispatch')};`,options);
+   if(!options.error)assert.equal(result.second.authorized,false,label);
+   assert.equal(await query(`select state from private.merch_checkout_dispatch where order_id=${lit(reserved.id)}`),'prepared');
+   assert.equal(await fixture.stock(),'1','denial retains unresolved inventory until owned abort');
+  }finally{await query(`${restore};`);}
+  const aborted=await rpc(fixture.transition('abort'));assert.equal(aborted.aborted,true);assert.equal(await fixture.stock(),'0');
+ }
+ // Passive expiry is not a revocation writer: the waiter already passed its
+ // first authority check when it blocks on the product. Recheck after waiting.
+ const premiumRenewal=async duration=>{
+  const result=JSON.parse(await query(`select public.process_revenuecat_premium_event_atomic(
+   'revenuecat_google_play',${lit('passive-renewal-'+randomUUID())},'RENEWAL',${lit(creator)}::uuid,
+   p.provider_product_id,p.provider_base_plan_id,'sandbox','active',clock_timestamp()-interval '1 minute',
+   clock_timestamp()+interval '${duration}',clock_timestamp(),999,'usd',repeat('d',64),
+   'NORMAL','google_play','android',null,p.id,${lit('live-authority-original-'+creator)})
+   from public.monetization_products p where p.provider='revenuecat_google_play' and p.environment='sandbox'
+    and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1;`));
+  assert.equal(result.status,'processed','finite expiry comes from the canonical Premium processor');
+ };
+ for(const subject of ['free buyer session','creator Premium']) {
+  const fixture=await make(),reserved=await rpc(fixture.reserve);await fixture.bind(reserved.id);
+  if(subject==='free buyer session')await query(`update auth.sessions set not_after=clock_timestamp()+interval '2 seconds' where id=${lit(session)};`);
+  else await premiumRenewal('2 seconds');
+  try {
+   const stillCurrent=subject==='free buyer session'
+    ?`exists(select 1 from auth.sessions where id=${lit(session)} and not_after>clock_timestamp())`
+    :`exists(select 1 from public.user_entitlements where user_id=${lit(creator)} and entitlement_key='premium' and expires_at>clock_timestamp())`;
+   const options={afterBlocked:`do $expiry_barrier$ begin if not (${stillCurrent}) then raise exception 'passive_expiry_barrier_was_late';end if;end $expiry_barrier$;select pg_sleep(2.2);select '{}'::jsonb;`,
+    ...(sequentialReplay&&subject==='free buyer session'?{error:/merch_current_session_required/}:{})};
+   const result=await race(`passive ${subject} expiry while dispatch waits on product`,
+    `select id from public.merch_products where id=${lit(fixture.product)} for update;select '{}'::jsonb;`,
+    auth('buyer1','service_role')+`select ${fixture.transition('dispatch')};`,options);
+   // The sequential adapter starts after expiry and can only prove its actual
+   // early rejection; it never fabricates an after-wait authorized:false result.
+   if(!options.error)assert.equal(result.second.authorized,false);
+   assert.equal(await query(`select state from private.merch_checkout_dispatch where order_id=${lit(reserved.id)}`),'prepared');
+   assert.equal(await fixture.stock(),'1');
+  }finally{
+   if(subject==='free buyer session')await query(`update auth.sessions set not_after=clock_timestamp()+interval '1 day' where id=${lit(session)};`);
+   else await premiumRenewal('1 day');
+  }
+  assert.equal((await rpc(fixture.transition('abort'))).aborted,true);assert.equal(await fixture.stock(),'0');
+ }
 }

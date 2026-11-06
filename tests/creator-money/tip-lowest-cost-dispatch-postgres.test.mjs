@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('server lowest qualified tip selection revalidates at native dispatch and tombstones undispatched actions', {timeout:240000}, async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
+  await seedCurrentEventCommerceCreator(db);
   const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
   const buyer=actors.find(x=>x.kind==='buyer1'),creator=actors.find(x=>x.kind==='creator');
   const as=async(role='authenticated')=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claims',$1,false),set_config('request.headers',$2,false)",[JSON.stringify({sub:buyer.user_id,session_id:buyer.session_id,role}),JSON.stringify({'x-chillywood-platform':'ios'})]);await db.exec(`set role ${role}`);};

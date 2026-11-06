@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {brandReferenceNativeContainer,brandNativeSpawnSync,brandNativeSpawn,brandNativePreflight} from './helpers/brand-reference-native-target.mjs';
-import {createDatabase,repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
+import {captureCurrentDatabaseReplay} from './helpers/database-runtime-authority-fixture.mjs';
 
 if(process.argv.includes('--help')){
  console.log('BRAND_REFERENCE_TEST_CONTAINER=brand-ref-perf-* node tests/brand-reference-guards-native.mjs [--benchmark] [--keep-fixture]. Requires a fresh disposable PostgreSQL cluster in a network-disabled container with no mounts and socket /tmp. Source migrations intentionally reject pre-existing cognitive runtime roles, so a new database in a previously replayed cluster is insufficient. Replays source schema with managed-service doubles into a newly generated database. Optional benchmark adds 429749 synthetic audit rows and times complete clearance calls. --keep-fixture retains the exact printed database for follow-up; otherwise it is dropped. No provider/scanner evidence.');
@@ -44,13 +44,9 @@ let created=false;
 // migration replay policy. It supplies empty auth/storage catalog shapes and
 // explicit cron/vault/realtime doubles; no snapshot overlay or data is loaded.
 async function fixtureSQL(){
- const nativeStatements=[];
- class CaptureDatabase {async exec(sql){nativeStatements.push(sql);} async close(){}}
- const {replayReport}=await createDatabase({includeHeldStudio:true,applyRepair:true,
-  databaseFactory:async()=>new CaptureDatabase()});
- assert.ok(repairMigrationPath,'runtime authority repair source is required');
- replayReport.files.push(repairMigrationPath.split('/').at(-1));
- let sql=nativeStatements.join('\n');
+ const fixture=await captureCurrentDatabaseReplay();
+ const {replayReport}=fixture;
+ let {sql}=fixture;
  // Roles are cluster-scoped and may already belong to the sibling synthetic
 // benchmark. Do not alter or drop them; only create missing fixture roles.
  sql=sql.replace(/create role (anon|authenticated|service_role|supabase_admin|supabase_auth_admin|supabase_storage_admin)( bypassrls)?;/g,

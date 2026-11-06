@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from './helpers/current-event-commerce-fixture.mjs';
+import {assertBuyerHasNoPremium} from './helpers/automatic-commerce-fixture.mjs';
 import ts from 'typescript';
 
 const purchaseModule = {exports:{}};
@@ -24,6 +26,7 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
     await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8')
       .replaceAll('md5(', 'pg_temp.room_library_uuid_hash('));
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
+    await seedCurrentEventCommerceCreator(db);
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const rows=async s=>(await db.query(s)).rows;
     const bindBody=(await rows("select pg_get_functiondef('public.bind_creator_room_auction_checkout(uuid,uuid,text,text,text,integer,text)'::regprocedure) body"))[0].body;
@@ -32,6 +35,14 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
     const quoteLock=bindBody.indexOf('select * into q from private.creator_room_auction_quotes where id=p_quote_id for update');
     assert.ok(roomLock>=0&&auctionLock>roomLock&&quoteLock>auctionLock,'installed binder follows room → auction → quote lock order');
     const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
+    // Canonical creator Premium has its own grant and purchase ledger. Exclude
+    // only these exact seed rows from assertions about newly purchased access.
+    const membershipSnapshots={
+      'public.access_grants':(await db.query("select * from public.access_grants where user_id=$1 and grant_type='premium' order by id",[actors.creator.user_id])).rows,
+      'public.money_access_ledger_events':(await db.query("select l.* from public.money_access_ledger_events l join public.monetization_products p on p.id=l.product_id where l.user_id=$1 and p.product_type='premium_subscription' order by l.id",[actors.creator.user_id])).rows,
+    };
+    for(const snapshot of Object.values(membershipSnapshots)) assert.equal(snapshot.length,1,'one exact creator Premium seed row');
+    const membershipRows=Object.fromEntries(Object.entries(membershipSnapshots).map(([table,snapshot])=>[table,snapshot.map(row=>row.id)]));
     const events=Object.fromEntries((await rows('select * from event_reservation_fixture.events')).map(a=>[a.name,a.id]));
     const lit=x=>`'${String(x).replaceAll("'","''")}'`;
     const rpc=async(actor,expression,role='authenticated',platform='ios')=>{
@@ -86,7 +97,7 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
       amountMinor:237,currency:'usd',outcome:'paid',refundedAmountMinor:null,providerProductId:'prod_AuctionFixture',...extra});
     const receive=(e,hash=createHash('sha256').update(JSON.stringify(e)).digest('hex'))=>rpc('buyer1',
       `public.process_stripe_room_auction_receipt(${lit(JSON.stringify(e))}::jsonb,'${hash}')`,'service_role');
-    const count=async(table,where='true')=>Number((await rows(`select count(*) n from ${table} where ${where}`))[0].n);
+    const count=async(table,where='true')=>Number((await rows(`select count(*) n from ${table} where (${where})${membershipRows[table]?.length?` and id not in (${membershipRows[table].map(lit).join(',')})`:''}`))[0].n);
     const s=await prepare('PRIMARY');
     assert.equal(await count('public.access_grants'),0);
     const good=evidence(s,'Success');
@@ -198,5 +209,9 @@ test('synthetic verified Stripe room auction receipts preserve exact paid access
     assert.deepEqual(wallet.creatorPurchaseDestinationRoute(partyItem.destination),
       {pathname:'/watch-party/[partyId]',params:{partyId:'PAYMENT-PARTY'}});
     assert.equal(wallet.parseCreatorPurchasePage({...partyLibrary,items:[{...partyItem,destination:{...partyItem.destination,kind:'live_stage'}}]},actors.buyer1.user_id),null);
+    for(const [table,snapshot] of Object.entries(membershipSnapshots))
+      assert.deepEqual((await db.query(`select * from ${table} where id=any($1::uuid[]) order by id`,[membershipRows[table]])).rows,snapshot,'auction lifecycle never mutates the excluded creator Premium seed');
+    for(const actor of Object.values(actors).filter(actor=>actor.kind.startsWith('buyer')))
+      await assertBuyerHasNoPremium(db,{id:actor.user_id});
   }finally{Date.now=realDateNow;await db.close();}
 });

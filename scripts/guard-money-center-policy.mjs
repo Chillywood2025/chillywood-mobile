@@ -261,7 +261,7 @@ assertIncludes(channelSettings, "Sandbox only", "creator sandbox labeling");
 assertIncludes(channelSettings, "Live money stays disabled until provider checks, policy checks, and owner approval pass.", "creator launch summary copy");
 assertIncludes(channelSettings, "No withdrawal, transfer, cash-out, or payout release action is available.", "creator sandbox-only not-payable copy");
 assertIncludes(channelSettings, "Provider readiness is the visible source of truth for creator money tools.", "creator provider-tooling source copy");
-assertIncludes(channelSettings, "Sandbox tester offers are ready. Test mode only. No real charges, creator earnings, payouts, withdrawals, or cash-out.", "creator sandbox proof product copy");
+assertIncludes(channelSettings, "Sandbox offers are ready. Test mode only. No real charges, creator earnings, payouts, withdrawals, or cash-out.", "creator sandbox proof product copy");
 assertIncludes(channelSettings, "Sandbox setup is partially ready", "creator setup/sandbox not-payable proof copy");
 assertIncludes(channelSettings, "money_center_visible", "Money Center visibility switch");
 assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch");

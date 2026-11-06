@@ -730,6 +730,33 @@ test("creator sandbox setup cannot transfer account-A input to account B during 
   const eligibility = new Promise((resolve) => { releaseEligibility = resolve; });
   let captureCalls = 0;
   let mutationCalls = 0;
+  const creatorEligibility = loadStubbed("_lib/creatorEligibility.ts", {});
+  const readback = {
+    ...accountA,
+    state: "PENDING_VERIFICATION",
+    authoritative: true,
+    accountStatus: "ACTIVE",
+    age18Plus: true,
+    creatorRole: true,
+    legalAccepted: true,
+    market: "UNITED_STATES",
+    moderationState: "CLEAR",
+    platformCapability: true,
+    authoritySource: "automatic_eligibility",
+    version: 1,
+    evaluatedAt: new Date().toISOString(),
+    minimumAge: 18,
+    rollout: "AUTOMATIC_PREMIUM_UNITED_STATES",
+    canProcessHistoricalObligations: true,
+    sandboxCapability: {
+      environment: "sandbox",
+      financialAuthority: false,
+      canUseCreatorTools: true,
+    },
+  };
+  assert.equal(creatorEligibility.canUseCreatorSandboxTools(
+    creatorEligibility.parseCreatorEligibilityReadback(readback, accountA),
+  ), true, "the initiating account has a valid sandbox capability before the account switch");
   const api = loadStubbed("_lib/creatorMonetizationSetup.ts", {
     "react-native": { Linking: {}, Platform: { OS: "android" } },
     "./supabase": {
@@ -738,7 +765,7 @@ test("creator sandbox setup cannot transfer account-A input to account B during 
         rpc: async (name) => {
           assert.equal(name, "wave1_creator_eligibility_readback");
           await eligibility;
-          return { data: accountA, error: null };
+          return { data: readback, error: null };
         },
       },
     },
@@ -751,13 +778,7 @@ test("creator sandbox setup cannot transfer account-A input to account B during 
         && left.sessionGeneration === right.sessionGeneration
         && left.restoreOnly === right.restoreOnly,
     },
-    "./creatorEligibility": {
-      canCreateCreatorMoneyExposure: (value) => value?.canCreateMoneyExposure === true,
-      parseCreatorEligibilityReadback: (value) => ({
-        ...(value ?? {}),
-        canCreateMoneyExposure: value?.userId === accountA.userId,
-      }),
-    },
+    "./creatorEligibility": creatorEligibility,
     "./entitlementAuthority": { withAuthorityReadDeadline: async (operation) => await operation },
     "./accountBoundSupabaseMutation": {
       captureAccountBoundSupabaseMutationSubject: async () => {
@@ -779,9 +800,13 @@ test("creator sandbox setup cannot transfer account-A input to account B during 
   });
   current = accountB;
   releaseEligibility();
-  await assert.rejects(pending, /verification is complete|account changed/u);
+  await assert.rejects(pending, /current server eligibility is confirmed/u);
   assert.equal(captureCalls, 0);
   assert.equal(mutationCalls, 0);
+  current = accountA;
+  assert.equal(creatorEligibility.canUseCreatorSandboxTools(
+    await api.assertCreatorSandboxToolsAllowed(accountA),
+  ), true, "the same setup gate accepts the coherent original account readback");
 
   const migration = read("supabase/migrations/20260912235910_preproduction_adversarial_product_integrity_closure.sql");
   assert.match(migration, /creator_sandbox_source_owned_by_current_user_internal/u);

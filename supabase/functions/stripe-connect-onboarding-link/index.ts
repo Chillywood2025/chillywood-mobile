@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
       mode: "test", status: route.status, liveMoneyAction: false, onboardingUrlCreated: false,
       reason: route.reason,
       message: route.reason === "live_setup_required"
-        ? "Live payout setup is not configured yet. Sandbox setup is limited to approved testers."
+        ? "Live payout setup is not configured yet. Your existing payout account and history remain unchanged."
         : "Complete eligible adult creator status and the current payout terms before starting provider setup.",
     });
     if (route.mode === "live") {

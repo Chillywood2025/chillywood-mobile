@@ -3,16 +3,25 @@ import fs from 'node:fs';
 import test from 'node:test';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {client} from './event-ticket-policy-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('promised replay deadline uses actual protected delivery and retains earned remedies', {timeout:600_000}, async t => {
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});
+  const {db,replayReport}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   let checks=0;
   const check=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const isolate=async fn=>{await db.exec('begin');try{await fn();}finally{await db.exec('rollback');}};
   try {
     for(const file of ['event-reservation-authority.sql','event-broadcast-producer-authority.sql','event-replay-deadline-policy.sql']) {
-      await db.exec(fs.readFileSync(`tests/fixtures/${file}`,'utf8'));
+      const source=fs.readFileSync(`tests/fixtures/${file}`,'utf8');
+      if(file==='event-replay-deadline-policy.sql'){
+        const parts=source.split('-- Replay deadline scenario begins.');
+        assert.equal(parts.length,2,'independent creator setup precedes replay deadline scenario');
+        await db.exec(parts[0]);
+        await seedCurrentEventCommerceCreator(db,{premium:false,kind:'replay_deadline_creator'});
+        await db.exec(`-- Replay deadline scenario begins.${parts[1]}`);
+      }else await db.exec(source);
+      if(file==='event-reservation-authority.sql')await seedCurrentEventCommerceCreator(db,{premium:false});
     }
     const c=await one('select context from event_reservation_fixture.replay_deadline_context');
     const claim=async(user=c.buyerId,session=c.buyerSession)=>{

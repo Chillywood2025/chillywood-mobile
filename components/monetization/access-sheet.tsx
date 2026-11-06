@@ -188,7 +188,7 @@ export function AccessSheet({
     enabled: false,
     mode: "public",
     label: "Provider sandbox purchases",
-    reason: "Checking tester access.",
+    reason: "Checking current account eligibility.",
     allowedRoles: [],
     liveMoneyEnabled: false,
     payoutsEnabled: false,

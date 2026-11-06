@@ -184,9 +184,9 @@ test('full fresh-schema replay works without implicit table/sequence grants', {t
     implicitApiGrants: false, excludeMigrations: [migrationName]});
   try {
     const sourceFiles = fs.readdirSync(new URL('supabase/migrations/', root)).filter(name => name.endsWith('.sql'));
-    assert.equal(replayReport.files.length + 2, sourceFiles.length, 'all migrations plus separately applied runtime repair, excluding only new grant repair');
+    assert.equal(replayReport.files.length + 1, sourceFiles.length, 'all migrations including runtime repair in source order, excluding only new grant repair');
     assert.deepEqual(replayReport.excludedMigrations, [migrationName]);
-    t.diagnostic(`${replayReport.files.length + 1} historical migrations replayed; managed cron/net doubles and two empty-data recovery skips, not Supabase integration proof`);
+    t.diagnostic(`${replayReport.files.length} baseline migrations replayed; managed cron/net doubles and two empty-data recovery skips, not Supabase integration proof`);
     const before = await aclSnapshot(db);
     const requiredKeys = new Set();
     const queries = [];

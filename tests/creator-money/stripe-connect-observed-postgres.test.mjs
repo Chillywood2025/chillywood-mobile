@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { createDatabase } from "../helpers/database-runtime-authority-fixture.mjs";
+import { migrationsFrom } from "../helpers/historical-migration-boundary.mjs";
 import { account, connect, creator, clientFor, payoutsFor } from "./stripe-connect-observed-fixture.mjs";
 
 const migration = "20261027034858_creator_connect_observed_configuration.sql";
-test("observed Connect configuration persists through actual SQL, eligibility and client round trip without granting payout authority", { timeout: 240_000 }, async () => {
-  const { db } = await createDatabase({ includeHeldStudio: true, implicitApiGrants: false, excludeMigrations: [migration, "20261101154121_creator_connect_live_observation.sql", "20261101162340_creator_connect_unobserved_readiness.sql", "20261101170000_creator_connect_distinct_mode_bindings.sql", "20261101171600_creator_connect_atomic_mode_projection.sql", "20261101172200_creator_connect_all_mode_setup_admission.sql"] });
+test("historical observed Connect migration backfills configuration without granting payout authority", { timeout: 240_000 }, async () => {
+  // This is the October 27 before/after migration proof, not final-schema
+  // qualification. Defer the entire suffix so future wrappers cannot run
+  // against a partially restored historical account/eligibility schema.
+  const { db } = await createDatabase({ includeHeldStudio: true, implicitApiGrants: false, excludeMigrations: migrationsFrom(migration) });
   const one = async (sql, args = []) => (await db.query(sql, args)).rows[0];
   const schemaAuthority = async () => (await db.query(`select relname,relacl::text,relrowsecurity,relforcerowsecurity
     from pg_class where oid in ('public.creator_payout_accounts'::regclass,'public.creator_payout_eligibility_records'::regclass) order by relname`)).rows;

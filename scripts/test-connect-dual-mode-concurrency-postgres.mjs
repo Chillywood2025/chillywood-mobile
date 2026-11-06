@@ -7,6 +7,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {load,connect,account} from '../tests/creator-money/stripe-connect-observed-fixture.mjs';
+import {commerceSeedAdapter,seedCommerceCreator} from '../tests/helpers/automatic-commerce-fixture.mjs';
 if(process.argv.includes('--help')){console.log('Run real Connect lock schedules in an owned disposable local Supabase clone; no provider traffic.');process.exit(0);}
 assert.equal(process.argv.length,2,'no arbitrary targets');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/mu)?.[1];assert.ok(project);
@@ -47,16 +48,22 @@ try{
  insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
  select '${creator}',public.wave1_sha256('${creator}'),document_key,version,market,'member',capability,'${session}','service_reconciliation' from public.wave1_legal_document_versions where active and market='UNITED_STATES';
  insert into public.wave1_creator_eligibility(creator_user_id,state,account_status,age_18_plus,legal_accepted,creator_role,moderation_state,market,rollout_eligible,platform_capability,provider_eligible,kyc_complete,tax_complete,sanctions_clear,payout_eligible,authority_source,last_operation_key)
- values('${creator}','PENDING_VERIFICATION','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,false,false,false,false,false,'synthetic_fixture','native');
+ values('${creator}','PENDING_VERIFICATION','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,null,null,null,null,null,'synthetic_fixture','native');
  insert into public.creator_payout_accounts(id,creator_user_id,provider,provider_environment,provider_account_id) values('${testId}','${creator}','stripe_connect','test','acct_nativeTest');
  insert into private.creator_connect_onboarding_policy(environment,enabled,platform_account_id,configuration_key,country,currency,return_url,refresh_url,controller_pricing_evidence_hash,hosted_onboarding_evidence_hash,verified_at,expires_at)
  values('live',true,'${platform}','stripe_connect_live_express_recipient_controller_v1','US','usd','https://synthetic.invalid/return','https://synthetic.invalid/refresh',repeat('a',64),repeat('b',64),clock_timestamp(),clock_timestamp()+interval '1 day');`);
- // Actual confirmation waits for a callback's account row, then callback must
- // finish without trying to take confirmation's already-held creator mutex.
- const a=start(`begin;select id from public.creator_payout_accounts where id='${testId}' for update;select 'HOLDING';`);
+ // Pre-live hosted setup requires genuine production Premium, not a relabeled
+ // sandbox grant. The synthetic canonical event must not supply provider/KYC/
+ // tax readiness. Unknown compliance is NULL, not an explicit denial disguised
+ // as PENDING_VERIFICATION; live money closes before the setup schedules.
+ await seedCommerceCreator(commerceSeedAdapter(query),{id:creator,session},{environment:'production'});
+ query("update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled')");
+ // Hold the actual callback's full prefix before its account row. Confirmation
+ // must block at the canonical root while callback finishes without inversion.
+ const a=start(`begin;select private.lock_ordinary_commerce_authority_gate();select id from public.creator_payout_accounts where id='${testId}' for update;select 'HOLDING';`);
  await until(()=>a.output().includes('HOLDING'),'test row holder missing');
  const b=start(`begin;${service}select public.confirm_creator_connect_live_setup('${creator}','${session}','distinct-live-account-v1');commit;`);b.child.stdin.end();
- await until(()=>blocked(a,b),'confirmation did not reach test row lock');
+ await until(()=>blocked(a,b),'confirmation did not reach canonical test-account prefix');
  a.child.stdin.end(`${update(testId)}commit;\n`);await completed(a);await completed(b);
  const reserved=rpc(`select public.reserve_creator_connect_account_creation('${creator}','${session}')`);
  assert.equal(rpc(`select public.claim_creator_connect_account_creation('${creator}','${session}','${reserved.attemptId}')`).claimed,true);
@@ -71,9 +78,9 @@ try{
  const v2={id:liveAccount,livemode:true,dashboard:'express',defaults:{responsibilities:{fees_collector:'application',losses_collector:'application'}},configuration:{recipient:{capabilities:{stripe_balance:{stripe_transfers:{status:'active'}}}}}};
  const replies=[{id:platform},v2,account({id:liveAccount,livemode:undefined,country:'US',default_currency:'usd',requirements:{currently_due:[],past_due:[],eventually_due:[],pending_verification:[]},settings:{payouts:{schedule:{interval:'manual'}}}}),v2];
  const facts=await observeLiveConnectAccount(context,'rk_live_synthetic',async()=>Response.json(replies.shift()));
- const c=start(`begin;select id from public.creator_payout_accounts where id='${liveId}' for update;select 'HOLDING';`);
+ const c=start(`begin;select private.lock_ordinary_commerce_authority_gate();select id from public.creator_payout_accounts where id='${liveId}' for update;select 'HOLDING';`);
  await until(()=>c.output().includes('HOLDING'),'live row holder missing');
- const d=start(`begin;${service}${bind}commit;`);d.child.stdin.end();await until(()=>blocked(c,d),'binder did not reach live row lock');
+ const d=start(`begin;${service}${bind}commit;`);d.child.stdin.end();await until(()=>blocked(c,d),'binder did not reach canonical live-observation prefix');
  c.child.stdin.end(`${service}select public.record_creator_connect_live_observation(${lit(JSON.stringify(context))}::jsonb,${lit(JSON.stringify(facts))}::jsonb);commit;\n`);
  await completed(c);await completed(d);assert.equal(selected(creator).id,liveId);
  // Both insert/update orders cross statement snapshots. The ON CONFLICT
@@ -83,12 +90,41 @@ try{
   query(`insert into auth.users(id,email_confirmed_at,is_sso_user,is_anonymous) values('${who}',now(),false,false);insert into public.creator_payout_accounts(id,creator_user_id,provider,provider_environment,provider_account_id) values('${old}','${who}','stripe_connect','test','acct_test${who.replaceAll('-','')}');`);
   const insert=`insert into public.creator_payout_accounts(id,creator_user_id,provider,provider_environment,provider_account_id) values('${fresh}','${who}','stripe_connect','live','acct_live${who.replaceAll('-','')}');`;
   const h=start(`begin;${liveFirst?insert:update(old)}select 'HOLDING';`);await until(()=>h.output().includes('HOLDING'),'projection holder missing');
-  const w=start(`begin;${liveFirst?update(old):insert}commit;`);w.child.stdin.end();await until(()=>blocked(h,w),'projection did not block on eligibility tuple');
+  const w=start(`begin;${liveFirst?update(old):insert}commit;`);w.child.stdin.end();await until(()=>blocked(h,w),'projection did not block on canonical authority prefix');
   h.child.stdin.end('commit;\n');await completed(h);await completed(w);
   assert.deepEqual(selected(who),{id:fresh,mode:'live',payable:false});
  }
+ // Keep the invocation observation timestamp truthful. The existing60-second
+ // provider read window must also remain current AFTER the gate/account/
+ // policy/retention waits; no queued callback can redate its old evidence.
+ const observationSnapshot=()=>query(`select jsonb_build_object(
+  'account',(select to_jsonb(a) from public.creator_payout_accounts a where id=${lit(liveId)}),
+  'audit',(select coalesce(jsonb_agg(to_jsonb(l) order by id),'[]'::jsonb) from public.platform_admin_audit_logs l where target_id=${lit(liveId)}),
+  'job',(select to_jsonb(j) from private.creator_provider_observation_jobs j where account_id=${lit(liveId)}))`);
+ for(const expiresDuringWait of [false,true]) {
+  const currentContext=rpc(`select public.get_creator_connect_live_observation_context('${creator}')`);
+  const nearFacts={...facts,readStartedAt:new Date(Date.now()-(expiresDuringWait?58_000:0)).toISOString()};
+  const persist=`select public.record_creator_connect_live_observation(${lit(JSON.stringify(currentContext))}::jsonb,${lit(JSON.stringify(nearFacts))}::jsonb);`;
+  const snapshot=observationSnapshot();
+  const h=start('begin;select private.lock_ordinary_commerce_authority_gate();select jsonb_build_object(\'holderPid\',pg_backend_pid());select \'FRESHNESS_READY\';');
+  await until(()=>h.output().includes('FRESHNESS_READY'),'observation freshness holder missing');
+  const w=start(`begin;${service}${persist}commit;`);w.child.stdin.end();
+  await until(()=>blocked(h,w),'observation did not block at actual gate');
+  assert.equal(query(`select count(*) from pg_stat_activity a join pg_locks l on l.pid=a.pid where a.application_name=${lit(w.name)}
+   and a.datname=current_database() and l.locktype='advisory' and l.classid=176214 and l.objid=32 and l.objsubid=2 and not l.granted`),'1');
+  assert.equal(query(`select ${lit(nearFacts.readStartedAt)}::timestamptz between clock_timestamp()-interval '60 seconds' and clock_timestamp()`),'t','read is current at observed blocking edge');
+  h.child.stdin.end(`select pg_sleep(${expiresDuringWait?'2.2':'0.05'});commit;\n`);await completed(h);
+  const result=await w.done;
+  if(expiresDuringWait) {
+   assert.notEqual(result.code,0);assert.match(result.stderr,/^ERROR:\s+live_observation_binding_invalid\r?$/mu);
+   assert.equal(observationSnapshot(),snapshot,'expired callback changes no account, audit or job freshness');
+  } else {
+   assert.equal(result.code,0,result.stderr);
+   assert.equal(JSON.parse(result.stdout.split('\n').findLast(line=>line.startsWith('{'))).recorded,true);
+  }
+ }
  assert.equal(query("select count(*) from public.platform_money_kill_switches where key in ('live_money_enabled','payouts_enabled') and state<>'off';"),'0');
- console.log('PASS native Connect: callback/confirmation and observation/binder complete without lock cycles; both snapshot orders retain distinct live projection. Synthetic only.');
+ console.log('PASS native Connect: six real blocking schedules: callback/confirmation, observation/binder, both snapshot projection orders, current observation and read expiry during gate wait. Rejected expiry leaves exact account/audit/job rows unchanged. Synthetic only.');
 }finally{
  for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end();s.child.kill('SIGTERM');}
  await Promise.allSettled(sessions.map(s=>s.done));

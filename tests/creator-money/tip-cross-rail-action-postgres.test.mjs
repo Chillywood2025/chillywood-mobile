@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('cross-rail action identity is immutable, session scoped, transaction atomic and allows distinct actions', {timeout:240000}, async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
+  await seedCurrentEventCommerceCreator(db);
   const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
   const buyer=actors.find(x=>x.kind==='buyer1'),other=actors.find(x=>x.kind==='buyer2'),creator=actors.find(x=>x.kind==='creator');
   const action=randomUUID(),ref=randomUUID();
@@ -49,6 +51,7 @@ test('historical Stripe attempt without a shared claim cannot be mistaken for un
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
+  await seedCurrentEventCommerceCreator(db);
   const actors=(await db.query('select * from event_reservation_fixture.actors')).rows,buyer=actors.find(x=>x.kind==='buyer1'),creator=actors.find(x=>x.kind==='creator');
   const action=randomUUID(),tip=randomUUID();
   const quote={tipId:tip,creatorId:creator.user_id,amountCents:299,currency:'usd',privateNote:null,providerAccountId:'acct_fixture',capabilityId:'ef000000-0000-4000-8000-000000000001',body:{client_reference_id:tip,'metadata[chillywood_tip_id]':tip,'metadata[fan_user_id]':buyer.user_id,'metadata[creator_user_id]':creator.user_id,'line_items[0][price_data][currency]':'usd','line_items[0][price_data][unit_amount]':299,'payment_intent_data[transfer_data][destination]':'acct_fixture','payment_method_types[0]':'card',mode:'payment',expires_at:Math.floor(Date.now()/1000)+3600}};

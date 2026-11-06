@@ -107,6 +107,8 @@ export async function invokeAccountBoundSupabaseMutationRpc<T>(
     || functionName === "touch_owned_communication_room_session"
     || functionName === "leave_communication_room_session"
     || (functionName === "set_watch_party_room_host_settings" && options.retainTransportSettlement)
+    || (functionName === "declare_creator_money_eligibility" && options.retainTransportSettlement)
+    || (functionName === "wave1_accept_legal_documents" && options.retainTransportSettlement)
     || (functionName === "clear_stale_chilly_chat_thread_call" && options.retainTransportSettlement)
     || (functionName === "wave1_session_authority_readback" && options.waitForReadSettlement)
     ? await pending

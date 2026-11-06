@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 // Existing external-auction qualification and provider deliveries are synthetic
 // inputs to the actual current checkout/receipt processors. No storefront,
@@ -16,6 +17,12 @@ test('fulfilled event and room test-platform auction receipts enter sandbox cash
   await db.exec(fs.readFileSync(new URL('../fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
   await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events); update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled'); update public.platform_money_kill_switches set state='sandbox_only' where key='stripe_connect_enabled'; update private.sandbox_cashout_control set enabled=true");
   const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
+  await seedQualifiedCommerceCreator(db,{id:actors.creator.user_id,session:actors.creator.session_id},{providerAccountId:'acct_fixture'});
+  await assertBuyerHasNoPremium(db,{id:actors.buyer1.user_id});
+  await db.exec("insert into public.wave1_legal_document_versions(document_key,version,market,capability,effective_at) values('payout_terms','SYNTHETIC-auction-cashout-fixture','UNITED_STATES','payout',now()-interval '1 day') on conflict do nothing");
+  await db.query(`insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
+   select $1::uuid,public.wave1_sha256($1::text),document_key,version,market,'member',capability,$2,'service_reconciliation'
+   from public.wave1_legal_document_versions where active and market='UNITED_STATES' and capability='payout' on conflict do nothing`,[actors.creator.user_id,actors.creator.session_id]);
   const eventId=await one("select id from event_reservation_fixture.events where name='show1'");
   const lit=x=>`'${String(x).replaceAll("'","''")}'`;
   const rpc=async(actor,expression,role='authenticated')=>{

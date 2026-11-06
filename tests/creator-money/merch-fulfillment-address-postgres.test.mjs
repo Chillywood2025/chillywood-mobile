@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {randomUUID,createHmac} from 'node:crypto';
 import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 import {mountShipping} from '../helpers/merch-shipping-mounted-harness.mjs';
 function load(file,{Deno={},modules={}}={}){
  const module={exports:{}};
@@ -16,14 +17,14 @@ function load(file,{Deno={},modules={}}={}){
 test('signed exact Checkout → private SQL address under actual API roles → mounted shipping details; no financial authority',{timeout:240000},async()=>{
  const migration='20261030210200_merch_private_fulfillment_address.sql';
  const successors=migrationsFrom(migration,{inclusive:false});
- const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,...successors]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const creator=await one("select md5('shipping-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('shipping-host:'||n::text)::uuid::text,20260814),100)=0 limit 1");
  const buyer=randomUUID(),other=randomUUID(),cs=randomUUID(),bs=randomUUID(),os=randomUUID();
  const sessions={[creator]:cs,[buyer]:bs,[other]:os},audits=[];
  const root=()=>db.exec('reset role');
- const claim=async(u,s=sessions[u])=>{await root();await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',sub:u,session_id:s})]);await db.exec('set role authenticated');};
- const service=async()=>{await root();await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false);set role service_role`);};
+ const claim=async(u,s=sessions[u])=>{await root();await db.query("select set_config('request.jwt.claims',$1,false),set_config('request.jwt.claim.role','authenticated',false)",[JSON.stringify({role:'authenticated',sub:u,session_id:s})]);await db.exec('set role authenticated');};
+ const service=async()=>{await root();await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false);set role service_role`);};
  let webhook,ui;
  const admin={rpc:async(name,args)=>{await service();try{return {data:await one(`select public.${name}($1,$2,$3,$4)`,[args.p_event_id,args.p_event_type,args.p_raw_event_hash,JSON.stringify(args.p_facts)]),error:null};}catch(e){return {data:null,error:{message:e.message}};}finally{await root();}}};
  const env={STRIPE_MERCH_WEBHOOK_SECRET:'whsec_synthetic',SUPABASE_URL:'https://fixture.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'fixture'};
@@ -50,6 +51,8 @@ test('signed exact Checkout → private SQL address under actual API roles → m
    values($1,$2,$3,$4,'stripe_physical_goods','sandbox','pending','not_started','pending',1000,1000,'usd',$5,$6)`,[id,product,buyer,creator,'cs_test_'+id.replaceAll('-',''),'pi_'+id.replaceAll('-','')]);return id;};
   const legacy=await make();
   for(const file of [migration,...successors])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
+  await seedQualifiedCommerceCreator(db,{id:creator,session:cs});
+  for(const id of [buyer,other])await assertBuyerHasNoPremium(db,{id});
   assert.equal(await one('select fulfillment_address_policy_version from public.merch_orders where id=$1',[legacy]),null);
   const order=await make(),second=await make(),missing=await make();
   await assert.rejects(read(order),/unavailable/);
@@ -58,6 +61,40 @@ test('signed exact Checkout → private SQL address under actual API roles → m
   response=await send(event(order));assert.equal(response.status,200,await response.text());
   const original=await one('select address from private.merch_fulfillment_addresses where order_id=$1',[order]);assert.deepEqual(original,address);
   assert.equal((await read(order,creator)).status,'available');assert.deepEqual((await read(order)).address,address);
+  // Paid-order fulfillment survives membership expiry and a later global mode
+  // change. It still needs the exact current, unrestricted owning account.
+  const recovery=async({expired=false,live=false,suspended=false,blocked=null},run)=>{
+   await root();await db.exec('begin');
+   try{
+    await db.exec("set local request.jwt.claim.role='service_role';set local request.jwt.claims='{\"role\":\"service_role\"}'");
+    if(expired)await db.query("update public.user_entitlements set status='expired',expires_at=clock_timestamp()-interval '1 second' where user_id=$1 and entitlement_key='premium'",[creator]);
+    if(live)await db.exec("update public.platform_money_kill_switches set state='on' where key='live_money_enabled'");
+    if(suspended)await db.query("update public.wave1_creator_eligibility set state='SUSPENDED' where creator_user_id=$1",[creator]);
+    if(blocked==='session')await db.query("update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id=$1",[cs]);
+    if(blocked==='ban')await db.query("update auth.users set banned_until=clock_timestamp()+interval '1 day' where id=$1",[creator]);
+    if(expired)assert.equal(await one("select private.ordinary_commerce_premium_current($1,'sandbox')",[creator]),false);
+    await run();
+   }finally{await db.exec('rollback');await root();}
+  };
+  const recoveryFinancialState=async()=>{await root();return one(`select jsonb_build_object(
+   'order',(select to_jsonb(o) from public.merch_orders o where id=$1),
+   'money',(select coalesce(jsonb_agg(to_jsonb(e) order by e.id),'[]'::jsonb) from public.money_access_ledger_events e),
+   'earnings',(select coalesce(jsonb_agg(to_jsonb(e) order by e.id),'[]'::jsonb) from public.creator_earnings_ledger e),
+   'payouts',(select coalesce(jsonb_agg(to_jsonb(p) order by p.id),'[]'::jsonb) from public.creator_payout_requests p))`,[order]);};
+  const recoveryBefore=await recoveryFinancialState();
+  // A money-only creator suspension still permits fulfillment of the owned
+  // paid order. It cannot grant new-sale authority or change financial rows.
+  for(const condition of [{expired:true},{live:true},{expired:true,live:true},{suspended:true},{expired:true,live:true,suspended:true}])await recovery(condition,async()=>{
+   assert.equal(await one('select public.wave1_creator_money_subject_authorized_internal($1)',[creator]),false,'historical fulfillment does not restore financial authority');
+   assert.deepEqual(await read(order,creator),{status:'available',address});
+   assert.deepEqual(await recoveryFinancialState(),recoveryBefore,'fulfillment recovery cannot modify orders or financial ledgers');
+   assert.equal(await one('select public.wave1_creator_money_subject_authorized_internal($1)',[creator]),false,'address read cannot grant new financial authority');
+  });
+  for(const blocked of ['other','cross_session','session','ban'])await recovery({expired:true,live:true,blocked},async()=>{
+   if(blocked==='other')await claim(other);
+   else await claim(creator,blocked==='cross_session'?os:cs);
+   await assert.rejects(one('select public.get_merch_fulfillment_address($1)',[order]),/merch_shipping_unavailable/);
+  });
   await assert.rejects(read(order,other),/unavailable/);
   await claim(buyer,cs);await assert.rejects(one('select public.get_merch_fulfillment_address($1)',[order]),/unavailable/);
   await claim(buyer);await assert.rejects(one('select * from private.merch_fulfillment_addresses'),/permission denied/);
@@ -76,7 +113,7 @@ test('signed exact Checkout → private SQL address under actual API roles → m
   await ui.order(second);await ui.press('View shipping details');assert.doesNotMatch(ui.text(),/FIXTURE STREET/);assert.match(ui.text(),/unavailable/);await ui.close();ui=null;
   await root();assert.equal(await one('select count(*)::int from private.merch_fulfillment_address_access'),2,'bounded buyer and eligible seller audit');
   await assert.rejects(db.query('update public.merch_orders set fulfillment_address_policy_version=null where id=$1',[order]),/immutable/);
-  await db.query("update public.wave1_creator_eligibility set state='SUSPENDED' where creator_user_id=$1",[creator]);
+  await db.query("update auth.users set banned_until=clock_timestamp()+interval '1 day' where id=$1",[creator]);
   await assert.rejects(read(order,creator),/unavailable/);await root();
   await assert.rejects(db.query("update private.merch_fulfillment_addresses set address='{}' where order_id=$1",[order]),/immutable/);
   const empty=event(missing);delete empty.data.object.collected_information;await send(empty);assert.equal((await read(missing)).status,'unavailable');

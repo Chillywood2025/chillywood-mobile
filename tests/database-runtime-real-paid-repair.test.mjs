@@ -1,13 +1,13 @@
 import test from 'node:test';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
-import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalRuntimeDatabase} from './helpers/runtime-authority-historical-fixture.mjs';
 // Reconstructed from the surviving independent 66-step provider proof after
 // workspace rollback. The prior e27 test-file bytes were not recoverable.
-// Real application SQL/guards run through the shared full-schema fixture.
+// Real application SQL/guards run at the historical pre-automatic-commerce checkpoint.
 for(const includeHeldStudio of [false,true]) for(const finalQuarantineStore of ['apple','google'])
 test(`real paid TITLE and durable ${finalQuarantineStore} quarantine repair, held Studio ${includeHeldStudio?'included':'absent'}`,{timeout:180_000},async t=>{
-const receipt={scope:'Full migrated PGlite schema plus captured runtime overlay and candidate repair. No custom predicate replacements, trigger disabling, replication bypass, production calls, or source edits. Auth/storage managed infrastructure remains the common helper catalog double.',steps:[]};
+const receipt={scope:'Historical pre-automatic-commerce PGlite schema plus captured runtime overlay and candidate repair. No custom predicate replacements, trigger disabling, replication bypass, production calls, or source edits. Auth/storage managed infrastructure remains the common helper catalog double.',steps:[]};
 let db;
 let repairApplied=false;
 const authorityModes=new Set();
@@ -16,7 +16,7 @@ async function step(name,fn){currentStep=name;const result=await fn();receipt.st
 async function service(fn){await db.exec('set role service_role');let failed=false;try{return await fn();}catch(error){failed=true;throw error;}finally{try{await db.exec('reset role');}catch(error){if(!failed)throw error;}}}
 async function isolate(fn){await db.exec('begin');try{return await fn();}finally{await db.exec('rollback');}}
 try{
- const built=await createDatabase({overlayLiveDrift:true,applyRepair:false,includeHeldStudio});db=built.db;
+ const built=await createHistoricalRuntimeDatabase({overlayLiveDrift:true,applyRepair:false,includeHeldStudio});db=built.db;
  receipt.candidateHash=crypto.createHash('sha256').update(built.repairSql).digest('hex');receipt.replayReport=built.replayReport;
  const host=(await db.query(`select md5('paid-real-fixture:'||n::text)::uuid id from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('paid-real-fixture:'||n::text)::uuid::text,20260814),100)=0 limit 1`)).rows[0].id;
  const hostSession='a9000000-0000-4000-8000-000000000001';

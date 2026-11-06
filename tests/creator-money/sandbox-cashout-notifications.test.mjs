@@ -6,6 +6,7 @@ import ts from 'typescript';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCashoutExecutionFixture} from '../helpers/cashout-execution-fixture.mjs';
+import {seedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 import {pgtapSQLPreflight} from '../helpers/pgtap-sql-preflight.mjs';
 import {createNotificationActivityHandler} from '../../supabase/functions/_shared/notification-activity-worker.mjs';
 
@@ -16,9 +17,10 @@ test('sandbox cashout milestones reach only the creator inbox and privacy-safe o
   try {
     const f=await seedCashoutExecutionFixture(db,{reserveInitialRequest:false});
     const {scalar,creator,session,claims,rpc}=f;
+    await seedCommerceCreator(db,{id:creator,session});
     const buyer=randomUUID();
     await db.query("insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values($1,'payout-notice-buyer@example.test',now(),false,false)",[buyer]);
-    await db.query("insert into public.sandbox_monetization_testers(user_id,email,status,expires_at) values($1,$2,'active',now()+interval '1 day')",[creator,`cashout-${creator}@example.test`]);
+    await assertBuyerHasNoPremium(db,{id:buyer});
     await db.exec("update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled'); update public.platform_money_kill_switches set state='sandbox_only' where key in ('stripe_connect_enabled','creator_monetization_enabled','provider_webhooks_enabled'); update private.sandbox_cashout_control set enabled=true");
     await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,country) values($1,'stripe_connect','test','acct_noticeCreator','US')",[creator]);
     const qualification=await scalar(`insert into private.sandbox_cashout_qualifications(creator_id,platform_account_id,account_id,destination_id,payout_type,source_type,
@@ -31,6 +33,7 @@ test('sandbox cashout milestones reach only the creator inbox and privacy-safe o
       values($1,$2,$3,'INITIAL_PURCHASE',10000,'usd','sandbox','not_payable','sandbox_only','tip','{"original_transaction_id":"noticeOriginal"}')`,[buyer,creator,provider]);
     const user=async(sql,args=[])=>{await claims('authenticated');await db.exec('set role authenticated');try{return await scalar(sql,args);}finally{await db.exec('reset role');}};
     const quote=await user("select public.preview_sandbox_creator_cashout(9000,'instant')");
+    assert.equal(quote.ready,true,JSON.stringify(quote));
     const request=()=>user('select public.request_sandbox_creator_cashout($1,$2,$3,$4,$5,$6,$7)',[9000,'instant',qualification,quote.operationId,180,0,8820]);
     const record=await request(),id=record.requestId;
     const events=()=>db.query("select e.*,private.resolve_notification_activity(e) plan from public.notification_activity_events e where event_kind='sandbox_cashout_status_updated' and source_id=$1 order by created_at,id",[id]);

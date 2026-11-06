@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 const migration = '20261027085833_creator_event_explicit_replay_terms.sql';
 test('explicit replay policy preserves historical purchases and enforces new production event and offer writes', {timeout:240_000}, async t => {
-  const {db} = await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
+  const {db} = await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
   let checks = 0, step = 'historical purchase fixture';
   const one = async (sql,args=[]) => Object.values((await db.query(sql,args)).rows[0])[0];
   const eq = (actual,expected,message) => {assert.deepEqual(actual,expected,message);checks++;};
@@ -15,6 +16,7 @@ test('explicit replay policy preserves historical purchases and enforces new pro
   const isolate = async fn => {await db.exec('begin');try{await fn();}finally{await db.exec('rollback');}};
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const actors = (await db.query('select * from event_reservation_fixture.actors')).rows;
     const host = actors.find(a=>a.kind==='creator'),buyer = actors.find(a=>a.kind==='buyer14');
     const pendingBuyer = actors.find(a=>a.kind==='buyer15'),newBuyer = actors.find(a=>a.kind==='buyer16');

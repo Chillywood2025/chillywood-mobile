@@ -887,7 +887,7 @@ export default function PublicChannelScreen() {
     const followLabel = viewerFollowState === "following" ? "Following" : "Follow";
     const viewerPurchaseMode = isViewerPurchasePlatformMode(platformMode);
     const canRenderFollow = viewerPurchaseMode && viewerFollowState !== "unavailable";
-    const canRenderTip = viewerPurchaseMode && tipStatus?.canTip === true;
+    const canRenderTip = viewerPurchaseMode && (tipStatus?.canTip === true || tipStatus?.nativeSandboxAvailable === true);
     const canRenderSubscribe = viewerPurchaseMode && sandboxTesterActive && !!subscriptionAccess?.offer && (subscriptionAccess.requiresPurchase || subscriptionAccess.allowed);
     const subscribeLabel = subscriptionAccess?.allowed
       ? "Subscribed"
@@ -1225,7 +1225,7 @@ export default function PublicChannelScreen() {
         button: "View tip",
         testID: "tester-tip-creator-button",
         onPress: openTipSheet,
-        available: tipStatus?.canTip === true,
+        available: tipStatus?.canTip === true || tipStatus?.nativeSandboxAvailable === true,
       },
       {
         title: "Paid video",

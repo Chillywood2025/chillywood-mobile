@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCashoutExecutionFixture} from '../helpers/cashout-execution-fixture.mjs';
+import {seedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 // The sale and refund receipts come from the real canonical Stripe lifecycle
 // processor. No digital provider or earnings rows are synthesized for merch.
@@ -12,9 +13,10 @@ test('canonical sandbox physical purchase supplies isolated cashout earnings and
  try{
   const f=await seedCashoutExecutionFixture(db,{reserveInitialRequest:false});
   const {scalar,claims,rpc,creator}=f;
+  await seedCommerceCreator(db,{id:creator,session:f.session});
   const buyer='ce000000-0000-4000-8000-000000000001',product='ce000000-0000-4000-8000-000000000002';
   await db.query("insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values($1,'sandbox-merch-buyer@example.test',now(),false,false)",[buyer]);
-  await db.query("insert into public.sandbox_monetization_testers(user_id,email,status) values($1,$2,'active')",[creator,`cashout-${creator}@example.test`]);
+  await assertBuyerHasNoPremium(db,{id:buyer});
   await db.exec("update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled'); update public.platform_money_kill_switches set state='sandbox_only' where key in ('stripe_connect_enabled','creator_monetization_enabled','provider_webhooks_enabled'); update private.sandbox_cashout_control set enabled=true");
   await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,country) values($1,'stripe_connect','test','acct_merchSandboxCreator','US')",[creator]);
   const q=await scalar(`insert into private.sandbox_cashout_qualifications(creator_id,platform_account_id,account_id,destination_id,payout_type,source_type,

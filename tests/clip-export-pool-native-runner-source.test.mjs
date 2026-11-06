@@ -17,13 +17,14 @@ const workflow=parse(readFileSync('.github/workflows/required-validation.yml','u
 function assertGate(candidate){
  const job=candidate.jobs.database;
  assert.equal(job.if,"needs.plan.outputs.database == 'true'");assert.equal(job['continue-on-error'],undefined);
- assert.equal(job['timeout-minutes'],50,'retain the reviewed database job budget');
- const steps=job.steps.filter(step=>step.run?.split('\n').includes(command));assert.equal(steps.length,1);
- const step=steps[0];assert.equal(step.if,undefined);assert.equal(step['continue-on-error'],undefined);
+ assert.equal(job['timeout-minutes'],65,'database_reviewed_budget');
+ const steps=job.steps.filter(step=>step.run?.split('\n').includes(command));assert.equal(steps.length,1,'clip_pool_command_exactly_once');
+ const step=steps[0];assert.equal(step.if,undefined,'clip_pool_step_required');assert.equal(step['continue-on-error'],undefined,'clip_pool_failure_must_propagate');
  assertDatabaseUpgradeCI(step.run);
  const commands=step.run.split('\n');
- assert.ok(commands.indexOf('supabase test db')<commands.indexOf(guard));
- assert.ok(commands.indexOf(guard)<commands.indexOf(command));
+ assert.equal(commands.filter(line=>line===guard).length,1,'clip_pool_guard_exactly_once');
+ assert.ok(commands.indexOf('supabase test db')<commands.indexOf(guard),'clip_pool_guard_after_pgtap');
+ assert.ok(commands.indexOf(guard)<commands.indexOf(command),'clip_pool_runner_after_guard');
  assert.ok(commands.includes('SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-clip-export-concurrency-postgres.mjs'));
 }
 test('bounded Clip pool native runner rejects remote arguments and provides offline help',()=>{
@@ -37,7 +38,11 @@ test('bounded Clip pool contention is mandatory after full migrations and existi
  assert.equal(computeValidationPlan([path]).categories.database,true);
 });
 test('pool gate rejects omission, optionality, swallowed failure, wrong target and wrong order',()=>{
- for(const mode of ['omit','omit-guard','optional','swallow','wrong-target','before-reset','budget']){
+ assertGate(workflow); // Mutants must not pass because the unchanged baseline already fails.
+ const expected={omit:'clip_pool_command_exactly_once','omit-guard':'clip_pool_guard_exactly_once',
+  optional:'clip_pool_step_required',swallow:'clip_pool_failure_must_propagate','wrong-target':'clip_pool_command_exactly_once',
+  'before-reset':'clip_pool_runner_after_guard','stale-budget':'database_reviewed_budget','changed-budget':'database_reviewed_budget'};
+ for(const [mode,reason] of Object.entries(expected)){
   const changed=structuredClone(workflow),step=changed.jobs.database.steps.find(s=>s.run?.includes(command));
   if(mode==='omit')step.run=step.run.replace(command,'');
   if(mode==='omit-guard')step.run=step.run.replace(guard,'');
@@ -45,8 +50,10 @@ test('pool gate rejects omission, optionality, swallowed failure, wrong target a
   if(mode==='swallow')step['continue-on-error']=true;
   if(mode==='wrong-target')step.run=step.run.replace(command,command.replace('supabase_db_chillywood-mobile','supabase_db_other'));
   if(mode==='before-reset')step.run=`${command}\n${step.run.replace(command,'')}`;
-  if(mode==='budget')changed.jobs.database['timeout-minutes']=51;
-  assert.throws(()=>assertGate(changed),assert.AssertionError,mode);
+  if(mode==='stale-budget')changed.jobs.database['timeout-minutes']=50;
+  if(mode==='changed-budget')changed.jobs.database['timeout-minutes']=66;
+  assert.throws(()=>assertGate(changed),error=>error instanceof assert.AssertionError&&error.message.split('\n')[0]===reason,
+   `${mode} must fail its intended invariant, not an unrelated earlier assertion`);
  }
 });
 test('native pool proof observes actual lock edges and preserves production boundaries',()=>{

@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator} from '../helpers/automatic-commerce-fixture.mjs';
 
 const migration='20261026164507_creator_supported_prices_and_purchase_quotes.sql';
 const successors=migrationsFrom(migration,{inclusive:false});
@@ -47,6 +48,7 @@ test('catalog selection and immutable quote survive source edits, duplicates, te
     await service();
     await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${migration}`,import.meta.url),'utf8'));
     for(const successor of successors)await db.exec(fs.readFileSync(new URL(`../../supabase/migrations/${successor}`,import.meta.url),'utf8'));
+    await seedQualifiedCommerceCreator(db,{id:host,session:hostSession});
     eq(await scalar("select to_regclass('private.google_play_external_capability_program_bindings') is not null"),true,'exact program-binding successor is replayed after its prerequisites');
     eq(await scalar("select to_regclass('private.commerce_fee_report_observations') is not null"),true,'fee-report successor is replayed after its settlement prerequisite');
     step='catalog and creator';

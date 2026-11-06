@@ -7,6 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {commerceSeedAdapter} from '../tests/helpers/automatic-commerce-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../tests/helpers/current-event-commerce-fixture.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset. Only generated local clone is written; no remote URLs accepted.');process.exit(0);
@@ -49,12 +51,24 @@ try{
     '--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
   success(dump,'read-only local source export');
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore clone');
-  // Preserve protected synthetic Premium authority inherited from earlier
-  // native proofs, including every column, rather than assuming an empty reset.
   const baselineAccessGrants=query(accessGrantsSnapshotSql);
+  const inheritedAccessGrantIds=query("select coalesce(jsonb_agg(g.id order by g.id),'[]'::jsonb)::text from public.access_grants g");
+  const inheritedAccessGrantsSql=accessGrantsSnapshotSql+` where g.id::text in (select jsonb_array_elements_text(${lit(inheritedAccessGrantIds)}::jsonb))`;
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority'])
     query(readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
+  assert.ok(query(accessGrantsSnapshotSql)===baselineAccessGrants,'legacy fixtures never add, remove or modify inherited access grants');
+  await seedCurrentEventCommerceCreator(commerceSeedAdapter(query));
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+  assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants,'setup never removes or modifies any exact inherited grant row');
+  assert.equal(query(`select count(*) from public.access_grants g where g.id::text not in (select jsonb_array_elements_text(${lit(inheritedAccessGrantIds)}::jsonb))`),'1','setup adds exactly one creator Premium grant');
+  assert.equal(query(`select count(*) from public.access_grants g join public.provider_events e on e.id=g.provider_event_id
+    where g.id::text not in (select jsonb_array_elements_text(${lit(inheritedAccessGrantIds)}::jsonb))
+    and g.user_id='${actors.creator.id}' and g.grant_type='premium' and g.provider='revenuecat_google_play'
+    and g.environment='sandbox' and g.status='sandbox_only' and e.provider=g.provider and e.environment=g.environment
+    and e.user_id::text=g.user_id::text and e.status='processed' and private.ordinary_commerce_premium_current(g.user_id,'sandbox')`),'1','the only added grant has canonical current creator Premium authority');
+  // A post-setup baseline is valid only after the exact inherited rows and
+  // sole canonical creator addition have passed the checks above.
+  const raceAccessGrants=query(accessGrantsSnapshotSql);
   const auth=(who,role='authenticated')=>`set local role ${role};set local request.jwt.claims=${lit(JSON.stringify({role,sub:actors[who].id,session_id:actors[who].session}))};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const call=(who,sql,role)=>`begin;${auth(who,role)}select ${sql};commit;`;
   const rpc=(who,sql,role)=>JSON.parse(query(call(who,sql,role)).split('\n').at(-1));
@@ -138,9 +152,10 @@ try{
   const denied=docker(args(),call(who,invalid.sql,invalid.role));
   assert.notEqual(denied.status,0);assert.match(denied.stderr,/tip_buyer_authority_required/);
   verify(who,action,null,tip,'stripe_connect');
-  assert.ok(query(accessGrantsSnapshotSql)===baselineAccessGrants,'tip attempts never add, remove or modify access grants');
-  assert.equal(query('select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors)'),
-    '0','tip fixture actors never gain content access from attempts');
+  assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants,'tip attempts never remove or modify any exact inherited grant row');
+  assert.ok(query(accessGrantsSnapshotSql)===raceAccessGrants,'tip attempts never add, remove or modify access grants');
+  assert.equal(query("select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors where kind like 'buyer%')"),
+    '0','Free tip buyers never gain content access from attempts');
   assert.equal(checks,9);
   console.log('Tip actions: 9 observed native PostgreSQL advisory-lock races plus invalid-session rejection; synthetic providers only.');
 }finally{

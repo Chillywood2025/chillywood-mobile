@@ -1,9 +1,10 @@
-// Full migration replay, actual role/RLS/report/audit/notification/delivery SQL.
+// Historical repair checkpoint, actual role/RLS/report/audit/notification/delivery SQL.
 // Synthetic accounts and storage rows only; no network, provider or device use.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import {createDatabase, splitSQL} from './helpers/database-runtime-authority-fixture.mjs';
+import {splitSQL} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalRuntimeDatabase} from './helpers/runtime-authority-historical-fixture.mjs';
 
 const migration = new URL('../supabase/migrations/20261016113149_profile_media_report_enforcement_repair.sql', import.meta.url);
 const sourceRepair = fs.readFileSync(migration, 'utf8');
@@ -28,7 +29,7 @@ const claims = n => ({role:'authenticated', sub:id(n), session_id:session(n), em
 const owner = id(2);
 
 test('profile-media report action preserves authority and enforces exact delivery', {timeout:240_000}, async t => {
-  const {db} = await createDatabase({overlayLiveDrift:true, applyRepair:true});
+  const {db} = await createHistoricalRuntimeDatabase({overlayLiveDrift:true, applyRepair:true});
   const one = async (sql, params=[]) => (await db.query(sql, params)).rows[0];
   const as = async (n, sql, params=[]) => {
     await db.query("select set_config('request.jwt.claims',$1,false)", [JSON.stringify(claims(n))]);

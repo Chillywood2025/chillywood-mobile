@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 // Real purchase-intent and provider processors in a full disposable schema.
 // Only users, legal acceptance, test product/account qualification and the signed
@@ -23,20 +25,19 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
   await db.exec('set role authenticated');
  };
  try {
-  const host=await scalar("select md5('sandbox-cashout-canonical-host:'||n)::uuid from generate_series(1,10000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('sandbox-cashout-canonical-host:'||n)::uuid::text,20260814),100)=0 limit 1");
+  const host=randomUUID();
   for(const [user,session] of [[host,hostSession],...buyers.map((user,i)=>[user,sessions[i]])]){
    await db.query('insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values($1,false,false,now())',[user]);
    await db.query('insert into auth.sessions(id,user_id) values($1,$2)',[session,user]);
-   await db.query('insert into public.sandbox_monetization_testers(user_id) values($1)',[user]);
   }
+  await db.exec("insert into public.wave1_legal_document_versions(document_key,version,market,capability,effective_at) values('payout_terms','SYNTHETIC-canonical-cashout-fixture','UNITED_STATES','payout',now()-interval '1 day') on conflict do nothing");
   await db.query(`insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
    select s.user_id,public.wave1_sha256(s.user_id::text),d.document_key,d.version,d.market,'member',d.capability,s.id::text,'service_reconciliation'
    from auth.sessions s cross join public.wave1_legal_document_versions d where d.active and d.market='UNITED_STATES'
-   and (d.capability='account' or (s.user_id=$1 and d.capability in('creator','creator_money')))`,[host]);
+   and (d.capability='account' or (s.user_id=$1 and d.capability in('creator','creator_money','payout')))`,[host]);
   await service();
-  assert.equal((await scalar(`select public.wave1_evaluate_creator_eligibility($1,
-   '{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR","market":"UNITED_STATES","rolloutEligible":true,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}',
-   'sandbox-cashout-canonical-fixture','local_pgtap')`,[host])).state,'VERIFIED');
+  await seedQualifiedCommerceCreator(db,{id:host,session:hostSession},{providerAccountId:'acct_canonicalSandboxCreator',platformAccountId:'acct_canonicalSandboxPlatform'});
+  for(const id of buyers)await assertBuyerHasNoPremium(db,{id});
   await db.exec("update public.platform_money_kill_switches set state='sandbox_only' where key in ('revenuecat_app_store_enabled','revenuecat_google_play_enabled','provider_webhooks_enabled','creator_monetization_enabled','digital_sales_enabled','stripe_connect_enabled'); update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled')");
   const qualification=await scalar(`insert into private.sandbox_cashout_qualifications(creator_id,platform_account_id,account_id,destination_id,payout_type,source_type,
    provider_fee_bps,provider_fee_fixed_minor,settlement_policy_version,simulated_tax_bps,simulated_platform_bps,simulated_provider_bps,simulated_provider_fixed_minor,
@@ -215,10 +216,9 @@ test('canonical subscriptions, renewals, tips, video, VIP, fixed tickets and roo
   assert.equal(await scalar("select count(*)::int from public.money_access_ledger_events where creator_id=$1 and environment='sandbox'",[host]),receipts.length+receipts.filter(r=>r.renewed).length);
   await service();
   await db.exec('update private.sandbox_cashout_control set enabled=true');
-  await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,country) values($1,'stripe_connect','test','acct_canonicalSandboxCreator','US')",[host]);
   const net=await scalar("select sum((private.sandbox_cashout_source(id,$2)->>'netMinor')::int)::int from public.money_access_ledger_events where creator_id=$1",[host,qualification]);
   await claim(host,hostSession);
-  const quote=await scalar("select public.preview_sandbox_creator_cashout($1,'scheduled')",[net]);assert.equal(quote.ready,true);
+  const quote=await scalar("select public.preview_sandbox_creator_cashout($1,'scheduled')",[net]);assert.equal(quote.ready,true,JSON.stringify(quote));
   const reserved=await scalar("select public.request_sandbox_creator_cashout($1,'scheduled',$2,gen_random_uuid(),$3,$4,$5)",[net,qualification,quote.appFeeMinor,quote.expectedProviderFeeMinor,quote.bankMinor]);
   await service();
   assert.equal(await scalar('select count(*)::int from private.sandbox_cashout_allocations where execution_id=$1',[reserved.requestId]),receipts.length+receipts.filter(r=>r.renewed).length,'every canonical lane has its own reserved ledger allocation');

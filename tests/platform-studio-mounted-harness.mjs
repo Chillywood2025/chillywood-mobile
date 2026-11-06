@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 export const ROOT=process.env.STUDIO_SOURCE_ROOT||path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(path.join(process.env.STUDIO_DEPENDENCY_ROOT||ROOT,'package.json'));
 export const React=require('react');
@@ -26,6 +26,7 @@ export function productionFunctions(file,names,bindings){
  names.forEach(name=>assert.ok(found.has(name),`Production declaration ${name}`));const ctx={exports:{},...bindings};vm.runInNewContext(compile([...found.values()].join('\n')+`\nexports.api={${names.join(',')}};`),ctx);return ctx.exports.api;
 }
 export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B')],overrides={},session:initialSession=null,platform='android'}={}){
+  const legalPolicies=await import(pathToFileURL(path.join(ROOT,'legal/policies.mjs')).href);
   const replayPolicy = productionFunctions('_lib/liveEvents.ts',['readNewCreatorEventReplayTermsError'],{Date,Number});
   const nodes=new Map(),calls=[],alerts=[],routes=[],timers=new Map(),scrolls=[],measures=[];let timerId=0;
   let session=initialSession||{user:{id:'owner',email:'owner@example.test'},isSignedIn:true,isLoading:false,authority:{userId:'owner',accountId:'owner',sessionGeneration:'first',state:'ACTIVE',restoreOnly:false},authorityStatus:'active'};
@@ -55,6 +56,18 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     subscribeToAccountSessionAuthority:()=>noop,
     readCreatorAuthoringPrices:async sourceType=>({status:'resolved',subjectUserId:session.user.id,prices:[{priceKey:'fixture-price',productKey:'fixture-product',amountMinor:['vip_pass','channel_subscription'].includes(sourceType)?499:99,currency:'usd',label:['vip_pass','channel_subscription'].includes(sourceType)?'$4.99':'$0.99',environment:'sandbox',provider:'revenuecat_app_store',providerProductId:'fixture-store-product',platform:'ios',status:'sandbox',providerVerified:false,availablePlatforms:['ios','android'],availabilityLabel:'iOS and Android'}]}),
     sameAccountSessionAuthority:authorityApi.sameAccountSessionAuthority,
+    ...productionFunctions('_lib/creatorEligibilityDeclaration.ts',['CREATOR_US_REGIONS'],{}),
+    creatorDeclarationErrorMessage:()=> 'Refresh before retrying.',
+    readCreatorEligibilityDeclaration:async()=>({declaration:null,pending:[],eligibility:null}),
+    readCreatorPayoutLegalStatus:async()=> 'Payout terms: not yet checked.',
+    saveCreatorEligibilityDeclaration:async()=>{throw Error('Declaration save requires an explicit test fixture');},
+    creatorPolicyErrorMessage:()=> 'Creator terms acceptance could not be confirmed. Refresh before retrying.',
+    readCreatorPolicyRequirements:async()=>({...session.authority,authoritative:true,market:'UNITED_STATES',capability:'creator_money',
+      requirements:evaluate('_lib/legalPolicies.ts').LEGAL_DOCUMENTS.map(document=>{
+        const accepted=['terms','privacy','community_guidelines'].includes(document.documentKey);
+        return {documentKey:document.documentKey,version:document.version,accepted,state:accepted?'CURRENT_ACCEPTED':'REQUIRED_UNACCEPTED',acceptedAt:accepted?'2026-11-06T00:00:00Z':null};
+      })}),
+    acceptCreatorPolicies:async()=>{throw Error('Creator consent requires an explicit test fixture');},
     useSession:()=>session,useBetaProgram:()=>({isLoading:false,isActive:true,accessState:{status:'active'}}),getBetaAccessBlockCopy:()=>({title:'Beta required',body:'Blocked'}),
     DEFAULT_APP_CONFIG:config,readAppConfig:async()=>config,resolveFeatureConfig:x=>x.features,resolveBrandingConfig:x=>x.branding,
     readUserProfile:async()=>({username:'Owner',displayName:'Owner',avatarIndex:0,platformAccessVisibility:'public',watchPartyAccessRule:'open',communicationAccessRule:'open'}),normalizeUserProfile:x=>x,saveUserProfile:async x=>x,
@@ -95,7 +108,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
     const imports=name=>{
       if(name==='react')return React;if(name==='react-native')return native;
       if(name==='react-native-safe-area-context')return {useSafeAreaInsets:()=>({top:0,bottom:0,left:0,right:0})};
-      if(name==='expo-router')return {useLocalSearchParams:()=>params,useRouter:()=>router,useFocusEffect:callback=>React.useEffect(callback,[callback])};
+      if(name==='expo-router')return {router,useLocalSearchParams:()=>params,useRouter:()=>router,useFocusEffect:callback=>React.useEffect(callback,[callback])};
       if(name==='expo-av')return {Video:native.Video,ResizeMode:{CONTAIN:'contain',COVER:'cover'}};
       if(name==='expo-image-picker')return {UIImagePickerPreferredAssetRepresentationMode:{Compatible:'compatible'},VideoExportPreset:{HighestQuality:'highest'},requestCameraPermissionsAsync:async()=>({granted:true}),launchCameraAsync:(...args)=>{calls.push(['launchCameraAsync',...args]);return mocks.launchCameraAsync?.(...args)??Promise.resolve({canceled:true});},launchImageLibraryAsync:(...args)=>{calls.push(['launchImageLibraryAsync',...args]);return mocks.launchImageLibraryAsync?.(...args)??Promise.resolve({canceled:true});}};
       if(name.endsWith('/useMediaPicker'))return evaluate('hooks/useMediaPicker.tsx');
@@ -117,6 +130,11 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name.endsWith('/creatorVideoPreview'))return evaluate('_lib/creatorVideoPreview.ts');
       if(name.endsWith('/CreatorContentActionSheet'))return evaluate('components/creator-media/CreatorContentActionSheet.tsx');
       if(name.endsWith('/creatorMonetizationFeatures'))return evaluate('_lib/creatorMonetizationFeatures.ts');
+      if(name.endsWith('/creatorEligibility'))return evaluate('_lib/creatorEligibility.ts');
+      if(name.endsWith('/accountLegalAcceptance'))return evaluate('_lib/accountLegalAcceptance.ts');
+      if(name.endsWith('/legalPolicies'))return evaluate('_lib/legalPolicies.ts');
+      if(name==='../legal/policies.mjs')return legalPolicies;
+      if(name.endsWith('/creator-eligibility-declaration-panel'))return evaluate('components/monetization/creator-eligibility-declaration-panel.tsx');
       if(name.endsWith('/creatorMonetizationRouteTargets'))return evaluate('_lib/creatorMonetizationRouteTargets.ts');
       if(name.endsWith('/eventSchedule'))return evaluate('_lib/eventSchedule.ts');
       if(name.endsWith('/useCreatorAuthoringPrice'))return evaluate('_lib/useCreatorAuthoringPrice.ts');
@@ -157,7 +175,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
   const render=()=>React.act(async()=>root.render(rootElement()));
   await render();t?.after(()=>React.act(async()=>root.unmount()));
   const all=()=>[...nodes.values()];
-  return {media:evaluate('_lib/mediaPickerResources.ts'),calls,alerts,routes,scrolls,measures,mocks,all,text:()=>all().filter(n=>n.type==='Text').map(n=>textOf(n)).join('\n'),
+  return {media:evaluate('_lib/mediaPickerResources.ts'),creatorEligibility:evaluate('_lib/creatorEligibility.ts'),calls,alerts,routes,scrolls,measures,mocks,all,text:()=>all().filter(n=>n.type==='Text').map(n=>textOf(n)).join('\n'),
     find:(predicate)=>all().find(predicate),input:p=>all().find(n=>n.type==='TextInput'&&n.props.placeholder===p),
     button:label=>all().find(n=>['TouchableOpacity','Pressable'].includes(n.type)&&(n.props.accessibilityLabel===label||textOf(n).trim()===label)),
     async press(n){assert.ok(n,'mounted visible button exists');assert.notEqual(n.props.disabled,true,'mounted button enabled');await React.act(async()=>{void n.props.onPress();});},

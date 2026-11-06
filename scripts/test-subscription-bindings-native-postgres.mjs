@@ -7,6 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {commerceSeedAdapter} from '../tests/helpers/automatic-commerce-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../tests/helpers/current-event-commerce-fixture.mjs';
 
 if(process.argv.includes('--help')) {
   console.log('Run after local Supabase reset: node scripts/test-subscription-bindings-native-postgres.mjs. SUPABASE_DB_CONTAINER may name a local supabase_db_* CLI container. Only generated disposable clone is written.');
@@ -49,6 +51,7 @@ try {
   success(dump,'read-only local source export');
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore clone');
   query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+  await seedCurrentEventCommerceCreator(commerceSeedAdapter(query));
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
   const claims=who=>`set local role authenticated;set local request.jwt.claims=${literal(JSON.stringify({role:'authenticated',sub:actors[who].id,session_id:actors[who].session}))};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const call=(who,sql)=>`begin;${claims(who)}select ${sql};commit;`;

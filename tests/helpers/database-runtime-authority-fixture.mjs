@@ -1,4 +1,4 @@
-// Test-only schema replay for the October runtime-authority repair. No provider network,
+// Test-only current-schema replay, with explicit historical repair controls. No provider network,
 // production rows or production credentials. Managed services are local doubles.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,12 +66,17 @@ export function splitSQL(source) {
   return statements;
 }
 
-export async function createDatabase({overlayLiveDrift = false, applyRepair = false, repairInMigrationOrder = false, includeHeldStudio = false,
+export async function createDatabase({overlayLiveDrift = false, applyRepair = true, repairInMigrationOrder = true, includeHeldStudio = true,
   implicitApiGrants = true, excludeMigrations = [], databaseFactory = null} = {}) {
+  if (applyRepair && !repairMigrationPath) throw new Error('Repair migration is not available');
+  if (overlayLiveDrift && repairInMigrationOrder) {
+    throw new Error('Captured live drift requires an explicit historical repair overlay, not current-schema replay');
+  }
   // A test-supplied native adapter must expose the same exec/query/close methods.
-  // Default replay and every statement/double below remain unchanged.
+  // Current-schema callers replay the repair exactly once in production order.
+  // Historical before/after controls must explicitly opt out of that default.
   const db = databaseFactory ? await databaseFactory() : new PGlite({extensions: {pgcrypto, pg_trgm}});
-  const replayReport = {files: [], statements: 0, skipped: [], implicitApiGrants, excludedMigrations: [...excludeMigrations],
+  const replayReport = {files: [], overlayFiles: [], statements: 0, skipped: [], implicitApiGrants, excludedMigrations: [...excludeMigrations],
     infrastructure: 'Empty catalog-derived auth/storage; controlled cron/vault/realtime; no provider transport'};
   try {
     await db.exec(`set check_function_bodies=false; set time zone 'UTC';
@@ -120,7 +125,7 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
     `);
     // Forward-feature qualification must retain the actual migration order:
     // appending an old repair after newer migrations can overwrite new APIs.
-    // Legacy before/after repair tests retain their explicit final overlay.
+    // Historical before/after repair tests explicitly request omission/overlay.
     const files = fs.readdirSync(migrationDirectory).filter(name => name.endsWith('.sql')
       && (name !== repairName || (applyRepair && repairInMigrationOrder))
       && !excludeMigrations.includes(name)
@@ -144,12 +149,25 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
       }
       replayReport.files.push(file);
     }
-    if (overlayLiveDrift) await db.exec(fs.readFileSync(liveSnapshotPath, 'utf8'));
+    if (overlayLiveDrift) {
+      await db.exec(fs.readFileSync(liveSnapshotPath, 'utf8'));
+      replayReport.overlayFiles.push(path.basename(liveSnapshotPath));
+    }
     const repairSql = repairMigrationPath ? fs.readFileSync(repairMigrationPath, 'utf8') : '';
     if (applyRepair && !repairInMigrationOrder) {
       if (!repairSql.trim()) throw new Error('Repair migration is not available');
       await db.exec(repairSql);
+      replayReport.overlayFiles.push(repairName);
     }
     return {db, replayReport, repairSql};
   } catch (error) { await db.close(); throw error; }
+}
+
+// Native runners capture the same chronological source replay and its report.
+// Do not append repair SQL or add a synthetic file entry after this returns.
+export async function captureCurrentDatabaseReplay() {
+  const statements = [];
+  const {replayReport} = await createDatabase({
+    databaseFactory: async () => ({async exec(sql) { statements.push(sql); }, async close() {}})});
+  return {sql: statements.join('\n'), replayReport};
 }

@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync,spawn} from 'node:child_process';
 import fs from 'node:fs';
+import {commerceSeedAdapter,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../tests/helpers/automatic-commerce-fixture.mjs';
 process.on('uncaughtException',error=>{console.error(error.message);if(error.where)console.error(error.where);if(error.stderr)console.error(error.stderr);process.exitCode=1;process.exit(1);});
 const container=process.argv.find(a=>a.startsWith('--container='))?.slice(12);
 const databaseName=process.argv.find(a=>a.startsWith('--database='))?.slice(11)??'postgres';
@@ -12,7 +13,7 @@ if(!embedded) assert.match(container??'',/^chillywood-event-offer-audit-[a-z0-9-
 let database;
 if(embedded){
   const {createDatabase}=await import('../tests/helpers/database-runtime-authority-fixture.mjs');
-  ({db:database}=await createDatabase({includeHeldStudio:true,applyRepair:true}));
+  ({db:database}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true}));
   await database.exec(fs.readFileSync(new URL('../tests/fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
 }
 const args=['exec','-i',container,'psql','-X','-h','/tmp','-U','postgres','-d',databaseName,'-v','ON_ERROR_STOP=1','-Atq'];
@@ -28,6 +29,8 @@ const parallel=input=>new Promise((resolve,reject)=>{
   child.on('close',code=>{clearTimeout(timer);resolve({code,output:output.trim(),error});});child.stdin.end(input);
 });
 const actors=JSON.parse(await sql("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+await seedQualifiedCommerceCreator(commerceSeedAdapter(sql),actors.creator);
+for(const [kind,actor] of Object.entries(actors))if(kind.startsWith('buyer'))await assertBuyerHasNoPremium(commerceSeedAdapter(sql),actor);
 const events=JSON.parse(await sql('select jsonb_object_agg(name,id) from event_reservation_fixture.events'));
 const offset=Number(process.argv.find(a=>a.startsWith('--offset='))?.slice(9)??0);
 for(let index=1;index<=16-offset;index++) events[`show${index}`]=events[`show${index+offset}`];

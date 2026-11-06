@@ -9,7 +9,8 @@ import {fileURLToPath} from 'node:url';
 import {PGlite} from '@electric-sql/pglite';
 import {redundantNotNull} from './live-room-exact-deploy.mjs';
 import {loadBundle as loadIngress, addedCatalogHashSQL} from './native-ingress-exact-deploy.mjs';
-import {loadBundle as loadSandbox, addedCatalogSQL} from './sandbox-cashout-exact-deploy.mjs';
+import {addedCatalogSQL} from './sandbox-cashout-exact-deploy.mjs';
+import {loadHistoricalCashoutBundle} from '../tests/helpers/sandbox-cashout-historical-deployment-fixture.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const IMAGE='public.ecr.aws/supabase/postgres@sha256:86a2e078779e5bdccda1f6f6c5063aa9779a322d1fface5fb408d051909b230f';
@@ -52,7 +53,10 @@ end$$;
 set search_path=pg_catalog,public;
 `;
 
-const bundleIngress=loadIngress(ROOT),bundleSandbox=loadSandbox(ROOT);
+// Catalog portability concerns the immutable historical DDL, not qualification
+// of today's changed cashout engine. The original closure still passes the
+// production hash loader; the current engine still fails that stale manifest.
+const bundleIngress=loadIngress(ROOT),bundleSandbox=loadHistoricalCashoutBundle();
 const contracts=[
   {name:'ingress',bundle:bundleIngress,sql:addedCatalogHashSQL,alias:'c',suffix:'added_catalog',
     nullability:['private.native_production_ingress_qualifications','project_id'],

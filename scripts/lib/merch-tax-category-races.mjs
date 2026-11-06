@@ -38,5 +38,7 @@ export async function runMerchTaxCategoryRaces({query,race,auth,actors,lit}) {
  await race('retained brand latch precedes category product row lock',
   `select private.platform_brand_retention_lock();select '{}'::jsonb;`,
   auth('creator')+`select public.select_creator_merch_tax_category(${lit(e.id)},${lit(e.category)},${lit(e.updated)},'');`,
-  {afterBlocked:`select id from public.merch_products where id=${lit(e.id)} for update nowait;select '{}'::jsonb;`});
+  {afterBlocked:`select public.lock_revenuecat_premium_owner_users_internal(${lit(creator.id)},${lit(creator.id)});
+    select creator_user_id from public.wave1_creator_eligibility where creator_user_id=${lit(creator.id)} for update nowait;
+    select id from public.merch_products where id=${lit(e.id)} for update nowait;select '{}'::jsonb;`});
 }

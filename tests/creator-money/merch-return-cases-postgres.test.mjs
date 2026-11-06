@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 import {mountReturns} from '../helpers/merch-return-mounted-harness.mjs';
 
 test('actual API actors: order-bound cases, immutable aggregate holds, scoped staff review, independent provider evidence',{timeout:240000},async()=>{
@@ -15,7 +16,7 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
  const buyer=randomUUID(),other=randomUUID(),staff=randomUUID(),moderator=randomUUID();
  const actors=[creator,buyer,other,staff,moderator],sessions=Object.fromEntries(actors.map(a=>[a,randomUUID()]));
  const root=()=>db.exec('reset role');
- const claim=async(u,s=sessions[u])=>{await root();await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',sub:u,session_id:s,email:u+'@example.test'})]);await db.exec('set role authenticated');};
+ const claim=async(u,s=sessions[u])=>{await root();await db.query("select set_config('request.jwt.claims',$1,false),set_config('request.jwt.claim.role','authenticated',false)",[JSON.stringify({role:'authenticated',sub:u,session_id:s,email:u+'@example.test'})]);await db.exec('set role authenticated');};
  const submit=async(order,kind='non_delivery',actor=buyer,request=randomUUID(),note='Synthetic order support concern')=>{await claim(actor);return one('select public.submit_merch_return_case($1,$2,$3,$4)',[order,request,kind,note]);};
  const respond=async(c,action,actor=buyer,request=randomUUID(),note='Synthetic support response')=>{await claim(actor);return one('select public.respond_merch_return_case($1,$2,$3,$4)',[c.id,request,action,note]);};
  const state=async(id)=>{await root();return one(`select public.merch_order_projection_internal(o) from public.merch_orders o where id=$1`,[id]);};
@@ -41,6 +42,12 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
   };
   const historical=await make();
   for(const file of [migration,...successors])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
+  await seedCommerceCreator(db,{id:creator,session:sessions[creator]});
+  for(const id of [buyer,other])await assertBuyerHasNoPremium(db,{id});
+  await claim(creator);
+  const declared=await one("select public.declare_creator_money_eligibility(true,'US','CA')");
+  assert.equal(declared.state,'PENDING_VERIFICATION');assert.equal(declared.canCreateMoneyExposure,false);
+  assert.equal(declared.sandboxCapability.canUseCreatorTools,true);
   assert.equal((await state(historical)).returnCaseProtocol,null);
   assert.ok((await state(historical)).returnHoldReasons.includes('merch_return_clearance_unknown'));
   const order=await make(),otherOrder=await make();
@@ -73,6 +80,44 @@ test('actual API actors: order-bound cases, immutable aggregate holds, scoped st
    if(role!=='authenticated')await assert.rejects(one('select public.read_merch_return_cases($1)',[order]),/permission denied/);
   }
   assert.equal((await respond(first,'creator_response',creator)).status,'open');
+  // Existing paid-order support is an obligation, not admission to a new sale.
+  // Roll back each authority mutation so the remaining protocol cases keep
+  // their original fixture and no financial state is fabricated for recovery.
+  const recovery=async({expired=false,live=false,suspended=false,blocked=null},run)=>{
+   await root();await db.exec('begin');
+   try{
+    await db.exec("set local request.jwt.claim.role='service_role';set local request.jwt.claims='{\"role\":\"service_role\"}'");
+    if(expired)await db.query("update public.user_entitlements set status='expired',expires_at=clock_timestamp()-interval '1 second' where user_id=$1 and entitlement_key='premium'",[creator]);
+    if(live)await db.exec("update public.platform_money_kill_switches set state='on' where key='live_money_enabled'");
+    if(suspended)await db.query("update public.wave1_creator_eligibility set state='SUSPENDED' where creator_user_id=$1",[creator]);
+    if(blocked==='session')await db.query("update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id=$1",[sessions[creator]]);
+    if(blocked==='ban')await db.query("update auth.users set banned_until=clock_timestamp()+interval '1 day' where id=$1",[creator]);
+    if(expired)assert.equal(await one("select private.ordinary_commerce_premium_current($1,'sandbox')",[creator]),false);
+    await run();
+   }finally{await db.exec('rollback');await root();}
+  };
+  const recoveryFinancialState=async()=>{await root();return one(`select jsonb_build_object(
+   'order',(select to_jsonb(o) from public.merch_orders o where id=$1),
+   'money',(select coalesce(jsonb_agg(to_jsonb(e) order by e.id),'[]'::jsonb) from public.money_access_ledger_events e),
+   'earnings',(select coalesce(jsonb_agg(to_jsonb(e) order by e.id),'[]'::jsonb) from public.creator_earnings_ledger e),
+   'payouts',(select coalesce(jsonb_agg(to_jsonb(p) order by p.id),'[]'::jsonb) from public.creator_payout_requests p))`,[order]);};
+  const recoveryBefore=await recoveryFinancialState();
+  // A money-only creator suspension denies new financial exposure, not the
+  // current account's text response on its existing paid order.
+  for(const condition of [{expired:true},{live:true},{expired:true,live:true},{suspended:true},{expired:true,live:true,suspended:true}])await recovery(condition,async()=>{
+   assert.equal(await one('select public.wave1_creator_money_subject_authorized_internal($1)',[creator]),false,'historical support does not restore financial authority');
+   const response=await respond(first,'creator_response',creator,randomUUID(),'Historical obligation remains actionable');
+   assert.equal(response.status,'open');assert.equal(response.refundExecuted,false);
+   assert.equal(response.events.at(-1).actorRole,'creator');
+   assert.deepEqual(response.acceptedTerms,first.acceptedTerms);
+   assert.deepEqual(await recoveryFinancialState(),recoveryBefore,'support recovery cannot modify orders or financial ledgers');
+   assert.equal(await one('select public.wave1_creator_money_subject_authorized_internal($1)',[creator]),false,'support response cannot grant new financial authority');
+  });
+  for(const blocked of ['other','cross_session','session','ban'])await recovery({expired:true,live:true,blocked},async()=>{
+   if(blocked==='other')await claim(other);
+   else await claim(creator,blocked==='cross_session'?sessions[other]:sessions[creator]);
+   await assert.rejects(one('select public.respond_merch_return_case($1,$2,$3,$4)',[first.id,randomUUID(),'creator_response','Denied historical response']),/merch_case_unavailable/);
+  });
   await assert.rejects(respond(first,'creator_response',buyer),/action_denied/);
   const replyId=randomUUID();const reply=await respond(first,'buyer_response',buyer,replyId,'Buyer additional evidence');
   assert.equal(reply.status,'open');assert.equal(reply.refundExecuted,false);

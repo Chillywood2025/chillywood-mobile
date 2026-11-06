@@ -197,7 +197,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
       <View style={styles.centered}>
         <Text style={styles.title}>Sandbox tester access required</Text>
         <Text style={styles.body}>
-          This sandbox purchase proof surface is limited to active Owner/Admin accounts or approved internal tester sandbox accounts.
+          This internal diagnostic surface is limited to active Owner/Admin accounts or approved internal tester sandbox accounts. Ordinary buyers use the normal purchase screens and can remain Free; they do not need an internal tester grant.
         </Text>
         <Text style={styles.body}>{accessSummary}</Text>
       </View>
@@ -209,7 +209,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
       <Text style={styles.kicker}>Internal test mode / Sandbox only / Not payable</Text>
       <Text style={styles.title}>Sandbox Purchase Testing</Text>
       <Text style={styles.body}>
-        Approved testers open the normal buyer screen to review an exact digital item before a sandbox purchase. Physical merch has a separate sandbox checkout. This screen cannot activate
+        Buyers open the normal buyer screen to review an exact digital item before a purchase. Eligible Premium creators use automatic creator eligibility. Physical merch has a separate checkout. This internal diagnostic screen cannot activate
         production money, payout execution, cash-out, withdrawal, transfer, payable balances, LiveKit publish authority, host
         power, speaker authority, moderator power, or admin power.
       </Text>

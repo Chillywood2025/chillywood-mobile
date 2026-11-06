@@ -7,6 +7,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {commerceSeedAdapter,seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../tests/helpers/automatic-commerce-fixture.mjs';
 
 if(process.argv.includes('--help')) {
   console.log('Run after local Supabase reset: node scripts/test-auction-transfer-concurrency-postgres.mjs. SUPABASE_DB_CONTAINER may name a local supabase_db_* CLI container. Only generated disposable clone is written.');
@@ -56,6 +57,10 @@ try {
   // PostgreSQL row/composite RPCs (including room join) are not JSON text.
   const rpc=(who,sql)=>JSON.parse(query(call(who,`to_jsonb(${sql})`)).split('\n').at(-1));
   query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
+  if(query("select to_regprocedure('private.ordinary_creator_provider_ready(uuid,text)') is not null")==='t'){
+    await seedQualifiedCommerceCreator(commerceSeedAdapter(query),actors.creator,{providerAccountId:'acct_fixture'});
+    await assertBuyerHasNoPremium(commerceSeedAdapter(query),actors.buyer1);
+  }
   const cap=query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,platform,storefront,storefront_country,route_kind,currency,
     environment,payment_method,min_amount_minor,max_amount_minor,provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)
     values('room_seat_auction','${actors.creator.id}','acct_fixture','ios','UNITED_STATES','US','external_browser_checkout','usd','test','card',50,100000,

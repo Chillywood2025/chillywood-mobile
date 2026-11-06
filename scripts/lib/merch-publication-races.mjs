@@ -25,4 +25,15 @@ export async function runMerchPublicationRaces({query,race,auth,actors,lit}) {
   auth('creator')+`select public.confirm_creator_merch_live_publication(${lit(third.review)});`,{error:/creator_eligibility_required/});
  await query(`update public.wave1_creator_eligibility set payout_eligible=true where creator_user_id=${lit(creator.id)};`);
  assert.equal(await query(`select count(*) from private.merch_publication_receipts where product_id in(${lit(first.id)},${lit(second.id)},${lit(third.id)})`),'0');
+ for(const operation of ['review','confirm','copy']) {
+  const p=await make();
+  const call=operation==='confirm'?`public.confirm_creator_merch_live_publication(${lit(p.review)})`:
+   `public.${operation==='copy'?'copy_creator_merch_live_draft':'review_creator_merch_live_publication'}(${lit(p.id)},${lit(p.updated)})`;
+  await race(`global latch precedes Premium and wave1 for public ${operation}`,
+   "select private.platform_brand_retention_lock();select '{}'::jsonb;",auth('creator')+`select ${call};`,
+   {error:operation==='confirm'?/merch_publish_review_changed/:/merch_product_changed_reload/,
+    afterBlocked:`select public.lock_revenuecat_premium_owner_users_internal(${lit(creator.id)},${lit(creator.id)});
+     select creator_user_id from public.wave1_creator_eligibility where creator_user_id=${lit(creator.id)} for update nowait;
+     update public.merch_products set price_minor=1100,updated_at=clock_timestamp() where id=${lit(p.id)};select '{}'::jsonb;`});
+ }
 }

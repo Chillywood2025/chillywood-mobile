@@ -5,6 +5,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import ts from 'typescript';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import * as commerceFixtures from './helpers/automatic-commerce-fixture.mjs';
 
 // Execute the native runner's actual setup and fulfilled-room fixture against
 // the full SQL schema. Only adapt synchronous psql transport to asynchronous
@@ -48,6 +49,8 @@ const wireQuery=db=>async sql=>{
 };
 const literal=value=>`'${String(value).replaceAll("'","''")}'`;
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+const fixtureExecution=(parameters,source)=>new AsyncFunction(...Object.keys(commerceFixtures),...parameters,source)
+  .bind(null,...Object.values(commerceFixtures));
 for(const control of ['current','expired','malformed'])test(`native transfer fixture qualification ${control}`, {timeout:180000}, async()=>{
   const source=readFileSync('scripts/test-auction-transfer-concurrency-postgres.mjs','utf8');
   const start=source.indexOf("  query(readFileSync('tests/fixtures/event-reservation-authority.sql'");
@@ -70,7 +73,7 @@ for(const control of ['current','expired','malformed'])test(`native transfer fix
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   const query=wireQuery(db);
   try {
-    const execute=new AsyncFunction('query','readFileSync','assert','randomUUID','createHash','delay','literal',executable);
+    const execute=fixtureExecution(['query','readFileSync','assert','randomUUID','createHash','delay','literal'],executable);
     if(control==='expired'){
       await assert.rejects(execute(query,readFileSync,assert,randomUUID,createHash,delay,literal),/auction_platform_qualification_required/);
       return;
@@ -125,7 +128,7 @@ for(const checkpoint of ['current','historical'])test(`${checkpoint} native tran
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
     excludeMigrations:checkpoint==='historical'?historicalSuccessors:[]});
   try {
-    const execute=new AsyncFunction('query','readFileSync','assert','randomUUID','createHash','delay','literal',asyncTransport(fragment+'\nreturn checks;'));
+    const execute=fixtureExecution(['query','readFileSync','assert','randomUUID','createHash','delay','literal'],asyncTransport(fragment+'\nreturn checks;'));
     assert.equal(await execute(wireQuery(db),readFileSync,assert,randomUUID,createHash,delay,literal),checkpoint==='current'?6:14);
     if(checkpoint==='historical'){
       for(const migration of historicalSuccessors)await db.exec(readFileSync('supabase/migrations/'+migration,'utf8'));
@@ -157,7 +160,7 @@ for(const runner of ['merch-tracking','merch-return-cases'])test(`native ${runne
   const executable=asyncTransport(source.slice(start,end)+'\n'+qualifications[0]+`\nreturn ${runner==='merch-tracking'?'[firstOrder,secondOrder]':'[order]'};`);
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   try {
-    const execute=new AsyncFunction('query','readFileSync','assert','randomUUID','lit','json','parsed',executable);
+    const execute=fixtureExecution(['query','readFileSync','assert','randomUUID','lit','json','parsed'],executable);
     const ids=await execute(wireQuery(db),readFileSync,assert,randomUUID,literal,value=>`${literal(JSON.stringify(value))}::jsonb`,value=>JSON.parse(value.split('\n').at(-1)));
     for(const id of ids){
       const order=(await db.query('select payment_status,fulfillment_address_policy_version,return_case_protocol from public.merch_orders where id=$1',[id])).rows[0];

@@ -36,6 +36,6 @@ test('registration protocol applies and rolls back over the full fresh-schema ch
   const registered=await invoke('select public.register_my_push_token($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,null,null,$10,$11,$12,$13) value',
     [actor,session,'ios','expo','migrated-fixture','ExpoPushToken[migrated-fixture]',credential,`register:${operation}`,'granted','{}',operation,snapshot.incarnation,snapshot.revision]);
   assert.equal(registered.status,'registered');assert.equal(registered.revision,'1');
-  assert.equal(replayReport.files.length+2,fs.readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')).length);
-  t.diagnostic(`${replayReport.files.length} historical migrations plus runtime repair and registration protocol executed as SQL. Managed infrastructure doubles, not native concurrency or production evidence.`);
+  assert.equal(replayReport.files.length+1,fs.readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')).length);
+  t.diagnostic(`${replayReport.files.length} baseline migrations including runtime repair in source order, plus registration protocol executed as SQL. Managed infrastructure doubles, not native concurrency or production evidence.`);
 });

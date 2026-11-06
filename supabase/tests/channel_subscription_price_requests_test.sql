@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/automatic-commerce.inc
 select no_plan();
 
 -- Real session/legal/eligibility roots, not replacement auth functions. All
@@ -26,12 +27,8 @@ where document.active and document.market='UNITED_STATES'
   and document.capability in ('account','creator','creator_money');
 do $$ declare fixture record; begin
   for fixture in select * from pg_temp.subscription_request_creators loop
-    perform public.wave1_evaluate_creator_eligibility(fixture.creator_id,jsonb_build_object(
-      'accountStatus','ACTIVE','age18Plus',true,'legalAccepted',true,'creatorRole',true,
-      'moderationState','CLEAR','market','UNITED_STATES','rolloutEligible',true,
-      'platformCapability',true,'providerEligible',true,'kycComplete',true,'taxComplete',true,
-      'sanctionsClear',true,'payoutEligible',true,'inputVersions',jsonb_build_object('evaluationSequence',1)),
-      'subscription-price-request-test','local_pgtap');
+    perform pg_temp.seed_creator_premium(fixture.creator_id);
+    perform pg_temp.declare_sandbox_creator(fixture.creator_id,fixture.session_id);
   end loop;
 end $$;
 
@@ -90,7 +87,7 @@ update auth.sessions set not_after=now()-interval '1 second'
 where id=(select session_id from pg_temp.subscription_request_creators where fixture_number=2);
 set local role authenticated;
 select throws_ok($$select public.request_creator_channel_subscription_price(1400,'usd')$$,
-  'P0001','creator_session_authority_required','expired exact session cannot enqueue requests');
+  '42501','creator_session_premium_required','expired exact session cannot enqueue requests');
 reset role;
 select * from finish();
 rollback;

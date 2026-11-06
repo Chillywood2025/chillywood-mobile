@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('actual SQL fee feed and exact-session tip comparison stay unknown until qualified; revoke and stale evidence fail closed', {timeout:240000}, async()=>{
   const module={exports:{}};
@@ -14,6 +15,7 @@ test('actual SQL fee feed and exact-session tip comparison stay unknown until qu
   try {
     for(const path of ['event-reservation-authority.sql','creator-external-payment-capabilities.sql','creator-external-payment-authority.sql'])
       await db.exec(fs.readFileSync(`tests/fixtures/${path}`,'utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(a=>a.kind==='buyer1'),other=actors.find(a=>a.kind==='buyer2'),creator=actors.find(a=>a.kind==='creator');
     const claims=async(who=buyer,role='authenticated')=>{

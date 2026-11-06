@@ -1,0 +1,20 @@
+begin;
+select no_plan();
+select ok((select relrowsecurity and relforcerowsecurity from pg_class
+ where oid='private.creator_eligibility_declarations'::regclass),'declaration history has forced RLS');
+select ok(not has_table_privilege('authenticated','private.creator_eligibility_declarations','select'), 'clients cannot read raw declaration history');
+select ok(not has_table_privilege('service_role','private.creator_eligibility_declarations','insert'), 'service role cannot manufacture declarations');
+select ok(not has_function_privilege('anon','public.declare_creator_money_eligibility(boolean,text,text,text)','execute'), 'anonymous declaration denied');
+select ok(not has_function_privilege('service_role','public.declare_creator_money_eligibility(boolean,text,text,text)','execute'), 'service declaration denied');
+select ok(has_function_privilege('authenticated','public.declare_creator_money_eligibility(boolean,text,text,text)','execute'), 'authenticated exact-self declaration available');
+select ok(not has_function_privilege('authenticated','private.refresh_ordinary_creator_eligibility(uuid)','execute'), 'client cannot refresh arbitrary creator');
+select ok(not has_function_privilege('service_role','private.refresh_ordinary_creator_eligibility(uuid)','execute'), 'refresh only through scoped backend paths');
+select is((select provolatile::text from pg_proc where oid='private.ordinary_creator_provider_ready(uuid,text)'::regprocedure),'s','provider predicate is pure stable read');
+select is((select provolatile::text from pg_proc where oid='public.wave1_creator_money_subject_authorized_internal(uuid)'::regprocedure),'s','buyer-side subject admission remains stable read');
+select ok(position('refresh_ordinary_creator_eligibility' in pg_get_functiondef('public.wave1_creator_money_subject_authorized_internal(uuid)'::regprocedure))=0,'buyer-side subject admission performs no lazy write');
+select ok(exists(select 1 from pg_indexes where schemaname='private' and tablename='creator_eligibility_declarations' and indexname='creator_eligibility_declarations_latest_idx'),'latest declaration has deterministic ordinal index');
+select ok(exists(select 1 from pg_indexes where schemaname='private' and tablename='creator_eligibility_declarations' and indexname='creator_eligibility_declarations_recent_idx'),'rolling quota has timestamp index');
+select is(private.ordinary_creator_provider_ready(null,'sandbox'),false,'missing creator never has provider authority');
+select is(private.ordinary_creator_provider_ready(gen_random_uuid(),'invalid'),false,'unknown environment never has provider authority');
+select * from finish();
+rollback;

@@ -37,6 +37,9 @@ async function mount(t,overrides={}){
 }
 test('mounted sandbox quote never reports payout success; duplicate confirm reserves once and explicit continuation dispatches',async t=>{
  const m=await mount(t);await m.amount('100');await m.press(m.button('Review test payout'));
+ assert.match(m.text(),/New test payout requests require eligible Premium creator status/);
+ assert.match(m.text(),/Viewing your history does not establish eligibility for a new request/);
+ assert.doesNotMatch(m.text(),/authorized internal testers only|Tester access/);
  assert.match(m.text(),/No provider payout has been sent/);assert.match(m.text(),/simulated test deductions/);
  const confirm=m.button('Confirm sandbox request');
  await React.act(async()=>{void confirm.props.onPress();void confirm.props.onPress();});
@@ -104,21 +107,21 @@ test('unknown dispatch with expired qualification retains safe provider reconcil
  assert.equal(m.button('Continue provider test payout'),undefined);
  await m.press(m.button('Reconcile this test payout'));assert.equal(m.calls.filter(x=>x[0]==='advance').length,1);
 });
-test('unknown and denied actual tester reads hide all payout controls and rows',async t=>{
+test('unknown and denied current-account history reads hide all payout controls and rows',async t=>{
  const pending=deferred(),m=await mount(t,{readSandboxCreatorCashoutHistory:()=>pending.promise});
- assert.match(m.text(),/Checking current internal tester access/);assert.equal(m.button('Review test payout'),undefined);
+ assert.match(m.text(),/Checking current account and test payout history/);assert.equal(m.button('Review test payout'),undefined);
  assert.equal([...m.nodes.values()].some(n=>n.type==='TextInput'),false);
- m.api.readSandboxCreatorCashoutHistory=async()=>{throw Error('tester revoked');};
+ m.api.readSandboxCreatorCashoutHistory=async()=>{throw Error('session revoked');};
  await m.account({userId:'B',sessionGeneration:'2'});await m.resolve(pending,[m.row]);
  assert.equal(m.button('Review test payout'),undefined);assert.equal(m.button('Continue provider test payout'),undefined);
- assert.match(m.text(),/could not be verified/);assert.ok(m.button('Check internal test access'));
+ assert.match(m.text(),/could not be verified/);assert.ok(m.button('Check test payout access'));
 });
 test('revocation before confirmation fails closed before submit and clears displayed quote and rows',async t=>{
  const m=await mount(t);await m.amount('100');await m.press(m.button('Review test payout'));
- const confirm=m.button('Confirm sandbox request');m.api.readSandboxCreatorCashoutHistory=async()=>{throw Error('tester expired');};
+ const confirm=m.button('Confirm sandbox request');m.api.readSandboxCreatorCashoutHistory=async()=>{throw Error('session expired');};
  await m.press(confirm);await React.act(async()=>confirm.props.onPress());
  assert.equal(m.calls.filter(x=>x[0]==='submit').length,0);assert.equal(m.button('Review test payout'),undefined);
- assert.equal(m.button('Continue provider test payout'),undefined);assert.match(m.text(),/tester expired/);
+ assert.equal(m.button('Continue provider test payout'),undefined);assert.match(m.text(),/session expired/);
 });
 test('access lease expiry hides all rows and retains in-flight submit latch until actual settlement',async t=>{
  const pending=deferred();let submits=0;
@@ -126,8 +129,8 @@ test('access lease expiry hides all rows and retains in-flight submit latch unti
  await m.amount('100');await m.press(m.button('Review test payout'));const confirm=m.button('Confirm sandbox request');
  await m.press(confirm);assert.equal(submits,1);await m.expire();
  assert.equal(m.button('Review test payout'),undefined);assert.equal(m.button('Continue provider test payout'),undefined);
- const access=m.button('Check internal test access');assert.equal(access.props.disabled,true);
+ const access=m.button('Check test payout access');assert.equal(access.props.disabled,true);
  await React.act(async()=>{confirm.props.onPress();access.props.onPress();});assert.equal(submits,1);
  await m.resolve(pending,m.row);assert.equal(m.button('Continue provider test payout'),undefined);
- assert.equal(m.button('Check internal test access').props.disabled,false);assert.match(m.text(),/in-flight request may still be processing/);
+ assert.equal(m.button('Check test payout access').props.disabled,false);assert.match(m.text(),/in-flight request may still be processing/);
 });

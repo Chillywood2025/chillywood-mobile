@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from './helpers/current-event-commerce-fixture.mjs';
 
 test('own-inbox context binds real session, identity, target and current privacy without rewriting history',{timeout:180000},async()=>{
  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
@@ -13,6 +14,7 @@ test('own-inbox context binds real session, identity, target and current privacy
  }finally{await db.exec('rollback');}};
  try{
   await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
+  await seedCurrentEventCommerceCreator(db);
   const creator=await one("select * from event_reservation_fixture.actors where kind='creator'");
   const buyer=await one("select * from event_reservation_fixture.actors where kind='buyer1'");
   const other=await one("select * from event_reservation_fixture.actors where kind='buyer2'");

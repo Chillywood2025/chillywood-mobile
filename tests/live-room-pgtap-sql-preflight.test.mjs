@@ -1,8 +1,8 @@
-import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 import {pgtapSQLPreflight} from './helpers/pgtap-sql-preflight.mjs';
+import {readPgtapSource} from './helpers/pgtap-source.mjs';
 test('full-schema SQL preflight retains historical Party/Live/Event pgTAP behavior after versioned API cutover', {timeout:180000},async()=>{
   const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
   try {
@@ -28,7 +28,7 @@ test('full-schema SQL preflight retains historical Party/Live/Event pgTAP behavi
       'discovery_scoped_invalidation_test.sql','notifications_realtime_publication_test.sql',
       'wave1_session_not_after_authority_test.sql','room_host_participant_block_check_test.sql',
       'party_room_live_stage_event_ux_rfgc_test.sql']) {
-      const source=fs.readFileSync(`supabase/tests/${name}`,'utf8').replace(/create extension if not exists pgtap with schema extensions;/gi,'');
+      const source=readPgtapSource(name);
       const results=await db.exec(source);
       const assertions=results.flatMap(r=>r.rows??[]).flatMap(Object.values).filter(v=>typeof v==='string'&&v.startsWith('ok '));
       const planned=source.match(/select plan\((\d+)\)/i)?.[1];

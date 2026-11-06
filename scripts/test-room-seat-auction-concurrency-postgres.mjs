@@ -7,6 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
+import {commerceSeedAdapter} from '../tests/helpers/automatic-commerce-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../tests/helpers/current-event-commerce-fixture.mjs';
 
 if(process.argv.includes('--help')) {
   console.log('Run after local Supabase reset: node scripts/test-room-seat-auction-concurrency-postgres.mjs. SUPABASE_DB_CONTAINER may name a local supabase_db_* CLI container. Only generated disposable clone is written.');
@@ -49,13 +51,25 @@ try {
     '--exclude-schema=cron','--exclude-schema=realtime','--exclude-schema=_realtime','--exclude-schema=vault','--exclude-schema=graphql','--exclude-schema=graphql_public','postgres'],undefined,null);
   success(dump,'read-only local source export');
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore clone');
-  // Earlier native proofs retain protected synthetic Premium authority until
-  // whole-cluster disposal. Preserve the exact inherited grant rows: these
-  // auction schedules must neither create access nor alter/delete prior access.
   const baselineAccessGrants=query(accessGrantsSnapshotSql);
+  const inheritedAccessGrantIds=query("select coalesce(jsonb_agg(g.id order by g.id),'[]'::jsonb)::text from public.access_grants g");
+  const inheritedAccessGrantsSql=accessGrantsSnapshotSql+` where g.id::text in (select jsonb_array_elements_text(${literal(inheritedAccessGrantIds)}::jsonb))`;
   query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
   query("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+  query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
+  assert.ok(query(accessGrantsSnapshotSql)===baselineAccessGrants,'legacy fixtures never add, remove or modify inherited access grants');
+  await seedCurrentEventCommerceCreator(commerceSeedAdapter(query));
+  assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants,'setup never removes or modifies any exact inherited grant row');
+  assert.equal(query(`select count(*) from public.access_grants g where g.id::text not in (select jsonb_array_elements_text(${literal(inheritedAccessGrantIds)}::jsonb))`),'1','setup adds exactly one creator Premium grant');
+  assert.equal(query(`select count(*) from public.access_grants g join public.provider_events e on e.id=g.provider_event_id
+    where g.id::text not in (select jsonb_array_elements_text(${literal(inheritedAccessGrantIds)}::jsonb))
+    and g.user_id='${actors.creator.id}' and g.grant_type='premium' and g.provider='revenuecat_google_play'
+    and g.environment='sandbox' and g.status='sandbox_only' and e.provider=g.provider and e.environment=g.environment
+    and e.user_id::text=g.user_id::text and e.status='processed' and private.ordinary_commerce_premium_current(g.user_id,'sandbox')`),'1','the only added grant has canonical current creator Premium authority');
+  // Only after inherited rows and the exact canonical addition are validated
+  // may the race baseline include the creator seed. It still covers ALL rows.
+  const raceAccessGrants=query(accessGrantsSnapshotSql);
   const claims=(who,role='authenticated')=>`set local role ${role};set local request.jwt.claims=${literal(JSON.stringify({role,sub:actors[who].id,session_id:actors[who].session}))};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const call=(who,sql,role)=>`begin;${claims(who,role)}select ${sql};commit;`;
   // PostgreSQL row/composite RPCs (including room join) are not JSON text.
@@ -65,7 +79,6 @@ try {
     insert into public.watch_party_rooms(party_id,host_user_id,room_type,join_policy,content_access_rule,is_active,discovery_visibility)
     values('${party}','${actors.creator.id}','live','open','open',true,'private');commit;`);
   const auction=rpc('creator',create('RACE-STAGE'));
-  query(readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
   const cap=query(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,platform,storefront,storefront_country,route_kind,currency,
     environment,payment_method,min_amount_minor,max_amount_minor,provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)
     values('room_seat_auction','${actors.creator.id}','acct_fixture','ios','UNITED_STATES','US','external_browser_checkout','usd','test','card',50,100000,
@@ -152,9 +165,10 @@ try {
   const binderResult=await binder.done;assert.equal(binderResult.code,0,binderResult.stderr);
   assert.equal(query(`select provider_checkout_session_id from private.creator_room_auction_quotes where id='${bindQuote.id}'`),'cs_test_RaceBind');
   console.log(`ok ${++checks} - provider binder and checkout claim preserve room/auction/quote lock order`);
-  assert.ok(query(accessGrantsSnapshotSql)===baselineAccessGrants,'bids/holds never add, remove or modify access grants');
-  assert.equal(query('select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors)'),
-    '0','auction fixture actors never gain access from bids/holds');
+  assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants,'bids/holds never remove or modify any exact inherited grant row');
+  assert.ok(query(accessGrantsSnapshotSql)===raceAccessGrants,'bids/holds never add, remove or modify access grants');
+  assert.equal(query("select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors where kind like 'buyer%')"),
+    '0','Free auction buyers never gain access from bids/holds');
   assert.equal(checks,7);console.log('Room auction native concurrency:7 observed production lock races passed; no provider operation.');
 } finally {
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}

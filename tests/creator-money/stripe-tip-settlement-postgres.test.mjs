@@ -3,6 +3,7 @@ import {randomUUID} from 'node:crypto';
 import fs from 'node:fs';
 import test from 'node:test';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 // Real reservation, receipt, event lease and atomic projector over the complete
 // local migration chain. Only managed infrastructure is doubled; no provider IO.
@@ -18,6 +19,7 @@ test('Stripe tip settlement requires raw provider authority and survives reorder
     // evidence. Settlement assertions below are unchanged; no guard is bypassed.
     await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-authority.sql','utf8'));
     await db.exec(fs.readFileSync('tests/fixtures/creator-external-payment-capabilities.sql','utf8'));
+    await seedCurrentEventCommerceCreator(db);
     const actors=(await db.query('select * from event_reservation_fixture.actors')).rows;
     const buyer=actors.find(a=>a.kind==='buyer1'),other=actors.find(a=>a.kind==='buyer2'),creator=actors.find(a=>a.kind==='creator');
     await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false)`);

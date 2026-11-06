@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from './helpers/current-event-commerce-fixture.mjs';
 
 test('approved automatic auction source stays off, scopes renewal and hard-blocks unknown tax fees', {timeout:180000}, async()=>{
   const realDateNow=Date.now;
@@ -10,6 +11,7 @@ test('approved automatic auction source stays off, scopes renewal and hard-block
   try {
     await db.exec(fs.readFileSync(new URL('./fixtures/event-reservation-authority.sql',import.meta.url),'utf8'));
     await db.exec(fs.readFileSync(new URL('./fixtures/creator-external-payment-authority.sql',import.meta.url),'utf8'));
+    await seedCurrentEventCommerceCreator(db);
     await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
     const rows=async s=>(await db.query(s)).rows;
     const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));

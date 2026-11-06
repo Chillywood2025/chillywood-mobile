@@ -4,14 +4,14 @@ import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {harness,buyer,session,product,attempt} from '../helpers/merch-checkout-edge-harness.mjs';
-import {runMerchCheckoutDispatchRaces} from '../../scripts/lib/merch-checkout-dispatch-races.mjs';
+import {seedQualifiedCommerceCreator} from '../helpers/automatic-commerce-fixture.mjs';
 
 const migration='20261101045810_merch_checkout_dispatch_provenance.sql';
 test('real Edge + full SQL: no-dispatch proof, actor gates, retries, rollback and ambiguous holds', {timeout:240000}, async()=>{
  const successors=fs.readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')&&name>=migration).sort();
  // Exercise the old/new dispatch boundary in chronological schema order, then
  // replay every successor. Never omit a live binding beneath dependent guards.
- const {db}=await createDatabase({applyRepair:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:successors});
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:successors});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const root=()=>db.exec('reset role');
  const service=async()=>{await root();await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false);set role service_role`);};
@@ -39,18 +39,10 @@ test('real Edge + full SQL: no-dispatch proof, actor gates, retries, rollback an
    from auth.sessions s cross join public.wave1_legal_document_versions d where s.user_id in($1,$2) and d.active and d.market='UNITED_STATES'
    and (d.capability='account' or (s.user_id=$1 and d.capability in('creator','creator_money')))`,[host,buyer]);
   await service();await one(`select public.wave1_evaluate_creator_eligibility($1,'{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR","market":"UNITED_STATES","rolloutEligible":false,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','dispatch-fixture','local_pgtap')`,[host]);
-  // Execute the native runner's actual bootstrap against the full real schema.
-  // Its beta subject index is partial: the old bare conflict target must fail,
-  // while a fresh synthetic actor needs only a plain insert.
-  let nativeSeed;const captured=new Error('captured native bootstrap');
-  await assert.rejects(()=>runMerchCheckoutDispatchRaces({actors:{buyer1:{id:buyer,session},creator:{id:host}},
-   lit:value=>`'${String(value).replaceAll("'","''")}'`,query:sql=>{nativeSeed=sql;throw captured;}}),error=>error===captured);
+  // Historical pre-cutover negative control deliberately retains its old beta
+  // membership. The new current-schema free-buyer suite has no such grant.
   await root();
-  const oldNativeSeed=nativeSeed.replace(/(insert into public\.beta_access_memberships[^;]+);/,"$1 on conflict(user_id) do update set access_status='active';");
-  await assert.rejects(()=>db.exec(oldNativeSeed),/no unique or exclusion constraint/);
-  await db.exec(nativeSeed);
-  await assert.rejects(()=>db.exec(nativeSeed),/duplicate key/,'bootstrap must not hide a non-fresh actor');
-  assert.equal(await one('select count(*)::int from public.beta_access_memberships where user_id=$1 and access_status=$$active$$',[buyer]),1);
+  await db.query("insert into public.beta_access_memberships(user_id,access_status) values($1,'active')",[buyer]);
   await claim(host,hs);await one('select public.save_creator_merch_product_with_tracking($1,$$Test$$,$$Physical only$$,null,1000,20,$$published$$,null,$$tracked$$)',[product]);
 
   // Cutover: matching new RPC is absent on old schema. New Edge cannot fall
@@ -148,6 +140,7 @@ test('real Edge + full SQL: no-dispatch proof, actor gates, retries, rollback an
   assert.equal((await transition(uncertainKey,'abort')).aborted,false);
   await root();
   for(const file of successors.filter(name=>name!==migration))await db.exec(fs.readFileSync(`supabase/migrations/${file}`,'utf8'));
+  await seedQualifiedCommerceCreator(db,{id:host,session:hs});
   assert.equal((await transition(uncertainKey,'abort')).aborted,false,'current guards retain the ambiguous dispatch hold');
   await root();
   assert.equal(await one('select count(*)::int from public.creator_earnings_ledger'),0,'successor replay does not create payable money');

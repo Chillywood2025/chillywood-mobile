@@ -6,15 +6,17 @@ import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCashoutExecutionFixture} from '../helpers/cashout-execution-fixture.mjs';
 import {assertSandboxEdgeRecoveryFromSql} from '../helpers/sandbox-cashout-edge-recovery-proof.mjs';
+import {seedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 test('sandbox cashout uses provider-backed test sources without opening live money or payable ledgers', {timeout:240000}, async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true});
  try {
   const f=await seedCashoutExecutionFixture(db,{reserveInitialRequest:false});
   const {scalar,creator,claims,rpc}=f;
+  await seedCommerceCreator(db,{id:creator,session:f.session});
   const buyer='b2000000-0000-4000-8000-000000000001';
   await db.query("insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values($1,'sandbox-buyer@example.test',now(),false,false)",[buyer]);
-  await db.query("insert into public.sandbox_monetization_testers(user_id,email,status,expires_at) values($1,$2,'active',now()+interval '1 day')",[creator,`cashout-${creator}@example.test`]);
+  await assertBuyerHasNoPremium(db,{id:buyer});
   await db.exec("update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled'); update public.platform_money_kill_switches set state='sandbox_only' where key in ('stripe_connect_enabled','creator_monetization_enabled','provider_webhooks_enabled')");
   await db.query("insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,country) values($1,'stripe_connect','test','acct_sandboxCreator','US')",[creator]);
   const q=await scalar(`insert into private.sandbox_cashout_qualifications(creator_id,platform_account_id,account_id,destination_id,payout_type,source_type,
@@ -30,6 +32,17 @@ test('sandbox cashout uses provider-backed test sources without opening live mon
   await db.exec('update private.sandbox_cashout_control set enabled=true');
   const quote=await user("select public.preview_sandbox_creator_cashout(9000,'instant')");
   assert.equal(quote.ready,true); assert.equal(quote.appFeeMinor,180);assert.equal(quote.bankMinor,8820);
+  // Qualified test-key cashout is deliberately isolated from unknown live
+  // compliance. An explicit negative finding still blocks the creator.
+  for(const field of ['tax_complete','sanctions_clear']){
+   await db.exec('begin');
+   try{
+    await db.query(`update public.wave1_creator_eligibility set ${field}=null,state='PENDING_VERIFICATION' where creator_user_id=$1`,[creator]);
+    assert.equal((await user("select public.preview_sandbox_creator_cashout(9000,'instant')")).ready,true,`unknown ${field} does not fabricate or require live verification for isolated test cashout`);
+    await db.query(`update public.wave1_creator_eligibility set ${field}=false where creator_user_id=$1`,[creator]);
+    assert.equal((await user("select public.preview_sandbox_creator_cashout(9000,'instant')")).reason,'sandbox_origin_creator_required',`explicit negative ${field} blocks test cashout`);
+   }finally{await db.exec('rollback');}
+  }
   assert.equal(quote.earningsBasis,'sandbox_fixture_deductions_not_actual_fees');
   assert.equal((await user("select public.preview_sandbox_creator_cashout(9001,'instant')")).reason,'sandbox_earnings_insufficient');
   const request=async(operation=quote.operationId)=>user('select public.request_sandbox_creator_cashout($1,$2,$3,$4,$5,$6,$7)',[9000,'instant',q,operation,180,0,8820]);
@@ -170,7 +183,8 @@ test('sandbox cashout uses provider-backed test sources without opening live mon
   await assert.rejects(rpc("select public.claim_sandbox_creator_cashout_dispatch($1,'funding')",[reReserved.requestId]),/sandbox_source_reconciliation_required/);
   await user('select public.cancel_undispatched_sandbox_creator_cashout($1)',[reReserved.requestId]);
   await assert.rejects(user("select public.request_sandbox_creator_cashout(1,'instant',$1,gen_random_uuid(),1,0,0)",[q]),/sandbox_source_reconciliation_required/);
-  await db.query("update public.sandbox_monetization_testers set status='revoked' where user_id=$1",[creator]);
-  await assert.rejects(user('select public.list_my_sandbox_creator_cashout_executions()'),/sandbox_current_tester_required/);
+  await db.query("update public.user_entitlements set status='expired',expires_at=clock_timestamp()-interval '1 second' where user_id=$1 and entitlement_key='premium'",[creator]);
+  assert.ok((await user('select public.list_my_sandbox_creator_cashout_executions()')).length>0,'expired creator Premium preserves historical cashout readback');
+  assert.equal((await user("select public.preview_sandbox_creator_cashout(1,'instant')")).reason,'sandbox_origin_creator_required','expired creator Premium denies a new cashout');
  } finally {await db.close();}
 });

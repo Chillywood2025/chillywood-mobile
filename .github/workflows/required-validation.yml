@@ -175,6 +175,8 @@ jobs:
         run: deno test --node-modules-dir=none --no-lock supabase/functions/_shared/exact-subject-authority_test.ts supabase/functions/_shared/platform-role-authority_test.ts
       - name: Typecheck cashout and pending provider reconciliation entry points
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/sandbox-creator-cashout/index.ts supabase/functions/sandbox-creator-cashout-webhook/index.ts supabase/functions/creator-cashout-driver/index.ts supabase/functions/creator-cashout-worker/index.ts supabase/functions/creator-cashout-webhook/index.ts supabase/functions/creator-cashout-fee-import/index.ts supabase/functions/revenuecat-pending-reconcile/index.ts supabase/functions/stripe-connect-live-observation-webhook/index.ts
+      - name: Typecheck dormant creator provider observer
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/creator-provider-observation-worker/index.ts
       - name: Typecheck authenticated creator setup and owner tax catalog boundaries
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/stripe-connect-account/index.ts supabase/functions/stripe-connect-onboarding-link/index.ts supabase/functions/stripe-connect-account-sync/index.ts supabase/functions/stripe-tax-category-catalog/index.ts
 
@@ -183,9 +185,10 @@ jobs:
     if: needs.plan.outputs.database == 'true'
     needs: plan
     runs-on: ubuntu-latest
-    # Core already took 32m27s before the added transfer/tracking/case races.
-    # This is only the job budget, not a relaxed database or lock deadline.
-    timeout-minutes: 50
+    # Expanded native proofs project 53m13s including the measured successful tail.
+    # 20% engineering allowance, rounded up: 65m. See docs/DATABASE_VALIDATION_BUDGET.md.
+    # Aggregate budget only; every script/SQL/lock deadline remains unchanged.
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }

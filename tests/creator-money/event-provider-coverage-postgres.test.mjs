@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 function load(file,imports={}) {
   const context={exports:{},URL,Date,BigInt,require:name=>{assert.ok(name in imports,name);return imports[name];}};
@@ -21,9 +22,10 @@ const runtime=load('creator-event-broadcast-runtime',{
 });
 
 test('authenticated provider parser -> real runtime -> immutable SQL coverage; no received-time fulfillment', {timeout:240_000},async t=>{
-  const {db}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false});
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
+    await seedCurrentEventCommerceCreator(db,{premium:false});
     await db.exec(fs.readFileSync('tests/fixtures/event-broadcast-producer-authority.sql','utf8'));
     await db.exec(`select set_config('request.jwt.claims','{"role":"service_role"}',false);
       select public.heartbeat_creator_event_broadcast_worker();`);

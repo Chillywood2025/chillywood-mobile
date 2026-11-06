@@ -1,9 +1,11 @@
-// Reconstructed catalog contract after workspace rollback; all comparisons run
-// against the actual full replay, not static names alone.
+// Reconstructed historical catalog contract after workspace rollback; delta and
+// repair controls retain their pre-automatic-commerce checkpoint. The current
+// commerce boundary case and database-replay-order.test.mjs use the full chain.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createDatabase, splitSQL, merchStorefrontFiles, heldStudioBundleVersions} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalRuntimeDatabase, runtimeRepairDeferredSuccessors} from './helpers/runtime-authority-historical-fixture.mjs';
 import {monetizationAuditFiles, monetizationImplementationFiles,
   monetizationAddedFunctionIdentities, monetizationReplacedFunctionIdentities,
   monetizationRenamedFunctionIdentities, monetizationRemovedFunctionIdentities,
@@ -786,9 +788,9 @@ const queries={
 async function snapshot(db){return Object.fromEntries(await Promise.all(Object.entries(queries).map(async([key,sql])=>[key,(await db.query(sql)).rows])))}
 
 test('bounded render pool successors have the exact catalog delta and private activation boundary', {timeout:180_000}, async()=>{
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:clipExportPoolFiles});
+  const {db,replayReport}=await createHistoricalRuntimeDatabase({includeHeldStudio:true,excludeMigrations:clipExportPoolFiles});
   try{
-    assert.deepEqual(replayReport.excludedMigrations,[...clipExportPoolFiles]);
+    assert.deepEqual(replayReport.excludedMigrations,[...clipExportPoolFiles,...runtimeRepairDeferredSuccessors]);
     assert.ok(replayReport.files.includes('20261101141646_creator_clip_export_jobs.sql'),'original durable queue is the real prerequisite');
     const before=(await db.query(queries.functions)).rows;
     await db.exec('update private.creator_clip_export_worker set enabled=true,last_heartbeat_at=clock_timestamp() where singleton');
@@ -837,10 +839,10 @@ test('bounded render pool successors have the exact catalog delta and private ac
 test('November completion bundle has the exact reviewed added/replaced catalog signatures', {timeout:180_000}, async()=>{
   const completionOnDisk=fs.readdirSync(new URL('../supabase/migrations/',import.meta.url))
     .filter(file=>file.endsWith('.sql')&&file>='20261101141441_secondary_media_producer_registry.sql').sort();
-  assert.deepEqual(completionOnDisk,[...appCompletionFiles],'every completion successor, including data-only migrations, requires explicit inventory review');
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:appCompletionFiles});
+  assert.deepEqual(completionOnDisk,[...appCompletionFiles,...runtimeRepairDeferredSuccessors].sort(),'every completion successor, including the explicitly deferred automatic-commerce bundle, requires explicit inventory review');
+  const {db,replayReport}=await createHistoricalRuntimeDatabase({includeHeldStudio:true,excludeMigrations:appCompletionFiles});
   try{
-    assert.deepEqual(replayReport.excludedMigrations,[...appCompletionFiles]);
+    assert.deepEqual(replayReport.excludedMigrations,[...appCompletionFiles,...runtimeRepairDeferredSuccessors]);
     const before=(await db.query(queries.functions)).rows;
     for(const file of appCompletionFiles)for(const statement of splitSQL(fs.readFileSync(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8'))){
       const clean=statement.replace(/--[^\n]*/gu,'').replace(/\/\*[\s\S]*?\*\//gu,'').trim();
@@ -859,9 +861,9 @@ test('November completion bundle has the exact reviewed added/replaced catalog s
 
 test('creator monetization has the exact declared catalog delta from the audit checkpoint', {timeout:180_000}, async()=>{
   const excluded=[...monetizationImplementationFiles,...merchStorefrontFiles,...flexibleCommerceFiles];
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:excluded});
+  const {db,replayReport}=await createHistoricalRuntimeDatabase({includeHeldStudio:true,excludeMigrations:excluded});
   try {
-    assert.deepEqual(replayReport.excludedMigrations,excluded);
+    assert.deepEqual(replayReport.excludedMigrations,[...excluded,...runtimeRepairDeferredSuccessors]);
     assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),[], 'dependent storefront belongs after this historical audit checkpoint');
     assert.deepEqual(replayReport.files.filter(file=>monetizationImplementationFiles.includes(file)),[]);
     const before=(await db.query(queries.functions)).rows;
@@ -894,9 +896,9 @@ test('creator monetization has the exact declared catalog delta from the audit c
 
 test('physical merch successors have the exact declared catalog delta', {timeout:180_000}, async()=>{
   const excluded=[...merchStorefrontFiles,...flexibleCommerceFiles];
-  const {db,replayReport}=await createDatabase({includeHeldStudio:true,excludeMigrations:excluded});
+  const {db,replayReport}=await createHistoricalRuntimeDatabase({includeHeldStudio:true,excludeMigrations:excluded});
   try {
-    assert.deepEqual(replayReport.excludedMigrations,excluded);
+    assert.deepEqual(replayReport.excludedMigrations,[...excluded,...runtimeRepairDeferredSuccessors]);
     assert.deepEqual(replayReport.files.filter(file=>merchStorefrontFiles.includes(file)),[]);
     // The prerequisite settlement implementation is present in this checkpoint.
     assert.ok(replayReport.files.includes('20261027034844_creator_merch_payment_refund_reconciliation.sql'));
@@ -1022,7 +1024,7 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
     .filter(([key])=>includeHeldStudio||!appCompletionStudioDependentAddedFunctionIdentities.has(key)));
   const expectedFlexibleFiles = flexibleCommerceFiles
     .filter(file=>includeHeldStudio||!appCompletionStudioDependentFiles.includes(file));
-  const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
+  const {db,repairSql,replayReport}=await createHistoricalRuntimeDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
     assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size+notificationPreferenceFunctionKeys.size+notificationRegistrationFunctionKeys.size+brandRetentionFunctionKeys.size+legacyRetentionFunctionKeys.size+originalCopyFunctionKeys.size+externalReferenceFunctionKeys.size+r2QualificationFunctionIdentities.size+brandGlobalRetentionFunctionKeys.size+brandObservationFunctionKeys.size+brandEmptyFunctionKeys.size+brandArchivedVerificationFunctionIdentities.size+referenceAndRenditionFunctionIdentities.size+monetizationAddedFunctionIdentities.size+profileFeedFunctions.length+discoveryInvalidationFunctions.length+merchAddedFunctionIdentities.size+expectedFlexibleFunctions.size);

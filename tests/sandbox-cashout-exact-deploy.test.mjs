@@ -16,12 +16,13 @@ import {
 import {
   VERSION as INGRESS_VERSION, NAME as INGRESS_NAME, HASH as INGRESS_HASH,
 } from '../scripts/native-ingress-exact-deploy.mjs';
+import {HISTORICAL_CASHOUT_SOURCE,loadHistoricalCashoutBundle,readHistoricalCashoutSource,materializeHistoricalCashoutClosure} from './helpers/sandbox-cashout-historical-deployment-fixture.mjs';
 
-const bundle = loadBundle();
+const bundle = loadHistoricalCashoutBundle();
 const committedManifestBytes = fs.readFileSync(MANIFEST, 'utf8');
 after(() => {
   assert.equal(fs.readFileSync(MANIFEST, 'utf8'), committedManifestBytes, 'fixtures must not change the real manifest');
-  assert.deepEqual(loadBundle().manifest, bundle.manifest);
+  assert.deepEqual(loadHistoricalCashoutBundle().manifest, bundle.manifest);
 });
 const context = () => ({
   currentPostgres: false, currentReadOnly: true, sessionPostgres: false,
@@ -93,15 +94,32 @@ function sourceFixture(t, {unqualified = false} = {}) {
   git('config', 'user.name', 'Synthetic fixture');
   git('config', 'user.email', 'fixture@example.invalid');
   git('config', 'commit.gpgsign', 'false');
-  for (const file of CLOSURE) {
-    fs.mkdirSync(path.dirname(path.join(dir, file)), {recursive: true});
-    fs.copyFileSync(file, path.join(dir, file));
-  }
+  materializeHistoricalCashoutClosure(dir);
   if (unqualified) fs.writeFileSync(path.join(dir, MANIFEST), JSON.stringify(unqualifiedBundle().manifest, null, 2) + '\n');
   git('add', '.');
   git('commit', '-m', 'synthetic source closure');
   return {dir, git, source: git('rev-parse', 'HEAD')};
 }
+
+test('historical manifest does not qualify the changed working-tree cashout engine', () => {
+  const engine = EDGE_FILES.find(file => file.endsWith('/creator-cashout-execution.ts'));
+  assert.notEqual(fs.readFileSync(engine, 'utf8'), readHistoricalCashoutSource(engine));
+  assert.throws(() => loadBundle(), /EDGE_HASH_MISMATCH/);
+  assert.equal(fs.readFileSync(MANIFEST, 'utf8'), committedManifestBytes);
+  assert.deepEqual(loadHistoricalCashoutBundle().manifest, bundle.manifest);
+});
+
+test('original closure works in a single-commit checkout without historical Git objects', t => {
+  const {dir,git,source} = sourceFixture(t);
+  assert.equal(git('rev-list','--count','HEAD'),'1');
+  assert.throws(() => git('cat-file','-e',`${HISTORICAL_CASHOUT_SOURCE}^{commit}`));
+  assert.deepEqual(loadBundle(dir,source).manifest,bundle.manifest);
+  fs.rmSync(path.join(dir,'.git'),{recursive:true,force:true});
+  assert.deepEqual(loadBundle(dir).manifest,bundle.manifest,'the fixture also works with no Git directory');
+  const engine = EDGE_FILES.find(file => file.endsWith('/creator-cashout-execution.ts'));
+  fs.copyFileSync(engine,path.join(dir,engine));
+  assert.throws(() => loadBundle(dir),/EDGE_HASH_MISMATCH/,'current engine does not inherit the historical qualification');
+});
 
 test('committed dormant baseline matches reviewed evidence and plans without writing', async () => {
   const evidence = JSON.parse(fs.readFileSync('docs/audits/sandbox-cashout-baseline-20261104.json', 'utf8'));
@@ -301,12 +319,12 @@ test('source closure rejects changed, missing and uncommitted files without acce
   fs.appendFileSync(path.join(dir, MIGRATION), '\n-- changed fixture\n');
   assert.throws(() => sourceBinding(dir, source), /TRACKED_SOURCE_DIRTY/);
   assert.throws(() => loadBundle(dir), /MIGRATION_HASH_MISMATCH/);
-  fs.copyFileSync(MIGRATION, path.join(dir, MIGRATION));
+  fs.writeFileSync(path.join(dir, MIGRATION), readHistoricalCashoutSource(MIGRATION));
 
   const edge = EDGE_FILES.find(file => file.endsWith('/creator-cashout-execution.ts'));
   fs.appendFileSync(path.join(dir, edge), '\n// changed fixture\n');
   assert.throws(() => loadBundle(dir), /EDGE_HASH_MISMATCH/);
-  fs.copyFileSync(edge, path.join(dir, edge));
+  fs.writeFileSync(path.join(dir, edge), readHistoricalCashoutSource(edge));
   for (const change of [
     manifest => {manifest.edges[0].verify_jwt = false;},
     manifest => {manifest.edges[1].verify_jwt = true;},
@@ -318,11 +336,11 @@ test('source closure rejects changed, missing and uncommitted files without acce
     fs.writeFileSync(path.join(dir, MANIFEST), JSON.stringify(manifest));
     assert.throws(() => loadBundle(dir), /EDGE_CLOSURE_INVALID/);
   }
-  fs.copyFileSync(MANIFEST, path.join(dir, MANIFEST));
+  fs.writeFileSync(path.join(dir, MANIFEST), readHistoricalCashoutSource(MANIFEST));
   fs.unlinkSync(path.join(dir, edge));
   assert.throws(() => sourceBinding(dir, source));
   assert.throws(() => loadBundle(dir));
-  fs.copyFileSync(edge, path.join(dir, edge));
+  fs.writeFileSync(path.join(dir, edge), readHistoricalCashoutSource(edge));
 
   // A missing tracked closure member must not pass even if an untracked copy
   // happens to exist at the expected path.

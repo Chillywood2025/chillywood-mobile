@@ -1,4 +1,5 @@
 begin;
+\ir fixtures/automatic-commerce.inc
 select no_plan();
 set local timezone='UTC';
 -- Real local provider-reconciliation functions create the authority chain.
@@ -18,9 +19,8 @@ insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,doc
  from auth.sessions s cross join public.wave1_legal_document_versions d
  where s.user_id::text like '9b550000-%' and d.active and d.market='UNITED_STATES'
    and (d.capability='account' or (s.user_id='9b550000-0000-4000-8000-000000000001' and d.capability in ('creator','creator_money')));
-insert into public.wave1_creator_eligibility(creator_user_id,state,account_status,age_18_plus,legal_accepted,creator_role,moderation_state,market,rollout_eligible,platform_capability,
- provider_eligible,kyc_complete,tax_complete,sanctions_clear,payout_eligible,authority_source,last_operation_key) values
- ('9b550000-0000-4000-8000-000000000001','VERIFIED','ACTIVE',true,true,true,'CLEAR','UNITED_STATES',true,true,true,true,true,true,true,'local_social_test','social_creator_fixture');
+select pg_temp.seed_creator_premium('9b550000-0000-4000-8000-000000000001');
+select pg_temp.declare_sandbox_creator('9b550000-0000-4000-8000-000000000001','9b550000-0000-4000-8000-000000000101');
 update public.platform_money_kill_switches set state='sandbox_only' where key='revenuecat_app_store_enabled';
 insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes,vip_access_required) values
  ('9b551000-0000-4000-8000-000000000001','9b550000-0000-4000-8000-000000000001','VIP social fixture','public','clean','cloudflare_r2','chillywood-media-origin','9b550000-0000-4000-8000-000000000001/vip.mp4','9b550000-0000-4000-8000-000000000001/vip.mp4','video/mp4',1024,true),

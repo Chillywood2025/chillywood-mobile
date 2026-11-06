@@ -29,10 +29,44 @@ test('creator first live publication requires exact reviewed revision, current m
  await assert.rejects(confirm(r),/creator_eligibility_required/);
  await db.query('update public.wave1_creator_eligibility set payout_eligible=true where creator_user_id=$1',[actors.creator.user_id]);
  await assert.rejects(confirm(r),/eligibility_changed/,'restored eligibility still needs a new review');
- r=await review();p=await confirm(r);assert.equal(p.environment,'production');assert.equal(p.publicationStatus,'published');
+ r=await review();
+ const unchangedAuthority=()=>one(`select jsonb_build_object('version',version,'evaluatedAt',evaluated_at,
+   'epoch',(select last_value from private.merch_publish_authority_epoch)) from public.wave1_creator_eligibility where creator_user_id=$1`,[actors.creator.user_id]);
+ const beforeRefresh=await unchangedAuthority();
+ await rpc('creator','public.wave1_creator_eligibility_readback()');
+ await rpc('creator','public.wave1_creator_eligibility_readback()');
+ assert.deepEqual(await unchangedAuthority(),beforeRefresh,'unchanged lazy readbacks perform no statement and preserve reviewed publication epoch');
+ const beforeConfirmation=await one('select to_jsonb(p) from public.merch_products p where id=$1',[id]);
+ await assert.rejects(rpc('creator',`public.save_creator_merch_product_with_tracking('${id}','First listing','Physical item',null,1000,10,'published','${p.updatedAt}','tracked')`),/creator_mode_changed/,
+  'ordinary Sandbox publication cannot borrow live mode without the reviewed private context');
+ for(const role of ['anon','authenticated','service_role'])
+  assert.equal(await one("select has_table_privilege($1,'private.merch_publication_confirmation_context','insert')",[role]),false,
+   `${role} cannot forge reviewed promotion context`);
+ await db.exec(`create function public.synthetic_fail_reviewed_merch_save() returns trigger language plpgsql as $$begin
+  if new.id='${id}' and new.publication_status='published' then
+   if not exists(select 1 from private.merch_publication_confirmation_context where transaction_id=txid_current() and product_id=new.id)
+   then raise exception 'synthetic_confirmation_context_missing';end if;
+   raise exception 'synthetic_reviewed_save_failed';
+  end if;return new;end$$;
+  create trigger aaa_synthetic_reviewed_save_failure before update on public.merch_products
+   for each row execute function public.synthetic_fail_reviewed_merch_save();`);
+ await assert.rejects(confirm(r),/synthetic_reviewed_save_failed/);
+ await db.exec('drop trigger aaa_synthetic_reviewed_save_failure on public.merch_products;drop function public.synthetic_fail_reviewed_merch_save()');
+ assert.deepEqual(await one('select to_jsonb(p) from public.merch_products p where id=$1',[id]),beforeConfirmation,
+  'inner save failure rolls back all publication, mode and inventory changes');
+ assert.equal(await one('select count(*)::int from private.merch_publication_confirmation_context'),0,'failed confirmation retains no context');
+ assert.equal(await one('select count(*)::int from private.merch_publication_receipts'),0,'failed confirmation retains no receipt');
+ r=await review();
+ p=await confirm(r);assert.equal(p.environment,'production');assert.equal(p.publicationStatus,'published');
  assert.equal((await confirm(r)).id,id,'same receipt retry is nonmutating acknowledgement');
  assert.equal(await one('select count(*)::int from private.merch_publication_receipts'),1);
+ // A historical test listing must have been authored in actual Sandbox mode.
+ // Do not relabel it or bypass the normal creator writer to create the fixture.
+ await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
  const testId=randomUUID();let old=await rpc('creator',`public.save_creator_merch_product_with_tracking('${testId}','Test history','Physical item',null,2000,5,'published',null,'untracked')`);
+ old=await rpc('creator',`public.configure_creator_merch_variants('${testId}','options',
+  '[{"id":"${randomUUID()}","sku":"HISTORY-M-BLUE","size":"M","color":"Blue","stockQuantity":5,"status":"active"}]'::jsonb,'${old.updatedAt}')`);
+ await db.exec("begin;set local request.jwt.claim.role='service_role';update public.platform_money_kill_switches set state='on' where key='live_money_enabled';commit;");
  await db.query(`insert into public.merch_orders(id,product_id,buyer_id,creator_id,provider,environment,order_status,payment_status,amount_subtotal_minor,amount_total_minor,currency)
  values($1,$2,$3,$4,'stripe_physical_goods','sandbox','paid','paid',2000,2000,'usd')`,[randomUUID(),testId,actors.buyer1.user_id,actors.creator.user_id]);
  const storefront=await rpc('buyer2',`public.list_creator_merch_products('${actors.creator.user_id}',false,null,20)`);
@@ -44,6 +78,8 @@ test('creator first live publication requires exact reviewed revision, current m
  const retryCopy=await rpc('creator',`public.copy_creator_merch_live_draft('${testId}','${old.updatedAt}')`);assert.equal(retryCopy.id,copied.id,'lost copy response resumes the same inventory identity');
  assert.equal(await one('select count(*)::int from private.merch_live_draft_copies'),1);
  assert.notEqual(copied.id,testId);assert.equal(copied.environment,'sandbox');assert.equal(copied.publicationStatus,'draft');assert.equal(copied.photoAssetId,null);
+ assert.equal(copied.variantMode,'options');assert.equal(copied.variants.length,1);
+ assert.notEqual(copied.variants[0].id,old.variants[0].id,'live-mode draft options copy gets new inventory identity');
  assert.deepEqual(await rows('select to_jsonb(o) value from public.merch_orders o'),ordersBefore);
  assert.equal(await one('select publication_status from public.merch_products where id=$1',[testId]),'published');
  assert.equal(await one('select count(*)::int from private.commerce_tax_qualifications where product_id=$1',[copied.id]),0);
@@ -52,6 +88,6 @@ test('creator first live publication requires exact reviewed revision, current m
  const nativeQuery=async sql=>{const results=await db.exec(sql);const row=results.at(-1)?.rows?.[0];return row?String(Object.values(row)[0]):'';};
  const nativeAuth=()=>`set local request.jwt.claims='${JSON.stringify({role:'authenticated',sub:actors.creator.user_id,session_id:actors.creator.session_id})}';set local role authenticated;`;
  await runMerchPublicationRaces({query:nativeQuery,actors:{creator:{id:actors.creator.user_id,session:actors.creator.session_id}},lit:v=>`'${String(v).replaceAll("'","''")}'`,auth:nativeAuth,
- race:async(_name,first,second,expected)=>{await nativeQuery(`begin;${first}commit;`);await assert.rejects(nativeQuery(`begin;${second}commit;`),expected.error);await db.exec('rollback');}});
+ race:async(_name,first,second,expected)=>{await nativeQuery(`begin;${first}${expected.afterBlocked??''}commit;`);await assert.rejects(nativeQuery(`begin;${second}commit;`),expected.error);await db.exec('rollback');}});
  for(const role of ['anon','service_role'])assert.equal(await one("select has_function_privilege($1,'public.confirm_creator_merch_live_publication(uuid)','execute')",[role]),false);
 }));

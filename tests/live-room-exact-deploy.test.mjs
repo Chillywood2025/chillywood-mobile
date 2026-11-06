@@ -5,7 +5,7 @@ import {Buffer} from 'node:buffer';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
+import {createHistoricalDeploymentDatabase} from './helpers/historical-deployment-schema-fixture.mjs';
 import {loadBundle,projectFunctions,splitSQL,readbackSql,finalReadbackSql,buildApplySql,classifyState,deploy,sourceBinding,TOOL,MANIFEST,VERSIONS,diagnosticManagementQuery,safeHelperError,MANAGEMENT_CONTEXT_SQL,validateManagementContext,finalContractChecks} from '../scripts/live-room-exact-deploy.mjs';
 
 const bundle=loadBundle();
@@ -108,10 +108,10 @@ test('committed exact HEAD and immutable Git inputs are required; dirty/untracke
   assert.throws(()=>loadBundle(dir),/MANIFEST_INVALID/);
 });
 
-test('real nine bodies atomically roll back failures, preserve exact history, and verify final closure',{timeout:300000},async t=>{
+test('historical nine bodies atomically roll back failures, preserve exact history, and verify final closure',{timeout:300000},async t=>{
   const excluded=[...bundle.migrations.map(x=>x.path.split('/').at(-1)),'20261102093836_creator_clip_export_bounded_pool.sql','20261102094308_creator_clip_scale_lifecycle_ledger.sql','20261102194000_sandbox_creator_cashout_execution.sql'];
   excluded.push('20261105010859_sandbox_cashout_status_notifications.sql'); // Depends on the intentionally absent sandbox execution.
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,excludeMigrations:excluded});t.after(()=>db.close());
+  const {db}=await createHistoricalDeploymentDatabase({excludeMigrations:excluded});t.after(()=>db.close());
   // Synthetic local configuration aligns the approved live hold contract. No
   // provider network, real users, secrets, or production fixtures are accessed.
   await db.exec(`create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);

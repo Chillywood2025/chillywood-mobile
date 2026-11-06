@@ -1078,8 +1078,10 @@ select set_config(
   true
 );
 select ok(
-  not public.resolve_sandbox_monetization_tester(null,null),
-  'revoked sandbox tester remains blocked'
+  public.resolve_sandbox_monetization_tester(null,null)
+    and not public.has_platform_role(array['owner','operator'])
+    and not public.monetization_has_active_premium(auth.uid()),
+  'revoked tester remains an ordinary Free sandbox buyer without staff authority'
 );
 
 select set_config(
