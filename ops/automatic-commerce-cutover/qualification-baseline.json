@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "kind": "read-only target baseline observation, not deployment",
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "capturedAt": "2026-11-06T17:19:23Z",
+  "querySha256": "a39bfc2fc7aa56dcf037217962ab5c43debf2f99d1dfc18f22a39c3a82a299ec",
+  "affectedKeys": 529,
+  "affectedKeysSha256": "9185d1750ad7fa10d99590bb02121723be1ca8bab95ce6289355ab22c9c0408d",
+  "sourceExpectedOriginalSha256": "9dae3673ee3f1356cba3d8ff5d52777213cd11b5bc06bd4f64dce5fa07b78a74",
+  "observedOriginalSha256": "9dae3673ee3f1356cba3d8ff5d52777213cd11b5bc06bd4f64dce5fa07b78a74",
+  "observedUntouchedSha256": "74e978fb894f3ef47088420186a9510fe5ac95d73a81809e6b10c5a66667c29a",
+  "notes": [
+    "The source-expected affected hash was derived before the live observation, not accepted from live data.",
+    "Only the two documented legacy comments are normalized in the local native fixture; deployment leaves those comments unchanged.",
+    "The untouched hash is a frozen observation, enforced before and after each write. This record does not authorize unlisted changes.",
+    "Custom role and database settings are hashed server-side. No credential values or customer records are included."
+  ]
+}

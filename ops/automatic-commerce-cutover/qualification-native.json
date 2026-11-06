@@ -1,0 +1,123 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "native": true,
+  "elapsedMs": 105865,
+  "sourceFiles": 609,
+  "statements": 14422,
+  "heldMigrations": [
+    "20261102093836_creator_clip_export_bounded_pool.sql",
+    "20261102094308_creator_clip_scale_lifecycle_ledger.sql",
+    "20261104120922_google_refund_tax_history_checkpoints.sql",
+    "20261105010859_sandbox_cashout_status_notifications.sql"
+  ],
+  "sourceReplaySha256": "606c2c8116eaad5d2a08f1f2ed9add57ccabfaf18a6e5e5da9287ef0c39fdc0b",
+  "managedServices": "repository fixture doubles; no provider network",
+  "reports": [
+    {
+      "schema": 1,
+      "status": "passed",
+      "native": true,
+      "version": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+      "tests": [
+        "PL/pgSQL, SQL/STABLE, immutable, composite and set-returning bridges fail closed; attributes/ACL/owner restore exactly",
+        "cached prepared and inlined SQL plan is invalidated by committed bridge",
+        "old prebridge frame remains executable, and positive virtualtransaction drain rejects it until completed",
+        "bridge frame paused before its first instruction cannot resume old domain logic after final commit",
+        "idle/read-only virtualtransactions without permanent XIDs block cutover",
+        "direct authority DML rejects and relation contention rolls back bounded cutover, preserving bridge",
+        "Auth-like direct DML queued after census sees the final statement gate after commit, not a stale bridge trigger",
+        "unchanged lock-taking outer caller is bridged before DECLARE, earlier locks and changed callees",
+        "catalog digest preserves 64-bit sequence limits without JavaScript numeric round-tripping"
+      ],
+      "bridgeSourceSha256": "894e7ea5b7dbaee82d77e91ac7be9d503b4d9a0f40eaa9e6704decbff3a80486"
+    },
+    {
+      "schema": 1,
+      "status": "passed",
+      "native": true,
+      "fixtureOnly": true,
+      "baseline": "full chronological source replay with managed-service stubs and synthetic history/control fingerprints",
+      "functions": 407,
+      "migrations": 13,
+      "bridgeBytes": 556895,
+      "finalBytes": 795894,
+      "restoreBytes": 555562,
+      "readbackBytes": 580805,
+      "phaseTimings": [
+        {
+          "phase": "bridge-uncertain-rollback",
+          "beforeCommitMs": 3673,
+          "wallMs": 3736,
+          "includesPausedReadbackProbe": true
+        },
+        {
+          "phase": "bridge",
+          "wallMs": 5333
+        },
+        {
+          "phase": "restore",
+          "wallMs": 3771
+        },
+        {
+          "phase": "bridge-uncertain-commit",
+          "beforeCommitMs": 5658,
+          "wallMs": 5745,
+          "includesPausedReadbackProbe": true
+        },
+        {
+          "phase": "finalize-uncertain-rollback",
+          "beforeCommitMs": 6077,
+          "wallMs": 6148,
+          "includesPausedReadbackProbe": true
+        },
+        {
+          "phase": "finalize-uncertain-commit",
+          "beforeCommitMs": 5986,
+          "wallMs": 6052,
+          "includesPausedReadbackProbe": true
+        }
+      ],
+      "fixturePayloadSha256": {
+        "bridge": "77c3548cc88566fc4a3c43d80c2e6f13c939582a7f5232525b7d34909d199842",
+        "finalize": "74c03a173dde0d11fc97afac3f8e0161f4296884a30d20f31a6fb8963ef25bca",
+        "restore": "23449ec1ab858d74af64d051d6c764d9100ae1f52a8fe9dfee3fb8c36b94d6c7",
+        "readback": "ead1729e1e7017d7df250e38f88d6286c4095607607f34d764f021fc5fc5e5db"
+      },
+      "maxPhysicalLineBytes": {
+        "bridge": 1803,
+        "finalize": 1803,
+        "restore": 1803,
+        "readback": 1803
+      },
+      "payloadBinding": "These hashes bind prepared synthetic history/control fixture payloads. Uncertain-operation cases add only a pre-COMMIT observation marker and hold, then commit or roll back. Target payloads are separately source-bound.",
+      "generatorSourceSha256": "c86a25e0a356c09e6d0cf54519d656bcfb23e8b75641c40b2bfe0d92d1f865b1",
+      "catalogSourceSha256": "2da918c362dc31998af1421c0a7a5357e84741708fff7d69773f498f8e2c8183",
+      "budgets": {
+        "statementMs": 50000,
+        "lockMs": 3000,
+        "idleTransactionMs": 15000,
+        "scope": "Per server statement; all mutations are in one outer DO. Not an HTTP or downtime guarantee."
+      },
+      "originalAffectedSha256": "9dae3673ee3f1356cba3d8ff5d52777213cd11b5bc06bd4f64dce5fa07b78a74",
+      "finalAffectedSha256": "1cc3e0ce87be0a6a744be8347781e0945bcb6f559a6b6bbfb2dd4ba521039e65",
+      "tests": [
+        "407 complete metadata/definition checks",
+        "expanded/compact function, history and catalog predicates agree at all four phase boundaries",
+        "NULL, missing, empty, duplicated and changed function/key/migration constants reject",
+        "all payloads below 900000 bytes and physical lines below 2048 bytes",
+        "flat chunks reconstruct exact Unicode, quote, dollar, newline and boundary bytes in native PostgreSQL",
+        "server statement timeouts preserve original/bridge states",
+        "actual emitted bridge/final pre-COMMIT holds reject concurrent readback; commit and rollback yield fresh committed states",
+        "atomic bridge failure",
+        "complete bridge and exact recovery",
+        "atomic mid-migration rollback",
+        "unexpected catalog mutation rejected",
+        "all 13 original history identities and statement bytes; NULL, missing and extra history elements rejected",
+        "exact final affected catalog and unchanged remainder",
+        "dormant observer and empty initial declarations"
+      ],
+      "sourceSha256": "14a26407cc9f0e25b0ddf65e334fbedc6cb35c1adf6c37dcfa9345eccae8fd2f"
+    }
+  ]
+}
