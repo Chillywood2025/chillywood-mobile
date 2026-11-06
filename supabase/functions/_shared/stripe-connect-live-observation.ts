@@ -48,6 +48,11 @@ export async function observeLiveConnectAccount(context: LiveConnectObservationC
   if (bind(v2) !== bind(again) || now() - started > 45000) fail();
   const configuration = normalizeStripeConfiguration(v1 as StripeAccountObject);
   const responsibilities = v2.defaults?.responsibilities;
+  // Only explicit null means no disabled reason. Missing, malformed or blank
+  // values are incomplete evidence; still record them to revoke prior readiness.
+  const disabledReason = v1.requirements?.disabled_reason;
+  const disabledReasonVerified = disabledReason === null
+    || (typeof disabledReason === "string" && disabledReason.trim().length > 0);
   const proof = {
     accountId: context.accountId, platformAccountId: context.platformAccountId, environment: "live", modeVerified: true,
     source: "authenticated_stripe_get_v1_v2", v2Dashboard: v2.dashboard ?? "unknown",
@@ -58,7 +63,7 @@ export async function observeLiveConnectAccount(context: LiveConnectObservationC
     pendingVerification: strings(v1.requirements?.pending_verification) ?? ["unverified"],
     requirementsComplete: ["currently_due", "past_due", "eventually_due", "pending_verification"]
       .every((key) => strings(v1.requirements?.[key]) !== null)
-      && Object.prototype.hasOwnProperty.call(v1.requirements ?? {}, "disabled_reason"),
+      && disabledReasonVerified,
   };
   const v2Matches = proof.v2Dashboard === "express" && proof.v2FeesCollector === "application" && proof.v2LossesCollector === "application";
   return { ...configuration, configurationStatus: v2Matches ? configuration.configurationStatus : "mismatch",
@@ -66,7 +71,7 @@ export async function observeLiveConnectAccount(context: LiveConnectObservationC
     chargesEnabled: v1.charges_enabled === true, payoutsEnabled: v1.payouts_enabled === true,
     detailsSubmitted: v1.details_submitted === true, country: v1.country ?? null,
     currency: /^[a-z]{3}$/.test(v1.default_currency) ? v1.default_currency : "xxx",
-    disabledReason: typeof v1.requirements?.disabled_reason === "string" ? v1.requirements.disabled_reason : null,
+    disabledReason: typeof disabledReason === "string" ? disabledReason : null,
     currentlyDue: strings(v1.requirements?.currently_due) ?? ["unverified"],
     pastDue: strings(v1.requirements?.past_due) ?? ["unverified"],
     eventuallyDue: strings(v1.requirements?.eventually_due) ?? ["unverified"],
