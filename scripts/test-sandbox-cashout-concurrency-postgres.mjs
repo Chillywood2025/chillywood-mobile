@@ -8,6 +8,7 @@ import {readFileSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createBrandGuardCloneRestorer} from './lib/brand-guard-clone-restore.mjs';
 import {seedCashoutExecutionFixture,creator,session as actorSession} from '../tests/helpers/cashout-execution-fixture.mjs';
+import {commerceSeedAdapter,seedCommerceCreator} from '../tests/helpers/automatic-commerce-fixture.mjs';
 if(process.argv.includes('--help')){console.log('After local Supabase reset, test actual cashout locks in a generated disposable clone. No remote URLs or provider calls.');process.exit(0);}
 assert.equal(process.argv.length,2,'no arbitrary target arguments');
 const project=readFileSync('supabase/config.toml','utf8').match(/^project_id\s*=\s*"([A-Za-z0-9_.-]+)"/mu)?.[1];assert.ok(project);
@@ -72,6 +73,7 @@ try{
  async function seed(){
   await db.exec('reset role');
   const a=await seedCashoutExecutionFixture(db,{creatorId:randomUUID(),sessionId:randomUUID(),recipientAccountId:'acct_'+randomUUID().replaceAll('-',''),reserveInitialRequest:false});
+  await seedCommerceCreator(commerceSeedAdapter(query),{id:a.creator,session:a.session});
   // Provider account IDs are globally unique across mode rows. The test-mode
   // binding must be a distinct account, never reuse/convert the live fixture.
   a.accountId='acct_test'+randomUUID().replaceAll('-','');
@@ -80,7 +82,6 @@ try{
   query(`reset role;update public.platform_money_kill_switches set state='off' where key in ('live_money_enabled','payouts_enabled','cashout_enabled');
    update public.platform_money_kill_switches set state='sandbox_only' where key in ('stripe_connect_enabled','creator_monetization_enabled','provider_webhooks_enabled');
    update private.sandbox_cashout_control set enabled=true;
-   insert into public.sandbox_monetization_testers(user_id,email,status,expires_at) values(${lit(a.creator)},${lit('native-'+a.creator+'@example.test')},'active',now()+interval '1 day');
    insert into public.creator_payout_accounts(creator_user_id,provider,provider_environment,provider_account_id,country) values(${lit(a.creator)},'stripe_connect','test',${lit(a.accountId)},'US');`);
   a.qualification=query(`insert into private.sandbox_cashout_qualifications(creator_id,platform_account_id,account_id,destination_id,payout_type,source_type,
    provider_fee_bps,provider_fee_fixed_minor,settlement_policy_version,simulated_tax_bps,simulated_platform_bps,simulated_provider_bps,simulated_provider_fixed_minor,
@@ -198,13 +199,13 @@ try{
   invariants(a);
  }
  // Claim/cancel commit and rollback schedules, including duplicate claims.
- for(const mutation of ['session','tester','control'])for(const outcome of ['commit','rollback']){
+ for(const mutation of ['session','creatorPremium','control'])for(const outcome of ['commit','rollback']){
   const a=await seed(),id=run(a,'authenticated',request(a)).requestId;
   const change=mutation==='session'?`update auth.sessions set not_after=now()-interval '1 minute' where id=${lit(a.session)};`
-   :mutation==='tester'?`update public.sandbox_monetization_testers set status='revoked' where user_id=${lit(a.creator)};`
+   :mutation==='creatorPremium'?`update public.user_entitlements set revoked_at=clock_timestamp() where user_id=${lit(a.creator)} and entitlement_key='premium';`
    :'update private.sandbox_cashout_control set enabled=false;';
   const {waited}=await race(change,auth('service_role',a)+claim(id),outcome);
-  if(outcome==='commit'){failed(waited,mutation==='control'?/sandbox_payout_execution_disabled/:/sandbox_origin_tester_required/);assert.equal(phase(id),'prepared');}
+  if(outcome==='commit'){failed(waited,mutation==='control'?/sandbox_payout_execution_disabled/:/sandbox_origin_creator_required/);assert.equal(phase(id),'prepared');}
   else {passed(waited);assert.equal(parse(waited.stdout).claimed,true);assert.equal(phase(id),'funding_unknown');}
   invariants(a);
  }

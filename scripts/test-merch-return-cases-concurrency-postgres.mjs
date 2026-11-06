@@ -12,6 +12,10 @@ import {runMerchPublicationRaces} from './lib/merch-publication-races.mjs';
 import {runMerchTaxCategoryRaces} from './lib/merch-tax-category-races.mjs';
 import {runMerchLiveCheckoutRaces} from './lib/merch-live-checkout-races.mjs';
 import {runMerchAdmissionCutoverRace} from './lib/merch-admission-cutover-race.mjs';
+import {commerceSeedAdapter,seedQualifiedCommerceCreator} from '../tests/helpers/automatic-commerce-fixture.mjs';
+import {runAutomaticCommerceObserverRaces} from './lib/automatic-commerce-observer-races.mjs';
+import {runAutomaticCommerceDeclarationRaces} from './lib/automatic-commerce-declaration-races.mjs';
+import {runAutomaticCommerceAuthorityRaces} from './lib/automatic-commerce-authority-races.mjs';
 
 if(process.argv.includes('--help')){
   console.log('Run after local Supabase reset. Writes only a generated local clone. No remote URLs or provider calls.');process.exit(0);
@@ -64,6 +68,8 @@ try{
   success(admin(['psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',database],restore.prepare(dump.stdout,database),null),'restore owned clone');
   query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
   const actors=JSON.parse(query("select jsonb_object_agg(kind,jsonb_build_object('id',user_id,'session',session_id)) from event_reservation_fixture.actors"));
+  await seedQualifiedCommerceCreator(commerceSeedAdapter(query),actors.creator,{environment:'production'});
+  await runAutomaticCommerceObserverRaces({query,session,until,actors,lit});
   const auth=(who='creator',role='authenticated')=>`set local role ${role};set local request.jwt.claims=${json({role,sub:actors[who].id,session_id:actors[who].session}).replace(/::jsonb$/u,'')};set local request.headers='{"x-chillywood-platform":"ios"}';`;
   const tx=(sql,role='service_role',who='creator')=>`begin;${auth(who,role)}select ${sql};commit;`;
   const rpc=(sql,role='service_role',who='creator')=>parsed(query(tx(sql,role,who)));
@@ -156,13 +162,17 @@ try{
   assert.equal(query('select count(*) from public.creator_earnings_ledger'),'0');
   assert.equal(checks,4);
   await runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json});
-  assert.equal(checks,10);
+  assert.equal(checks,14);
   await runMerchAdmissionCutoverRace({query,rpc,session,until,auth,actors,lit});
   await runMerchLiveCheckoutRaces({query,race,auth,actors,lit,json});
   await runMerchPublicationRaces({query,race,auth,actors,lit});
   await runMerchTaxCategoryRaces({query,race,auth,actors,lit});
-  assert.equal(checks,22);
-  console.log('PASS native: twenty-two PostgreSQL blocking-edge schedules; cases, carrier/dispute orderings, duplicate checkout allocation, dispatch/abort races, once-only stock release, current legal/publication/category review and retained global-latch interoperation. Synthetic source fixture only.');
+  assert.equal(checks,26);
+  await runAutomaticCommerceDeclarationRaces({query,race,lit});
+  assert.equal(checks,27);
+  await runAutomaticCommerceAuthorityRaces({query,race,lit});
+  assert.equal(checks,33);
+  console.log('PASS native: thirty-three PostgreSQL blocking-edge schedules plus nonblocking observer SKIP LOCKED; free buyer account/session revocation, creator Premium authority, seller ban and new quarantine/hold rows in both orders, distinct-session declaration quota, cases, dispatch/abort, legal/publication/category and retained global-latch interoperation. Synthetic source fixture only.');
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop owned clone');}

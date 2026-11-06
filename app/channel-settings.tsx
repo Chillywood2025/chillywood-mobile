@@ -1,4 +1,5 @@
 import { CreatorAuctionHeldEarnings } from "../components/monetization/creator-auction-held-earnings";
+import { CreatorEligibilityDeclarationPanel } from "../components/monetization/creator-eligibility-declaration-panel";
 import { CreatorCashoutPanel } from "../components/monetization/creator-cashout-panel";
 import { SandboxCreatorCashoutPanel } from "../components/monetization/sandbox-creator-cashout-panel";
 import { SubscriptionPriceRequestStatus } from "../components/monetization/subscription-price-request-status";
@@ -9418,6 +9419,7 @@ export function ChannelStudioScreen() {
     };
     const renderMoneyCenterOverviewContent = () => (
       <View testID="money-center-overview-panel">
+        <CreatorEligibilityDeclarationPanel key={JSON.stringify(studioAuthority)} />
         {creatorEarningsBalances?.authorityQuarantined ? (
           <Text style={styles.eventEmptyBody} testID="money-center-authority-quarantined-copy">
             Financial balances are temporarily unavailable while provider authority is under review. Payouts remain locked.
@@ -9956,7 +9958,7 @@ export function ChannelStudioScreen() {
                     <Text style={styles.summaryLabel}>Tester Access</Text>
                     <Text style={styles.summaryValue}>{sandboxTesterRows.length > 0 ? `Active testers: ${sandboxTesterRows.length}` : "No active testers"}</Text>
                     <Text style={styles.summaryBody}>
-                      Tester access allows sandbox/test-only monetization flows. It does not grant owner, payout, or live-money permissions.
+                      Tester access is for internal diagnostics. Eligible Premium creators use automatic eligibility; ordinary buyers can remain Free. Tester access does not grant owner, payout, or live-money permissions.
                     </Text>
                   </View>
                 </View>

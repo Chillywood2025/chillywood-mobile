@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDatabase} from './database-runtime-authority-fixture.mjs';
+import {seedCommerceCreator,seedSyntheticStrictCreatorProvider} from './automatic-commerce-fixture.mjs';
 
 // Synthetic disposable full-schema fixture. No external provider or hosted writes.
 export async function withQualifiedAuctionFixture({mode='live',lane='event',sourceKind='stage_reserved_seat'}={},use=async()=>{}) {
@@ -27,6 +28,12 @@ export async function withQualifiedAuctionFixture({mode='live',lane='event',sour
   await db.exec(recipientFixture);
   await db.exec("update public.creator_events set visibility='public' where id in(select id from event_reservation_fixture.events)");
   const actors=Object.fromEntries((await rows('select * from event_reservation_fixture.actors')).map(a=>[a.kind,a]));
+  const creatorActor={id:actors.creator.user_id,session:actors.creator.session_id};
+  await seedCommerceCreator(db,creatorActor,{environment:rawMode});
+  // Premium production processing opens only isolated fixture controls; retain
+  // this fixture's explicit activation boundary below for auction assertions.
+  if(mode==='live')await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
+  await seedSyntheticStrictCreatorProvider(db,creatorActor,{environment:rawMode,providerAccountId:'acct_fixture'});
   const event=(await rows("select id from event_reservation_fixture.events where name='show1'"))[0].id;
   const rpc=async(actor,expression,role='authenticated')=>{
    const a=actors[actor];try{

@@ -323,3 +323,6 @@ verify_jwt = false
 
 [functions.stripe-tax-category-catalog]
 verify_jwt = true
+
+[functions.creator-provider-observation-worker]
+verify_jwt = true

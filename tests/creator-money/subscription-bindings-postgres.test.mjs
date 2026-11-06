@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {randomUUID} from 'node:crypto';
+import {seedQualifiedCommerceCreator,assertBuyerHasNoPremium} from '../helpers/automatic-commerce-fixture.mjs';
 
 // Actual full application SQL, immutable quote triggers and provider lifecycle;
 // no authority predicates are replaced. PGlite is not native concurrency proof.
@@ -19,17 +21,17 @@ for(const implicitApiGrants of [true,false]) test(`creator subscription cohorts 
     await db.exec('set role authenticated');
   };
   try {
-    const host=await scalar(`select md5('subscription-bindings-host:'||n)::uuid from generate_series(1,10000)n
-      where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('subscription-bindings-host:'||n)::uuid::text,20260814),100)=0 limit 1`);
+    const host=randomUUID();
     for(const [user,session] of [[host,hostSession],...buyers.map((v,i)=>[v,sessions[i]])]){
       await db.query('insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values($1,false,false,now())',[user]);
       await db.query('insert into auth.sessions(id,user_id) values($1,$2)',[session,user]);
-      await db.query('insert into public.sandbox_monetization_testers(user_id) values($1)',[user]);
     }
     await db.query(`insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
       select s.user_id,public.wave1_sha256(s.user_id::text),d.document_key,d.version,d.market,'member',d.capability,s.id::text,'service_reconciliation'
       from auth.sessions s cross join public.wave1_legal_document_versions d where d.active and d.market='UNITED_STATES'
       and (d.capability='account' or (s.user_id=$1 and d.capability in('creator','creator_money')))`,[host]);
+    await seedQualifiedCommerceCreator(db,{id:host,session:hostSession});
+    for(const id of buyers)await assertBuyerHasNoPremium(db,{id});
     await service();
     assert.equal((await scalar(`select public.wave1_evaluate_creator_eligibility($1,
       '{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR","market":"UNITED_STATES","rolloutEligible":true,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}',

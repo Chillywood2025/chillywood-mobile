@@ -2,11 +2,10 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 
-export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json}) {
+export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,lit,json,sequentialReplay=false}) {
  const buyer=actors.buyer1.id,session=actors.buyer1.session,creator=actors.creator.id;
- // These actors are fresh in the disposable clone. Do not infer an
- // unconditional user_id conflict target from the partial beta subject index.
- await query(`insert into public.beta_access_memberships(user_id,access_status) values(${lit(buyer)},'active');
+ // Ordinary buyers have no beta/tester membership or Premium entitlement.
+ await query(`update public.platform_money_kill_switches set state='sandbox_only' where key='merch_enabled';
   insert into public.user_profiles(user_id,username,display_name) values(${lit(creator)},'dispatch_race_creator','Creator'),(${lit(buyer)},'dispatch_race_buyer','Buyer') on conflict(user_id) do nothing;`);
  const make=async()=>{
   const product=randomUUID(),attempt=randomUUID();
@@ -68,4 +67,32 @@ export async function runMerchCheckoutDispatchRaces({query,rpc,race,auth,actors,
   {afterBlocked:ownerClaims+`select ${old};`});
  assert.equal(interop.first.id,interop.second.id);assert.equal(await allocation.stock(),'1');
  assert.equal(await query(`select count(*) from private.merch_checkout_dispatch where order_id=${lit(interop.first.id)}`),'0','no historical provenance inference');
+
+ // Creator authority and free-buyer account/session revocations must serialize
+ // with the actual dispatch, not just with an earlier preflight read. Native
+ // race() proves distinct backends and pg_blocking_pids before the commit.
+ const mutations=[
+  ['creator Premium revocation',`update public.user_entitlements set revoked_at=clock_timestamp() where user_id=${lit(creator)} and entitlement_key='premium'`,
+   `update public.user_entitlements set revoked_at=null where user_id=${lit(creator)} and entitlement_key='premium'`],
+  ['creator Premium grant refund',`update public.access_grants set refunded_at=clock_timestamp() where user_id=${lit(creator)} and grant_type='premium'`,
+   `update public.access_grants set refunded_at=null where user_id=${lit(creator)} and grant_type='premium'`],
+  ['free buyer ban',`update auth.users set banned_until=clock_timestamp()+interval '1 hour' where id=${lit(buyer)}`,
+   `update auth.users set banned_until=null where id=${lit(buyer)}`],
+  ['free buyer session expiry',`update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id=${lit(session)}`,
+   `update auth.sessions set not_after=clock_timestamp()+interval '1 day' where id=${lit(session)}`],
+ ];
+ for(const [label,change,restore] of mutations) {
+  const fixture=await make(),reserved=await rpc(fixture.reserve);await fixture.bind(reserved.id);
+  try {
+   // PGlite executes sequentially and starts with the actor already revoked.
+   // It proves rejection, never fabricates the native after-wait false result.
+   const options=sequentialReplay&&label.startsWith('free buyer')?{error:/merch_current_session_required/}:{};
+   const result=await race(`${label} before dispatch`,`${change};select '{}'::jsonb;`,
+    auth('buyer1','service_role')+`select ${fixture.transition('dispatch')};`,options);
+   if(!options.error)assert.equal(result.second.authorized,false,label);
+   assert.equal(await query(`select state from private.merch_checkout_dispatch where order_id=${lit(reserved.id)}`),'prepared');
+   assert.equal(await fixture.stock(),'1','denial retains unresolved inventory until owned abort');
+  }finally{await query(`${restore};`);}
+  const aborted=await rpc(fixture.transition('abort'));assert.equal(aborted.aborted,true);assert.equal(await fixture.stock(),'0');
+ }
 }

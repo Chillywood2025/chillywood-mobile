@@ -23,8 +23,14 @@ test('missing or unsupported reviewed tax policy blocks account reads and checko
  }
 });
 test('ineligible, stale session and rejected reservation never reach provider',async()=>{
- for(const options of [{beta:false},{authority:false},{reservationError:true}]){const h=harness(options);assert.ok((await h.send()).status>=400);assert.equal(h.provider.length,0);assert.equal(h.updates.length,0);}
+ for(const options of [{authority:false},{reservationError:true}]){const h=harness(options);assert.ok((await h.send()).status>=400);assert.equal(h.provider.length,0);assert.equal(h.updates.length,0);}
  const h=harness();assert.equal((await h.send({product_id:product,quantity:1})).status,400);assert.equal(h.provider.length,0);
+});
+test('ordinary non-tester buyers use database admission without staff or Premium grants',async()=>{
+ const h=harness({beta:false});const r=await h.send();assert.equal(r.status,200);assert.equal(h.provider.length,1);
+ assert.equal(h.calls.filter(c=>c[0]==='reserve_merch_checkout_dispatch').length,1);
+ assert.equal(h.calls.filter(c=>c[0]==='transition_merch_checkout_dispatch'&&c[1].p_action==='dispatch').length,1);
+ const denied=harness({beta:false,reservationError:true});assert.ok((await denied.send()).status>=400);assert.equal(denied.provider.length,0);
 });
 test('ambiguous provider error never cancels or releases reserved stock',async()=>{
  const h=harness({providerError:true});const r=await h.send();assert.equal(r.status,500);assert.equal(r.body.checkoutCreated,false);assert.equal(h.updates.length,0);

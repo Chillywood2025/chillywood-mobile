@@ -13,11 +13,10 @@ import {
   safeWriteAuditLog,
   sanitizeErrorMessage,
   toText,
-  userHasPlatformRole,
   type AuthenticatedUser,
   type SupabaseClientLike,
 } from "../_shared/stripe-connect.ts";
-import { parseExactCurrentSessionAuthority, readExactBetaAccess } from "../_shared/exact-subject-authority.ts";
+import { parseExactCurrentSessionAuthority } from "../_shared/exact-subject-authority.ts";
 import { readCommerceTaxReadiness, commerceTaxParameters } from "../_shared/commerce-tax-readiness.ts";
 
 const FUNCTION_NAME = "stripe-merch-checkout";
@@ -156,11 +155,6 @@ const assertPhysicalMerchProduct = (product: MerchProductRow) => {
   if (!/^[a-z]{3}$/.test(product.currency ?? "")) throw new Error("Merch product currency is invalid.");
 };
 
-const userHasActiveSandboxTesterAccess = async (
-  adminClient: SupabaseClientLike,
-  currentUser: AuthenticatedUser,
-) => readExactBetaAccess(adminClient, currentUser.id);
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
@@ -216,19 +210,6 @@ Deno.serve(async (req) => {
 
     const product = await readProduct(adminClient, parsed.value);
     assertPhysicalMerchProduct(product);
-
-    const [isOperator, isSandboxTester] = await Promise.all([
-      userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]),
-      userHasActiveSandboxTesterAccess(adminClient, currentUser),
-    ]);
-    if (product.environment === "sandbox" && !isOperator && !isSandboxTester) {
-      return jsonResponse(403, {
-        error: "sandbox_tester_required",
-        message: "Sandbox physical merch checkout is limited to exact owner/operator subjects or active exact-subject beta testers.",
-        liveMoneyAction: false,
-        checkoutCreated: false,
-      });
-    }
 
     const environment = product.environment as "sandbox" | "production";
     checkoutEnvironment = environment;
@@ -425,7 +406,7 @@ Deno.serve(async (req) => {
     await safeWriteAuditLog(adminClient, {
       action: "stripe_merch_checkout_created",
       actorEmail: currentUser.email,
-      actorRole: "operator",
+      actorRole: "user",
       actorUserId: currentUser.id,
       metadata: {
         checkout_created: true,
@@ -472,7 +453,7 @@ Deno.serve(async (req) => {
     await boundedCleanup(safeWriteAuditLog(adminClient, {
       action: "stripe_merch_checkout_failed",
       actorEmail: currentUser?.email ?? null,
-      actorRole: "operator",
+      actorRole: currentUser ? "user" : null,
       actorUserId: currentUser?.id ?? null,
       metadata: {
         error: sanitizeErrorMessage(error),

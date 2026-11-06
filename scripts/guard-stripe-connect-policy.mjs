@@ -104,13 +104,26 @@ assertIncludes(merchMigration, "not_payable", "merch not payable metadata");
 
 assertIncludes(merchCheckout, "readStripeTestSecret", "merch checkout test secret only");
 assertIncludes(merchCheckout, "stripe_physical_goods", "merch checkout physical goods provider");
-assertIncludes(merchCheckout, "userHasActiveSandboxTesterAccess", "merch checkout approved tester access check");
-assertIncludes(merchCheckout, "readExactBetaAccess", "merch checkout exact-subject beta access check");
-assertIncludes(merchCheckout, "userHasPlatformRole", "merch checkout shared staff access check");
+for (const legacyGate of ["userHasActiveSandboxTesterAccess", "readExactBetaAccess", "userHasPlatformRole", "sandbox_tester_required"]) {
+  assertNotIncludes(merchCheckout, legacyGate, "merch checkout uses automatic eligibility, not staff or beta admission");
+}
 assertIncludes(shared, "readExactPlatformRole", "shared Stripe exact-subject staff access check");
 assertNotIncludes(merchCheckout, "INTERNAL_SANDBOX_TESTER_EMAILS", "merch checkout must not use email-derived tester authority");
-assertIncludes(merchCheckout, "sandbox_tester_required", "merch checkout tester-required denial");
-assertIncludes(merchCheckout, "exact owner/operator subjects or active exact-subject beta testers", "merch checkout bounded tester copy");
+assertIncludes(merchCheckout, "parseExactCurrentSessionAuthority", "merch checkout exact current session check");
+assertIncludes(merchCheckout, 'if (!authority) return jsonResponse(401', "merch checkout rejects missing session authority");
+assertIncludes(merchCheckout, 'p_buyer_id: authority.userId, p_session_id: authority.sessionGeneration', "merch checkout binds buyer and session");
+assertIncludes(merchCheckout, 'rpc("reserve_merch_checkout_dispatch"', "merch checkout database eligibility and stock reservation");
+assertIncludes(merchCheckout, 'rpc("transition_merch_checkout_dispatch"', "merch checkout dispatch authorization");
+assertIncludes(merchCheckout, 'dispatch.data?.authorized !== true', "merch checkout fails closed on dispatch rejection");
+assertIncludes(merchCheckout, 'session.livemode !== (environment === "production")', "merch checkout exact provider mode");
+assertIncludes(merchCheckout, 'session.amount_total !== reservation.priceMinor! * quantity', "merch checkout immutable quote verification");
+assertIncludes(merchCheckout, 'expires_at: Math.floor(Date.parse(reservation.createdAt ?? "") / 1000) + 3600', "merch checkout fixed expiry");
+assertIncludes(merchCheckout, 'actorRole: "user"', "merch checkout ordinary buyer audit identity");
+assertNotIncludes(merchCheckout, 'actorRole: "operator"', "merch checkout must not claim staff authority");
+for (const connectSurface of [account, onboarding]) {
+  assertNotIncludes(connectSurface, "limited to approved testers", "creator provider setup has no tester-only copy");
+}
+assertIncludes(transferCreate, 'userHasPlatformRole(adminClient, currentUser, ["owner", "operator"])', "administrative transfers retain staff authority");
 assertIncludes(merchCheckout, "creates_digital_access === true", "merch checkout digital access refusal");
 assertIncludes(merchCheckout, "physical_merch", "merch checkout physical rail metadata");
 assertIncludes(merchCheckout, "digitalAccessGrantCreated: false", "merch checkout no access grant");

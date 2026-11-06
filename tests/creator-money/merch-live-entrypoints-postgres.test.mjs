@@ -4,9 +4,9 @@ import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {harness,buyer,session,product} from '../helpers/merch-checkout-edge-harness.mjs';
 import {runMerchLiveCheckoutRaces} from '../../scripts/lib/merch-live-checkout-races.mjs';
-import {runMerchCheckoutDispatchRaces} from '../../scripts/lib/merch-checkout-dispatch-races.mjs';
+import {seedQualifiedCommerceCreator,seedSyntheticStrictCreatorProvider} from '../helpers/automatic-commerce-fixture.mjs';
 test('live merchandise exact mode/account/quote chain remains dormant and preserves unknown holds',{timeout:240000},async()=>{
- const {db}=await createDatabase({includeHeldStudio:true});
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const root=()=>db.exec('reset role');
  const service=()=>db.exec(`reset role;set request.jwt.claim.role='service_role';set request.jwt.claims='{"role":"service_role"}';set role service_role;`);
@@ -17,7 +17,7 @@ test('live merchandise exact mode/account/quote chain remains dormant and preser
   writeRow:async(body,id)=>{await service();await db.query('update public.merch_orders set provider_order_id=$1,stripe_checkout_session_id=$2,stripe_payment_intent_id=$3 where id=$4',[body.provider_order_id,body.stripe_checkout_session_id,body.stripe_payment_intent_id,id]);return{error:null};},...options});
  const body=key=>({product_id:product,quantity:1,attempt_id:key,tracking_mode:'tracked',expected_unit_price_minor:1000,expected_currency:'usd'});
  try{
-  const host=await one("select md5('merch-host:'||n::text)::uuid from generate_series(1,1000)n where mod(hashtextextended('chillywood-wave1-us-rollout-v1:'||md5('merch-host:'||n::text)::uuid::text,20260814),100)=0 limit 1"),hs=randomUUID();
+  const host=randomUUID(),hs=randomUUID();
   await db.query('insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at) values($1,false,false,now()),($2,false,false,now())',[host,buyer]);
   await db.query('insert into auth.sessions(id,user_id) values($1,$2),($3,$4)',[hs,host,session,buyer]);
   await db.query("insert into public.user_profiles(user_id,username,display_name) values($1,'dispatch_host','Host'),($2,'dispatch_buyer','Buyer') on conflict(user_id) do nothing",[host,buyer]);
@@ -26,18 +26,12 @@ test('live merchandise exact mode/account/quote chain remains dormant and preser
    from auth.sessions s cross join public.wave1_legal_document_versions d where s.user_id in($1,$2) and d.active and d.market='UNITED_STATES'
    and (d.capability='account' or (s.user_id=$1 and d.capability in('creator','creator_money')))`,[host,buyer]);
   await service();await one(`select public.wave1_evaluate_creator_eligibility($1,'{"accountStatus":"ACTIVE","age18Plus":true,"legalAccepted":true,"creatorRole":true,"moderationState":"CLEAR","market":"UNITED_STATES","rolloutEligible":false,"platformCapability":true,"providerEligible":true,"kycComplete":true,"taxComplete":true,"sanctionsClear":true,"payoutEligible":true,"inputVersions":{"evaluationSequence":1}}','dispatch-fixture','local_pgtap')`,[host]);
-  // Execute the native runner's actual bootstrap against the full real schema.
-  // Its beta subject index is partial: the old bare conflict target must fail,
-  // while a fresh synthetic actor needs only a plain insert.
-  let nativeSeed;const captured=new Error('captured native bootstrap');
-  await assert.rejects(()=>runMerchCheckoutDispatchRaces({actors:{buyer1:{id:buyer,session},creator:{id:host}},
-   lit:value=>`'${String(value).replaceAll("'","''")}'`,query:sql=>{nativeSeed=sql;throw captured;}}),error=>error===captured);
+  // Ordinary free buyers require neither beta nor tester membership.
   await root();
-  const oldNativeSeed=nativeSeed.replace(/(insert into public\.beta_access_memberships[^;]+);/,"$1 on conflict(user_id) do update set access_status='active';");
-  await assert.rejects(()=>db.exec(oldNativeSeed),/no unique or exclusion constraint/);
-  await db.exec(nativeSeed);
-  await assert.rejects(()=>db.exec(nativeSeed),/duplicate key/,'bootstrap must not hide a non-fresh actor');
-  assert.equal(await one('select count(*)::int from public.beta_access_memberships where user_id=$1 and access_status=$$active$$',[buyer]),1);
+  await seedQualifiedCommerceCreator(db,{id:host,session:hs},{environment:'production'});
+  await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
+  // Authoring starts in sandbox before this fixture explicitly promotes live.
+  await seedQualifiedCommerceCreator(db,{id:host,session:hs},{environment:'sandbox',premium:false});
   await claim(host,hs);await one('select public.save_creator_merch_product_with_tracking($1,$$Test$$,$$Physical only$$,null,1000,20,$$published$$,null,$$tracked$$)',[product]);
 
   await root();await db.query("update public.merch_products set environment='production',status='active' where id=$1",[product]);
@@ -46,6 +40,7 @@ test('live merchandise exact mode/account/quote chain remains dormant and preser
   await root();
   // Synthetic local qualifications only; nothing is sent to a provider.
   await db.exec("update public.platform_money_kill_switches set state='on' where key in('merch_enabled','live_money_enabled')");
+  await seedSyntheticStrictCreatorProvider(db,{id:host,session:hs},{environment:'production'});
   await db.exec("insert into public.provider_readiness_status(provider,capability,status,environment,is_live_money_enabled,proof_source,proof_summary,last_checked_at) values('stripe','platform_commerce','active','production',true,'synthetic','synthetic',now()) on conflict(provider,capability,environment) do update set status='active',is_live_money_enabled=true,proof_source='synthetic',proof_summary='synthetic',last_checked_at=now()");
   await db.exec("insert into private.merch_live_checkout_qualifications values('acct_fixture',repeat('a',64),repeat('b',64),repeat('c',64),now()+interval '1 hour',null)");
   await db.query(`insert into private.commerce_tax_qualifications(feature,product_id,account_id,environment,permitted_scope,platform_scope,

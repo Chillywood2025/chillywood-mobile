@@ -29,7 +29,14 @@ test('creator first live publication requires exact reviewed revision, current m
  await assert.rejects(confirm(r),/creator_eligibility_required/);
  await db.query('update public.wave1_creator_eligibility set payout_eligible=true where creator_user_id=$1',[actors.creator.user_id]);
  await assert.rejects(confirm(r),/eligibility_changed/,'restored eligibility still needs a new review');
- r=await review();p=await confirm(r);assert.equal(p.environment,'production');assert.equal(p.publicationStatus,'published');
+ r=await review();
+ const unchangedAuthority=()=>one(`select jsonb_build_object('version',version,'evaluatedAt',evaluated_at,
+   'epoch',(select last_value from private.merch_publish_authority_epoch)) from public.wave1_creator_eligibility where creator_user_id=$1`,[actors.creator.user_id]);
+ const beforeRefresh=await unchangedAuthority();
+ await rpc('creator','public.wave1_creator_eligibility_readback()');
+ await rpc('creator','public.wave1_creator_eligibility_readback()');
+ assert.deepEqual(await unchangedAuthority(),beforeRefresh,'unchanged lazy readbacks perform no statement and preserve reviewed publication epoch');
+ p=await confirm(r);assert.equal(p.environment,'production');assert.equal(p.publicationStatus,'published');
  assert.equal((await confirm(r)).id,id,'same receipt retry is nonmutating acknowledgement');
  assert.equal(await one('select count(*)::int from private.merch_publication_receipts'),1);
  const testId=randomUUID();let old=await rpc('creator',`public.save_creator_merch_product_with_tracking('${testId}','Test history','Physical item',null,2000,5,'published',null,'untracked')`);
