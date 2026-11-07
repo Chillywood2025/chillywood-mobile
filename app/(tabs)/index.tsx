@@ -51,10 +51,7 @@ import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
-    getDiscoveryAccessLabel,
-    getDiscoveryItemActionLabel,
     getDiscoveryItemDestination,
-    getDiscoveryLiveLabel,
     getDiscoveryRankingReasonLabel,
     scoreCircleSpectatorFeedItem,
     scoreDiscoveryFeedItem,
@@ -62,6 +59,7 @@ import {
 } from "../../_lib/discoveryFeed";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
+import { LiveDiscoveryCard } from "../../components/live/live-discovery-card";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
 import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
@@ -639,9 +637,6 @@ export default function HomeScreen() {
   }
 
   function renderFeedItemCard(item: DiscoveryFeedItem) {
-    const title = String(item.title ?? "").trim() || "Public activity";
-    const accessLabel = getDiscoveryAccessLabel(item);
-    const liveLabel = getDiscoveryLiveLabel(item);
     const isCircleSpectatorItem = item.visibility === "circle" || item.visibility === "chilly_circle" || item.access_type === "circle";
     const rankingReason = isCircleSpectatorItem
       ? scoreCircleSpectatorFeedItem(item, circleSpectatorSignals).reason
@@ -649,34 +644,15 @@ export default function HomeScreen() {
     const rankingLabel = getDiscoveryRankingReasonLabel(rankingReason);
 
     return (
-      <TouchableOpacity
+      <LiveDiscoveryCard
         key={`feed-item-${item.id}`}
+        item={item}
+        compact
+        contextLabel={rankingLabel}
         testID={`home-discovery-card-${rankingReason}-${item.id}`}
         style={styles.feedActivityCard}
-        activeOpacity={0.9}
-        onPress={() => openDiscoveryFeedItem(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}. ${liveLabel}. ${accessLabel}. Open ${getDiscoveryItemActionLabel(item)}`}
-      >
-        <View style={styles.feedActivityThumb}>
-          <StableImage
-            expectedWidth="100%"
-            expectedHeight="100%"
-            source={item.thumbnail_url ? { uri: item.thumbnail_url } : null}
-            borderRadius={0}
-            resizeMode="cover"
-          />
-          <View style={styles.feedActivityScrim} />
-          <View style={styles.feedCompactBadgeRow}>
-            <AppText scale="caption" style={[styles.feedCompactBadge, item.live_state === "live" ? styles.feedActivityLiveBadge : null]}>{liveLabel}</AppText>
-            <AppText scale="caption" style={styles.feedCompactBadge}>{accessLabel}</AppText>
-          </View>
-          <View style={styles.feedCompactCopy}>
-            <AppText scale="subhead" style={styles.feedCompactTitle} numberOfLines={2}>{title}</AppText>
-            <AppText scale="caption" style={styles.feedCompactMeta} numberOfLines={1}>{rankingLabel}</AppText>
-          </View>
-        </View>
-      </TouchableOpacity>
+        onOpen={() => openDiscoveryFeedItem(item)}
+      />
     );
   }
 

@@ -1,5 +1,8 @@
+import { CommentLikeButton } from "../../components/social/comment-like-button";
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
 import { AppBackButton } from "../../components/navigation/app-back-button";
+import { ContentEngagementDock } from "../../components/social/content-engagement-dock";
+import { invalidateContentSocialEngagement } from "../../_lib/contentSocialEngagement";
 import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useIsFocused } from "@react-navigation/native";
@@ -1316,6 +1319,7 @@ export default function PlayerScreen() {
   const [creatorVideoReportVisible, setCreatorVideoReportVisible] = useState(false);
   const [creatorVideoReportBusy, setCreatorVideoReportBusy] = useState(false);
   const [creatorVideoComments, setCreatorVideoComments] = useState<CreatorVideoComment[]>([]);
+  const creatorVideoCommentInputRef = useRef<TextInput | null>(null);
   const [creatorVideoCommentsLoading, setCreatorVideoCommentsLoading] = useState(false);
   const [creatorVideoCommentsError, setCreatorVideoCommentsError] = useState<string | null>(null);
   const [creatorVideoCommentDraft, setCreatorVideoCommentDraft] = useState("");
@@ -5164,6 +5168,7 @@ export default function PlayerScreen() {
       });
       if (!isCurrent()) return;
       setCreatorVideoComments((current) => [...current.filter((entry) => entry.id !== comment.id), comment]);
+      invalidateContentSocialEngagement({ kind: "creator_video", id: creatorVideoId });
       setCreatorVideoCommentDraft("");
       setCreatorVideoCommentAttachmentFile(null);
       setCreatorVideoCommentReplyTargetId(null);
@@ -5214,6 +5219,7 @@ export default function PlayerScreen() {
                 setCreatorVideoCommentDeletingId(comment.id);
                 setCreatorVideoCommentsError(null);
                 await deleteCreatorVideoComment(comment.id);
+                invalidateContentSocialEngagement({ kind: "creator_video", id: comment.videoId });
                 setCreatorVideoComments((current) => current.filter((entry) => (
                   entry.id !== comment.id && entry.parentCommentId !== comment.id
                 )));
@@ -9319,6 +9325,7 @@ export default function PlayerScreen() {
               <ConversationTimestamp style={styles.creatorCommentTime} value={conversationCreatedAt(comment)} />
             </View>
             <LinkedText text={comment.body} style={styles.creatorCommentBody} />
+            <CommentLikeButton kind="creator_video_comment" id={comment.id} />
             {comment.attachments.length ? (
               <View style={styles.creatorCommentAttachmentStack}>
                 {comment.attachments.map((attachment) => (
@@ -9393,6 +9400,18 @@ export default function PlayerScreen() {
           {creatorVideoCommentsLoading ? <ActivityIndicator color={ACCENT} /> : null}
         </View>
 
+        {creatorVideo && isCreatorVideoPubliclyShareable(creatorVideo) ? (
+          <ContentEngagementDock
+            kind="creator_video"
+            id={creatorVideo.id}
+            onComments={() => {
+              if (creatorVideoCommentUserId) creatorVideoCommentInputRef.current?.focus();
+              else Alert.alert("Sign in to comment", "Sign in to join this discussion.");
+            }}
+            onShare={() => { void onShareCreatorVideo(); }}
+          />
+        ) : null}
+
         <ScrollView
           style={[
             styles.creatorCommentsList,
@@ -9457,6 +9476,7 @@ export default function PlayerScreen() {
                 <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
               </TouchableOpacity>
               <TextInput
+                ref={creatorVideoCommentInputRef}
                 value={creatorVideoCommentDraft}
                 onChangeText={(value) => {
                   setCreatorVideoCommentDraft(value);

@@ -125,6 +125,18 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name==='expo-document-picker')return {getDocumentAsync:(...args)=>{calls.push(['getDocumentAsync',...args]);return mocks.getDocumentAsync(...args);}};
       if(name.endsWith('.jpg'))return 1;
       if(name.endsWith('/creator-video-card'))return evaluate('components/creator-media/creator-video-card.tsx');
+      if(name.endsWith('/content-engagement-dock'))return evaluate('components/social/content-engagement-dock.tsx');
+      if(name.endsWith('/engagement-bar'))return evaluate('components/social/engagement-bar.tsx');
+      if(name.endsWith('/socialCountPresentation'))return evaluate('_lib/socialCountPresentation.ts');
+      if(name==='@expo/vector-icons/MaterialIcons')return native.View;
+      if(name==='@react-navigation/native')return {useIsFocused:()=>true};
+      // These suites mount the real card/dock presentation. Network engagement
+      // authority is exercised independently by content-social-engagement tests.
+      if(name.endsWith('/use-content-social-engagement'))return {useContentSocialEngagement:()=>({
+        likeCount:null,commentCount:null,shareCount:null,viewCount:null,liked:false,reposted:false,
+        canLike:false,canRepost:false,loading:false,busy:false,error:null,
+        toggleLike:async()=>{},toggleRepost:async()=>{},refresh:async()=>{},
+      })};
       if(name.endsWith('/ClipExportPanel'))return evaluate('components/creator-media/ClipExportPanel.tsx');
       if(name.endsWith('/deviceVideoPicker'))return mocks.pickDeviceVideo?{pickDeviceVideo:mocks.pickDeviceVideo}:evaluate('_lib/deviceVideoPicker.ts');
       if(name.endsWith('/creatorVideoPreview'))return evaluate('_lib/creatorVideoPreview.ts');

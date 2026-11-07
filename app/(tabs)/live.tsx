@@ -24,8 +24,6 @@ import {
 } from "../../_lib/customerExperiencePresentation";
 
 import {
-  getDiscoveryAccessLabel,
-  getDiscoveryItemActionLabel,
   getDiscoveryItemDestination,
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
@@ -42,6 +40,7 @@ import {
 import { buildLiveTabDiscoveryBuckets } from "../../_lib/liveTabDiscoveryBuckets";
 import { AccessSheet, type AccessSheetActionFeedback } from "../../components/monetization/access-sheet";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
+import { LiveDiscoveryCard } from "../../components/live/live-discovery-card";
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
 
@@ -267,17 +266,9 @@ export default function LiveTabScreen() {
               <View style={styles.loadingRow}><ActivityIndicator color="#E50914" /><Text style={styles.muted}>Loading live discovery...</Text></View>
             ) : liveItems.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                {liveItems.map((item) => {
-                  const title = String(item.title ?? "").trim() || "Live Now";
-                  return (
-                    <TouchableOpacity key={`live-${item.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openDiscoveryItem(item)} accessibilityRole="button" accessibilityLabel={`${title}. Live. ${getDiscoveryAccessLabel(item)}. Open ${getDiscoveryItemActionLabel(item)}`}>
-                      <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>
-                      <Text style={styles.cardTitle} numberOfLines={2}>{title}</Text>
-                      <Text style={styles.cardBody} numberOfLines={2}>{String(item.subtitle ?? "").trim() || "Public live experience"}</Text>
-                      <Text style={styles.cardMeta}>{getDiscoveryAccessLabel(item)}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                {liveItems.map((item) => (
+                  <LiveDiscoveryCard key={`live-${item.id}`} item={item} style={{ width: discoveryCardWidth }} onOpen={() => openDiscoveryItem(item)} testID={`live-discovery-${item.id}`} />
+                ))}
               </ScrollView>
             ) : (
               <View style={styles.emptyState}>

@@ -331,7 +331,7 @@ test("whole profile activity card preserves notification action and native style
   const Card = h.load("components/ProfileSocialFeedCard.tsx", {
     "@expo/vector-icons/MaterialIcons": () => null,
     "../_lib/discoveryFeed": {}, "./creator-media/creator-video-card": {}, "./social/linked-text": {},
-    "./social/social-attachment-card": {}, "./ui/ProfileMediaImage": {},
+    "./social/social-attachment-card": {}, "./ui/ProfileMediaImage": {}, "./live/live-discovery-card": {},
   }).ProfileSocialFeedCard;
   const item = { type: "backed_activity_item", notification: { title: "Message", body: "Body", target: { supported: true },
     createdAt: "2026-10-16T08:30:00Z", displayCreatedAt: "2025-12-31T12:00:00Z" } };
@@ -476,6 +476,14 @@ test("actual Party insert receipt preserves raw time through Stage and Player sa
 test("audited surfaces retain exact original StyleSheet colors, backgrounds and layout", () => {
   for (const [file] of sources) {
     let original = execFileSync("git", ["show", `934db4003e604e9ac42aa6feb9d4511e1c80a97b:${file}`], { cwd: rootPath, encoding: "utf8" });
+    if (file === "components/ProfileSocialFeedCard.tsx") {
+      // Reviewed live-card extraction owns its height and branded shell. Keep
+      // the rail width and every unrelated timestamp/surface style unchanged.
+      const previous = '  compactDiscoveryTile: {\n    width: 150,\n    aspectRatio: 9 / 16,\n    borderRadius: 14,\n    borderWidth: 1,\n    borderColor: "rgba(255,255,255,0.12)",\n    backgroundColor: "#111723",\n    overflow: "hidden",\n  },';
+      assert.equal(original.split(previous).length, 2, 'exact historical live-card shell');
+      original = original.replace(previous, '  compactDiscoveryTile: {\n    width: 150,\n  },');
+      assert.match(fs.readFileSync(new URL('../components/ProfileSocialFeedCard.tsx', import.meta.url), 'utf8'), /<LiveDiscoveryCard/);
+    }
     if (file === "app/player/[id].tsx") {
       // Reviewed shared arrow Back conversion: 44px target replaces the old
       // 112px text button. Project only these two exact historical fragments.

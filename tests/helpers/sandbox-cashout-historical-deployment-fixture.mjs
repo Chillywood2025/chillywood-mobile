@@ -15,7 +15,9 @@ export const HISTORICAL_CASHOUT_SOURCE=inventory.source;
 assert.equal(inventory.schema,1);
 assert.deepEqual(inventory.files.map(file=>file.path).sort(),[...CLOSURE].sort());
 // These successors require the sandbox cashout predecessor that historical
-// pre-deployment replays intentionally omit. Full-chain tests still apply them.
+// pre-deployment replays intentionally omit. Later social successors are also
+// explicitly deferred to preserve this chronological checkpoint; current full-chain
+// engagement tests apply them and qualify their independent authority boundaries.
 export const POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS=Object.freeze([
  '20261106001341_automatic_premium_commerce_admission.sql',
  '20261106001353_automatic_creator_eligibility_refresh.sql',
@@ -30,6 +32,8 @@ export const POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS=Object.freeze([
  '20261106035132_reviewed_merch_publication_mode.sql',
  '20261106073240_ordinary_commerce_canonical_lock_prefix.sql',
  '20261106170725_tip_commerce_gate_entry.sql',
+ '20261107173220_creator_video_social_engagement.sql',
+ '20261107191000_comment_likes.sql',
 ]);
 
 export function readHistoricalCashoutSource(file){

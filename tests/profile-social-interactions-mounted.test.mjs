@@ -6,6 +6,15 @@ import test from 'node:test';
 import vm from 'node:vm';
 const require=createRequire(import.meta.url),React=require('react'),ts=require('typescript');
 const {createRoot}=require('react-dom/client');
+function loadSocial(file,imports={}) {
+  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,
+    {exports,require:name=>{if(!(name in imports))throw Error(`Unexpected social import ${name}`);return imports[name];}});return exports;
+}
+const {EngagementBar}=loadSocial('components/social/engagement-bar.tsx',{
+  react:React,'react-native':{StyleSheet:{create:x=>x},View:'View',Text:'Text',TouchableOpacity:'TouchableOpacity',ActivityIndicator:'Spinner'},
+  '@expo/vector-icons/MaterialIcons':'Icon','../../_lib/socialCountPresentation':loadSocial('_lib/socialCountPresentation.ts'),
+  '../ui/chillywood-visual-system':{CHILLYWOOD_VISUAL:{}},
+});
 let source=fs.readFileSync(new URL('../app/profile/[userId].tsx',import.meta.url),'utf8');
 // Opt-in negative controls remove only the production race barrier, never
 // replace the implementation with a parallel test model.
@@ -23,12 +32,12 @@ const code=ts.transpileModule(selected.map(n=>n.getText(ast)).join('\n')+`\nObje
 const noop=()=>{},doc={addEventListener:noop,removeEventListener:noop,defaultView:globalThis,nodeType:9};
 const container=()=>({addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'});
 doc.documentElement=container();globalThis.document=doc;globalThis.window=globalThis;globalThis.HTMLIFrameElement=class{};globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-const nodes=value=>!value||typeof value!=='object'?[]:Array.isArray(value)?value.flatMap(nodes):[value,...nodes(value.props?.children)];
+const nodes=value=>!value||typeof value!=='object'?[]:Array.isArray(value)?value.flatMap(nodes):value.type===EngagementBar?nodes(EngagementBar(value.props)):[value,...nodes(value.props?.children)];
 const text=value=>value==null?'':typeof value==='string'||typeof value==='number'?String(value):Array.isArray(value)?value.map(text).join(''):value.props?.text??text(value.props?.children);
 const post={id:'post-1',userId:'friend',body:'hello',visibility:'public',moderationStatus:'active',attachments:[]};
 async function mount(t){
   const calls=[],comments=[];let tree,current=true,saveError=null;
-  const context=vm.createContext({exports:{},React,...loadPickedMediaResources(),styles:new Proxy({},{get:()=>({})}),
+  const context=vm.createContext({exports:{},React,EngagementBar,CommentLikeButton:'CommentLikeButton',...loadPickedMediaResources(),styles:new Proxy({},{get:()=>({})}),
     View:'View',TouchableOpacity:'TouchableOpacity',AppText:'AppText',Text:'Text',TextInput:'TextInput',MaterialIcons:'Icon',LinkedText:'LinkedText',SocialAttachmentCard:'Attachment',ActivityIndicator:'Spinner',ConversationTimestamp:'Timestamp',
     currentUserId:'viewer',isSelfProfile:true,userId:'viewer',isOfficialProfile:false,profile:{displayName:'Viewer'},profilePostUiById:{'post-1':{engagementReady:true,engagement:{likedByViewer:false,likeCount:0,commentCount:0}}},profilePostDeletingId:null,socialIdentity:'viewer:one',socialActionKeysRef:{current:new Set()},commentRevisionsRef:{current:new Map()},engagementRevisionsRef:{current:new Map()},
     isSocialIdentityCurrent:()=>current,formatEngagementCount:(n,label)=>n?`${n} ${label}`:'',formatProfilePostDate:()=>'',isProfilePostPubliclyShareable:()=>true,isProfilePostEngageable:()=>true,shouldShowOwnerDraftMarker:()=>false,
@@ -53,13 +62,13 @@ async function mount(t){
   function Host(){tree=context.exports.renderProfileSocialFeedItem(item);return null;}
   const root=createRoot(container());const render=()=>React.act(async()=>root.render(React.createElement(Host)));
   t.after(()=>React.act(async()=>root.unmount()));await render();
-  return{context,calls,comments,render,tree:()=>tree,select:label=>nodes(tree).find(n=>n.type==='TouchableOpacity'&&text(n)===label),
+  return{context,calls,comments,render,tree:()=>tree,select:label=>nodes(tree).find(n=>n.type==='TouchableOpacity'&&(({Like:'social-like',Comment:'social-comments',Share:'social-share'}[label])?n.props.testID===({Like:'social-like',Comment:'social-comments',Share:'social-share'}[label]):text(n)===label)),
     runEngagementEffect:()=>React.act(async()=>root.render(React.createElement(function EffectHost(){context.useEffect=React.useEffect;vm.runInContext(engagementCode,context);return null;}))),
     item:async value=>{item={...item,...value};await render();},current:value=>{current=value;},saveError:value=>{saveError=value;}};
 }
 test('mounted Circle and followed posts expose full interactions with actor identity, not owner delete',async t=>{
   const m=await mount(t);assert.match(text(m.tree()),/Friend/);assert.ok(m.select('Like'));assert.ok(m.select('Comment'));assert.ok(m.select('Share'));assert.ok(m.select('Report'));assert.equal(m.select('Delete'),undefined);
-  await m.select('Like').props.onPress();await new Promise(resolve=>setImmediate(resolve));await m.render();assert.equal(m.calls[0][0],'like');assert.ok(m.select('Liked · 1 like'));
+  await m.select('Like').props.onPress();await new Promise(resolve=>setImmediate(resolve));await m.render();assert.equal(m.calls[0][0],'like');assert.equal(m.select('Like').props.accessibilityState.selected,true);assert.match(m.select('Like').props.accessibilityLabel,/1 Likes/);
   await m.select('Share').props.onPress();await new Promise(resolve=>setImmediate(resolve));assert.match(m.calls.find(c=>c[0]==='share')[1].message,/profile\/friend\?postId=post-1/);
   m.select('Report').props.onPress();assert.equal(m.calls.find(c=>c[0]==='report')[1].id,'post-1');
   await m.item({type:'followed_user_post'});assert.ok(m.select('Share'));assert.ok(m.select('Report'));
