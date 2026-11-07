@@ -8,6 +8,7 @@ import {seedLiveRoomActor} from './helpers/live-room-authority-fixture.mjs';
 
 const migration = '20261106073240_ordinary_commerce_canonical_lock_prefix.sql';
 const tipSuccessor = '20261106170725_tip_commerce_gate_entry.sql';
+const socialSuccessors = Object.freeze(['20261107173220_creator_video_social_engagement.sql','20261107191000_comment_likes.sql']);
 const allowed = Object.freeze([
   'profile_avatar_scan_status', 'profile_avatar_scan_provider', 'profile_avatar_scan_result',
   'profile_avatar_scanned_at', 'profile_avatar_scan_error', 'profile_avatar_media_status',
@@ -73,8 +74,8 @@ test('exact profile metadata exception preserves authority, late guards and real
     return fn();
   });
   try {
-    assert.equal(replayReport.files.length,626,'all 624 predecessors, the profile gate and the tip successor execute');
-    assert.deepEqual(replayReport.files.slice(-2),[migration,tipSuccessor],'the current chain preserves the exact final migration order');
+    assert.equal(replayReport.files.length,626+socialSuccessors.length,'all 624 predecessors, profile/tip gates and exact social successors execute');
+    assert.deepEqual(replayReport.files.slice(-4),[migration,tipSuccessor,...socialSuccessors],'the current chain preserves the exact final migration order');
     assert.deepEqual(replayReport.excludedMigrations,[]);
     assert.deepEqual(replayReport.overlayFiles,[]);
     const columns = (await db.query("select attname from pg_attribute where attrelid='public.user_profiles'::regclass and attnum>0 and not attisdropped order by attnum")).rows.map(row=>row.attname);
@@ -234,8 +235,18 @@ test('exact profile metadata exception preserves authority, late guards and real
       assert.deepEqual(await profile(),baseline);
     });
 
+    // The reviewed social successor adds a distinct, column-limited withdrawal
+    // trigger. Inventory it exactly rather than weakening the unique commerce
+    // actual-NEW backstop requirement or ignoring arbitrary new AFTER triggers.
+    const socialPrivacy = triggerCatalog.filter(row=>row.tgname==='creator_video_reposts_profile_privacy');
+    assert.deepEqual(socialPrivacy.map(({tgname,tgtype,tgdeferrable,tginitdeferred,proname,nspname,columns})=>
+      ({tgname,tgtype,tgdeferrable,tginitdeferred,proname,nspname,columns})), [{
+      tgname:'creator_video_reposts_profile_privacy',tgtype:17,tgdeferrable:false,tginitdeferred:false,
+      proname:'profile_privacy_changed',nspname:'video_engagement_private',
+      columns:['profile_access_visibility','profile_visibility','shares_visibility'],
+    }]);
     const actualGuards = triggerCatalog.filter(row=>(row.tgtype&3)===1 && (row.tgtype&16)!==0
-      && !retainedTriggers.includes(row.tgname));
+      && !retainedTriggers.includes(row.tgname) && !socialPrivacy.includes(row));
     assert.equal(actualGuards.length,1,'one immediate AFTER ROW actual-NEW assertion supplements existing triggers');
     const actualGuard=actualGuards[0];
     assert.equal(actualGuard.tgdeferrable,false);

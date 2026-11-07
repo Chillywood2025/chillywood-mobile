@@ -65,3 +65,23 @@ Use 48-point minimum actions, count labels for assistive technology, text wrappi
 Local UI/component checks, TypeScript, lint and complete-schema SQL tests are source-level evidence only. A layout-only Chromium attempt could not run because this cloud container forbids Unix sockets. No Android/iOS installed-device visual, keyboard, accessibility or playback proof is claimed.
 
 The Required Validation workflow adds one command immediately after the existing profile engagement concurrency command: `SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-creator-video-engagement-concurrency.mjs`. Existing checks are unchanged. The runner exercises disposable local PostgreSQL lock races; it refuses remote transport. Local execution is blocked by the same socket restriction, so exact-head CI is required before claiming concurrency success. Workflow policy/review requirements remain applicable.
+
+## Dependency-aware preflight
+
+The first full Product run exposed missing transitive harness and inventory updates. Direct-file tests alone were insufficient. Before the follow-up, the dependency audit follows these paths rather than only rerunning failed test names:
+
+| Changed boundary | Downstream contracts checked |
+| --- | --- |
+| `LiveDiscoveryCard` | Home, Live, Explore, Platform Live Now, profile activity; canonical destination/accessibility guard; mounted live/upcoming/profile tests and original-style witness |
+| `CreatorVideoCard` → content dock/bar | Both shared Platform mounted harnesses and all 25 importing suites; Clip authoring/export/brand, public Platform, paid controls, media ownership and Rachi identity |
+| Profile and Player discussion UI | Profile interactions and race barriers, comment-like hook/API, media-submit retirement, timestamps, navigation, direct dock/button state/action tests |
+| Reposts shelf and page API | Real shelf state with boundary transports: cursor pagination, retained loaded extent, policy-hidden vs errors, profile/account/focus/background retirement, UUID exclusion, malformed readback, mutation invalidation |
+| Content engagement API | Video and title branches, own-user relationship filters, published-source/RLS checks, guest behavior, nullable totals, desired-state mutations and retired responses |
+| Two social migrations | Full-schema social SQL tests, current-schema grants/RLS, exact migration tail/catalog, ordinary-profile trigger identities, and all 17 test consumers of the historical deployment fixture through its intermediate helpers |
+| CI concurrency command | Singular mandatory command beside the existing profile proof; negative mutation controls; both pre-existing Database contract hashes remain unchanged after removing only the separately asserted new command |
+
+The title API is generic support, not a claim that every title UI now displays social totals. Its ordinary-viewer release visibility remains governed by canonical title RLS. The explicit client inventory adds two read consumers only, not database grants.
+
+The direct shelf tests reproduced lifecycle defects: a mutation hint could be dropped behind an active read, a same-identity session-object renewal reset loaded pagination, and retained controls could issue reads after unmount. The shelf now fences invalidated snapshots, coalesces a follow-up read, keys retirement to semantic session identity rather than object reference, and requires a live mounted identity before dispatch. Account/focus retirement still cancels ownership of old responses; repeated hints coalesce and StrictMode effect replay retains only the current timer.
+
+The dependency sweep is source-level evidence. Exact new-head Required Validation still runs in CI; browser/native socket-dependent proofs and installed Android/iOS interaction remain separate qualifications. No local test-harness pass is a claim of provider delivery or production deployment.

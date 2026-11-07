@@ -82,3 +82,21 @@ test('comment likes expose real state, retry and no private room-message metric'
   assert.equal(ready.props.accessibilityState.selected,true);
   ready.props.onPress();assert.equal(toggles,1);
 });
+
+test('content dock forwards focus, authoritative state and distinct repost/send actions', () => {
+  let focused=true, captured, likes=0,reposts=0,sends=0,comments=0;
+  const state={likeCount:2,commentCount:3,shareCount:4,viewCount:null,liked:true,reposted:true,canLike:true,canRepost:true,loading:false,busy:false,error:null,toggleLike:()=>likes++,toggleRepost:()=>reposts++,refresh:()=>{}};
+  const {ContentEngagementDock}=load('components/social/content-engagement-dock.tsx',{
+    react:React,'@react-navigation/native':{useIsFocused:()=>focused},
+    '../../hooks/use-content-social-engagement':{useContentSocialEngagement:input=>{captured=input;return state;}},
+    './engagement-bar':bar,
+  });
+  const dock=ContentEngagementDock({kind:'creator_video',id:'v1',onComments:()=>comments++,onShare:()=>sends++});
+  assert.equal(captured.enabled,true);assert.equal(dock.props.commentsLabel,'Discussions');
+  assert.equal(dock.props.shares,4);assert.equal(dock.props.reposted,true);
+  dock.props.onLike();dock.props.onRepost();dock.props.onComments();dock.props.onShare();
+  assert.deepEqual([likes,reposts,comments,sends],[1,1,1,1]);
+  focused=false;state.loading=true;
+  const retired=ContentEngagementDock({kind:'creator_video',id:'v1'});
+  assert.equal(captured.enabled,false);assert.equal(retired.props.onLike,undefined);assert.equal(retired.props.onRepost,undefined);
+});

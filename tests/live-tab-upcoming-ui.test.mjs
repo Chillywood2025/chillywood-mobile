@@ -11,7 +11,7 @@ const noop = () => {}, doc = { addEventListener: noop, removeEventListener: noop
 const container = () => ({ addEventListener: noop, removeEventListener: noop, namespaceURI: 'http://www.w3.org/1999/xhtml', nodeName: 'DIV', nodeType: 1, ownerDocument: doc, parentNode: null, tagName: 'DIV' });
 doc.documentElement = container(); globalThis.document = doc; globalThis.window = globalThis; globalThis.HTMLIFrameElement = class {};
 const compile = file => ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText;
-const walk = (node, predicate) => Array.isArray(node) ? node.flatMap(value => walk(value, predicate)) : node && typeof node === 'object' ? [...(predicate(node) ? [node] : []), ...walk(node.props?.children, predicate)] : [];
+const walk = (node, predicate) => Array.isArray(node) ? node.flatMap(value => walk(value, predicate)) : node && typeof node === 'object' ? typeof node.type === 'function' && node.type.name === 'LiveDiscoveryCard' ? walk(node.type(node.props), predicate) : [...(predicate(node) ? [node] : []), ...walk(node.props?.children, predicate)] : [];
 const text = node => Array.isArray(node) ? node.map(text).join(' ') : node && typeof node === 'object' ? text(node.props?.children) : typeof node === 'string' ? node : '';
 const bucketExports = {};
 vm.runInNewContext(compile('_lib/liveTabDiscoveryBuckets.ts'), { exports: bucketExports });
@@ -33,7 +33,7 @@ async function mount(t, upcoming, discoveryItems = []) {
     '../../components/ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: 'Fill' },
     '../../_lib/actionSingleFlight.mjs': { createActionSingleFlightLatch },
     '../../_lib/customerExperiencePresentation': { resolveLiveHubCardWidth: () => 300, resolveMainTabBrandRevealHeight: () => 100 },
-    '../../_lib/discoveryFeed': { getDiscoveryAccessLabel: () => "Chi'lly Circle", getDiscoveryItemActionLabel: () => 'Live', getDiscoveryItemDestination: item => `/spectate/${item.id}` },
+    '../../_lib/discoveryFeed': { getDiscoveryAccessLabel: () => "Chi'lly Circle", getDiscoveryLiveLabel: () => 'Live', getDiscoveryItemActionLabel: () => 'Live', getDiscoveryItemDestination: item => `/spectate/${item.id}` },
     '../../_lib/useLiveDiscoveryFeed': { useLiveDiscoveryFeed: options => { discoveryOptions = options; return { items: discoveryItems, loading: false, error: null, reload: async () => {}, pendingItemCount: 0 }; } },
     '../../_lib/useLiveUpcomingEvents': { useLiveUpcomingEvents: () => ({ loading: false, error: null, reload: async () => {}, items: [], ...upcoming }) },
     '../../components/live/new-live-streams-button': { NewLiveStreamsButton: 'NewLiveStreamsButton' },
@@ -43,6 +43,14 @@ async function mount(t, upcoming, discoveryItems = []) {
     '../../components/navigation/main-tab-top-bar': { MainTabTopBar: 'TopBar' },
     '../../assets/images/chillywood-branded-background.png': 1,
   };
+  const cardExports = {};
+  vm.runInNewContext(compile('components/live/live-discovery-card.tsx'), { exports: cardExports, require: name => {
+    if(name === '../ui/StableImage') return { StableImage: 'StableImage' };
+    if(name === '../ui/chillywood-visual-system') return imports['../../components/ui/chillywood-visual-system'];
+    if (!(name in imports)) throw Error(`Unexpected card import ${name}`);
+    return imports[name];
+  } });
+  imports['../../components/live/live-discovery-card'] = cardExports;
   const exports = {};
   vm.runInNewContext(compile('app/(tabs)/live.tsx'), { exports, Intl, require: name => { if (!(name in imports)) throw Error(`Unexpected import ${name}`); return imports[name]; } });
   function Host() { tree = exports.default(); return null; }

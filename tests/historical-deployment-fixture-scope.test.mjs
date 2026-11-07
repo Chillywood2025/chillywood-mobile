@@ -14,7 +14,8 @@ const assertDeferredInventory = files => assert.deepEqual(files,
 test('historical inventory rejects missing, duplicate, reordered or earlier migrations', () => {
   const files = [...POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS];
   assertDeferredInventory(files);
-  assert.equal(files.at(-1), '20261106170725_tip_commerce_gate_entry.sql');
+  assert.deepEqual(files.slice(-3), ['20261106170725_tip_commerce_gate_entry.sql',
+    '20261107173220_creator_video_social_engagement.sql','20261107191000_comment_likes.sql']);
   for (const mutant of [files.slice(0,-1), [...files,files.at(-1)], [...files].reverse(),
     ['20261105010859_sandbox_cashout_status_notifications.sql',...files]])
     assert.throws(() => assertDeferredInventory(mutant), assert.AssertionError);

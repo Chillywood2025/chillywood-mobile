@@ -12,22 +12,28 @@ import { CHILLYWOOD_VISUAL, ChillywoodPanel } from "../ui/chillywood-visual-syst
 export function RepostsShelf({ userId, enabled, onOpen }: { userId: string; enabled: boolean; onOpen: (video: CreatorVideo) => void }) {
   const focused = useIsFocused();
   const supportedProfile = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-  const { authority, authorityStatus } = useSession();
+  const { authorityStatus } = useSession();
   const [active, setActive] = useState(AppState.currentState === "active");
   const identity = `${contentSocialAuthorityKey()}:${userId}:${enabled && focused && active}:${authorityStatus}`;
   const current = useRef(identity); current.current = identity;
+  const mountedIdentity = useRef<string | null>(null);
   const sequence = useRef(0);
   const flight = useRef(false);
+  const invalidationRevision = useRef(0);
+  const pendingInvalidation = useRef<string | null>(null);
+  const latestLoad = useRef<(() => Promise<void>) | null>(null);
   const loadedPages = useRef(1);
   const [hiddenIdentity, setHiddenIdentity] = useState<string | null>(null);
   const [state, setState] = useState<{ identity: string; videos: CreatorVideo[]; cursor: CreatorVideoRepostCursor | null; loading: boolean; error: boolean }>({ identity, videos: [], cursor: null, loading: true, error: false });
   const visible = state.identity === identity ? state : { identity, videos: [], cursor: null, loading: true, error: false };
   const load = useCallback(async (cursor: CreatorVideoRepostCursor | null = null) => {
-    if (!enabled || !focused || !active || !supportedProfile || flight.current) return;
+    if (mountedIdentity.current !== identity || current.current !== identity || !enabled || !focused || !active || !supportedProfile || flight.current) return;
     flight.current = true;
     const ticket = ++sequence.current;
     const subject = contentSocialAuthorityKey();
-    const owns = () => current.current === identity && sequence.current === ticket && contentSocialAuthorityKey() === subject;
+    const revision = invalidationRevision.current;
+    const owns = () => mountedIdentity.current === identity && current.current === identity && sequence.current === ticket
+      && invalidationRevision.current === revision && contentSocialAuthorityKey() === subject;
     setState(previous => ({ identity, videos: previous.identity === identity ? previous.videos : [], cursor: previous.identity === identity ? previous.cursor : cursor, loading: true, error: false }));
     try {
       let page = await readCreatorVideoRepostsPage(userId, { limit: 24, cursor: cursor ?? undefined });
@@ -65,23 +71,44 @@ export function RepostsShelf({ userId, enabled, onOpen }: { userId: string; enab
     } catch {
       // Withhold retained images when authority cannot be revalidated.
       if (owns()) setState({ identity, videos: [], cursor: null, loading: false, error: true });
-    } finally { if (ticket === sequence.current) flight.current = false; }
+    } finally {
+      if (ticket === sequence.current) {
+        flight.current = false;
+        if (pendingInvalidation.current === identity && current.current === identity) {
+          pendingInvalidation.current = null;
+          // A mutation during this read invalidates its snapshot. Coalesce to
+          // one fresh read rather than publishing stale rows or losing the hint.
+          void latestLoad.current?.();
+        }
+      }
+    }
   }, [active, enabled, focused, identity, userId, supportedProfile]);
+  latestLoad.current = load;
   useEffect(() => {
     const subscription = AppState.addEventListener("change", value => setActive(value === "active"));
     return () => subscription.remove();
   }, []);
   useEffect(() => {
+    mountedIdentity.current = identity;
     sequence.current += 1; flight.current = false;
+    pendingInvalidation.current = null;
     loadedPages.current = 1;
     setState({ identity, videos: [], cursor: null, loading: true, error: false });
     void load();
     const timer = enabled && focused && active ? setInterval(() => { void load(); }, 30_000) : null;
-    return () => { sequence.current += 1; flight.current = false; if (timer) clearInterval(timer); };
-  }, [identity, load, enabled, focused, active, authority]);
+    return () => {
+      mountedIdentity.current = null;
+      sequence.current += 1; flight.current = false; pendingInvalidation.current = null;
+      if (timer) clearInterval(timer);
+    };
+  }, [identity, load, enabled, focused, active]);
   useEffect(() => subscribeToContentSocialEngagement((key, subject) => {
-    if (key.startsWith("creator_video:") && subject === contentSocialAuthorityKey()) void load();
-  }), [load]);
+    if (mountedIdentity.current === identity && current.current === identity && key.startsWith("creator_video:") && subject === contentSocialAuthorityKey()) {
+      invalidationRevision.current += 1;
+      if (flight.current) pendingInvalidation.current = identity;
+      else void load();
+    }
+  }), [identity, load]);
   if (!enabled || !focused || !active || !supportedProfile || hiddenIdentity === identity) return null;
   return <ChillywoodPanel style={styles.panel} testID="profile-reposts-library">
     <Text style={styles.title}>Reposts</Text>
