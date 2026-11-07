@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "migrations": [
+    {
+      "version": "20261107173220",
+      "name": "creator_video_social_engagement",
+      "sha256": "139f5b6222023682f605cdda160ec7de780bfcbd61748549d6c4c21c6d394c44",
+      "path": "supabase/migrations/20261107173220_creator_video_social_engagement.sql"
+    },
+    {
+      "version": "20261107191000",
+      "name": "comment_likes",
+      "sha256": "4ae184fa4ecfc3358feb5a1485b9e49322fc637d09f3f97dad66aa9843304f8a",
+      "path": "supabase/migrations/20261107191000_comment_likes.sql"
+    }
+  ],
+  "targetCatalogSha256": "25f1e0f2e57a51f6589e40a94c7b933a27bd31c5c21b197ccb7ebaca47e676f6",
+  "helpers": [
+    {
+      "signature": "public.wave1_current_caller_authority_internal()",
+      "bodySha256": [
+        "58a1ef26dfd3fb5e272ed64fa46d70e448af27e9fdf206b87fc08ef7f86b7995"
+      ],
+      "metadata": {
+        "language": "plpgsql",
+        "volatility": "s",
+        "strict": false,
+        "parallel": "u",
+        "acl": "{postgres=X/postgres}",
+        "arg_names": null,
+        "arg_modes": null,
+        "arg_defaults": null,
+        "cost": 100,
+        "rows": 0,
+        "support": "-"
+      }
+    },
+    {
+      "signature": "public.is_account_access_restricted(text)",
+      "bodySha256": [
+        "cff245d1e7251332d1d5f039160460d8c1f3df21fc39cb2c8b14e2c91a1fea97"
+      ],
+      "metadata": {
+        "language": "plpgsql",
+        "volatility": "s",
+        "strict": false,
+        "parallel": "u",
+        "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "arg_names": [
+          "p_user_id"
+        ],
+        "arg_modes": null,
+        "arg_defaults": null,
+        "cost": 100,
+        "rows": 0,
+        "support": "-"
+      }
+    },
+    {
+      "signature": "public.can_view_profile_content(text)",
+      "bodySha256": [
+        "ef5cdbdd8439a7d31cff315004942bb3784ec640d482c7a99d442e684cbc23ac"
+      ],
+      "metadata": {
+        "language": "plpgsql",
+        "volatility": "s",
+        "strict": false,
+        "parallel": "u",
+        "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "arg_names": [
+          "profile_user_id"
+        ],
+        "arg_modes": null,
+        "arg_defaults": null,
+        "cost": 100,
+        "rows": 0,
+        "support": "-"
+      }
+    },
+    {
+      "signature": "public.media_scan_public_safe(text)",
+      "bodySha256": [
+        "7923af4008f334abac6cfaebcef79006d1209da0df14028b43b350ad687ff57c"
+      ],
+      "metadata": {
+        "language": "sql",
+        "volatility": "i",
+        "strict": false,
+        "parallel": "u",
+        "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "arg_names": [
+          "scan_status"
+        ],
+        "arg_modes": null,
+        "arg_defaults": null,
+        "cost": 100,
+        "rows": 0,
+        "support": "-"
+      }
+    },
+    {
+      "signature": "public.can_read_creator_video_row(text,text,text,text,text,text,text,text)",
+      "bodySha256": [
+        "f30d29ee49a58acd182c996b0e3cf5f23d71bc7e287ccad6562619b97c3f0eba"
+      ],
+      "metadata": {
+        "language": "plpgsql",
+        "volatility": "s",
+        "strict": false,
+        "parallel": "u",
+        "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+        "arg_names": [
+          "p_owner_user_id",
+          "p_visibility",
+          "p_moderation_status",
+          "p_scan_status",
+          "p_storage_path",
+          "p_storage_object_key",
+          "p_playback_url",
+          "p_viewer_user_id"
+        ],
+        "arg_modes": null,
+        "arg_defaults": "(auth.uid())::text",
+        "cost": 100,
+        "rows": 0,
+        "support": "-"
+      }
+    }
+  ]
+}
