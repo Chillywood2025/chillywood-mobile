@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
 import React from "react";
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { getDiscoveryAccessLabel, getDiscoveryItemDestination, isDiscoveryFeedItemEligibleForRanking } from "../../_lib/discoveryFeed";
+import { getDiscoveryItemDestination, isDiscoveryFeedItemEligibleForRanking } from "../../_lib/discoveryFeed";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
 import { AppActionButton, AppEmptyState, AppSection } from "../ui/app-surface";
+import { LiveDiscoveryCard } from "./live-discovery-card";
 
 /** Current canonical live sources, including standalone stages with no Event. */
 export function PlatformLiveNow({ creatorUserId, enabled }: { creatorUserId: string; enabled: boolean }) {
@@ -31,20 +32,12 @@ export function PlatformLiveNow({ creatorUserId, enabled }: { creatorUserId: str
       ) : items.length ? (
         <View style={styles.list}>
           {items.map((item) => (
-            <TouchableOpacity
+            <LiveDiscoveryCard
               key={item.id}
-              style={styles.card}
-              activeOpacity={0.86}
+              item={item}
               testID="platform-live-discovery-open-button"
-              accessibilityRole="button"
-              accessibilityLabel={`${item.title || "Live session"}. ${getDiscoveryAccessLabel(item)}. Open live session`}
-              onPress={() => router.push(getDiscoveryItemDestination(item) as Parameters<typeof router.push>[0])}
-            >
-              <Text style={styles.kicker}>LIVE</Text>
-              <Text style={styles.title} numberOfLines={2}>{item.title || "Live session"}</Text>
-              {item.subtitle ? <Text style={styles.body}>{item.subtitle}</Text> : null}
-              <Text style={styles.body}>{getDiscoveryAccessLabel(item)} · Open live session</Text>
-            </TouchableOpacity>
+              onOpen={() => router.push(getDiscoveryItemDestination(item) as Parameters<typeof router.push>[0])}
+            />
           ))}
         </View>
       ) : (

@@ -12,8 +12,6 @@ import {
 
 import type { CreatorVideo } from "../_lib/creatorVideos";
 import {
-  getDiscoveryAccessLabel,
-  getDiscoveryLiveLabel,
   type DiscoveryFeedItem,
 } from "../_lib/discoveryFeed";
 import type {
@@ -21,6 +19,7 @@ import type {
   ProfileSocialFeedItem,
 } from "../_lib/profileSocialFeed";
 import { CreatorVideoCard } from "./creator-media/creator-video-card";
+import { LiveDiscoveryCard } from "./live/live-discovery-card";
 import { LinkedText } from "./social/linked-text";
 import { SocialAttachmentCard } from "./social/social-attachment-card";
 import { ProfileMediaImage as Image } from "./ui/ProfileMediaImage";
@@ -150,35 +149,14 @@ export function ProfileSocialFeedCard({
   }
 
   if (item.type === "spectator_entry" || item.type === "public_profile_spectator_entry") {
-    const title = String(item.discoveryItem.title ?? "").trim() || "Public live entry";
-
     return (
-      <TouchableOpacity
+      <LiveDiscoveryCard
+        item={item.discoveryItem}
+        compact
+        contextLabel={getDiscoveryKicker(item)}
         style={styles.compactDiscoveryTile}
-        activeOpacity={0.9}
-        onPress={() => onOpenDiscoveryItem(item.discoveryItem)}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${title}`}
-      >
-        {item.discoveryItem.thumbnail_url ? (
-          <Image source={{ uri: item.discoveryItem.thumbnail_url }} style={styles.mediaImage} />
-        ) : (
-          <View style={styles.compactMediaFallback}>
-            <MaterialIcons name="live-tv" size={28} color="#EAF0FF" />
-          </View>
-        )}
-        <View style={styles.mediaScrim} />
-        <View style={styles.compactBadgeRow}>
-          <Text style={[styles.mediaBadge, item.discoveryItem.live_state === "live" && styles.liveBadge]}>
-            {getDiscoveryLiveLabel(item.discoveryItem)}
-          </Text>
-          <Text style={styles.mediaBadge}>{getDiscoveryAccessLabel(item.discoveryItem)}</Text>
-        </View>
-        <View style={styles.compactMediaCopy}>
-          <Text style={styles.compactMediaKicker}>{getDiscoveryKicker(item)}</Text>
-          <Text style={styles.compactMediaTitle} numberOfLines={2}>{title}</Text>
-        </View>
-      </TouchableOpacity>
+        onOpen={() => onOpenDiscoveryItem(item.discoveryItem)}
+      />
     );
   }
 
@@ -221,12 +199,6 @@ const styles = StyleSheet.create({
   },
   compactDiscoveryTile: {
     width: 150,
-    aspectRatio: 9 / 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "#111723",
-    overflow: "hidden",
   },
   compactMediaFallback: {
     ...StyleSheet.absoluteFillObject,

@@ -207,7 +207,12 @@ for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explo
 }
 for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explore]]) {
   assert.ok(source.includes("accessibilityLabel"), `${label} discovery cards need deterministic accessibility meaning`);
-  assert.ok(source.includes("getDiscoveryItemActionLabel(item)"),
+  const sharedCard = read("components/live/live-discovery-card.tsx");
+  assert.ok(source.includes("getDiscoveryItemActionLabel(item)") || (
+    source.includes("<LiveDiscoveryCard") && source.includes('components/live/live-discovery-card')
+    && sharedCard.includes("getDiscoveryItemActionLabel(item)")
+    && sharedCard.includes("accessibilityLabel=") && sharedCard.includes("${action}")
+  ),
     `${label} must share the exact discovery destination accessibility label`);
   assert.ok(label === "Live" ? source.includes("useLiveUpcomingEvents") && upcomingFeed.includes("next === 'active'") : source.includes("useRefreshOnForeground"), `${label} must refresh canonical discovery after foreground resume`);
   assert.ok(label === "Live" ? upcomingFeed.includes("request === sequence") && upcomingFeed.includes("sameAccountSessionAuthority") : source.includes("LoadGenerationRef") && source.includes("generation !=="),

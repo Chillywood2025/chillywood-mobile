@@ -30,8 +30,6 @@ import {
   type CreatorVideo,
 } from "../../_lib/creatorVideos";
 import {
-  getDiscoveryAccessLabel,
-  getDiscoveryItemActionLabel,
   getDiscoveryItemDestination,
   getDiscoveryLiveLabel,
   rankDiscoveryFeedItems,
@@ -57,6 +55,7 @@ import {
 import { supabase } from "../../_lib/supabase";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
+import { LiveDiscoveryCard } from "../../components/live/live-discovery-card";
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import type { Tables } from "../../supabase/database.types";
 
@@ -697,38 +696,18 @@ export default function ExploreScreen() {
   );
 
   const renderDiscoveryCard = (item: DiscoveryFeedItem, labelOverride?: string) => {
-    const thumbnail = remoteImageSource(item.thumbnail_url);
-    const label = labelOverride ?? getDiscoveryLiveLabel(item);
-    const accessLabel = getDiscoveryAccessLabel(item);
     const rankingReason = scoreDiscoveryFeedItem(item, discovery.signals).reason;
-    const title = String(item.title ?? "").trim() || "Untitled";
 
     return (
-      <TouchableOpacity
+      <LiveDiscoveryCard
         key={`feed-${item.id}`}
+        item={item}
+        compact
+        contextLabel={labelOverride}
         testID={`explore-discovery-card-${rankingReason}-${item.id}`}
         style={styles.discoveryCard}
-        activeOpacity={0.9}
-        onPress={() => openDiscoveryFeedItem(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}. ${label}. ${accessLabel}. Open ${getDiscoveryItemActionLabel(item)}`}
-      >
-        <View style={styles.discoveryThumb}>
-          {thumbnail ? (
-            <Image source={thumbnail} style={styles.discoveryThumbImage} />
-          ) : (
-            <Text style={styles.discoveryThumbInitial}>{title.slice(0, 1).toUpperCase()}</Text>
-          )}
-          <View style={styles.discoveryScrim} />
-          <View style={styles.discoveryOverlayBadgeRow}>
-            <Text style={[styles.smallBadge, label === "Live" && styles.smallBadgeLive]}>{label}</Text>
-            <Text style={styles.smallBadge}>{accessLabel}</Text>
-          </View>
-          <View style={styles.discoveryOverlayCopy}>
-            <Text style={styles.discoveryCardTitle} numberOfLines={2}>{title}</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
+        onOpen={() => openDiscoveryFeedItem(item)}
+      />
     );
   };
 
@@ -1465,12 +1444,6 @@ const styles = StyleSheet.create({
   },
   discoveryCard: {
     width: 150,
-    aspectRatio: 9 / 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: CHILLYWOOD_VISUAL.controlBorder,
-    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
-    overflow: "hidden",
   },
   creatorVideoTile: {
     width: 150,

@@ -105,6 +105,7 @@ async function mountSubmit(t, surface, pick) {
     return { id: 'saved-comment', userId: 'one', body: 'hello', createdAt: '2026-11-01T00:00:00Z', attachments: [] };
   };
   const scope = { exports: {}, ...React, ...media, runtime, noop, CREATOR_VIDEO_COMMENT_BODY_LIMIT: 2000,
+    invalidateContentSocialEngagement: noop,
     createRoomAttachmentIntent, AppState: { currentState: 'active', addEventListener: () => ({ remove: noop }) },
     getPartyRoomSnapshot: async () => runtime.canonicalRoomSnapshot,
     resolvePaidWatchPartyTicketAccess: async () => runtime.ticket ?? ({ allowed: true, reason: 'free_room' }),
