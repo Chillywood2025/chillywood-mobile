@@ -149,9 +149,32 @@ node --test tests/isolated-sandbox-commerce-client.test.mjs tests/isolated-sandb
 
 The core harness writes synthetic responses from the actual SQL for the client
 integration test. Without that environment variable, the client bridge case
-explicitly skips; the native SQL cases are not run by the existing CI Node-test
-glob. Preserve the separate native results when reviewing this work. These
-fixtures do not authenticate provider payloads or exercise real app screens.
+explicitly skips in an ordinary standalone Node run. The canonical source CI
+now has a separate required `Validation / Isolated Sandbox Native PostgreSQL
+17.6` job whenever database validation applies. It builds the official 17.6
+source archive after checking its pinned SHA-256, runs all seven native
+harnesses sequentially (144 groups), generates fresh actual-SQL command
+responses, then requires all 52 client/provider/delivery Node tests with zero
+skips, cancellations or TODOs. Native results must report verified cleanup and
+matching source hashes. An applicable missing or non-successful job blocks both
+Results and the protected publisher. The normal product/sensitive Node globs
+remain separate and do not replace this native job.
+
+Inspect or run the same orchestration locally with existing PostgreSQL 17.6
+binaries. The output directory must be new and inside the checkout:
+
+```sh
+node scripts/ci/isolated-sandbox-native.mjs --plan
+node scripts/ci/isolated-sandbox-native.mjs --local-bin "$SANDBOX_TEST_PG_BIN" --output-dir "$PWD/isolated-sandbox-native-evidence"
+```
+
+CI retains per-suite JSON/stdout/stderr, actual response fixtures and a source
+manifest for 14 days, including partial evidence on failure. Build failures
+remain in the job log; they cannot produce a passing qualification summary.
+These tests use no production/provider credentials, authenticate no real
+provider payloads, and exercise no real app screens or installed devices.
+Hosted managed-schema compatibility, actual Auth/gateway/pool behavior and
+provider delivery still require their separate qualification.
 
 For local fixtures only, the ordered SQL is core, Premium authority, authority,
 commands, receipts, then `permissions-finalize.sql`, all in one transaction.

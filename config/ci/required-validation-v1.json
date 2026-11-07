@@ -25,6 +25,7 @@
     "sensitive": "Validation / Sensitive",
     "database": "Validation / Database",
     "brandNative": "Validation / Brand Native PostgreSQL 17.6",
+    "isolatedSandboxNative": "Validation / Isolated Sandbox Native PostgreSQL 17.6",
     "nativeRelease": "Validation / Native and Release",
     "autonomous": "Validation / Autonomous",
     "policy": "Validation / Policy",
@@ -92,6 +93,9 @@
     ],
     "database": [
       "supabase/**",
+      "tests/isolated-sandbox-*.test.mjs",
+      "tests/creator-money/isolated-sandbox-provider.test.mjs",
+      "scripts/ci/isolated-sandbox-native.mjs",
       "scripts/brand-reference-index-installer.mjs",
       "tests/brand-reference-*.mjs",
       "tests/helpers/brand-reference-*.mjs",
