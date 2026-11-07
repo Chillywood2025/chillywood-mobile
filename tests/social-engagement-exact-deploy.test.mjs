@@ -11,6 +11,21 @@ const context={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,
 const ready=()=>({schema:1,database:'postgres',context:{...context},priorHistorySha256:'a'.repeat(64),catalogSha256:'b'.repeat(64),controlsSha256:'c'.repeat(64),targetCatalogSha256:'d'.repeat(64),holds:true,prerequisites:true,absent:true,targets:[]});
 const applied=()=>({...ready(),absent:false,targetCatalogSha256:bundle.manifest.targetCatalogSha256,targets:bundle.migrations.map(({version,name,statementsSha256})=>({version,name,statementsSha256}))});
 
+test('native fixture verifies its generated database before adapting management-only identity',()=>{
+ const source=fs.readFileSync('scripts/test-social-engagement-exact-deploy-postgres.mjs','utf8');
+ const start=source.indexOf('const read=()=>{'),end=source.indexOf('const fail=',start);
+ assert.ok(start>=0&&end>start,'exact native read adapter is exercised');
+ const database='runtime_authority_123_abcdef123456_social';
+ let raw={...ready(),database};
+ const read=new Function('assert','query','readbackSql','bundle','context','database',source.slice(start,end)+'return read;')
+   (assert,()=>JSON.stringify(raw),readbackSql,bundle,context,database);
+ const state=read();assert.equal(classifyState(bundle,state),'ready');
+ assert.deepEqual(state,{...raw,database:'postgres',context});
+ assert.throws(()=>classifyState(bundle,raw),/READBACK_INVALID/,'production identity requirement stays strict');
+ raw={...raw,database:'unowned_database'};assert.throws(read,/readback must come from this owned clone/);
+ raw={...ready(),database,holds:false};assert.throws(()=>classifyState(bundle,read()),/PRODUCTION_HOLDS_MISMATCH/,'no actual safety predicate is substituted');
+});
+
 test('two immutable migrations, exact source closure, and strict transaction envelope',t=>{
  assert.equal(bundle.migrations.length,2);
  for(const e of bundle.migrations)assert.equal(e.body,fs.readFileSync(e.path,'utf8'));

@@ -20,7 +20,14 @@ const args=(db=database)=>['exec','-i',container,'psql','-X','-q','-A','-t','-v'
 const query=(sql,db)=>success(docker(args(db),`set statement_timeout='30s';${sql}`),'clone SQL').trim();
 const admin=(a,input,encoding='utf8')=>docker(['exec',...(input===undefined?[]:['-i']),container,'sh','-lc','PGPASSWORD="$POSTGRES_PASSWORD" exec "$@"','social-fixture-admin',...a],input,encoding);
 const context={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
-const read=()=>({...JSON.parse(query(readbackSql(bundle)).trim().split('\n').at(-1)),context});
+const read=()=>{
+ const state=JSON.parse(query(readbackSql(bundle)).trim().split('\n').at(-1));
+ // The production classifier requires its real postgres database. This native
+ // fixture intentionally uses an owned generated clone: verify that identity
+ // first, then model only the fixed management transport name and role fields.
+ assert.equal(state.database,database,'readback must come from this owned clone');
+ return {...state,database:'postgres',context};
+};
 const fail=(sql,pattern)=>{const result=docker(args(),sql);assert.notEqual(result.status,0);assert.match(result.stderr,pattern);};
 const sessions=new Set();let cloned=false;
 function start(sql){
