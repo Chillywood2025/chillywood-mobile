@@ -3,8 +3,12 @@
 **Inactive implementation work. Not a production migration, deployable release,
 or completed replacement for PR #683/#684.** The Library links to dedicated
 sandbox tip authoring/history routes and buyer quote preparation/recovery.
-Provider purchase is visibly unavailable. No
-existing webhook, money dispatcher or delivery endpoint activates this bundle.
+Provider purchase remains visibly unavailable in the ordinary app. A separate
+dedicated DEBUG Test Store flavor now has a bounded one-attempt tip checkout,
+authenticated receipt projection and read-only recovery source path; it is
+unconfigured and unactivated. It is not completed repeatable checkout. See
+[TEST_STORE.md](TEST_STORE.md). No existing webhook, money dispatcher or delivery
+endpoint activates this bundle.
 
 This work avoids replacing the existing commerce functions. A fresh private
 schema owns its resources, requests, offers, purchase attempts and provider
@@ -64,6 +68,15 @@ a charge, completed tip or receipt.
   an independently authenticated, exact provider observation; the pure provider
   classifier does not establish that authentication. Tips never create access
   grants, Premium, payable earnings, payouts or cashout.
+* `test-store.sql` adds the dedicated Test Store tip rehearsal: immutable
+  buyer/session/quote/dispatch and opaque provider-customer bindings, authenticated
+  raw receipt evidence, one-use claims and retained receipt/recovery history.
+  New connection/native-profile tables are empty and both controls start off.
+  Negative evidence is scoped only to the separate Test Store project; existing
+  Apple/Google authorities and provider paths are not redirected. The dedicated
+  DEBUG app permanently reserves one installation attempt; neither a receipt nor
+  a cancellation proves SDK quiescence. Repeat purchases require a separate
+  qualified correlation protocol. See `TEST_STORE.md` for exact limitations.
 * `history.sql` supplies the dedicated tip RPC: current capabilities, bounded
   studio and offer pages, retained buyer/creator history, exact request recovery,
   offer retirement and abandonment of an undispatched attempt. History survives
@@ -100,7 +113,9 @@ watch parties, Live Stage entry and speaking-seat eligibility, merch, and event
 and room-seat auctions. The new private graphs describe those distinct terms;
 their authoring, provider admission and actual delivery are still incomplete:
 
-* Native SDK purchases currently carry a product rather than an app intent ID.
+* Ordinary native SDK purchases carry a product rather than an app intent ID.
+  The dedicated Test Store rehearsal binds one opaque provider customer to one
+  admitted dispatch; this does not solve repeat checkout or mixed-store routing.
   Receipt ownership must be unambiguous across old and new intent namespaces.
   Missing-product terminal events require original-transaction ownership.
   The existing RevenueCat webhook can quarantine authority before product
@@ -116,8 +131,9 @@ their authoring, provider admission and actual delivery are still incomplete:
   Auctions need exact winner/claim/deadline state; merch needs inventory,
   reservation, photo ownership, shipping-data privacy and test-only fulfillment.
 * Dedicated pre-purchase app routes, Library discovery, durable authoring
-  recovery and retained tip history exist. Actual provider/native checkout,
-  non-tip product screens and installed-device delivery remain incomplete.
+  recovery, retained tip history and the bounded Test Store DEBUG path exist.
+  Actual provider qualification, repeat checkout, non-tip product screens and
+  installed-device delivery remain incomplete.
   Current main targets V19; this work does not permit publishing it as V18.
 
 These are unresolved implementation/integration requirements. They are not
@@ -170,7 +186,7 @@ fresh-project bootstrap for the repository's held/deferred migration inventory.
 The canonical source CI has a required `Validation / Isolated Sandbox Native
 PostgreSQL 17.6` job whenever database validation applies. It builds the official
 17.6 archive after checking its pinned SHA-256, runs the native harnesses
-sequentially, generates fresh actual-SQL command/history responses, and requires
+sequentially, generates fresh actual-SQL command/history/Test Store responses, and requires
 the exact per-suite Node counts with zero skips, cancellations or TODOs. The
 runner's `--plan` reports the current complete stage list and expected counts.
 Native results must report verified cleanup and matching source hashes.
@@ -182,7 +198,7 @@ entry and its imports with Deno, without starting it.
 
 Run from the repository root with an existing PostgreSQL 17.6 binary directory.
 The evidence directory must be new and inside the checkout; the runner creates
-both actual-SQL response fixtures there and verifies their hashes through the
+all three actual-SQL response fixtures there and verifies their hashes through the
 client suites:
 
 ```sh
@@ -200,9 +216,10 @@ synthetic transport and actual local-SQL response fixtures, not installed device
 Hosted managed-schema compatibility, actual Auth/gateway/pool behavior and
 provider delivery still require their separate qualification.
 
-For local fixtures only, the ordered SQL is core, Premium authority, authority,
-commands, receipts, history, resource graphs, delivery authority, then
-`permissions-finalize.sql`, all in one transaction. The receipt router has its
+For local combined fixtures only, the ten ordered SQL files are core, Premium
+authority, authority, commands, receipts, Test Store, history, resource graphs,
+delivery authority, then `permissions-finalize.sql`, all in one transaction.
+The receipt router has its
 own ordered installation contract; its source bridge is not a legacy cutover.
 There is intentionally no production execution command here. Full repository
 validation and a complete real integration rehearsal are required before

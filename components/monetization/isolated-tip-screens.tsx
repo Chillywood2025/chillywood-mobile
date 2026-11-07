@@ -10,6 +10,8 @@ import { createIsolatedSandboxTipCheckoutJournal, type IsolatedSandboxTipCheckou
 import { IsolatedSandboxCommerceError } from "../../_lib/isolatedSandboxCommerce";
 import { AppBackButton } from "../navigation/app-back-button";
 import { IsolatedTipReceipt, isolatedTipMoney } from "./isolated-tip-receipt";
+import { IsolatedTestStoreCheckout } from "./isolated-test-store-checkout";
+import { isIsolatedTestStoreFlavor } from "../../_lib/isolatedTestStoreBuild";
 
 type Page = "home" | "studio" | "offer" | "status" | "history";
 type Notice = { message: string; requestId?: string };
@@ -49,6 +51,7 @@ export function IsolatedTipScreen({ page }: { page: Page }) {
 }
 
 function TipSession({ page, title, authority }: { page: Page; title: string; authority: AccountSessionAuthorityBinding }) {
+  const [testStoreFlavor] = useState(isIsolatedTestStoreFlavor);
   const router = useRouter();
   const params = useLocalSearchParams<{ offerId?: string; intentId?: string; receiptId?: string; requestId?: string }>();
   const [client, setClient] = useState<IsolatedTipClient | null>(null);
@@ -190,7 +193,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
         settled = await checkoutJournal.reconcile(requestId, canonical, { requestId: readId, sessionGeneration: authority.sessionGeneration });
       }
       if (current()) {
-        setNotice({ message: settled.state === "not_applied" ? "This preparation was not sent. Reopen the current account view before choosing another action." : settled.state === "intent_prepared" ? "Preparation saved and reviewed quote confirmed. Actual purchase remains unavailable. Check this exact attempt before choosing another action." : settled.intentId ? "The attempt was recorded, but its reviewed quote could not be confirmed. Check status or request closure; do not prepare a replacement." : "Preparation outcome is unknown. Read status without repeating it or starting a replacement.", ...(settled.state !== "not_applied" ? { requestId } : {}) });
+        setNotice({ message: settled.state === "not_applied" ? "This preparation was not sent. Reopen the current account view before choosing another action." : settled.state === "intent_prepared" ? testStoreFlavor ? "Preparation saved and reviewed quote confirmed. Review the dedicated Test Store section to request a simulation." : "Preparation saved and reviewed quote confirmed. Actual purchase remains unavailable. Check this exact attempt before choosing another action." : settled.intentId ? "The attempt was recorded, but its reviewed quote could not be confirmed. Check status or request closure; do not prepare a replacement." : "Preparation outcome is unknown. Read status without repeating it or starting a replacement.", ...(settled.state !== "not_applied" ? { requestId } : {}) });
         setRevision(value => value + 1);
       }
     } catch {
@@ -286,7 +289,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
   };
   const showOffer = (offer: TipOffer) => <View key={offer.id} style={styles.card} testID={`isolated-tip-offer-${offer.id}`}>
     <Text style={styles.title}>{offer.title}</Text><Text style={styles.body}>{isolatedTipMoney(offer.amountMinor, offer.currency)} · {offer.status}</Text>
-    <Text style={styles.body}>Creator: {offer.creatorId}</Text><Text style={styles.body}>Revision {offer.revision}. {offer.available ? "Published. Test payments are unavailable." : "This offer is unavailable for new purchases."}</Text>
+    <Text style={styles.body}>Creator: {offer.creatorId}</Text><Text style={styles.body}>Revision {offer.revision}. {offer.available ? testStoreFlavor ? "Published. The separate Test Store rehearsal requires current qualification." : "Published. Test payments are unavailable." : "This offer is unavailable for new purchases."}</Text>
     <Action testID={`isolated-tip-view-${offer.id}`} onPress={() => navigate(`/sandbox-tips/offer/${offer.id}`)}>View offer</Action>
     {offer.kind !== "creator_tip" ? <Text style={styles.body}>This is a different product type. This view supports tip authoring only.</Text> : offer.creatorId === authority.userId && offer.status !== "retired" ? <Action testID={`isolated-tip-retire-${offer.id}`} disabled={mutationDisabled} onPress={() => void retire(offer)}>Retire offer</Action> : null}
   </View>;
@@ -300,7 +303,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
     <View style={styles.actions}><Action testID="isolated-tip-home" onPress={() => navigate("/sandbox-tips")}>Overview</Action><Action testID="isolated-tip-studio" onPress={() => navigate("/sandbox-tips/studio")}>Tip studio</Action><Action testID="isolated-tip-history" onPress={() => navigate("/sandbox-tips/history")}>History</Action><Action testID="isolated-tip-refresh" disabled={busy} onPress={refresh}>Refresh status</Action></View>
     {busy ? <View accessibilityLiveRegion="polite"><ActivityIndicator /><Text style={styles.body}>Checking sandbox status…</Text></View> : null}
     {notice ? <View accessibilityLiveRegion="polite"><Text style={styles.body}>{notice.message}</Text>{notice.requestId ? <Action testID="isolated-tip-check-action" onPress={() => navigate(`/sandbox-tips/status?requestId=${notice.requestId}`)}>Check action status</Action> : null}</View> : null}
-    <View style={styles.card}><Text style={styles.title}>Test checkout unavailable</Text><Text style={styles.body}>{checkoutUnavailable}</Text><Action testID="isolated-tip-checkout" disabled onPress={() => undefined}>Send test tip</Action></View>
+    <View style={styles.card}><Text style={styles.title}>{testStoreFlavor ? "Store payment unavailable" : "Test checkout unavailable"}</Text><Text style={styles.body}>{testStoreFlavor ? "Apple and Google store payments remain off. The separate Test Store section describes the DEBUG rehearsal." : checkoutUnavailable}</Text><Action testID="isolated-tip-checkout" disabled onPress={() => undefined}>Send test tip</Action></View>
     {data ? <View testID="isolated-tip-data" style={styles.section}>
       {(page === "home" || page === "studio") && capability ? <View style={styles.card}>
         <Text style={styles.title}>{capability.canAuthor ? "Creator authoring available" : "Creator authoring unavailable"}</Text>
@@ -323,7 +326,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
         <Text style={styles.title}>Review a test preparation</Text>
         <Text style={styles.body}>{isolatedTipMoney(selectedOffer.amountMinor, selectedOffer.currency)} · Recipient account: {selectedOffer.creatorId}</Text>
         <Text style={styles.body}>Offer revision {selectedOffer.revision} · Resource revision {selectedOffer.resourceRevision}</Text>
-        <Text style={styles.body}>This saves an attempt for status and recovery. It does not open a purchase sheet. Actual purchase remains unavailable.</Text>
+        <Text style={styles.body}>{testStoreFlavor ? "This saves an attempt for status and recovery. It does not open a purchase sheet. After quote confirmation, the separate Test Store section can request a qualified simulation." : "This saves an attempt for status and recovery. It does not open a purchase sheet. Actual purchase remains unavailable."}</Text>
         <Action testID="isolated-tip-review-quote" disabled={buyerDisabled} selected={reviewedQuote === JSON.stringify(quoteForOffer(selectedOffer))} onPress={() => setReviewedQuote(value => value === JSON.stringify(quoteForOffer(selectedOffer)) ? "" : JSON.stringify(quoteForOffer(selectedOffer)))}>I reviewed this recipient and amount</Action>
         <Action testID="isolated-tip-prepare" disabled={buyerDisabled || reviewedQuote !== JSON.stringify(quoteForOffer(selectedOffer))} onPress={() => void prepareBuyerAttempt(selectedOffer)}>Save test preparation</Action>
         {buyerUnresolved ? <Text style={styles.body}>A saved buyer attempt still requires recovery or an authoritative undispatched closure before a replacement can be prepared.</Text> : null}
@@ -344,6 +347,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
       <Text style={styles.body}>Reviewed amount: {isolatedTipMoney(entry.quote.amountMinor, entry.quote.currency)} · Offer revision {entry.quote.offerRevision} · Resource revision {entry.quote.resourceRevision}</Text>
       <Action testID={`isolated-tip-buyer-recover-${entry.requestId}`} onPress={() => navigate(`/sandbox-tips/status?requestId=${entry.requestId}`)}>Check buyer action</Action>
     </View>)}</View> : null}
+    <IsolatedTestStoreCheckout authority={authority} preparation={checkoutEntries.find(entry => entry.state === "intent_prepared" && entry.command === "checkout.prepare" && (!statusEntry || entry.intentId === statusEntry.id) && (!selectedOffer || entry.quote.offerId === selectedOffer.id)) ?? null} />
   </Frame>;
 }
 const styles = StyleSheet.create({

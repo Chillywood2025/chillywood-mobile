@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { ConfigContext, ExpoConfig } from "@expo/config";
+import { isolatedTestStoreDebugConfig } from "./config/test-store-debug-config";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
@@ -164,6 +165,12 @@ const buildAndroidAppLinkIntentFilters = (): NonNullable<NonNullable<ExpoConfig[
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const base = config as ExpoConfig;
+  const isolatedTestStore = isolatedTestStoreDebugConfig(base, {
+    EAS_BUILD_PROFILE: process.env.EAS_BUILD_PROFILE,
+    CHILLYWOOD_TEST_STORE_FLAVOR: process.env.CHILLYWOOD_TEST_STORE_FLAVOR,
+    CHILLYWOOD_TEST_STORE_NATIVE_CONFIG: process.env.CHILLYWOOD_TEST_STORE_NATIVE_CONFIG,
+  });
+  if (isolatedTestStore) return isolatedTestStore;
   const existingExtra = (base.extra ?? {}) as Record<string, unknown>;
   const existingAndroid = (
     base.android && typeof base.android === "object" && !Array.isArray(base.android)

@@ -60,6 +60,8 @@ function fixture(platform = "ios", { initial = A, memory = new Map(), serialStar
     "../../_lib/session": { useSession: () => ({ user: current ? { id: current.userId } : null, authority: current, isLoading: false }) },
     "../../_lib/accountSessionAuthority": authority, "../../_lib/isolatedSandboxTips": api, "../../_lib/isolatedSandboxTipAttempts": journal, "../../_lib/isolatedSandboxTipCheckoutAttempts": checkoutJournal, "../../_lib/isolatedSandboxCommerce": commerce,
     "../navigation/app-back-button": { AppBackButton: primitive("AppBackButton") }, "./isolated-tip-receipt": receiptComponent,
+    "./isolated-test-store-checkout": { IsolatedTestStoreCheckout: () => null }, // Ordinary app flavor; dedicated DEBUG component has its own mounted suite.
+    "../../_lib/isolatedTestStoreBuild": { isIsolatedTestStoreFlavor: () => false },
   });
   const root = createRoot(container());
   const visibleNodes = () => nodes.slice(Math.max(0, nodes.findLastIndex(node => node.name === "ImageBackground")));

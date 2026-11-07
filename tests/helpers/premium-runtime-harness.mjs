@@ -21,7 +21,7 @@ const load = (path, mocks = {}, overrides = {}) => {
 
 // Full actual monetization module, actual entitlement policy and purchase closure.
 // Only account, database and provider boundaries are modeled; no real purchase occurs.
-export function premiumRuntime(platform = 'android', { independentProjection = false, immediatePolls = false } = {}) {
+export function premiumRuntime(platform = 'android', { independentProjection = false, immediatePolls = false, isolatedTestStore = false } = {}) {
   const product = platform === 'ios' ? 'com.chillywood.premium.monthly' : 'premium_subscription';
   const pkg = { identifier: 'monthly', product: { identifier: product } };
   const offering = { identifier: 'premium', availablePackages: [pkg], monthly: pkg };
@@ -42,7 +42,8 @@ export function premiumRuntime(platform = 'android', { independentProjection = f
       getMoneyFeatureFlag: () => ({ state: state.railState }) },
     './moderation': { readMyPlatformRoleMemberships: async () => [], hasPlatformRoleMembership: () => false },
     './runtimeConfig': { getRuntimeConfig: () => ({ revenueCat: { appStorePurchasesEnabled: true } }), isBetaOperatorIdentity: () => false },
-    './revenuecat': { configureRevenueCatOnce: () => ({ shouldConfigure: true, mode: platform === 'ios' ? 'ios-release' : 'android-release', apiKey: 'nonsecret-model' }),
+    './isolatedTestStoreBuild': { isIsolatedTestStoreFlavor: () => isolatedTestStore },
+    './revenuecat': { configureRevenueCatOnce: () => ({ shouldConfigure: !isolatedTestStore, mode: isolatedTestStore ? 'disabled' : platform === 'ios' ? 'ios-release' : 'android-release', apiKey: isolatedTestStore ? '' : 'nonsecret-model' }),
       syncRevenueCatCustomerIdentity: async userId => ({ matchesSourceUser: state.providerIdentity, appUserId: userId, isAnonymous: false }),
       canMakeRevenueCatPurchases: async () => true,
       readRevenueCatCustomerInfo: async () => { state.providerReads++; if (state.providerReader) return state.providerReader();

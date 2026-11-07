@@ -9,7 +9,7 @@ create table sandbox_commerce_v1.provider_routes (
   provider text not null, scope_key text not null, store text not null,
   source_environment text not null,
   semantic_contract text not null check(semantic_contract in
-    ('rc_app_store_tip_v1','rc_google_play_tip_v1','stripe_platform_tip_v1')),
+    ('rc_app_store_tip_v1','rc_google_play_tip_v1','rc_test_store_tip_v1','stripe_platform_tip_v1')),
   qualification_state text not null default 'unavailable' check(qualification_state in ('unavailable','qualified')),
   ownership_evidence_sha256 text, delivery_evidence_sha256 text, adapter_evidence_sha256 text,
   initiation_enabled boolean not null default false,
@@ -75,8 +75,8 @@ begin
   if p_provider='revenuecat' then
     return jsonb_array_length(s)=5 and s->>0='revenuecat'
       and sandbox_commerce_v1.provider_text(s->>1) and sandbox_commerce_v1.provider_text(s->>2)
-      and p_store in ('app_store','google_play')
-      and s->>3=case p_store when 'app_store' then 'APP_STORE' else 'PLAY_STORE' end
+      and p_store in ('app_store','google_play','test_store')
+      and s->>3=case p_store when 'app_store' then 'APP_STORE' when 'google_play' then 'PLAY_STORE' else 'TEST_STORE' end
       and s->>4='SANDBOX' and p_environment='SANDBOX';
   elsif p_provider='stripe' then
     return jsonb_array_length(s)=4 and s->>0='stripe' and s->>1 ~ '^acct_[A-Za-z0-9]+$'
@@ -115,6 +115,18 @@ begin
   perform sandbox_commerce_v1.assert_generation(true);
   if i.kind<>'creator_tip' or i.state<>'prepared' or i.dispatch_id is not null or i.expires_at<=clock_timestamp()
   then raise exception 'sandbox_tip_dispatch_unavailable'; end if;
+  -- Test Store requires the dedicated authenticated allocation/claim boundary.
+  -- A generic service dispatch cannot turn a caller-selected RC identity into
+  -- proof of the buyer, session or quote. The private context exists only in
+  -- the same transaction as that boundary's fresh admission.
+  if i.store='test_store' then
+    if not exists(select 1 from sandbox_commerce_v1.test_store_call_context x
+      join sandbox_commerce_v1.test_store_allocations binding on binding.intent_id=x.intent_id
+      where x.transaction_id=txid_current() and x.operation='dispatch' and x.intent_id=i.id
+        and binding.dispatch_id=p_dispatch_id and binding.buyer_id=i.buyer_id
+        and binding.buyer_session_id=i.buyer_session_id)
+    then raise exception 'sandbox_test_store_dispatch_source_required'; end if;
+  end if;
   select * into r from sandbox_commerce_v1.provider_routes
     where provider=i.provider and scope_key=i.scope_key and store=i.store for share nowait;
   if not found or r.qualification_state<>'qualified' or not r.initiation_enabled
@@ -122,6 +134,7 @@ begin
     or r.semantic_contract is distinct from (case
       when i.provider='revenuecat' and i.store='app_store' then 'rc_app_store_tip_v1'
       when i.provider='revenuecat' and i.store='google_play' then 'rc_google_play_tip_v1'
+      when i.provider='revenuecat' and i.store='test_store' then 'rc_test_store_tip_v1'
       when i.provider='stripe' and i.store='stripe' then 'stripe_platform_tip_v1' end)
   then raise exception 'sandbox_provider_route_unavailable'; end if;
   buyer:=sandbox_commerce_v1.assert_authority(i.buyer_id,i.buyer_session_id,'buyer');
@@ -259,10 +272,22 @@ begin
     or (refunded is not null and (jsonb_typeof(p_receipt->'refundedAmountMinor')<>'number' or refunded<=0 or refunded>9007199254740991))
     or ((amount is null)<>(currency is null)) or (currency is not null and currency !~ '^[a-z]{3}$')
   then raise exception 'sandbox_receipt_identity_invalid'; end if;
+  -- No public normalized-fact setter for Test Store. Only the dedicated
+  -- exact-byte ingress may create this private, transaction-local authorization
+  -- after joining its immutable provider customer ID to an admitted dispatch.
+  if store='test_store' then
+    if not exists(select 1 from sandbox_commerce_v1.test_store_call_context x
+      join sandbox_commerce_v1.test_store_ingress evidence on evidence.id=x.ingress_id
+      where x.transaction_id=txid_current() and x.operation='receipt' and x.payload=p_receipt
+        and evidence.raw_sha256=p_receipt->>'rawBodySha256'
+        and evidence.observation->>'eventId'=event_id)
+    then raise exception 'sandbox_test_store_receipt_source_required'; end if;
+  end if;
   select * into r from sandbox_commerce_v1.provider_routes pr where pr.provider=receipt_ctx.provider and pr.scope_key=scope and pr.store=receipt_ctx.store;
   if not found or r.qualification_state<>'qualified' or r.source_environment<>source_environment
     or r.semantic_contract is distinct from (case when provider='revenuecat' and store='app_store' then 'rc_app_store_tip_v1'
       when provider='revenuecat' and store='google_play' then 'rc_google_play_tip_v1'
+      when provider='revenuecat' and store='test_store' then 'rc_test_store_tip_v1'
       when provider='stripe' and store='stripe' then 'stripe_platform_tip_v1' end)
   then raise exception 'sandbox_provider_route_unavailable'; end if;
   if not pg_try_advisory_xact_lock(hashtextextended('sandbox-event:'||jsonb_build_array(provider,scope,store,event_id)::text,683))
@@ -310,6 +335,17 @@ begin
         select * into strict i from sandbox_commerce_v1.intents where id=original.intent_id;
         if original.transaction_id<>transaction_id or (intent_hint is not null and intent_hint<>i.id)
         then reason:='original_transaction_or_intent_conflict'; end if;
+      elsif provider='revenuecat' and store='test_store' then
+        -- Never use the legacy buyer/SKU/time candidate search for Test Store.
+        -- Repeated same-price purchases have different immutable RC identities.
+        if intent_hint is null or dispatch_hint is null then reason:='test_store_dispatch_binding_required';
+        else
+          select candidate.* into i from sandbox_commerce_v1.intents candidate
+            join sandbox_commerce_v1.test_store_allocations binding on binding.intent_id=candidate.id
+            where candidate.id=intent_hint and binding.dispatch_id=dispatch_hint
+              and binding.buyer_id=buyer and binding.buyer_session_id=candidate.buyer_session_id;
+          if not found then reason:='test_store_dispatch_binding_missing'; end if;
+        end if;
       elsif provider='revenuecat' then
         select array_agg(candidate.id order by candidate.id) into candidates
         from sandbox_commerce_v1.intents candidate join sandbox_commerce_v1.dispatch_attempts attempt on attempt.intent_id=candidate.id
@@ -338,6 +374,8 @@ begin
         or i.amount_minor<>amount or i.currency<>currency or i.dispatch_id is distinct from a.dispatch_id or i.dispatched_at is distinct from a.claimed_at
         or purchased<a.claimed_at or purchased>a.accept_purchase_until
       then reason:='tip_admitted_quote_mismatch';
+      elsif store='test_store' and a.dispatch_id is distinct from dispatch_hint then
+        reason:='test_store_dispatch_binding_conflict';
       elsif provider='stripe' and (a.dispatch_id<>dispatch_hint or a.provider_transaction_id is distinct from transaction_id) then
         if a.dispatch_id=dispatch_hint and a.provider_transaction_id is null then outcome:='pending'; reason:='stripe_provider_binding_pending';
         else reason:='stripe_provider_binding_conflict'; end if;
@@ -370,7 +408,8 @@ begin
       else select * into strict receipt_row from sandbox_commerce_v1.receipts where id=original.receipt_id;
       end if;
     end if;
-  elsif (event_type='refund' and provider_event_type=case provider when 'stripe' then 'charge.refunded' else 'REFUND' end)
+  elsif (event_type='refund' and provider_event_type=case when provider='stripe' then 'charge.refunded'
+      when store='test_store' then 'CANCELLATION' else 'REFUND' end)
     or (provider='revenuecat' and event_type='revocation' and provider_event_type='REVOCATION') then
     if provider='stripe' and (amount is null or refunded is null or refunded>amount
       or p_receipt->>'providerObjectType' is distinct from 'charge'

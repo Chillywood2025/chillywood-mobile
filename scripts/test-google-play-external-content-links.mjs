@@ -15,12 +15,13 @@ for (const platform of ['android', 'ios', 'web']) {
 assert.equal(backendCalls, 0, 'Installed V17 without bridge must fail before backend checkout');
 let prepares = 0, launches = 0, cancels = 0;
 const native = {
-  capabilities: () => ({ apiVersion: 1, program: 'external_content_link', billingLibraryVersion: '8.2.1' }),
+  capabilities: () => ({ apiVersion: 1, program: 'external_content_link', billingLibraryVersion: '8.3.0' }),
   prepare: async () => ({ flowId: `flow-${++prepares}`, externalTransactionToken: `fresh-${prepares}` }),
   launch: async () => { launches++; return { launched: true }; },
   cancel: async () => { cancels++; },
 };
 assert.equal(supported('android', native), true);
+assert.equal(supported('android', { ...native, capabilities: () => ({ apiVersion: 1, program: 'external_content_link', billingLibraryVersion: '8.2.1' }) }), false);
 assert.equal(supported('ios', native), false);
 assert.equal(supported('android', { ...native, capabilities: () => ({ apiVersion: 2 }) }), false);
 assert.equal(supported('android', { ...native, capabilities: () => { throw Error('unavailable'); } }), false);

@@ -18,6 +18,67 @@ export function googleExternalLinkCompileTasks() {
   ]);
 }
 
+export function testStoreAdmissionCompileTasks() {
+  return ANDROID_VARIANTS.flatMap(variant => [
+    `:chillywood-test-store-admission:compile${variantTitle(variant)}Kotlin`,
+    `:chillywood-test-store-admission:compile${variantTitle(variant)}JavaWithJavac`,
+  ]);
+}
+
+export function resolveTestStoreAdmissionProject(resolution, projectRoot, platform) {
+  assert(["android", "ios"].includes(platform), "A native Test Store platform is required");
+  const modules = resolution?.modules?.filter(module => module.packageName === "chillywood-test-store-admission") ?? [];
+  assert.equal(modules.length, 1, "Exactly one actual Test Store admission module must autolink");
+  const module = modules[0];
+  const sourceDir = path.join(projectRoot, "modules/chillywood-test-store-admission", platform === "ios" ? "ios" : "android");
+  let name, requiredFiles;
+  if (platform === "android") {
+    assert.equal(module.projects?.length, 1, "Exactly one Test Store source project is required");
+    const project = module.projects[0];
+    assert.equal(project.name, "chillywood-test-store-admission");
+    assert.equal(project.sourceDir, sourceDir, "Test Store must compile this isolated source copy");
+    assert(!project.publication, "Test Store admission must compile source, never a prebuilt AAR");
+    assert(project.modules?.includes("expo.modules.chillywoodteststore.ChillywoodTestStoreAdmissionModule"),
+      "Actual Test Store Expo bridge must autolink");
+    name = project.name;
+    requiredFiles = ["build.gradle", "src/main/java/expo/modules/chillywoodteststore/ChillywoodTestStoreAdmissionModule.kt",
+      "src/main/java/expo/modules/chillywoodteststore/TestStoreAdmissionPolicy.java"];
+  } else {
+    assert.equal(module.debugOnly, false, "Release must retain the native denial gate");
+    assert(module.modules?.includes("ChillywoodTestStoreAdmissionModule"), "Actual Swift Expo bridge must autolink");
+    assert.equal(module.pods?.length, 1, "Exactly one Test Store source pod is required");
+    assert.equal(module.pods[0].podName, "ChillywoodTestStoreAdmission");
+    assert.equal(module.pods[0].podspecDir, sourceDir, "Test Store pod must use this isolated source copy");
+    name = module.pods[0].podName;
+    requiredFiles = ["ChillywoodTestStoreAdmission.podspec", "ChillywoodTestStoreAdmissionModule.swift", "TestStoreAdmissionPolicy.swift"];
+  }
+  for (const file of requiredFiles) assert(fs.statSync(path.join(sourceDir, file)).isFile(), "Required native admission source is missing");
+  return { name, sourceDir };
+}
+
+export function verifyTestStoreAdmissionRuntimeGraph(graph) {
+  assert.equal(graph.components.filter(component => component.kind === "project" && component.buildPath === ":"
+    && component.projectPath === ":chillywood-test-store-admission").length, 1,
+  "Actual app runtime must include exactly one main-build Test Store admission source project");
+}
+
+export function requireTestStoreAdmissionPodTarget(list) {
+  const target = "ChillywoodTestStoreAdmission";
+  assert.equal(list?.project?.targets?.filter(name => name === target).length, 1,
+    "Resolved Pods project must contain exactly one Test Store admission target");
+  return target;
+}
+
+export function parseTestStoreNativePolicyReport(output) {
+  for (const [name, count] of [["tests", 8], ["pass", 8], ["fail", 0], ["cancelled", 0], ["skipped", 0], ["todo", 0]]) {
+    const summaries = [...output.matchAll(new RegExp(`^# ${name} (\\d+)$`, "gmu"))];
+    assert.equal(summaries.length, 1, "Exactly one complete native policy report is required");
+    assert.equal(Number(summaries[0][1]), count, "Native policy cases must all execute successfully");
+  }
+  assert.match(output, /^ok 8 - compiled Java and Swift admission rejects Release before callback and latches configuration\/UID for process lifetime$/mu);
+  return { groups: 8, nativeProcessScenarios: 10, failures: 0, skipped: 0, providerSdkInvoked: false };
+}
+
 export function mediaPickerCompileTasks() {
   return ["chillywood-gallery-picker", "expo-modules-core", "expo-image-picker"].flatMap(name =>
     ANDROID_VARIANTS.flatMap(variant => [`:${name}:compile${variantTitle(variant)}Kotlin`,
@@ -73,7 +134,7 @@ export function verifyGoogleBillingRuntimeGraph(graph) {
   const billing = graph.components.filter(component => component.kind === "module"
     && component.group === "com.android.billingclient" && component.name === "billing");
   assert.equal(billing.length, 1, "Exactly one shared Google Billing runtime is required");
-  assert.equal(billing[0].version, "8.2.1", "RevenueCat and external links must share reviewed Billing 8.2.1");
+  assert.equal(billing[0].version, "8.3.0", "RevenueCat and external links must share reviewed Billing 8.3.0");
   assert(graph.components.some(component => component.kind === "module"
     && component.group === "com.revenuecat.purchases" && component.name === "purchases"),
   "Native purchase integration must remain in the resolved runtime graph");
@@ -422,6 +483,18 @@ try {
   receipt.cameraModuleSourceSha256 = sourceHash.digest("hex");
   console.log(`Camera module source SHA-256: ${receipt.cameraModuleSourceSha256}`);
   saveReceipt();
+  const admissionHash = createHash("sha256");
+  for (const file of files(path.join(project, "modules/chillywood-test-store-admission")).sort()) {
+    admissionHash.update(path.relative(project, file)); admissionHash.update(fs.readFileSync(file));
+  }
+  receipt.testStoreAdmissionSourceSha256 = admissionHash.digest("hex");
+  if (platforms.includes("ios") && !generateOnly) {
+    assert(env.JAVA_HOME && fs.existsSync(path.join(env.JAVA_HOME, "bin/javac")), "Native policy checks require the runner's Java toolchain");
+    receipt.testStoreNativePolicy = parseTestStoreNativePolicyReport(run(process.execPath,
+      ["--test", "--test-reporter=tap", "tests/isolated-test-store-build.test.mjs"], root,
+      { ISOLATED_TEST_STORE_NATIVE_POLICY: "1", TEST_STORE_JAVA_HOME: env.JAVA_HOME }));
+    saveReceipt();
+  }
   for (const platform of platforms) {
     console.log(`Generating isolated ${platform} project with the actual Expo plugins`);
     const easSource = platform === "android" ? fs.readFileSync(path.join(project, "eas.json"), "utf8") : undefined;
@@ -440,12 +513,14 @@ try {
     const cameraProjects = platform === "android" ? resolveAndroidCameraProjects(resolution, project) : undefined;
     const devLauncherProject = platform === "android" ? resolveAndroidDevLauncherProject(resolution, project) : undefined;
     const pickerProjects = platform === "android" ? resolveAndroidMediaPickerProjects(resolution, project) : undefined;
+    const admissionProject = resolveTestStoreAdmissionProject(resolution, project, platform);
     run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformEnv);
     const generated = path.join(project, platform);
     assert(fs.existsSync(generated), `Expo must generate ${platform} sources`);
     const digest = createHash("sha256");
     for (const file of files(generated).sort()) { digest.update(path.relative(generated, file)); digest.update(fs.readFileSync(file)); }
     receipts[platform] = { generatedSourceSha256: digest.digest("hex"), compiled: false };
+    receipts[platform].testStoreAdmissionSourceProject = { name: admissionProject.name, sourceDir: path.relative(project, admissionProject.sourceDir) };
     if (platform === "android") {
       receipts.android.profile = { name: platformEnv.EAS_BUILD_PROFILE, literalEnvironment: platformEnv,
         easConfigSha256: createHash("sha256").update(easSource).digest("hex"),
@@ -470,6 +545,7 @@ import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 def expectedCameraProjects = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_CAMERA_SOURCE_PROJECTS'))
 def expectedDevLauncher = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_CAMERA_DEV_LAUNCHER_PROJECT'))
 def expectedPickerProjects = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_MEDIA_PICKER_SOURCE_PROJECTS'))
+def expectedAdmission = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_TEST_STORE_ADMISSION_SOURCE_PROJECT'))
 def expectedCameraRoot = new File(System.getenv('CHILLYWOOD_CAMERA_GRADLE_ROOT')).canonicalFile
 gradle.projectsEvaluated {
   // Init scripts also run for included Expo/React Native plugin builds.
@@ -509,6 +585,18 @@ gradle.projectsEvaluated {
     }
   }
   println('CHILLYWOOD_CAMERA_MEDIA_PICKER_SOURCE_PROJECTS=' + JsonOutput.toJson(expectedPickerProjects))
+  def admission = gradle.rootProject.findProject(':' + expectedAdmission.name)
+  if (admission == null || admission.projectDir.canonicalFile != new File(expectedAdmission.sourceDir).canonicalFile) {
+    throw new GradleException('Test Store admission source project differs from actual autolinking')
+  }
+  ['Debug', 'Release'].each { variant ->
+    ['Kotlin', 'JavaWithJavac'].each { compiler ->
+      if (admission.tasks.findByName('compile' + variant + compiler) == null) {
+        throw new GradleException('Required Test Store admission compile task missing: ' + variant + compiler)
+      }
+    }
+  }
+  println('CHILLYWOOD_CAMERA_TEST_STORE_ADMISSION_SOURCE_PROJECT=' + JsonOutput.toJson(expectedAdmission))
   def launcher = gradle.rootProject.findProject(':' + expectedDevLauncher.name)
   if (launcher == null || launcher.projectDir.canonicalFile != new File(expectedDevLauncher.sourceDir).canonicalFile ||
       launcher.tasks.findByName('compileDebugKotlin') == null) {
@@ -590,11 +678,12 @@ allprojects { p ->
     }
   }
 }`);
-      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), ...googleExternalLinkCompileTasks(), ...mediaPickerCompileTasks(), "--init-script", initScript,
+      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), ...googleExternalLinkCompileTasks(), ...mediaPickerCompileTasks(), ...testStoreAdmissionCompileTasks(), "--init-script", initScript,
         "--no-daemon", "--console=plain"], generated,
       { ...platformEnv, CHILLYWOOD_CAMERA_SOURCE_PROJECTS: JSON.stringify(cameraProjects),
         CHILLYWOOD_CAMERA_DEV_LAUNCHER_PROJECT: JSON.stringify(devLauncherProject),
         CHILLYWOOD_MEDIA_PICKER_SOURCE_PROJECTS: JSON.stringify(pickerProjects),
+        CHILLYWOOD_TEST_STORE_ADMISSION_SOURCE_PROJECT: JSON.stringify(admissionProject),
         CHILLYWOOD_CAMERA_GRADLE_ROOT: fs.realpathSync(generated) });
       assert.deepEqual(parseGradleRecord(output, "SOURCE_PROJECTS"), cameraProjects,
         "Both actual camera Gradle source projects must match autolinking");
@@ -602,6 +691,9 @@ allprojects { p ->
       assert.deepEqual(parseGradleRecord(output, "MEDIA_PICKER_SOURCE_PROJECTS"), pickerProjects);
       receipts.android.mediaPickerSourceProjects = pickerProjects.map(({ name, sourceDir }) => ({ name, sourceDir: path.relative(project, sourceDir) }));
       receipts.android.mediaPickerCompileTasks = mediaPickerCompileTasks();
+      assert.deepEqual(parseGradleRecord(output, "TEST_STORE_ADMISSION_SOURCE_PROJECT"), admissionProject,
+        "Compiled Test Store admission must match actual autolinked source");
+      receipts.android.testStoreAdmissionCompileTasks = testStoreAdmissionCompileTasks();
       receipts.android.galleryNativeTests = verifyGalleryNativeTestReport(fs.readFileSync(path.join(project,
         "modules/chillywood-gallery-picker/android/build/test-results/testDebugUnitTest/TEST-expo.modules.chillywoodgallerypicker.GalleryPickerActivityTest.xml"), "utf8"));
       assert.deepEqual(parseGradleRecord(output, "DEV_LAUNCHER_SOURCE_PROJECT"), devLauncherProject,
@@ -620,6 +712,7 @@ allprojects { p ->
         verifyRuntimeGraph(graph, runtimePins, manifests[variant].sources, variant);
         verifyGoogleBillingRuntimeGraph(graph);
         verifyMediaPickerRuntimeGraph(graph, manifests[variant].sources);
+        verifyTestStoreAdmissionRuntimeGraph(graph);
         receipts.android.runtimeClosures[variant] = { scope: `app-${variant}-runtime-and-merged-manifest`,
           profile: records[variant].profile, runtimePins, graph,
           pinnedAarArtifacts: artifacts.map(({ coordinate, type }) => ({ coordinate, type })), manifests: manifests[variant].receipts };
@@ -678,6 +771,15 @@ allprojects { p ->
         receipts.ios.compiledTargets.push(target);
         saveReceipt();
       }
+      const admissionTarget = requireTestStoreAdmissionPodTarget(JSON.parse(run("xcodebuild",
+        ["-project", "Pods/Pods.xcodeproj", "-list", "-json"], generated, platformEnv)));
+      assert.equal(admissionTarget, admissionProject.name, "Resolved pod target must match actual autolinking");
+      run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", admissionTarget, "-configuration", "Debug",
+        "-sdk", "iphonesimulator", "-arch", process.arch === "arm64" ? "arm64" : "x86_64",
+        "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
+        `SYMROOT=${path.join(workspace, "ios-build")}`, "build"], generated, platformEnv);
+      receipts.ios.compiledTargets.push(admissionTarget);
+      saveReceipt();
     }
     receipts[platform].compiled = true;
     saveReceipt();

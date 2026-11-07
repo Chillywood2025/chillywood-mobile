@@ -19,7 +19,7 @@ function run(command, args) {
   return result.stdout;
 }
 const artifacts = [
-  ['billing.aar', 'https://dl.google.com/dl/android/maven2/com/android/billingclient/billing/8.2.1/billing-8.2.1.aar', '5fe141489daebd43e0b62ade8ef70470139515806d7729aa961263f1bd7dbc9c'],
+  ['billing-8.3.0.aar', 'https://dl.google.com/dl/android/maven2/com/android/billingclient/billing/8.3.0/billing-8.3.0.aar', '9810b5cd47e20bc82b354f3583c9d3bf7c42b33e64e192dce0495d036a85f505'],
   ['ecj.jar', 'https://repo.maven.apache.org/maven2/org/eclipse/jdt/ecj/3.39.0/ecj-3.39.0.jar', '01f5a92ac19bb2b3bf85e295a68f2c73c264369109158b566ce9b490af982948'],
   ['android14.jar', 'https://repo.maven.apache.org/maven2/org/robolectric/android-all/14-robolectric-10818077/android-all-14-robolectric-10818077.jar', '6be2218c6a53fe3c57bc22ebdc723edcb7270a8a6f187545708aa5c0ed813977'],
 ];
@@ -29,7 +29,7 @@ try {
     if (!fs.existsSync(destination)) run('curl', ['--fail', '--silent', '--show-error', '--location', '--max-time', '180', url, '--output', destination]);
     assert.equal(createHash('sha256').update(fs.readFileSync(destination)).digest('hex'), digest, `Pinned ${name} integrity mismatch`);
   }
-  run('unzip', ['-oq', path.join(cache, 'billing.aar'), 'classes.jar', '-d', temporary]);
+  run('unzip', ['-oq', path.join(cache, 'billing-8.3.0.aar'), 'classes.jar', '-d', temporary]);
   const source = path.join(root, 'modules/chillywood-external-content-links/android/src');
   const classes = path.join(temporary, 'classes');
   const files = ['ExternalLinkFlow.java', 'GooglePlayTransport.java'].map(name => path.join(source, 'main/java/expo/modules/chillywoodexternalcontentlinks', name));
@@ -39,5 +39,5 @@ try {
   // android-all's boot Java classes as a competing Java 9+ named module.
   run(java, ['-jar', path.join(cache, 'ecj.jar'), '-8', '-warn:none', '-cp', `${path.join(temporary, 'classes.jar')}${path.delimiter}${path.join(cache, 'android14.jar')}`, '-d', classes, ...files]);
   process.stdout.write(run(java, ['-cp', classes, 'expo.modules.chillywoodexternalcontentlinks.ExternalLinkFlowTest']));
-  console.log('Pinned Google Billing 8.2.1 / real Android controller compilation passed (Expo bridge/full Gradle qualification still required).');
+  console.log('Pinned Google Billing 8.3.0 / real Android controller compilation passed (Expo bridge/full Gradle qualification still required).');
 } finally { fs.rmSync(temporary, { recursive: true, force: true }); }

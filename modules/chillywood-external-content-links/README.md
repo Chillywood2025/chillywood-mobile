@@ -33,14 +33,15 @@ No timer admits a second disclosure while the first is still open.
 
 ## Dependency and qualification
 
-Billing is strictly pinned to **8.2.1**. This raises the app's shared dependency
-from RevenueCat purchases 9.28.1's Billing 8.0.0 requirement. A separate client
-does not isolate dependency versions. Review the actual resolved graph and
-regress native RevenueCat purchases/restore alongside this flow.
+Billing is strictly pinned to **8.3.0**, matching RevenueCat purchases 10.28.1
+through React Native Purchases 10.15.1 and PurchasesHybridCommon 19.14.1. A
+separate client does not isolate dependency versions. Review the actual resolved
+graph and regress native RevenueCat purchases/restore alongside this flow.
 
-The 8.2.1 binary supports `enableBillingProgram(int)`, not the newer params
-overload shown in current documentation samples. The implementation is compiled
-against the real pinned artifact rather than relying on sample text.
+The 8.3.0 binary retains the reviewed `enableBillingProgram(int)` overload and
+the reporting and launch APIs used by this adapter. Its newer params overload
+is not required by this implementation. The compiler check uses the real pinned
+artifact rather than relying on sample text.
 
 Checks:
 
