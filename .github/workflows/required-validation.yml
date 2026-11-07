@@ -344,10 +344,10 @@ jobs:
           pg_build="$RUNNER_TEMP/isolated-sandbox-pg17"
           mkdir "$pg_build"
           curl --fail --location --proto '=https' --tlsv1.2 --max-time 180 \
-            --output "$pg_build/postgresql-17.6.tar.gz" \
-            https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.gz
-          echo "e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0  $pg_build/postgresql-17.6.tar.gz" | sha256sum --check --strict
-          tar --extract --gzip --file "$pg_build/postgresql-17.6.tar.gz" --directory "$pg_build"
+            --output "$pg_build/postgresql-17.6.tar.bz2" \
+            https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2
+          echo "e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0  $pg_build/postgresql-17.6.tar.bz2" | sha256sum --check --strict
+          tar --extract --bzip2 --file "$pg_build/postgresql-17.6.tar.bz2" --directory "$pg_build"
           cd "$pg_build/postgresql-17.6"
           ./configure --prefix="$pg_build/install" --without-icu --without-readline --without-zlib
           make --jobs=2

@@ -11,7 +11,7 @@ import {createHash} from 'node:crypto';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const modulePath='isolated-runtime/sandbox-commerce-v1';
 export const POSTGRES=Object.freeze({version:'17.6',
- archiveUrl:'https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.gz',
+ archiveUrl:'https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2',
  sha256:'e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0'});
 const ordinaryCleanup=['clusterStopped','clusterNotRunningVerified','directoryRemoved'];
 const allSql=['core.sql','premium-authority.sql','authority.sql','commands.sql','receipts.sql','permissions-finalize.sql'];

@@ -12,6 +12,7 @@ const jobId = 'database-isolated-sandbox-native';
 const jobName = 'Validation / Isolated Sandbox Native PostgreSQL 17.6';
 const command = 'node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"';
 const postgresSha256 = 'e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0';
+const postgresArchiveUrl = 'https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2';
 const sha = value => value.repeat(40);
 const paths = ['isolated-runtime/sandbox-commerce-v1/core.sql'];
 const jobs = () => expectedJobs(computeValidationPlan(paths)).map(name => ({name, status: 'completed', conclusion: 'success', headSha: sha('b')}));
@@ -52,7 +53,11 @@ function assertNativeGate(candidate) {
   const builds = job.steps.filter(step => step.run?.includes(postgresSha256));
   assert.equal(builds.length, 1, 'build the checksum-pinned official PostgreSQL archive');
   assert.equal(builds[0].if, undefined);
-  assert.match(builds[0].run, /https:\/\/ftp\.postgresql\.org\/pub\/source\/v17\.6\/postgresql-17\.6\.tar\.(?:bz2|gz)/u);
+  assert.ok(builds[0].run.includes(postgresArchiveUrl), 'checksum binds the exact bzip2 archive');
+  assert.ok(builds[0].run.includes('--output "$pg_build/postgresql-17.6.tar.bz2"'));
+  assert.ok(builds[0].run.includes(`${postgresSha256}  $pg_build/postgresql-17.6.tar.bz2`));
+  assert.ok(builds[0].run.includes('tar --extract --bzip2 --file "$pg_build/postgresql-17.6.tar.bz2"'));
+  assert.doesNotMatch(builds[0].run, /postgresql-17\.6\.tar\.gz|--gzip/u);
   assert.match(builds[0].run, /sha256sum\s+(?:-c|--check)\b/u);
   assert.ok(job.steps.indexOf(builds[0]) < job.steps.indexOf(runners[0]));
   const upload = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'));
@@ -106,6 +111,14 @@ test('isolated native wiring rejects removed, skipped, weakened and credential-b
     'duplicate runner': (candidate, runner) => { candidate.jobs[jobId].steps.push(structuredClone(runner)); },
     'swallow runner failure': (candidate, runner) => { runner.run += ' || true'; },
     'skip archive verification': candidate => { candidate.jobs[jobId].steps.find(step => step.run?.includes(postgresSha256)).if = 'false'; },
+    'mismatched archive compression': candidate => {
+      const build = candidate.jobs[jobId].steps.find(step => step.run?.includes(postgresSha256));
+      build.run = build.run.replaceAll('.tar.bz2', '.tar.gz').replace('--bzip2', '--gzip');
+    },
+    'wrong extractor': candidate => {
+      const build = candidate.jobs[jobId].steps.find(step => step.run?.includes(postgresSha256));
+      build.run = build.run.replace('--bzip2', '--gzip');
+    },
     'mutable action tag': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/checkout@')).uses = 'actions/checkout@v7'; },
     'persist checkout token': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/checkout@')).with['persist-credentials'] = true; },
     'skip failure artifact': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).if = 'success()'; },
@@ -176,7 +189,7 @@ test('the offline runner plan contains every native suite and complete client/pr
   assert.equal(result.status, 0, result.stderr || result.error?.message);
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.postgres.version, '17.6');
-  assert.match(plan.postgres.archiveUrl, /^https:\/\/ftp\.postgresql\.org\/pub\/source\/v17\.6\/postgresql-17\.6\.tar\.(?:bz2|gz)$/u);
+  assert.equal(plan.postgres.archiveUrl, postgresArchiveUrl);
   assert.equal(plan.postgres.sha256, postgresSha256);
   const nativeFiles = ['managed-install', 'premium-authority', 'authority', 'core', 'declarations', 'receipts', 'availability']
     .map(name => `isolated-runtime/sandbox-commerce-v1/tests/${name}.native.mjs`);
