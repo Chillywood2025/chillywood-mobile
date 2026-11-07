@@ -29,7 +29,7 @@ starts with ingress and initiation disabled. No runtime client can create or
 qualify these records.
 
 The native `configurationDigest` uses the ordered descriptor documented by
-`config/test-store-debug-v1.json` and `config/test-store-debug-config.ts`.
+`config/test-store-debug-v1.json` and `config/test-store-debug-config.js`.
 The webhook's `providerConfigurationDigest` is a separate connection value: a
 webhook cannot choose a native platform profile. The dedicated webhook endpoint
 has its own explicit secret/configuration variables and has no legacy credential

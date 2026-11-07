@@ -99,7 +99,7 @@ test('isolated native qualification is a credential-free canonical database obli
     'supabase/functions/isolated-sandbox-test-store-v1/index.ts',
     'supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts',
     '_lib/isolatedTestStoreSdk.ts',
-    'config/test-store-debug-config.ts',
+    'config/test-store-debug-config.js',
     'plugins/withIsolatedTestStoreDebug.js',
     'scripts/compile-native-camera-effects.mjs',
     'modules/chillywood-test-store-admission/android/src/main/java/com/chillywood/teststore/TestStoreAdmissionPolicy.java',

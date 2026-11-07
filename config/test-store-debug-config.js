@@ -1,24 +1,30 @@
-import { createHash } from "node:crypto";
-import type { ExpoConfig } from "@expo/config";
-import contract from "./test-store-debug-v1.json";
+const { createHash } = require("node:crypto");
+const contract = require("./test-store-debug-v1.json");
 
 const profiles = ["isolated-test-store-debug-ios", "isolated-test-store-debug-ios-simulator", "isolated-test-store-debug-android"];
-type Environment = { EAS_BUILD_PROFILE?: string; CHILLYWOOD_TEST_STORE_FLAVOR?: string; CHILLYWOOD_TEST_STORE_NATIVE_CONFIG?: string };
-export function isolatedTestStoreDebugConfig(base: ExpoConfig, environment: Environment): ExpoConfig | null {
+/**
+ * Expo transforms app.config.ts only; imported configuration must be executable
+ * by Node without a TypeScript require hook.
+ * @param {import("@expo/config").ExpoConfig} base
+ * @param {{ EAS_BUILD_PROFILE?: string; CHILLYWOOD_TEST_STORE_FLAVOR?: string; CHILLYWOOD_TEST_STORE_NATIVE_CONFIG?: string }} environment
+ * @returns {import("@expo/config").ExpoConfig | null}
+ */
+function isolatedTestStoreDebugConfig(base, environment) {
   const selected = profiles.includes(environment.EAS_BUILD_PROFILE ?? "");
   const flavor = environment.CHILLYWOOD_TEST_STORE_FLAVOR;
   if (!selected && !flavor && !environment.CHILLYWOOD_TEST_STORE_NATIVE_CONFIG) return null;
   if (!selected || flavor !== "isolated-test-store-debug-v1") throw new Error("Isolated Test Store requires its explicit debug build profile.");
   const platform = environment.EAS_BUILD_PROFILE === "isolated-test-store-debug-android" ? "android" : "ios";
-  let nativeConfig: Record<string, string> | null = null;
+  /** @type {Record<string, string> | null} */
+  let nativeConfig = null;
   // This input is incorporated into the native artifact, never Expo extra or an
   // OTA manifest. Supplying it does not prove external project ownership/store
   // exclusivity; those facts must be independently qualified before a build.
   if (environment.CHILLYWOOD_TEST_STORE_NATIVE_CONFIG) {
-    let provider: unknown;
+    let provider;
     try { provider = JSON.parse(environment.CHILLYWOOD_TEST_STORE_NATIVE_CONFIG); }
     catch { throw new Error("Invalid native Test Store configuration."); }
-    const p = provider as Record<string, unknown>;
+    const p = provider;
     if (!p || typeof p !== "object" || Array.isArray(p) || Object.keys(p).sort().join(",") !== "appId,projectId,publicSdkKey"
       || typeof p.projectId !== "string" || !/^[A-Za-z0-9_-]{4,100}$/u.test(p.projectId)
       || typeof p.appId !== "string" || !/^[A-Za-z0-9_-]{4,100}$/u.test(p.appId)
@@ -49,3 +55,5 @@ export function isolatedTestStoreDebugConfig(base: ExpoConfig, environment: Envi
     plugins: [...(base.plugins ?? []), ["./plugins/withIsolatedTestStoreDebug", { nativeConfig }]],
   };
 }
+
+exports.isolatedTestStoreDebugConfig = isolatedTestStoreDebugConfig;

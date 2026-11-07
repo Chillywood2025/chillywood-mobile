@@ -18,7 +18,7 @@ const compile = file => ts.transpileModule(fs.readFileSync(path.join(root, file)
   target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true, resolveJsonModule: true,
 } }).outputText;
 const configContext = { exports: {}, require: name => name === "./test-store-debug-v1.json" ? contract : require(name) };
-vm.runInNewContext(compile("config/test-store-debug-config.ts"), configContext);
+vm.runInNewContext(fs.readFileSync(path.join(root, "config/test-store-debug-config.js"), "utf8"), configContext);
 const resolve = configContext.exports.isolatedTestStoreDebugConfig;
 const environment = (platform = "ios", configured = true) => ({ EAS_BUILD_PROFILE: `isolated-test-store-debug-${platform}`,
   CHILLYWOOD_TEST_STORE_FLAVOR: "isolated-test-store-debug-v1", ...(configured ? { CHILLYWOOD_TEST_STORE_NATIVE_CONFIG: JSON.stringify(provider) } : {}) });

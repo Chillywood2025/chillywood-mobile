@@ -151,7 +151,7 @@ export function collectSourceManifest(){
   'supabase/functions/_shared/stripe-connect.ts','supabase/functions/_shared/exact-subject-authority.ts','supabase/functions/_shared/livekit-session-generation.ts',
   ...['','Attempts','Build','Contract','Rehearsal','Sdk'].map(name=>`_lib/isolatedTestStore${name}.ts`),
   '_lib/monetization.ts','_lib/revenuecat.ts','tests/helpers/premium-runtime-harness.mjs',
-  'app.config.ts','eas.json','config/test-store-debug-config.ts','config/test-store-debug-v1.json',
+  'app.config.ts','eas.json','config/test-store-debug-config.js','config/test-store-debug-v1.json',
   'plugins/withIsolatedTestStoreDebug.js','scripts/compile-native-camera-effects.mjs',
   'scripts/test-local-camera-inference-offline.mjs','scripts/camera-provider-closure.mjs','tests/native-camera-compile-records.test.mjs',
   'supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql',

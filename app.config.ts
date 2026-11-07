@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { ConfigContext, ExpoConfig } from "@expo/config";
-import { isolatedTestStoreDebugConfig } from "./config/test-store-debug-config";
+import { isolatedTestStoreDebugConfig } from "./config/test-store-debug-config.js";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
