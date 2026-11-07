@@ -169,6 +169,8 @@ jobs:
           deno check --node-modules-dir=none --no-lock supabase/functions/livekit-token/index.ts supabase/functions/livekit-heartbeat-monitor/index.ts
       - name: Typecheck the versioned notification registration Edge endpoint
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/notification-device-tokens/index.ts
+      - name: Typecheck the inactive receipt router and dedicated Test Store Edge boundaries
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-receipt-router-v1/index.ts supabase/functions/isolated-sandbox-test-store-v1/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts
       - name: Typecheck creator commerce and reporting Edge boundaries
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/create-creator-tip-checkout/index.ts supabase/functions/stripe-tip-webhook/index.ts supabase/functions/stripe-event-auction-checkout/index.ts supabase/functions/stripe-event-auction-webhook/index.ts supabase/functions/stripe-room-auction-checkout/index.ts supabase/functions/stripe-room-auction-webhook/index.ts supabase/functions/google-play-external-reporter/index.ts supabase/functions/stripe-merch-checkout/index.ts supabase/functions/stripe-merch-webhook/index.ts supabase/functions/stripe-merch-cost-reconcile/index.ts supabase/functions/merch-tracking-webhook/index.ts supabase/functions/merch-tracking-reconcile/index.ts supabase/functions/creator-event-broadcast/index.ts supabase/functions/stripe-auction-cost-reconcile/index.ts supabase/functions/stripe-auction-test-transfer/index.ts supabase/functions/merch-reconciliation-driver/index.ts supabase/functions/auction-observation-driver/index.ts supabase/functions/auction-approved-automation/index.ts supabase/functions/stripe-fee-report-import/index.ts
       - name: Run exact role and explicit permission checks
@@ -323,6 +325,43 @@ jobs:
         with:
           name: brand-native-${{ github.run_id }}-${{ github.run_attempt }}
           path: brand-native-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+  database-isolated-sandbox-native:
+    name: Validation / Isolated Sandbox Native PostgreSQL 17.6
+    if: needs.plan.outputs.database == 'true'
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Build verified official PostgreSQL 17.6 for disposable fixtures
+        shell: bash --noprofile --norc -eo pipefail {0}
+        run: |
+          pg_build="$RUNNER_TEMP/isolated-sandbox-pg17"
+          mkdir "$pg_build"
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 180 \
+            --output "$pg_build/postgresql-17.6.tar.bz2" \
+            https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2
+          echo "e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0  $pg_build/postgresql-17.6.tar.bz2" | sha256sum --check --strict
+          tar --extract --bzip2 --file "$pg_build/postgresql-17.6.tar.bz2" --directory "$pg_build"
+          cd "$pg_build/postgresql-17.6"
+          ./configure --prefix="$pg_build/install" --without-icu --without-readline --without-zlib
+          make --jobs=2
+          make install
+      - name: Run all isolated native suites and their actual-response client bridge
+        run: node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"
+      - name: Preserve isolated source attempt evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: isolated-sandbox-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: isolated-sandbox-native-evidence
           if-no-files-found: warn
           retention-days: 14
 
@@ -571,7 +610,7 @@ jobs:
   result:
     name: Validation / Results
     if: always()
-    needs: [plan, core, product, sensitive, database, database-brand-native, native-inference, native-sdk, native-release, autonomous, policy]
+    needs: [plan, core, product, sensitive, database, database-brand-native, database-isolated-sandbox-native, native-inference, native-sdk, native-release, autonomous, policy]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -586,6 +625,8 @@ jobs:
           const coreFailed = needs.core?.result !== 'success';
           const brandNativeFailed = needs.plan?.outputs?.database === 'true'
             && needs['database-brand-native']?.result !== 'success';
+          const isolatedSandboxFailed = needs.plan?.outputs?.database === 'true'
+            && needs['database-isolated-sandbox-native']?.result !== 'success';
           console.log(JSON.stringify({ jobs: Object.fromEntries(Object.entries(needs).map(([key, value]) => [key, value.result])), failures: failures.map(([key]) => key) }));
-          if (planFailed || coreFailed || brandNativeFailed || failures.length > 0) process.exit(1);
+          if (planFailed || coreFailed || brandNativeFailed || isolatedSandboxFailed || failures.length > 0) process.exit(1);
           NODE

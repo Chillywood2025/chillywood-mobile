@@ -32,7 +32,7 @@ function harness(options = {}) {
   };
   const flow = load("_lib/google-play-external-content-link-flow.ts", {});
   const native = {
-    capabilities: () => ({ apiVersion: 1, program: "external_content_link", billingLibraryVersion: "8.2.1" }),
+    capabilities: () => ({ apiVersion: 1, program: "external_content_link", billingLibraryVersion: "8.3.0" }),
     prepare: async () => { calls.push(["prepare"]); return { flowId: String(++sequence), externalTransactionToken: "token-" + sequence }; },
     launch: () => assert.fail("Bidding must not launch a payment"),
     cancel: async id => calls.push(["cancel", id]),

@@ -38,6 +38,7 @@ import { resolveAlternativeEntitlementAuthority, withAuthorityReadDeadline, type
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
 import { getRuntimeConfig, isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
+import { isIsolatedTestStoreFlavor } from "./isolatedTestStoreBuild";
 import {
   isRevenueCatExistingPurchase,
   isRevenueCatUserCancellation,
@@ -330,6 +331,7 @@ const storePurchasesEnabledForPlatform = () => (
 );
 
 export const isPremiumPurchaseShellAvailable = () => {
+  if (isIsolatedTestStoreFlavor()) return false;
   const runtime = getAppMonetizationRuntimeFeatures();
   return FEATURE_FLAGS.monetization.subscriptions
     && runtime.premiumEnabled
@@ -340,6 +342,7 @@ export const isPremiumPurchaseShellAvailable = () => {
 export const isPremiumPurchaseShellAvailableForMode = (
   mode: MonetizationPurchaseMode = "public",
 ) => {
+  if (isIsolatedTestStoreFlavor()) return false;
   if (isPremiumPurchaseShellAvailable()) return true;
   const runtime = getAppMonetizationRuntimeFeatures();
   return mode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
@@ -1246,6 +1249,7 @@ async function reconcileActivePremiumProviderSnapshot(
   authority: AccountSessionAuthorityBinding,
   customerInfo: CustomerInfo,
 ): Promise<PremiumReconciliationOutcome> {
+  if (isIsolatedTestStoreFlavor()) return "failed";
   if (!customerInfo.entitlements.active.premium) return "inactive";
   if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return "stale";
 

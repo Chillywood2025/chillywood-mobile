@@ -326,3 +326,13 @@ verify_jwt = true
 
 [functions.creator-provider-observation-worker]
 verify_jwt = true
+
+[functions.isolated-sandbox-test-store-v1]
+# Exact Supabase user/session authentication plus the private source authority
+# checks; no provider credential or activation is supplied by this definition.
+verify_jwt = true
+
+[functions.isolated-test-store-revenuecat-webhook-v1]
+# Dedicated default-off Test Store shared-secret/raw-byte boundary. Never the
+# legacy RevenueCat destination, and never a fallback to its credential.
+verify_jwt = false

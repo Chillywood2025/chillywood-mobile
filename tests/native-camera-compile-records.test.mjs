@@ -18,15 +18,17 @@ test("external link bridge requires both Kotlin and Java variants and shared Bil
     ":chillywood-external-content-links:compileReleaseJavaWithJavac",
   ]);
   const components = [
-    { kind: "module", group: "com.android.billingclient", name: "billing", version: "8.2.1" },
-    { kind: "module", group: "com.revenuecat.purchases", name: "purchases", version: "9.28.1" },
+    { kind: "module", group: "com.android.billingclient", name: "billing", version: "8.3.0" },
+    { kind: "module", group: "com.revenuecat.purchases", name: "purchases", version: "10.28.1" },
     { kind: "project", projectPath: ":chillywood-external-content-links" },
   ];
   verifyGoogleBillingRuntimeGraph({ components });
   for (let missing = 0; missing < components.length; missing++) {
     assert.throws(() => verifyGoogleBillingRuntimeGraph({ components: components.filter((_, i) => i !== missing) }));
   }
-  assert.throws(() => verifyGoogleBillingRuntimeGraph({ components: [{ ...components[0], version: "8.0.0" }, ...components.slice(1)] }));
+  for (const version of ["8.0.0", "8.2.1"]) {
+    assert.throws(() => verifyGoogleBillingRuntimeGraph({ components: [{ ...components[0], version }, ...components.slice(1)] }));
+  }
   assert.throws(() => verifyGoogleBillingRuntimeGraph({ components: [...components, components[0]] }));
 });
 

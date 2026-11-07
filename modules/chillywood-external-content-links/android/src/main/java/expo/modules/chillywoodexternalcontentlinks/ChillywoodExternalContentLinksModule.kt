@@ -18,7 +18,7 @@ class ChillywoodExternalContentLinksModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ChillywoodExternalContentLinks")
     Function("capabilities") {
-      mapOf("apiVersion" to 1, "program" to "external_content_link", "billingLibraryVersion" to "8.2.1")
+      mapOf("apiVersion" to 1, "program" to "external_content_link", "billingLibraryVersion" to "8.3.0")
     }
     AsyncFunction("prepare") { promise: Promise ->
       if (activeActivity() == null) {

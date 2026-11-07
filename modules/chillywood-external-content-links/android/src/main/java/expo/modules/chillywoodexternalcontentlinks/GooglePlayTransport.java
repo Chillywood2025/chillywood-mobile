@@ -15,7 +15,7 @@ public final class GooglePlayTransport implements ExternalLinkFlow.Transport {
   private ExternalLinkFlow.Result activeResult;
   public GooglePlayTransport(Context context, ActivityProvider activities) {
     this.activities = activities;
-    // The params overload shown by newer docs does not exist in pinned 8.2.1.
+    // The reviewed integer overload remains available in pinned Billing 8.3.0.
     client = BillingClient.newBuilder(context.getApplicationContext())
       .enableBillingProgram(BillingClient.BillingProgram.EXTERNAL_CONTENT_LINK).build();
   }
