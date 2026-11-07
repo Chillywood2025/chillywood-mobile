@@ -11,6 +11,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn,spawnSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
+import {Buffer} from 'node:buffer';
 
 assert.equal(process.argv.length,4,'Only --local-bin /absolute/path is accepted');
 assert.equal(process.argv[2],'--local-bin');
@@ -25,13 +26,28 @@ const fixtures=Object.fromEntries(fixtureFiles.map(f=>[f,fs.readFileSync(path.jo
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!k.startsWith('PG')));
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'sandbox-managed-permissions-'));
+const socket=fs.mkdtempSync(path.join(fs.realpathSync('/tmp'),'scv1-managed-'));
+fs.chmodSync(socket,0o700);
 const data=path.join(directory,'data'),port='55460';
-const args=(user='fixture_admin',db='permission_fixture')=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U',user,'-d',db];
-const run=(tool,a,input)=>spawnSync(path.join(bin,tool),a,{env,input,encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024});
-const invoke=(tool,a,input)=>{const r=run(tool,a,input);assert.equal(r.status,0,`${tool}: ${r.error?.message??''}\n${r.stderr??''}`);return r.stdout.trim();};
+const args=(user='fixture_admin',db='permission_fixture')=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h',socket,'-p',port,'-U',user,'-d',db];
+const redact=value=>String(value??'')
+ .replace(/\b(?:https?|postgres(?:ql)?):\/\/[^\s"'<>]+/giu,'[redacted URL]')
+ .replace(/\b(Bearer|Basic)\s+[^\s"',;]+/giu,'$1 [redacted]')
+ .replace(/\b(authorization|password|passfile|access[_-]?token|refresh[_-]?token|secret|api[_-]?key)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,'$1=[redacted]')
+ .replace(/^.*\b(?:STATEMENT|QUERY|CONTEXT):[^\n]*(?:\n(?!\d{4}-\d{2}-\d{2}[ T]|\s*(?:LOG|FATAL|ERROR|HINT|WARNING|DETAIL):)[^\n]*)*/gmu,'[redacted SQL context]');
+const bounded=value=>redact(value).slice(-8192),bootstrapCommands=[];
+const run=(tool,a,input)=>{
+ const r=spawnSync(path.join(bin,tool),a,{env,input,encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024});
+ if(['postgres','initdb','pg_ctl'].includes(tool)&&bootstrapCommands.length<12)bootstrapCommands.push({
+  tool,operation:a.includes('start')?'start':a.includes('stop')?'stop':a.includes('status')?'status':tool==='initdb'?'initdb':'version',
+  status:r.status,signal:r.signal,error:r.error?bounded(r.error.message):null,stdout:bounded(r.stdout),stderr:bounded(r.stderr)});
+ return r;
+};
+const invoke=(tool,a,input)=>{const r=run(tool,a,input);assert.equal(r.status,0,`${tool}: ${bounded(r.error?.message)}\n${bounded(r.stderr)}`);return r.stdout.trim();};
 const q=(sql,user='fixture_admin')=>invoke('psql',args(user),sql);
 const attempt=sql=>run('psql',args('postgres'),'begin;'+sql+'commit;');
-const cases=[];let started=false,startAttempted=false,initializationAttempted=false,initialized=false,report;
+const cases=[];let started=false,startAttempted=false,initializationAttempted=false,initialized=false,report,primaryFailure,cleanupFailure;
+let phase='version',startupLog=null;
 const children=[];
 const cleanup={sessionsClosed:false,clusterStopped:false,clusterNotRunningVerified:false,directoryRemoved:false};
 const literal=value=>"'"+String(value).replaceAll("'","''")+"'";
@@ -57,9 +73,14 @@ function heldSession(sql){
 const begun=Date.now();
 try {
  const version=invoke('postgres',['--version']);assert.match(version,/PostgreSQL\) 17\.6/u);
- initializationAttempted=true;invoke('initdb',['-D',data,'-U','fixture_admin','--encoding=UTF8','--no-locale','--auth=trust']);initialized=true;
- startAttempted=true;
- invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(directory,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c autovacuum=off`,'start']);started=true;
+ phase='initdb';initializationAttempted=true;invoke('initdb',['-D',data,'-U','fixture_admin','--encoding=UTF8','--no-locale','--auth=trust']);initialized=true;
+ phase='pg_ctl_start';startAttempted=true;
+ invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(directory,'server.log'),'-o',`-c listen_addresses='' -c unix_socket_directories='${socket}' -p ${port} -c autovacuum=off`,'start']);started=true;
+ assert.equal(invoke('psql',args('fixture_admin','postgres'),"select current_setting('listen_addresses');"),'');
+ assert.equal(invoke('psql',args('fixture_admin','postgres'),"select current_setting('unix_socket_directories');"),socket);
+ assert.equal(invoke('psql',args('fixture_admin','postgres'),'select inet_server_addr() is null;'),'t');
+ assert.equal(fs.statSync(socket).mode&0o777,0o700);
+ phase='cases';
  invoke('psql',args('fixture_admin','postgres'),`create role postgres login createrole bypassrls nosuperuser nocreatedb noinherit;create database permission_fixture owner postgres;`);
  q('create role anon nologin;create role authenticated nologin;create role service_role nologin;');
  q(fixtures['premium-authority.fixture.sql']);
@@ -250,11 +271,31 @@ try {
   assumptions:['PostgreSQL 17.6 task-selected local binaries','Synthetic database owned by modeled postgres LOGIN CREATEROLE BYPASSRLS NOSUPERUSER NOINHERIT','Separate fixture_admin superuser performs fixture setup and verification; runtime functions execute as actual source owners','Explicit SELECT+MAINTAIN on only synthetic shared projections models required authority-reader capabilities; production privileges are not inferred','Synthetic channel_audience_blocks projection supplies exact owner/viewer columns; no real block data read','Fresh module names and ordinary local event-trigger/catalog behavior','Direct synthetic receipt/scan rows prove lifecycle permission composition, not provider verification or signing','No assertion about actual managed target roles, shared Auth access, deployment eligibility or provider configuration'],
   caseCount:cases.length,cases,sourceHashes:Object.fromEntries(ordered.map(f=>[f,hash(files[f])])),
   fixtureHashes:Object.fromEntries(fixtureFiles.map(f=>[f,hash(fixtures[f])])),harnessHash:hash(fs.readFileSync(fileURLToPath(import.meta.url)))};
+} catch(error) {
+ primaryFailure=error;
+ if(startAttempted&&!started){
+  let fd;
+  try{const file=path.join(directory,'server.log');fd=fs.openSync(file,'r');const size=fs.fstatSync(fd).size,bytes=Buffer.alloc(Math.min(size,32768));
+   fs.readSync(fd,bytes,0,bytes.length,Math.max(0,size-bytes.length));startupLog={path:file,available:true,truncated:size>bytes.length,text:bounded(bytes.toString('utf8'))};
+  }catch(error){startupLog={available:false,error:bounded(error.code??error.name)};}finally{if(fd!==undefined)fs.closeSync(fd);}
+ }
 } finally {
+ try {
  for(const child of children)if(child.exitCode===null){child.stdin.end('rollback;\n');child.kill('SIGTERM');}
+ cleanup.sessionsClosed=children.every(child=>child.exitCode!==null||child.signalCode!==null);
  assert.ok(!initializationAttempted||initialized,'Failed bootstrap may have delayed descendants; preserve directory');
  if(startAttempted){let s=run('pg_ctl',['-D',data,'status']);if(s.status===0){invoke('pg_ctl',['-D',data,'-m','immediate','-w','-t','15','stop']);cleanup.clusterStopped=true;s=run('pg_ctl',['-D',data,'status']);}else if(started&&s.status===3)cleanup.clusterStopped=true;assert.equal(s.status,3,'Local status uncertain; preserve data');assert.ok(started,'Uncertain start: preserve data');cleanup.clusterNotRunningVerified=true;}else {cleanup.clusterStopped=true;cleanup.clusterNotRunningVerified=true;}
  cleanup.sessionsClosed=cleanup.clusterNotRunningVerified;
  fs.rmSync(directory,{recursive:true});cleanup.directoryRemoved=true;
+ fs.rmSync(socket,{recursive:true});
+ } catch(error){cleanupFailure=error;}
+}
+if(primaryFailure||cleanupFailure){
+ process.stderr.write('MANAGED_BOOTSTRAP_DIAGNOSTICS '+JSON.stringify({phase,directory,socketDirectory:socket,
+  directoryPreserved:fs.existsSync(directory),socketDirectoryPreserved:fs.existsSync(socket),initializationAttempted,initialized,
+  startAttempted,started,commands:bootstrapCommands,serverLog:startupLog,cleanup,
+  primaryFailure:primaryFailure?{name:primaryFailure.name,message:bounded(primaryFailure.message)}:null,
+  cleanupFailure:cleanupFailure?{name:cleanupFailure.name,message:bounded(cleanupFailure.message)}:null})+'\n');
+ throw primaryFailure??cleanupFailure;
 }
 assert.ok(report);process.stdout.write(JSON.stringify({...report,durationMs:Date.now()-begun,cleanup},null,2)+'\n');

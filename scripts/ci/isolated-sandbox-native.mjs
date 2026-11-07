@@ -159,6 +159,7 @@ export function collectSourceManifest(){
   'supabase/migrations/20260909015439_pre_activation_premium_fresh_generation_lifecycle.sql',
   'scripts/ci/isolated-sandbox-native.mjs','scripts/ci/required-validation.mjs','config/ci/required-validation-v1.json',
   'tests/ci/legacy-source-bridge-bootstrap.test.mjs',
+  'tests/ci/managed-install-bootstrap.test.mjs',
   'tests/ci/isolated-sandbox-native-validation.test.mjs','.github/workflows/required-validation.yml'];
  const visit=relative=>{for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){
   const next=`${relative}/${entry.name}`;assert.ok(!entry.isSymbolicLink(),`Source symlink rejected: ${next}`);

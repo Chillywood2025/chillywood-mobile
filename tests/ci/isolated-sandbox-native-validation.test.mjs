@@ -427,6 +427,7 @@ test('source manifest binds actual app routes, journal, mounted UI, router, SQL 
   for (const file of [
     '_lib/isolatedSandboxTips.ts', '_lib/isolatedSandboxTipAttempts.ts', '_lib/isolatedSandboxTipCheckoutAttempts.ts',
     'tests/ci/legacy-source-bridge-bootstrap.test.mjs',
+  'tests/ci/managed-install-bootstrap.test.mjs',
     'components/monetization/isolated-tip-screens.tsx', 'components/monetization/isolated-tip-receipt.tsx',
     'app/(tabs)/my-list.tsx', 'app/sandbox-tips/index.tsx', 'app/sandbox-tips/studio.tsx',
     'app/sandbox-tips/status.tsx', 'app/sandbox-tips/history.tsx', 'app/sandbox-tips/offer/[offerId].tsx',
