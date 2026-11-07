@@ -1,12 +1,15 @@
 import React from "react";
 import {
+  Alert,
+  Share,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
 
 import type { CreatorVideo } from "../../_lib/creatorVideos";
-import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import { ContentEngagementDock } from "../social/content-engagement-dock";
 import { hasCreatorVideoPreviewSource } from "../../_lib/creatorVideoPreview";
 import { RACHI_OFFICIAL_USER_ID } from "../../_lib/officialAccounts";
 import {
@@ -196,6 +199,11 @@ export function CreatorVideoCard({
   const cardAccessibilityLabel = ownerMode
     ? `${displayTitle}. ${formatVisibilityLabel(video, true)} creator video. ${playable ? "Open video. Hold for content actions." : "Media unavailable. Hold for content actions."}`
     : `${publicDisplayTitle}. ${formatVisibilityLabel(video, false)} creator video.${accessLabel ? ` ${accessLabel}.` : ""} ${playable ? "Open in Chi'llywood Player." : "Media unavailable."}`;
+  const shareVideo = onShare ?? (() => {
+    if (!shareable) return;
+    void Share.share({ message: `Watch ${publicDisplayTitle} on Chi'llywood: ${buildCreatorVideoDeepLink(video.id)}` })
+      .catch(() => Alert.alert("Share unavailable", "Unable to open the share sheet. Please try again."));
+  });
 
   if (variant === "compact") {
     const compactStatus = accessLabel
@@ -259,6 +267,7 @@ export function CreatorVideoCard({
             ) : null}
           </View>
         </TouchableOpacity>
+        {shareable ? <ContentEngagementDock kind="creator_video" id={video.id} compact onComments={onOpen} onShare={shareVideo} /> : null}
       </View>
     );
   }
@@ -387,6 +396,7 @@ export function CreatorVideoCard({
       </TouchableOpacity>
 
       <View style={styles.body}>
+        {shareable ? <ContentEngagementDock kind="creator_video" id={video.id} onComments={onOpen} onShare={shareVideo} /> : null}
         <AppText scale="subhead" style={styles.title} numberOfLines={2}>{publicDisplayTitle}</AppText>
         <AppText scale="footnote" style={styles.description} numberOfLines={2}>
           {publicDescription}

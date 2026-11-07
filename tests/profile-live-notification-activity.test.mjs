@@ -38,7 +38,7 @@ async function mount(t){
     if(name.endsWith('/notifications'))return{readNotificationListPage:(...args)=>{calls.push(args);return read(...args);}};
     if(name.includes('conversation-timestamp'))return{ConversationTimestamp:()=>null};
     if(name.endsWith('/discoveryFeed'))return{};
-    if(name.includes('creator-video-card')||name.includes('linked-text')||name.includes('social-attachment-card')||name.includes('ProfileMediaImage'))return{};
+    if(name.includes('creator-video-card')||name.includes('live-discovery-card')||name.includes('linked-text')||name.includes('social-attachment-card')||name.includes('ProfileMediaImage'))return{};
     const target=new URL(name,new URL(`../${file}`,import.meta.url));const resolved=[target.pathname,`${target.pathname}.ts`,`${target.pathname}.tsx`].find(fs.existsSync);assert.ok(resolved,name);
     return load(resolved.slice(new URL('../',import.meta.url).pathname.length));
    }};

@@ -1,4 +1,7 @@
+import { CommentLikeButton } from "../../components/social/comment-like-button";
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
+import { EngagementBar } from "../../components/social/engagement-bar";
+import { RepostsShelf } from "../../components/social/reposts-shelf";
 import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -392,12 +395,6 @@ const shouldShowOwnerDraftMarker = (
   isSelfProfile: boolean,
   post: { visibility?: string },
 ) => isSelfProfile && post.visibility === "draft";
-
-const formatEngagementCount = (count: number, singular: string, plural: string) => {
-  const normalizedCount = Math.max(0, Math.floor(Number(count) || 0));
-  if (normalizedCount <= 0) return "";
-  return `${normalizedCount} ${normalizedCount === 1 ? singular : plural}`;
-};
 
 const formatEventTypeLabel = (value: CreatorEventType) => {
   switch (value) {
@@ -3764,13 +3761,6 @@ export default function ProfileScreen() {
     const canEngageWithPost = isProfilePostEngageable(post);
     const uiState = profilePostUiById[post.id] ?? {};
     const engagement = uiState.engagement;
-    const likeCountLabel = uiState.engagementReady
-      ? formatEngagementCount(engagement?.likeCount ?? 0, "like", "likes")
-      : "";
-    const commentCountLabel = uiState.engagementReady
-      ? formatEngagementCount(engagement?.commentCount ?? 0, "comment", "comments")
-      : "";
-    const likeButtonLabel = engagement?.likedByViewer ? "Liked" : "Like";
     const comments = uiState.comments ?? [];
     const commentDraft = uiState.commentDraft ?? "";
     const commentDraftLength = commentDraft.trim().length;
@@ -3809,6 +3799,7 @@ export default function ProfileScreen() {
               <ConversationTimestamp scale="caption" style={styles.profilePostCommentMeta} value={conversationCreatedAt(comment)} />
           </View>
           <LinkedText text={comment.body} style={styles.profilePostCommentBody} />
+          <CommentLikeButton kind="profile_post_comment" id={comment.id} />
           {comment.attachments.length ? (
             <View style={styles.profilePostCommentAttachmentStack}>
               {comment.attachments.map((attachment) => (
@@ -3892,50 +3883,16 @@ export default function ProfileScreen() {
             ))}
           </View>
         ) : null}
+        {canSharePost ? <EngagementBar
+          likes={uiState.engagementReady ? engagement?.likeCount ?? null : null}
+          comments={uiState.engagementReady ? engagement?.commentCount ?? null : null}
+          liked={engagement?.likedByViewer}
+          busy={!!uiState.likeBusy}
+          onLike={currentUserId && !uiState.engagementReady ? undefined : () => { void onToggleProfilePostLike(post); }}
+          onComments={() => onToggleProfilePostComments(post)}
+          onShare={() => { void onShareProfilePost(post); }}
+        /> : null}
         <View style={styles.feedPostActionRow}>
-          {canSharePost ? (
-            <TouchableOpacity
-              style={[styles.feedPostAction, uiState.likeBusy && styles.feedPostActionDisabled]}
-              activeOpacity={0.84}
-              disabled={!!uiState.likeBusy || (!!currentUserId && !uiState.engagementReady)}
-              onPress={() => {
-                void onToggleProfilePostLike(post);
-              }}
-            >
-              <MaterialIcons
-                name={engagement?.likedByViewer ? "favorite" : "favorite-border"}
-                size={17}
-                color={engagement?.likedByViewer ? "#FF7A9B" : "#E6ECFA"}
-              />
-              <Text style={styles.feedPostActionText}>
-                {likeCountLabel ? `${likeButtonLabel} · ${likeCountLabel}` : likeButtonLabel}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-          {canSharePost ? (
-            <TouchableOpacity
-              style={styles.feedPostAction}
-              activeOpacity={0.84}
-              onPress={() => onToggleProfilePostComments(post)}
-            >
-              <MaterialIcons name="chat-bubble-outline" size={17} color="#E6ECFA" />
-              <Text style={styles.feedPostActionText}>
-                {commentCountLabel || "Comment"}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-          {canSharePost ? (
-            <TouchableOpacity
-              style={styles.feedPostAction}
-              activeOpacity={0.84}
-              onPress={() => {
-                void onShareProfilePost(post);
-              }}
-            >
-              <MaterialIcons name="ios-share" size={17} color="#E6ECFA" />
-              <Text style={styles.feedPostActionText}>Share</Text>
-            </TouchableOpacity>
-          ) : null}
           {canDeletePost ? (
             <TouchableOpacity
               style={[
@@ -4833,6 +4790,7 @@ export default function ProfileScreen() {
               )}
             </View>
           ) : null}
+          {activeTab === "content" && !shouldShowLockedShell ? <RepostsShelf userId={userId} enabled={canViewFullProfile} onOpen={openCreatorVideo} /> : null}
           {activeTab === "community" && communityActions.length ? (
             <View style={styles.quickActionsCard}>
               <AppText scale="subhead" style={styles.quickActionsTitle}>Community Follow-Up</AppText>

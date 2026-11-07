@@ -331,7 +331,7 @@ test("whole profile activity card preserves notification action and native style
   const Card = h.load("components/ProfileSocialFeedCard.tsx", {
     "@expo/vector-icons/MaterialIcons": () => null,
     "../_lib/discoveryFeed": {}, "./creator-media/creator-video-card": {}, "./social/linked-text": {},
-    "./social/social-attachment-card": {}, "./ui/ProfileMediaImage": {},
+    "./social/social-attachment-card": {}, "./ui/ProfileMediaImage": {}, "./live/live-discovery-card": {},
   }).ProfileSocialFeedCard;
   const item = { type: "backed_activity_item", notification: { title: "Message", body: "Body", target: { supported: true },
     createdAt: "2026-10-16T08:30:00Z", displayCreatedAt: "2025-12-31T12:00:00Z" } };
