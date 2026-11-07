@@ -14,9 +14,20 @@ const priorContractSha256='f5d2994c71cf3749dc29f8760aceb56fdf59990eed66d5bb8e5dd
 const cutoverCommand='node ops/automatic-commerce-cutover/run-native.mjs --docker supabase_db_chillywood-mobile';
 const precedingCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-sandbox-payout-notification-exact-deploy-postgres.mjs';
 const followingCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-commerce-fee-concurrency-postgres.mjs';
+const videoCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-creator-video-engagement-concurrency.mjs';
+const profileCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs';
 const contractHash=contract=>createHash('sha256').update(JSON.stringify(contract)).digest('hex');
 const rebuildStep=job=>job.steps.find(step=>step.name==='Rebuild and test the local database');
 const assertJob=job=>{
+ // Assert the added proof independently, then prove the entire prior contract
+ // remains byte-for-byte unchanged. Do not bless a replacement baseline hash.
+ assert.equal(job.steps.flatMap(step=>(step.run??'').split('\n')).filter(line=>line===videoCommand).length,1);
+ const normalized=structuredClone(job),videoStep=rebuildStep(normalized),videoLines=videoStep.run.split('\n');
+ const videoPosition=videoLines.indexOf(videoCommand);
+ assert.ok(videoPosition>0);
+ assert.equal(videoLines[videoPosition-1],profileCommand);
+ videoLines.splice(videoPosition,1);videoStep.run=videoLines.join('\n');
+ job=normalized;
  const {'timeout-minutes':budget,...contract}=job;
  assert.equal(budget,65);
  assert.equal(job.steps.filter(step=>step.name==='Rebuild and test the local database').length,1);
@@ -57,6 +68,16 @@ test('Database keeps its measured aggregate budget and every prior mandatory com
   const mutant=structuredClone(workflow.jobs.database);mutate(mutant);
   assert.throws(()=>assertJob(mutant),assert.AssertionError);
  }
+});
+
+test('creator video concurrency proof is mandatory, singular and beside the existing profile proof',()=>{
+ for(const mutate of [
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand+'\n','');},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand,videoCommand+' || true');},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand,videoCommand+'\n'+videoCommand);},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand+'\n','')+videoCommand+'\n';},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand+'\n','');job.steps.push({run:videoCommand});},
+ ]){const mutant=structuredClone(workflow.jobs.database);mutate(mutant);assert.throws(()=>assertJob(mutant),assert.AssertionError);}
 });
 
 test('the cutover proof rejects missing, moved, duplicated or changed commands',()=>{
