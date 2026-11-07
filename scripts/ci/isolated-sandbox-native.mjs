@@ -15,6 +15,7 @@ export const POSTGRES=Object.freeze({version:'17.6',
  sha256:'e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0'});
 const ordinaryCleanup=['clusterStopped','clusterNotRunningVerified','directoryRemoved'];
 const allSql=['core.sql','premium-authority.sql','authority.sql','commands.sql','receipts.sql','permissions-finalize.sql'];
+const testStoreV2Sql=['test-store-offerings-core.sql','test-store-qualification.sql','test-store-offerings-commands.sql','test-store-offerings-provisioning.sql','test-store-offerings-receipts.sql'];
 const resourceSql=[...allSql.filter(file=>file!=='permissions-finalize.sql'),'resource-graphs.sql','delivery-authority.sql','permissions-finalize.sql'];
 const routerPath='isolated-runtime/receipt-router-v1';
 const routerSql=['core.sql','holds.sql','ownership.sql','worker.sql','permissions-finalize.sql'];
@@ -31,10 +32,17 @@ const testStoreSources=[...allSql.filter(file=>file!=='permissions-finalize.sql'
  .map(file=>`${modulePath}/${file}`).concat(
  ['premium-authority.fixture.sql','authority.fixture.sql','test-store.fixture.mjs','test-store.native.mjs'].map(file=>`${modulePath}/tests/${file}`),
  'supabase/functions/_shared/revenuecat-router-envelope.ts','supabase/functions/_shared/isolated-test-store-contract.ts');
+const testStoreV2Sources=[...allSql.filter(file=>file!=='permissions-finalize.sql'),'test-store.sql','history.sql',...testStoreV2Sql,'permissions-finalize.sql']
+ .map(file=>`${modulePath}/${file}`).concat(
+ ['premium-authority.fixture.sql','authority.fixture.sql','test-store-v2.fixture.mjs','test-store-v2.native.mjs',
+  'test-store.fixture.mjs','receipts.fixture.mjs','test-store-v2-provider.fixture.mjs','test-store-v2-receipts.fixture.mjs'].map(file=>`${modulePath}/tests/${file}`),
+ 'supabase/functions/_shared/revenuecat-router-envelope.ts','supabase/functions/_shared/isolated-test-store-v2-provisioner.ts',
+ 'supabase/functions/_shared/isolated-test-store-v2-receipt.ts','supabase/functions/_shared/isolated-test-store-qualification.ts',
+ 'supabase/functions/_shared/revenuecat-lossless-envelope.ts');
 const stageSources={
  'premium-authority':['premium-authority.sql'],authority:['authority.sql','premium-authority.sql'],
  core:allSql.filter(file=>file!=='receipts.sql'),declarations:allSql,receipts:allSql,
- 'managed-install':[...resourceSql,'history.sql','test-store.sql'],availability:['core.sql'],history:[...allSql,'history.sql'],
+ 'managed-install':[...resourceSql,'history.sql','test-store.sql',...testStoreV2Sql],availability:['core.sql'],history:[...allSql,'history.sql'],
  'resource-graphs':resourceSql,
 };
 export const NATIVE_STAGES=Object.freeze([
@@ -51,6 +59,8 @@ export const NATIVE_STAGES=Object.freeze([
  sourceFiles:Object.freeze(stageSources[name]),file:`${modulePath}/tests/${name}.native.mjs`})).concat([
  Object.freeze({name:'test-store',caseCount:29,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],sourceBase:'',
   sourceFiles:Object.freeze(testStoreSources),file:`${modulePath}/tests/test-store.native.mjs`}),
+ Object.freeze({name:'test-store-v2',caseCount:43,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],sourceBase:'',
+  sourceFiles:Object.freeze(testStoreV2Sources),file:`${modulePath}/tests/test-store-v2.native.mjs`}),
  Object.freeze({name:'receipt-router',caseCount:22,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],
   sourceBase:'',sourceFiles:Object.freeze(routerSources),file:`${routerPath}/tests/router.native.mjs`,proofFormat:'receipt-router-v1',
   proofKind:'actual-local-postgresql-source-proof',providerQualificationField:'actualProviderAuthenticationProven'}),
@@ -65,7 +75,7 @@ export const NODE_STAGES=Object.freeze([
  {name:'commerce-provider-delivery',expectedTests:52,files:['tests/isolated-sandbox-commerce-client.test.mjs',
   'tests/isolated-sandbox-delivery-policy.test.mjs','tests/creator-money/isolated-sandbox-provider.test.mjs']},
  {name:'tip-client',expectedTests:17,files:['tests/isolated-sandbox-tips-client.test.mjs']},
- {name:'tip-mounted',expectedTests:25,files:['tests/isolated-sandbox-tips-mounted.test.mjs']},
+ {name:'tip-mounted',expectedTests:26,files:['tests/isolated-sandbox-tips-mounted.test.mjs']},
  {name:'tip-journal',expectedTests:18,files:['tests/isolated-sandbox-tip-attempts.test.mjs']},
  {name:'tip-checkout-journal',expectedTests:19,files:['tests/isolated-sandbox-tip-checkout-attempts.test.mjs']},
  {name:'library-discovery',expectedTests:19,files:['tests/saved-media-screens-mounted.test.mjs']},
@@ -79,6 +89,21 @@ export const NODE_STAGES=Object.freeze([
  {name:'test-store-attempts',expectedTests:26,files:['tests/isolated-test-store-attempts.test.mjs']},
  {name:'test-store-build',expectedTests:7,files:['tests/isolated-test-store-build.test.mjs']},
  {name:'test-store-native-compile-guard',expectedTests:6,files:['tests/isolated-test-store-native-compile.test.mjs']},
+ {name:'test-store-v2-provisioner',expectedTests:38,files:['tests/creator-money/isolated-test-store-v2-provisioner.test.mjs']},
+ {name:'test-store-v2-receipt',expectedTests:37,files:['tests/creator-money/isolated-test-store-v2-receipt.test.mjs']},
+ {name:'test-store-v2-command',expectedTests:22,files:['tests/creator-money/isolated-test-store-v2-command.test.mjs']},
+ {name:'test-store-qualification',expectedTests:25,files:['tests/creator-money/isolated-test-store-qualification.test.mjs']},
+ {name:'test-store-qualification-client',expectedTests:9,files:['qualification/test-store-debug/tests/client.test.mjs']},
+ {name:'test-store-qualification-mounted',expectedTests:8,files:['qualification/test-store-debug/tests/mounted.test.mjs']},
+ {name:'test-store-qualification-compile-guard',expectedTests:6,files:['qualification/test-store-debug/tests/compile-contract.test.mjs']},
+ {name:'test-store-v2-client',expectedTests:10,files:['tests/isolated-test-store-v2-client.test.mjs']},
+ {name:'test-store-v2-sdk',expectedTests:5,files:['tests/isolated-test-store-v2-sdk.test.mjs']},
+ {name:'test-store-v2-legacy-suppression',expectedTests:6,files:['tests/isolated-test-store-v2-legacy-suppression.test.mjs']},
+ {name:'test-store-v2-mounted',expectedTests:18,files:['tests/isolated-test-store-v2-mounted.test.mjs']},
+ {name:'test-store-v2-attempts',expectedTests:30,files:['tests/isolated-test-store-v2-attempts.test.mjs']},
+ {name:'test-store-v2-preparations',expectedTests:15,files:['tests/isolated-test-store-v2-preparations.test.mjs']},
+ {name:'test-store-v2-native',expectedTests:7,files:['tests/isolated-test-store-v2-native.test.mjs']},
+ {name:'test-store-v2-native-compile-guard',expectedTests:3,files:['tests/isolated-test-store-v2-native-compile.test.mjs']},
 ].map(stage=>Object.freeze({...stage,files:Object.freeze(stage.files)})));
 export const NODE_TEST_FILES=Object.freeze(NODE_STAGES.flatMap(stage=>stage.files));
 export const EXPECTED_NODE_TESTS=NODE_STAGES.reduce((total,stage)=>total+stage.expectedTests,0);
@@ -105,9 +130,9 @@ export function validateNativeProof(stage,proof,sourceHashes){
   for(const key of ['providerOrProductionCalls',stage.providerQualificationField,'legacyEnforcementProven'])assert.equal(proof[key],false,`${stage.name}: ${key}`);
   assert.equal(proof.syntheticProviderEvidence,true);
  }
- if(stage.name==='test-store'){
-  assert.equal(proof.kind,'isolated-test-store-native-source-proof');assert.equal(proof.syntheticProviderEvidence,true);
-  for(const key of ['providerOrProductionCalls','actualProviderAuthenticationProven','actualDeviceBehaviorProven'])assert.equal(proof[key],false,`test-store: ${key}`);
+ if(stage.name==='test-store'||stage.name==='test-store-v2'){
+  assert.equal(proof.kind,stage.name==='test-store'?'isolated-test-store-native-source-proof':'isolated-test-store-v2-native-source-proof');assert.equal(proof.syntheticProviderEvidence,true);
+  for(const key of ['providerOrProductionCalls','actualProviderAuthenticationProven','actualDeviceBehaviorProven'])assert.equal(proof[key],false,`${stage.name}: ${key}`);
  }
  for(const key of stage.cleanupKeys)assert.equal(proof.cleanup?.[key],true,`${stage.name}: cleanup ${key}`);
  assert.ok(Object.values(proof.cleanup).every(value=>value===true),`${stage.name}: cleanup failure`);
@@ -148,10 +173,15 @@ export function collectSourceManifest(){
   'supabase/functions/_shared/provider-readiness.ts',
   'supabase/functions/_shared/isolated-sandbox-provider.ts','supabase/functions/_shared/isolated-sandbox-delivery-policy.ts',
   'supabase/functions/_shared/isolated-test-store-contract.ts','supabase/functions/_shared/isolated-test-store-command.ts','supabase/config.toml',
+  ...['command','provisioner','receipt'].map(name=>`supabase/functions/_shared/isolated-test-store-v2-${name}.ts`),
+  'supabase/functions/_shared/isolated-test-store-qualification.ts',
   'supabase/functions/_shared/stripe-connect.ts','supabase/functions/_shared/exact-subject-authority.ts','supabase/functions/_shared/livekit-session-generation.ts',
   ...['','Attempts','Build','Contract','Rehearsal','Sdk'].map(name=>`_lib/isolatedTestStore${name}.ts`),
+  ...['','Actions','Attempts','Build','Contract','Preparations','Sdk'].map(name=>`_lib/isolatedTestStoreV2${name}.ts`),
   '_lib/monetization.ts','_lib/revenuecat.ts','tests/helpers/premium-runtime-harness.mjs',
   'app.config.ts','eas.json','config/test-store-debug-config.js','config/test-store-debug-v1.json',
+  'config/test-store-debug-v2-config.js','config/test-store-debug-v2.json','plugins/withIsolatedTestStoreV2Debug.js',
+  'tests/helpers/isolated-test-store-v2-fixtures.mjs',
   'plugins/withIsolatedTestStoreDebug.js','scripts/compile-native-camera-effects.mjs',
   'scripts/test-local-camera-inference-offline.mjs','scripts/camera-provider-closure.mjs','tests/native-camera-compile-records.test.mjs',
   'supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql',
@@ -160,14 +190,20 @@ export function collectSourceManifest(){
   'scripts/ci/isolated-sandbox-native.mjs','scripts/ci/required-validation.mjs','config/ci/required-validation-v1.json',
   'tests/ci/legacy-source-bridge-bootstrap.test.mjs',
   'tests/ci/managed-install-bootstrap.test.mjs',
+  'tests/ci/qualification-validation.test.mjs',
   'tests/ci/isolated-sandbox-native-validation.test.mjs','.github/workflows/required-validation.yml'];
  const visit=relative=>{for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){
+  if(relative.startsWith('qualification/test-store-debug')&&(['node_modules','.expo'].includes(entry.name)
+    ||(relative==='qualification/test-store-debug'&&['ios','android'].includes(entry.name))))continue;
   const next=`${relative}/${entry.name}`;assert.ok(!entry.isSymbolicLink(),`Source symlink rejected: ${next}`);
   if(entry.isDirectory())visit(next);else if(entry.isFile())files.push(next);
  }};
  for(const directory of [modulePath,routerPath,'app/sandbox-tips','components/monetization',
   'supabase/functions/revenuecat-receipt-router-v1','supabase/functions/isolated-sandbox-test-store-v1',
-  'supabase/functions/isolated-test-store-revenuecat-webhook-v1','modules/chillywood-test-store-admission'])visit(directory);
+  'supabase/functions/isolated-test-store-revenuecat-webhook-v1','supabase/functions/isolated-sandbox-test-store-v2',
+  'supabase/functions/isolated-test-store-provisioner-v2','supabase/functions/isolated-test-store-revenuecat-webhook-v2',
+  'supabase/functions/isolated-test-store-qualification-v1',
+  'modules/chillywood-test-store-admission','qualification/test-store-debug'])visit(directory);
  return Object.fromEntries([...new Set(files)].sort().map(file=>{
   const absolute=path.join(root,file);assert.ok(fs.lstatSync(absolute).isFile(),`Regular source required: ${file}`);
   return [file,hash(fs.readFileSync(absolute))];
@@ -175,6 +211,76 @@ export function collectSourceManifest(){
 }
 
 export function validateCommandFixture(fixture,kind){
+ if(kind==='test-store-v2'){
+  assert.equal(fixture.protocol,'isolated-test-store-v2');
+  assert.ok(Array.isArray(fixture.cases)&&fixture.cases.length>=14,'Two fresh actual v2 SQL purchase cycles required');
+  const commands=new Set(),allocations=new Map(),customers=new Set(),registrations=new Map(),claimed=new Set(),verified=new Set(),released=new Set();
+  let customerSnapshot;const excludedBindings=[];
+  let freshClaims=0,deniedClaims=0;
+  for(const entry of fixture.cases){
+   assert.ok(['bind','allocate','claim','read','report','advance'].includes(entry.command));commands.add(entry.command);
+   for(const value of [entry.requestId,entry.actor?.userId,entry.actor?.sessionId])assert.match(value??'',/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
+   assert.match(entry.configurationDigest??'',/^[a-f0-9]{64}$/u);
+   const response=entry.response,r=response?.result;assert.equal(response?.protocol,fixture.protocol);assert.equal(response?.environment,'sandbox');
+   assert.equal(response?.generation,1);assert.equal(response?.command,entry.command);assert.equal(response?.requestId,entry.requestId);
+   assert.deepEqual(response?.actor,entry.actor);assert.equal(r?.retryProviderMutation,false);assert.equal(r?.grantsAccess,false);assert.equal(r?.notPayable,true);
+   const customer=r.customer,a=r.allocation,reservation=r.reservation;
+   if(customer===null){
+    assert.equal(entry.command,'bind');assert.equal(r.status,'held');assert.equal(r.reason,'test_store_v2_customer_qualification_excluded');
+    for(const key of ['allocation','reservation','authorityValidUntil','receipt'])assert.equal(r[key],null);
+    assert.equal(r.dispatchAllowed,false);assert.match(entry.payload.installationId??'',/^[a-f0-9-]{36}$/u);
+    excludedBindings.push(entry);continue;
+   }
+   assert.ok(customer&&reservation,'Same-attempt v2 capture requires its bound customer and reservation');customers.add(customer.id);
+   if(customerSnapshot)assert.deepEqual(customer,customerSnapshot);else customerSnapshot=customer;
+   assert.equal(customer.buyerId,entry.actor.userId);assert.equal(customer.configurationDigest,entry.configurationDigest);
+   assert.equal(customer.store,'TEST_STORE');assert.equal(customer.sourceEnvironment,'SANDBOX');assert.equal(customer.provider,'revenuecat');
+   assert.match(customer.providerAppUserId??'',/^scv2_teststore_[a-f0-9-]{36}$/u);
+   assert.deepEqual(JSON.parse(customer.providerScopeKey),['revenuecat',customer.projectId,customer.appId,'TEST_STORE','SANDBOX']);
+   assert.equal(customer.economicApplicationId,`rc_test_store:${customer.projectId}:${customer.appId}`);
+   assert.ok(Number.isSafeInteger(reservation.revision)&&reservation.revision>0);
+   if(a){
+    assert.equal(a.customerBindingId,customer.id);assert.equal(a.configurationDigest,entry.configurationDigest);
+    if(entry.payload.intentId)assert.equal(a.intentId,entry.payload.intentId);
+    if(entry.payload.expectedQuote)assert.deepEqual(a.quote,entry.payload.expectedQuote);
+    if(entry.payload.dispatchId)assert.equal(a.dispatchId,entry.payload.dispatchId);
+    assert.equal(a.quote.kind,'creator_tip');assert.equal(a.quote.currency,'usd');
+    const immutable={...a};delete immutable.registration;
+    if(allocations.has(a.id))assert.deepEqual(allocations.get(a.id),immutable);else allocations.set(a.id,immutable);
+    if(a.registration){assert.equal(a.registration.productId,a.productId);
+     if(registrations.has(a.id))assert.deepEqual(a.registration,registrations.get(a.id));else registrations.set(a.id,a.registration);}
+    if(r.dispatchAllowed){assert.equal(entry.command,'claim');assert.equal(r.status,'dispatch_claimed');assert.equal(reservation.activeAllocationId,a.id);
+     assert.ok(a.registration);assert.ok(Number.isFinite(Date.parse(r.authorityValidUntil)));assert.ok(!claimed.has(a.id));claimed.add(a.id);freshClaims++;}
+    else{assert.equal(r.authorityValidUntil,null);if(entry.command==='claim')deniedClaims++;}
+    if(r.status==='verified'){assert.equal(r.receipt?.state,'verified');verified.add(a.id);}
+    if(r.status==='released'){assert.equal(entry.command,'advance');assert.notEqual(reservation.activeAllocationId,a.id);
+     assert.ok(reservation.revision>entry.payload.expectedReservationRevision);assert.equal(r.receipt?.id,entry.payload.expectedReceiptId);released.add(a.id);}
+   }else{assert.equal(entry.command,'bind');assert.equal(r.status,'customer_bound');assert.equal(r.dispatchAllowed,false);assert.equal(reservation.activeAllocationId,null);}
+  }
+  for(const command of ['bind','allocate','claim','read','report','advance'])assert.ok(commands.has(command));
+  assert.equal(customers.size,1);assert.equal(allocations.size,2);assert.equal(registrations.size,2);
+  assert.equal(excludedBindings.length,3,'Actual generated-customer exclusion must cover first, same-request and new-request bind');
+  const [blocked,replayed,again]=excludedBindings;
+  assert.equal(blocked.requestId,replayed.requestId);assert.notEqual(blocked.requestId,again.requestId);
+  for(const entry of excludedBindings.slice(1)){
+   assert.deepEqual(entry.payload,blocked.payload);assert.deepEqual(entry.actor,blocked.actor);
+   assert.equal(entry.configurationDigest,blocked.configurationDigest);assert.deepEqual(entry.response.result,blocked.response.result);
+  }
+  for(const key of ['id','providerOfferingId','offeringIdentifier'])assert.equal(new Set([...registrations.values()].map(value=>value[key])).size,2);
+  assert.equal(freshClaims,2);assert.ok(deniedClaims>=1);assert.equal(verified.size,2);assert.equal(released.size,2);
+  assert.ok(Array.isArray(fixture.checkoutCases)&&fixture.checkoutCases.length===2,'Each allocated intent needs actual core quote preparation/recovery');
+  for(const checkout of fixture.checkoutCases){
+   const prepared=checkout.response?.data?.intent,recovered=checkout.recovery?.response;
+   assert.equal(checkout.command,'checkout.prepare');assert.equal(checkout.response?.command,'checkout.prepare');
+   assert.equal(checkout.response?.requestId,checkout.requestId);assert.equal(checkout.response?.status,'ok');
+   assert.equal(recovered?.command,'request.read');assert.equal(recovered?.data?.originalRequestId,checkout.requestId);
+   assert.equal(recovered?.data?.recordedSessionId,checkout.actor?.sessionGeneration);assert.equal(recovered?.data?.entry?.id,prepared?.id);
+   const allocation=[...allocations.values()].find(value=>value.intentId===prepared?.id);assert.ok(allocation);
+   assert.deepEqual(allocation.quote,checkout.quote);
+   for(const key of ['offerId','offerRevision','resourceId','resourceRevision','creatorId','kind','amountMinor','currency'])assert.equal(recovered.data.entry[key],allocation.quote[key]);
+  }
+  return {cases:fixture.cases.length,commands:[...commands].sort(),freshClaims,checkoutCases:fixture.checkoutCases.length};
+ }
  if(kind==='test-store'){
   assert.equal(fixture.protocol,'isolated-test-store-v1');
   assert.ok(Array.isArray(fixture.cases)&&fixture.cases.length>=7,'Fresh actual Test Store SQL responses required');
@@ -259,6 +365,7 @@ function main(argv){
   ISOLATED_SANDBOX_COMMAND_FIXTURE:path.join(output,'native-command-responses.json'),
   ISOLATED_SANDBOX_TIPS_FIXTURE:path.join(output,'native-tip-history-responses.json'),
   ISOLATED_TEST_STORE_FIXTURE:path.join(output,'native-test-store-responses.json'),
+  ISOLATED_TEST_STORE_V2_FIXTURE:path.join(output,'native-test-store-v2-responses.json'),
   ISOLATED_TIPS_NATIVE_FIXTURES:path.join(output,'native-tip-history-responses.json')});
  const sources=collectSourceManifest();
  const report={status:'running',startedAt:new Date().toISOString(),plan:createPlan(),sourceHashes:sources,stages:[],
@@ -283,7 +390,8 @@ function main(argv){
    report.stages.push({name:stage.name,caseCount:stage.caseCount,status:'passed',cleanup:proof.cleanup});save();
    console.log(`${stage.name}: ${stage.caseCount} native groups passed; cleanup verified`);
   }
-  const fixtures={core:env.ISOLATED_SANDBOX_COMMAND_FIXTURE,history:env.ISOLATED_SANDBOX_TIPS_FIXTURE,'test-store':env.ISOLATED_TEST_STORE_FIXTURE};
+  const fixtures={core:env.ISOLATED_SANDBOX_COMMAND_FIXTURE,history:env.ISOLATED_SANDBOX_TIPS_FIXTURE,
+   'test-store':env.ISOLATED_TEST_STORE_FIXTURE,'test-store-v2':env.ISOLATED_TEST_STORE_V2_FIXTURE};
   report.commandFixtures={};
   for(const [kind,file]of Object.entries(fixtures)){
    const bytes=fs.readFileSync(file);const fixture=JSON.parse(bytes.toString('utf8'));

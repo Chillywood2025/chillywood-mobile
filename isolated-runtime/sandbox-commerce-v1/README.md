@@ -6,9 +6,15 @@ sandbox tip authoring/history routes and buyer quote preparation/recovery.
 Provider purchase remains visibly unavailable in the ordinary app. A separate
 dedicated DEBUG Test Store flavor now has a bounded one-attempt tip checkout,
 authenticated receipt projection and read-only recovery source path; it is
-unconfigured and unactivated. It is not completed repeatable checkout. See
-[TEST_STORE.md](TEST_STORE.md). No existing webhook, money dispatcher or delivery
-endpoint activates this bundle.
+unconfigured and unactivated. V1 is not completed repeatable checkout. The
+additive v2 source path uses a permanently bound customer and a distinct real
+registered Offering for each successive tip; its provider and target
+qualification remain outstanding. A separate record-only receiver and
+qualification DEBUG app preserve test evidence without economic authority;
+sealing evidence does not qualify the provider or enable checkout.
+See [TEST_STORE.md](TEST_STORE.md) and
+[TEST_STORE_V2.md](TEST_STORE_V2.md). No existing webhook, money dispatcher or
+delivery endpoint activates this bundle.
 
 This work avoids replacing the existing commerce functions. A fresh private
 schema owns its resources, requests, offers, purchase attempts and provider
@@ -132,7 +138,7 @@ their authoring, provider admission and actual delivery are still incomplete:
   reservation, photo ownership, shipping-data privacy and test-only fulfillment.
 * Dedicated pre-purchase app routes, Library discovery, durable authoring
   recovery, retained tip history and the bounded Test Store DEBUG path exist.
-  Actual provider qualification, repeat checkout, non-tip product screens and
+  Actual provider/device qualification of repeated checkout, non-tip product screens and
   installed-device delivery remain incomplete.
   Current main targets V19; this work does not permit publishing it as V18.
 
@@ -216,8 +222,9 @@ synthetic transport and actual local-SQL response fixtures, not installed device
 Hosted managed-schema compatibility, actual Auth/gateway/pool behavior and
 provider delivery still require their separate qualification.
 
-For local combined fixtures only, the ten ordered SQL files are core, Premium
-authority, authority, commands, receipts, Test Store, history, resource graphs,
+For local combined fixtures only, the fifteen ordered SQL files are core, Premium
+authority, authority, commands, receipts, Test Store v1, the v2 Offering core,
+record-only qualification, v2 commands, provisioning and receipts, history, resource graphs,
 delivery authority, then `permissions-finalize.sql`, all in one transaction.
 The receipt router has its
 own ordered installation contract; its source bridge is not a legacy cutover.

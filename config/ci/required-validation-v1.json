@@ -46,7 +46,8 @@
       "docs/chat/PR532_AUTOMATED_COVERAGE.json",
       "docs/chat/PR532_AUDITED_CASES.tsv",
       "docs/DATABASE_RUNTIME_AUTHORITY_DEPLOYMENT_2026_10_15.json",
-      "tests/**"
+      "tests/**",
+      "qualification/test-store-debug/**"
     ],
     "sensitive": [
       "app/_layout.tsx",
@@ -89,7 +90,8 @@
       "scripts/*security*",
       "scripts/*chilly-chat*",
       "tests/creator-money/**",
-      "tests/wave1/**"
+      "tests/wave1/**",
+      "qualification/test-store-debug/**"
     ],
     "database": [
       "supabase/**",
@@ -133,7 +135,8 @@
       "hooks/use-communication-room-session.ts",
       "hooks/use-livekit-chat-call-session.ts",
       "scripts/test-communication-room-realtime-delivery.mjs",
-      "scripts/test-chilly-chat-real-peer-http.mjs"
+      "scripts/test-chilly-chat-real-peer-http.mjs",
+      "qualification/test-store-debug/**"
     ],
     "nativeRelease": [
       "android/**",
@@ -174,7 +177,9 @@
       ".github/workflows/*release*",
       ".github/workflows/*build*",
       ".github/workflows/*preview*",
-      ".github/workflows/*testflight*"
+      ".github/workflows/*testflight*",
+      "qualification/test-store-debug/**",
+      "tests/isolated-test-store-v2-native*.test.mjs"
     ],
     "autonomous": [
       "isolated-runtime/**",
@@ -196,7 +201,9 @@
       "scripts/ci/**",
       "scripts/assurance/**",
       "tests/ci/**",
-      "tests/assurance/**"
+      "tests/assurance/**",
+      "qualification/test-store-debug/package.json",
+      "qualification/test-store-debug/package-lock.json"
     ]
   },
   "knownDocumentation": [

@@ -4,6 +4,26 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "isolated-test-store-v2-debug-ios": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "isolated-test-store-debug-v2-ios",
+      "environment": "development",
+      "env": { "CHILLYWOOD_TEST_STORE_V2_FLAVOR": "isolated-test-store-debug-v2" },
+      "ios": { "buildConfiguration": "Debug" }
+    },
+    "isolated-test-store-v2-debug-ios-simulator": {
+      "extends": "isolated-test-store-v2-debug-ios",
+      "ios": { "buildConfiguration": "Debug", "simulator": true }
+    },
+    "isolated-test-store-v2-debug-android": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "isolated-test-store-debug-v2-android",
+      "environment": "development",
+      "env": { "CHILLYWOOD_TEST_STORE_V2_FLAVOR": "isolated-test-store-debug-v2" },
+      "android": { "gradleCommand": ":app:assembleDebug", "buildType": "apk" }
+    },
     "isolated-test-store-debug-ios": {
       "developmentClient": true,
       "distribution": "internal",

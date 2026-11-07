@@ -79,6 +79,29 @@ export function parseTestStoreNativePolicyReport(output) {
   return { groups: 8, nativeProcessScenarios: 10, failures: 0, skipped: 0, providerSdkInvoked: false };
 }
 
+export function resolveTestStoreV2AdmissionProject(resolution, projectRoot, platform) {
+  const source = resolveTestStoreAdmissionProject(resolution, projectRoot, platform);
+  const module = resolution.modules.find(item => item.packageName === "chillywood-test-store-admission");
+  const classes = platform === "android" ? module.projects[0].modules : module.modules;
+  assert(classes.includes(platform === "android" ? "expo.modules.chillywoodteststore.ChillywoodTestStoreV2Module" : "ChillywoodTestStoreV2Module"),
+    "Actual v2 native lifetime bridge must autolink with v1 preserved");
+  const prefix = platform === "android" ? "src/main/java/expo/modules/chillywoodteststore/" : "";
+  const required = platform === "android" ? ["ChillywoodTestStoreV2Module.kt", "TestStoreV2Policy.java", "TestStoreV2Contract.kt"]
+    : ["ChillywoodTestStoreV2Module.swift", "TestStoreV2Policy.swift", "TestStoreV2Contract.swift"];
+  for (const file of required) assert(fs.statSync(path.join(source.sourceDir, prefix + file)).isFile(), "Required v2 native source is missing");
+  return source;
+}
+
+export function parseTestStoreV2NativePolicyReport(output) {
+  for (const [name, count] of [["tests", 8], ["pass", 8], ["fail", 0], ["cancelled", 0], ["skipped", 0], ["todo", 0]]) {
+    const summaries = [...output.matchAll(new RegExp(`^# ${name} (\\d+)$`, "gmu"))];
+    assert.equal(summaries.length, 1, "Exactly one complete v2 native policy report is required");
+    assert.equal(Number(summaries[0][1]), count, "V2 native lifecycle and Release cases must all execute");
+  }
+  assert.match(output, /^ok 8 - compiled native lifecycle persists before invocation, retains unknown work and supports only same-owner completed repetition$/mu);
+  return { groups: 8, nativeExecutables: 3, failures: 0, skipped: 0, providerSdkInvoked: false };
+}
+
 export function mediaPickerCompileTasks() {
   return ["chillywood-gallery-picker", "expo-modules-core", "expo-image-picker"].flatMap(name =>
     ANDROID_VARIANTS.flatMap(variant => [`:${name}:compile${variantTitle(variant)}Kotlin`,
@@ -488,11 +511,19 @@ try {
     admissionHash.update(path.relative(project, file)); admissionHash.update(fs.readFileSync(file));
   }
   receipt.testStoreAdmissionSourceSha256 = admissionHash.digest("hex");
+  const v2Hash = createHash("sha256");
+  const v2Sources = files(path.join(project, "modules/chillywood-test-store-admission")).filter(file => /(?:ChillywoodTestStoreV2Module|TestStoreV2Policy|TestStoreV2Contract)\.(?:swift|java|kt)$/u.test(file)).sort();
+  assert.equal(v2Sources.length, 6, "All six v2 platform sources must be captured");
+  for (const file of v2Sources) { v2Hash.update(path.relative(project, file)); v2Hash.update(fs.readFileSync(file)); }
+  receipt.testStoreV2AdmissionSourceSha256 = v2Hash.digest("hex");
   if (platforms.includes("ios") && !generateOnly) {
     assert(env.JAVA_HOME && fs.existsSync(path.join(env.JAVA_HOME, "bin/javac")), "Native policy checks require the runner's Java toolchain");
     receipt.testStoreNativePolicy = parseTestStoreNativePolicyReport(run(process.execPath,
       ["--test", "--test-reporter=tap", "tests/isolated-test-store-build.test.mjs"], root,
       { ISOLATED_TEST_STORE_NATIVE_POLICY: "1", TEST_STORE_JAVA_HOME: env.JAVA_HOME }));
+    receipt.testStoreV2NativePolicy = parseTestStoreV2NativePolicyReport(run(process.execPath,
+      ["--test", "--test-reporter=tap", "tests/isolated-test-store-v2-native.test.mjs"], root,
+      { ISOLATED_TEST_STORE_V2_NATIVE_POLICY: "1", TEST_STORE_JAVA_HOME: env.JAVA_HOME }));
     saveReceipt();
   }
   for (const platform of platforms) {
@@ -514,6 +545,7 @@ try {
     const devLauncherProject = platform === "android" ? resolveAndroidDevLauncherProject(resolution, project) : undefined;
     const pickerProjects = platform === "android" ? resolveAndroidMediaPickerProjects(resolution, project) : undefined;
     const admissionProject = resolveTestStoreAdmissionProject(resolution, project, platform);
+    assert.deepEqual(resolveTestStoreV2AdmissionProject(resolution, project, platform), admissionProject);
     run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformEnv);
     const generated = path.join(project, platform);
     assert(fs.existsSync(generated), `Expo must generate ${platform} sources`);

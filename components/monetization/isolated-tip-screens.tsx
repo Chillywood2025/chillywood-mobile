@@ -12,6 +12,8 @@ import { AppBackButton } from "../navigation/app-back-button";
 import { IsolatedTipReceipt, isolatedTipMoney } from "./isolated-tip-receipt";
 import { IsolatedTestStoreCheckout } from "./isolated-test-store-checkout";
 import { isIsolatedTestStoreFlavor } from "../../_lib/isolatedTestStoreBuild";
+import { isIsolatedTestStoreV2Flavor } from "../../_lib/isolatedTestStoreV2Build";
+import { IsolatedTestStoreV2Checkout } from "./isolated-test-store-v2-checkout";
 
 type Page = "home" | "studio" | "offer" | "status" | "history";
 type Notice = { message: string; requestId?: string };
@@ -52,6 +54,7 @@ export function IsolatedTipScreen({ page }: { page: Page }) {
 
 function TipSession({ page, title, authority }: { page: Page; title: string; authority: AccountSessionAuthorityBinding }) {
   const [testStoreFlavor] = useState(isIsolatedTestStoreFlavor);
+  const [testStoreV2Flavor] = useState(isIsolatedTestStoreV2Flavor);
   const router = useRouter();
   const params = useLocalSearchParams<{ offerId?: string; intentId?: string; receiptId?: string; requestId?: string }>();
   const [client, setClient] = useState<IsolatedTipClient | null>(null);
@@ -289,7 +292,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
   };
   const showOffer = (offer: TipOffer) => <View key={offer.id} style={styles.card} testID={`isolated-tip-offer-${offer.id}`}>
     <Text style={styles.title}>{offer.title}</Text><Text style={styles.body}>{isolatedTipMoney(offer.amountMinor, offer.currency)} · {offer.status}</Text>
-    <Text style={styles.body}>Creator: {offer.creatorId}</Text><Text style={styles.body}>Revision {offer.revision}. {offer.available ? testStoreFlavor ? "Published. The separate Test Store rehearsal requires current qualification." : "Published. Test payments are unavailable." : "This offer is unavailable for new purchases."}</Text>
+    <Text style={styles.body}>Creator: {offer.creatorId}</Text><Text style={styles.body}>Revision {offer.revision}. {offer.available ? testStoreV2Flavor ? "Published. Registered Test Store checkout requires current qualification." : testStoreFlavor ? "Published. The separate Test Store rehearsal requires current qualification." : "Published. Test payments are unavailable." : "This offer is unavailable for new purchases."}</Text>
     <Action testID={`isolated-tip-view-${offer.id}`} onPress={() => navigate(`/sandbox-tips/offer/${offer.id}`)}>View offer</Action>
     {offer.kind !== "creator_tip" ? <Text style={styles.body}>This is a different product type. This view supports tip authoring only.</Text> : offer.creatorId === authority.userId && offer.status !== "retired" ? <Action testID={`isolated-tip-retire-${offer.id}`} disabled={mutationDisabled} onPress={() => void retire(offer)}>Retire offer</Action> : null}
   </View>;
@@ -303,7 +306,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
     <View style={styles.actions}><Action testID="isolated-tip-home" onPress={() => navigate("/sandbox-tips")}>Overview</Action><Action testID="isolated-tip-studio" onPress={() => navigate("/sandbox-tips/studio")}>Tip studio</Action><Action testID="isolated-tip-history" onPress={() => navigate("/sandbox-tips/history")}>History</Action><Action testID="isolated-tip-refresh" disabled={busy} onPress={refresh}>Refresh status</Action></View>
     {busy ? <View accessibilityLiveRegion="polite"><ActivityIndicator /><Text style={styles.body}>Checking sandbox status…</Text></View> : null}
     {notice ? <View accessibilityLiveRegion="polite"><Text style={styles.body}>{notice.message}</Text>{notice.requestId ? <Action testID="isolated-tip-check-action" onPress={() => navigate(`/sandbox-tips/status?requestId=${notice.requestId}`)}>Check action status</Action> : null}</View> : null}
-    <View style={styles.card}><Text style={styles.title}>{testStoreFlavor ? "Store payment unavailable" : "Test checkout unavailable"}</Text><Text style={styles.body}>{testStoreFlavor ? "Apple and Google store payments remain off. The separate Test Store section describes the DEBUG rehearsal." : checkoutUnavailable}</Text><Action testID="isolated-tip-checkout" disabled onPress={() => undefined}>Send test tip</Action></View>
+    {!testStoreV2Flavor ? <View style={styles.card}><Text style={styles.title}>{testStoreFlavor ? "Store payment unavailable" : "Test checkout unavailable"}</Text><Text style={styles.body}>{testStoreFlavor ? "Apple and Google store payments remain off. The separate Test Store section describes the DEBUG rehearsal." : checkoutUnavailable}</Text><Action testID="isolated-tip-checkout" disabled onPress={() => undefined}>Send test tip</Action></View> : null}
     {data ? <View testID="isolated-tip-data" style={styles.section}>
       {(page === "home" || page === "studio") && capability ? <View style={styles.card}>
         <Text style={styles.title}>{capability.canAuthor ? "Creator authoring available" : "Creator authoring unavailable"}</Text>
@@ -322,7 +325,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
         {studio.nextCursor ? <Action testID="isolated-tip-more" disabled={busy} onPress={() => void loadMore()}>Load older drafts</Action> : null}
       </> : null}
       {selectedOffer ? showOffer(selectedOffer) : null}
-      {selectedOffer?.kind === "creator_tip" && selectedOffer.available && selectedOffer.creatorId !== authority.userId ? <View style={styles.card} testID="isolated-tip-buyer-review">
+      {!testStoreV2Flavor && selectedOffer?.kind === "creator_tip" && selectedOffer.available && selectedOffer.creatorId !== authority.userId ? <View style={styles.card} testID="isolated-tip-buyer-review">
         <Text style={styles.title}>Review a test preparation</Text>
         <Text style={styles.body}>{isolatedTipMoney(selectedOffer.amountMinor, selectedOffer.currency)} · Recipient account: {selectedOffer.creatorId}</Text>
         <Text style={styles.body}>Offer revision {selectedOffer.revision} · Resource revision {selectedOffer.resourceRevision}</Text>
@@ -348,6 +351,7 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
       <Action testID={`isolated-tip-buyer-recover-${entry.requestId}`} onPress={() => navigate(`/sandbox-tips/status?requestId=${entry.requestId}`)}>Check buyer action</Action>
     </View>)}</View> : null}
     <IsolatedTestStoreCheckout authority={authority} preparation={checkoutEntries.find(entry => entry.state === "intent_prepared" && entry.command === "checkout.prepare" && (!statusEntry || entry.intentId === statusEntry.id) && (!selectedOffer || entry.quote.offerId === selectedOffer.id)) ?? null} />
+    <IsolatedTestStoreV2Checkout authority={authority} offer={selectedOffer} />
   </Frame>;
 }
 const styles = StyleSheet.create({

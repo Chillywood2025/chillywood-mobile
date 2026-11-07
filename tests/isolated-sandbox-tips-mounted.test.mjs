@@ -29,7 +29,7 @@ function load(path, bindings) {
   const context = { exports: {}, setTimeout, clearTimeout, require(name) { if (name.endsWith(".png")) return 1; assert.ok(name in bindings, `Unmodeled production dependency ${name}`); return bindings[name]; } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(path, import.meta.url), "utf8"), { fileName: path, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, context, { filename: path }); return context.exports;
 }
-function fixture(platform = "ios", { initial = A, memory = new Map(), serialStart = 100 } = {}) {
+function fixture(platform = "ios", { initial = A, memory = new Map(), serialStart = 100, testStoreV2 = false } = {}) {
   let nodes = []; let current = initial; let params = {}; let serial = serialStart; let requestIds = []; let rejectStorage = false; let beforeStore = async () => {};
   const listeners = new Set(); const calls = []; const navigations = [];
   const storage = { async getItem(key) { return memory.get(key) ?? null; }, async setItem(key, value) { if (rejectStorage) throw Error("disk unavailable"); await beforeStore(); memory.set(key, value); } };
@@ -62,6 +62,8 @@ function fixture(platform = "ios", { initial = A, memory = new Map(), serialStar
     "../navigation/app-back-button": { AppBackButton: primitive("AppBackButton") }, "./isolated-tip-receipt": receiptComponent,
     "./isolated-test-store-checkout": { IsolatedTestStoreCheckout: () => null }, // Ordinary app flavor; dedicated DEBUG component has its own mounted suite.
     "../../_lib/isolatedTestStoreBuild": { isIsolatedTestStoreFlavor: () => false },
+    "../../_lib/isolatedTestStoreV2Build": { isIsolatedTestStoreV2Flavor: () => testStoreV2 },
+    "./isolated-test-store-v2-checkout": { IsolatedTestStoreV2Checkout: props => testStoreV2 ? React.createElement(native.Text, { testID: "isolated-tip-v2-route", offer: props.offer, authority: props.authority }, "Dedicated registered Test Store component") : null },
   });
   const root = createRoot(container());
   const visibleNodes = () => nodes.slice(Math.max(0, nodes.findLastIndex(node => node.name === "ImageBackground")));
@@ -75,6 +77,15 @@ function fixture(platform = "ios", { initial = A, memory = new Map(), serialStar
     respond(fn) { respond = fn; }, useRequestIds(ids) { requestIds = [...ids]; }, rejectStorage() { rejectStorage = true; }, changeDuringStorage(next) { beforeStore = async () => { beforeStore = async () => {}; current = next; for (const fn of listeners) fn(next); }; }, async dispose() { await React.act(async () => root.unmount()); },
   };
 }
+
+test("dedicated v2 offer route passes the exact current offer and session to its separate checkout flow", async t => {
+  const f = fixture("ios", { initial: B, testStoreV2: true }); t.after(() => f.dispose()); await f.render("offer", { offerId: offer.id });
+  const panel = f.node("isolated-tip-v2-route"); assert.ok(panel);
+  assert.equal(panel.props.offer.id, offer.id); assert.equal(panel.props.offer.revision, offer.revision);
+  assert.equal(panel.props.authority.userId, B.userId); assert.equal(panel.props.authority.sessionGeneration, B.sessionGeneration);
+  assert.equal(f.node("isolated-tip-buyer-review"), undefined); assert.equal(f.node("isolated-tip-checkout"), undefined);
+  assert.equal(f.calls.some(call => /checkout|restore|dispatch/u.test(call.command)), false);
+});
 
 for (const platform of ["android", "ios"]) test(`mounted production ${platform} studio persists a draft action before transport and never exposes payment`, async t => {
   const f = fixture(platform); t.after(() => f.dispose()); await f.render("studio");

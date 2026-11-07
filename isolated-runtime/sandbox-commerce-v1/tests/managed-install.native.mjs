@@ -19,6 +19,7 @@ const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
 const here=path.dirname(fileURLToPath(import.meta.url));
 const root=path.resolve(here,'..');
 const ordered=['core.sql','premium-authority.sql','authority.sql','commands.sql','receipts.sql','test-store.sql',
+ 'test-store-offerings-core.sql','test-store-qualification.sql','test-store-offerings-commands.sql','test-store-offerings-provisioning.sql','test-store-offerings-receipts.sql',
  'history.sql','resource-graphs.sql','delivery-authority.sql','permissions-finalize.sql'];
 const files=Object.fromEntries(ordered.map(f=>[f,fs.readFileSync(path.join(root,f),'utf8')]));
 const fixtureFiles=['premium-authority.fixture.sql','authority.fixture.sql'];
@@ -133,18 +134,23 @@ try {
  // Fail after every module has been installed, not just during its first DDL.
  const lateFailure=attempt(files['core.sql']+rest+"do $$begin raise exception 'combined_install_injected_failure';end$$;");
  assert.notEqual(lateFailure.status,0);assert.match(lateFailure.stderr,/combined_install_injected_failure/u);noInstalledObjects();
- cases.push({name:'Late failure after all ten source files rolls back every new schema, role, helper and public wrapper'});
+ cases.push({name:'Late failure after all fifteen source files rolls back every new schema, role, helper and public wrapper'});
 
- // This is the unmodified, current TEN-file source bundle, with the actual
+ // This is the unmodified, current fifteen-file source bundle, with the actual
  // finalizer executed before the same install transaction commits.
  const good=attempt(files['core.sql']+rest);assert.equal(good.status,0,`${good.error?.message??''}\n${good.stderr}`);
- cases.push({name:'Entire current ten-file source bundle including Test Store, history, resource graphs, delivery and finalizer installs atomically without SUPERUSER'});
+ cases.push({name:'Entire current fifteen-file source bundle including both Test Store protocols, record-only qualification, history, resource graphs, delivery and finalizer installs atomically without SUPERUSER'});
  assert.equal(q("select rolsuper,rolcreaterole,rolbypassrls,rolinherit from pg_roles where rolname='postgres';"),'f|t|t|f');
  assert.equal(q('select state from sandbox_commerce_v1.lifecycle;'),'disabled');
  assert.equal(q('select count(*) from sandbox_commerce_v1.provider_routes;'),'0');
  assert.equal(q('select count(*) from sandbox_commerce_v1.test_store_connections;'),'0');
  assert.equal(q('select count(*) from sandbox_commerce_v1.test_store_native_profiles;'),'0');
  assert.equal(q('select ingress_enabled,initiation_enabled from sandbox_commerce_v1.test_store_controls;'),'f|f');
+ assert.equal(q('select ingress_enabled,provisioning_enabled,initiation_enabled,max_active_plans,requests_per_minute from sandbox_commerce_v1.test_store_v2_controls;'),'f|f|f|0|0');
+ assert.equal(q('select phase,max_entries,max_deliveries,max_total_bytes from sandbox_commerce_v1.test_store_qualification_controls;'),'disabled|0|0|0');
+ assert.equal(q('select count(*) from sandbox_commerce_v1.test_store_qualification_connections;'),'0');
+ for(const table of ['connections','native_profiles','products','customers','plans','allocations','registrations'])
+  assert.equal(q(`select count(*) from sandbox_commerce_v1.test_store_v2_${table};`),'0');
  assert.equal(q("select has_function_privilege('authenticated','sandbox_commerce_v1.assert_authority(uuid,uuid,text)','EXECUTE'),has_function_privilege('service_role','sandbox_commerce_v1.assert_authority(uuid,uuid,text)','EXECUTE'),has_schema_privilege('sbx_v1_core_owner','public','CREATE');"),'f|f|f');
  cases.push({name:'Generation remains disabled with no provider routes; protected API stays closed and temporary public CREATE is revoked'});
  assert.equal(q('begin;set local row_security=off;lock table sandbox_commerce_v1.declarations in share mode nowait;select count(*) from sandbox_commerce_v1.declarations;rollback;','postgres'),'0');
@@ -181,6 +187,13 @@ try {
   ['isolated_sandbox_ingest_receipt_v1(jsonb)','service_role'],
   ['isolated_test_store_command_v1(uuid,uuid,text,uuid,text,jsonb)','service_role'],
   ['isolated_test_store_ingest_v1(uuid,integer,jsonb,jsonb)','service_role'],
+  ['isolated_test_store_command_v2(uuid,uuid,text,uuid,text,jsonb)','service_role'],
+  ['isolated_test_store_ingest_v2(uuid,integer,jsonb,jsonb)','service_role'],
+  ['isolated_test_store_v2_provisioning_claim_v1(uuid,text,uuid,text)','service_role'],
+  ['isolated_test_store_v2_provisioning_record_v1(uuid,jsonb,jsonb)','service_role'],
+  ['isolated_test_store_v2_provisioning_next_v1(uuid)','service_role'],
+  ['isolated_test_store_v2_provisioning_plan_v1(uuid,uuid)','service_role'],
+  ['isolated_test_store_qualification_ingest_v1(uuid,integer,jsonb,jsonb)','service_role'],
  ];
  for(const [signature,executor] of publicMatrix){
   const definition=JSON.parse(q(`select json_build_object('owner',pg_get_userbyid(proowner),'definer',prosecdef,'config',proconfig)
@@ -190,12 +203,20 @@ try {
   for(const role of ['anon','authenticated','service_role'])assert.equal(q(`select has_function_privilege('${role}','public.${signature}','EXECUTE');`),role===executor?'t':'f');
  }
  assert.equal(q("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and (p.proname like 'isolated_sandbox_%' or p.proname like 'isolated_test_store_%');"),String(publicMatrix.length));
- cases.push({name:'Exact seven public RPCs have core definer ownership, empty search path, intended authenticated/service ACLs and no timer-restoring SET clause'});
+ cases.push({name:'Exact fourteen public RPCs have core definer ownership, empty search path, intended authenticated/service ACLs and no timer-restoring SET clause'});
  for(const call of [
   'public.isolated_test_store_command_v1(null,null,null,null,null,null)',
   'public.isolated_test_store_ingest_v1(null,null,null,null)',
+  'public.isolated_test_store_command_v2(null,null,null,null,null,null)',
+  'public.isolated_test_store_ingest_v2(null,null,null,null)',
+  'public.isolated_test_store_v2_provisioning_claim_v1(null,null,null,null)',
+  'public.isolated_test_store_v2_provisioning_record_v1(null,null,null)',
+  'public.isolated_test_store_v2_provisioning_next_v1(null)',
+  'public.isolated_test_store_v2_provisioning_plan_v1(null,null)',
+  'public.isolated_test_store_qualification_ingest_v1(null,null,null,null)',
  ])rejected(`begin;set local transaction_timeout=8000;set local role service_role;set local request.jwt.claims='{"role":"service_role"}';select ${call};commit;`,/sandbox_timeout_context_invalid/u);
- cases.push({name:'Both actual Test Store wrappers reject unknown positive transaction timers before private authority or ingestion locks'});
+ rejected("begin;set local transaction_timeout=8000;set local role sbx_v1_operator;select sandbox_commerce_v1.test_store_qualification_transition(null);commit;",/sandbox_timeout_context_invalid/u);
+ cases.push({name:'All nine actual Test Store wrappers and the record-only phase operator reject unknown positive transaction timers before private locks'});
 
  const postgresHelpers=JSON.parse(q(`select json_agg(p.proname order by p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='sandbox_commerce_v1' and pg_get_userbyid(p.proowner)='postgres';`));
@@ -267,7 +288,7 @@ try {
  assert.equal(q("select string_agg(state,',' order by key) from public.platform_money_kill_switches;"),'off,off,off');
  cases.push({name:'Combined irreversible retirement blocks initiation while owner history and retained receipt delivery survive seller Premium loss; all live money controls remain off'});
  for(const f of ordered)assert.equal(hash(fs.readFileSync(path.join(root,f),'utf8')),hash(files[f]),`Source changed during test: ${f}`);
- report={status:'passed',engine:version,scope:'Combined ten-file local non-super installer, finalized ACL and actual runtime/availability proof on minimum synthetic projections; no hosted target, provider, gateway or release attestation',
+ report={status:'passed',engine:version,scope:'Combined fifteen-file local non-super installer, finalized ACL and actual runtime/availability proof on minimum synthetic projections; no hosted target, provider, gateway or release attestation',
   assumptions:['PostgreSQL 17.6 task-selected local binaries','Synthetic database owned by modeled postgres LOGIN CREATEROLE BYPASSRLS NOSUPERUSER NOINHERIT','Separate fixture_admin superuser performs fixture setup and verification; runtime functions execute as actual source owners','Explicit SELECT+MAINTAIN on only synthetic shared projections models required authority-reader capabilities; production privileges are not inferred','Synthetic channel_audience_blocks projection supplies exact owner/viewer columns; no real block data read','Fresh module names and ordinary local event-trigger/catalog behavior','Direct synthetic receipt/scan rows prove lifecycle permission composition, not provider verification or signing','No assertion about actual managed target roles, shared Auth access, deployment eligibility or provider configuration'],
   caseCount:cases.length,cases,sourceHashes:Object.fromEntries(ordered.map(f=>[f,hash(files[f])])),
   fixtureHashes:Object.fromEntries(fixtureFiles.map(f=>[f,hash(fixtures[f])])),harnessHash:hash(fs.readFileSync(fileURLToPath(import.meta.url)))};

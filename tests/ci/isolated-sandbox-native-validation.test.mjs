@@ -12,11 +12,76 @@ const policy = JSON.parse(readFileSync('config/ci/required-validation-v1.json', 
 const jobId = 'database-isolated-sandbox-native';
 const jobName = 'Validation / Isolated Sandbox Native PostgreSQL 17.6';
 const command = 'node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"';
-const edgeCommand = 'DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-receipt-router-v1/index.ts supabase/functions/isolated-sandbox-test-store-v1/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts';
+const edgeCommand = 'DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-receipt-router-v1/index.ts supabase/functions/isolated-sandbox-test-store-v1/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts supabase/functions/isolated-sandbox-test-store-v2/index.ts supabase/functions/isolated-test-store-provisioner-v2/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v2/index.ts supabase/functions/isolated-test-store-qualification-v1/index.ts';
 const postgresSha256 = 'e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0';
 const postgresArchiveUrl = 'https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2';
+const qualificationNativeCommand='JAVA_HOME="${JAVA_HOME_17_X64:-$JAVA_HOME}" node qualification/test-store-debug/scripts/compile-native.mjs';
 const sha = value => value.repeat(40);
 const paths = ['isolated-runtime/sandbox-commerce-v1/core.sql'];
+
+test('v2 fixture validator binds two distinct registered purchases and their actual core recoveries', () => {
+  // Validator-only fabricated records. They do not run a provider or database.
+  const id=n=>`a0000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+  const actor={userId:id(1),sessionId:id(2)},configurationDigest='a'.repeat(64);
+  const customer={id:'scv2_customer_'+id(3),buyerId:actor.userId,installationId:id(4),providerAppUserId:'scv2_teststore_'+id(3),
+    configurationDigest,projectId:'fixture-project',appId:'fixture-app',providerScopeKey:'["revenuecat","fixture-project","fixture-app","TEST_STORE","SANDBOX"]',
+    economicApplicationId:'rc_test_store:fixture-project:fixture-app',provider:'revenuecat',store:'TEST_STORE',sourceEnvironment:'SANDBOX'};
+  const fixture={protocol:'isolated-test-store-v2',cases:[],checkoutCases:[]};let request=10;
+  function add(command,payload,allocation,status,revision,activeAllocationId,receipt=null,dispatchAllowed=false){
+    const requestId=id(request++);
+    fixture.cases.push({command,requestId,actor,configurationDigest,payload,
+      response:{protocol:fixture.protocol,command,requestId,actor,generation:1,environment:'sandbox',result:{
+        status,reason:'validator_only',dispatchAllowed,authorityValidUntil:dispatchAllowed?'2026-11-07T12:00:04Z':null,
+        retryProviderMutation:false,grantsAccess:false,notPayable:true,customer,allocation,reservation:{revision,activeAllocationId},receipt}}});
+  }
+  add('bind',{installationId:customer.installationId},null,'customer_bound',1,null);
+  for(let cycle=0;cycle<2;cycle++){
+    const intentId='scv1_intent_'+id(100+cycle),allocationId='scv2_allocation_'+id(200+cycle),dispatchId=id(300+cycle);
+    const quote={offerId:'scv1_offer_'+id(400+cycle),offerRevision:1,resourceId:'scv1_resource_'+id(500+cycle),resourceRevision:1,creatorId:id(600),
+      kind:'creator_tip',amountMinor:199,currency:'usd'};
+    const allocation={id:allocationId,intentId,dispatchId,customerBindingId:customer.id,configurationDigest,productId:'fixture-tip',quote,
+      acceptPurchaseUntil:'2026-11-07T12:15:00Z',registration:null};
+    const revision=cycle*2+2,prepareRequest=id(700+cycle);
+    add('allocate',{intentId,customerBindingId:customer.id,expectedQuote:quote},structuredClone(allocation),'provisioning',revision,allocationId);
+    allocation.registration={id:'scv2_registration_'+id(800+cycle),providerOfferingId:'offering-'+cycle,offeringIdentifier:'lookup-'+cycle,
+      providerPackageId:'package-'+cycle,packageIdentifier:'tip',providerProductId:'product',productId:'fixture-tip'};
+    add('read',{intentId},allocation,'offering_ready',revision,allocationId);
+    const claim={intentId,dispatchId,registrationId:allocation.registration.id,expectedQuote:quote};
+    add('claim',claim,allocation,'dispatch_claimed',revision,allocationId,null,true);
+    add('claim',claim,allocation,'pending',revision,allocationId);
+    add('report',{intentId,dispatchId,outcome:'sdk_unknown',transactionHint:null},allocation,'pending',revision,allocationId);
+    const receipt={id:'scv1_receipt_'+id(900+cycle),state:'verified'};
+    add('read',{intentId},allocation,'verified',revision,allocationId,receipt);
+    add('advance',{intentId,dispatchId,expectedReservationRevision:revision,disposition:'receipt_recorded',expectedReceiptId:receipt.id},
+      allocation,'released',revision+1,null,receipt);
+    add('read',{intentId},allocation,'verified',revision+1,null,receipt);
+    fixture.checkoutCases.push({command:'checkout.prepare',requestId:prepareRequest,actor:{sessionGeneration:actor.sessionId},quote,
+      response:{command:'checkout.prepare',requestId:prepareRequest,status:'ok',data:{intent:{id:intentId}}},
+      recovery:{response:{command:'request.read',data:{originalRequestId:prepareRequest,recordedSessionId:actor.sessionId,entry:{id:intentId,...quote}}}}});
+  }
+  for(const requestId of [id(1001),id(1001),id(1002)])fixture.cases.push({command:'bind',requestId,actor,configurationDigest,payload:{installationId:id(1000)},
+    response:{protocol:fixture.protocol,command:'bind',requestId,actor,generation:1,environment:'sandbox',result:{
+      status:'held',reason:'test_store_v2_customer_qualification_excluded',dispatchAllowed:false,retryProviderMutation:false,grantsAccess:false,notPayable:true,
+      customer:null,allocation:null,reservation:null,authorityValidUntil:null,receipt:null}}});
+  assert.equal(validateCommandFixture(fixture,'test-store-v2').freshClaims,2);
+  for(const mutate of [
+    value=>{value.cases[0].response.result.customer={...customer,projectId:'other'};},
+    value=>{value.cases[3].response.result.dispatchAllowed=false;},
+    value=>{value.cases[4].response.result.dispatchAllowed=true;},
+    value=>{value.cases[7].response.result.reservation.activeAllocationId=value.cases[7].response.result.allocation.id;},
+    value=>{value.cases[9].response.result.allocation.quote.amountMinor=200;},
+    value=>{value.checkoutCases[1].recovery.response.data.entry.resourceRevision=2;},
+    value=>{value.checkoutCases.pop();},
+    value=>{value.cases[3].response.result.grantsAccess=true;},
+    value=>{value.cases.pop();},
+    value=>{value.cases.at(-1).payload.installationId=id(1003);},
+    value=>{for(const entry of value.cases)if(entry.response.result.allocation?.registration)entry.response.result.allocation.registration.offeringIdentifier='reused';},
+  ]){
+    const candidate=structuredClone(fixture);mutate(candidate);
+    assert.throws(()=>validateCommandFixture(candidate,'test-store-v2'),assert.AssertionError);
+  }
+});
+
 const jobs = () => expectedJobs(computeValidationPlan(paths)).map(name => ({name, status: 'completed', conclusion: 'success', headSha: sha('b')}));
 const evaluate = runJobs => evaluateRun({baseRef: 'main', baseSha: sha('a'), headSha: sha('b'), paths, jobs: runJobs, author: 'contributor'});
 
@@ -73,6 +138,12 @@ function assertNativeGate(candidate) {
   assert.equal(edgeSteps[0].run, edgeCommand, 'typecheck both actual Test Store entry points and imported Auth boundary');
   assert.equal(edgeSteps[0].if, undefined);
   assert.equal(edgeSteps[0]['continue-on-error'], undefined);
+  const native=candidate.jobs['native-sdk'];
+  const qualification=native.steps.filter(step=>step.run?.includes('qualification/test-store-debug/scripts/compile-native.mjs'));
+  assert.equal(qualification.length,1);assert.equal(qualification[0].run,qualificationNativeCommand);
+  assert.equal(qualification[0].if,undefined);assert.equal(qualification[0]['continue-on-error'],undefined);
+  const qualificationEvidence=native.steps.filter(step=>step.with?.path==='artifacts/qualification-native');
+  assert.equal(qualificationEvidence.length,1);assert.equal(qualificationEvidence[0].if,'always()');
 }
 
 test('isolated native qualification is a credential-free canonical database obligation', () => {
@@ -98,6 +169,19 @@ test('isolated native qualification is a credential-free canonical database obli
     'isolated-runtime/sandbox-commerce-v1/test-store.sql',
     'supabase/functions/isolated-sandbox-test-store-v1/index.ts',
     'supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts',
+    'supabase/functions/isolated-sandbox-test-store-v2/index.ts',
+    'supabase/functions/isolated-test-store-provisioner-v2/index.ts',
+    'supabase/functions/isolated-test-store-revenuecat-webhook-v2/index.ts',
+    'supabase/functions/_shared/isolated-test-store-v2-command.ts',
+    'supabase/functions/_shared/isolated-test-store-v2-provisioner.ts',
+    'supabase/functions/_shared/isolated-test-store-v2-receipt.ts',
+    'isolated-runtime/sandbox-commerce-v1/test-store-offerings-core.sql',
+    'isolated-runtime/sandbox-commerce-v1/test-store-offerings-commands.sql',
+    'isolated-runtime/sandbox-commerce-v1/test-store-offerings-provisioning.sql',
+    'isolated-runtime/sandbox-commerce-v1/test-store-offerings-receipts.sql',
+    '_lib/isolatedTestStoreV2Contract.ts',
+    'config/test-store-debug-v2-config.js',
+    'plugins/withIsolatedTestStoreV2Debug.js',
     '_lib/isolatedTestStoreSdk.ts',
     'config/test-store-debug-config.js',
     'plugins/withIsolatedTestStoreDebug.js',
@@ -151,6 +235,9 @@ test('isolated native wiring rejects removed, skipped, weakened and credential-b
     'persist checkout token': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/checkout@')).with['persist-credentials'] = true; },
     'omit Test Store Edge entry': candidate => { candidate.jobs.sensitive.steps.find(step => step.run === edgeCommand).run = edgeCommand.replace(' supabase/functions/isolated-sandbox-test-store-v1/index.ts', ''); },
     'skip Test Store Edge checks': candidate => { candidate.jobs.sensitive.steps.find(step => step.run === edgeCommand).if = 'false'; },
+    'skip standalone qualification compilation': candidate => { candidate.jobs['native-sdk'].steps.find(step=>step.run===qualificationNativeCommand).if='false'; },
+    'swallow standalone qualification compile failure': candidate => { candidate.jobs['native-sdk'].steps.find(step=>step.run===qualificationNativeCommand).run+=' || true'; },
+    'remove standalone qualification compile': candidate => { candidate.jobs['native-sdk'].steps=candidate.jobs['native-sdk'].steps.filter(step=>step.run!==qualificationNativeCommand); },
     'skip failure artifact': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).if = 'success()'; },
     'artifact parent traversal': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).with.path = '../isolated-sandbox-native-evidence'; },
   };
@@ -221,17 +308,17 @@ test('the offline runner plan contains every native suite and complete client/pr
   assert.equal(plan.postgres.version, '17.6');
   assert.equal(plan.postgres.archiveUrl, postgresArchiveUrl);
   assert.equal(plan.postgres.sha256, postgresSha256);
-  const nativeFiles = ['managed-install', 'premium-authority', 'authority', 'core', 'declarations', 'receipts', 'availability', 'history', 'resource-graphs', 'test-store']
+  const nativeFiles = ['managed-install', 'premium-authority', 'authority', 'core', 'declarations', 'receipts', 'availability', 'history', 'resource-graphs', 'test-store', 'test-store-v2']
     .map(name => `isolated-runtime/sandbox-commerce-v1/tests/${name}.native.mjs`)
     .concat(['router', 'isolated-source-bridge', 'legacy-source-bridge'].map(name => `isolated-runtime/receipt-router-v1/tests/${name}.native.mjs`));
   assert.deepEqual(plan.nativeStages.map(stage => stage.file).sort(), nativeFiles.sort());
   assert.equal(new Set(plan.nativeStages.map(stage => stage.name)).size, nativeFiles.length);
   assert.deepEqual(Object.fromEntries(plan.nativeStages.map(stage => [stage.name, stage.caseCount])), {
     'premium-authority': 46, authority: 20, core: 11, declarations: 12, receipts: 26, 'managed-install': 20, availability: 21,
-    history: 25, 'resource-graphs': 46, 'test-store': 29, 'receipt-router': 22, 'isolated-source-bridge': 16, 'legacy-source-bridge': 49,
+    history: 25, 'resource-graphs': 46, 'test-store': 29, 'test-store-v2': 43, 'receipt-router': 22, 'isolated-source-bridge': 16, 'legacy-source-bridge': 49,
   });
   for (const stage of plan.nativeStages) {
-    assert.match(stage.name, /^[a-z][a-z-]+$/u);
+    assert.match(stage.name, /^[a-z][a-z0-9-]+$/u);
     assert.ok(Number.isInteger(stage.caseCount) && stage.caseCount > 0);
     assert.ok(existsSync(stage.file));
   }
@@ -254,14 +341,36 @@ test('the offline runner plan contains every native suite and complete client/pr
     'tests/isolated-test-store-attempts.test.mjs',
     'tests/isolated-test-store-build.test.mjs',
     'tests/isolated-test-store-native-compile.test.mjs',
+    'tests/creator-money/isolated-test-store-v2-provisioner.test.mjs',
+    'tests/creator-money/isolated-test-store-v2-receipt.test.mjs',
+    'tests/creator-money/isolated-test-store-v2-command.test.mjs',
+    'tests/creator-money/isolated-test-store-qualification.test.mjs',
+    'qualification/test-store-debug/tests/client.test.mjs',
+    'qualification/test-store-debug/tests/mounted.test.mjs',
+    'qualification/test-store-debug/tests/compile-contract.test.mjs',
+    'tests/isolated-test-store-v2-client.test.mjs',
+    'tests/isolated-test-store-v2-sdk.test.mjs',
+    'tests/isolated-test-store-v2-legacy-suppression.test.mjs',
+    'tests/isolated-test-store-v2-mounted.test.mjs',
+    'tests/isolated-test-store-v2-attempts.test.mjs',
+    'tests/isolated-test-store-v2-preparations.test.mjs',
+    'tests/isolated-test-store-v2-native.test.mjs',
+    'tests/isolated-test-store-v2-native-compile.test.mjs',
   ]);
   for (const file of plan.nodeTests) assert.ok(existsSync(file), file);
-  assert.equal(plan.expectedNodeTests, 289);
+  assert.equal(plan.expectedNodeTests, 529);
   assert.deepEqual(Object.fromEntries(plan.nodeStages.map(stage => [stage.name, stage.expectedTests])), {
-    'commerce-provider-delivery': 52, 'tip-client': 17, 'tip-mounted': 25, 'tip-journal': 18,
+    'commerce-provider-delivery': 52, 'tip-client': 17, 'tip-mounted': 26, 'tip-journal': 18,
     'tip-checkout-journal': 19, 'library-discovery': 19, 'receipt-router': 18,
     'test-store-provider': 20, 'test-store-command': 28, 'test-store-client': 7, 'test-store-sdk': 9,
     'test-store-legacy-suppression': 6, 'test-store-mounted': 12, 'test-store-attempts': 26, 'test-store-build': 7, 'test-store-native-compile-guard': 6,
+    'test-store-v2-provisioner': 38, 'test-store-v2-receipt': 37, 'test-store-v2-command': 22,
+    'test-store-qualification': 25,
+    'test-store-qualification-client': 9, 'test-store-qualification-mounted': 8,
+    'test-store-qualification-compile-guard': 6,
+    'test-store-v2-client': 10, 'test-store-v2-sdk': 5, 'test-store-v2-legacy-suppression': 6,
+    'test-store-v2-mounted': 18, 'test-store-v2-attempts': 30, 'test-store-v2-preparations': 15,
+    'test-store-v2-native': 7, 'test-store-v2-native-compile-guard': 3,
   });
   assert.equal(plan.execution, 'sequential/local-only');
 });
@@ -293,7 +402,7 @@ function validatorFixture(stage) {
   });
   if (stage.providerQualificationField) Object.assign(proof, {providerOrProductionCalls: false,
     [stage.providerQualificationField]: false, legacyEnforcementProven: false, syntheticProviderEvidence: true});
-  if (stage.name === 'test-store') Object.assign(proof, {kind: 'isolated-test-store-native-source-proof',
+  if (stage.name === 'test-store' || stage.name === 'test-store-v2') Object.assign(proof, {kind: stage.name === 'test-store' ? 'isolated-test-store-native-source-proof' : 'isolated-test-store-v2-native-source-proof',
     providerOrProductionCalls: false, actualProviderAuthenticationProven: false, actualDeviceBehaviorProven: false, syntheticProviderEvidence: true});
   return {proof, sourceHashes};
 }
@@ -339,7 +448,7 @@ test('native proof validator rejects incomplete cases, cleanup and source identi
       'false legacy qualification': candidate => { candidate.legacyEnforcementProven = true; },
       'missing synthetic boundary': candidate => { delete candidate.syntheticProviderEvidence; },
     });
-    if (stage.name === 'test-store') Object.assign(mutations, {
+    if (stage.name === 'test-store' || stage.name === 'test-store-v2') Object.assign(mutations, {
       'wrong kind': candidate => { candidate.kind = 'unverified'; },
       'provider activity': candidate => { candidate.providerOrProductionCalls = true; },
       'false provider proof': candidate => { candidate.actualProviderAuthenticationProven = true; },
@@ -427,7 +536,7 @@ test('source manifest binds actual app routes, journal, mounted UI, router, SQL 
   for (const file of [
     '_lib/isolatedSandboxTips.ts', '_lib/isolatedSandboxTipAttempts.ts', '_lib/isolatedSandboxTipCheckoutAttempts.ts',
     'tests/ci/legacy-source-bridge-bootstrap.test.mjs',
-  'tests/ci/managed-install-bootstrap.test.mjs',
+    'tests/ci/managed-install-bootstrap.test.mjs',
     'components/monetization/isolated-tip-screens.tsx', 'components/monetization/isolated-tip-receipt.tsx',
     'app/(tabs)/my-list.tsx', 'app/sandbox-tips/index.tsx', 'app/sandbox-tips/studio.tsx',
     'app/sandbox-tips/status.tsx', 'app/sandbox-tips/history.tsx', 'app/sandbox-tips/offer/[offerId].tsx',

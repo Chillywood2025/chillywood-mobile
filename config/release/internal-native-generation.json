@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v19",
+  "generation": "internal-native-v20",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v19",
-    "ios": "1.0.0-ios-production-v19"
+    "android": "1.0.0-android-production-v20",
+    "ios": "1.0.0-ios-production-v20"
   },
   "supersedes": {
-    "generation": "internal-native-v18",
-    "androidRuntimeVersion": "1.0.0-android-production-v18",
-    "iosRuntimeVersion": "1.0.0-ios-production-v18",
-    "androidCompatibilityDigest": "aa0a83a683ae83cea39d964ea43688faf0d20a725dd5f18fb7b94ded1eea4243",
-    "iosCompatibilityDigest": "7b709e9e43fc8bface36ae2009e5b2e635bf7d522cbc1e909fffbe2153ef05c6"
+    "generation": "internal-native-v19",
+    "androidRuntimeVersion": "1.0.0-android-production-v19",
+    "iosRuntimeVersion": "1.0.0-ios-production-v19",
+    "androidCompatibilityDigest": "807f1ba7007f93f6c05efab66055fd3eb6471c3d85116e7028b6e22a049572f7",
+    "iosCompatibilityDigest": "9c078431f4b69a8d2f39877e34685d00539268cd4c445b32fcec1f53ae31b908"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "807f1ba7007f93f6c05efab66055fd3eb6471c3d85116e7028b6e22a049572f7",
-    "iosDigest": "9c078431f4b69a8d2f39877e34685d00539268cd4c445b32fcec1f53ae31b908"
+    "androidDigest": "44a0ea69f93d99cd811d5dc399aee029b7aeafb5e448d1436f8d8add36765a85",
+    "iosDigest": "1e2bcf8d913f11a6aab22c25dc81f773f5650d071a4764f129f6e3a80b078ff4"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V19 is a prospective source cohort for the Android native Gallery picker, Android Expo picker result-retention repair and iOS picker dismissal repair. V18 runtimes, signed artifacts and canonical compatibility digests remain immutable. Existing internal channels, tester audiences, app-owned activation, production generation and held Android106 restrictions are unchanged. Fresh matching signed binaries and platform-specific native and physical qualification are required; this metadata grants no build, deployment, submission, OTA, public release or payment activation authority. Provider identity, sandbox financial qualification, billing capability and production readiness remain separate gates."
+    "reason": "V20 is a prospective source cohort for the isolated Test Store native modules, debug configuration and pinned RevenueCat SDK. V19 and earlier runtimes, signed artifacts and canonical compatibility digests remain immutable. Existing internal channels, tester audiences, app-owned activation, production generation and held Android106 restrictions are unchanged. Fresh matching signed binaries and platform-specific native and physical qualification are required; this metadata grants no build, deployment, submission, OTA, public release or payment activation authority. Provider identity, sandbox financial qualification, billing capability and production readiness remain separate gates."
   }
 }
