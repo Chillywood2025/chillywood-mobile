@@ -1,8 +1,9 @@
 # Isolated sandbox commerce, generation 1
 
 **Inactive implementation work. Not a production migration, deployable release,
-or completed replacement for PR #683/#684.** No existing screen, webhook, money
-dispatcher or delivery endpoint imports this implementation.
+or completed replacement for PR #683/#684.** The Library links to dedicated
+sandbox tip authoring/history routes. Checkout is visibly unavailable. No
+existing webhook, money dispatcher or delivery endpoint activates this bundle.
 
 This work avoids replacing the existing commerce functions. A fresh private
 schema owns its resources, requests, offers, purchase attempts and provider
@@ -52,6 +53,28 @@ status and receipt reconciliation remain separate from new initiation.
   an independently authenticated, exact provider observation; the pure provider
   classifier does not establish that authentication. Tips never create access
   grants, Premium, payable earnings, payouts or cashout.
+* `history.sql` supplies the dedicated tip RPC: current capabilities, bounded
+  studio and offer pages, retained buyer/creator history, exact request recovery,
+  offer retirement and abandonment of an undispatched attempt. History survives
+  loss of creator Premium and generation retirement. Unknown outcomes remain
+  unknown; the durable app journal cannot turn missing evidence into a retry.
+  Resource previews contain at most ten offers; owner continuation pages contain
+  at most fifty. Historical economics come from immutable intent fields, not
+  current titles or prices. See `HISTORY.md` for the cursor and recovery contract.
+* `resource-graphs.sql` and `delivery-authority.sql` define the eleven non-tip
+  resource graphs, private grant settlement and resource-specific delivery
+  candidates. They cover immutable media incarnations/scans, finite memberships,
+  event/replay windows, auction claims, separate room admission/seat authority,
+  capacity and test-only merch reservation. These private functions are not
+  granted to runtime roles. They do not ingest non-tip provider receipts, upload
+  assets, sign media, issue room tokens or dispatch shipments. A candidate
+  explicitly reports that it is not an authorization proof or issued access.
+* The separate `../receipt-router-v1` bundle stores authenticated encrypted
+  evidence with immutable original ownership and honest multi-subject transfer
+  children. Its default-disabled Edge handler acknowledges only exact TEST
+  events. Real events remain pending/HTTP503 until all effective consumers and
+  reconciliation paths enforce the scoped negative evidence. Merely storing a
+  hold is not access control. Nothing redirects the current provider webhook.
 
 The only publication path currently implemented is `creator_tip`, and even that
 requires an independently qualified catalog/provider binding. Other kinds can
@@ -63,8 +86,8 @@ URL, readiness flag or hash as provider/resource qualification.
 
 Full scope includes Paid Videos, creator subscriptions, VIP, events and replays,
 watch parties, Live Stage entry and speaking-seat eligibility, merch, and event
-and room-seat auctions. Each needs its actual immutable terms and resource
-graph. A generic paid grant is insufficient:
+and room-seat auctions. The new private graphs describe those distinct terms;
+their authoring, provider admission and actual delivery are still incomplete:
 
 * Native SDK purchases currently carry a product rather than an app intent ID.
   Receipt ownership must be unambiguous across old and new intent namespaces.
@@ -81,7 +104,9 @@ graph. A generic paid grant is insufficient:
   proxy. Subscriptions and VIP need their distinct periods and inclusion rules.
   Auctions need exact winner/claim/deadline state; merch needs inventory,
   reservation, photo ownership, shipping-data privacy and test-only fulfillment.
-* Dedicated app routes and actual provider/native delivery remain absent.
+* Dedicated pre-purchase app routes, Library discovery, durable authoring
+  recovery and retained tip history exist. Actual provider/native checkout,
+  non-tip product screens and installed-device delivery remain incomplete.
   Current main targets V19; this work does not permit publishing it as V18.
 
 These are unresolved implementation/integration requirements. They are not
@@ -97,7 +122,7 @@ within the earliest session, entitlement, legal-change or five-second decision
 deadline. Creator deadlines and buyer deadlines are both checked.
 
 The shared-table locks temporarily block **all** writes to the selected tables,
-including Auth/session activity. Each of the four public RPC wrappers arms
+including Auth/session activity. Each public RPC wrapper arms
 a PostgreSQL 17 transaction-local timeout once, before taking any lifecycle or
 authority lock. It uses the remaining five-second transaction budget and
 persists through function return until commit/rollback. A nonzero incoming
@@ -131,39 +156,26 @@ their own loopback-only clusters, supply synthetic data and verify shutdown and
 removal. They do not accept a database URL. The minimum fixtures are **not** a
 fresh-project bootstrap for the repository's held/deferred migration inventory.
 
-Run from the repository root, using absolute paths to a local PostgreSQL 17.6
-binary directory and a disposable response file:
+The canonical source CI has a required `Validation / Isolated Sandbox Native
+PostgreSQL 17.6` job whenever database validation applies. It builds the official
+17.6 archive after checking its pinned SHA-256, runs the native harnesses
+sequentially, generates fresh actual-SQL command/history responses, and requires
+the exact per-suite Node counts with zero skips, cancellations or TODOs. The
+runner's `--plan` reports the current complete stage list and expected counts.
+Native results must report verified cleanup and matching source hashes.
+An applicable missing or non-successful job blocks Results and the protected
+publisher. Ordinary product/sensitive Node globs do not replace this native job;
+standalone client tests without actual-SQL fixture variables explicitly skip
+their bridge cases. The sensitive job also typechecks the actual router Edge
+entry and its imports with Deno, without starting it.
+
+Run from the repository root with an existing PostgreSQL 17.6 binary directory.
+The evidence directory must be new and inside the checkout; the runner creates
+both actual-SQL response fixtures there and verifies their hashes through the
+client suites:
 
 ```sh
 export SANDBOX_TEST_PG_BIN=/absolute/path/to/postgresql-17.6/bin
-export ISOLATED_SANDBOX_COMMAND_FIXTURE=/absolute/path/to/synthetic-responses.json
-node isolated-runtime/sandbox-commerce-v1/tests/premium-authority.native.mjs --local-bin "$SANDBOX_TEST_PG_BIN"
-node isolated-runtime/sandbox-commerce-v1/tests/authority.native.mjs --local-bin "$SANDBOX_TEST_PG_BIN"
-node isolated-runtime/sandbox-commerce-v1/tests/managed-install.native.mjs --local-bin "$SANDBOX_TEST_PG_BIN"
-node isolated-runtime/sandbox-commerce-v1/tests/availability.native.mjs --local-bin "$SANDBOX_TEST_PG_BIN"
-node isolated-runtime/sandbox-commerce-v1/tests/core.native.mjs --local-bin "$SANDBOX_TEST_PG_BIN"
-node isolated-runtime/sandbox-commerce-v1/tests/declarations.native.mjs --local-bin "$SANDBOX_TEST_PG_BIN"
-node isolated-runtime/sandbox-commerce-v1/tests/receipts.native.mjs --local-bin "$SANDBOX_TEST_PG_BIN"
-node --test tests/isolated-sandbox-commerce-client.test.mjs tests/isolated-sandbox-delivery-policy.test.mjs tests/creator-money/isolated-sandbox-provider.test.mjs
-```
-
-The core harness writes synthetic responses from the actual SQL for the client
-integration test. Without that environment variable, the client bridge case
-explicitly skips in an ordinary standalone Node run. The canonical source CI
-now has a separate required `Validation / Isolated Sandbox Native PostgreSQL
-17.6` job whenever database validation applies. It builds the official 17.6
-source archive after checking its pinned SHA-256, runs all seven native
-harnesses sequentially (144 groups), generates fresh actual-SQL command
-responses, then requires all 52 client/provider/delivery Node tests with zero
-skips, cancellations or TODOs. Native results must report verified cleanup and
-matching source hashes. An applicable missing or non-successful job blocks both
-Results and the protected publisher. The normal product/sensitive Node globs
-remain separate and do not replace this native job.
-
-Inspect or run the same orchestration locally with existing PostgreSQL 17.6
-binaries. The output directory must be new and inside the checkout:
-
-```sh
 node scripts/ci/isolated-sandbox-native.mjs --plan
 node scripts/ci/isolated-sandbox-native.mjs --local-bin "$SANDBOX_TEST_PG_BIN" --output-dir "$PWD/isolated-sandbox-native-evidence"
 ```
@@ -171,13 +183,16 @@ node scripts/ci/isolated-sandbox-native.mjs --local-bin "$SANDBOX_TEST_PG_BIN" -
 CI retains per-suite JSON/stdout/stderr, actual response fixtures and a source
 manifest for 14 days, including partial evidence on failure. Build failures
 remain in the job log; they cannot produce a passing qualification summary.
-These tests use no production/provider credentials, authenticate no real
-provider payloads, and exercise no real app screens or installed devices.
+These tests use no production/provider credentials and authenticate no real
+provider payloads. Mounted component tests exercise the actual app source with
+synthetic transport and actual local-SQL response fixtures, not installed devices.
 Hosted managed-schema compatibility, actual Auth/gateway/pool behavior and
 provider delivery still require their separate qualification.
 
 For local fixtures only, the ordered SQL is core, Premium authority, authority,
-commands, receipts, then `permissions-finalize.sql`, all in one transaction.
+commands, receipts, history, resource graphs, delivery authority, then
+`permissions-finalize.sql`, all in one transaction. The receipt router has its
+own ordered installation contract; its source bridge is not a legacy cutover.
 There is intentionally no production execution command here. Full repository
 validation and a complete real integration rehearsal are required before
 release qualification.

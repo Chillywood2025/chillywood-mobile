@@ -447,6 +447,17 @@ export default function MyListScreen() {
               <TouchableOpacity testID="library-purchases-link" accessibilityRole="button" accessibilityLabel="Open Purchases and My Tickets" style={styles.emptyButton} onPress={() => router.push("/purchases")}>
                 <ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Purchases &amp; My Tickets</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                testID="library-sandbox-tips-link"
+                accessibilityRole="button"
+                accessibilityLabel="Open Sandbox tip tools"
+                accessibilityHint="Check creator eligibility and test history. Test checkout is unavailable."
+                style={[styles.emptyButton, styles.sandboxTipsButton]}
+                onPress={() => router.push("/sandbox-tips")}
+              >
+                <ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Sandbox tip tools</Text>
+              </TouchableOpacity>
+              <Text style={styles.headerBody}>Check creator eligibility and test history. Test checkout is unavailable.</Text>
               <View style={styles.libraryScopeRow}>
                 {[
                   [savedTitleCount, "Saved"],
@@ -616,6 +627,7 @@ const styles = StyleSheet.create({
   emptyTitle: { color: "#fff", fontSize: 18, lineHeight: 23, fontWeight: "900" },
   emptyText: { color: "#bfc6d4", fontSize: 13, lineHeight: 19, fontWeight: "600" },
   emptyButton: { alignSelf: "flex-start", minHeight: 42, borderRadius: 12, backgroundColor: "#6E21FF", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 2, overflow: "hidden", borderWidth: 1, borderColor: "rgba(91,214,255,0.72)" },
+  sandboxTipsButton: { minHeight: 44 },
   emptyButtonText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   errorCard: { borderRadius: 8, borderWidth: 1, borderColor: "rgba(229,9,20,0.3)", backgroundColor: "rgba(229,9,20,0.12)", padding: 12, gap: 7 },
   errorTitle: { color: "#fff", fontSize: 13, fontWeight: "900" },

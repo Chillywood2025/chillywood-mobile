@@ -155,6 +155,34 @@ async function mountScreen(file, overrides={}) {
   return {state,run,render,flush:()=>run(noop),nodes:()=>elements(state.tree),text:()=>textOf(state.tree),unmount:()=>run(()=>root.unmount())};
 }
 
+test("Library opens isolated sandbox tip tools without mutations and preserves Purchases navigation",async()=>{
+  for (const user of [{id:"a"},null]) {
+    const h=await mountScreen("app/(tabs)/my-list.tsx",{user});
+    try {
+      const entry=h.nodes().find(x=>x.props?.testID==="library-sandbox-tips-link");
+      assert.ok(entry,"Sandbox tip tools remains discoverable for signed-in and signed-out visitors");
+      assert.equal(textOf(entry).trim(),"Sandbox tip tools");
+      assert.equal(entry.props.accessibilityRole,"button");
+      assert.equal(entry.props.accessibilityLabel,"Open Sandbox tip tools");
+      assert.equal(entry.props.accessibilityHint,"Check creator eligibility and test history. Test checkout is unavailable.");
+      assert.match(h.text(),/Check creator eligibility and test history\. Test checkout is unavailable\./);
+      assert.deepEqual(h.state.pushes,[],"Rendering must not navigate or activate sandbox tools");
+      await h.run(()=>entry.props.onPress());
+      assert.deepEqual(h.state.pushes,["/sandbox-tips"],"Entry passes no account, offer, or activation parameters");
+      assert.deepEqual(h.state.writes,[]);
+      assert.deepEqual(h.state.syncRetries,[]);
+      assert.deepEqual(h.state.resolutions,[]);
+      const purchases=h.nodes().find(x=>x.props?.testID==="library-purchases-link");
+      assert.ok(purchases);
+      assert.equal(purchases.props.accessibilityLabel,"Open Purchases and My Tickets");
+      assert.equal(textOf(purchases).trim(),"Purchases & My Tickets");
+      await h.run(()=>purchases.props.onPress());
+      assert.deepEqual(h.state.pushes,["/sandbox-tips","/purchases"]);
+      assert.deepEqual(h.state.writes,[]);
+    } finally {await h.unmount();}
+  }
+});
+
 test("Saved card removal is explicit, isolated from navigation, single-flight, and truthful on failure",async()=>{
   const h=await mountScreen("app/(tabs)/my-list.tsx");
   try {

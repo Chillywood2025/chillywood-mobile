@@ -4,7 +4,8 @@ import {spawnSync} from 'node:child_process';
 import test from 'node:test';
 import {parse} from 'yaml';
 import {computeValidationPlan, evaluateRun, evaluateWorkflowSnapshot, expectedJobs} from '../../scripts/ci/required-validation.mjs';
-import {NATIVE_STAGES, validateNativeProof, validateNodeTap} from '../../scripts/ci/isolated-sandbox-native.mjs';
+import {NATIVE_STAGES, NODE_STAGES, EXPECTED_NODE_TESTS, validateNativeProof, validateNodeTap,
+  validateCommandFixture, collectSourceManifest} from '../../scripts/ci/isolated-sandbox-native.mjs';
 
 const workflow = parse(readFileSync('.github/workflows/required-validation.yml', 'utf8'));
 const policy = JSON.parse(readFileSync('config/ci/required-validation-v1.json', 'utf8'));
@@ -76,6 +77,18 @@ test('isolated native qualification is a credential-free canonical database obli
     'isolated-runtime/sandbox-commerce-v1/tests/managed-install.native.mjs',
     'isolated-runtime/sandbox-commerce-v1/tests/availability.native.mjs',
     'isolated-runtime/sandbox-commerce-v1/tests/receipts-dispatch.fixture.mjs',
+    'isolated-runtime/receipt-router-v1/ownership.sql',
+    'isolated-runtime/receipt-router-v1/isolated-source-bridge.sql',
+    'isolated-runtime/receipt-router-v1/legacy-source-bridge.sql',
+    'isolated-runtime/receipt-router-v1/tests/router.native.mjs',
+    'isolated-runtime/receipt-router-v1/tests/legacy-source-bridge.fixture.mjs',
+    'app/sandbox-tips/studio.tsx',
+    'app/sandbox-tips/offer/[offerId].tsx',
+    'app/(tabs)/my-list.tsx',
+    'components/monetization/isolated-tip-screens.tsx',
+    'components/monetization/isolated-tip-receipt.tsx',
+    'tests/saved-media-screens-mounted.test.mjs',
+    'tests/creator-money/revenuecat-router.test.mjs',
     'scripts/ci/isolated-sandbox-native.mjs',
     'tests/isolated-sandbox-commerce-client.test.mjs',
     'tests/isolated-sandbox-delivery-policy.test.mjs',
@@ -191,12 +204,14 @@ test('the offline runner plan contains every native suite and complete client/pr
   assert.equal(plan.postgres.version, '17.6');
   assert.equal(plan.postgres.archiveUrl, postgresArchiveUrl);
   assert.equal(plan.postgres.sha256, postgresSha256);
-  const nativeFiles = ['managed-install', 'premium-authority', 'authority', 'core', 'declarations', 'receipts', 'availability']
-    .map(name => `isolated-runtime/sandbox-commerce-v1/tests/${name}.native.mjs`);
+  const nativeFiles = ['managed-install', 'premium-authority', 'authority', 'core', 'declarations', 'receipts', 'availability', 'history', 'resource-graphs']
+    .map(name => `isolated-runtime/sandbox-commerce-v1/tests/${name}.native.mjs`)
+    .concat(['router', 'isolated-source-bridge', 'legacy-source-bridge'].map(name => `isolated-runtime/receipt-router-v1/tests/${name}.native.mjs`));
   assert.deepEqual(plan.nativeStages.map(stage => stage.file).sort(), nativeFiles.sort());
   assert.equal(new Set(plan.nativeStages.map(stage => stage.name)).size, nativeFiles.length);
   assert.deepEqual(Object.fromEntries(plan.nativeStages.map(stage => [stage.name, stage.caseCount])), {
-    'premium-authority': 46, authority: 20, core: 11, declarations: 12, receipts: 26, 'managed-install': 8, availability: 21,
+    'premium-authority': 46, authority: 20, core: 11, declarations: 12, receipts: 26, 'managed-install': 19, availability: 21,
+    history: 24, 'resource-graphs': 46, 'receipt-router': 22, 'isolated-source-bridge': 16, 'legacy-source-bridge': 49,
   });
   for (const stage of plan.nativeStages) {
     assert.match(stage.name, /^[a-z][a-z-]+$/u);
@@ -207,9 +222,17 @@ test('the offline runner plan contains every native suite and complete client/pr
     'tests/isolated-sandbox-commerce-client.test.mjs',
     'tests/isolated-sandbox-delivery-policy.test.mjs',
     'tests/creator-money/isolated-sandbox-provider.test.mjs',
+    'tests/isolated-sandbox-tips-client.test.mjs',
+    'tests/isolated-sandbox-tips-mounted.test.mjs',
+    'tests/isolated-sandbox-tip-attempts.test.mjs',
+    'tests/saved-media-screens-mounted.test.mjs',
+    'tests/creator-money/revenuecat-router.test.mjs',
   ]);
   for (const file of plan.nodeTests) assert.ok(existsSync(file), file);
-  assert.equal(plan.expectedNodeTests, 52);
+  assert.equal(plan.expectedNodeTests, 135);
+  assert.deepEqual(Object.fromEntries(plan.nodeStages.map(stage => [stage.name, stage.expectedTests])), {
+    'commerce-provider-delivery': 52, 'tip-client': 13, 'tip-mounted': 15, 'tip-journal': 18, 'library-discovery': 19, 'receipt-router': 18,
+  });
   assert.equal(plan.execution, 'sequential/local-only');
 });
 
@@ -219,7 +242,7 @@ function validatorFixture(stage) {
   const modulePath = 'isolated-runtime/sandbox-commerce-v1';
   const digest = 'a'.repeat(64);
   const sourceHashes = Object.fromEntries([
-    ...(stage.sourceFiles ?? []).map(file => `${modulePath}/${file}`),
+    ...(stage.sourceFiles ?? []).map(file => stage.sourceBase ? `${stage.sourceBase}/${file}` : file),
     `${modulePath}/premium-authority.sql`,
     `${modulePath}/tests/premium-authority.fixture.sql`,
     `${modulePath}/tests/authority.fixture.sql`,
@@ -233,6 +256,13 @@ function validatorFixture(stage) {
     sourceSha256: digest, fixtureSha256: digest, harnessSha256: digest, harnessHash: digest,
     fixtureHashes: {'premium-authority.fixture.sql': digest, 'authority.fixture.sql': digest},
   };
+  if (stage.proofFormat === 'receipt-router-v1') Object.assign(proof, {
+    kind: stage.proofKind, postgres: '17.6', cases: stage.caseCount,
+    passed: Array.from({length: stage.caseCount}, (_, index) => `synthetic router validator ${index}`),
+    providerOrProductionCalls: false, actualProviderAuthenticationProven: false, legacyEnforcementProven: false, syntheticProviderEvidence: true,
+  });
+  if (stage.providerQualificationField) Object.assign(proof, {providerOrProductionCalls: false,
+    [stage.providerQualificationField]: false, legacyEnforcementProven: false, syntheticProviderEvidence: true});
   return {proof, sourceHashes};
 }
 
@@ -259,9 +289,28 @@ test('native proof validator rejects incomplete cases, cleanup and source identi
         else delete candidate.sourceHashes;
       },
     };
+    if (stage.proofFormat === 'receipt-router-v1') Object.assign(mutations, {
+      'failed status': candidate => { candidate.kind = 'unverified'; },
+      'changed case count': candidate => { candidate.cases -= 1; },
+      'missing case list': candidate => { delete candidate.passed; },
+      'truncated case list': candidate => { candidate.passed.pop(); },
+      'non-array case list': candidate => { candidate.passed = 'x'.repeat(stage.caseCount); },
+      'wrong engine': candidate => { candidate.postgres = '17.7'; },
+      'provider activity': candidate => { candidate.providerOrProductionCalls = true; },
+      'false provider qualification': candidate => { candidate[stage.providerQualificationField] = true; },
+      'false legacy qualification': candidate => { candidate.legacyEnforcementProven = true; },
+      'missing synthetic boundary': candidate => { delete candidate.syntheticProviderEvidence; },
+    });
+    if (stage.providerQualificationField) Object.assign(mutations, {
+      'provider activity': candidate => { candidate.providerOrProductionCalls = true; },
+      'false provider qualification': candidate => { candidate[stage.providerQualificationField] = true; },
+      'false legacy qualification': candidate => { candidate.legacyEnforcementProven = true; },
+      'missing synthetic boundary': candidate => { delete candidate.syntheticProviderEvidence; },
+    });
     if (stage.name !== 'premium-authority') {
       mutations['incomplete source inventory'] = candidate => { delete candidate.sourceHashes[stage.sourceFiles[0]]; };
       mutations['unexpected source inventory'] = candidate => { candidate.sourceHashes['unexpected.sql'] = 'a'.repeat(64); };
+      mutations['invalid source digest'] = candidate => { candidate.sourceHashes[stage.sourceFiles[0]] = null; };
     } else {
       mutations['wrong fixture hash'] = candidate => { candidate.fixtureSha256 = 'b'.repeat(64); };
       mutations['wrong harness hash'] = candidate => { candidate.harnessSha256 = 'b'.repeat(64); };
@@ -273,18 +322,59 @@ test('native proof validator rejects incomplete cases, cleanup and source identi
   }
 });
 
-test('Node TAP validator requires all 52 tests and zero skipped, cancelled, failed or todo work', () => {
-  const tap = 'TAP version 13\n1..52\n# tests 52\n# pass 52\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
-  assert.deepEqual(validateNodeTap(tap), {tests: 52, pass: 52, fail: 0, cancelled: 0, skipped: 0, todo: 0});
+test('Node TAP validator requires exact per-suite counts and zero skipped, cancelled, failed or todo work', () => {
+  const count = EXPECTED_NODE_TESTS;
+  const tap = `TAP version 13\n1..${count}\n# tests ${count}\n# pass ${count}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n`;
+  assert.deepEqual(validateNodeTap(tap), {tests: count, pass: count, fail: 0, cancelled: 0, skipped: 0, todo: 0});
+  for (const stage of NODE_STAGES) {
+    const own = tap.replaceAll(String(count), String(stage.expectedTests));
+    assert.equal(validateNodeTap(own, stage.expectedTests).pass, stage.expectedTests);
+    assert.throws(() => validateNodeTap(own, stage.expectedTests + 1), assert.AssertionError);
+  }
   for (const key of ['fail', 'cancelled', 'skipped', 'todo']) {
     assert.throws(() => validateNodeTap(tap.replace(`# ${key} 0`, `# ${key} 1`)), assert.AssertionError, key);
   }
   for (const key of ['tests', 'pass']) {
-    assert.throws(() => validateNodeTap(tap.replace(`# ${key} 52`, `# ${key} 51`)), assert.AssertionError, key);
+    assert.throws(() => validateNodeTap(tap.replace(`# ${key} ${count}`, `# ${key} ${count - 1}`)), assert.AssertionError, key);
   }
   for (const key of ['tests', 'pass', 'fail', 'cancelled', 'skipped', 'todo']) {
     const line = tap.split('\n').find(value => value.startsWith(`# ${key} `));
     assert.throws(() => validateNodeTap(tap.replace(line + '\n', '')), assert.AssertionError, `missing ${key}`);
     assert.throws(() => validateNodeTap(tap + line + '\n'), assert.AssertionError, `duplicate ${key}`);
   }
+});
+
+test('fresh SQL fixture validator rejects missing history commands, malformed identities and response substitutions', () => {
+  const requestId = 'a0000000-0000-4000-8000-000000000001';
+  const commands = ['capability.read', 'studio.read', 'offers.read', 'offer.read', 'history.read', 'status.read', 'request.read', 'offer.retire', 'checkout.abandon'];
+  const fixture = {protocol: 'sandbox-commerce-v1', cases: commands.map(command => ({command, payload: {requestId},
+    response: {protocol: 'sandbox-commerce-v1', environment: 'sandbox', command, requestId}}))};
+  assert.equal(validateCommandFixture(fixture, 'history').cases, commands.length);
+  for (const mutate of [candidate => { candidate.cases.pop(); }, candidate => { candidate.cases = []; },
+    candidate => { candidate.cases = {}; }, candidate => { candidate.cases[0].payload = []; },
+    candidate => { candidate.cases[0].response.requestId = 'wrong'; }, candidate => { candidate.cases[0].response.command = 'other'; },
+    candidate => { candidate.cases[0].response.environment = 'production'; }, candidate => { candidate.protocol = 'legacy'; }]) {
+    const candidate = structuredClone(fixture); mutate(candidate);
+    assert.throws(() => validateCommandFixture(candidate, 'history'), assert.AssertionError);
+  }
+});
+
+test('source manifest binds actual app routes, journal, mounted UI, router, SQL harnesses and fixture generators', () => {
+  const manifest = collectSourceManifest();
+  for (const stage of NATIVE_STAGES) for (const file of stage.sourceFiles) {
+    assert.match(manifest[stage.sourceBase ? `${stage.sourceBase}/${file}` : file] ?? '', /^[a-f0-9]{64}$/u, file);
+  }
+  for (const file of [
+    '_lib/isolatedSandboxTips.ts', '_lib/isolatedSandboxTipAttempts.ts',
+    'components/monetization/isolated-tip-screens.tsx', 'components/monetization/isolated-tip-receipt.tsx',
+    'app/(tabs)/my-list.tsx', 'app/sandbox-tips/index.tsx', 'app/sandbox-tips/studio.tsx',
+    'app/sandbox-tips/status.tsx', 'app/sandbox-tips/history.tsx', 'app/sandbox-tips/offer/[offerId].tsx',
+    'isolated-runtime/sandbox-commerce-v1/tests/history.fixture.mjs', 'isolated-runtime/sandbox-commerce-v1/tests/resource-graphs.fixture.mjs',
+    'isolated-runtime/receipt-router-v1/holds.sql', 'isolated-runtime/receipt-router-v1/tests/router.native.mjs',
+    'isolated-runtime/receipt-router-v1/ownership.sql', 'isolated-runtime/receipt-router-v1/isolated-source-bridge.sql',
+    'isolated-runtime/receipt-router-v1/legacy-source-bridge.sql', 'isolated-runtime/receipt-router-v1/tests/legacy-source-bridge.fixture.mjs',
+    'supabase/functions/_shared/revenuecat-router-envelope.ts', 'supabase/functions/_shared/revenuecat-router-planner.ts',
+    'supabase/functions/_shared/revenuecat-router-handler.ts', 'supabase/functions/_shared/revenuecat-router-worker.ts',
+    'supabase/functions/revenuecat-receipt-router-v1/index.ts', 'supabase/functions/_shared/provider-readiness.ts',
+  ]) assert.match(manifest[file] ?? '', /^[a-f0-9]{64}$/u, file);
 });

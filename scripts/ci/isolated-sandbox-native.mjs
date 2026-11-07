@@ -15,10 +15,23 @@ export const POSTGRES=Object.freeze({version:'17.6',
  sha256:'e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0'});
 const ordinaryCleanup=['clusterStopped','clusterNotRunningVerified','directoryRemoved'];
 const allSql=['core.sql','premium-authority.sql','authority.sql','commands.sql','receipts.sql','permissions-finalize.sql'];
+const resourceSql=[...allSql.filter(file=>file!=='permissions-finalize.sql'),'resource-graphs.sql','delivery-authority.sql','permissions-finalize.sql'];
+const routerPath='isolated-runtime/receipt-router-v1';
+const routerSql=['core.sql','holds.sql','ownership.sql','worker.sql','permissions-finalize.sql'];
+const routerSources=[...routerSql.map(file=>`${routerPath}/${file}`),
+ `${routerPath}/tests/router.native.mjs`,...['envelope','planner','handler','worker'].map(name=>`supabase/functions/_shared/revenuecat-router-${name}.ts`)];
+const isolatedBridgeSources=[...routerSql,'isolated-source-bridge.sql'].map(file=>`${routerPath}/${file}`).concat(
+ allSql.map(file=>`${modulePath}/${file}`),'supabase/functions/_shared/revenuecat-router-envelope.ts',
+ `${routerPath}/tests/isolated-source-bridge.native.mjs`,
+ ['receipts.fixture.mjs','authority.fixture.sql','premium-authority.fixture.sql'].map(file=>`${modulePath}/tests/${file}`));
+const legacyBridgeSources=[...routerSql,'legacy-source-bridge.sql'].map(file=>`${routerPath}/${file}`).concat(
+ `${routerPath}/tests/legacy-source-bridge.native.mjs`,`${routerPath}/tests/legacy-source-bridge.fixture.mjs`,
+ 'supabase/functions/_shared/revenuecat-router-envelope.ts');
 const stageSources={
  'premium-authority':['premium-authority.sql'],authority:['authority.sql','premium-authority.sql'],
  core:allSql.filter(file=>file!=='receipts.sql'),declarations:allSql,receipts:allSql,
- 'managed-install':allSql,availability:['core.sql'],
+ 'managed-install':[...resourceSql,'history.sql'],availability:['core.sql'],history:[...allSql,'history.sql'],
+ 'resource-graphs':resourceSql,
 };
 export const NATIVE_STAGES=Object.freeze([
  ['premium-authority',46,['stopped','notRunningVerified','directoryRemoved']],
@@ -26,26 +39,56 @@ export const NATIVE_STAGES=Object.freeze([
  ['core',11,[...ordinaryCleanup,'sessionsClosed']],
  ['declarations',12,[...ordinaryCleanup,'sessionsClosed']],
  ['receipts',26,[...ordinaryCleanup,'sessionsClosed']],
- ['managed-install',8,ordinaryCleanup],
+ ['history',24,[...ordinaryCleanup,'sessionsClosed']],
+ ['resource-graphs',46,[...ordinaryCleanup,'sessionsClosed']],
+ ['managed-install',19,[...ordinaryCleanup,'sessionsClosed']],
  ['availability',21,ordinaryCleanup],
-].map(([name,caseCount,cleanupKeys])=>Object.freeze({name,caseCount,cleanupKeys,sourceFiles:stageSources[name],file:`${modulePath}/tests/${name}.native.mjs`})));
-export const NODE_TEST_FILES=Object.freeze([
- 'tests/isolated-sandbox-commerce-client.test.mjs',
- 'tests/isolated-sandbox-delivery-policy.test.mjs',
- 'tests/creator-money/isolated-sandbox-provider.test.mjs',
-]);
+].map(([name,caseCount,cleanupKeys])=>Object.freeze({name,caseCount,cleanupKeys,sourceBase:modulePath,
+ sourceFiles:Object.freeze(stageSources[name]),file:`${modulePath}/tests/${name}.native.mjs`})).concat([
+ Object.freeze({name:'receipt-router',caseCount:22,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],
+  sourceBase:'',sourceFiles:Object.freeze(routerSources),file:`${routerPath}/tests/router.native.mjs`,proofFormat:'receipt-router-v1',
+  proofKind:'actual-local-postgresql-source-proof',providerQualificationField:'actualProviderAuthenticationProven'}),
+ Object.freeze({name:'isolated-source-bridge',caseCount:16,cleanupKeys:ordinaryCleanup,sourceBase:'',
+  sourceFiles:Object.freeze(isolatedBridgeSources),file:`${routerPath}/tests/isolated-source-bridge.native.mjs`,proofFormat:'receipt-router-v1',
+  proofKind:'actual-local-source-bridge-proof',providerQualificationField:'actualProviderQualificationProven'}),
+ Object.freeze({name:'legacy-source-bridge',caseCount:49,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],sourceBase:'',
+  sourceFiles:Object.freeze(legacyBridgeSources),file:`${routerPath}/tests/legacy-source-bridge.native.mjs`,
+  providerQualificationField:'actualProviderAuthenticationProven'}),
+]));
+export const NODE_STAGES=Object.freeze([
+ {name:'commerce-provider-delivery',expectedTests:52,files:['tests/isolated-sandbox-commerce-client.test.mjs',
+  'tests/isolated-sandbox-delivery-policy.test.mjs','tests/creator-money/isolated-sandbox-provider.test.mjs']},
+ {name:'tip-client',expectedTests:13,files:['tests/isolated-sandbox-tips-client.test.mjs']},
+ {name:'tip-mounted',expectedTests:15,files:['tests/isolated-sandbox-tips-mounted.test.mjs']},
+ {name:'tip-journal',expectedTests:18,files:['tests/isolated-sandbox-tip-attempts.test.mjs']},
+ {name:'library-discovery',expectedTests:19,files:['tests/saved-media-screens-mounted.test.mjs']},
+ {name:'receipt-router',expectedTests:18,files:['tests/creator-money/revenuecat-router.test.mjs']},
+].map(stage=>Object.freeze({...stage,files:Object.freeze(stage.files)})));
+export const NODE_TEST_FILES=Object.freeze(NODE_STAGES.flatMap(stage=>stage.files));
+export const EXPECTED_NODE_TESTS=NODE_STAGES.reduce((total,stage)=>total+stage.expectedTests,0);
 export const createPlan=()=>({postgres:POSTGRES,nativeStages:NATIVE_STAGES,nodeTests:NODE_TEST_FILES,
- expectedNodeTests:52,execution:'sequential/local-only',
- fixture:'Fresh actual core SQL responses, generated in this attempt before client tests',
+ nodeStages:NODE_STAGES,expectedNodeTests:EXPECTED_NODE_TESTS,execution:'sequential/local-only',
+ fixture:'Fresh actual core and history SQL responses, generated in this attempt before client tests',
  limitations:['Synthetic source fixtures only; no production schema, hosted owner/Auth/RLS or device qualification.',
   'Provider classifier and delivery policy tests do not authenticate provider observations or issue real access.']});
 
 export function validateNativeProof(stage,proof,sourceHashes){
- assert.equal(proof.status,'passed',`${stage.name}: status`);
- assert.equal(proof.caseCount,stage.caseCount,`${stage.name}: native case count changed`);
- assert.ok(Array.isArray(proof.cases),`${stage.name}: native cases must be an array`);
- assert.equal(proof.cases?.length,stage.caseCount,`${stage.name}: incomplete case list`);
- assert.match(proof.engine??proof.version??'',/^postgres \(PostgreSQL\) 17\.6$/u);
+ if(stage.proofFormat==='receipt-router-v1'){
+  assert.equal(proof.kind,stage.proofKind,`${stage.name}: proof kind`);
+  assert.equal(proof.postgres,'17.6');assert.equal(proof.cases,stage.caseCount,`${stage.name}: native case count changed`);
+  assert.ok(Array.isArray(proof.passed),`${stage.name}: native cases must be an array`);
+  assert.equal(proof.passed.length,stage.caseCount,`${stage.name}: incomplete case list`);
+ }else{
+  assert.equal(proof.status,'passed',`${stage.name}: status`);
+  assert.equal(proof.caseCount,stage.caseCount,`${stage.name}: native case count changed`);
+  assert.ok(Array.isArray(proof.cases),`${stage.name}: native cases must be an array`);
+  assert.equal(proof.cases?.length,stage.caseCount,`${stage.name}: incomplete case list`);
+  assert.match(proof.engine??proof.version??'',/^postgres \(PostgreSQL\) 17\.6$/u);
+ }
+ if(stage.providerQualificationField){
+  for(const key of ['providerOrProductionCalls',stage.providerQualificationField,'legacyEnforcementProven'])assert.equal(proof[key],false,`${stage.name}: ${key}`);
+  assert.equal(proof.syntheticProviderEvidence,true);
+ }
  for(const key of stage.cleanupKeys)assert.equal(proof.cleanup?.[key],true,`${stage.name}: cleanup ${key}`);
  assert.ok(Object.values(proof.cleanup).every(value=>value===true),`${stage.name}: cleanup failure`);
  if(stage.name==='premium-authority'){
@@ -55,25 +98,34 @@ export function validateNativeProof(stage,proof,sourceHashes){
  }else{
   assert.deepEqual(Object.keys(proof.sourceHashes??{}).sort(),[...stage.sourceFiles].sort(),`${stage.name}: incomplete source identity`);
   for(const [file,value]of Object.entries(proof.sourceHashes)){
-   assert.equal(value,sourceHashes[`${modulePath}/${file}`],`${stage.name}: source ${file}`);
+   assert.match(value??'',/^[a-f0-9]{64}$/u,`${stage.name}: invalid source digest ${file}`);
+   assert.equal(value,sourceHashes[stage.sourceBase?`${stage.sourceBase}/${file}`:file],`${stage.name}: source ${file}`);
   }
  }
 }
-export function validateNodeTap(tap){
+export function validateNodeTap(tap,expectedTests=EXPECTED_NODE_TESTS){
+ assert.ok(Number.isSafeInteger(expectedTests)&&expectedTests>0,'Exact expected Node count required');
  const values={};
  for(const key of ['tests','pass','fail','cancelled','skipped','todo']){
   const matches=[...tap.matchAll(new RegExp(`^# ${key} (\\d+)$`,'gm'))];
   assert.equal(matches.length,1,`Missing or ambiguous TAP ${key} summary`);
   values[key]=Number(matches[0][1]);
  }
- assert.equal(values.tests,52);assert.equal(values.pass,52);
+ assert.equal(values.tests,expectedTests);assert.equal(values.pass,expectedTests);
  for(const key of ['fail','cancelled','skipped','todo'])assert.equal(values[key],0,`Node ${key} must be zero`);
  return values;
 }
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-function manifest(){
- const files=[...NODE_TEST_FILES,'_lib/isolatedSandboxCommerce.ts','_lib/accountBoundSupabaseRpc.mjs',
+export function collectSourceManifest(){
+ const files=[...NODE_TEST_FILES,...NATIVE_STAGES.flatMap(stage=>stage.sourceFiles.map(file=>stage.sourceBase?`${stage.sourceBase}/${file}`:file)),
+  '_lib/isolatedSandboxCommerce.ts','_lib/accountBoundSupabaseRpc.mjs',
   '_lib/accountSessionAuthority.ts','_lib/accountBoundSupabaseMutation.ts','package.json','package-lock.json',
+  '_lib/isolatedSandboxTips.ts','_lib/isolatedSandboxTipAttempts.ts','_lib/session.tsx','_lib/supabase.ts',
+  '_lib/entitlementAuthority.ts','app/(tabs)/my-list.tsx','app/(tabs)/index.tsx','app/title/[id].tsx',
+  '_lib/liveDiscoveryInvalidation.ts','_lib/publicPartyRoomCounts.ts','_lib/usePublicPartyRoomCounts.ts',
+  'components/navigation/app-back-button.tsx',
+  ...['envelope','planner','handler','worker'].map(name=>`supabase/functions/_shared/revenuecat-router-${name}.ts`),
+  'supabase/functions/_shared/provider-readiness.ts',
   'supabase/functions/_shared/isolated-sandbox-provider.ts','supabase/functions/_shared/isolated-sandbox-delivery-policy.ts',
   'supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql',
   'supabase/migrations/20260908231500_pre_activation_premium_repurchase_quarantine_closure.sql',
@@ -83,8 +135,32 @@ function manifest(){
   const next=`${relative}/${entry.name}`;assert.ok(!entry.isSymbolicLink(),`Source symlink rejected: ${next}`);
   if(entry.isDirectory())visit(next);else if(entry.isFile())files.push(next);
  }};
- visit(modulePath);
- return Object.fromEntries([...new Set(files)].sort().map(file=>[file,hash(fs.readFileSync(path.join(root,file)))]));
+ for(const directory of [modulePath,routerPath,'app/sandbox-tips','components/monetization',
+  'supabase/functions/revenuecat-receipt-router-v1'])visit(directory);
+ return Object.fromEntries([...new Set(files)].sort().map(file=>{
+  const absolute=path.join(root,file);assert.ok(fs.lstatSync(absolute).isFile(),`Regular source required: ${file}`);
+  return [file,hash(fs.readFileSync(absolute))];
+ }));
+}
+
+export function validateCommandFixture(fixture,kind){
+ assert.equal(fixture.protocol,'sandbox-commerce-v1');
+ assert.ok(Array.isArray(fixture.cases)&&fixture.cases.length>0,'Fresh actual SQL responses required');
+ const commands=new Set();
+ for(const entry of fixture.cases){
+  assert.ok(entry&&typeof entry==='object'&&!Array.isArray(entry));
+  assert.equal(typeof entry.command,'string');assert.ok(entry.payload&&typeof entry.payload==='object'&&!Array.isArray(entry.payload));
+  const requestId=entry.requestId??entry.payload.requestId;
+  assert.match(requestId??'',/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
+  assert.equal(entry.response?.protocol,'sandbox-commerce-v1');assert.equal(entry.response?.environment,'sandbox');
+  assert.equal(entry.response?.command,entry.command);
+  assert.equal(entry.response?.requestId,requestId);
+  commands.add(entry.command);
+ }
+ if(kind==='history')for(const command of ['capability.read','studio.read','offers.read','offer.read','history.read',
+  'status.read','request.read','offer.retire','checkout.abandon'])assert.ok(commands.has(command),`Missing current SQL fixture command ${command}`);
+ else assert.equal(kind,'core');
+ return {cases:fixture.cases.length,commands:[...commands].sort()};
 }
 function main(argv){
  if(argv.length===1&&argv[0]==='--plan'){console.log(JSON.stringify(createPlan(),null,2));return;}
@@ -97,8 +173,10 @@ function main(argv){
  const env=Object.fromEntries(['PATH','HOME','TMPDIR','TMP','TEMP','SYSTEMROOT','LANG','LC_ALL']
   .filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]]));
  Object.assign(env,{CI:'1',EXPO_NO_DOTENV:'1',EXPO_NO_CLIENT_ENV_VARS:'1',
-  ISOLATED_SANDBOX_COMMAND_FIXTURE:path.join(output,'native-command-responses.json')});
- const sources=manifest();
+  ISOLATED_SANDBOX_COMMAND_FIXTURE:path.join(output,'native-command-responses.json'),
+  ISOLATED_SANDBOX_TIPS_FIXTURE:path.join(output,'native-tip-history-responses.json'),
+  ISOLATED_TIPS_NATIVE_FIXTURES:path.join(output,'native-tip-history-responses.json')});
+ const sources=collectSourceManifest();
  const report={status:'running',startedAt:new Date().toISOString(),plan:createPlan(),sourceHashes:sources,stages:[],
   runtime:{node:process.version,platform:process.platform,architecture:process.arch},
   checkoutCommit:spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).stdout?.trim()??null};
@@ -110,7 +188,7 @@ function main(argv){
   fs.writeFileSync(path.join(output,name+'.stdout'),result.stdout??'');
   fs.writeFileSync(path.join(output,name+'.stderr'),result.stderr??'');
   assert.equal(result.status,0,`${name}: ${result.error?.message??result.signal??'failed'}; see saved stderr`);
-  assert.deepEqual(manifest(),sources,'Source changed during qualification');return result.stdout;
+   assert.deepEqual(collectSourceManifest(),sources,'Source changed during qualification');return result.stdout;
  };
  save();
  try{
@@ -121,12 +199,24 @@ function main(argv){
    report.stages.push({name:stage.name,caseCount:stage.caseCount,status:'passed',cleanup:proof.cleanup});save();
    console.log(`${stage.name}: ${stage.caseCount} native groups passed; cleanup verified`);
   }
-  const fixture=JSON.parse(fs.readFileSync(env.ISOLATED_SANDBOX_COMMAND_FIXTURE,'utf8'));
-  assert.equal(fixture.protocol,'sandbox-commerce-v1');assert.ok(fixture.cases?.length>0,'Actual core responses required');
-  report.commandFixture={sha256:hash(fs.readFileSync(env.ISOLATED_SANDBOX_COMMAND_FIXTURE)),cases:fixture.cases.length};
-  const tap=execute('client-provider-delivery',['--test','--test-reporter=tap',...NODE_TEST_FILES]);
-  report.nodeTests=validateNodeTap(tap);report.status='passed';
-  console.log('Client/provider/delivery: 52 passed; zero skipped, cancelled or todo');
+  const fixtures={core:env.ISOLATED_SANDBOX_COMMAND_FIXTURE,history:env.ISOLATED_SANDBOX_TIPS_FIXTURE};
+  report.commandFixtures={};
+  for(const [kind,file]of Object.entries(fixtures)){
+   const bytes=fs.readFileSync(file);const fixture=JSON.parse(bytes.toString('utf8'));
+   report.commandFixtures[kind]={sha256:hash(bytes),...validateCommandFixture(fixture,kind)};
+  }
+  report.nodeStages=[];
+  for(const stage of NODE_STAGES){
+   const tap=execute(`node-${stage.name}`,['--test','--test-reporter=tap',...stage.files]);
+   const result=validateNodeTap(tap,stage.expectedTests);
+   report.nodeStages.push({name:stage.name,...result});save();
+   for(const [kind,file]of Object.entries(fixtures))assert.equal(hash(fs.readFileSync(file)),report.commandFixtures[kind].sha256,'SQL fixture changed during client validation');
+   console.log(`${stage.name}: ${result.pass} passed; zero skipped, cancelled or todo`);
+  }
+  report.nodeTests=Object.fromEntries(['tests','pass','fail','cancelled','skipped','todo']
+   .map(key=>[key,report.nodeStages.reduce((total,stage)=>total+stage[key],0)]));
+  assert.equal(report.nodeTests.tests,EXPECTED_NODE_TESTS);assert.equal(report.nodeTests.pass,EXPECTED_NODE_TESTS);
+  report.status='passed';
  }catch(error){report.status='failed';report.error=String(error.message);throw error;}
  finally{report.finishedAt=new Date().toISOString();save();}
 }
