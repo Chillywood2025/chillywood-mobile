@@ -66,7 +66,7 @@ export type TipResource = { id: string; creatorId: string; kind: IsolatedSandbox
 export type TipCatalogItem = { kind: "creator_tip"; amountMinor: number; currency: string; publicationAvailable: true; checkoutConnected: false };
 export type TipReceipt = { id: string; intentId: string; status: "verified" | "refunded" | "revoked" | "quarantined"; receiptType: "provider_verified"; purchasedAt: string; amountMinor: number; currency: string; grantsAccess: false; notPayable: true };
 export type TipAbandonment = { intentId: string; originalRequestId: string; originalSessionId: string; abandonedBySessionId: string; abandonedAt: string; proof: "undispatched_tombstone" };
-export type TipAttempt = { id: string; offerId: string; resourceId: string; creatorId: string; kind: IsolatedSandboxProductKind; amountMinor: number; currency: string; status: "prepared" | "expired" | "provider_pending" | "verified" | "failed" | "abandoned"; createdAt: string; expiresAt: string; originalSessionMatchesCurrent: boolean; dispatchState: "not_recorded" | "claimed" | "bound"; receipt: TipReceipt | null; abandonment: TipAbandonment | null; providerDispatchAllowed: false; noDispatchProven: boolean };
+export type TipAttempt = { id: string; offerId: string; offerRevision: number; resourceId: string; resourceRevision: number; creatorId: string; kind: IsolatedSandboxProductKind; amountMinor: number; currency: string; status: "prepared" | "expired" | "provider_pending" | "verified" | "failed" | "abandoned"; createdAt: string; expiresAt: string; originalSessionMatchesCurrent: boolean; dispatchState: "not_recorded" | "claimed" | "bound"; receipt: TipReceipt | null; abandonment: TipAbandonment | null; providerDispatchAllowed: false; noDispatchProven: boolean };
 export type TipCapability = { generationState: "disabled" | "active" | "retired"; canAuthor: boolean; creatorEligible: boolean; creatorReason: "eligible" | "premium_required" | "creator_eligibility_required" | "creator_legal_required" | "creator_restricted" | "financial_controls_unavailable"; canReadHistory: true; canRetireOwnOffers: true; checkoutConnected: false; declaration: TipDeclaration | null };
 export type TipRecovery = { resolution: "found" | "busy" | "unknown"; originalRequestId: string; recordedCommand: string | null; recordedSessionId: string | null; recordedPayload: Row | null; resource: TipResource | null; offer: TipOffer | null; entry: TipAttempt | null; declaration: TipDeclaration | null; retryAllowed: false; noDispatchProven: boolean };
 export type TipData = {
@@ -119,9 +119,9 @@ function abandonment(value: unknown): value is TipAbandonment {
     && isoDate(value.abandonedAt) && value.proof === "undispatched_tombstone";
 }
 function attempt(value: unknown): value is TipAttempt {
-  if (!row(value) || !keys(value, ["id", "offerId", "resourceId", "creatorId", "kind", "amountMinor", "currency", "status", "createdAt", "expiresAt", "originalSessionMatchesCurrent", "dispatchState", "receipt", "abandonment", "providerDispatchAllowed", "noDispatchProven"])) return false;
+  if (!row(value) || !keys(value, ["id", "offerId", "offerRevision", "resourceId", "resourceRevision", "creatorId", "kind", "amountMinor", "currency", "status", "createdAt", "expiresAt", "originalSessionMatchesCurrent", "dispatchState", "receipt", "abandonment", "providerDispatchAllowed", "noDispatchProven"])) return false;
   if (!tipId(value.id, "intent") || !tipId(value.offerId, "offer") || !tipId(value.resourceId, "resource") || !tipUuid(value.creatorId) || !kind(value.kind)
-    || !integer(value.amountMinor) || !currency(value.currency) || !choice(value.status, ["prepared", "expired", "provider_pending", "verified", "failed", "abandoned"])
+    || !integer(value.offerRevision) || !integer(value.resourceRevision) || !integer(value.amountMinor) || !currency(value.currency) || !choice(value.status, ["prepared", "expired", "provider_pending", "verified", "failed", "abandoned"])
     || !isoDate(value.createdAt) || !isoDate(value.expiresAt) || Date.parse(value.expiresAt) < Date.parse(value.createdAt)
     || typeof value.originalSessionMatchesCurrent !== "boolean" || !choice(value.dispatchState, ["not_recorded", "claimed", "bound"]) || value.providerDispatchAllowed !== false || typeof value.noDispatchProven !== "boolean") return false;
   if (value.receipt !== null && (!receipt(value.receipt) || value.receipt.intentId !== value.id || value.receipt.amountMinor !== value.amountMinor || value.receipt.currency !== value.currency)) return false;
@@ -208,6 +208,7 @@ export type IsolatedTipClient = {
   actor: Readonly<IsolatedSandboxActor>; dispose(): void;
   request<C extends TipCommand>(command: C, requestId: string, payload: TipPayloads[C]): Promise<TipResult<C>>;
   author<C extends TipMutation>(command: C, requestId: string, payload: IsolatedSandboxPayloads[C]): Promise<IsolatedSandboxResult<C>>;
+  prepareCheckout(requestId: string, payload: { offerId: string; expectedRevision: number }): Promise<IsolatedSandboxResult<"checkout.prepare">>;
 };
 export async function captureIsolatedTipClient(expected: AccountSessionAuthorityBinding): Promise<IsolatedTipClient> {
   if (!tipUuid(expected?.userId) || !tipUuid(expected.sessionGeneration) || expected.accountId !== expected.userId || expected.restoreOnly || !sameAccountSessionAuthority(expected, getCurrentAccountSessionAuthoritySnapshot())) throw new IsolatedSandboxCommerceError("authority_retired", null, "not_dispatched");
@@ -227,6 +228,19 @@ export async function captureIsolatedTipClient(expected: AccountSessionAuthority
   return Object.freeze({ actor,
     dispose() { retired = true; unsubscribe(); boundCommerce.dispose(); },
     async author<C extends TipMutation>(command: C, requestId: string, payload: IsolatedSandboxPayloads[C]) { assertCurrent(requestId); const result = await boundCommerce.request<C>(command, requestId, payload); assertCurrent(requestId, true); return result; },
+    async prepareCheckout(requestId: string, payload: { offerId: string; expectedRevision: number }) {
+      if (!tipUuid(requestId) || !row(payload) || !keys(payload, ["offerId", "expectedRevision"])
+        || !tipId(payload.offerId, "offer") || !integer(payload.expectedRevision))
+        throw new IsolatedSandboxCommerceError("invalid_request", requestId, "not_dispatched");
+      assertCurrent(requestId);
+      const result = await boundCommerce.request("checkout.prepare", requestId, {
+        offerId: payload.offerId as IsolatedSandboxPayloads["checkout.prepare"]["offerId"], expectedRevision: payload.expectedRevision,
+      });
+      assertCurrent(requestId, true);
+      if (result.status === "ok" && result.data.intent.kind !== "creator_tip")
+        throw new IsolatedSandboxCommerceError("invalid_response", requestId, "unknown");
+      return result;
+    },
     async request<C extends TipCommand>(command: C, requestId: string, payload: TipPayloads[C]): Promise<TipResult<C>> {
       if (!tipUuid(requestId) || !validPayload(command, payload)) throw new IsolatedSandboxCommerceError("invalid_request", requestId, "not_dispatched");
       assertCurrent(requestId);

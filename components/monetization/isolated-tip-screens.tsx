@@ -6,6 +6,7 @@ import { useSession } from "../../_lib/session";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from "../../_lib/accountSessionAuthority";
 import { captureIsolatedTipClient, newTipRequestId, tipId, tipUuid, type IsolatedTipClient, type TipCommand, type TipData, type TipPayloads, type TipMutation, type TipCapability, type TipAttempt, type TipOffer, type TipResource } from "../../_lib/isolatedSandboxTips";
 import { createIsolatedSandboxAttemptJournal, type IsolatedSandboxTipAttemptPayloads } from "../../_lib/isolatedSandboxTipAttempts";
+import { createIsolatedSandboxTipCheckoutJournal, type IsolatedSandboxTipCheckoutAttempt, type IsolatedSandboxTipCheckoutQuote } from "../../_lib/isolatedSandboxTipCheckoutAttempts";
 import { IsolatedSandboxCommerceError } from "../../_lib/isolatedSandboxCommerce";
 import { AppBackButton } from "../navigation/app-back-button";
 import { IsolatedTipReceipt, isolatedTipMoney } from "./isolated-tip-receipt";
@@ -15,6 +16,11 @@ type Notice = { message: string; requestId?: string };
 const unavailable = "Sandbox tools are unavailable. The backend could not verify this view. Refresh to check again.";
 const checkoutUnavailable = "Test checkout is not connected for this platform.";
 const param = (value: string | string[] | undefined) => typeof value === "string" ? value : "";
+const quoteForOffer = (offer: TipOffer): IsolatedSandboxTipCheckoutQuote => ({
+  offerId: offer.id, offerRevision: offer.revision, resourceId: offer.resourceId,
+  resourceRevision: offer.resourceRevision, creatorId: offer.creatorId, kind: "creator_tip",
+  amountMinor: offer.amountMinor, currency: offer.currency,
+});
 function Action({ children, onPress, disabled = false, selected, testID }: { children: React.ReactNode; onPress(): void; disabled?: boolean; selected?: boolean; testID: string }) {
   return <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ disabled, ...(selected !== undefined ? { selected } : {}) }} disabled={disabled} onPress={onPress} style={[styles.action, disabled && styles.disabled]}><Text style={styles.actionText}>{children}</Text></Pressable>;
 }
@@ -54,14 +60,18 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
   const [capability, setCapability] = useState<TipCapability | null>(null);
   const [journalReady, setJournalReady] = useState(false);
   const [journalEntries, setJournalEntries] = useState<Awaited<ReturnType<ReturnType<typeof createIsolatedSandboxAttemptJournal>["list"]>>>([]);
+  const [checkoutReady, setCheckoutReady] = useState(false);
+  const [checkoutEntries, setCheckoutEntries] = useState<readonly IsolatedSandboxTipCheckoutAttempt[]>([]);
+  const [reviewedQuote, setReviewedQuote] = useState("");
   const alive = useRef(true); const retired = useRef(false); const generation = useRef(0); const mutationPending = useRef(false);
   const pagePending = useRef(false); const pageRequest = useRef(0);
   const [role, setRole] = useState<"buyer" | "creator">("buyer");
   const [draftTitle, setDraftTitle] = useState(""); const [country, setCountry] = useState(""); const [region, setRegion] = useState("");
   const [adult, setAdult] = useState<boolean | null>(null);
   const [journal] = useState(() => createIsolatedSandboxAttemptJournal({ userId: authority.userId }));
+  const [checkoutJournal] = useState(() => createIsolatedSandboxTipCheckoutJournal({ userId: authority.userId }));
   const current = useCallback(() => alive.current && !retired.current && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()), [authority]);
-  useEffect(() => subscribeToAccountSessionAuthority(value => { if (!sameAccountSessionAuthority(authority, value)) { retired.current = true; generation.current += 1; setData(null); setCapability(null); setJournalEntries([]); setJournalReady(false); setNotice({ message: "Your account session changed. Reopen this view to check current history." }); } }), [authority]);
+  useEffect(() => subscribeToAccountSessionAuthority(value => { if (!sameAccountSessionAuthority(authority, value)) { retired.current = true; generation.current += 1; setData(null); setCapability(null); setJournalEntries([]); setJournalReady(false); setCheckoutEntries([]); setCheckoutReady(false); setReviewedQuote(""); setNotice({ message: "Your account session changed. Reopen this view to check current history." }); } }), [authority]);
   useEffect(() => {
     alive.current = true; let owned: IsolatedTipClient | null = null; let active = true;
     setNotice(null);
@@ -91,6 +101,8 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
     const load = async () => {
       try { const entries = await journal.list(); if (applies()) { setJournalEntries(entries); setJournalReady(true); } }
       catch { if (applies()) { setJournalReady(false); setNotice({ message: "Saved actions could not be read. New actions are unavailable until local recovery is restored. Server history can still be checked." }); } }
+      try { const entries = await checkoutJournal.list(); if (applies()) { setCheckoutEntries(entries); setCheckoutReady(true); } }
+      catch { if (applies()) { setCheckoutReady(false); setNotice({ message: "Saved buyer attempts could not be read. New preparations and closure requests are unavailable. Server history can still be checked." }); } }
       if (page === "home" || page === "studio") {
         const capabilities = await read("capability.read", {}); if (applies()) setCapability(capabilities);
         return page === "home" ? capabilities : read("studio.read", { cursor: null, limit: 50 });
@@ -103,13 +115,18 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
         if (result.status !== "ok") throw new Error("isolated_tip_read_unavailable");
         try { const local = await journal.list(); if (local.some(entry => entry.requestId === original)) await journal.reconcile(original, result, { requestId, sessionGeneration: authority.sessionGeneration }); }
         catch { if (applies()) { setJournalReady(false); setNotice({ message: "Server status was checked, but local recovery could not be updated. New actions remain unavailable." }); } }
+        try {
+          const local = await checkoutJournal.list();
+          if (local.some(entry => entry.requestId === original)) await checkoutJournal.reconcile(original, result, { requestId, sessionGeneration: authority.sessionGeneration });
+          const updated = await checkoutJournal.list(); if (applies()) setCheckoutEntries(updated);
+        } catch { if (applies()) { setCheckoutReady(false); setNotice({ message: "Server status was checked, but buyer recovery could not be saved. New preparations and closure requests remain unavailable." }); } }
         return result.data;
       }
       return read("status.read", { intentId: tipId(param(params.intentId), "intent") ? param(params.intentId) : null, receiptId: tipId(param(params.receiptId), "receipt") ? param(params.receiptId) : null });
     };
     void load().then(value => { if (applies()) { setData(value); setBusy(false); } }).catch(() => { if (applies()) { setNotice({ message: unavailable }); setBusy(false); } }).finally(() => clearTimeout(timer));
     return () => { active = false; clearTimeout(timer); };
-  }, [authority.sessionGeneration, client, current, journal, page, params.offerId, params.intentId, params.receiptId, params.requestId, read, revision, role]);
+  }, [authority.sessionGeneration, client, current, journal, checkoutJournal, page, params.offerId, params.intentId, params.receiptId, params.requestId, read, revision, role]);
 
   const author = async (command: TipMutation, payload: IsolatedSandboxTipAttemptPayloads[TipMutation]) => {
     if (!client || !current() || mutationPending.current || !journalReady) return;
@@ -151,6 +168,70 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
     } catch (error) { let stopped = false; if (saved && prepared?.stopBeforeDispatch) { try { await prepared.stopBeforeDispatch(error); stopped = true; } catch { /* Unknown remains sticky. */ } } if (saved && !stopped) await journal.markUnknown(requestId).catch(() => undefined); if (current()) setNotice(saved && !stopped ? { message: "Retirement could not be confirmed. Check status before repeating it.", requestId } : { message: "Retirement was not sent. Resolve saved actions and check local storage before continuing." }); }
     finally { clearTimeout(timer); mutationPending.current = false; if (current()) setBusy(false); }
   };
+  const prepareBuyerAttempt = async (offer: TipOffer) => {
+    if (!client || !current() || mutationPending.current || !checkoutReady || offer.kind !== "creator_tip"
+      || !offer.available || offer.creatorId === authority.userId || reviewedQuote !== JSON.stringify(quoteForOffer(offer))) return;
+    mutationPending.current = true; setBusy(true); setReviewedQuote("");
+    const requestId = newTipRequestId(); let saved = false;
+    const timer = setTimeout(() => { if (saved && current()) setNotice({ message: "Preparation is still unconfirmed. Read its status without repeating it or starting a replacement.", requestId }); }, 15_000);
+    try {
+      const pending = await checkoutJournal.prepare({ requestId, sessionGeneration: authority.sessionGeneration, quote: quoteForOffer(offer) });
+      saved = pending.mayDispatch;
+      if (!pending.mayDispatch || !pending.dispatch) throw new Error("isolated_tip_preparation_blocked");
+      let settled = await pending.dispatch(async () => {
+        if (!current()) throw new IsolatedSandboxCommerceError("authority_retired", requestId, "not_dispatched");
+        return client.prepareCheckout(requestId, { offerId: offer.id, expectedRevision: offer.revision });
+      });
+      // The prepare response carries identity only. Confirm the reviewed
+      // economics and both immutable revisions through a fresh canonical read.
+      if (settled.intentId && current()) {
+        const readId = newTipRequestId();
+        const canonical = await client.request("request.read", readId, { originalRequestId: requestId });
+        settled = await checkoutJournal.reconcile(requestId, canonical, { requestId: readId, sessionGeneration: authority.sessionGeneration });
+      }
+      if (current()) {
+        setNotice({ message: settled.state === "not_applied" ? "This preparation was not sent. Reopen the current account view before choosing another action." : settled.state === "intent_prepared" ? "Preparation saved and reviewed quote confirmed. Actual purchase remains unavailable. Check this exact attempt before choosing another action." : settled.intentId ? "The attempt was recorded, but its reviewed quote could not be confirmed. Check status or request closure; do not prepare a replacement." : "Preparation outcome is unknown. Read status without repeating it or starting a replacement.", ...(settled.state !== "not_applied" ? { requestId } : {}) });
+        setRevision(value => value + 1);
+      }
+    } catch {
+      if (saved) await checkoutJournal.markUnknown(requestId).catch(() => undefined);
+      if (current()) { setNotice(saved ? { message: "Preparation could not be confirmed. Read its status; missing evidence does not prove no payment or permit replacement.", requestId } : { message: "A new preparation was not sent. Resolve saved buyer attempts and check local storage first." }); setRevision(value => value + 1); }
+    } finally { clearTimeout(timer); mutationPending.current = false; if (current()) setBusy(false); }
+  };
+  const closeBuyerAttempt = async (original: IsolatedSandboxTipCheckoutAttempt) => {
+    if (!client || !current() || mutationPending.current || !checkoutReady || original.command !== "checkout.prepare" || !original.intentId) return;
+    mutationPending.current = true; setBusy(true); let actionId: string | null = null;
+    const timer = setTimeout(() => { if (actionId && current()) setNotice({ message: "Closure is unconfirmed. Check this saved action; do not repeat the closure request.", requestId: actionId }); }, 15_000);
+    try {
+      // Re-read the original request under the current session. This never
+      // repeats preparation or treats an absent dispatch row as a no-charge proof.
+      const readId = newTipRequestId();
+      const result = await client.request("request.read", readId, { originalRequestId: original.requestId });
+      const observation = await checkoutJournal.observeForAbandon(original.requestId, result, { requestId: readId, sessionGeneration: authority.sessionGeneration });
+      const verified = observation.attempt;
+      if (!current()) return;
+      if (verified.state === "abandoned") { setNotice({ message: "The server already closed this exact attempt before dispatch. Other payments are not described by this proof." }); setRevision(value => value + 1); return; }
+      const entry = result.status === "ok" && result.data.resolution === "found" ? result.data.entry : null;
+      if (!observation.mayRequestAbandon || !entry || entry.id !== verified.intentId || entry.kind !== "creator_tip" || !["prepared", "expired"].includes(entry.status)
+        || entry.dispatchState !== "not_recorded" || entry.receipt !== null || entry.abandonment !== null)
+        throw new Error("isolated_tip_closure_unavailable");
+      const requestId = newTipRequestId();
+      const pending = await checkoutJournal.prepareAbandon({ requestId, sessionGeneration: authority.sessionGeneration, originalRequestId: original.requestId, intentId: entry.id });
+      if (!pending.mayDispatch || !pending.dispatch) throw new Error("isolated_tip_closure_blocked");
+      actionId = requestId;
+      const settled = await pending.dispatch(async () => {
+        if (!current()) throw new IsolatedSandboxCommerceError("authority_retired", requestId, "not_dispatched");
+        return client.request("checkout.abandon", requestId, { intentId: entry.id, originalRequestId: original.requestId });
+      });
+      if (current()) {
+        setNotice({ message: settled.state === "abandoned" ? "The server closed this exact attempt before dispatch. A new preparation requires a new explicit choice; this proof says nothing about other payments." : settled.state === "not_applied" ? "The closure request was not sent. The original preparation remains saved." : "Closure is unconfirmed. Read its status before another action.", ...(settled.state !== "not_applied" ? { requestId } : {}) });
+        setRevision(value => value + 1);
+      }
+    } catch {
+      if (actionId) await checkoutJournal.markUnknown(actionId).catch(() => undefined);
+      if (current()) { setNotice(actionId ? { message: "Closure could not be confirmed. Read this exact action's status; no undispatched proof was established.", requestId: actionId } : { message: "This attempt could not be confirmed as available for closure. Check its current status. No payment or no-charge conclusion was made." }); setRevision(value => value + 1); }
+    } finally { clearTimeout(timer); mutationPending.current = false; if (current()) setBusy(false); }
+  };
   const navigate = (path: string) => { if (current()) router.push(path as Href); };
   const studio = page === "studio" && data ? data as TipData["studio.read"] : null;
   const selectedOffer = page === "offer" && data ? (data as TipData["offer.read"]).offer : null;
@@ -159,6 +240,13 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
   const statusEntry = page === "status" && data ? (recovery ? recovery.entry : (data as TipData["status.read"]).entry) : null;
   const unresolved = journalEntries.some(entry => entry.state !== "completed" && entry.state !== "not_applied");
   const mutationDisabled = busy || !journalReady || unresolved;
+  const buyerUnresolved = checkoutEntries.some(entry => entry.command === "checkout.prepare" && entry.state !== "abandoned" && entry.state !== "not_applied");
+  const buyerDisabled = busy || !checkoutReady || buyerUnresolved;
+  const closable = statusEntry && statusEntry.kind === "creator_tip" && ["prepared", "expired"].includes(statusEntry.status)
+    && statusEntry.dispatchState === "not_recorded" && statusEntry.receipt === null && statusEntry.abandonment === null
+    ? checkoutEntries.find(entry => entry.command === "checkout.prepare" && entry.intentId === statusEntry.id && ["unknown", "intent_prepared"].includes(entry.state)) : undefined;
+  const closurePending = closable && checkoutEntries.some(entry => entry.command === "checkout.abandon"
+    && entry.prepareRequestId === closable.requestId && entry.state !== "not_applied");
   const loadMore = async () => {
     const cursor = history?.nextCursor ?? studio?.nextCursor;
     if (!cursor || busy || !client || pagePending.current) return;
@@ -231,11 +319,31 @@ function TipSession({ page, title, authority }: { page: Page; title: string; aut
         {studio.nextCursor ? <Action testID="isolated-tip-more" disabled={busy} onPress={() => void loadMore()}>Load older drafts</Action> : null}
       </> : null}
       {selectedOffer ? showOffer(selectedOffer) : null}
+      {selectedOffer?.kind === "creator_tip" && selectedOffer.available && selectedOffer.creatorId !== authority.userId ? <View style={styles.card} testID="isolated-tip-buyer-review">
+        <Text style={styles.title}>Review a test preparation</Text>
+        <Text style={styles.body}>{isolatedTipMoney(selectedOffer.amountMinor, selectedOffer.currency)} · Recipient account: {selectedOffer.creatorId}</Text>
+        <Text style={styles.body}>Offer revision {selectedOffer.revision} · Resource revision {selectedOffer.resourceRevision}</Text>
+        <Text style={styles.body}>This saves an attempt for status and recovery. It does not open a purchase sheet. Actual purchase remains unavailable.</Text>
+        <Action testID="isolated-tip-review-quote" disabled={buyerDisabled} selected={reviewedQuote === JSON.stringify(quoteForOffer(selectedOffer))} onPress={() => setReviewedQuote(value => value === JSON.stringify(quoteForOffer(selectedOffer)) ? "" : JSON.stringify(quoteForOffer(selectedOffer)))}>I reviewed this recipient and amount</Action>
+        <Action testID="isolated-tip-prepare" disabled={buyerDisabled || reviewedQuote !== JSON.stringify(quoteForOffer(selectedOffer))} onPress={() => void prepareBuyerAttempt(selectedOffer)}>Save test preparation</Action>
+        {buyerUnresolved ? <Text style={styles.body}>A saved buyer attempt still requires recovery or an authoritative undispatched closure before a replacement can be prepared.</Text> : null}
+      </View> : null}
       {history ? <><View style={styles.actions}><Action testID="isolated-tip-history-buyer" selected={role === "buyer"} onPress={() => setRole("buyer")}>Sent support</Action><Action testID="isolated-tip-history-creator" selected={role === "creator"} onPress={() => setRole("creator")}>Received support</Action></View>{history.items.length ? history.items.map(showAttempt) : <Text testID="isolated-tip-empty" style={styles.body}>No test attempts in this history view.</Text>}{history.nextCursor ? <Action testID="isolated-tip-more" disabled={busy} onPress={() => void loadMore()}>Load older history</Action> : null}</> : null}
       {recovery ? <View style={styles.card}><Text style={styles.title}>{recovery.resolution === "found" ? "Saved action found" : "Action outcome unknown"}</Text><Text style={styles.body}>{recovery.resolution === "found" ? "The server found this original action. Current state is shown below. No action was repeated." : "The server could not establish the original outcome. Do not repeat the action or start a replacement based on a missing row."}</Text>{recovery.resource ? <Text style={styles.body}>{recovery.resource.title} · {recovery.resource.status}</Text> : null}{recovery.offer ? showOffer(recovery.offer) : null}{recovery.declaration ? <Text style={styles.body}>Current declaration: {recovery.declaration.declared18Plus ? "18 or older" : "Not confirmed 18 or older"} · {recovery.declaration.countryCode}</Text> : null}</View> : null}
       {statusEntry ? showAttempt(statusEntry) : null}
+      {closable ? <View style={styles.card}>
+        <Text style={styles.title}>Request closure of this unstarted attempt</Text>
+        <Text style={styles.body}>The server will check again that this exact attempt has no dispatch claim or receipt. Only its confirmed closure permits a new preparation. This is not a refund or a statement about other payments.</Text>
+        <Action testID="isolated-tip-abandon" disabled={busy || !checkoutReady || Boolean(closurePending)} onPress={() => void closeBuyerAttempt(closable)}>Close this unstarted attempt</Action>
+        {closurePending ? <Text style={styles.body}>A closure request is already saved. Check that action instead of sending it again.</Text> : null}
+      </View> : null}
     </View> : null}
     {journalEntries.length ? <View style={styles.card}><Text style={styles.title}>Saved actions</Text><Text style={styles.body}>Check unresolved actions before starting another. These local records are not payment receipts.</Text>{journalEntries.map(entry => <Action key={entry.requestId} testID={`isolated-tip-recover-${entry.requestId}`} onPress={() => navigate(`/sandbox-tips/status?requestId=${entry.requestId}`)}>Check saved action</Action>)}</View> : null}
+    {checkoutEntries.length ? <View style={styles.card}><Text style={styles.title}>Saved buyer attempts</Text><Text style={styles.body}>These records preserve original requests across restarts and account sessions. They are not payment receipts. Checking status never repeats the saved mutation.</Text>{checkoutEntries.map(entry => <View key={entry.requestId} style={styles.section}>
+      <Text style={styles.body}>{entry.command === "checkout.prepare" ? "Preparation" : "Closure request"} · {entry.state === "intent_prepared" ? "Reviewed quote confirmed; not a purchase" : entry.state === "abandoned" ? "Exact undispatched closure recorded" : entry.state === "not_applied" ? "Request not sent" : entry.intentId ? "Attempt recorded; reviewed quote unconfirmed" : "Outcome requires checking"}</Text>
+      <Text style={styles.body}>Reviewed amount: {isolatedTipMoney(entry.quote.amountMinor, entry.quote.currency)} · Offer revision {entry.quote.offerRevision} · Resource revision {entry.quote.resourceRevision}</Text>
+      <Action testID={`isolated-tip-buyer-recover-${entry.requestId}`} onPress={() => navigate(`/sandbox-tips/status?requestId=${entry.requestId}`)}>Check buyer action</Action>
+    </View>)}</View> : null}
   </Frame>;
 }
 const styles = StyleSheet.create({

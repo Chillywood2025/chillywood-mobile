@@ -29,6 +29,9 @@ loss or generation retirement. They still require current account/session/legal
 authority. A creator cannot read a buyer's original request/session identifiers.
 Receipt history uses immutable intent IDs and quoted amount/currency; current
 resource titles are not presented as historic receipt snapshots.
+Owned intent projections also expose the stored offer and resource revisions.
+Buyer recovery compares these revisions, recipient, resource and economics
+against its durably reviewed quote before confirming a prepared intent.
 
 Recovery returns `found`, `busy` or `unknown`. An absent request is always
 `unknown`, even when its advisory key is currently free: the original request

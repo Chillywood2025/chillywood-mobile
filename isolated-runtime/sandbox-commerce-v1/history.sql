@@ -118,7 +118,8 @@ $$;
 create function sandbox_commerce_v1.history_attempt(p_intent uuid,p_current_session uuid,p_user uuid)
 returns jsonb language sql stable security invoker set search_path='' as $$
   select jsonb_build_object('id','scv1_intent_'||i.id,'offerId','scv1_offer_'||i.offer_id,
-    'resourceId','scv1_resource_'||i.resource_id,'creatorId',i.creator_id,'kind',i.kind,
+    'offerRevision',i.offer_revision,'resourceId','scv1_resource_'||i.resource_id,
+    'resourceRevision',i.resource_revision,'creatorId',i.creator_id,'kind',i.kind,
     'amountMinor',i.amount_minor,'currency',i.currency,
     'status',case when b.intent_id is not null then 'abandoned'
       when i.state='prepared' and i.expires_at<=clock_timestamp() then 'expired' else i.state end,

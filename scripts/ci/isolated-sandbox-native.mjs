@@ -39,7 +39,7 @@ export const NATIVE_STAGES=Object.freeze([
  ['core',11,[...ordinaryCleanup,'sessionsClosed']],
  ['declarations',12,[...ordinaryCleanup,'sessionsClosed']],
  ['receipts',26,[...ordinaryCleanup,'sessionsClosed']],
- ['history',24,[...ordinaryCleanup,'sessionsClosed']],
+ ['history',25,[...ordinaryCleanup,'sessionsClosed']],
  ['resource-graphs',46,[...ordinaryCleanup,'sessionsClosed']],
  ['managed-install',19,[...ordinaryCleanup,'sessionsClosed']],
  ['availability',21,ordinaryCleanup],
@@ -58,9 +58,10 @@ export const NATIVE_STAGES=Object.freeze([
 export const NODE_STAGES=Object.freeze([
  {name:'commerce-provider-delivery',expectedTests:52,files:['tests/isolated-sandbox-commerce-client.test.mjs',
   'tests/isolated-sandbox-delivery-policy.test.mjs','tests/creator-money/isolated-sandbox-provider.test.mjs']},
- {name:'tip-client',expectedTests:13,files:['tests/isolated-sandbox-tips-client.test.mjs']},
- {name:'tip-mounted',expectedTests:15,files:['tests/isolated-sandbox-tips-mounted.test.mjs']},
+ {name:'tip-client',expectedTests:17,files:['tests/isolated-sandbox-tips-client.test.mjs']},
+ {name:'tip-mounted',expectedTests:25,files:['tests/isolated-sandbox-tips-mounted.test.mjs']},
  {name:'tip-journal',expectedTests:18,files:['tests/isolated-sandbox-tip-attempts.test.mjs']},
+ {name:'tip-checkout-journal',expectedTests:19,files:['tests/isolated-sandbox-tip-checkout-attempts.test.mjs']},
  {name:'library-discovery',expectedTests:19,files:['tests/saved-media-screens-mounted.test.mjs']},
  {name:'receipt-router',expectedTests:18,files:['tests/creator-money/revenuecat-router.test.mjs']},
 ].map(stage=>Object.freeze({...stage,files:Object.freeze(stage.files)})));
@@ -120,7 +121,7 @@ export function collectSourceManifest(){
  const files=[...NODE_TEST_FILES,...NATIVE_STAGES.flatMap(stage=>stage.sourceFiles.map(file=>stage.sourceBase?`${stage.sourceBase}/${file}`:file)),
   '_lib/isolatedSandboxCommerce.ts','_lib/accountBoundSupabaseRpc.mjs',
   '_lib/accountSessionAuthority.ts','_lib/accountBoundSupabaseMutation.ts','package.json','package-lock.json',
-  '_lib/isolatedSandboxTips.ts','_lib/isolatedSandboxTipAttempts.ts','_lib/session.tsx','_lib/supabase.ts',
+  '_lib/isolatedSandboxTips.ts','_lib/isolatedSandboxTipAttempts.ts','_lib/isolatedSandboxTipCheckoutAttempts.ts','_lib/session.tsx','_lib/supabase.ts',
   '_lib/entitlementAuthority.ts','app/(tabs)/my-list.tsx','app/(tabs)/index.tsx','app/title/[id].tsx',
   '_lib/liveDiscoveryInvalidation.ts','_lib/publicPartyRoomCounts.ts','_lib/usePublicPartyRoomCounts.ts',
   'components/navigation/app-back-button.tsx',
@@ -130,7 +131,8 @@ export function collectSourceManifest(){
   'supabase/migrations/20260730170000_revenuecat_transfer_authoritative_ordering.sql',
   'supabase/migrations/20260908231500_pre_activation_premium_repurchase_quarantine_closure.sql',
   'supabase/migrations/20260909015439_pre_activation_premium_fresh_generation_lifecycle.sql',
-  'scripts/ci/isolated-sandbox-native.mjs','.github/workflows/required-validation.yml'];
+  'scripts/ci/isolated-sandbox-native.mjs','tests/ci/legacy-source-bridge-bootstrap.test.mjs',
+  'tests/ci/isolated-sandbox-native-validation.test.mjs','.github/workflows/required-validation.yml'];
  const visit=relative=>{for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){
   const next=`${relative}/${entry.name}`;assert.ok(!entry.isSymbolicLink(),`Source symlink rejected: ${next}`);
   if(entry.isDirectory())visit(next);else if(entry.isFile())files.push(next);
@@ -160,7 +162,34 @@ export function validateCommandFixture(fixture,kind){
  if(kind==='history')for(const command of ['capability.read','studio.read','offers.read','offer.read','history.read',
   'status.read','request.read','offer.retire','checkout.abandon'])assert.ok(commands.has(command),`Missing current SQL fixture command ${command}`);
  else assert.equal(kind,'core');
- return {cases:fixture.cases.length,commands:[...commands].sort()};
+ assert.equal(fixture.provenance?.synthetic,true,'SQL fixtures must retain their synthetic-data boundary');
+ assert.equal(fixture.provenance?.providerOrProductionCalls,false);
+ assert.ok(Array.isArray(fixture.checkoutCases)&&fixture.checkoutCases.length===1,'One actual buyer preparation capture required');
+ const checkout=fixture.checkoutCases[0];assert.ok(checkout?.actor&&checkout.quote&&checkout.response?.data?.intent);
+ const {actor,quote,response}=checkout;
+ assert.equal(checkout.command,'checkout.prepare');assert.equal(response.command,checkout.command);
+ assert.equal(response.protocol,'sandbox-commerce-v1');assert.equal(response.environment,'sandbox');assert.equal(response.status,'ok');
+ assert.equal(response.requestId,checkout.requestId);assert.equal(actor.accountId,actor.userId);assert.equal(actor.restoreOnly,false);
+ for(const key of ['userId','sessionGeneration'])assert.match(actor[key]??'',/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
+ for(const key of ['userId','accountId','sessionGeneration'])assert.equal(response.actor?.[key],actor[key]);
+ assert.equal(checkout.payload?.offerId,quote.offerId);assert.equal(checkout.payload?.expectedRevision,quote.offerRevision);
+ for(const key of ['offerRevision','resourceRevision','amountMinor'])assert.ok(Number.isSafeInteger(quote[key])&&quote[key]>0);
+ assert.equal(quote.kind,'creator_tip');assert.match(quote.currency??'',/^[a-z]{3}$/u);
+ for(const key of ['offerId','resourceId','kind'])assert.equal(response.data.intent[key],quote[key]);
+ assert.equal(response.data.intent.providerDispatchAllowed,false);
+ if(kind==='history'){
+  const recovery=checkout.recovery?.response;assert.ok(recovery?.data?.entry,'Fresh original-request recovery capture required');
+  assert.equal(recovery.protocol,'sandbox-commerce-v1');assert.equal(recovery.environment,'sandbox');assert.equal(recovery.status,'ok');
+  assert.equal(recovery.command,'request.read');assert.equal(recovery.requestId,checkout.recovery.requestId);
+  for(const key of ['userId','accountId','sessionGeneration'])assert.equal(recovery.actor?.[key],actor[key]);
+  assert.equal(recovery.data.originalRequestId,checkout.requestId);assert.equal(recovery.data.recordedSessionId,actor.sessionGeneration);
+  assert.equal(recovery.data.recordedCommand,'checkout.prepare');assert.equal(recovery.data.recordedPayload?.requestId,checkout.requestId);
+  for(const key of ['offerId','expectedRevision'])assert.equal(recovery.data.recordedPayload?.[key],checkout.payload[key]);
+  assert.equal(recovery.data.entry.id,response.data.intent.id);assert.equal(recovery.data.entry.providerDispatchAllowed,false);
+  for(const key of ['offerId','offerRevision','resourceId','resourceRevision','creatorId','kind','amountMinor','currency'])
+   assert.equal(recovery.data.entry[key],quote[key],`Recovered quote differs: ${key}`);
+ }
+ return {cases:fixture.cases.length,commands:[...commands].sort(),checkoutCases:fixture.checkoutCases.length};
 }
 function main(argv){
  if(argv.length===1&&argv[0]==='--plan'){console.log(JSON.stringify(createPlan(),null,2));return;}

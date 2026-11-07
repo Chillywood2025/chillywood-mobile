@@ -91,6 +91,7 @@ test('isolated native qualification is a credential-free canonical database obli
     'tests/creator-money/revenuecat-router.test.mjs',
     'scripts/ci/isolated-sandbox-native.mjs',
     'tests/isolated-sandbox-commerce-client.test.mjs',
+    'tests/isolated-sandbox-tip-checkout-attempts.test.mjs',
     'tests/isolated-sandbox-delivery-policy.test.mjs',
     'tests/creator-money/isolated-sandbox-provider.test.mjs',
     'tests/ci/isolated-sandbox-native-validation.test.mjs',
@@ -211,7 +212,7 @@ test('the offline runner plan contains every native suite and complete client/pr
   assert.equal(new Set(plan.nativeStages.map(stage => stage.name)).size, nativeFiles.length);
   assert.deepEqual(Object.fromEntries(plan.nativeStages.map(stage => [stage.name, stage.caseCount])), {
     'premium-authority': 46, authority: 20, core: 11, declarations: 12, receipts: 26, 'managed-install': 19, availability: 21,
-    history: 24, 'resource-graphs': 46, 'receipt-router': 22, 'isolated-source-bridge': 16, 'legacy-source-bridge': 49,
+    history: 25, 'resource-graphs': 46, 'receipt-router': 22, 'isolated-source-bridge': 16, 'legacy-source-bridge': 49,
   });
   for (const stage of plan.nativeStages) {
     assert.match(stage.name, /^[a-z][a-z-]+$/u);
@@ -225,13 +226,15 @@ test('the offline runner plan contains every native suite and complete client/pr
     'tests/isolated-sandbox-tips-client.test.mjs',
     'tests/isolated-sandbox-tips-mounted.test.mjs',
     'tests/isolated-sandbox-tip-attempts.test.mjs',
+    'tests/isolated-sandbox-tip-checkout-attempts.test.mjs',
     'tests/saved-media-screens-mounted.test.mjs',
     'tests/creator-money/revenuecat-router.test.mjs',
   ]);
   for (const file of plan.nodeTests) assert.ok(existsSync(file), file);
-  assert.equal(plan.expectedNodeTests, 135);
+  assert.equal(plan.expectedNodeTests, 168);
   assert.deepEqual(Object.fromEntries(plan.nodeStages.map(stage => [stage.name, stage.expectedTests])), {
-    'commerce-provider-delivery': 52, 'tip-client': 13, 'tip-mounted': 15, 'tip-journal': 18, 'library-discovery': 19, 'receipt-router': 18,
+    'commerce-provider-delivery': 52, 'tip-client': 17, 'tip-mounted': 25, 'tip-journal': 18,
+    'tip-checkout-journal': 19, 'library-discovery': 19, 'receipt-router': 18,
   });
   assert.equal(plan.execution, 'sequential/local-only');
 });
@@ -347,13 +350,34 @@ test('Node TAP validator requires exact per-suite counts and zero skipped, cance
 test('fresh SQL fixture validator rejects missing history commands, malformed identities and response substitutions', () => {
   const requestId = 'a0000000-0000-4000-8000-000000000001';
   const commands = ['capability.read', 'studio.read', 'offers.read', 'offer.read', 'history.read', 'status.read', 'request.read', 'offer.retire', 'checkout.abandon'];
+  const actor = {userId: requestId, accountId: requestId, sessionGeneration: requestId, restoreOnly: false};
+  const quote = {offerId: 'fixture-offer', offerRevision: 2, resourceId: 'fixture-resource', resourceRevision: 3,
+    creatorId: 'fixture-creator', kind: 'creator_tip', amountMinor: 99, currency: 'usd'};
+  const payload = {offerId: quote.offerId, expectedRevision: quote.offerRevision};
+  const entry = {id: 'fixture-intent', ...quote, providerDispatchAllowed: false};
+  const checkout = {actor, quote, command: 'checkout.prepare', requestId, payload,
+    response: {protocol: 'sandbox-commerce-v1', environment: 'sandbox', status: 'ok', command: 'checkout.prepare', requestId,
+      actor, data: {intent: entry}},
+    recovery: {requestId, response: {protocol: 'sandbox-commerce-v1', environment: 'sandbox', status: 'ok', command: 'request.read',
+      requestId, actor, data: {entry, originalRequestId: requestId, recordedSessionId: actor.sessionGeneration,
+        recordedCommand: 'checkout.prepare', recordedPayload: {...payload, requestId}}}}};
   const fixture = {protocol: 'sandbox-commerce-v1', cases: commands.map(command => ({command, payload: {requestId},
-    response: {protocol: 'sandbox-commerce-v1', environment: 'sandbox', command, requestId}}))};
+    response: {protocol: 'sandbox-commerce-v1', environment: 'sandbox', command, requestId}})),
+    checkoutCases: [checkout], provenance: {synthetic: true, providerOrProductionCalls: false}};
   assert.equal(validateCommandFixture(fixture, 'history').cases, commands.length);
+  assert.equal(validateCommandFixture(fixture, 'history').checkoutCases, 1);
   for (const mutate of [candidate => { candidate.cases.pop(); }, candidate => { candidate.cases = []; },
     candidate => { candidate.cases = {}; }, candidate => { candidate.cases[0].payload = []; },
     candidate => { candidate.cases[0].response.requestId = 'wrong'; }, candidate => { candidate.cases[0].response.command = 'other'; },
-    candidate => { candidate.cases[0].response.environment = 'production'; }, candidate => { candidate.protocol = 'legacy'; }]) {
+    candidate => { candidate.cases[0].response.environment = 'production'; }, candidate => { candidate.protocol = 'legacy'; },
+    candidate => { delete candidate.checkoutCases; }, candidate => { candidate.checkoutCases = []; },
+    candidate => { delete candidate.checkoutCases[0].recovery; },
+    candidate => { candidate.checkoutCases[0].recovery.response.data.entry.resourceRevision += 1; },
+    candidate => { candidate.checkoutCases[0].recovery.response.data.entry.amountMinor += 1; },
+    candidate => { candidate.checkoutCases[0].recovery.response.data.originalRequestId = 'different-request'; },
+    candidate => { candidate.checkoutCases[0].recovery.response.data.recordedSessionId = 'different-session'; },
+    candidate => { candidate.checkoutCases[0].recovery.response.data.entry.providerDispatchAllowed = true; },
+    candidate => { candidate.provenance.providerOrProductionCalls = true; }]) {
     const candidate = structuredClone(fixture); mutate(candidate);
     assert.throws(() => validateCommandFixture(candidate, 'history'), assert.AssertionError);
   }
@@ -365,7 +389,8 @@ test('source manifest binds actual app routes, journal, mounted UI, router, SQL 
     assert.match(manifest[stage.sourceBase ? `${stage.sourceBase}/${file}` : file] ?? '', /^[a-f0-9]{64}$/u, file);
   }
   for (const file of [
-    '_lib/isolatedSandboxTips.ts', '_lib/isolatedSandboxTipAttempts.ts',
+    '_lib/isolatedSandboxTips.ts', '_lib/isolatedSandboxTipAttempts.ts', '_lib/isolatedSandboxTipCheckoutAttempts.ts',
+    'tests/ci/legacy-source-bridge-bootstrap.test.mjs',
     'components/monetization/isolated-tip-screens.tsx', 'components/monetization/isolated-tip-receipt.tsx',
     'app/(tabs)/my-list.tsx', 'app/sandbox-tips/index.tsx', 'app/sandbox-tips/studio.tsx',
     'app/sandbox-tips/status.tsx', 'app/sandbox-tips/history.tsx', 'app/sandbox-tips/offer/[offerId].tsx',

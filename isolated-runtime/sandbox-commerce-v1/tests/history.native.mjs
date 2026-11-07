@@ -20,7 +20,7 @@ const args=(database=db)=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.
 const run=(tool,argv,input)=>spawnSync(path.join(bin,tool),argv,{env,input,encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024});
 const invoke=(tool,argv,input)=>{const r=run(tool,argv,input);assert.equal(r.status,0,`${r.error?.message??''}\n${r.stderr}`);return r.stdout.trim();};
 const q=sql=>invoke('psql',args(),sql),runQuery=sql=>run('psql',args(),sql);
-const api=fixtureApi(q,runQuery),cases=[],captures=[],clients=[];
+const api=fixtureApi(q,runQuery),cases=[],captures=[],checkoutCaptures=[],clients=[];
 const body=fields=>({protocol:'sandbox-commerce-v1',requestId:randomUUID(),...fields});
 const command=(name,payload={},user=SELLER,sid=SELLER_SESSION,expected=sid)=>api.actorPrefix(user,sid)
  +`select public.isolated_sandbox_tips_v1(${sqlText(name)},${sqlJson(payload.protocol?payload:body(payload))},${sqlText(user)},${sqlText(expected)});`;
@@ -176,7 +176,28 @@ try{
   const r=call('request.read',{originalRequestId:id},BUYER,BUYER_SESSION);
   assert.equal(r.resolution,'found');assert.equal(r.recordedCommand,'checkout.prepare');assert.equal(r.recordedPayload.requestId,id);
   assert.equal(r.entry.status,'expired');assert.equal(r.noDispatchProven,false);assert.equal(r.recordedSessionId,BUYER_SESSION);
+  assert.equal(r.entry.offerRevision,c.offer.revision);assert.equal(r.entry.resourceRevision,c.resource.revision);
   assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),before);
+ });
+ record('A real pre-prepare quote is confirmed only by the same original request and immutable persisted intent tuple',()=>{
+  api.reset();const scope=api.seedCatalog();
+  const resource=api.command('resource.create',{kind:'creator_tip',title:'Quoted recovery tip'},SELLER,SELLER_SESSION).data.resource;
+  const offer=api.command('offer.publish',{resourceId:resource.id,expectedRevision:resource.revision,
+   amountMinor:scope.amountMinor,currency:'usd'},SELLER,SELLER_SESSION).data.offer;
+  const observed=call('offer.read',{offerId:offer.id},BUYER,BUYER_SESSION).offer;
+  const quote={offerId:observed.id,offerRevision:observed.revision,resourceId:observed.resourceId,
+   resourceRevision:observed.resourceRevision,creatorId:observed.creatorId,kind:observed.kind,
+   amountMinor:observed.amountMinor,currency:observed.currency};
+  const payload={offerId:quote.offerId,expectedRevision:quote.offerRevision};
+  const response=api.command('checkout.prepare',payload,BUYER,BUYER_SESSION);
+  const recoveryPayload=body({originalRequestId:response.requestId});
+  const result=call('request.read',recoveryPayload,BUYER,BUYER_SESSION),recoveryResponse=captures.at(-1).response;
+  assert.equal(result.resolution,'found');assert.equal(result.recordedCommand,'checkout.prepare');
+  assert.equal(result.recordedSessionId,BUYER_SESSION);assert.equal(result.recordedPayload.requestId,response.requestId);
+  assert.equal(result.entry.id,response.data.intent.id);
+  for(const [key,value]of Object.entries(quote))assert.equal(result.entry[key],value);
+  checkoutCaptures.push({actor:{...response.actor,state:'ACTIVE',restoreOnly:false},command:'checkout.prepare',
+   requestId:response.requestId,payload,quote,response,recovery:{requestId:recoveryPayload.requestId,response:recoveryResponse}});
  });
  record('Authoring recovery projects exact recorded requests and current owned declaration/resource/offer state',()=>{
   const c=fresh();
@@ -220,11 +241,12 @@ try{
  });
  record('Verified/refunded receipts remain discoverable for buyer and creator after Premium loss, retirement and title changes',()=>{
   const c=fresh();api.beginDispatch(c);const receipt=api.receipt(c);const stored=api.invokeReceipt(receipt);assert.equal(stored.status,'processed');
-  q(`delete from public.user_entitlements where user_id='${SELLER}';update sandbox_commerce_v1.resources set title='Current changed title';
+  q(`delete from public.user_entitlements where user_id='${SELLER}';update sandbox_commerce_v1.resources set title='Current changed title',revision=revision+1;
    update sandbox_commerce_v1.lifecycle set state='retired';`);
   for(const [user,sid,role]of[[BUYER,BUYER_SESSION,'buyer'],[SELLER,SELLER_SESSION,'creator']]){
    const item=call('history.read',{role,cursor:null,limit:10},user,sid).items[0];assert.equal(item.receipt.status,'verified');
    assert.equal(item.amountMinor,99);assert.equal(item.title,undefined);assert.equal(item.buyerId,undefined);
+   assert.equal(item.offerRevision,c.offer.revision);assert.equal(item.resourceRevision,c.resource.revision);
    assert.equal(call('status.read',{intentId:null,receiptId:'scv1_receipt_'+stored.receiptId},user,sid).entry.id,c.intent.id);
   }
   assert.equal(api.invokeReceipt(api.terminal(receipt)).status,'processed');
@@ -237,6 +259,7 @@ try{
   reject(command('offer.retire',p,BUYER,BUYER_SESSION),/sandbox_offer_unavailable/u);
   const retired=call('offer.retire',p).offer;assert.equal(retired.status,'retired');assert.equal(retired.available,false);
   assert.equal(retired.revision,c.offer.revision+1);assert.equal(call('offer.retire',p).offer.revision,retired.revision);
+  assert.equal(call('status.read',{intentId:c.intent.id,receiptId:null},BUYER,BUYER_SESSION).entry.offerRevision,c.offer.revision);
   assert.equal(call('request.read',{originalRequestId:p.requestId}).offer.status,'retired');
   reject(command('offer.retire',{...p,expectedRevision:retired.revision}),/sandbox_idempotency_conflict/u);
  });
@@ -320,6 +343,7 @@ try{
  });
  for(const [file,hash]of Object.entries(install.sourceHashes))assert.equal(createHash('sha256').update(fs.readFileSync(path.join(here,'..',file))).digest('hex'),hash);
  report={status:'passed',engine,caseCount:cases.length,cases,sourceHashes:install.sourceHashes,
+  captureCounts:{history:captures.length,checkout:checkoutCaptures.length},
   scope:'Actual seven-file SQL on synthetic source projections. No provider authentication, hosted owner/Auth/pool or UI/device qualification.',
   fixtureLifecycleReset:'Disposable reset bypasses lifecycle only between independent cases; no runtime reset API.',
   paginationScope:'Immutable created_at/id keyset with insertion cutoff; mutable status remains current per page, not a historic MVCC snapshot.'};
@@ -332,5 +356,6 @@ try{
  assert.ok(cleanup.sessionsClosed);fs.rmSync(directory,{recursive:true});cleanup.directoryRemoved=true;
 }
 assert.ok(report);
-if(process.env.ISOLATED_SANDBOX_TIPS_FIXTURE){assert.ok(path.isAbsolute(process.env.ISOLATED_SANDBOX_TIPS_FIXTURE));fs.writeFileSync(process.env.ISOLATED_SANDBOX_TIPS_FIXTURE,JSON.stringify({protocol:'sandbox-commerce-v1',cases:captures},null,2)+'\n');}
+if(process.env.ISOLATED_SANDBOX_TIPS_FIXTURE){assert.ok(path.isAbsolute(process.env.ISOLATED_SANDBOX_TIPS_FIXTURE));fs.writeFileSync(process.env.ISOLATED_SANDBOX_TIPS_FIXTURE,JSON.stringify({protocol:'sandbox-commerce-v1',cases:captures,checkoutCases:checkoutCaptures,
+ provenance:{synthetic:true,providerOrProductionCalls:false,quoteSource:'actual buyer offer.read before checkout.prepare; confirmed by exact original request.read',sourceHashes:install.sourceHashes}},null,2)+'\n');}
 process.stdout.write(JSON.stringify({...report,durationMs:Date.now()-began,cleanup},null,2)+'\n');

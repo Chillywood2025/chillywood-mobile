@@ -8,6 +8,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 import {createHash,randomUUID,webcrypto} from 'node:crypto';
+import {Buffer} from 'node:buffer';
 import {spawn,spawnSync} from 'node:child_process';
 import {BUYER,OTHER,CONN,lit,json,legacySchema,clearLegacy,source,sourceEvent,sourceRows} from './legacy-source-bridge.fixture.mjs';
 globalThis.crypto??=webcrypto;
@@ -28,10 +29,38 @@ const config={connectionId:CONN,connectionRevision:1,projectId:'fixture-project'
 const envelope=(event,connection=config)=>loaded.authenticateRevenueCatEnvelope(new Request('https://fixture.invalid/receipt',
  {method:'POST',headers:{authorization:connection.authentication.secret},body:JSON.stringify({api_version:'1.0',event})}),connection);
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'receipt-legacy-bridge-')),data=path.join(directory,'data'),port='55458';
+// A short, private socket namespace avoids both TCP port collisions and Unix
+// socket path-length limits on macOS/Linux. No shared listener is created.
+const socketDirectory=fs.mkdtempSync(path.join(fs.realpathSync('/tmp'),'rclb-'));
+fs.chmodSync(socketDirectory,0o700);
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!k.startsWith('PG')));
-const args=db=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U','postgres','-d',db];
-const run=(tool,a,input)=>spawnSync(path.join(bin,tool),a,{env,input,encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024});
-const invoke=(tool,a,input)=>{const r=run(tool,a,input);assert.equal(r.status,0,`${tool}: ${r.stderr}\n${r.error?.message??''}`);return r.stdout.trim();};
+const args=db=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h',socketDirectory,'-p',port,'-U','postgres','-d',db];
+const redact=value=>String(value??'')
+ .replace(/\b(?:https?|postgres(?:ql)?):\/\/[^\s"'<>]+/giu,'[redacted URL]')
+ .replace(/\b(Bearer|Basic)\s+[^\s"',;]+/giu,'$1 [redacted]')
+ .replace(/\b(authorization|password|passfile|access[_-]?token|refresh[_-]?token|secret|api[_-]?key)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,'$1=[redacted]')
+ .replace(/^.*\b(?:STATEMENT|QUERY|CONTEXT):[^\n]*(?:\n(?!\d{4}-\d{2}-\d{2}[ T]|\s*(?:LOG|FATAL|ERROR|HINT|WARNING|DETAIL):)[^\n]*)*/gmu,'[redacted SQL context]');
+const boundedText=value=>redact(value).slice(-8192);
+const bootstrapCommands=[];
+const run=(tool,a,input)=>{
+ const result=spawnSync(path.join(bin,tool),a,{env,input,encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024});
+ if(['postgres','initdb','pg_ctl'].includes(tool)&&bootstrapCommands.length<12)bootstrapCommands.push({tool,
+  operation:a.includes('start')?'start':a.includes('stop')?'stop':a.includes('status')?'status':tool==='initdb'?'initdb':'version',
+  status:result.status,signal:result.signal,error:result.error?boundedText(result.error.message):null,
+  stdout:boundedText(result.stdout),stderr:boundedText(result.stderr)});
+ return result;
+};
+const invoke=(tool,a,input)=>{const r=run(tool,a,input);assert.equal(r.status,0,`${tool}: ${tool==='psql'?r.stderr:boundedText(r.stderr)}\n${r.error?.message??''}`);return r.stdout.trim();};
+const startupLog=()=>{
+ const file=path.join(directory,'server.log');let fd;
+ try{
+  fd=fs.openSync(file,'r');const size=fs.fstatSync(fd).size,bytes=Buffer.alloc(Math.min(size,32768));
+  fs.readSync(fd,bytes,0,bytes.length,Math.max(0,size-bytes.length));
+  const redacted=redact(bytes.toString('utf8'));
+  return {path:file,available:true,truncated:size>bytes.length||redacted.length>8192,text:redacted.slice(-8192)};
+ }catch(error){return {path:file,available:false,error:boundedText(error.code??error.name)};}
+ finally{if(fd!==undefined){try{fs.closeSync(fd);}catch{/* Diagnostic collection cannot replace the primary error. */}}}
+};
 const q=sql=>invoke('psql',args('legacy_fixture'),sql);
 const bad=(sql,pattern)=>{const r=run('psql',args('legacy_fixture'),sql);assert.notEqual(r.status,0);assert.match(r.stderr,pattern);return r;};
 const service=`set role service_role;set request.jwt.claims='{"role":"service_role"}';`;
@@ -66,13 +95,18 @@ async function held(sql){
  return {child,done,finish:async ending=>{child.stdin.end(ending+';\n');const r=await done;assert.equal(r.code,0,r.error);}};
 }
 let initAttempted=false,initialized=false,startAttempted=false,started=false,report;
+let phase='version',primaryFailure,cleanupFailure,failureLog;
 const began=Date.now();
 try{
  const version=invoke('postgres',['--version']);assert.match(version,/PostgreSQL\) 17\.6/u);
- initAttempted=true;invoke('initdb',['-D',data,'-U','postgres','--encoding=UTF8','--no-locale','--auth=trust']);initialized=true;
- startAttempted=true;invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(directory,'server.log'),'-o',
-  `-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c autovacuum=off`,'start']);started=true;
+ phase='initdb';initAttempted=true;invoke('initdb',['-D',data,'-U','postgres','--encoding=UTF8','--no-locale','--auth=trust']);initialized=true;
+ phase='pg_ctl_start';startAttempted=true;invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(directory,'server.log'),'-o',
+  `-c listen_addresses='' -c unix_socket_directories='${socketDirectory}' -p ${port} -c autovacuum=off`,'start']);started=true;phase='test_execution';
  invoke('psql',args('postgres'),'create database legacy_fixture;');
+ assert.equal(q("select current_setting('listen_addresses')"),'');
+ assert.equal(q("select current_setting('unix_socket_directories')"),socketDirectory);
+ assert.equal(q('select inet_server_addr() is null'),'t');
+ assert.equal(fs.statSync(socketDirectory).mode&0o777,0o700);
  q(`create role anon nologin;create role authenticated nologin;create role service_role nologin;
   create role fixture_default_exec nologin;alter default privileges for role postgres grant execute on functions to fixture_default_exec;
   ${legacySchema}
@@ -247,13 +281,30 @@ try{
    'Local postgres is fixture superuser; private bridge functions still run as source-defined non-bypass roles',
    'Authenticated envelope uses synthetic local keys/raw bytes; no real provider verification',
    'Clear is absence of a router veto, never positive ownership, entitlement, payment or delivery authority'],durationMs:Date.now()-began};
+}catch(error){
+ primaryFailure=error;
+ // Capture before cleanup can change the directory. Only a failed bootstrap
+ // reads this log; SQL/provider fixture statements cannot enter this evidence.
+ if(!started&&startAttempted)failureLog=startupLog();
 }finally{
+ try{
  for(const child of sessions)child.kill('SIGTERM');
  if(sessions.size)await Promise.all([...sessions].map(child=>new Promise(resolve=>child.once('exit',resolve))));cleanup.sessionsClosed=true;
  if(startAttempted){let s=run('pg_ctl',['-D',data,'status']);if(s.status===0){invoke('pg_ctl',['-D',data,'-m','immediate','-w','-t','15','stop']);cleanup.clusterStopped=true;}
   else if(s.status!==3||!started)throw new Error('Uncertain local cluster; preserved '+directory);
   assert.equal(run('pg_ctl',['-D',data,'status']).status,3);cleanup.clusterNotRunningVerified=true;
  }else if(initAttempted&&!initialized)throw new Error('Uncertain local initialization; preserved '+directory);
- fs.rmSync(directory,{recursive:true});cleanup.directoryRemoved=true;
+ fs.rmSync(directory,{recursive:true});fs.rmSync(socketDirectory,{recursive:true});cleanup.directoryRemoved=true;
+ }catch(error){cleanupFailure=error;}
+}
+if(primaryFailure||cleanupFailure){
+ const failure=error=>error?{name:error.name??'Error',message:boundedText(error.message??error),code:error.code??null}:null;
+ process.stderr.write('LEGACY_BOOTSTRAP_DIAGNOSTICS '+JSON.stringify({phase,primaryFailure:failure(primaryFailure),
+  cleanupFailure:failure(cleanupFailure),initAttempted,initialized,startAttempted,started,commands:bootstrapCommands,
+  serverLog:failureLog??null,directoryPreserved:fs.existsSync(directory),socketDirectory,
+  socketDirectoryPreserved:fs.existsSync(socketDirectory),cleanup})+'\n');
+ // Cleanup never replaces the original failure. Neither failure can emit a
+ // passing proof, and uncertain clusters retain their exact directory.
+ throw primaryFailure??cleanupFailure;
 }
 assert.ok(report);console.log(JSON.stringify({...report,cleanup},null,2));

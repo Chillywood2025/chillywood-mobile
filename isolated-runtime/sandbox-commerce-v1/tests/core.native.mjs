@@ -13,7 +13,7 @@ assert.equal(process.argv.length,4);assert.equal(process.argv[2],'--local-bin');
 const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
 const here=path.dirname(fileURLToPath(import.meta.url));
 const work=fs.mkdtempSync(path.join(os.tmpdir(),'sandbox-core-native-'));
-const data=path.join(work,'data'),port='55451',db='core_'+randomUUID().replaceAll('-','');
+const data=path.join(work,'data'),port='55461',db='core_'+randomUUID().replaceAll('-','');
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!k.startsWith('PG')));
 const args=d=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U','postgres','-d',d];
 const run=(tool,a,input)=>spawnSync(path.join(bin,tool),a,{input,encoding:'utf8',env,timeout:30000,maxBuffer:4*1024*1024});
@@ -25,14 +25,19 @@ const buyer='66666666-6666-4666-8666-666666666666',buyerSession='77777777-7777-4
 const payload=(values={})=>({protocol:'sandbox-commerce-v1',requestId:randomUUID(),...values});
 const command=(kind,p,actor=creator,sid=creatorSession,expected=sid)=>
  `set role authenticated;set request.jwt.claims=${literal(JSON.stringify({role:'authenticated',sub:actor,session_id:sid}))};select public.isolated_sandbox_commerce_v1(${literal(kind)},${literal(JSON.stringify(p))},'${actor}','${expected}');`;
-const captures=[];
+const captures=[],checkoutCaptures=[];
 const call=(...a)=>{
  const response=JSON.parse(q(command(...a)));
  if(!a[2]||a[2]===creator){const {protocol,requestId,...fields}=a[1];captures.push({command:a[0],requestId,payload:fields,response});}
  return response;
 };
 const rejects=(sql,re)=>{const r=run('psql',args(db),sql);assert.notEqual(r.status,0);assert.match(r.stderr,re);};
-const read=f=>fs.readFileSync(path.join(here,'..',f),'utf8');
+const sourceFiles=['core.sql','premium-authority.sql','authority.sql','commands.sql','permissions-finalize.sql'];
+const sources=Object.fromEntries(sourceFiles.map(f=>[f,fs.readFileSync(path.join(here,'..',f),'utf8')]));
+const fixtureFiles=['premium-authority.fixture.sql','authority.fixture.sql'];
+const fixtures=Object.fromEntries(fixtureFiles.map(f=>[f,fs.readFileSync(path.join(here,f),'utf8')]));
+const digest=value=>createHash('sha256').update(value).digest('hex');
+const read=f=>sources[f];
 let startAttempted=false,started=false,report;
 const sessions=[],cases=[];
 const cleanup={sessionsClosed:false,clusterStopped:false,clusterNotRunningVerified:false,directoryRemoved:false};
@@ -43,8 +48,8 @@ try{
  startAttempted=true;invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(work,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c max_prepared_transactions=0 -c autovacuum=off`,'start']);started=true;
  invoke('psql',args('postgres'),`create database ${db};`);
  q('create role anon nologin;create role authenticated nologin;create role service_role nologin;alter default privileges for role postgres grant execute on functions to authenticated;');
- q(fs.readFileSync(path.join(here,'premium-authority.fixture.sql'),'utf8'));
- const fixture=fs.readFileSync(path.join(here,'authority.fixture.sql'),'utf8');
+ q(fixtures['premium-authority.fixture.sql']);
+ const fixture=fixtures['authority.fixture.sql'];
  const ownDeclaration=/create table sandbox_commerce_v1\.declarations\([\s\S]*?\);\n/u;
  assert.equal([...fixture.matchAll(new RegExp(ownDeclaration.source,'gu'))].length,1);
  q('begin;'+read('core.sql')+fixture.replace(ownDeclaration,'')+read('premium-authority.sql')+read('authority.sql')+read('commands.sql')+read('permissions-finalize.sql')+'commit;');
@@ -81,6 +86,19 @@ try{
  const checkout=payload({offerId:offer.id,expectedRevision:offer.revision});
  const prepared=call('checkout.prepare',checkout,buyer,buyerSession);
  assert.equal(prepared.status,'ok');assert.equal(prepared.data.intent.providerDispatchAllowed,false);
+ // Capture the actual buyer response separately from the existing creator
+ // contract cases. The quote is read from this exact persisted synthetic intent;
+ // no response, actor, price or revision is invented by a JS mock.
+ const quote=JSON.parse(q(`select jsonb_build_object('offerId','scv1_offer_'||offer_id,'offerRevision',offer_revision,
+  'resourceId','scv1_resource_'||resource_id,'resourceRevision',resource_revision,'creatorId',creator_id,
+  'kind',kind,'amountMinor',amount_minor,'currency',currency) from sandbox_commerce_v1.intents
+  where id='${prepared.data.intent.id.replace('scv1_intent_','')}';`));
+ assert.equal(prepared.actor.userId,buyer);assert.equal(prepared.actor.accountId,buyer);
+ assert.equal(prepared.actor.sessionGeneration,buyerSession);assert.equal(quote.offerId,checkout.offerId);
+ assert.equal(quote.offerRevision,checkout.expectedRevision);assert.equal(quote.resourceId,prepared.data.intent.resourceId);
+ assert.equal(quote.kind,'creator_tip');assert.equal(prepared.data.intent.status,'prepared');
+ checkoutCaptures.push({actor:{...prepared.actor,state:'ACTIVE',restoreOnly:false},command:'checkout.prepare',
+  requestId:checkout.requestId,payload:{offerId:checkout.offerId,expectedRevision:checkout.expectedRevision},quote,response:prepared});
  assert.equal(call('checkout.prepare',checkout,buyer,buyerSession).data.intent.id,prepared.data.intent.id);
  assert.equal(q(`select count(*) from public.user_entitlements where user_id='${buyer}';`),'0');
   const rid=resourceId.replace('scv1_resource_','');
@@ -148,8 +166,11 @@ try{
  assert.equal(q('select count(*) from sandbox_commerce_v1.grants;'),'0');
  assert.equal(q(`select count(*) from public.access_grants where user_id='${buyer}';`),'0');
  cases.push('No new grant, live-money switch change, buyer Premium or legacy paid right is created.');
+ for(const f of sourceFiles)assert.equal(digest(fs.readFileSync(path.join(here,'..',f))),digest(read(f)),`Source changed during run: ${f}`);
+ for(const f of fixtureFiles)assert.equal(digest(fs.readFileSync(path.join(here,f))),digest(fixtures[f]),`Fixture changed during run: ${f}`);
  report={status:'passed',engine,scope:'Actual source SQL on synthetic minimal authority tables and synthetic catalog; no provider or media integration, deployed schema, device or live behavior proof.',caseCount:cases.length,cases,
-  sourceHashes:Object.fromEntries(['core.sql','premium-authority.sql','authority.sql','commands.sql','permissions-finalize.sql'].map(f=>[f,createHash('sha256').update(read(f)).digest('hex')]))};
+  sourceHashes:Object.fromEntries(sourceFiles.map(f=>[f,digest(read(f))])),fixtureHashes:Object.fromEntries(fixtureFiles.map(f=>[f,digest(fixtures[f])])),
+  captureCounts:{creator:captures.length,checkout:checkoutCaptures.length}};
 }finally{
  for(const child of sessions)if(child.exitCode===null){child.stdin.end('rollback;\n');child.kill('SIGTERM');}
  cleanup.sessionsClosed=sessions.every(s=>s.exitCode!==null);
@@ -162,6 +183,8 @@ assert.ok(report);
 if(process.env.ISOLATED_SANDBOX_COMMAND_FIXTURE){
  assert.ok(path.isAbsolute(process.env.ISOLATED_SANDBOX_COMMAND_FIXTURE));
  fs.writeFileSync(process.env.ISOLATED_SANDBOX_COMMAND_FIXTURE,JSON.stringify({protocol:'sandbox-commerce-v1',
-  actor:{userId:creator,accountId:creator,sessionGeneration:creatorSession,state:'ACTIVE',restoreOnly:false},cases:captures},null,2)+'\n');
+  actor:{userId:creator,accountId:creator,sessionGeneration:creatorSession,state:'ACTIVE',restoreOnly:false},cases:captures,
+  checkoutCases:checkoutCaptures,provenance:{fixture:'core.native.mjs',synthetic:true,providerOrProductionCalls:false,
+   quoteSource:'persisted synthetic sandbox_commerce_v1.intents row',sourceHashes:report.sourceHashes,fixtureHashes:report.fixtureHashes}},null,2)+'\n');
 }
 process.stdout.write(JSON.stringify({...report,durationMs:Date.now()-startedAt,cleanup},null,2)+'\n');

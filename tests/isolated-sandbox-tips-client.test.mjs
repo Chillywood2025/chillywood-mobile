@@ -16,25 +16,26 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const offer = { id: id("offer"), resourceId: id("resource"), creatorId: A.userId, kind: "creator_tip", title: "Support", revision: 1, resourceRevision: 1, status: "published", amountMinor: 199, currency: "usd", createdAt, available: true, checkoutConnected: false };
 const resource = { id: id("resource"), creatorId: A.userId, kind: "creator_tip", title: "Support", revision: 1, status: "published", createdAt, offers: [offer], offersNextCursor: null, offersTruncated: false };
 const receipt = { id: id("receipt"), intentId: id("intent"), status: "verified", receiptType: "provider_verified", purchasedAt: createdAt, amountMinor: 199, currency: "usd", grantsAccess: false, notPayable: true };
-const entry = { id: id("intent"), offerId: id("offer"), resourceId: id("resource"), creatorId: A.userId, kind: "creator_tip", amountMinor: 199, currency: "usd", status: "verified", createdAt, expiresAt: "2026-11-07T10:05:00+00:00", originalSessionMatchesCurrent: true, dispatchState: "bound", receipt, abandonment: null, providerDispatchAllowed: false, noDispatchProven: false };
+const entry = { id: id("intent"), offerId: id("offer"), offerRevision: 1, resourceId: id("resource"), resourceRevision: 1, creatorId: A.userId, kind: "creator_tip", amountMinor: 199, currency: "usd", status: "verified", createdAt, expiresAt: "2026-11-07T10:05:00+00:00", originalSessionMatchesCurrent: true, dispatchState: "bound", receipt, abandonment: null, providerDispatchAllowed: false, noDispatchProven: false };
 const capability = { generationState: "active", canAuthor: true, creatorEligible: true, creatorReason: "eligible", canReadHistory: true, canRetireOwnOffers: true, checkoutConnected: false, declaration: null };
 function load(path, bindings) {
   const context = { exports: {}, crypto: webcrypto, require(name) { assert.ok(name in bindings, `Unmodeled dependency ${name}`); return bindings[name]; } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(path, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context, { filename: path });
   return context.exports;
 }
-function fixture() {
-  let session = A; let transform = value => value; let before = async () => {}; const calls = [];
+function fixture(initial = A) {
+  let session = initial; let transform = value => value; let before = async () => {}; const calls = [];
   const supabase = { SUPABASE_URL: "https://isolated-fixture.invalid", SUPABASE_ANON_KEY: "fixture-public-key", supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: session.userId }, access_token: `fixture-${session.sessionGeneration}` } } }) } } };
   const deadline = { withAuthorityReadDeadline: async operation => await operation };
-  const authority = load("../_lib/accountSessionAuthority.ts", { "./supabase": supabase, "./entitlementAuthority": deadline }); authority.publishAccountSessionAuthoritySnapshot(A);
+  const authority = load("../_lib/accountSessionAuthority.ts", { "./supabase": supabase, "./entitlementAuthority": deadline }); authority.publishAccountSessionAuthoritySnapshot(initial);
   const transport = { isAccountBoundSupabaseRpcOutcomeAmbiguous, invokeAccountBoundSupabaseRpc: args => invokeAccountBoundSupabaseRpc({ ...args, fetchImpl: async (url, init) => {
     const body = JSON.parse(init.body); calls.push({ url, body, headers: init.headers });
     if (url.endsWith("/wave1_session_authority_readback")) return Response.json({ ...session, authoritative: true });
-    assert.ok(url.endsWith("/isolated_sandbox_tips_v1")); await before();
+    assert.ok(url.endsWith(body.p_command === "checkout.prepare" ? "/isolated_sandbox_commerce_v1" : "/isolated_sandbox_tips_v1")); await before();
     const payload = body.p_payload;
     const data = { "capability.read": capability, "studio.read": { resources: [resource], nextCursor: null, catalog: [{ kind: "creator_tip", amountMinor: 199, currency: "usd", publicationAvailable: true, checkoutConnected: false }], catalogTruncated: false }, "offers.read": { resourceId: resource.id, offers: [offer], nextCursor: null }, "offer.read": { offer }, "history.read": { role: payload.role, items: [entry], nextCursor: null }, "status.read": { entry }, "request.read": { resolution: "unknown", originalRequestId: payload.originalRequestId, recordedCommand: null, recordedSessionId: null, recordedPayload: null, resource: null, offer: null, entry: null, declaration: null, retryAllowed: false, noDispatchProven: false }, "offer.retire": { offer: { ...offer, status: "retired", available: false } } }[body.p_command];
-    return Response.json(transform(clone({ protocol: "sandbox-commerce-v1", environment: "sandbox", command: body.p_command, requestId: payload.requestId, actor: { userId: body.p_expected_account_id, accountId: body.p_expected_account_id, sessionGeneration: body.p_expected_session_generation }, status: "ok", data })));
+    const prepared = body.p_command === "checkout.prepare" ? { intent: { id: id("intent"), offerId: payload.offerId, resourceId: id("resource"), kind: "creator_tip", status: "prepared", providerDispatchAllowed: false } } : data;
+    return Response.json(transform(clone({ protocol: "sandbox-commerce-v1", environment: "sandbox", command: body.p_command, requestId: payload.requestId, actor: { userId: body.p_expected_account_id, accountId: body.p_expected_account_id, sessionGeneration: body.p_expected_session_generation }, status: "ok", data: prepared })));
   } }) };
   const bindings = { "./accountSessionAuthority": authority, "./accountBoundSupabaseRpc.mjs": transport, "./supabase": supabase, "react-native": { Platform: { OS: "ios" } }, "./entitlementAuthority": deadline };
   const mutation = load("../_lib/accountBoundSupabaseMutation.ts", bindings);
@@ -58,6 +59,37 @@ test("all read surfaces and offer retirement accept exact current source contrac
   const f = fixture(); const client = await f.capture();
   for (const [command, payload] of Object.entries({ "capability.read": {}, "studio.read": { cursor: null, limit: 20 }, "offers.read": { resourceId: resource.id, cursor: null, limit: 20 }, "offer.read": { offerId: offer.id }, "history.read": { role: "creator", cursor: null, limit: 20 }, "status.read": { intentId: entry.id, receiptId: null }, "request.read": { originalRequestId: uuid(99) }, "offer.retire": { offerId: offer.id, expectedRevision: 1 } })) assert.equal((await client.request(command, f.api.newTipRequestId(), payload)).status, "ok");
   client.dispose();
+});
+test("Free buyer preparation uses the commerce RPC with the captured account and never dispatches a provider", async () => {
+  const f = fixture(B); const client = await f.capture();
+  const result = await client.prepareCheckout(uuid(210), { offerId: offer.id, expectedRevision: 1 });
+  const call = f.calls.at(-1);
+  assert.equal(call.url, "https://isolated-fixture.invalid/rest/v1/rpc/isolated_sandbox_commerce_v1");
+  assert.equal(call.body.p_command, "checkout.prepare"); assert.equal(call.body.p_expected_account_id, B.userId);
+  assert.equal(call.headers.Authorization, `Bearer fixture-${B.sessionGeneration}`);
+  assert.equal(result.data.intent.providerDispatchAllowed, false); assert.equal(result.data.intent.status, "prepared");
+  assert.ok(f.calls.every(item => !/begin_dispatch|bind_dispatch|restore|purchaseStore/u.test(item.url)));
+  client.dispose();
+});
+test("buyer preparation rejects injected fields before transport and non-tip or dispatch-capable responses", async () => {
+  const f = fixture(B); const client = await f.capture(); const before = f.calls.length;
+  for (const payload of [{ offerId: uuid(10), expectedRevision: 1 }, { offerId: offer.id, expectedRevision: 0 }, { offerId: offer.id, expectedRevision: 1, dispatchAllowed: true }])
+    await assert.rejects(client.prepareCheckout(f.api.newTipRequestId(), payload), error => error.code === "invalid_request" && error.outcome === "not_dispatched");
+  assert.equal(f.calls.length, before);
+  for (const change of [value => { value.data.intent.kind = "paid_content"; }, value => { value.data.intent.providerDispatchAllowed = true; }, value => { value.actor.sessionGeneration = A.sessionGeneration; }]) {
+    f.transform(value => { change(value); return value; });
+    await assert.rejects(client.prepareCheckout(f.api.newTipRequestId(), { offerId: offer.id, expectedRevision: 1 }), error => error.code === "invalid_response" && error.outcome === "unknown");
+  }
+  client.dispose();
+});
+test("buyer preparation stays unknown after A to B to A and the old client cannot prepare again", async () => {
+  const f = fixture(); const client = await f.capture(); let resolve; const pending = new Promise(done => { resolve = done; });
+  f.before(() => pending); const result = client.prepareCheckout(uuid(220), { offerId: offer.id, expectedRevision: 1 });
+  f.change(B); f.change(A); resolve();
+  await assert.rejects(result, error => error.code === "authority_retired" && error.outcome === "unknown");
+  const sent = f.calls.length;
+  await assert.rejects(client.prepareCheckout(uuid(221), { offerId: offer.id, expectedRevision: 1 }), error => error.code === "authority_retired" && error.outcome === "not_dispatched");
+  assert.equal(f.calls.length, sent); client.dispose();
 });
 test("A to B to A retires the old client permanently including an outstanding read", async () => {
   const f = fixture(); const client = await f.capture(); let resolve; const pending = new Promise(done => { resolve = done; }); f.before(() => pending);
@@ -144,4 +176,15 @@ if (nativeFixturePath) test("current real local PostgreSQL responses pass the st
   }
   assert.deepEqual(failures, []);
   assert.ok(records.length >= 30, "Native bridge must include current capability, history, recovery and lifecycle cases");
+});
+if (process.env.ISOLATED_SANDBOX_COMMAND_FIXTURE) test("actual PostgreSQL Free buyer preparation passes captured transport without provider continuation", async () => {
+  const saved = JSON.parse(fs.readFileSync(process.env.ISOLATED_SANDBOX_COMMAND_FIXTURE, "utf8"));
+  assert.ok(Array.isArray(saved.checkoutCases) && saved.checkoutCases.length > 0, "Need actual successful buyer preparation captures");
+  for (const item of saved.checkoutCases) {
+    assert.equal(item.command, "checkout.prepare"); assert.equal(item.response.status, "ok");
+    assert.notEqual(item.actor.userId, item.quote.creatorId);
+    const f = fixture(item.actor); const client = await f.capture(); f.transform(() => clone(item.response));
+    try { const result = await client.prepareCheckout(item.requestId, item.payload); assert.deepEqual(clone(result), item.response); assert.equal(result.data.intent.providerDispatchAllowed, false); }
+    finally { client.dispose(); }
+  }
 });

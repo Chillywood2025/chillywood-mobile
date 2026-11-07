@@ -2,7 +2,8 @@
 
 **Inactive implementation work. Not a production migration, deployable release,
 or completed replacement for PR #683/#684.** The Library links to dedicated
-sandbox tip authoring/history routes. Checkout is visibly unavailable. No
+sandbox tip authoring/history routes and buyer quote preparation/recovery.
+Provider purchase is visibly unavailable. No
 existing webhook, money dispatcher or delivery endpoint activates this bundle.
 
 This work avoids replacing the existing commerce functions. A fresh private
@@ -11,6 +12,16 @@ receipts. Installation refuses collisions rather than overwriting anything.
 The lifecycle starts disabled and permits only disabled → active → retired (or
 disabled → retired). Retired generations cannot be reactivated. Historical
 status and receipt reconciliation remain separate from new initiation.
+
+Buyer preparation uses a separate durable journal. The reviewed recipient,
+resource, offer, revisions and amount are persisted before a one-use request.
+A direct preparation response records only a known intent with an uncertain
+outcome. A fresh original-request read must confirm the full immutable quote
+before the UI calls it prepared. Unknown, restarted and retired-session work
+cannot automatically resend. A changed quote can only be closed through an
+explicit, exactly linked undispatched tombstone; it cannot authorize a purchase.
+The journal does not call the native SDK or a provider. A prepared intent is not
+a charge, completed tip or receipt.
 
 ## Implemented boundaries
 
