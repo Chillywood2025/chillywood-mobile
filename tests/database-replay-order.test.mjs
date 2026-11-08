@@ -24,12 +24,25 @@ test('native capture and exporter report every source migration exactly once in 
   const executed = [];
   for (const file of sourceFiles) {
     const skipped = new Set(replayReport.skipped.filter(entry => entry.file === file).map(entry => entry.index));
-    for (const [index, statement] of splitSQL(fs.readFileSync(path.join(migrationDirectory, file), 'utf8')).entries()) {
+    const sourceStatements = splitSQL(fs.readFileSync(path.join(migrationDirectory, file), 'utf8'));
+    const command = statement => statement.replace(/--[^\n]*/gu, '').replace(/\/\*[\s\S]*?\*\//gu, '').trim();
+    const roleSensitive = sourceStatements.some(statement => /^set\s+local\s+role\b/iu.test(command(statement)));
+    let atomic = null;
+    for (const [index, statement] of sourceStatements.entries()) {
       const head = statement.replace(/--[^\n]*/gu, '').replace(/\/\*[\s\S]*?\*\//gu, '').trim();
+      if (roleSensitive && /^begin\s*;?$/iu.test(head)) { assert.equal(atomic, null); atomic = ''; }
+      if (atomic !== null) {
+        assert.ok(!skipped.has(index), 'literal atomic blocks cannot skip source statements');
+        atomic += statement;
+        if (head && !/^(begin|commit|rollback)\s*;?$/iu.test(head)) statements++;
+        if (/^commit\s*;?$/iu.test(head)) { executed.push(atomic); atomic = null; }
+        continue;
+      }
       if (!head || /^(begin|commit|rollback)\s*;?$/iu.test(head)) continue;
       statements++;
       if (!skipped.has(index)) executed.push(/^lock table/iu.test(head) ? `begin;${statement};commit;` : statement);
     }
+    assert.equal(atomic, null, 'every role-sensitive source transaction closes');
   }
   assert.equal(replayReport.statements, statements, 'repair statements are not omitted or counted twice');
   assert.ok(sql.endsWith(executed.join('\n')), 'captured SQL really executes the reported chronology, with no late repair overlay');

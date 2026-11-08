@@ -163,12 +163,20 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = tr
       && !excludeMigrations.includes(name)
       && (includeHeldStudio || !heldStudioBundleVersions.some(version => name.startsWith(`${version}_`)))).sort();
     for (const file of files) {
-      const statements = migrationReplayUnits(fs.readFileSync(path.join(migrationDirectory, file), 'utf8'));
-      for (let index = 0; index < statements.length; index++) {
-        const sql = statements[index];
+      const source = fs.readFileSync(path.join(migrationDirectory, file), 'utf8');
+      const sourceStatements = splitSQL(source);
+      // This report counts original non-transaction source statements (including
+      // explicitly reported skips), not calls to db.exec or atomic replay units.
+      replayReport.statements += sourceStatements.filter(sql => {
+        const head = sql.replace(/--[^\n]*/gu, '').replace(/\/\*[\s\S]*?\*\//gu, '').trim();
+        return head && !/^(begin|commit|rollback)\s*;?$/iu.test(head);
+      }).length;
+      let nextSourceIndex = 0;
+      for (const sql of migrationReplayUnits(source)) {
+        const index = nextSourceIndex;
+        nextSourceIndex += splitSQL(sql).length;
         const head = sql.replace(/--[^\n]*/gu, '').replace(/\/\*[\s\S]*?\*\//gu, '').trim();
         if (!head || /^(begin|commit|rollback)\s*;?$/iu.test(head)) continue;
-        replayReport.statements++;
         if (/^create extension.*\b(pg_cron|pg_net)\b/iu.test(head)) {
           replayReport.skipped.push({file, index, reason: 'Managed scheduling/network extension replaced by local doubles'}); continue;
         }
