@@ -20,6 +20,8 @@ assert.deepEqual(inventory.files.map(file=>file.path).sort(),[...CLOSURE].sort()
 // engagement tests apply them and qualify their independent authority boundaries.
 // The later independent capture installation is likewise outside this historical
 // cashout checkpoint; its exact migration bytes have a separate PostgreSQL suite.
+// The capacity successor replaces two ticket-trigger bodies after this checkpoint;
+// current-chain provider/native contention suites cover it, never October overlays.
 export const POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS=Object.freeze([
  '20261106001341_automatic_premium_commerce_admission.sql',
  '20261106001353_automatic_creator_eligibility_refresh.sql',
@@ -37,6 +39,7 @@ export const POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS=Object.freeze([
  '20261107173220_creator_video_social_engagement.sql',
  '20261107191000_comment_likes.sql',
  '20261107233954_isolated_test_store_capture_v1.sql',
+ '20261108095500_paid_party_ticket_capacity_accounting.sql',
 ]);
 
 export function readHistoricalCashoutSource(file){
