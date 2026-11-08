@@ -27,6 +27,12 @@ SQL storage does not independently authenticate/redecrypt ciphertext: future
 workers must decrypt, reparse and verify scope before correlation. Original keys
 must remain available to replay retained receipts across key revisions.
 
+The service-only `native_store_sandbox_journal_read_v1` RPC returns an exact raw
+parent joined to its original immutable registry revision and revocation status.
+Historical reads remain available with intake off or the original revision
+revoked. It returns private encrypted/observation metadata, never encryption keys
+or purchase authority; the replay verifier still requires trusted original keys.
+
 Acknowledgement remains false even after durable storage. This journal alone
 cannot acknowledge a shared webhook until all required consumer dispositions are
 implemented. It does not project grants, publish an HTTP endpoint, qualify
@@ -37,10 +43,11 @@ project is required by the source; concrete provider routing remains unmodified.
 
 `node isolated-runtime/native-store-sandbox-v1/journal.native.mjs --local-bin /absolute/path/to/postgresql-17.6/bin`
 
-Seventeen cases exercise actual PostgreSQL, real authenticated/encrypted intake,
+Nineteen cases exercise actual PostgreSQL, real authenticated/encrypted intake,
 exact returned adapter results, lossless replay, duplicates, permanent conflicts,
 malformed bytes, role/RLS restrictions, immutable registry/evidence, revocation,
 revision rotation, concurrent delivery, actual transaction-expiry rollback,
-control/revocation contention in both directions, and off-switch behavior. The required
+control/revocation contention in both directions, historical raw-parent replay
+after rotation/revocation, malformed retained evidence, and off-switch behavior. The required
 native PostgreSQL CI job runs this harness using its already verified engine.
 These are synthetic local tests, not store/provider or installed-device proof.

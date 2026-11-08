@@ -26,6 +26,7 @@ function load(name) {
 }
 const { prepareNativeStoreSandboxIntakeV1: prepare, persistNativeStoreSandboxIntakeV1: persist } = load('native-store-sandbox-bridge-v1.ts');
 const { decryptLosslessRouterEnvelope: decrypt } = load('revenuecat-lossless-envelope.ts');
+const { replayNativeStoreSandboxReceiptV1: replay } = load('native-store-sandbox-replay-v1.ts');
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'native-store-journal-'));
 const data = path.join(work, 'data'), port = '55489';
 const db = 'journal_' + randomUUID().replaceAll('-', '');
@@ -60,6 +61,7 @@ try {
   reject(sql(initial), /native_store_journal_disabled/u); cases++;
   for (const role of ['anon', 'authenticated']) {
     reject(`set role ${role}; select public.native_store_sandbox_journal_v1('{}');`, /permission denied/u);
+    reject(`set role ${role}; select public.native_store_sandbox_journal_read_v1('${randomUUID()}');`, /permission denied/u);
     reject(`set role ${role}; select * from native_store_sandbox_v1.receipts;`, /permission denied/u);
   }
   reject('set role service_role; select * from native_store_sandbox_v1.receipts;', /permission denied/u);
@@ -89,10 +91,37 @@ try {
   reject(`update native_store_sandbox_v1.connections set app_id='changed';`, /native_store_journal_immutable/u); cases++;
   q(`insert into native_store_sandbox_v1.revocations(connection_id,connection_revision,reason) values('${c.connectionId}',1,'synthetic-revocation');`);
   reject(sql(initial), /native_store_connection_unavailable/u); cases++;
-  q(`insert into native_store_sandbox_v1.connections values('${c.connectionId}',2,${literal(c.projectId)},${literal(c.appId)},'APP_STORE','SANDBOX','v1','synthetic-key');`);
-  const c2 = { ...c, connectionRevision: 2 };
+  q(`insert into native_store_sandbox_v1.connections values('${c.connectionId}',2,${literal(c.projectId)},${literal(c.appId)},'APP_STORE','SANDBOX','v1','synthetic-key-2');`);
+  const c2 = { ...c, connectionRevision: 2, encryption: {keyId:'synthetic-key-2',key:new Uint8Array(32).fill(19)} };
   const rotationDuplicate = await persist(request(raw), c2, callback); assert.equal(rotationDuplicate.receiptId, first.receiptId);
   assert.equal(rotationDuplicate.connectionRevision, 2); closed(rotationDuplicate); cases++;
+  // Read the actual immutable raw parent and its original registry, not the
+  // latest delivery's revision. Fixture secrets are resolved by exact old IDs.
+  const readOriginal = receiptId => {
+    const stored = JSON.parse(q(`set role service_role;select public.native_store_sandbox_journal_read_v1(${literal(receiptId)}::uuid);`));
+    assert.equal(stored.protocol,'native-store-sandbox-journal-read-v1');
+    const registry = stored.registry;
+    assert.equal(registry.auth_key_version, c.authentication.keyVersion);
+    assert.equal(registry.storage_key_id, c.encryption.keyId);
+    const original = { bridgeProtocol: 'native-store-sandbox-v1', connectionId: registry.id,
+      connectionRevision: registry.revision, projectId: registry.project_id, appId: registry.app_id,
+      store: registry.store, environment: registry.environment,
+      authentication: { method: 'shared_secret', keyVersion: registry.auth_key_version, secret: c.authentication.secret },
+      encryption: { keyId: registry.storage_key_id, key: new Uint8Array(c.encryption.key) } };
+    return { stored, original };
+  };
+  const original = readOriginal(rotationDuplicate.receiptId);
+  assert.equal(original.stored.receipt.connection_revision, 1); assert.equal(original.stored.revoked, true);
+  reject(`set role service_role;select public.native_store_sandbox_journal_read_v1('${randomUUID()}');`, /native_store_receipt_unavailable/u);
+  const replayed = await replay(original.stored.receipt, original.original, original.stored.revoked);
+  assert.equal(replayed.replayVerified, true); assert.equal(replayed.originalRevisionRevoked, true);
+  assert.equal(replayed.connectionRevision, 1); assert.equal(replayed.observation.userId, 'synthetic-buyer');
+  for (const key of ['acknowledgementAllowed','dispatchAllowed','grantsAccess','financialAuthority']) assert.equal(replayed[key],false);
+  await assert.rejects(replay(original.stored.receipt,c2,false),e=>e.code==='native_store_replay_unavailable'); cases++;
+  const malformedOriginal=readOriginal(invalid.receiptId);
+  const malformedReplay=await replay(malformedOriginal.stored.receipt,malformedOriginal.original,malformedOriginal.stored.revoked);
+  assert.equal(malformedReplay.replayVerified,true); assert.equal(malformedReplay.observation.parseStatus,'invalid');
+  assert.ok(malformedReplay.reasons.includes('invalid_json')); assert.equal(malformedReplay.grantsAccess,false); cases++;
   const raceRaw = JSON.stringify(event({ id: 'synthetic-race', transaction_id: 'synthetic-race-tx' }));
   const race = await prepare(request(raceRaw), c2);
   let output = '', errors = '';
@@ -160,6 +189,8 @@ try {
   reject(sql(race), /native_store_connection_unavailable/u); cases++;
   q('update native_store_sandbox_v1.control set enabled=false;');
   reject(sql(race), /native_store_journal_disabled/u); cases++;
+  const offHistory=readOriginal(first.receiptId);
+  assert.equal((await replay(offHistory.stored.receipt,offHistory.original,offHistory.stored.revoked)).replayVerified,true);
   console.log(JSON.stringify({ protocol: 'native-store-sandbox-local-journal-proof-v1', cases, passed: cases, providerQualified: false, grantsAccess: false }));
 } finally {
   for (const child of children) if (child.exitCode === null) child.kill('SIGTERM');

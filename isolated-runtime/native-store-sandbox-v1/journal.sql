@@ -156,4 +156,21 @@ language sql security definer set search_path='' as $$select native_store_sandbo
 alter function public.native_store_sandbox_journal_v1(jsonb) owner to native_store_sandbox_v1_owner;
 revoke all on function public.native_store_sandbox_journal_v1(jsonb) from public,anon,authenticated;
 grant execute on function public.native_store_sandbox_journal_v1(jsonb) to service_role;
+-- Historical read-only replay is independent of the intake switch/revocation.
+-- It returns ORIGINAL parent/registry evidence, never keys or purchase authority.
+create function public.native_store_sandbox_journal_read_v1(p_receipt_id uuid) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare result jsonb;
+begin
+  select jsonb_build_object('protocol','native-store-sandbox-journal-read-v1',
+    'receipt',to_jsonb(r),'registry',to_jsonb(c),
+    'revoked',exists(select 1 from native_store_sandbox_v1.revocations v where v.connection_id=c.id and v.connection_revision=c.revision))
+    into result from native_store_sandbox_v1.receipts r join native_store_sandbox_v1.connections c
+      on c.id=r.connection_id and c.revision=r.connection_revision where r.id=p_receipt_id;
+  if result is null then raise exception 'native_store_receipt_unavailable' using errcode='22023'; end if;
+  return result;
+end $$;
+alter function public.native_store_sandbox_journal_read_v1(uuid) owner to native_store_sandbox_v1_owner;
+revoke all on function public.native_store_sandbox_journal_read_v1(uuid) from public,anon,authenticated;
+grant execute on function public.native_store_sandbox_journal_read_v1(uuid) to service_role;
 grant native_store_sandbox_v1_owner to postgres with inherit false,set false;

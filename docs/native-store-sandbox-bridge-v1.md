@@ -49,6 +49,14 @@ separate unimplemented checks, not consequences of a catalog match.
 
 ## Remaining integration, not hidden enablement flags
 
+Historical replay now verifies a stored raw parent against its original immutable
+connection revision, decrypts and reparses the retained bytes, and derives private
+reconciliation identities again. Duplicate deliveries after key rotation must
+not substitute their newer connection revision for that original parent.
+Revocation prevents new intake but does not erase historical reconciliation
+evidence. Replay proves byte integrity, not purchase correlation or access.
+The native PostgreSQL harness exercises this path using actually persisted rows.
+
 1. The companion journal retains raw receipts, deliveries, conflict variants and
    an explicitly held native-store consumer disposition. Its native regression
    exercises duplicates, concurrency, timeout rollback and revocation fences.
