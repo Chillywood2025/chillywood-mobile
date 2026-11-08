@@ -18,7 +18,7 @@ android {
 dependencies {
   // Shared with RevenueCat: fail dependency resolution rather than silently
   // changing the reviewed Billing SDK version under either purchase path.
-  implementation('com.android.billingclient:billing:8.2.1') {
-    version { strictly '8.2.1' }
+  implementation('com.android.billingclient:billing:8.3.0') {
+    version { strictly '8.3.0' }
   }
 }

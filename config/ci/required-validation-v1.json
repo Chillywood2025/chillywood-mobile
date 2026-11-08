@@ -25,6 +25,7 @@
     "sensitive": "Validation / Sensitive",
     "database": "Validation / Database",
     "brandNative": "Validation / Brand Native PostgreSQL 17.6",
+    "isolatedSandboxNative": "Validation / Isolated Sandbox Native PostgreSQL 17.6",
     "nativeRelease": "Validation / Native and Release",
     "autonomous": "Validation / Autonomous",
     "policy": "Validation / Policy",
@@ -45,7 +46,9 @@
       "docs/chat/PR532_AUTOMATED_COVERAGE.json",
       "docs/chat/PR532_AUDITED_CASES.tsv",
       "docs/DATABASE_RUNTIME_AUTHORITY_DEPLOYMENT_2026_10_15.json",
-      "tests/**"
+      "tests/**",
+      "qualification/test-store-debug/**",
+      "isolated-runtime/test-store-capture-v1/**"
     ],
     "sensitive": [
       "app/_layout.tsx",
@@ -88,10 +91,38 @@
       "scripts/*security*",
       "scripts/*chilly-chat*",
       "tests/creator-money/**",
-      "tests/wave1/**"
+      "tests/wave1/**",
+      "qualification/test-store-debug/**"
     ],
     "database": [
       "supabase/**",
+      "isolated-runtime/**",
+      "app/sandbox-tips/**",
+      "app/sandbox-videos/**",
+      "app/(tabs)/my-list.tsx",
+      "components/monetization/isolated-tip-*.tsx",
+      "components/monetization/isolated-paid-video*.tsx",
+      "_lib/isolatedPaidVideo*.ts",
+      "tests/isolated-paid-video-*.test.mjs",
+      "tests/creator-money/isolated-paid-video-*.test.mjs",
+      "ops/isolated-paid-video-worker/**",
+      "ops/isolated-paid-video-operations-v2/**",
+      "tests/isolated-sandbox-*.test.mjs",
+      "tests/isolated-test-store-*.test.mjs",
+      "tests/creator-money/isolated-test-store-*.test.mjs",
+      "components/monetization/isolated-test-store-*.tsx",
+      "_lib/isolatedTestStore*.ts",
+      "config/test-store-debug-*",
+      "plugins/withIsolatedTestStoreDebug.js",
+      "plugins/withIsolatedTestStoreV2Debug.js",
+      "plugins/withIsolatedTestStoreV3Debug.js",
+      "modules/chillywood-test-store-admission/**",
+      "scripts/compile-native-camera-effects.mjs",
+      "tests/saved-media-screens-mounted.test.mjs",
+      "tests/creator-money/isolated-sandbox-provider.test.mjs",
+      "tests/creator-money/revenuecat-router.test.mjs",
+      "tests/ci/isolated-sandbox-native-validation.test.mjs",
+      "scripts/ci/isolated-sandbox-native.mjs",
       "scripts/brand-reference-index-installer.mjs",
       "tests/brand-reference-*.mjs",
       "tests/helpers/brand-reference-*.mjs",
@@ -113,11 +144,18 @@
       "hooks/use-communication-room-session.ts",
       "hooks/use-livekit-chat-call-session.ts",
       "scripts/test-communication-room-realtime-delivery.mjs",
-      "scripts/test-chilly-chat-real-peer-http.mjs"
+      "scripts/test-chilly-chat-real-peer-http.mjs",
+      "qualification/test-store-debug/**"
     ],
     "nativeRelease": [
       "android/**",
       "ios/**",
+      "modules/chillywood-test-store-admission/**",
+      "config/test-store-debug-*",
+      "scripts/compile-native-camera-effects.mjs",
+      "tests/isolated-test-store-build.test.mjs",
+      "tests/isolated-test-store-native.test.mjs",
+      "tests/isolated-test-store-native-compile.test.mjs",
       "app/_layout.tsx",
       "app/chat/**",
       "hooks/use-chat-call-media-session.ts",
@@ -148,7 +186,12 @@
       ".github/workflows/*release*",
       ".github/workflows/*build*",
       ".github/workflows/*preview*",
-      ".github/workflows/*testflight*"
+      ".github/workflows/*testflight*",
+      "qualification/test-store-debug/**",
+      "tests/isolated-test-store-v2-native*.test.mjs",
+      "tests/isolated-test-store-v3-native*.test.mjs",
+      "tests/ci/paid-video-native-closure.test.mjs",
+      "scripts/ci/paid-video-native-closure.mjs"
     ],
     "autonomous": [
       "isolated-runtime/**",
@@ -170,7 +213,9 @@
       "scripts/ci/**",
       "scripts/assurance/**",
       "tests/ci/**",
-      "tests/assurance/**"
+      "tests/assurance/**",
+      "qualification/test-store-debug/package.json",
+      "qualification/test-store-debug/package-lock.json"
     ]
   },
   "knownDocumentation": [

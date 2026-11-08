@@ -71,7 +71,9 @@ test('tip-first exact identity, drift and controls fail closed; no snapshot is d
 
 test('CLI is offline, refuses apply/overwrites, and writes only review artifacts',t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sandbox-dormant-plan-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
-  const script=path.join(repo,planner),out=path.join(dir,'packet');
+  // macOS temp directories can use /var while Node resolves the module to
+  // /private/var. Invoke its canonical path so the actual CLI entry guard runs.
+  const script=fs.realpathSync(path.join(repo,planner)),out=path.join(dir,'packet');
   const run=(...args)=>execFileSync(process.execPath,[script,...args],{encoding:'utf8',stdio:'pipe'});
   assert.match(run('--help'),/Offline only/);
   assert.throws(()=>run('--source',source,'--out',out,'--apply'));

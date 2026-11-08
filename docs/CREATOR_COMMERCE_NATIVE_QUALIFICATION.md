@@ -12,10 +12,12 @@ Increasing a job cap is not evidence that the new checks have executed or passed
 
 ## Prospective cohort
 
-The external-content-link Expo module adds an Android native capability and
-raises the shared Google Billing dependency to 8.2.1. Source therefore targets
-prospective internal V18. Existing V17 signed binaries and runtime identities
-are immutable and cannot acquire this bridge through an OTA.
+The external-content-link Expo module originally introduced an Android native
+capability with shared Google Billing 8.2.1 for prospective internal V18.
+Existing V17 signed binaries and runtime identities are immutable and cannot
+acquire this bridge through an OTA. The current RevenueCat upgrade pins shared
+Billing 8.3.0 and requires fresh native qualification; it does not requalify an
+earlier cohort or its signed binaries.
 
 The conservative `git-native-inputs/v1` snapshot includes shared local-module
 metadata, so both platform cohort identities advance. This does not assert a
@@ -39,12 +41,12 @@ native input changes and verify the final committed tree before release.
   Google reporting and room-seat race schedules alongside existing event and
   subscription concurrency checks. These are native CI requirements; local
   PGlite results do not replace them.
-- Native SDK validation executes the pinned real Billing 8.2.1 Java adapter and
+- Native SDK validation executes the pinned real Billing 8.3.0 Java adapter and
   JVM lifecycle tests, plus the TypeScript native-flow checks.
 - Existing generated-application compilation now also requires the actual
   autolinked external-link Expo Kotlin and Java modules in Debug and Release.
   Both resolved app runtime graphs must retain RevenueCat, exactly Billing
-  8.2.1 and the external-link module. These graphs are actual Gradle output,
+  8.3.0 and the external-link module. These graphs are actual Gradle output,
   not a dependency text search.
 
 ## Proof boundaries

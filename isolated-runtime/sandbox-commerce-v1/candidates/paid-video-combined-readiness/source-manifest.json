@@ -1,0 +1,426 @@
+{
+  "protocol": "scpv-combined-source-profile-v1",
+  "status": "source-candidate-awaiting-local-qualification",
+  "freshInactiveInstallOnly": true,
+  "deploymentAuthorized": false,
+  "baseline": {
+    "commit": "12335a768fb683267ac281b1a180f9650479a98d",
+    "remoteCommit": "0d1d3b3a959295dfc44a6485ab8f7067d933bb43",
+    "tree": "5e9b8f86792c2fab606ed216037aec916f094b7c",
+    "referenceManifestSha256": "f3b28f88a28e8024c100b999e7cbc7569e60507838a4ffa0f8a7856a8f9d6959"
+  },
+  "sourceDigest": "1744dbcad583a6dac1e09b3d764ae9bc777993c40a6fc1ef4f7256dcbda717f3",
+  "orderedModules": [
+    {
+      "position": 1,
+      "path": "isolated-runtime/sandbox-commerce-v1/core.sql",
+      "sha256": "c5a55a9f7aa9f35cd12039028e010ed8f496d200008f13c7e324889e81913e5a",
+      "origin": "selected-published-baseline",
+      "gitBlob": "317a653c1f87bc4dbe112fb6b84081a4c62733a6"
+    },
+    {
+      "position": 2,
+      "path": "isolated-runtime/sandbox-commerce-v1/premium-authority.sql",
+      "sha256": "ec1d16265f4dcf9eb5904303c4c9c50a2f003bf2d7a53ec9040c9d1b7dc4b418",
+      "origin": "selected-published-baseline",
+      "gitBlob": "dea0f27d10987f3605b7f8a1204b0ffb78cad3bd"
+    },
+    {
+      "position": 3,
+      "path": "isolated-runtime/sandbox-commerce-v1/authority.sql",
+      "sha256": "8e077e8801bbd79f4bc0594bfbcaa47cd1d0c80a42f5320ebadd9f7bd1113ff4",
+      "origin": "selected-published-baseline",
+      "gitBlob": "216858dc5874da849c76b990c94f83fa450cb24e"
+    },
+    {
+      "position": 4,
+      "path": "isolated-runtime/sandbox-commerce-v1/commands.sql",
+      "sha256": "e42ec2f8ac50e2dea104a16abfa4429a3f351e560060fab4f19556a11e0bfb45",
+      "origin": "selected-published-baseline",
+      "gitBlob": "8dd1d2003054f6e57468993edc956f56b0583f2a"
+    },
+    {
+      "position": 5,
+      "path": "isolated-runtime/sandbox-commerce-v1/receipts.sql",
+      "sha256": "bd89841ed746267b4623798dad61873ad65e317a62dfa82fac65ac7293d4c2b1",
+      "origin": "selected-published-baseline",
+      "gitBlob": "b5d926304bcaa6d8733adcb1a1abb6e56ab7143a"
+    },
+    {
+      "position": 6,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store.sql",
+      "sha256": "4beb6b360a371985b39345a036bd9eee44bf75b5010030cb985aa37b1d1bff6a",
+      "origin": "selected-published-baseline",
+      "gitBlob": "c8766fa714982af6a34312251ce242826f2fc4bb"
+    },
+    {
+      "position": 7,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-core.sql",
+      "sha256": "24a8875b1abe1c9624e9f0a029af2784b38fb58b558a8e7ae309fef16dd8eedc",
+      "origin": "selected-published-baseline",
+      "gitBlob": "190c9964775f723211af6f7f2b82858b823b32a8"
+    },
+    {
+      "position": 8,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store-qualification.sql",
+      "sha256": "b08c416b9bca7b8d5496a3d097d16d4e5f3b780e68c2a4e97a9a578a2c3f279f",
+      "origin": "selected-published-baseline",
+      "gitBlob": "e3613886c4d28d5bca5cdd31ba08de490c645c0c"
+    },
+    {
+      "position": 9,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-commands.sql",
+      "sha256": "5f4b82b1e7b83471975bf27b5e067b0fe78230fcd7eb901240171fb61579d4e3",
+      "origin": "selected-published-baseline",
+      "gitBlob": "fa2f2f5109863c635f510519bba384a71e3e12fe"
+    },
+    {
+      "position": 10,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-provisioning.sql",
+      "sha256": "57f7ea45d1e6a23dc8093331e329838678af04f861d10f82529c36188efde9b3",
+      "origin": "selected-published-baseline",
+      "gitBlob": "007902cc37e0e37e006d8165f727b9a9f2f4b131"
+    },
+    {
+      "position": 11,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-receipts.sql",
+      "sha256": "20a3f444ac4cdeeea0a86942c5efa85fef2adc9eccffa941728b7f149ab5ff32",
+      "origin": "selected-published-baseline",
+      "gitBlob": "242f87772a7297c3833541aac0c374921a0730f0"
+    },
+    {
+      "position": 12,
+      "path": "isolated-runtime/sandbox-commerce-v1/history.sql",
+      "sha256": "d7ea655a49aaa5ed6fb4daf4982e5ce1ba10d8e054a1472f755472b0139c8f19",
+      "origin": "selected-published-baseline",
+      "gitBlob": "d3e7e2b9278547322faa545764b4dd2e49995454"
+    },
+    {
+      "position": 13,
+      "path": "isolated-runtime/sandbox-commerce-v1/resource-graphs.sql",
+      "sha256": "f0b72465c8699010890a93412bcb771988cf94cfc0d34d046952f5fc04e4c57f",
+      "origin": "selected-published-baseline",
+      "gitBlob": "7e0ad12101e0a0e5058abc5c4a3aa282986b6cef"
+    },
+    {
+      "position": 14,
+      "path": "isolated-runtime/sandbox-commerce-v1/delivery-authority.sql",
+      "sha256": "49a92c9f810218dea66ea896e98f10a22ff34ef15af2f722f573ec3a85242545",
+      "origin": "selected-published-baseline",
+      "gitBlob": "74e5e8fbfed919830b3709ebf54abbddad29677d"
+    },
+    {
+      "position": 15,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-context-v2.sql",
+      "sha256": "c6be30214316891be4c627d655a19ef335ec140c6f2ac67a6c31439a783acbd6",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 16,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-grant-v2.sql",
+      "sha256": "34198830d90c0b97ea57d2cdecdf82033768fc344f38fbdcb515118c1546a791",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 17,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-media.sql",
+      "sha256": "ec98da0d9bbc3400d00a750bdea5aaf65b8a799ed08e2e85abe168d6e76404cf",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 18,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-upload.sql",
+      "sha256": "b6510506762fe8b579c1af3b0d75ea626a1dbc147cfcc36753bae5fff3e02514",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 19,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-commands.sql",
+      "sha256": "b5c4fb3fd7d3a41ea85d2822623062aab31f230c21ce4a26bacafe764b7e4e1f",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 20,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-revoke-v2.sql",
+      "sha256": "51d4cba3786e2db06a36e57667a1d8a20431d1525a8cb57d36f516dd5635b1b4",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 21,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store-paid-video-core.sql",
+      "sha256": "b35ff1b171e78a20aee5e11eabb7dd6160db4d4cff2268aca20e00c5a47552ed",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 22,
+      "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-plan-lifecycle/lifecycle.sql",
+      "sha256": "c4f3f91ef03bd7c6f2bee3c413168a9bc41d2703cc23020365237471c235ae2a",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 23,
+      "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/commands.sql",
+      "sha256": "19062a47190ef7d18dade13e6c0c9c638a2b862b3e3cd30101606b85e4a15c43",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 24,
+      "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-checkout-recovery/abandon.sql",
+      "sha256": "ea264090eb8527ee4d2a9f219979d46649beddc46faf3e6a440a3dd3cf42415b",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 25,
+      "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/provisioning.sql",
+      "sha256": "576bb84abc0d085207b7de129f70b8ef09d6a0a65f2c5fa404f6690a4228b7df",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 26,
+      "path": "isolated-runtime/sandbox-commerce-v1/test-store-paid-video-receipts.sql",
+      "sha256": "7255b02224da3e0e54fa41802d519beaf9aae3b7c3b7013f7d9cd061161ecce6",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 27,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-grant-v2.sql",
+      "sha256": "34198830d90c0b97ea57d2cdecdf82033768fc344f38fbdcb515118c1546a791",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 28,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-access.sql",
+      "sha256": "4c8ac599f3cc761985f3fa57f730ba274143c1d84f2da9e616c8ddbf32613ee7",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 29,
+      "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/gateway.sql",
+      "sha256": "534af30129e94ce9e12e8d188bb033058da34ecaf76fd2ef61efc79d6e124dd8",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 30,
+      "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/media.sql",
+      "sha256": "97321cc09316e76b734c6d689dfd173b69bf6e54711182b3ca4beb65cc942ee3",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 31,
+      "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-revoke-v2.sql",
+      "sha256": "51d4cba3786e2db06a36e57667a1d8a20431d1525a8cb57d36f516dd5635b1b4",
+      "origin": "reviewed-additive-source"
+    },
+    {
+      "position": 32,
+      "path": "isolated-runtime/sandbox-commerce-v1/permissions-finalize.sql",
+      "sha256": "26d1f8ccb2bd55452f79e9fc55bf775b8fa16ee10bf5e61ed4402848092993c8",
+      "origin": "selected-published-baseline",
+      "gitBlob": "c6f1b9c4e2f2817cc43b708b567ee8dff647e50c"
+    }
+  ],
+  "candidateFiles": {
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/commands.sql": "19062a47190ef7d18dade13e6c0c9c638a2b862b3e3cd30101606b85e4a15c43",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/gateway.sql": "534af30129e94ce9e12e8d188bb033058da34ecaf76fd2ef61efc79d6e124dd8",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/provisioning.sql": "576bb84abc0d085207b7de129f70b8ef09d6a0a65f2c5fa404f6690a4228b7df",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/media.sql": "97321cc09316e76b734c6d689dfd173b69bf6e54711182b3ca4beb65cc942ee3",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/generate.mjs": "e9b0f2bed78e76e469ee94661771c9f4b8430073d6b245830db14f1c69e293de",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/README.md": "0797ae681ce241e3232299f8d6db60bfb98890eec584178737752f5c923ea94c",
+    "isolated-runtime/sandbox-commerce-v1/tests/paid-video-combined-readiness.native.mjs": "1120beb485dbd65721a3cfe9a4dc8da619744c23de19ce9254011c8840759c53",
+    "isolated-runtime/sandbox-commerce-v1/tests/test-store-v3-economic-admission-managed.native.mjs": "184c6f88106ebf5c969821161d48e5fb4de874bb32ad32abfd9a6a552fe9cc11"
+  },
+  "substitutions": [
+    {
+      "source": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-checkout-recovery/commands.sql",
+      "sha256": "c2f047b02459628e9a59fc28607d838f7d23d69a0a41deb5b82bd6d5f31bf2db",
+      "replacement": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/commands.sql"
+    },
+    {
+      "source": "isolated-runtime/sandbox-commerce-v1/paid-video-gateway-v2.sql",
+      "sha256": "f27cc2323782d8ec068d38cd47205bffc7a6f3d7d55c7c41d277de985e1a9daf",
+      "replacement": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/gateway.sql"
+    },
+    {
+      "source": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-plan-lifecycle/provisioning.sql",
+      "sha256": "b771c4e9b5a76d6f84c491e44f16ef1b65d8da4c332c848309d4016e41b14c56",
+      "replacement": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/provisioning.sql"
+    }
+  ],
+  "boundaries": [
+    "One fresh transaction; final public CREATE revocation and disabled lifecycle/gateway enforced at COMMIT.",
+    "No active CREATE OR REPLACE, provisioning, schema migration bootstrap or existing-function replacement.",
+    "New economic work gates: offer/prepare, allocation, SDK dispatch claim, provisioning POST permit, current byte access.",
+    "Receipt settlement, consumed-request replay and read-only recovery/provider GET reconciliation remain available under their existing authority rules.",
+    "Exact source profile excludes separately developed scanner/moderation operations, prepared-checkout closure and provider capture add-ons; any combined installation must explicitly add and qualify them."
+  ],
+  "limitations": [
+    "Successor local Auth/PostgREST and SQL qualification pending; historical results apply only to predecessor bytes.",
+    "Provider/native/scanner/moderation facts in combined fixtures are synthetic.",
+    "Actual origin/provider/native qualification, target review and deployment/release authority remain required."
+  ],
+  "historicalPredecessor": {
+    "commit": "245400c9d3fb3e82920793ea35a986db56e555c8",
+    "sourceDigest": "6ccbcf34fc830b4493916dd65f312410ef8308e1e403d84aa3d59861691e1289",
+    "qualification": {
+      "native": {
+        "artifact": "paid-video-combined-economic-native-959e29b47fb1.json",
+        "sha256": "959e29b47fb16e8d2a9801132adbdb3d2ead91d0c9e9463f533da11aea86bbc6",
+        "groups": 14
+      },
+      "http": {
+        "artifact": "paid-video-combined-economic-http-a9dbe4879990.json",
+        "sha256": "a9dbe48799907a271f9de48ece3cdfe1ac7f151047bd396be8476f70020fbc6e",
+        "cases": 48,
+        "additionalEconomicSqlControls": 4,
+        "cleanupVerified": true
+      },
+      "managed": {
+        "artifact": "test-store-v3-economic-admission-managed-317fc2e17966.json",
+        "sha256": "317fc2e17966711c7a492d8abaf4f3cf5d86d2f8ff7ffc9e1249c9c5059c608a",
+        "groups": 24,
+        "orderedManifest": "test-store-v3-economic-admission-managed-manifest-50c5bff00aaa.json",
+        "orderedManifestSha256": "50c5bff00aaaaf1bc7c9e0b7e9ef87638536f9ad5903dbc1f63e15cf2eeaead3",
+        "cleanupVerified": true,
+        "orderingNote": "Primary order above is the actual HTTP install order; managed fixture uses same32-position/30-unique sources with baseline v2 commands/provisioning ordering reversed, each before runtime use."
+      }
+    },
+    "appliesToSuccessor": false
+  },
+  "qualification": {
+    "status": "pending",
+    "reason": "EOF-normalized source successor; historical proofs do not qualify these bytes."
+  },
+  "sourcePreimage": {
+    "protocol": "scpv-combined-ordered-source-preimage-v1",
+    "orderedModules": [
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/core.sql",
+        "sha256": "c5a55a9f7aa9f35cd12039028e010ed8f496d200008f13c7e324889e81913e5a"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/premium-authority.sql",
+        "sha256": "ec1d16265f4dcf9eb5904303c4c9c50a2f003bf2d7a53ec9040c9d1b7dc4b418"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/authority.sql",
+        "sha256": "8e077e8801bbd79f4bc0594bfbcaa47cd1d0c80a42f5320ebadd9f7bd1113ff4"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/commands.sql",
+        "sha256": "e42ec2f8ac50e2dea104a16abfa4429a3f351e560060fab4f19556a11e0bfb45"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/receipts.sql",
+        "sha256": "bd89841ed746267b4623798dad61873ad65e317a62dfa82fac65ac7293d4c2b1"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store.sql",
+        "sha256": "4beb6b360a371985b39345a036bd9eee44bf75b5010030cb985aa37b1d1bff6a"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-core.sql",
+        "sha256": "24a8875b1abe1c9624e9f0a029af2784b38fb58b558a8e7ae309fef16dd8eedc"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store-qualification.sql",
+        "sha256": "b08c416b9bca7b8d5496a3d097d16d4e5f3b780e68c2a4e97a9a578a2c3f279f"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-commands.sql",
+        "sha256": "5f4b82b1e7b83471975bf27b5e067b0fe78230fcd7eb901240171fb61579d4e3"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-provisioning.sql",
+        "sha256": "57f7ea45d1e6a23dc8093331e329838678af04f861d10f82529c36188efde9b3"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store-offerings-receipts.sql",
+        "sha256": "20a3f444ac4cdeeea0a86942c5efa85fef2adc9eccffa941728b7f149ab5ff32"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/history.sql",
+        "sha256": "d7ea655a49aaa5ed6fb4daf4982e5ce1ba10d8e054a1472f755472b0139c8f19"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/resource-graphs.sql",
+        "sha256": "f0b72465c8699010890a93412bcb771988cf94cfc0d34d046952f5fc04e4c57f"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/delivery-authority.sql",
+        "sha256": "49a92c9f810218dea66ea896e98f10a22ff34ef15af2f722f573ec3a85242545"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-context-v2.sql",
+        "sha256": "c6be30214316891be4c627d655a19ef335ec140c6f2ac67a6c31439a783acbd6"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-grant-v2.sql",
+        "sha256": "34198830d90c0b97ea57d2cdecdf82033768fc344f38fbdcb515118c1546a791"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-media.sql",
+        "sha256": "ec98da0d9bbc3400d00a750bdea5aaf65b8a799ed08e2e85abe168d6e76404cf"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-upload.sql",
+        "sha256": "b6510506762fe8b579c1af3b0d75ea626a1dbc147cfcc36753bae5fff3e02514"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-commands.sql",
+        "sha256": "b5c4fb3fd7d3a41ea85d2822623062aab31f230c21ce4a26bacafe764b7e4e1f"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-revoke-v2.sql",
+        "sha256": "51d4cba3786e2db06a36e57667a1d8a20431d1525a8cb57d36f516dd5635b1b4"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store-paid-video-core.sql",
+        "sha256": "b35ff1b171e78a20aee5e11eabb7dd6160db4d4cff2268aca20e00c5a47552ed"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-plan-lifecycle/lifecycle.sql",
+        "sha256": "c4f3f91ef03bd7c6f2bee3c413168a9bc41d2703cc23020365237471c235ae2a"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/commands.sql",
+        "sha256": "19062a47190ef7d18dade13e6c0c9c638a2b862b3e3cd30101606b85e4a15c43"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-checkout-recovery/abandon.sql",
+        "sha256": "ea264090eb8527ee4d2a9f219979d46649beddc46faf3e6a440a3dd3cf42415b"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/provisioning.sql",
+        "sha256": "576bb84abc0d085207b7de129f70b8ef09d6a0a65f2c5fa404f6690a4228b7df"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/test-store-paid-video-receipts.sql",
+        "sha256": "7255b02224da3e0e54fa41802d519beaf9aae3b7c3b7013f7d9cd061161ecce6"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-grant-v2.sql",
+        "sha256": "34198830d90c0b97ea57d2cdecdf82033768fc344f38fbdcb515118c1546a791"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-access.sql",
+        "sha256": "4c8ac599f3cc761985f3fa57f730ba274143c1d84f2da9e616c8ddbf32613ee7"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/gateway.sql",
+        "sha256": "534af30129e94ce9e12e8d188bb033058da34ecaf76fd2ef61efc79d6e124dd8"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/media.sql",
+        "sha256": "97321cc09316e76b734c6d689dfd173b69bf6e54711182b3ca4beb65cc942ee3"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/paid-video-install-revoke-v2.sql",
+        "sha256": "51d4cba3786e2db06a36e57667a1d8a20431d1525a8cb57d36f516dd5635b1b4"
+      },
+      {
+        "path": "isolated-runtime/sandbox-commerce-v1/permissions-finalize.sql",
+        "sha256": "26d1f8ccb2bd55452f79e9fc55bf775b8fa16ee10bf5e61ed4402848092993c8"
+      }
+    ]
+  }
+}

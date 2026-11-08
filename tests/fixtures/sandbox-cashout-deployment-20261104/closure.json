@@ -25,11 +25,13 @@
     },
     {
       "path": "package.json",
-      "sha256": "5f93a815d0d52eb587ea90231ddcd2511e2e79c55f619a5d61336bcf59727792"
+      "sha256": "5f93a815d0d52eb587ea90231ddcd2511e2e79c55f619a5d61336bcf59727792",
+      "snapshot": "package.json.txt"
     },
     {
       "path": "package-lock.json",
-      "sha256": "223cd834339b10a095a96b57ec22aa1d237ab892bf1006f6698913ee86373ece"
+      "sha256": "223cd834339b10a095a96b57ec22aa1d237ab892bf1006f6698913ee86373ece",
+      "snapshot": "package-lock.json.txt"
     },
     {
       "path": "scripts/native-ingress-exact-deploy.mjs",

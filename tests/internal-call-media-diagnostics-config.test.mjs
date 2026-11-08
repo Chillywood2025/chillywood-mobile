@@ -4,7 +4,9 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
 
-const require = createRequire(import.meta.url);
+// Execute app.config.ts with its own module-relative resolver, as Expo does.
+// A resolver rooted in this test would load ./config from tests/config instead.
+const require = createRequire(new URL("../app.config.ts", import.meta.url));
 const ts = require("typescript");
 const compiled = ts.transpileModule(fs.readFileSync("app.config.ts", "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
@@ -86,7 +88,13 @@ test("resolved EAS environments opt in only the two tester profiles and suppress
     if (isTester) assert.equal(flag, "true", `${name}/${platform}`);
     else assert.ok(flag === undefined || flag === "false", `${name}/${platform} inherits diagnostic opt-in`);
     const result = loadConfig({ ...profile.env, EAS_BUILD_PROFILE: name }).default({ config: baseConfig });
-    assert.equal(result.extra.runtime.internalCallMediaDiagnosticsEnabled, isTester, `${name}/${platform}`);
+    if (/^isolated-test-store(?:-v[23])?-debug-(?:android|ios(?:-simulator)?)$/u.test(name)) {
+      assert.match(result.extra.isolatedTestStoreFlavor, /^isolated-test-store-debug-v[123]$/u);
+      assert.equal(result.extra.runtime, undefined, `${name} must strip the shared runtime and diagnostics`);
+      assert.equal(result.updates.enabled, false, `${name} must keep OTA disabled`);
+    } else {
+      assert.equal(result.extra.runtime.internalCallMediaDiagnosticsEnabled, isTester, `${name}/${platform}`);
+    }
     if (isTester) assert.equal(profile.channel, name, `${name} must retain its exact signed build channel`);
   }
   for (const platform of ["android", "ios"]) {
