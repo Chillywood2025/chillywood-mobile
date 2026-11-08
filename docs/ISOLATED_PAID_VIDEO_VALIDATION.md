@@ -15,7 +15,7 @@ The PaidVideo runner executes these stages sequentially:
 | Runtime with retained, sealed capture evidence | 19 native groups |
 | Operations with actual local scanner | 11 native groups |
 | Local Auth, PostgREST, and four production Edge entries | 103 HTTP cases |
-| App successor | 262 Node tests |
+| App successor | 273 Node tests |
 | Provider, recovery, and operations contracts | 82 Node tests |
 | Local object transport | 2 Node tests |
 | Exact profile binding | 16 Node tests |
@@ -24,8 +24,8 @@ The PaidVideo runner executes these stages sequentially:
 | Platform HTTP response compatibility | 7 Node tests |
 
 Every required Node stage rejects skips. The separate existing canonical lane
-includes the 19 Library tests. The current app qualification is therefore 288
-tests: 262 app tests, 19 Library tests, and 7 platform HTTP bridge tests. The
+includes the 19 Library tests. The current app qualification is therefore 299
+tests: 273 app tests, 19 Library tests, and 7 platform HTTP bridge tests. The
 historical 48-response and first retained 103-response bridge files keep their
 original contracts; the successor invokes only the versioned platform bridge.
 No responses are renamed or manufactured to satisfy a historical count.
@@ -33,7 +33,7 @@ No responses are renamed or manufactured to satisfy a historical count.
 The caller creates a fresh 32-hex-character attempt ID and an exact evidence
 directory. The HTTP producer binds both to its owned Docker project, summary,
 and cleanup. The aggregator compares those values to the caller's retained
-expectation, checks all 99 execution inputs and 21 evidence files, and verifies
+expectation, checks all 100 execution inputs and 21 evidence files, and verifies
 the four image identities against the pinned raw index, platform manifest, and
 config chain. It records the start time before executing the producer and
 rejects stale files. Copying old artifacts with new timestamps does not satisfy

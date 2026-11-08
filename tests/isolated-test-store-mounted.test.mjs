@@ -19,7 +19,7 @@ function load(path, bindings, globals = {}) {
   const scope = { exports: {}, setTimeout, clearTimeout, ...globals, require(name) { assert.ok(name in bindings, `unmodeled dependency ${name}`); return bindings[name]; } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(path, import.meta.url), "utf8"), { fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, scope); return scope.exports;
 }
-function fixture({ initial = A, memory = new Map(), configured = true, platform = "ios" } = {}) {
+function fixture({ initial = A, memory = new Map(), configured = true, platform = "ios", strict = false } = {}) {
   let current = initial; let nodes = []; let serial = 100; let verified = false; let reviewHold = false; let backendUnavailable = false; let rejectClaim = false; let sdkPrice = 1.99; let readWait = null; let serverWait = null; let localWait = null;
   const purchasedAt = new Date().toISOString();
   let purchase = async () => ({ productIdentifier: "tip-199", transaction: { productIdentifier: "tip-199", transactionIdentifier: "sdk-hint-only" } });
@@ -59,15 +59,19 @@ function fixture({ initial = A, memory = new Map(), configured = true, platform 
   const component = load("../components/monetization/isolated-test-store-checkout.tsx", { react: React, "react-native": native, "../../_lib/accountSessionAuthority": authority, "../../_lib/isolatedSandboxTips": { newTipRequestId: () => uuid(++serial) }, "../../_lib/isolatedTestStoreBuild": nativeBuild, "../../_lib/isolatedTestStore": transport, "../../_lib/isolatedTestStoreAttempts": uiJournal, "../../_lib/isolatedTestStoreRehearsal": rehearsal, "./isolated-tip-receipt": { isolatedTipMoney: (amount, currency) => `${(amount / 100).toFixed(2)} ${currency}` } });
   const root = createRoot(container());
   const visible = () => nodes.slice(Math.max(0, nodes.findLastIndex(n => n.props.testID === "isolated-test-store-panel")));
-  const render = async () => { nodes = []; await React.act(async () => { root.render(React.createElement(component.IsolatedTestStoreCheckout, { authority: current, preparation: current.userId === A.userId ? preparation : null })); }); };
+  const render = async () => { nodes = []; await React.act(async () => { const child = React.createElement(component.IsolatedTestStoreCheckout, { authority: current, preparation: current.userId === A.userId ? preparation : null }); root.render(strict ? React.createElement(React.StrictMode, null, child) : child); }); };
   return { memory, calls, nativeCalls, journal, render, node: id => visible().findLast(n => n.props.testID === id), text: () => visible().filter(n => n.name === "Text").flatMap(n => n.props.children).join("\n"),
     async press(id) { const n = visible().findLast(n => n.props.testID === id); assert.ok(n, id); assert.notEqual(n.props.disabled, true); await React.act(async () => { n.props.onPress(); await new Promise(done => setImmediate(done)); }); },
+    async publish(next) { await React.act(async () => { current = next; for (const listener of listeners) listener(next); }); },
     async change(next) { await React.act(async () => { current = next; for (const listener of listeners) listener(next); }); await render(); },
     async settle() { await React.act(async () => { await new Promise(done => setImmediate(done)); }); }, verify() { verified = true; }, hold() { reviewHold = true; }, unavailable() { backendUnavailable = true; }, delayRead() { readWait = deferred(); return readWait; }, delayServerArrival() { serverWait = deferred(); return serverWait; }, delayLocalReservation() { localWait = { started: deferred(), release: deferred() }; return localWait; }, loseClaim() { rejectClaim = true; }, wrongPrice() { sdkPrice = 2; }, setPurchase(fn) { purchase = fn; }, async dispose() { await React.act(async () => root.unmount()); } };
 }
 
 for (const platform of ["ios", "android"]) test(`mounted ${platform} actual pipeline persists each phase, opens exactly once and waits for server receipt`, async t => {
-  const f = fixture({ platform }); t.after(() => f.dispose()); await f.render();
+  for (const strict of [false, true]) {
+  const f = fixture({ platform, strict }); t.after(() => f.dispose()); await f.render();
+  // SessionProvider publishes a fresh equivalent binding on same-session refresh.
+  await f.change({ ...A });
   assert.equal(f.node("isolated-test-store-open").props.accessibilityState.disabled, true); assert.match(f.text(), /One provider attempt per installation/u);
   await f.press("isolated-test-store-review"); await f.press("isolated-test-store-open");
   assert.deepEqual(f.calls.map(v => v.command), ["allocate", "claim", "report"]); assert.deepEqual(f.nativeCalls, ["configure", "purchase"]);
@@ -78,6 +82,7 @@ for (const platform of ["ios", "android"]) test(`mounted ${platform} actual pipe
   assert.equal((await f.journal().readGlobalReservation()).reserved, true); assert.equal(f.node("isolated-test-store-open").props.disabled, true);
   f.hold(); await f.press(`isolated-test-store-recover-${saved.allocationRequestId}`);
   assert.match(f.text(), /Server review hold/u); assert.match(f.text(), /Earlier server receipt:\s+verified/u); assert.doesNotMatch(f.text(), /Server receipt: verified/u);
+  }
 });
 test("unconfigured native DEBUG view remains unavailable with zero network or SDK actions", async t => {
   const f = fixture({ configured: false }); t.after(() => f.dispose()); await f.render();
@@ -102,6 +107,12 @@ test("late SDK result after A to B to A cannot switch identity, report success o
   await React.act(async () => { held.resolve({ productIdentifier: "tip-199", transaction: { productIdentifier: "tip-199", transactionIdentifier: "late" } }); }); await f.settle();
   assert.equal(f.calls.some(v => v.command === "report"), false); assert.equal(f.node("isolated-test-store-open").props.disabled, true);
   assert.deepEqual(f.nativeCalls, ["configure", "purchase"]); const [saved] = await f.journal().list(); assert.equal(saved.sdkObservation.outcome, "sdk_unknown");
+  // Even if React never renders the transient authority gap, the old incarnation
+  // must remain retired when the same binding returns.
+  const retired = fixture({ strict: true }); t.after(() => retired.dispose()); await retired.render();
+  await retired.publish(null); await retired.publish({ ...A }); await retired.render();
+  assert.equal(retired.node("isolated-test-store-review").props.disabled, true);
+  assert.equal(retired.calls.length, 0); assert.equal(retired.nativeCalls.length, 0);
 });
 test("read-only recovery stays visible while native purchase is unresolved and never releases ownership", async t => {
   const held = deferred(); const f = fixture(); f.setPurchase(() => held.promise); t.after(() => f.dispose());

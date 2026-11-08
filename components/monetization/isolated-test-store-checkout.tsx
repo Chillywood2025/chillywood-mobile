@@ -11,9 +11,10 @@ import { isolatedTipMoney } from "./isolated-tip-receipt";
 
 export function IsolatedTestStoreCheckout(props: { authority: AccountSessionAuthorityBinding; preparation: IsolatedSandboxTipCheckoutAttempt | null }) {
   if (!isIsolatedTestStoreFlavor()) return null;
-  return <TestStoreSession key={`${props.authority.userId}:${props.authority.sessionGeneration}`} {...props} />;
+  return <TestStoreSession key={`${props.authority.userId}:${props.authority.accountId}:${props.authority.sessionGeneration}:${props.authority.restoreOnly}`} {...props} />;
 }
-function TestStoreSession({ authority, preparation }: { authority: AccountSessionAuthorityBinding; preparation: IsolatedSandboxTipCheckoutAttempt | null }) {
+function TestStoreSession({ authority: incomingAuthority, preparation }: { authority: AccountSessionAuthorityBinding; preparation: IsolatedSandboxTipCheckoutAttempt | null }) {
+  const [authority] = useState(() => Object.freeze({ ...incomingAuthority }));
   const [build] = useState(readIsolatedTestStoreBuild);
   const [journal] = useState(() => build ? createIsolatedTestStoreAttemptJournal({ userId: authority.userId, configurationDigest: build.configId }) : null);
   const [client, setClient] = useState<IsolatedTestStoreClient | null>(null);
@@ -21,24 +22,27 @@ function TestStoreSession({ authority, preparation }: { authority: AccountSessio
   const [reserved, setReserved] = useState(true); const [ready, setReady] = useState(false);
   const [reviewed, setReviewed] = useState(false); const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Checking the dedicated Test Store connection…");
-  const alive = useRef(true); const retired = useRef(false); const running = useRef(false); const readSequence = useRef(0); const localSequence = useRef(0);
+  const alive = useRef(true); const retired = useRef(false); const running = useRef(false); const readSequence = useRef(0); const localSequence = useRef(0); const incarnation = useRef(0);
   const current = useCallback(() => alive.current && !retired.current && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()), [authority]);
   const refreshLocal = useCallback(async () => {
     if (!journal) return null;
-    const sequence = ++localSequence.current;
+    const epoch = incarnation.current, sequence = ++localSequence.current;
     const [rows, reservation] = await Promise.all([journal.list(), journal.readGlobalReservation()]);
-    if (!current() || sequence !== localSequence.current) return null;
+    if (!current() || epoch !== incarnation.current || sequence !== localSequence.current) return null;
     setAttempts(rows); setReserved(reservation.reserved); setReady(true); return rows;
   }, [current, journal]);
   useEffect(() => {
-    alive.current = true; let owned: IsolatedTestStoreClient | null = null;
-    const unsubscribe = subscribeToAccountSessionAuthority(next => { if (!sameAccountSessionAuthority(authority, next)) { retired.current = true; setReady(false); setAttempts([]); setNotice("Your account session changed. Reopen this view to read retained status."); } });
+    const epochRef = incarnation, snapshotRef = localSequence;
+    const epoch = ++incarnation.current; alive.current = true; let owned: IsolatedTestStoreClient | null = null;
+    const active = () => epoch === incarnation.current && current();
+    setClient(null); setReady(false);
+    const unsubscribe = subscribeToAccountSessionAuthority(next => { if (!sameAccountSessionAuthority(authority, next)) { retired.current = true; localSequence.current++; setClient(null); setReady(false); setAttempts([]); setNotice("Your account session changed. Reopen this view to read retained status."); } });
     if (build) void captureIsolatedTestStoreClient(authority, build.configId).then(async value => {
-      if (!current()) { value.dispose(); return; } owned = value; setClient(value); await refreshLocal();
-      if (current()) setNotice("This dedicated DEBUG build can request one Test Store rehearsal. Server qualification is checked before the purchase simulation opens.");
-    }).catch(() => { if (current()) { setReady(false); setNotice("Test Store is unavailable. Current account or saved recovery could not be verified."); } });
+      if (!active()) { value.dispose(); return; } owned = value; setClient(value); await refreshLocal();
+      if (active()) setNotice("This dedicated DEBUG build can request one Test Store rehearsal. Server qualification is checked before the purchase simulation opens.");
+    }).catch(() => { if (active()) { setReady(false); setNotice("Test Store is unavailable. Current account or saved recovery could not be verified."); } });
     else setNotice("Test Store is unavailable. This build has no qualified native DEBUG configuration.");
-    return () => { alive.current = false; retired.current = true; owned?.dispose(); unsubscribe(); };
+    return () => { if (epochRef.current === epoch) { alive.current = false; epochRef.current++; snapshotRef.current++; } owned?.dispose(); unsubscribe(); };
   }, [authority, build, current, refreshLocal]);
   useEffect(() => { setReviewed(false); }, [preparation?.requestId]);
   const start = async () => {
