@@ -17,9 +17,17 @@ const followingCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node
 const videoCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-creator-video-engagement-concurrency.mjs';
 const profileCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs';
 const socialDeployCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-social-engagement-exact-deploy-postgres.mjs';
+const capacityCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-paid-party-capacity-concurrency-postgres.mjs';
 const contractHash=contract=>createHash('sha256').update(JSON.stringify(contract)).digest('hex');
 const rebuildStep=job=>job.steps.find(step=>step.name==='Rebuild and test the local database');
 const assertJob=job=>{
+ assert.equal(job.steps.flatMap(step=>(step.run??'').split('\n')).filter(line=>line===capacityCommand).length,1);
+ const capacityNormalized=structuredClone(job),capacityStep=rebuildStep(capacityNormalized),capacityLines=capacityStep.run.split('\n');
+ const capacityPosition=capacityLines.indexOf(capacityCommand);
+ assert.ok(capacityPosition>0);
+ assert.equal(capacityLines[capacityPosition-1],'SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-room-seat-auction-concurrency-postgres.mjs');
+ assert.equal(capacityLines[capacityPosition+1],'SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-auction-transfer-concurrency-postgres.mjs');
+ capacityLines.splice(capacityPosition,1);capacityStep.run=capacityLines.join('\n');job=capacityNormalized;
  assert.equal(job.steps.flatMap(step=>(step.run??'').split('\n')).filter(line=>line===socialDeployCommand).length,1);
  const socialNormalized=structuredClone(job),socialStep=rebuildStep(socialNormalized),socialLines=socialStep.run.split('\n');
  const socialPosition=socialLines.indexOf(socialDeployCommand);
@@ -52,6 +60,16 @@ const assertJob=job=>{
  assert.equal(contractHash(contract),contractSha256,
   'the complete reviewed Database contract includes the required cutover proof');
 };
+
+test('paid-party capacity concurrency proof is mandatory, singular and preserves prior contract',()=>{
+ assertJob(workflow.jobs.database);
+ for(const mutate of [
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(capacityCommand+'\n','');},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(capacityCommand,capacityCommand+' || true');},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(capacityCommand,capacityCommand+'\n'+capacityCommand);},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(capacityCommand+'\n','')+capacityCommand+'\n';},
+ ]){const mutant=structuredClone(workflow.jobs.database);mutate(mutant);assert.throws(()=>assertJob(mutant),assert.AssertionError);}
+});
 
 test('Database keeps its measured aggregate budget and every prior mandatory command with the added cutover proof',()=>{
  const prefix=Date.parse('2026-11-06T11:22:08.962Z')-Date.parse('2026-11-06T10:32:01.735Z');
