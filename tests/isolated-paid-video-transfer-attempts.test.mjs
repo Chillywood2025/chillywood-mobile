@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { objectVersionCorpus } from "./isolated-paid-video-object-version-corpus.mjs";
 const compile = file => ts.transpileModule(fs.readFileSync(new URL(`../_lib/${file}.ts`, import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
 }).outputText;
@@ -37,7 +38,30 @@ function probe(request, current = binding(), changes = {}) {
   return { protocol: "scpv-upload-probe-v2", state: "observed", observationRaw: JSON.stringify(observation), signature: "b".repeat(64) };
 }
 
-test("one PUT opportunity is issued only after exact immutable persistence and readback", async () => {
+test("opaque version restart parity and one PUT opportunity require exact immutable persistence", async () => {
+  for (const [objectVersion, valid] of objectVersionCorpus) {
+    const f = load(), request = input(); await f.journal.prepare(request);
+    if (valid) {
+      await f.journal.recordProbe(request.requestId, probe(request, binding(), { objectVersion }), binding());
+      const restarted = load(f.storage);
+      assert.equal((await restarted.journal.list())[0].observation.objectVersion, objectVersion);
+      await restarted.journal.recordReceipt(request.requestId, receipt(request, { objectVersion }), binding());
+      const saved = (await load(f.storage).journal.list())[0];
+      assert.equal(saved.receipt.objectVersion, objectVersion);
+      assert.equal(saved.observation.objectVersion, objectVersion);
+      assert.equal((await load(f.storage).journal.prepare(request)).mayPut, false);
+    } else {
+      await assert.rejects(f.journal.recordProbe(request.requestId, probe(request, binding(), { objectVersion }), binding()), expected("invalid_response"));
+      await assert.rejects(f.journal.recordReceipt(request.requestId, receipt(request, { objectVersion }), binding()), expected("invalid_response"));
+      // A tampered persisted observation must still fail on a fresh process.
+      await f.journal.recordProbe(request.requestId, probe(request), binding());
+      const document = JSON.parse(f.storage.values.get(keyFor(userId)));
+      document.attempts[0].observation.objectVersion = objectVersion;
+      f.storage.values.set(keyFor(userId), JSON.stringify(document));
+      await assert.rejects(load(f.storage).journal.list(), expected("storage_corrupt"));
+    }
+  }
+  // Keep the original persistence-before-dispatch regression in this group.
   const f = load(), request = input(); let release; const write = f.storage.setItem;
   f.storage.setItem = async (...args) => { await new Promise(done => { release = done; }); return write(...args); };
   let returned = false; const pending = f.journal.prepare(request).then(result => { returned = true; return result; }); request.upload.expectedByteLength++;

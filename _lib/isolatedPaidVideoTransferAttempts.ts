@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { paidVideoId, paidVideoUuid, parsePaidVideoV2Response } from "./isolatedPaidVideoV2";
-import { IsolatedPaidVideoTransferError, parsePaidVideoV2TransferResponse, parsePaidVideoV2ObjectReceipt, parsePaidVideoV2ProbeResponse } from "./isolatedPaidVideoTransfer";
+import { IsolatedPaidVideoTransferError, isPaidVideoS3ObjectVersion as version, parsePaidVideoV2TransferResponse, parsePaidVideoV2ObjectReceipt, parsePaidVideoV2ProbeResponse } from "./isolatedPaidVideoTransfer";
 
 type Row = Record<string, unknown>;
 export type PaidVideoTransferStorage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<unknown> };
@@ -22,7 +22,6 @@ const keys = (v: unknown, expected: readonly string[]): v is Row => row(v) && Ob
 const digest = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/u.test(v);
 const member = (v: unknown, values: readonly string[]) => typeof v === "string" && values.includes(v);
 const milliseconds = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
-const version = (v: unknown): v is string => typeof v === "string" && /^(?!null$)[A-Za-z0-9._-]{1,256}$/u.test(v);
 function freeze<T>(value: T): T { if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 function copy<T>(value: T): T {
   const raw = JSON.stringify(value, (_key, v) => { if (v === undefined || typeof v === "function" || typeof v === "symbol" || typeof v === "bigint" || (typeof v === "number" && !Number.isFinite(v))) throw Error("Invalid JSON"); return v; });

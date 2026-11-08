@@ -23,7 +23,20 @@ const row = (value: unknown): value is Row => !!value && typeof value === "objec
 const keys = (value: unknown, names: readonly string[]): value is Row => row(value) && Object.keys(value).sort().join(",") === [...names].sort().join(",");
 const hash = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
 const integer = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-const version = (value: unknown): value is string => typeof value === "string" && value !== "null" && /^[A-Za-z0-9._-]{1,256}$/u.test(value);
+/** Match the server's opaque S3 VersionId contract without requiring Node
+ * Buffer or a TextEncoder polyfill in React Native. Never trim or decode it. */
+export function isPaidVideoS3ObjectVersion(value: unknown): value is string {
+  if (typeof value !== "string" || !value.length || value.length > 1024 || value === "null"
+    || /[\u0000-\u001f\u007f\ud800-\udfff]/u.test(value)) return false;
+  let bytes = 0;
+  for (const scalar of value) {
+    const point = scalar.codePointAt(0)!;
+    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+    if (bytes > 1024) return false;
+  }
+  return true;
+}
+const version = isPaidVideoS3ObjectVersion;
 const sameUpload = (a: PaidVideoV2TransferUpload, b: PaidVideoV2TransferUpload) => a.id === b.id && a.incarnation === b.incarnation && a.expectedSha256 === b.expectedSha256 && a.expectedByteLength === b.expectedByteLength;
 export function validPaidVideoV2TransferUpload(value: unknown): value is PaidVideoV2TransferUpload {
   return keys(value, ["id", "incarnation", "expectedSha256", "expectedByteLength"]) && paidVideoId(value.id, "upload") && paidVideoUuid(value.incarnation)

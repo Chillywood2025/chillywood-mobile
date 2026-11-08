@@ -50,7 +50,10 @@ const runAndroid = () => {
   const propertiesPath = path.join(output, "gradle/wrapper/gradle-wrapper.properties");
   const properties = fs.readFileSync(propertiesPath, "utf8");
   assert(properties.includes("gradle-8.14.3-bin.zip"), "Review the native test harness when the locked Expo Gradle version changes.");
-  fs.appendFileSync(propertiesPath, "\ndistributionSha256Sum=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531\n");
+  // The template's 10-second socket timeout is too short on hosted runners.
+  // Java properties use the last value; retain a bounded 60-second download
+  // timeout without changing the pinned artifact or the 20-minute test limit.
+  fs.appendFileSync(propertiesPath, "\nnetworkTimeout=60000\ndistributionSha256Sum=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531\n");
   const versions = fs.readFileSync(path.join(root, "node_modules/@react-native/gradle-plugin/gradle/libs.versions.toml"), "utf8");
   assert(versions.includes('agp = "8.11.0"') && versions.includes('kotlin = "2.1.20"'), "Review native test harness compiler versions after a React Native dependency update.");
   write("local.properties", `sdk.dir=${sdk.replaceAll("\\", "\\\\")}\n`);

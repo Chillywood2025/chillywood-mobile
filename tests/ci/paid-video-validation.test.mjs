@@ -27,7 +27,7 @@ test('PaidVideo plan requires five actual native profiles and the distinct retai
  assert.deepEqual(plan.http,{cases:103,actualGatewayEntries:4});assert.equal(plan.providerOrProductionActions,false);
  assert.equal(plan.execution,'sequential/local-disposable-only');
  assert.equal(PAID_VIDEO_NATIVE_STAGES.filter(s=>s.scanner).length,2);assert.equal(PAID_VIDEO_NATIVE_STAGES.filter(s=>s.reference).length,3);
- for(const name of ['tests/helpers/isolated-test-store-v3-fixtures.mjs','tests/helpers/media-picker-host.mjs','hooks/useMediaPicker.tsx','components/ui/MediaSourceSheet.tsx','_lib/deviceAttachmentPicker.ts','modules/chillywood-gallery-picker/index.js'])assert.match(collectPaidVideoSourceManifest()[name],/^[a-f0-9]{64}$/u);
+ for(const name of ['tests/helpers/isolated-test-store-v3-fixtures.mjs','tests/helpers/media-picker-host.mjs','tests/isolated-paid-video-object-version-corpus.mjs','hooks/useMediaPicker.tsx','components/ui/MediaSourceSheet.tsx','_lib/deviceAttachmentPicker.ts','modules/chillywood-gallery-picker/index.js'])assert.match(collectPaidVideoSourceManifest()[name],/^[a-f0-9]{64}$/u);
 });
 test('successor app coverage explicitly replaces only historical HTTP48 with the real HTTP103 bridge',()=>{
  const plan=paidVideoValidationPlan(),files=paidVideoAppFiles();

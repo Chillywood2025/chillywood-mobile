@@ -6,10 +6,7 @@ import Ajv from 'ajv';
 import { PGlite } from '@electric-sql/pglite';
 import { isS3ObjectVersion, validateObjectBinding } from '../ops/isolated-paid-video-worker/private-object.mjs';
 import { signScanResult } from '../ops/isolated-paid-video-worker/scan.mjs';
-
-const accepted = ['opaque/+==%2F%25&?#', ' version with spaces ', 'NULL', 'x'.repeat(1024), 'é'.repeat(512), '😀'.repeat(256), 'e\u0301'];
-const rejected = ['', 'null', null, 123, {}, 'x'.repeat(1025), 'é'.repeat(513), '😀'.repeat(257), '\ud800', '\udfff', 'x\ud800y', ...Array.from({length:32},(_,i)=>'a'+String.fromCharCode(i)+'b'), 'a\x7fb'];
-const corpus = [...accepted.map(value=>[value,true]), ...rejected.map(value=>[value,false])];
+import { objectVersionCorpus as corpus } from './isolated-paid-video-object-version-corpus.mjs';
 const uuid = randomUUID(), incarnation = randomUUID();
 const binding = {provider:'s3',bucket:'private-bucket',routeId:uuid,incarnation,expectedSha256:'a'.repeat(64),expectedByteLength:1,
   objectKey:`sandbox-commerce-v1/${uuid}/scv1_resource_${uuid}/scv1_asset_${uuid}/${incarnation}.mp4`};

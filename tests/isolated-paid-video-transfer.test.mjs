@@ -3,6 +3,8 @@ import fs from "node:fs";
 import vm from "node:vm";
 import test from "node:test";
 import ts from "typescript";
+import { objectVersionCorpus } from "./isolated-paid-video-object-version-corpus.mjs";
+import { isS3ObjectVersion } from "../ops/isolated-paid-video-worker/private-object.mjs";
 const uuid = n => `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const A = { userId: uuid(1), accountId: uuid(1), sessionGeneration: uuid(2), restoreOnly: false }, B = { ...A, userId: uuid(3), accountId: uuid(3), sessionGeneration: uuid(4) };
 const upload = { id: `scpv_upload_${uuid(10)}`, incarnation: uuid(11), expectedSha256: "a".repeat(64), expectedByteLength: 4 };
@@ -38,7 +40,23 @@ function fixture() {
     unavailable() { available = false; }, stale() { stale = true; }, mismatch() { mismatch = true; }, fail() { failure = true; },
     delayRead() { readWait = deferred(); return readWait; }, delayResponse() { responseWait = deferred(); return responseWait; } };
 }
-test("one PUT requires a fresh exact capability, immutable byte snapshot and original session", async () => {
+test("opaque versions preserve server parity and one PUT requires an exact immutable capability", async () => {
+  const { api } = fixture(), context = { ...binding, now: 100000 };
+  for (const [objectVersion, valid] of objectVersionCorpus) {
+    assert.equal(api.isPaidVideoS3ObjectVersion(objectVersion), valid);
+    assert.equal(api.isPaidVideoS3ObjectVersion(objectVersion), isS3ObjectVersion(objectVersion));
+    const value = { ...receipt(context), objectVersion }, signed = probe(context);
+    const observation = { ...JSON.parse(signed.observationRaw), objectVersion };
+    const observed = { ...signed, observationRaw: JSON.stringify(observation) };
+    if (valid) {
+      assert.equal(api.parsePaidVideoV2ObjectReceipt(value, context).objectVersion, objectVersion);
+      assert.equal(JSON.parse(api.parsePaidVideoV2ProbeResponse(observed, context).observationRaw).objectVersion, objectVersion);
+    } else {
+      assert.throws(() => api.parsePaidVideoV2ObjectReceipt(value, context));
+      assert.throws(() => api.parsePaidVideoV2ProbeResponse(observed, context));
+    }
+  }
+  // Keep the original one-PUT capability and identity regression in this group.
   const f = fixture(), client = await f.api.capturePaidVideoV2TransferClient(A), wait = f.delayRead(), bytes = new Uint8Array([1, 2, 3, 4]);
   const pending = client.put(binding, bytes); bytes.fill(9); wait.resolve(); const result = await pending;
   assert.equal(result.state, "acknowledged"); assert.equal(result.verificationRequired, true); assert.deepEqual(f.calls.map(c => c.method), ["READ_CAPABILITY", "PUT"]);
