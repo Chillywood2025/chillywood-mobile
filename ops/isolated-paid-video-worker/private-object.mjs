@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 import { createHash, createHmac } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 
+// S3 VersionId is opaque. Preserve exact scalar Unicode; never trim or decode.
+export function isS3ObjectVersion(value) {
+  return typeof value === 'string' && value.length > 0 && value !== 'null'
+    && !/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(value)
+    && new TextEncoder().encode(value).byteLength <= 1024;
+}
+
 const MAX_BYTES = 16777216, MAX_RANGE = 512 * 1024;
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const hmac = (key, bytes) => createHmac('sha256', key).update(bytes).digest();
@@ -15,7 +22,7 @@ export function validateObjectBinding(binding) {
   if (!match || match[4] !== binding.incarnation || binding.provider !== 's3' || !new RegExp(`^${uuid}$`, 'u').test(binding.routeId)
     || typeof binding.bucket !== 'string' || !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/u.test(binding.bucket) || !/^[a-f0-9]{64}$/u.test(binding.expectedSha256)
     || !Number.isSafeInteger(binding.expectedByteLength) || binding.expectedByteLength < 1 || binding.expectedByteLength > MAX_BYTES
-    || (binding.objectVersion !== undefined && (!/^[A-Za-z0-9._-]{1,256}$/u.test(binding.objectVersion) || binding.objectVersion === 'null')))
+    || (binding.objectVersion !== undefined && !isS3ObjectVersion(binding.objectVersion)))
     fail('paid_video_object_binding_invalid');
   return binding;
 }
@@ -69,7 +76,7 @@ export function createPrivateS3Transport({ routeId, bucket, region, accessKeyId,
     const actualVersion = response.headers.get('x-amz-version-id'), etag = response.headers.get('etag');
     if (response.status !== 200 || response.headers.get('content-length') !== String(binding.expectedByteLength)
       || response.headers.get('content-type') !== 'video/mp4' || response.headers.has('content-encoding')
-      || !actualVersion || actualVersion === 'null' || !/^[A-Za-z0-9._-]{1,256}$/u.test(actualVersion)
+      || !isS3ObjectVersion(actualVersion)
       || (version !== undefined && actualVersion !== version) || !etag || !/^"[A-Za-z0-9._-]{1,128}"$/u.test(etag)) fail('paid_video_origin_metadata_invalid');
     return { version: actualVersion, etag };
   };
@@ -85,7 +92,7 @@ export function createPrivateS3Transport({ routeId, bucket, region, accessKeyId,
       try {
         if (response.status !== 200) return { state: response.status === 412 ? 'exists_unverified' : 'unknown' };
         const version = response.headers.get('x-amz-version-id');
-        if (!version || version === 'null' || !/^[A-Za-z0-9._-]{1,256}$/u.test(version)
+        if (!isS3ObjectVersion(version)
           || response.headers.get('x-amz-checksum-sha256') !== Buffer.from(binding.expectedSha256, 'hex').toString('base64')) return { state: 'unknown' };
         return { state: 'acknowledged', objectVersion: version };
       } finally { await response.body?.cancel(); }

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {spawnSync} from 'node:child_process';
-import {PAID_VIDEO_NATIVE_STAGES,PAID_VIDEO_PORTABLE_STAGES,paidVideoAppFiles,paidVideoValidationPlan,extractPaidVideoFixtures,validateLegacyProof,readPaidVideoHttpSummary}
+import {PAID_VIDEO_NATIVE_STAGES,PAID_VIDEO_PORTABLE_STAGES,paidVideoAppFiles,paidVideoValidationPlan,extractPaidVideoFixtures,validateLegacyProof,readPaidVideoHttpSummary,collectPaidVideoSourceManifest}
  from '../../scripts/ci/paid-video-validation.mjs';
 
 test('PaidVideo plan requires five actual native profiles and the distinct retained HTTP successor',()=>{
@@ -14,20 +14,21 @@ test('PaidVideo plan requires five actual native profiles and the distinct retai
  assert.deepEqual(plan.http,{cases:103,actualGatewayEntries:4});assert.equal(plan.providerOrProductionActions,false);
  assert.equal(plan.execution,'sequential/local-disposable-only');
  assert.equal(PAID_VIDEO_NATIVE_STAGES.filter(s=>s.scanner).length,2);assert.equal(PAID_VIDEO_NATIVE_STAGES.filter(s=>s.reference).length,3);
+ assert.match(collectPaidVideoSourceManifest()['tests/helpers/isolated-test-store-v3-fixtures.mjs'],/^[a-f0-9]{64}$/u);
 });
 test('successor app coverage explicitly replaces only historical HTTP48 with the real HTTP103 bridge',()=>{
  const plan=paidVideoValidationPlan(),files=paidVideoAppFiles();
  assert.ok(files.includes('tests/isolated-paid-video-checkout-v3.test.mjs'));assert.ok(files.includes('tests/isolated-test-store-v3-native.test.mjs'));
  assert.ok(!files.includes('tests/isolated-paid-video-http-bridge.test.mjs'));assert.ok(!files.includes('tests/isolated-paid-video-retained-http-bridge.test.mjs'));
  assert.ok(!files.includes('tests/isolated-paid-video-platform-http-bridge.test.mjs'));
- assert.equal(plan.app.tests,262);assert.equal(plan.app.libraryTestsInExistingCanonicalLane,19);
+ assert.equal(plan.app.tests,270);assert.equal(plan.app.libraryTestsInExistingCanonicalLane,19);
  assert.equal(PAID_VIDEO_PORTABLE_STAGES.find(s=>s.name==='platform-http-app').tests,7);
- assert.equal(262+19+7,288);assert.equal(plan.app.historicalBridgeExcluded,'tests/isolated-paid-video-http-bridge.test.mjs');
+ assert.equal(270+19+7,296);assert.equal(plan.app.historicalBridgeExcluded,'tests/isolated-paid-video-http-bridge.test.mjs');
  const all=PAID_VIDEO_PORTABLE_STAGES.flatMap(s=>s.files);assert.equal(new Set(all).size,all.length);
- assert.equal(PAID_VIDEO_PORTABLE_STAGES.reduce((n,s)=>n+s.tests,0)+262,386);
+ assert.equal(PAID_VIDEO_PORTABLE_STAGES.reduce((n,s)=>n+s.tests,0)+270,394);
 });
 const fixtures=()=>({authoring:{contractCaptures:[]},gateway:{captures:[]},'capture-composed':{combinedCaptures:
- [['checkout',41],['provider-command',31],['prepared-closure',8],['playback',15]].flatMap(([kind,count])=>Array.from({length:count},(_,index)=>({kind,
+ [['checkout',42],['provider-command',31],['prepared-closure',8],['playback',15]].flatMap(([kind,count])=>Array.from({length:count},(_,index)=>({kind,
   input:{actor:{userId:`synthetic-${index}`},request:{command:'read',requestId:`synthetic-request-${index}`,payload:{index}}},
   result:{grantsAccess:false,notPayable:true,status:'synthetic-validator-only',index}})))}});
 test('same-attempt capture extraction preserves every input/result and makes no new economic claim',t=>{

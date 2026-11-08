@@ -11,6 +11,7 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const hmac = (key, value) => createHmac('sha256', key).update(value).digest();
 
 test('actual local HTTP object fixture: signed conditional upload, version-pinned bytes, bounded range and post-I/O authority', async () => {
+  const version = 'opaque/+==%2F%25&?#' + 'x'.repeat(300);
   const config = { routeId: randomUUID(), bucket: 'synthetic-private-video', region: 'us-east-1', accessKeyId: 'TESTACCESSKEY12345678', secretAccessKey: 'synthetic-local-secret-value-not-a-real-key-00000000' };
   const host = `${config.bucket}.s3.${config.region}.amazonaws.com`;
   const resourceId = 'scv1_resource_' + randomUUID(), assetId = 'scv1_asset_' + randomUUID(), incarnation = randomUUID();
@@ -36,13 +37,13 @@ test('actual local HTTP object fixture: signed conditional upload, version-pinne
         assert.equal(req.headers['content-type'], 'video/mp4'); assert.equal(req.headers['x-amz-acl'], undefined);
         assert.equal(req.headers['x-amz-checksum-sha256'], Buffer.from(digest(body), 'hex').toString('base64'));
         if (stored) { res.writeHead(412); res.end(); return; }
-        stored = body; res.writeHead(200, { 'x-amz-version-id': 'fixture-v1', 'x-amz-checksum-sha256': req.headers['x-amz-checksum-sha256'] }); res.end(); return;
+        stored = body; res.writeHead(200, { 'x-amz-version-id': version, 'x-amz-checksum-sha256': req.headers['x-amz-checksum-sha256'] }); res.end(); return;
       }
       assert.ok(stored); assert.ok(req.method === 'GET' || req.method === 'HEAD');
-      if (url.search) assert.equal(url.searchParams.get('versionId'), 'fixture-v1');
-      const headers = { 'content-type': 'video/mp4', 'content-length': String(stored.length), etag: '"fixture-etag"', 'x-amz-version-id': wrongVersion ? 'wrong' : 'fixture-v1' };
+      if (url.search) assert.equal(url.searchParams.get('versionId'), version);
+      const headers = { 'content-type': 'video/mp4', 'content-length': String(stored.length), etag: '"fixture-etag"', 'x-amz-version-id': wrongVersion ? 'wrong' : version };
       if (req.method === 'HEAD') { res.writeHead(200, headers); res.end(); return; }
-      assert.equal(url.searchParams.get('versionId'), 'fixture-v1'); assert.equal(req.headers['if-match'], '"fixture-etag"');
+      assert.equal(url.searchParams.get('versionId'), version); assert.equal(req.headers['if-match'], '"fixture-etag"');
       if (req.headers.range) {
         rangeRead++; const [, start, end] = /^bytes=(\d+)-(\d+)$/u.exec(req.headers.range);
         headers['content-range'] = `bytes ${start}-${end}/${stored.length}`; headers['content-length'] = String(Number(end) - Number(start) + 1);
@@ -86,8 +87,8 @@ test('actual local HTTP object fixture: signed conditional upload, version-pinne
     assert.deepEqual(await transport.writeOnce(binding, bytes, Date.now() + 10000), { state: 'exists_unverified' });
     assert.equal(stored.length, bytes.length);
     const scanned = await transport.readForScan(binding, Date.now() + 10000);
-    assert.deepEqual(scanned.bytes, bytes); assert.equal(scanned.objectVersion, 'fixture-v1');
-    const pinned = { ...binding, objectVersion: 'fixture-v1' };
+    assert.deepEqual(scanned.bytes, bytes); assert.equal(scanned.objectVersion, version);
+    const pinned = { ...binding, objectVersion: version };
     assert.deepEqual(await transport.readRange(pinned, { start: 100, end: 199 }, Date.now() + 10000), bytes.subarray(100, 200));
     badRange = true; await assert.rejects(transport.readRange(pinned, { start: 100, end: 199 }, Date.now() + 10000), /range_response_invalid/u); badRange = false;
     wrongVersion = true; await assert.rejects(transport.readRange(pinned, { start: 100, end: 199 }, Date.now() + 10000), /origin_metadata_invalid/u); wrongVersion = false;

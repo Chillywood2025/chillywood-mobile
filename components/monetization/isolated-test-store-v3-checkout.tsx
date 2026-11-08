@@ -104,7 +104,7 @@ function Session({ authority: incoming, offerId }: { authority: AccountSessionAu
         || snapshot.attempts.some(attempt => attempt.intentId === preparation.attempt?.intentId)}
         onPress={() => { void run(async source => { await source.allocate(preparation); }, "Requesting the exact registered test offer…"); }}>Request registered test offer</Action>
       <Action id={`paid-video-v3-close-${preparation.requestId}`} disabled={disabled || !preparation.attempt?.intentId || preparation.attempt.state === "closed" || preparation.attempt.state === "not_applied"
-        || snapshot.attempts.some(attempt => attempt.intentId === preparation.attempt?.intentId)}
+        || snapshot.attempts.some(attempt => attempt.intentId === preparation.attempt?.intentId && (attempt.allocation !== null || attempt.nativePhase !== "unprepared"))}
         onPress={() => { void run(async source => { await source.closePreparation(preparation); }, "Checking that this exact preparation was never allocated before closing it…"); }}>Close unallocated preparation</Action>
     </View>)}
     {snapshot?.attempts.map(attempt => {

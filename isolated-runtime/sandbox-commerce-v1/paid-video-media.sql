@@ -141,7 +141,9 @@ begin
   or result->>'protocol' is distinct from 'scpv-byte-scan-v1' or result->>'profile' is distinct from 'scpv-mp4-h264-aac-v1'
   or result->>'moderation' is distinct from 'unreviewed' or result->>'verdict' not in ('clean','rejected')
   or jsonb_typeof(body->'objectVersion') is distinct from 'string'
-  or coalesce(body->>'objectVersion','') !~ '^[A-Za-z0-9._-]+$' or length(body->>'objectVersion')>256 or body->>'objectVersion'='null'
+  or coalesce(body->>'objectVersion','')='' or body->>'objectVersion'='null'
+  or octet_length(convert_to(body->>'objectVersion','UTF8'))>1024
+  or body->>'objectVersion' ~ U&'[\0001-\001F\007F]'
  then raise exception 'paid_video_result_invalid'; end if;
  -- Lifecycle shared fence also covers retired negative/replay reconciliation.
  perform sandbox_commerce_v1.assert_generation(false);

@@ -27,7 +27,7 @@ schema.definitions.gatewayRequest={oneOf:schema.definitions.request.oneOf.map(va
  const payload=structuredClone(variant.properties.p_payload);delete payload.properties.protocol;delete payload.properties.requestId;payload.required=payload.required.filter(k=>!['protocol','requestId'].includes(k));
  return object({protocol:{const:'isolated-paid-video-v2'},command:variant.properties.p_command,requestId:uuid,expectedSessionId:uuid,configurationDigest:digest,payload});
 })};
-const uploadId=schema.definitions.upload.properties.id, version={type:'string',pattern:'^(?!null$)[A-Za-z0-9._-]{1,256}$'};
+const uploadId=schema.definitions.upload.properties.id, version={type:'string',minLength:1,maxLength:1024,format:'s3-object-version',description:'Opaque scalar Unicode, not literal null or ASCII controls; at most 1024 UTF-8 bytes, preserved exactly.'};
 schema.definitions.transferResponse=object({protocol:{const:'scpv-transfer-v2'},state:{enum:['unknown','acknowledged','exists_unverified']},uploadId,requestId:uuid,verificationRequired:{const:true}});
 schema.definitions.probeResponse=object({protocol:{const:'scpv-upload-probe-v2'},state:{const:'observed'},observationRaw:{type:'string',maxLength:4096},signature:digest});
 schema.definitions.objectReceipt=object({protocol:{const:'scpv-object-receipt-v2'},state:{const:'recorded'},uploadId,userId:uuid,originalSessionId:uuid,originalConfigurationDigest:digest,

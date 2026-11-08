@@ -1,3 +1,4 @@
+import { isS3ObjectVersion } from './private-object.mjs';
 import assert from 'node:assert/strict';
 import { constants } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -178,7 +179,7 @@ export function signScanResult({ key, ticketId, uploadId, incarnation, objectVer
   if (!(key instanceof Uint8Array) || key.byteLength !== 32) fail('paid_video_worker_key_invalid');
   const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
   if (!uuid.test(ticketId) || !uuid.test(incarnation) || !/^scpv_upload_[a-f0-9-]{36}$/u.test(uploadId)
-    || !uuid.test(uploadId.slice(12)) || typeof objectVersion !== 'string' || !/^[A-Za-z0-9._-]{1,256}$/u.test(objectVersion)
+    || !uuid.test(uploadId.slice(12)) || !isS3ObjectVersion(objectVersion)
     || result?.protocol !== 'scpv-byte-scan-v1' || !['clean', 'rejected'].includes(result.verdict)
     || result.profile !== PAID_VIDEO_PROFILE.id || !HEX.test(result.sha256)) fail('paid_video_result_binding_invalid');
   const raw = JSON.stringify({ protocol: 'scpv-worker-result-v1', ticketId, uploadId, incarnation, objectVersion, result });

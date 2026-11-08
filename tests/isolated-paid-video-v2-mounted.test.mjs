@@ -25,6 +25,10 @@ function load(file, bindings, extra = {}) {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, scope, { filename: file }); return scope.exports;
 }
 function fixture({ initial = A, platform = "ios", memory = new Map(), strict = false, nativeConfig = "b".repeat(64), clockNow = null, remote = { upload: clone(upload), resource: clone(resource), offer: null, transfer: null, recorded: false } } = {}) {
+  // Keep the synthetic upload and every participating boundary on one clock.
+  // Real captured envelopes supply their own explicit observation time below.
+  const now = () => clockNow ?? Date.parse("2026-11-07T12:00:00Z");
+  class Clock extends Date { static now() { return now(); } }
   let losePut = false, losePost = false; let current = initial, nodes = [], params = {}, beforeStore = async () => {}, failStorage = false, picked = 0, requestIds = [];
   const listeners = new Set(), calls = [], navigations = [], shares = [], checkoutEntries = [];
   const authority = { getCurrentAccountSessionAuthoritySnapshot: () => current,
@@ -37,7 +41,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
   const api = load("../_lib/isolatedPaidVideoV2.ts", { "react-native": native, "react-native-get-random-values": {}, "./accountSessionAuthority": authority, "./isolatedTestStoreV3Build": { readIsolatedTestStoreV3Build: () => ({configId:nativeConfig}) },
     "./supabase": { SUPABASE_URL: "https://isolated.invalid", SUPABASE_ANON_KEY: "public-fixture" },
     "./accountBoundSupabaseMutation": { async captureAccountBoundSupabaseMutationSubject() { return { authority: current, accessToken: "captured-fixture-token" }; } } },
-  { Date: class extends Date { static now() { return clockNow ?? Date.now(); } }, fetch: async (url, options) => { const body = JSON.parse(options.body); calls.push({ url, options, body }); return { ok: true, json: async () => respond(body) }; } });
+  { Date: Clock, fetch: async (url, options) => { const body = JSON.parse(options.body); calls.push({ url, options, body }); return { ok: true, json: async () => respond(body) }; } });
   const secureId = api.newPaidVideoV2RequestId; api.newPaidVideoV2RequestId = () => requestIds.shift() ?? secureId();
   const journal = load("../_lib/isolatedPaidVideoV2Attempts.ts", { "@react-native-async-storage/async-storage": storage, "./isolatedPaidVideoV2": api });
   const files = load("../_lib/isolatedPaidVideoFiles.ts", { "react-native": native, "./accountSessionAuthority": authority, "./isolatedPaidVideo": api,
@@ -47,10 +51,10 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
   const transfer = load("../_lib/isolatedPaidVideoTransfer.ts", { "./isolatedPaidVideoV2":api,"./accountSessionAuthority":authority,
     "./accountBoundSupabaseMutation":{async captureAccountBoundSupabaseMutationSubject(){return {authority:current,accessToken:"captured-fixture-token"};}},
     "./supabase":{SUPABASE_URL:"https://isolated.invalid",SUPABASE_ANON_KEY:"public-fixture"}},
-    {fetch:async(url,options)=>{calls.push({url,options,method:options.method});return {ok:true,json:async()=>transferRespond(options)};}});
+    {Date:Clock,fetch:async(url,options)=>{calls.push({url,options,method:options.method});return {ok:true,json:async()=>transferRespond(options)};}});
   const transferJournal=load("../_lib/isolatedPaidVideoTransferAttempts.ts",{"@react-native-async-storage/async-storage":storage,"./isolatedPaidVideoV2":api,"./isolatedPaidVideoTransfer":transfer});
-  const actions = load("../_lib/isolatedPaidVideoV2Actions.ts", { "react-native": native, "./isolatedPaidVideoOfferCode": offerCodes, "./accountSessionAuthority": authority, "./isolatedPaidVideoV2": api, "./isolatedPaidVideoV2Attempts": journal, "./isolatedPaidVideoFiles": files, "./isolatedPaidVideoTransfer":transfer,"./isolatedPaidVideoTransferAttempts":transferJournal });
-  const envelope = (body, data, status = "ok") => ({ protocol: "isolated-paid-video-v2", command: body.command, requestId: body.requestId, status, configurationDigest:"b".repeat(64), capabilityExpiresAtMs:Date.now()+4000,
+  const actions = load("../_lib/isolatedPaidVideoV2Actions.ts", { "react-native": native, "./isolatedPaidVideoOfferCode": offerCodes, "./accountSessionAuthority": authority, "./isolatedPaidVideoV2": api, "./isolatedPaidVideoV2Attempts": journal, "./isolatedPaidVideoFiles": files, "./isolatedPaidVideoTransfer":transfer,"./isolatedPaidVideoTransferAttempts":transferJournal }, {Date:Clock});
+  const envelope = (body, data, status = "ok") => ({ protocol: "isolated-paid-video-v2", command: body.command, requestId: body.requestId, status, configurationDigest:"b".repeat(64), capabilityExpiresAtMs:now()+4000,
     actor: { userId: current.userId, accountId: current.accountId, sessionGeneration: current.sessionGeneration }, data });
   let respond = async body => {
     if(body.command==="upload.reserve")remote.upload={...clone(upload),title:body.payload.title,transferAvailable:true};
@@ -76,7 +80,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
     assert.ok(remote.transfer,"No transfer exists");assert.equal(h["x-chillywood-request-id"],remote.transfer.requestId);
     if(options.method==="GET"){
       if(remote.recorded)return receipt();
-      return {protocol:"scpv-upload-probe-v2",state:"observed",signature:"c".repeat(64),observationRaw:JSON.stringify({protocol:"scpv-object-observation-v2",...remote.transfer,sessionId:h["x-chillywood-auth-session"],configurationDigest:h["x-chillywood-native-configuration"],verifierId:uuid(801),checkedAtMs:Date.now(),expiresAtMs:Date.now()+25000})};
+      return {protocol:"scpv-upload-probe-v2",state:"observed",signature:"c".repeat(64),observationRaw:JSON.stringify({protocol:"scpv-object-observation-v2",...remote.transfer,sessionId:h["x-chillywood-auth-session"],configurationDigest:h["x-chillywood-native-configuration"],verifierId:uuid(801),checkedAtMs:now(),expiresAtMs:now()+25000})};
     }
     assert.equal(options.method,"POST");const body=JSON.parse(options.body);assert.equal(body.protocol,"scpv-reconcile-v2");assert.equal(JSON.parse(body.observationRaw).requestId,remote.transfer.requestId);
     remote.recorded=true;if(losePost)throw Error("lost reconcile response");return receipt();
@@ -181,12 +185,14 @@ test("A to B to A during transfer persistence closes the old owner before PUT", 
   assert.equal(f.calls.some(c => c.method === "PUT"), false); assert.equal((await f.transfers().list()).at(-1).state, "not_applied");
   assert.match(f.text(), /session changed/u); await f.render("upload", { uploadId: upload.id }); assert.equal(f.node("paid-video-refresh").props.disabled, true);
 });
-test("fresh capability loss and local storage failure each stop transfer before any raw bytes", async t => {
-  for (const scenario of ["capability", "storage"]) {
+test("fresh capability loss, expired upload and local storage failure each stop transfer before any raw bytes", async t => {
+  for (const scenario of ["capability", "expiry", "storage"]) {
     const f = fixture(); t.after(() => f.dispose()); await reserve(f); await openUpload(f);
-    if (scenario === "capability") f.remote.upload.transferAvailable = false; else f.failStorage();
+    if (scenario === "capability") f.remote.upload.transferAvailable = false;
+    else if (scenario === "expiry") f.remote.upload.expiresAt = "2026-11-07T12:00:00Z";
+    else f.failStorage();
     await f.press("paid-video-transfer"); assert.equal(f.calls.some(c => c.method === "PUT"), false);
-    if (scenario === "capability") assert.equal((await f.transfers().list()).at(-1).state, "not_applied");
+    if (scenario !== "storage") assert.equal((await f.transfers().list()).at(-1).state, "not_applied");
   }
 });
 if (process.env.ISOLATED_PAID_VIDEO_V2_FIXTURE) test("mounted retained upload view consumes unchanged actual gateway responses and adopts only their exact descriptor", async t => {
@@ -205,4 +211,3 @@ if (process.env.ISOLATED_PAID_VIDEO_V2_FIXTURE) test("mounted retained upload vi
   assert.equal(saved.configurationDigest, retained.result.data.transfer.configurationDigest); assert.equal(f.node("paid-video-transfer").props.disabled, true);
   assert.doesNotMatch(f.text(), /could not be verified/u); assert.equal(f.calls.some(c => c.method === "PUT"), false);
 });
-

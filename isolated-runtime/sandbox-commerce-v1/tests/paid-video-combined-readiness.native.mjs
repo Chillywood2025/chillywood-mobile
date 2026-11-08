@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { isS3ObjectVersion } from '../../../ops/isolated-paid-video-worker/private-object.mjs';
 // Actual PostgreSQL + production gateway code. Auth, native/provider admission
 // and object transport are explicitly synthetic here; the HTTP/Auth profile is
 // separate. No production target, credential or provider is contacted.
@@ -247,7 +248,7 @@ try {
   assert.throws(()=>boundary.strictPaidVideoJson('{"a":1,"a":2}'),/duplicate/u);
   cases.push('Strict unknown-key/duplicate JSON and exact current-session rejection happen before SQL mutations.');
   const schema=JSON.parse(keep(path.join(runtime,'paid-video-contract-v2.json'))),Ajv=createRequire(import.meta.url)('ajv');
-  const ajv=new Ajv({allErrors:true}),validate=ajv.compile(schema);
+  const ajv=new Ajv({allErrors:true});ajv.addFormat('s3-object-version',isS3ObjectVersion);const validate=ajv.compile(schema);
   const shapes=Object.fromEntries(['transferResponse','probeResponse','objectReceipt'].map(name=>[name,ajv.compile({...schema,oneOf:undefined,$ref:'#/definitions/'+name})]));
   for(const capture of captures){
     if(capture.kind==='range')continue;

@@ -9,9 +9,9 @@ const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const bases={
  legacy_commands:['commands.sql','e42ec2f8ac50e2dea104a16abfa4429a3f351e560060fab4f19556a11e0bfb45'],
- commands:['candidates/paid-video-combined-readiness/commands.sql','eb919a47a64dcbdc102e8d85045ab827f32d17a0b232514e858eb75f4d13f8d7'],
- gateway:['candidates/paid-video-combined-readiness/gateway.sql','81708d6ea9325c874dc95931fe6c320efe046a108d99e5b792ec55dc560a902c'],
- provisioning:['candidates/paid-video-combined-readiness/provisioning.sql','85ec3e8b5e04f63d41b8d3a35ed80c095a2069c1189f607275bf1a5a6fdf5c1b'],
+ commands:['candidates/paid-video-combined-readiness/commands.sql','19062a47190ef7d18dade13e6c0c9c638a2b862b3e3cd30101606b85e4a15c43'],
+ gateway:['candidates/paid-video-combined-readiness/gateway.sql','534af30129e94ce9e12e8d188bb033058da34ecaf76fd2ef61efc79d6e124dd8'],
+ provisioning:['candidates/paid-video-combined-readiness/provisioning.sql','576bb84abc0d085207b7de129f70b8ef09d6a0a65f2c5fa404f6690a4228b7df'],
  receipts:['test-store-paid-video-receipts.sql','7255b02224da3e0e54fa41802d519beaf9aae3b7c3b7013f7d9cd061161ecce6'],
  access:['paid-video-access.sql','4c8ac599f3cc761985f3fa57f730ba274143c1d84f2da9e616c8ddbf32613ee7'],
 };

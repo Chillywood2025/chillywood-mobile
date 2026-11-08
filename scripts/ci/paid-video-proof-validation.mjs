@@ -15,10 +15,10 @@ const same = (actual, expected, code) => assert.deepEqual(actual, expected, `PAI
 const profiles = {
   fresh: { count: 31, manifest: "source-manifest.json", modules: "orderedModules",
     harness: "test-store-v3-capture-composed-managed.native.mjs",
-    installation: "5b4eee14864d5e039114ae8c605407f7b3f9baaca90511172267d31b4fd1356e" },
+    installation: "09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563" },
   retained: { count: 19, manifest: "retained-source-manifest.json", modules: "executedModules",
     harness: "test-store-v3-retained-capture-managed.native.mjs",
-    installation: "a899f70795d5b9234fdb1e44f694c56da2cff6224a2e71b2fd3508d86b4b0e11" },
+    installation: "0740568bed37dbc21cb462efcfd577078c9325f3449b1e50bfac6fe57e8e559a" },
 };
 const edgePaths = ["supabase/functions/_shared/isolated-test-store-v3-provisioner.ts",
   `${fixtureRoot}/test-store-v3-provider.fixture.mjs`, "supabase/functions/_shared/revenuecat-router-envelope.ts",
@@ -30,7 +30,7 @@ const capturePaths = ["supabase/functions/_shared/revenuecat-router-envelope.ts"
 const cleanupKeys = ["sessionsClosed", "clusterStopped", "clusterNotRunningVerified", "directoryRemoved"];
 const retainedTables = ["project_reservations", "test_store_qualification_connections", "test_store_qualification_controls",
   "test_store_qualification_entries", "test_store_qualification_deliveries", "test_store_qualification_exclusions", "test_store_qualification_conflicts"];
-const httpSource = "25134c0952bcf71be1274da91bf36013fe662a065db11dfc6a91cfcab3ef51c0";
+const httpSource = "22c7dcfd9a2569b9b902db79f8468df90c1058b53fe663cdefe01a63bcd663b2";
 const secretFiles = ["edge.private.json", "credentials.private.json", "accounts.private.json",
   "purchase.private.json", "compose.private.json", "gateway.private.json"];
 const evidenceNames = ["auth-issuance-proof.json", "cleanup-proof.json", "edge-cleanup-proof.json", "edge-listener-proof.json",
@@ -70,7 +70,7 @@ export function capturePaidVideoPostgresSources({ repositoryRoot, baselineDirect
   check(Array.isArray(modules) && modules.length === 42, "MODULE_COUNT");
   same(manifest.installationSourceSha256, selected.installation, "INSTALLATION_MISMATCH");
   if (profile === "fresh") verifyFreshCaptureProfile(manifest, modules.map((entry) => entry.path), baselineRead);
-  else same(sha256(manifestBytes), "4f2f12150bf7b010cda011e1b9ca43aa38dd4d15168125d6ea4b0ce8e930bb7e", "RETAINED_PROFILE_CHANGED");
+  else same(sha256(manifestBytes), "39f259c62d0683c750be6b4fa01d254aa91a8dc3cefb9d74219398c70eb36a37", "RETAINED_PROFILE_CHANGED");
   const sourceHashes = {};
   for (const [index, entry] of modules.entries()) {
     same(entry.position, index + 1, "MODULE_POSITION");
@@ -128,7 +128,7 @@ export function validatePaidVideoPostgresProof(proof, { profile, expected }) {
   return proof;
 }
 
-const platformTemplate = new URL('../../isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/',import.meta.url);
+const platformTemplate = new URL('../../isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/',import.meta.url);
 function expectedImageChains(){
   const raw=fs.readFileSync(new URL('image-chains.json',platformTemplate));
   same(sha256(raw),'1e223c1d89821bb5d7a9c18fd56aae1eb560943dc3c07596cb4abc96b83b460e','IMAGE_PINS_SOURCE');
@@ -164,7 +164,7 @@ export function validatePaidVideoPlatformHttpAggregate(proof,expectedAttempt){
   same(proof.source, httpSource, "HTTP_SOURCE");
   same(proof.retainedInstallationSourceSha256, profiles.retained.installation, "HTTP_INSTALLATION");
   same(proof.templateManifestSha256,sha256(fs.readFileSync(new URL('source-manifest.json',platformTemplate))),'HTTP_TEMPLATE');
-  hashMap(proof.executionInputs, 99); hashMap(proof.evidenceSha256, 21);
+  hashMap(proof.executionInputs, 100); hashMap(proof.evidenceSha256, 21);
   same(proof.executionInputs['image-chains.json'],'1e223c1d89821bb5d7a9c18fd56aae1eb560943dc3c07596cb4abc96b83b460e','HTTP_IMAGE_PINS');
   same(proof.imageChains,expectedImageChains(),'HTTP_IMAGE_CHAINS');
   same(Object.keys(proof.evidenceSha256).sort(), [...evidenceNames].sort(), "HTTP_EVIDENCE_SET");
@@ -204,7 +204,7 @@ export function aggregatePaidVideoRetainedHttpProof({ summary, evidenceDirectory
   check(path.isAbsolute(evidenceDirectory) && fs.realpathSync(evidenceDirectory) === evidenceDirectory, "HTTP_EVIDENCE_DIRECTORY");
   same(summary.evidenceDirectory, evidenceDirectory, "HTTP_SUMMARY_DIRECTORY");
   check(Number.isFinite(attemptStartedAtMs) && attemptStartedAtMs > 0 && attemptStartedAtMs <= Date.now(), "HTTP_ATTEMPT_START");
-  hashMap(executionInputs, 99); digest(templateManifestSha256);
+  hashMap(executionInputs, 100); digest(templateManifestSha256);
   const evidence = {}, evidenceSha256 = {};
   for (const name of evidenceNames) {
     const file = path.join(evidenceDirectory, name), stat = fs.lstatSync(file);

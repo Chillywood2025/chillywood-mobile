@@ -3,6 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import test from "node:test";
 import ts from "typescript";
+import { capturedPurchaseChain } from "./helpers/isolated-test-store-v3-fixtures.mjs";
 
 const uuid = n => `b0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const userId = uuid(1), sessionId = uuid(2), installationId = uuid(3), configurationDigest = "a".repeat(64);
@@ -43,9 +44,10 @@ const v1 = load("../_lib/isolatedTestStoreContract.ts", {});
 const contract = load("../_lib/isolatedTestStoreV3Contract.ts", { "./isolatedTestStoreContract": v1 });
 const core = load("../_lib/isolatedPaidVideoCheckoutV3.ts", { "react-native": {}, "react-native-get-random-values": {}, "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {}, "./supabase": {}, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract });
 const closures = load("../_lib/isolatedTestStoreV3PreparedClosures.ts", { "@react-native-async-storage/async-storage": { default: {} }, "./isolatedPaidVideoCheckoutV3": core, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract });
+const coreJournal = load("../_lib/isolatedPaidVideoCheckoutV3Attempts.ts", { "@react-native-async-storage/async-storage": { default: {} }, "./isolatedPaidVideoCheckoutV3": core, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract });
 function module() {
   return load("../_lib/isolatedTestStoreV3Attempts.ts", { "@react-native-async-storage/async-storage": { default: {} },
-    "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3PreparedClosures": closures });
+    "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3PreparedClosures": closures, "./isolatedPaidVideoCheckoutV3Attempts": coreJournal });
 }
 function fixture() {
   const loaded = module(), data = new Map(), writes = []; let hook = null, time = epoch;
@@ -145,6 +147,46 @@ test("lost allocation may adopt exact canonical result before a new explicit cla
   await f.journal.reconcile({ requestId: uuid(52), sessionId, payload: { intentId: first.intentId } }, response("read", uuid(52), { status: "offering_ready" }));
   const c = await f.journal.prepareClaim({ requestId: claimId, sessionId, allocationId: first.id }); assert.equal(c.mayExecute, true);
   assert.equal(typeof (await c.execute(async () => response("claim", claimId))).purchase, "function");
+});
+
+function closedPreparation() {
+  return { command:"prepare", requestId:uuid(700), userId, sessionGeneration:sessionId, configurationDigest, quote:clone(quote), state:"closed",
+    intentId:first.intentId, intent:{id:first.intentId,state:"expired",quote:clone(quote),createdAt:new Date(epoch).toISOString(),expiresAt:new Date(epoch+60_000).toISOString(),receipt:null,grantId:null,dispatchAllowed:false,accessRequiresCurrentAuthorization:true,notPayable:true},
+    observedSessionGeneration:sessionId, closure:{id:uuid(701),originalRequestId:uuid(700),originalSessionId:sessionId,configurationDigest,closedAt:new Date(epoch+1000).toISOString(),kind:"unallocated_preparation",allocationAbsent:true,dispatchAbsent:true},
+    closureAttempts:[{requestId:uuid(702),sessionGeneration:sessionId,state:"recorded"}] };
+}
+test("only bound server unallocated closure releases refused/unknown allocation, retaining history after restart",async()=>{
+  for(const lost of [false,true]) {
+    const f=fixture();await bound(f);const ticket=await f.journal.prepareAllocation({requestId,sessionId,intentId:first.intentId,quote});
+    if(lost)await assert.rejects(ticket.execute(async()=>{throw Error("lost");}),err("outcome_unknown"));
+    else await ticket.execute(async()=>response("allocate",requestId,{status:"unavailable",reason:"allocation_missing",allocation:null,reservation:{revision:1,activeAllocationId:null}}));
+    await f.journal.reconcile({requestId:uuid(703),sessionId,payload:{intentId:first.intentId}},response("read",uuid(703),{status:"unavailable",reason:"allocation_missing",allocation:null,reservation:{revision:1,activeAllocationId:null}}));
+    assert.equal((await f.journal.list())[0].initiationReleased,false);
+    await assert.rejects(f.journal.prepareAllocation({requestId:uuid(704),sessionId,intentId:allocation(100).intentId,quote}),err("phase_unavailable"));
+    await f.journal.recordUnallocatedRelease(closedPreparation());
+    assert.equal((await f.create().list())[0].initiationReleased,true);
+    assert.equal((await f.create().list())[0].allocation,null);
+    assert.equal((await f.create().prepareAllocation({requestId:uuid(704),sessionId,intentId:allocation(100).intentId,quote})).mayExecute,true);
+    assert.equal((await f.create().list()).length,2);
+    await assert.rejects(f.journal.prepareAllocation({requestId:uuid(705),sessionId,intentId:first.intentId,quote}),err("request_conflict"));
+  }
+});
+test("unallocated closure fences unsent allocation ticket and rejects a contradictory delayed allocation response",async()=>{
+  const f=fixture();await bound(f);const ticket=await f.journal.prepareAllocation({requestId,sessionId,intentId:first.intentId,quote});
+  await f.journal.recordUnallocatedRelease(closedPreparation());let calls=0;
+  await assert.rejects(ticket.execute(async()=>{calls++;return response("allocate",requestId);}),err("phase_unavailable"));assert.equal(calls,0);
+  const g=fixture();await bound(g);const pendingTicket=await g.journal.prepareAllocation({requestId,sessionId,intentId:first.intentId,quote});let finish;
+  const pending=pendingTicket.execute(async()=>new Promise(resolve=>{finish=resolve;}));while(!finish)await tick();
+  await g.journal.recordUnallocatedRelease(closedPreparation());finish(response("allocate",requestId));await assert.rejects(pending,err("invalid_response"));
+  assert.equal((await g.create().list())[0].allocation,null);assert.equal((await g.create().list())[0].initiationReleased,true);
+});
+test("unallocated release rejects altered binding, absent proof, allocated or native history",async()=>{
+  const f=fixture();await bound(f);await f.journal.prepareAllocation({requestId,sessionId,intentId:first.intentId,quote});
+  for(const edit of [p=>p.userId=uuid(900),p=>p.configurationDigest="f".repeat(64),p=>p.sessionGeneration=uuid(901),p=>p.intentId=allocation(100).intentId,p=>p.quote.amountMinor++,p=>p.closure=null,p=>p.closure.dispatchAbsent=false,p=>p.closureAttempts[0].state="unknown"]) {
+    const proof=closedPreparation();edit(proof);await assert.rejects(f.journal.recordUnallocatedRelease(proof));
+  }
+  assert.equal((await f.journal.list())[0].initiationReleased,false);
+  for(const setup of [allocated,claimed,completed]) {const g=fixture();await setup(g);await assert.rejects(g.journal.recordUnallocatedRelease(closedPreparation()),err("invalid_response"));}
 });
 
 test("lost binding permits a fresh explicit bind but never changes installation owner", async () => {
@@ -411,10 +453,10 @@ test("native completion cannot substitute a different immutable video incarnatio
 });
 if (process.env.ISOLATED_TEST_STORE_V3_FIXTURE) test("actual PostgreSQL v3 allocation and claim traverse durable full-asset journal without synthetic receipt authority", async () => {
   const capture = JSON.parse(fs.readFileSync(process.env.ISOLATED_TEST_STORE_V3_FIXTURE, "utf8"));
-  const b = capture.cases.find(e => e.command === "bind" && e.response.result.status === "customer_bound");
-  const a = capture.cases.find(e => e.command === "allocate" && e.response.result.customer.id === b.response.result.customer.id);
-  const r = capture.cases.find(e => e.command === "read" && e.payload.intentId === a.payload.intentId && e.response.result.status === "offering_ready");
-  const c = capture.cases.find(e => e.command === "claim" && e.payload.intentId === a.payload.intentId && e.response.result.dispatchAllowed); assert.ok(b && a && r && c);
+  const { b, a, r, c } = capturedPurchaseChain(capture.cases);
+  assert.throws(() => capturedPurchaseChain([a,r,c]), /complete same-actor/u);
+  const mismatched=clone(b);mismatched.configurationDigest="f".repeat(64);
+  assert.throws(() => capturedPurchaseChain([mismatched,a,r,c]), /complete same-actor/u);
   const data = new Map(), storage = { async getItem(k) { return data.get(k) ?? null; }, async setItem(k,v) { data.set(k,v); } };
   const j = module().createIsolatedTestStoreV3AttemptJournal({ userId: b.actor.userId, installationId: b.payload.installationId,
     configurationDigest: b.configurationDigest, storage, now: () => Date.parse(c.response.result.authorityValidUntil) - 1000 });

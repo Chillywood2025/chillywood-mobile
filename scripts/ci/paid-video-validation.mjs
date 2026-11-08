@@ -40,7 +40,7 @@ export function paidVideoAppFiles(repositoryRoot=root){
   .sort().map(name=>`tests/${name}`);
 }
 export function paidVideoValidationPlan(){return {nativeStages:PAID_VIDEO_NATIVE_STAGES,nativeCases:84,
- http:{cases:103,actualGatewayEntries:4},app:{tests:262,files:paidVideoAppFiles(),libraryTestsInExistingCanonicalLane:19,
+ http:{cases:103,actualGatewayEntries:4},app:{tests:270,files:paidVideoAppFiles(),libraryTestsInExistingCanonicalLane:19,
   historicalBridgeExcluded:'tests/isolated-paid-video-http-bridge.test.mjs'},portableStages:PAID_VIDEO_PORTABLE_STAGES,
  execution:'sequential/local-disposable-only',providerOrProductionActions:false};}
 
@@ -59,6 +59,7 @@ export function collectPaidVideoSourceManifest(){
   }
  }
  paths.add('scripts/ci/fixtures/paid-video-v2-baseline.json');
+ paths.add('tests/helpers/isolated-test-store-v3-fixtures.mjs');
  paths.add('scripts/ci/fixtures/paid-video-native-profiles.json');
  visit('scripts/ci/paid-video-prerequisites');
  for(const name of ['isolated-paid-video-authoring-v2','isolated-paid-video-upload-v2','isolated-paid-video-range-v1',
@@ -110,7 +111,7 @@ export function extractPaidVideoFixtures(proofs,output){
  const combined=proofs['capture-composed'].combinedCaptures;
  const rows=kind=>combined.filter(v=>v.kind===kind).map(({kind:ignored,...row})=>row);
  const checkout=rows('checkout'),commands=rows('provider-command'),closure=rows('prepared-closure'),playback=rows('playback');
- assert.equal(checkout.length,41);assert.equal(commands.length,31);assert.equal(closure.length,8);assert.equal(playback.length,15);
+ assert.equal(checkout.length,42);assert.equal(commands.length,31);assert.equal(closure.length,8);assert.equal(playback.length,15);
  const fixtures={authoring:proofs.authoring,gateway:proofs.gateway,checkout,closure,playback,
   provider:{protocol:'isolated-test-store-v3',cases:commands.map(({input,result})=>({...input.request,actor:input.actor,response:result}))}};
  const files={};for(const [name,value] of Object.entries(fixtures)){const file=path.join(output,`fresh-${name}-captures.json`);fs.writeFileSync(file,JSON.stringify(value,null,2)+'\n',{mode:0o600});files[name]=file;}
@@ -170,7 +171,7 @@ function main(args){
   const httpDirectory=path.join(output,'retained-http-private');
   // The preparer requires runtime credentials and state to remain outside checkout.
   assert.ok(!httpDirectory.startsWith(root+path.sep),'Evidence root must be outside checkout for HTTP qualification');
-  const template=`${runtime}/tests/local-auth-paid-video-retained-platform-v1`;
+  const template=`${runtime}/tests/local-auth-paid-video-retained-platform-v2`;
   execute('http-prepare','python3',[`${template}/prepare.py`,'--repo',root,'--output',httpDirectory,'--deno',deno]);
   const executionInputs=JSON.parse(fs.readFileSync(path.join(httpDirectory,'execution-inputs.json'),'utf8'));
   const expectedRunId=randomBytes(16).toString('hex');
@@ -190,7 +191,7 @@ function main(args){
    ISOLATED_PAID_VIDEO_PLATFORM_HTTP_RUN_ID:expectedRunId,ISOLATED_PAID_VIDEO_PLATFORM_HTTP_EVIDENCE_DIRECTORY:expectedEvidenceDirectory});
   report.http={cases:103,actualGatewayEntries:4,proofSha256:sha(aggregateBytes),cleanupVerified:true};save();
   const fixtureHashes=Object.fromEntries([...Object.values(fixtures),proofFile,captureFile].map(file=>[file,sha(fs.readFileSync(file))]));
-  const stages=[{name:'app-successor',tests:262,files:paidVideoAppFiles()},...PAID_VIDEO_PORTABLE_STAGES];report.nodeStages=[];
+  const stages=[{name:'app-successor',tests:270,files:paidVideoAppFiles()},...PAID_VIDEO_PORTABLE_STAGES];report.nodeStages=[];
   for(const stage of stages){
    const tap=execute('node-'+stage.name,process.execPath,['--test','--test-reporter=tap',...stage.files]);
    const result=validateNodeTap(tap,stage.tests);report.nodeStages.push({name:stage.name,...result});

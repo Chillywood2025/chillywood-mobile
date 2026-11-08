@@ -19,7 +19,7 @@
     },
     {
       "path": "ops/isolated-paid-video-operations-v2/runner.mjs",
-      "sha256": "da3509cb86e798eb1f30f0967fcd3c9a29cf7bb6f8ced6ee6c571efcd8939f5b"
+      "sha256": "938cb5da5b48b94451c11d5dffcb38346ae2e48e6257e7ea4c38a98f1ae95a13"
     },
     {
       "path": "ops/isolated-paid-video-operations-v2/scan-child.mjs",
@@ -35,11 +35,11 @@
     },
     {
       "path": "ops/isolated-paid-video-worker/private-object.mjs",
-      "sha256": "ee847725e5ac8fe53686c97b306ffc44e4da53094ccd0937d67a8d72b0741a30"
+      "sha256": "9954182fb39cd21be07efa114f7bb9cf60c156375d2b2b6660681711599eef87"
     },
     {
       "path": "ops/isolated-paid-video-worker/scan.mjs",
-      "sha256": "b7f5375984d47dfe6530334881d28c4ffebc4f6be15108b13396c1a179fc57d9"
+      "sha256": "3f18e7de97c1d1caba7d017dfcee126e5fb4b8bfa723e02c3ab29457ed2817ce"
     }
   ]
 }

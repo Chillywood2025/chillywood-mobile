@@ -1,4 +1,4 @@
--- Fresh inactive combined-readiness substitution; derived paid-video-gateway-v2.sql SHA256 fdf563b2ded0ed6549f03acde08edf1e1546a7b98e9c60a19587f7a6c415cdf1.
+-- Fresh inactive combined-readiness substitution; derived paid-video-gateway-v2.sql SHA256 f27cc2323782d8ec068d38cd47205bffc7a6f3d7d55c7c41d277de985e1a9daf.
 -- Do not install alongside its source; no CREATE OR REPLACE or active cutover.
 -- Inactive additive profile, after all paid-video-v1 and test-store-v3 modules,
 -- before permissions-finalize.sql. Frozen v1 implementation remains private.
@@ -145,7 +145,9 @@ begin
   or (b-array['protocol','userId','sessionId','uploadId','requestId','transferId','originalSessionId','configurationDigest','originalConfigurationDigest','verifierId','incarnation','sha256','byteLength','objectVersion','checkedAtMs','expiresAtMs'])<>'{}'::jsonb
   or b->>'protocol' is distinct from 'scpv-object-observation-v2' or b->>'userId' is distinct from p_user::text
   or b->>'sessionId' is distinct from p_session::text or jsonb_typeof(b->'objectVersion') is distinct from 'string'
-  or b->>'objectVersion' !~ '^[A-Za-z0-9._-]+$' or length(b->>'objectVersion')>256 or b->>'objectVersion'='null'
+  or coalesce(b->>'objectVersion','')='' or b->>'objectVersion'='null'
+  or octet_length(convert_to(b->>'objectVersion','UTF8'))>1024
+  or b->>'objectVersion' ~ U&'[\0001-\001F\007F]'
   or jsonb_typeof(b->'byteLength') is distinct from 'number' or jsonb_typeof(b->'checkedAtMs') is distinct from 'number'
   or jsonb_typeof(b->'expiresAtMs') is distinct from 'number'
  then raise exception 'paid_video_probe_invalid'; end if;

@@ -23,7 +23,7 @@ const revisePreimage=value=>{value.witnessPreimage={protocol:'scpv-capture-insta
  orderedModules:value.orderedModules.filter(entry=>entry.path!==identity.path).map(({path,sha256})=>({path,sha256}))};};
 
 test('current packaging manifest verifies the same exact 42-position SQL profile',()=>{
- assert.deepEqual(verify(),{installationSourceSha256:'5b4eee14864d5e039114ae8c605407f7b3f9baaca90511172267d31b4fd1356e',moduleCount:42,identitySha256:identity.sha256});
+ assert.deepEqual(verify(),{installationSourceSha256:'09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563',moduleCount:42,identitySha256:identity.sha256});
 });
 
 test('non-executable packaging and qualification metadata do not determine SQL identity',()=>{

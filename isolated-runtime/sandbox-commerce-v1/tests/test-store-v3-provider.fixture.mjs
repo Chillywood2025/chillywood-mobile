@@ -9,6 +9,33 @@ export function providerSources(repo) {
   return [path.join(repo, 'supabase/functions/_shared/isolated-test-store-v3-provisioner.ts'),
     path.join(repo, 'isolated-runtime/sandbox-commerce-v1/tests/test-store-v3-provider.fixture.mjs')];
 }
+// A fresh invocation is safe only after a bounded pass of fully acknowledged
+// steps. Never turn a lease/rate refusal or an unknown outcome into a retry.
+export function assertCleanProvisioningYield(pass, { elapsedMs, selections, claims, recorded }) {
+  assert.equal(pass.httpStatus, 202);
+  assert.deepEqual(Object.keys(pass.result).sort(), ['grantsAccess', 'protocol', 'retryProviderMutation', 'status', 'steps']);
+  assert.equal(pass.result.protocol, 'isolated-test-store-v3-provision-worker');
+  assert.equal(pass.result.status, 'waiting');
+  assert.equal(pass.result.retryProviderMutation, false);
+  assert.equal(pass.result.grantsAccess, false);
+  const steps = pass.result.steps;
+  assert.ok(Number.isInteger(steps) && steps > 0 && steps <= 8, 'Yield must make bounded progress');
+  assert.ok(steps === 8 || elapsedMs > 10000, 'Clean fixture stopped before either finite bound');
+  assert.ok(selections.length === steps || (steps === 8 && selections.length === steps + 1));
+  assert.ok(selections.every(selected => selected.status === 'step'), 'Refused selection must not be retried');
+  assert.equal(claims.length, steps);
+  assert.equal(recorded.length, steps);
+  for (let i = 0; i < steps; i++) {
+    const claim = claims[i], record = recorded[i];
+    assert.equal(claim.result.status, 'send_permit_consumed');
+    assert.deepEqual(claim.selector, selections[i].selector);
+    assert.equal(record.ticketId, claim.result.ticket.ticketId);
+    assert.equal(record.result.ticketId, record.ticketId);
+    assert.equal(record.result.status, 'recorded');
+    assert.equal(record.result.ackAllowed, true);
+    assert.ok(['resource', 'list'].includes(record.observation.kind));
+  }
+}
 export function createV3ProviderFixture(q, repo, load) {
   const source = load(path.join(repo, 'supabase/functions/_shared/isolated-test-store-v3-provisioner.ts'));
   const connection = v3Connection(), service = 'synthetic-v3-internal-service-credential-only';
@@ -19,7 +46,7 @@ export function createV3ProviderFixture(q, repo, load) {
     encryption: connection.encryption,
     limits: { timeoutMs: 5000, maxResponseBytes: 262144, pageSize: 100, maxPages: 10, maxItems: 1000 } };
   const prefix = `set role service_role;set request.jwt.claims='{"role":"service_role"}';`;
-  const states = new Map(), tickets = new Map(), faults = new Map(), calls = [], recorded = [], claims = [];
+  const states = new Map(), tickets = new Map(), faults = new Map(), calls = [], recorded = [], claims = [], selections = [];
   const response = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   const product = () => ({ object: 'product', id: V3_FIXTURE.providerProductId, store_identifier: V3_FIXTURE.productId,
     app_id: connection.appId, state: 'active', type: 'consumable', one_time: null });
@@ -83,7 +110,9 @@ export function createV3ProviderFixture(q, repo, load) {
     return body;
   };
   const deps = {
-    next: async planId => next(planId),
+    next: async planId => {
+      const result = next(planId); selections.push(structuredClone(result)); return result;
+    },
     claim: async selector => {
       const result = rpc('isolated_test_store_v3_provisioning_claim_v1', { p_plan_id: selector.planId,
         p_operation: selector.operation, p_request_id: selector.requestId, p_cursor: selector.cursor });
@@ -155,12 +184,12 @@ export function createV3ProviderFixture(q, repo, load) {
   const registerPlan = async (allocation, actor = { userId: BUYER, sessionId: BUYER_SESSION }) => {
     const input = allocation.allocation ?? allocation, planId = planFor(input, actor.userId), passes = [];
     for (let attempt = 0; attempt < 4; attempt++) {
+      const started = performance.now(), offsets = { selections: selections.length, claims: claims.length, recorded: recorded.length };
       const pass = await runWorker(planId); passes.push(pass);
       assert.ok(['registered', 'waiting'].includes(pass.result.status), JSON.stringify({ pass, lastClaim: claims.at(-1), lastRecorded: recorded.at(-1) }));
       if (pass.result.status === 'registered') break;
-      // Only continue a bounded eight-step pass. A waiting lease, unknown
-      // response, or rate refusal is deliberately not retried by this helper.
-      assert.equal(pass.result.steps, 8, 'Clean fixture unexpectedly stopped before the finite step cap');
+      assertCleanProvisioningYield(pass, { elapsedMs: performance.now() - started,
+        selections: selections.slice(offsets.selections), claims: claims.slice(offsets.claims), recorded: recorded.slice(offsets.recorded) });
     }
     assert.equal(passes.at(-1).result.status, 'registered', 'Actual worker did not register through readbacks');
     const response = createV3CommandApi(q).call('read', { intentId: input.intentId }, randomUUID(), actor);
@@ -187,6 +216,6 @@ export function createV3ProviderFixture(q, repo, load) {
   };
   return { source, config, deps, states, tickets, calls, recorded, claims, next, runWorker, runStep, planFor, registerPlan,
     setFault(planId, operation, fault) { assert.ok(['response_lost', 'storage_ack_lost'].includes(fault)); faults.set(`${planId}:${operation}`, fault); },
-    reset() { states.clear(); tickets.clear(); calls.length = 0; recorded.length = 0; claims.length = 0; faults.clear(); },
+    reset() { states.clear(); tickets.clear(); calls.length = 0; recorded.length = 0; claims.length = 0; selections.length = 0; faults.clear(); },
   };
 }

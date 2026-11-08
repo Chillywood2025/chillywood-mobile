@@ -1,7 +1,7 @@
--- Fresh inactive combined-readiness substitution; derived candidates/paid-video-checkout-recovery/commands.sql SHA256 202b50e091eb3b68a5df972f4565d0528252aa1fef894acd95f6b932643574e7.
+-- Fresh inactive combined-readiness substitution; derived candidates/paid-video-checkout-recovery/commands.sql SHA256 c2f047b02459628e9a59fc28607d838f7d23d69a0a41deb5b82bd6d5f31bf2db.
 -- Do not install alongside its source; no CREATE OR REPLACE or active cutover.
 -- CANDIDATE successor of separately frozen lifecycle commands. Fresh inactive install only.
--- Derived lifecycle commands SHA256 f2be5b0e749db2fc408bd79e292385465fe2b59135f78edf0a9e698313223815; preserve both prior checkpoints.
+-- Derived lifecycle commands SHA256 4cd74b03c1dcceb131380737da3a7648db4b973b9b64fbfa2e00f8e2234fad63; preserve both prior checkpoints.
 -- CANDIDATE fresh-install substitute only. Derived from frozen test-store-paid-video-commands.sql
 -- SHA256 61ef1142e7e2c62dd2f77fa8cdda6f29cb92e2c2d7c56bfc2c5d43ecbc4973a0. Do not install alongside frozen function definitions.
 -- Separate protocol v3. A slot release is not cancellation or payment evidence.
@@ -499,4 +499,3 @@ revoke all on function public.isolated_paid_video_checkout_v3(uuid,uuid,text,uui
 grant execute on function public.isolated_paid_video_checkout_v3(uuid,uuid,text,uuid,text,jsonb) to service_role;
 reset role;
 revoke create on schema public from sbx_v1_core_owner;
-

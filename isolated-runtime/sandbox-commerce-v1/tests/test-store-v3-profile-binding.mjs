@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 
-const installationSourceSha256='5b4eee14864d5e039114ae8c605407f7b3f9baaca90511172267d31b4fd1356e';
+const installationSourceSha256='09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563';
 const identityPath='isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/identity.sql';
-const identitySha256='68656d51d9ca207d39f6b37a3340cb5eff2f398ed21ad76c423dd8f6317a9206';
+const identitySha256='894b788aa5a982934952d851020f67423c96c755f59007862ddb524a15c10f62';
 const baseline={
  commit:'12335a768fb683267ac281b1a180f9650479a98d',
  remoteCommit:'0d1d3b3a959295dfc44a6485ab8f7067d933bb43',

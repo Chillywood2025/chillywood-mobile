@@ -13,9 +13,9 @@ import { validatePaidVideoPostgresProof, aggregatePaidVideoRetainedHttpProof,
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const fakeHash = hash("validator-only input");
 const clone = (value) => structuredClone(value);
-const source = "25134c0952bcf71be1274da91bf36013fe662a065db11dfc6a91cfcab3ef51c0";
-const installation = { fresh: "5b4eee14864d5e039114ae8c605407f7b3f9baaca90511172267d31b4fd1356e",
-  retained: "a899f70795d5b9234fdb1e44f694c56da2cff6224a2e71b2fd3508d86b4b0e11" };
+const source = "22c7dcfd9a2569b9b902db79f8468df90c1058b53fe663cdefe01a63bcd663b2";
+const installation = { fresh: "09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563",
+  retained: "0740568bed37dbc21cb462efcfd577078c9325f3449b1e50bfac6fe57e8e559a" };
 const map = (count) => Object.fromEntries(Array.from({ length: count }, (_, i) => [`fixture-${i}`, hash(`fixture-${i}`)]));
 const rows = (count) => Array.from({ length: count }, (_, i) => ({ name: `validator-only case ${i}` }));
 function postgres(profile) {
@@ -86,11 +86,11 @@ function http(t) {
   fs.mkdirSync(evidenceDirectory,{mode:0o700});t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   const project='chillywood-auth-fixture-'+expectedRunId.slice(0,12);
   const summary = { status: "passed", cleanupVerified: true, error: null, evidenceDirectory,runId:expectedRunId };
-  const template=new URL('../../isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/',import.meta.url);
+  const template=new URL('../../isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/',import.meta.url);
   const pinsRaw=fs.readFileSync(new URL('image-chains.json',template)),pins=JSON.parse(pinsRaw);
   const imageChains=Object.fromEntries(Object.entries(pins.images).map(([role,pin])=>[role,{reference:pin.reference,indexDigest:pin.index.digest,
     manifestDigest:pin.platformManifest.digest,configDigest:pin.config.digest,os:'linux',architecture:'amd64'}]));
-  const executionInputs = {...map(98),'image-chains.json':hash(pinsRaw)};
+  const executionInputs = {...map(99),'image-chains.json':hash(pinsRaw)};
   const artifacts = Object.fromEntries(["edge-listener-proof.json", "edge-process-log.json", "gateway-health-proof.json",
     "install-proof.json", "loopback-bindings.json", "settlement-boundary-proof.json", "synthetic-scanner-boundary.json"].map((name) => [name, { validatorOnly: true }]));
   Object.assign(artifacts, {

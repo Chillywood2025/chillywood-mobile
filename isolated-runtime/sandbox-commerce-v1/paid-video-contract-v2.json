@@ -2286,7 +2286,10 @@
         },
         "objectVersion": {
           "type": "string",
-          "pattern": "^(?!null$)[A-Za-z0-9._-]{1,256}$"
+          "minLength": 1,
+          "maxLength": 1024,
+          "format": "s3-object-version",
+          "description": "Opaque scalar Unicode, not literal null or ASCII controls; at most 1024 UTF-8 bytes, preserved exactly."
         }
       },
       "required": [
@@ -2384,7 +2387,10 @@
         },
         "objectVersion": {
           "type": "string",
-          "pattern": "^(?!null$)[A-Za-z0-9._-]{1,256}$"
+          "minLength": 1,
+          "maxLength": 1024,
+          "format": "s3-object-version",
+          "description": "Opaque scalar Unicode, not literal null or ASCII controls; at most 1024 UTF-8 bytes, preserved exactly."
         },
         "checkedAtMs": {
           "type": "integer",

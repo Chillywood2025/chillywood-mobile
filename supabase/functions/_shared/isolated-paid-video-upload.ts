@@ -1,5 +1,5 @@
 import { transferReservedUpload } from "../../../ops/isolated-paid-video-worker/upload-broker.mjs";
-import { validateObjectBinding } from "../../../ops/isolated-paid-video-worker/private-object.mjs";
+import { isS3ObjectVersion, validateObjectBinding } from "../../../ops/isolated-paid-video-worker/private-object.mjs";
 import { checkPaidVideoDeadline, exact, freeze, PaidVideoBoundaryError, paidVideoHeaders, paidVideoJson, paidVideoPath,
   paidVideoSessionHeader, paidVideoWithin, readPaidVideoJson, requirePaidVideoSession, row, strictPaidVideoJson, uuid, type PaidVideoSession } from "./isolated-paid-video-boundary.ts";
 import type { PaidVideoRpc } from "./isolated-paid-video-rpc.ts";
@@ -11,7 +11,7 @@ function receipt(value: unknown, uploadId: string, requestId: string, userId: st
     && typeof value.originalConfigurationDigest === "string" && /^[a-f0-9]{64}$/u.test(value.originalConfigurationDigest)
     && typeof value.sha256 === "string" && /^[a-f0-9]{64}$/u.test(value.sha256)
     && Number.isSafeInteger(value.byteLength) && Number(value.byteLength) > 0 && Number(value.byteLength) <= 16777216
-    && typeof value.objectVersion === "string" && /^[A-Za-z0-9._-]{1,256}$/u.test(value.objectVersion) && value.objectVersion !== "null";
+    && isS3ObjectVersion(value.objectVersion);
 }
 export function createPaidVideoUploadHandler(dependencies: {
   authenticate: (request: Request) => Promise<PaidVideoSession | null>; rpc: PaidVideoRpc;
@@ -104,7 +104,7 @@ export function createPaidVideoUploadHandler(dependencies: {
         const after = validate(await readAdmission()); checkPaidVideoDeadline(until, now);
         for (const field of ["transferId", "originalSessionId", "originalConfigurationDigest", "verifierId"]) if (initial[field] !== after[field]) throw Error("paid_video_probe_changed");
         for (const key of Object.keys(object)) if ((after.object as Record<string, unknown>)[key] !== object[key]) throw Error("paid_video_probe_changed");
-        if (!/^[A-Za-z0-9._-]{1,256}$/u.test(stored.objectVersion) || stored.objectVersion === "null") throw Error("paid_video_probe_version_invalid");
+        if (!isS3ObjectVersion(stored.objectVersion)) throw Error("paid_video_probe_version_invalid");
         const checkedAt = now();
         const raw = JSON.stringify({ protocol: "scpv-object-observation-v2", userId: actor.userId, sessionId: actor.sessionGeneration,
           uploadId: id, requestId: originalRequest, transferId: initial.transferId, originalSessionId: initial.originalSessionId,

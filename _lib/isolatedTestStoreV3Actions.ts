@@ -33,9 +33,17 @@ export async function captureIsolatedTestStoreV3Actions(authority: AccountSessio
       const result = await connection.request(request.command, request.requestId, request.payload); current(); return result;
     };
     const nativeRead = async (dispatchId: string) => { current(); const result = await readIsolatedTestStoreV3NativeInvocation(dispatchId); current(); return result; };
+    const retainUnallocatedRelease = async (saved: Awaited<ReturnType<typeof preparations.reconcile>>) => {
+      if (saved.state !== "closed") return;
+      current(); const attempts = await journal.list(); current();
+      if (attempts.some(a => a.intentId === saved.intentId && !a.initiationReleased)) {
+        await journal.recordUnallocatedRelease(saved); current();
+      }
+    };
     const recoverPreparation = async (requestId: string) => {
       current(); const readId = nextId(); const result = await core.request("recover", readId, { originalRequestId: requestId }); current();
-      const saved = await preparations.reconcile(requestId, result, { requestId: readId, sessionGeneration: expected.sessionGeneration }); current(); return saved;
+      const saved = await preparations.reconcile(requestId, result, { requestId: readId, sessionGeneration: expected.sessionGeneration }); current();
+      await retainUnallocatedRelease(saved); return saved;
     };
     const recover = async (attempt: IsolatedTestStoreV3Attempt) => {
       current(); const requestId = nextId(), payload = { intentId: attempt.intentId };
@@ -57,7 +65,11 @@ export async function captureIsolatedTestStoreV3Actions(authority: AccountSessio
       installationId: installation.installationId, nativeProcessRetired: installation.processRetired,
       dispose() { retired = true; unsubscribe(); sdk?.dispose(); connection.dispose(); core.dispose(); },
       async snapshot() {
-        current(); const [owner, attempts, quotes, closures] = await Promise.all([journal.readOwner(), journal.list(), preparations.list(), preparedClosures.list()]); current();
+        current(); const quotes = await preparations.list(); current();
+        // Repair a process loss between the durable core closure and its local
+        // provider-history projection; no server request or purchase is repeated.
+        for (const entry of quotes) if (entry.attempt) await retainUnallocatedRelease(entry.attempt);
+        const [owner, attempts, closures] = await Promise.all([journal.readOwner(), journal.list(), preparedClosures.list()]); current();
         return { owner, attempts, preparations: quotes, preparedClosures: closures };
       },
       async bind() {
@@ -82,7 +94,8 @@ export async function captureIsolatedTestStoreV3Actions(authority: AccountSessio
         if (latest.state === "closed") return latest;
         const requestId = nextId(), ticket = await preparations.prepareAbandon({ requestId, sessionId: expected.sessionGeneration, originalRequestId: preparation.requestId }); current();
         if (!ticket.mayDispatch || !ticket.dispatch) return unavailable();
-        const result = await ticket.dispatch(async payload => { current(); return core.request("abandon", requestId, payload); }); current(); return result;
+        const result = await ticket.dispatch(async payload => { current(); return core.request("abandon", requestId, payload); }); current();
+        await retainUnallocatedRelease(result); return result;
       },
       async readOffer(offerId: string) { current(); const result = await core.request("offer", nextId(), { offerId }); current(); return result; },
       async history(cursor: string | null = null) { current(); const result = await core.request("history", nextId(), { limit: 25, cursor }); current(); return result; },

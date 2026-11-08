@@ -354,5 +354,3 @@ print("swift-v3-lifecycle-passed")
     }
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 });
-
-

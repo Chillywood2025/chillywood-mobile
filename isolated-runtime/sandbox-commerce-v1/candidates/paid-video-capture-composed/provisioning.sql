@@ -1,6 +1,6 @@
--- Fresh inactive capture composition. Derived candidates/paid-video-combined-readiness/provisioning.sql SHA256 85ec3e8b5e04f63d41b8d3a35ed80c095a2069c1189f607275bf1a5a6fdf5c1b.
+-- Fresh inactive capture composition. Derived candidates/paid-video-combined-readiness/provisioning.sql SHA256 576bb84abc0d085207b7de129f70b8ef09d6a0a65f2c5fa404f6690a4228b7df.
 -- Substitute in a fresh profile only; no active replacement.
--- Fresh inactive combined-readiness substitution; derived candidates/paid-video-plan-lifecycle/provisioning.sql SHA256 97b80419ed1f818b040ac9797946b0cd01013bb94e470020a7dbad5bd4e766d2.
+-- Fresh inactive combined-readiness substitution; derived candidates/paid-video-plan-lifecycle/provisioning.sql SHA256 b771c4e9b5a76d6f84c491e44f16ef1b65d8da4c332c848309d4016e41b14c56.
 -- Do not install alongside its source; no CREATE OR REPLACE or active cutover.
 -- CANDIDATE fresh-install substitute only. Derived from frozen test-store-paid-video-provisioning.sql
 -- SHA256 42f718264985589c67f1282e02ef718671b597c41c4869e2fee29fd12a2312f3. Do not install alongside frozen function definitions.
@@ -582,4 +582,3 @@ grant execute on function public.isolated_test_store_v3_provisioning_claim_v1(uu
  public.isolated_test_store_v3_provisioning_plan_v1(uuid,uuid) to service_role;
 reset role;
 revoke create on schema public from sbx_v1_core_owner;
-

@@ -10,7 +10,7 @@
     "referenceManifestSha256": "f3b28f88a28e8024c100b999e7cbc7569e60507838a4ffa0f8a7856a8f9d6959"
   },
   "consumerBinding": "sandbox-commerce-v1:protocol-3:capture-composed-v1",
-  "installationSourceSha256": "5b4eee14864d5e039114ae8c605407f7b3f9baaca90511172267d31b4fd1356e",
+  "installationSourceSha256": "09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563",
   "witnessPreimage": {
     "protocol": "scpv-capture-install-source-preimage-v1",
     "orderedModules": [
@@ -84,7 +84,7 @@
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/paid-video-media.sql",
-        "sha256": "9e23896785b374b11f65ccedaa05f2018889420e23a4fcd75b72dbd4f8d676f9"
+        "sha256": "ec98da0d9bbc3400d00a750bdea5aaf65b8a799ed08e2e85abe168d6e76404cf"
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/paid-video-upload.sql",
@@ -112,7 +112,7 @@
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/commands.sql",
-        "sha256": "f1bae5237667bd0f345c068579a1ee2dff1109c3f5253a796e4b2516c6976412"
+        "sha256": "61dcb95d1081d44180f089b5ba433f94349b622807dd08845b8d37305dcdc856"
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-checkout-recovery/abandon.sql",
@@ -124,7 +124,7 @@
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/provisioning.sql",
-        "sha256": "6c48b0f0017f2ca79fa41cd555bb434e229d14e92cb60d4eadddbf4a687808b4"
+        "sha256": "cfebc46b5b5db87b4737ca2b11a4728ed5d9c25fe1b90f3bb8422a24c96d5444"
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/receipts.sql",
@@ -140,7 +140,7 @@
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/gateway.sql",
-        "sha256": "6fea5ba842b71e5cba7c2e40a8803c16dbcf82cc6039391a0c55a8698baf4d34"
+        "sha256": "a9e5bfcfd7fffe135e5f56eec162643df1548946fb55b53e8add48b22c31a40e"
       },
       {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/media.sql",
@@ -304,7 +304,7 @@
     {
       "position": 18,
       "path": "isolated-runtime/sandbox-commerce-v1/paid-video-media.sql",
-      "sha256": "9e23896785b374b11f65ccedaa05f2018889420e23a4fcd75b72dbd4f8d676f9",
+      "sha256": "ec98da0d9bbc3400d00a750bdea5aaf65b8a799ed08e2e85abe168d6e76404cf",
       "origin": "reviewed-additive-source"
     },
     {
@@ -334,7 +334,7 @@
     {
       "position": 23,
       "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/identity.sql",
-      "sha256": "68656d51d9ca207d39f6b37a3340cb5eff2f398ed21ad76c423dd8f6317a9206",
+      "sha256": "894b788aa5a982934952d851020f67423c96c755f59007862ddb524a15c10f62",
       "origin": "generated-install-witness"
     },
     {
@@ -352,11 +352,11 @@
     {
       "position": 26,
       "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/commands.sql",
-      "sha256": "f1bae5237667bd0f345c068579a1ee2dff1109c3f5253a796e4b2516c6976412",
+      "sha256": "61dcb95d1081d44180f089b5ba433f94349b622807dd08845b8d37305dcdc856",
       "origin": "fresh-source-substitution",
       "derivedFrom": {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/commands.sql",
-        "sha256": "eb919a47a64dcbdc102e8d85045ab827f32d17a0b232514e858eb75f4d13f8d7"
+        "sha256": "19062a47190ef7d18dade13e6c0c9c638a2b862b3e3cd30101606b85e4a15c43"
       }
     },
     {
@@ -374,11 +374,11 @@
     {
       "position": 29,
       "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/provisioning.sql",
-      "sha256": "6c48b0f0017f2ca79fa41cd555bb434e229d14e92cb60d4eadddbf4a687808b4",
+      "sha256": "cfebc46b5b5db87b4737ca2b11a4728ed5d9c25fe1b90f3bb8422a24c96d5444",
       "origin": "fresh-source-substitution",
       "derivedFrom": {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/provisioning.sql",
-        "sha256": "85ec3e8b5e04f63d41b8d3a35ed80c095a2069c1189f607275bf1a5a6fdf5c1b"
+        "sha256": "576bb84abc0d085207b7de129f70b8ef09d6a0a65f2c5fa404f6690a4228b7df"
       }
     },
     {
@@ -410,11 +410,11 @@
     {
       "position": 33,
       "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/gateway.sql",
-      "sha256": "6fea5ba842b71e5cba7c2e40a8803c16dbcf82cc6039391a0c55a8698baf4d34",
+      "sha256": "a9e5bfcfd7fffe135e5f56eec162643df1548946fb55b53e8add48b22c31a40e",
       "origin": "fresh-source-substitution",
       "derivedFrom": {
         "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/gateway.sql",
-        "sha256": "81708d6ea9325c874dc95931fe6c320efe046a108d99e5b792ec55dc560a902c"
+        "sha256": "534af30129e94ce9e12e8d188bb033058da34ecaf76fd2ef61efc79d6e124dd8"
       }
     },
     {
@@ -483,18 +483,18 @@
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/capture-contract.native.mjs": "91333dbc3efb843b6b91fdb0c3625582e05871475b4a14557c2c2e4f80547841",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/capture-dependency.sql": "48f600455a8805d6b649924965306c0173f5c70f55c7298f203b698000a5dd99",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/capture-owned-contract.json": "6495fd1c0452b7d6d506e2ff223337548a2d592e5b153e8bc1559dee20a550ff",
-    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/commands.sql": "f1bae5237667bd0f345c068579a1ee2dff1109c3f5253a796e4b2516c6976412",
-    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/gateway.sql": "6fea5ba842b71e5cba7c2e40a8803c16dbcf82cc6039391a0c55a8698baf4d34",
-    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/generate.mjs": "b2cfad5e7a46dc5e6d16ade9c450336e1a98ef57e155f71c644b5923debb90a3",
-    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/identity.sql": "68656d51d9ca207d39f6b37a3340cb5eff2f398ed21ad76c423dd8f6317a9206",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/commands.sql": "61dcb95d1081d44180f089b5ba433f94349b622807dd08845b8d37305dcdc856",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/gateway.sql": "a9e5bfcfd7fffe135e5f56eec162643df1548946fb55b53e8add48b22c31a40e",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/generate.mjs": "d4772cde47b077ea2f14b0395d2d03f385ed393b8b274cae399deef334935d9d",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/identity.sql": "894b788aa5a982934952d851020f67423c96c755f59007862ddb524a15c10f62",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/legacy_commands.sql": "8be451986af607fa82e773ba661b15641ab417818c57a2c602c1515500af32be",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/profile-guard.sql": "9d8bd4418388af08519c4441aad347f1cb2ec9c797beeef0ddb52f4953aecc80",
-    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/provisioning.sql": "6c48b0f0017f2ca79fa41cd555bb434e229d14e92cb60d4eadddbf4a687808b4",
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/provisioning.sql": "cfebc46b5b5db87b4737ca2b11a4728ed5d9c25fe1b90f3bb8422a24c96d5444",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/receipts.sql": "6e976a10f1d9311c317a57a86eb861b2c68d42234cd1aa084d8fdeef15f776bc",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/reconcile.sql": "cca3e212f2229f0009c7e606b21f6b77e73deb79336b1fdb6976d591f0dfe838",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/recovery.mjs": "3630eb6424032106bd419a39a16fe01da8d4833e2346102bfcfa65cdbea6d996",
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/recovery.test.mjs": "92acca9251b66200371948996399df1eb7f7f1b46a258931b116cef189b2fadb",
-    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/retained-identity.sql": "cdc90dde0fbf967ea18d31125400f52394d141b2742aaf9de3dbd461ca66a139"
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/retained-identity.sql": "cc910e0bfc03d175d32c3a438faac8b327f188f6a68dfeaf98a328b6dda8b3db"
   },
   "qualifications": [],
   "limitations": [

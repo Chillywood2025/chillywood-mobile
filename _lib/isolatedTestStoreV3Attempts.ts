@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { parseClosedPaidVideoCheckoutV3Attempt, type PaidVideoCheckoutV3Attempt } from "./isolatedPaidVideoCheckoutV3Attempts";
 import { testStoreDigest, testStoreUuid } from "./isolatedTestStoreContract";
 import { parseClosedTestStoreV3PreparedAttempt, type TestStoreV3PreparedCloseAttempt } from "./isolatedTestStoreV3PreparedClosures";
 import {
@@ -28,6 +29,7 @@ type SavedAttempt = {
   nativePhase: "unprepared" | "prepared" | "reserved" | "invoking" | "unknown" | "completed" | "prepared_closed";
   nativeInvocation: TestStoreV3NativeInvocation | null; recoveryGeneration: number;
   nativePreparedClosure: TestStoreV3NativePreparedClosure | null; preparedRelease: TestStoreV3PreparedCloseAttempt | null;
+  unallocatedRelease: PaidVideoCheckoutV3Attempt | null;
 };
 type Document = {
   version: 3; userId: string; installationId: string; configurationDigest: string;
@@ -91,7 +93,8 @@ function publicAttempt(a: SavedAttempt, d: Document): IsolatedTestStoreV3Attempt
     && !!d.reservation && d.reservation.revision > (o.request.payload as TestStoreV3Payloads["advance"]).expectedReservationRevision);
   const preparedRelease = a.preparedRelease?.observation?.response;
   const closedUnclaimed = preparedRelease?.status === "ok" && !!d.reservation && d.reservation.revision >= preparedRelease.data.closure.releasedReservationRevision;
-  const initiationReleased = (a.nativePhase === "completed" || a.nativePhase === "prepared_closed") && !!a.allocation && !!d.reservation
+  const initiationReleased = !!a.unallocatedRelease && d.bindingObservation?.response.result.status !== "held" && a.observation?.response.result.status !== "held"
+    || (a.nativePhase === "completed" || a.nativePhase === "prepared_closed") && !!a.allocation && !!d.reservation
     && d.bindingObservation?.response.result.status !== "held" && a.observation?.response.result.status !== "held" && d.reservation.activeAllocationId !== a.allocation.id
     && (continuation || closedUnclaimed);
   return snapshot({ allocationRequestId: a.allocationRequestId, sessionId: a.sessionId, intentId: a.intentId, quote: a.quote,
@@ -148,6 +151,7 @@ export function createIsolatedTestStoreV3AttemptJournal({ userId, installationId
       return;
     }
     if (r.allocation) {
+      if (a.unallocatedRelease) return fail("invalid_response");
       if (r.allocation.intentId !== a.intentId || !sameTestStoreV3Quote(r.allocation.quote, a.quote)
         || (a.allocation && (!sameAllocationBase(a.allocation, r.allocation)
           || (a.allocation.registration && r.allocation.registration && !sameTestStoreV3Allocation(a.allocation, r.allocation))))) return fail("invalid_response");
@@ -198,13 +202,21 @@ export function createIsolatedTestStoreV3AttemptJournal({ userId, installationId
       // Historical records gain only empty recovery fields. Their old invocation
       // state is preserved; an absent field never becomes closure evidence.
       if (row(a) && !Object.hasOwn(a, "nativePreparedClosure") && !Object.hasOwn(a, "preparedRelease")) { a.nativePreparedClosure = null; a.preparedRelease = null; }
-      if (!row(a) || !keys(a, ["allocationRequestId", "sessionId", "intentId", "quote", "operations", "allocation", "observation", "receiptObservation", "nativePhase", "nativeInvocation", "recoveryGeneration", "nativePreparedClosure", "preparedRelease"])
+      if (row(a) && !Object.hasOwn(a, "unallocatedRelease")) a.unallocatedRelease = null;
+      if (!row(a) || !keys(a, ["allocationRequestId", "sessionId", "intentId", "quote", "operations", "allocation", "observation", "receiptObservation", "nativePhase", "nativeInvocation", "recoveryGeneration", "nativePreparedClosure", "preparedRelease", "unallocatedRelease"])
         || !testStoreUuid(a.allocationRequestId) || !testStoreUuid(a.sessionId) || !validTestStoreV3Quote(a.quote) || a.quote.currency !== "usd"
         || !validTestStoreV3Payload("read", { intentId: a.intentId }) || intents.has(a.intentId) || a.quote.creatorId === userId
         || !Array.isArray(a.operations) || a.operations.length < 1 || a.operations.length > 64
         || !choice(a.nativePhase, ["unprepared", "prepared", "reserved", "invoking", "unknown", "completed", "prepared_closed"])
         || !Number.isSafeInteger(a.recoveryGeneration) || a.recoveryGeneration < 0) return fail("storage_corrupt");
       intents.add(a.intentId);
+      if (a.unallocatedRelease) {
+        try { parseClosedPaidVideoCheckoutV3Attempt(a.unallocatedRelease, { userId, configurationDigest }); } catch { return fail("storage_corrupt"); }
+        if (a.unallocatedRelease.intentId !== a.intentId || a.unallocatedRelease.sessionGeneration !== a.sessionId
+          || !sameTestStoreV3Quote(a.unallocatedRelease.quote, a.quote) || a.allocation || a.nativePhase !== "unprepared"
+          || a.nativeInvocation || a.nativePreparedClosure || a.preparedRelease || a.receiptObservation
+          || a.operations.some(o => o.request.command !== "allocate")) return fail("storage_corrupt");
+      }
       const first = a.operations[0];
       if (first.request.command !== "allocate" || first.request.requestId !== a.allocationRequestId || first.request.expectedSessionId !== a.sessionId
         || a.operations.some(o => o.request.command === "bind" || !("intentId" in o.request.payload) || o.request.payload.intentId !== a.intentId)
@@ -324,6 +336,7 @@ export function createIsolatedTestStoreV3AttemptJournal({ userId, installationId
         const latest = await current(), attempt = a ? findAttempt(latest, a.intentId) : null;
         const stored = operations(latest).find(o => o.request.requestId === r.requestId);
         if (!stored || stored.state !== "prepared") return fail("phase_unavailable");
+        if (attempt?.unallocatedRelease) return fail("phase_unavailable");
         if (["allocate", "claim", "advance"].includes(r.command) && latest.bindingObservation?.response.result.status === "held") return fail("phase_unavailable");
         if (attempt && r.command === "claim" && (attempt.nativePreparedClosure || !["unprepared", "prepared"].includes(attempt.nativePhase)
           || attempt.recoveryGeneration !== preparedGeneration || !attempt.allocation || attempt.observation?.response.result.status !== "offering_ready"
@@ -374,7 +387,7 @@ export function createIsolatedTestStoreV3AttemptJournal({ userId, installationId
           || d.attempts.some(a => !publicAttempt(a, d).initiationReleased)) return fail("phase_unavailable");
         if (quote.currency !== "usd" || quote.creatorId === userId || d.attempts.length >= 128) return fail("invalid_request");
         const a: SavedAttempt = { allocationRequestId: requestId, sessionId, intentId, quote: copy(quote), operations: [], allocation: null,
-          observation: null, receiptObservation: null, nativePhase: "unprepared", nativeInvocation: null, recoveryGeneration: 0, nativePreparedClosure: null, preparedRelease: null };
+          observation: null, receiptObservation: null, nativePhase: "unprepared", nativeInvocation: null, recoveryGeneration: 0, nativePreparedClosure: null, preparedRelease: null, unallocatedRelease: null };
         d.attempts.push(a); return prepare(d, a, r);
       });
     },
@@ -387,6 +400,19 @@ export function createIsolatedTestStoreV3AttemptJournal({ userId, installationId
         if (!operations(d).some(o => o.request.requestId === requestId) && (!["unprepared", "prepared"].includes(a.nativePhase) || a.observation?.response.result.status !== "offering_ready"
           || d.reservation?.activeAllocationId !== x.id || !before(x.acceptPurchaseUntil))) return fail("phase_unavailable");
         return prepare(d, a, r);
+      });
+    },
+    async recordUnallocatedRelease(value: unknown) {
+      let proof: PaidVideoCheckoutV3Attempt;
+      try { proof = parseClosedPaidVideoCheckoutV3Attempt(value, { userId, configurationDigest }); } catch { return fail("invalid_response"); }
+      return serialized(async () => {
+        const d = await current(), a = findAttempt(d, proof.intentId!);
+        if (proof.sessionGeneration !== a.sessionId || !sameTestStoreV3Quote(proof.quote, a.quote) || a.allocation
+          || a.nativePhase !== "unprepared" || a.nativeInvocation || a.nativePreparedClosure || a.preparedRelease || a.receiptObservation
+          || a.operations.some(o => o.request.command !== "allocate")
+          || a.unallocatedRelease && !same(a.unallocatedRelease.closure, proof.closure)) return fail("invalid_response");
+        a.unallocatedRelease = copy(proof); a.recoveryGeneration++;
+        await write(d); return publicAttempt(a, d);
       });
     },
     async reconcile({ requestId, sessionId, payload }: { requestId: string; sessionId: string; payload: TestStoreV3Payloads["read"] }, response: unknown) {

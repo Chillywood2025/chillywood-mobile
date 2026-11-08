@@ -1,4 +1,4 @@
--- Fresh inactive combined-readiness substitution; derived candidates/paid-video-plan-lifecycle/provisioning.sql SHA256 97b80419ed1f818b040ac9797946b0cd01013bb94e470020a7dbad5bd4e766d2.
+-- Fresh inactive combined-readiness substitution; derived candidates/paid-video-plan-lifecycle/provisioning.sql SHA256 b771c4e9b5a76d6f84c491e44f16ef1b65d8da4c332c848309d4016e41b14c56.
 -- Do not install alongside its source; no CREATE OR REPLACE or active cutover.
 -- CANDIDATE fresh-install substitute only. Derived from frozen test-store-paid-video-provisioning.sql
 -- SHA256 42f718264985589c67f1282e02ef718671b597c41c4869e2fee29fd12a2312f3. Do not install alongside frozen function definitions.
@@ -579,4 +579,3 @@ grant execute on function public.isolated_test_store_v3_provisioning_claim_v1(uu
  public.isolated_test_store_v3_provisioning_plan_v1(uuid,uuid) to service_role;
 reset role;
 revoke create on schema public from sbx_v1_core_owner;
-

@@ -33,3 +33,21 @@ export function load(relative, bindings = {}, globals = {}) {
 }
 export const v1 = load("_lib/isolatedTestStoreContract.ts");
 export const contract = load("_lib/isolatedTestStoreV3Contract.ts", { "./isolatedTestStoreContract": v1 });
+
+// Capture sets contain several independent customers, including interrupted
+// allocations. Select one complete actual chain, never splice those subjects.
+export function capturedPurchaseChain(captures) {
+  for (const c of captures.filter(e => e.command === "claim" && e.response.result.dispatchAllowed)) {
+    const sameScope = e => e.actor.userId === c.actor.userId && e.actor.sessionId === c.actor.sessionId
+      && e.configurationDigest === c.configurationDigest && e.response.result.customer?.id === c.response.result.customer?.id;
+    const a = captures.find(e => e.command === "allocate" && sameScope(e) && e.payload.intentId === c.payload.intentId
+      && e.response.result.allocation?.id === c.response.result.allocation?.id && captures.indexOf(e) < captures.indexOf(c));
+    if (!a) continue;
+    const b = captures.find(e => e.command === "bind" && e.response.result.status === "customer_bound" && sameScope(e) && captures.indexOf(e) < captures.indexOf(a));
+    const r = captures.find(e => e.command === "read" && sameScope(e) && e.payload.intentId === a.payload.intentId
+      && e.response.result.status === "offering_ready" && e.response.result.allocation?.id === a.response.result.allocation?.id
+      && captures.indexOf(e) > captures.indexOf(a) && captures.indexOf(e) < captures.indexOf(c));
+    if (b && r) return { b, a, r, c };
+  }
+  assert.fail("Actual captures must contain a complete same-actor/config/customer bind→allocate→ready read→claim chain");
+}

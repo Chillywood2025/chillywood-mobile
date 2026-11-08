@@ -29,10 +29,10 @@
     "sha256": "3287efef53606966469cb6a02781327be22b908959397f976e2996dc1b64ae0f",
     "bytes": 50293548
   },
-  "httpProfile": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/harness/v2-source.json",
-  "httpLock": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/deno.lock",
-  "httpSourceManifest": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/manifest.json",
-  "httpPrepare": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/prepare.py",
+  "httpProfile": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/harness/v2-source.json",
+  "httpLock": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/deno.lock",
+  "httpSourceManifest": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/manifest.json",
+  "httpPrepare": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/prepare.py",
   "publishedBaselines": [
     {
       "commit": "0d1d3b3a959295dfc44a6485ab8f7067d933bb43",
@@ -43,6 +43,6 @@
       "tree": "b055c3931cf4f53275e0f95f740b64d34bef9b12"
     }
   ],
-  "imageChains": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/image-chains.json",
-  "imageValidator": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/harness/image_chain.py"
+  "imageChains": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/image-chains.json",
+  "imageValidator": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/harness/image_chain.py"
 }

@@ -464,4 +464,3 @@ revoke all on function public.isolated_paid_video_checkout_v3(uuid,uuid,text,uui
 grant execute on function public.isolated_paid_video_checkout_v3(uuid,uuid,text,uuid,text,jsonb) to service_role;
 reset role;
 revoke create on schema public from sbx_v1_core_owner;
-

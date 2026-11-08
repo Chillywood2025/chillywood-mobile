@@ -73,11 +73,15 @@ test('polling remains bounded by overall deadline even when queue stays empty',a
 test('stale leased ticket cannot launch scanner',async t=>{
  const dir=await privateWork(t),b=binding();
  const result={state:'leased',binding:b,ticket:{protocol:'scpv-worker-ticket-v1',profile:'scpv-mp4-h264-aac-v1',ticketId:randomUUID(),uploadId:'scpv_upload_'+randomUUID(),
- incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'v1',expiresAt:new Date(Date.now()-1).toISOString()}};
+ incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'opaque/+==%2F%25'+'x'.repeat(300),expiresAt:new Date(Date.now()-1).toISOString()}};
  await assert.rejects(runWorker({binding:b,directory:dir,deadline:Date.now()+10000,rpc:async(a,r)=>ack(r,result),scan:async()=>assert.fail('no scan')}),/ticket_invalid/u);
 });
 test('scanner subprocess hard deadline kills its process group',async()=>{
- await assert.rejects(runScanChild({ticket:{expiresAt:new Date(Date.now()+10000).toISOString()},configuration:{},deadline:Date.now()+1,onProcess:async()=>{}}),/scan_deadline|runner_deadline/u);
+ const started=Date.now();let processGroupId;
+ assert.throws(()=>runScanChild({ticket:{expiresAt:new Date(started+10000).toISOString()},configuration:{},deadline:started,now:()=>started,onProcess:async()=>{}}),/runner_deadline/u);
+ await assert.rejects(runScanChild({ticket:{expiresAt:new Date(started+10000).toISOString()},configuration:{},deadline:started+1,now:()=>started,
+  onProcess:async value=>{processGroupId=value.processGroupId;}}),/scan_deadline/u);
+ assert.ok(Number.isSafeInteger(processGroupId),'Scanner process was actually started and registered');
 });
 
 // RPC/signatures below are synthetic orchestration fixtures. The separate
@@ -85,7 +89,7 @@ test('scanner subprocess hard deadline kills its process group',async()=>{
 async function interruptedFixture(t) {
  const directory=await privateWork(t),b=binding(),calls=[],results=new Map();let scans=0,failScan=true,loseResult=false;
  const ticket={protocol:'scpv-worker-ticket-v1',profile:'scpv-mp4-h264-aac-v1',ticketId:randomUUID(),uploadId:'scpv_upload_'+randomUUID(),
-  incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'v1',expectedSha256:'a'.repeat(64),expiresAt:new Date(Date.now()+60000).toISOString()};
+  incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'opaque/+==%2F%25'+'x'.repeat(300),expectedSha256:'a'.repeat(64),expiresAt:new Date(Date.now()+60000).toISOString()};
  const rpc=async(action,raw)=>{
   const request=JSON.parse(raw);calls.push({action,raw});
   if(action==='execute') {
@@ -153,7 +157,7 @@ test('tampered audit head fails before any network or scan',async t=>{
 test('recovered lease must pass fresh server admission before any origin read',async t=>{
  const dir=await privateWork(t),b=binding();let checks=0;
  const result={state:'leased',binding:b,ticket:{protocol:'scpv-worker-ticket-v1',profile:'scpv-mp4-h264-aac-v1',ticketId:randomUUID(),uploadId:'scpv_upload_'+randomUUID(),
- incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'v1',expiresAt:new Date(Date.now()+60000).toISOString()}};
+ incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'opaque/+==%2F%25'+'x'.repeat(300),expiresAt:new Date(Date.now()+60000).toISOString()}};
  const outcome=await runWorker({binding:b,directory:dir,deadline:Date.now()+10000,rpc:async(a,r)=>{
   if(a==='check'){checks++;throw Error('current generation retired');}return ack(r,result);
  },scan:async()=>assert.fail('origin must not be read')});
@@ -162,7 +166,7 @@ test('recovered lease must pass fresh server admission before any origin read',a
 test('held acknowledged lease can be audited and retired after expiry using only original recovery',async t=>{
  const directory=await privateWork(t),b=binding(),calls=[];let clock=Date.now(),original;
  const result={state:'leased',binding:b,ticket:{protocol:'scpv-worker-ticket-v1',profile:'scpv-mp4-h264-aac-v1',ticketId:randomUUID(),uploadId:'scpv_upload_'+randomUUID(),
-  incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'v1',expiresAt:new Date(clock+60000).toISOString()}};
+  incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'opaque/+==%2F%25'+'x'.repeat(300),expiresAt:new Date(clock+60000).toISOString()}};
  const rpc=async(action,raw)=>{calls.push({action,raw});if(action==='check')throw Error('current admission held');if(action==='execute')original=raw;return ack(raw,result);};
  const args=()=>({binding:b,directory,rpc,deadline:clock+10000,now:()=>clock,scan:async()=>assert.fail('no scan')});
  assert.equal((await runWorker(args())).state,'held');clock+=60001;
@@ -179,7 +183,7 @@ test('acknowledgement-only crash can retire, but cannot use resume or substitute
  const directory=await privateWork(t),b=binding();
  const raw=JSON.stringify({protocol:'scpv-operations-request-v1',requestId:randomUUID(),command:'lease',binding:b,uploadId:'scpv_upload_'+randomUUID()});
  const result={state:'leased',binding:b,ticket:{protocol:'scpv-worker-ticket-v1',profile:'scpv-mp4-h264-aac-v1',ticketId:randomUUID(),uploadId:JSON.parse(raw).uploadId,
-  incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'v1',expiresAt:new Date(Date.now()-1000).toISOString()}};
+  incarnation:randomUUID(),routeId:b.routeId,provider:'s3',objectVersion:'opaque/+==%2F%25'+'x'.repeat(300),expiresAt:new Date(Date.now()-1000).toISOString()}};
  await journalState(directory,null,{binding:b,phase:'acknowledged',raw,response:ack(raw,result)},'fixture_acknowledgement_before_crash');
  const recovery={...(await workerStatus(directory)),action:'retire',requestId:randomUUID(),authorizationSha256:'c'.repeat(64),processesStoppedConfirmed:true,
   reason:'Inspected acknowledged lease after runner exited before scan.',resolutionEvidenceSha256:'d'.repeat(64)};

@@ -367,11 +367,14 @@ jobs:
       - name: Verify prerequisite and caller-owned image identity controls
         run: |
           python3 scripts/ci/paid-video-prerequisites/provision_test.py
-          python3 isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/image_chain_test.py
+          python3 isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/image_chain_test.py
+          python3 isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/harness/raw_put_test.py
       - name: Provision verified public prerequisites for disposable PaidVideo qualification
         run: python3 scripts/ci/paid-video-prerequisites/provision.py --repo "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/paid-video-prerequisites"
       - name: Run actual PaidVideo PostgreSQL, scanner, Auth, HTTP and app bridges
-        run: node scripts/ci/paid-video-validation.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$RUNNER_TEMP/paid-video-canonical" --database "$RUNNER_TEMP/paid-video-prerequisites/database" --certificates /usr/local/etc/certs --deno "$RUNNER_TEMP/paid-video-prerequisites/deno"
+        run: |
+          node --test tests/test-store-v3-provider-fixture-yield.test.mjs
+          node scripts/ci/paid-video-validation.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$RUNNER_TEMP/paid-video-canonical" --database "$RUNNER_TEMP/paid-video-prerequisites/database" --certificates /usr/local/etc/certs --deno "$RUNNER_TEMP/paid-video-prerequisites/deno"
       - name: Preserve bounded PaidVideo qualification reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

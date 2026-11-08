@@ -492,6 +492,8 @@ try {
  }
  cases.push({name:'Both gateway and verifier retirement serialize against actual preparation: retirement-first denies without waiting; prepare-first retains SHARE fences until commit so concurrent retirement cannot commit inside the authority window'});
  const preparedRequest=randomUUID(),prepared=checkout('prepare',{offerId:offer.id,expectedQuote:offered.data.quote},preparedRequest);
+ const preparedRecovery=checkout('recover',{originalRequestId:preparedRequest});
+ assert.equal(preparedRecovery.data.intent.state,'prepared');assert.equal(preparedRecovery.data.intent.id,prepared.data.intent.id);
  const closure=checkout('abandon',{originalRequestId:preparedRequest,originalSessionId:buyerSession,intentId:prepared.data.intent.id,expectedQuote:offered.data.quote});
  assert.equal(closure.data.intent.state,'expired');assert.equal(closure.data.closure.allocationAbsent,true);assert.equal(closure.data.closure.dispatchAbsent,true);
  assert.equal(q("select rolsuper from pg_roles where rolname='postgres';"),'f');

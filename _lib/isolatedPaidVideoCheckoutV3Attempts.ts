@@ -18,6 +18,27 @@ const keys = (v: unknown, names: readonly string[]): v is Row => row(v) && Objec
 const choice = (v: unknown, values: readonly string[]) => typeof v === "string" && values.includes(v);
 function freeze<T>(v: T): T { if (v && typeof v === "object") { Object.values(v).forEach(freeze); Object.freeze(v); } return v; }
 const copy = <T,>(v: T): T => freeze(JSON.parse(JSON.stringify(v)) as T);
+/** A server tombstone, never a missing read or local refusal, can close an
+ * allocation attempt that never acquired an allocation. Retain its full binding. */
+export function parseClosedPaidVideoCheckoutV3Attempt(value: unknown, expected: { userId: string; configurationDigest: string }): PaidVideoCheckoutV3Attempt {
+  if (!keys(value, ["command", "requestId", "userId", "sessionGeneration", "configurationDigest", "quote", "state", "intentId", "intent", "observedSessionGeneration", "closure", "closureAttempts"])
+    || value.command !== "prepare" || value.state !== "closed" || value.userId !== expected.userId || value.configurationDigest !== expected.configurationDigest
+    || !testStoreUuid(value.requestId) || !testStoreUuid(value.sessionGeneration) || !testStoreUuid(value.observedSessionGeneration)
+    || !validTestStoreV3Quote(value.quote) || value.quote.creatorId === expected.userId
+    || !Array.isArray(value.closureAttempts) || value.closureAttempts.length < 1 || value.closureAttempts.length > 64) return fail("invalid_response");
+  const intent = parsePaidVideoCheckoutV3Intent(value.intent);
+  parsePaidVideoCheckoutV3Closure(value.closure, { originalRequestId: value.requestId, originalSessionId: value.sessionGeneration, configurationDigest: expected.configurationDigest });
+  if (intent.id !== value.intentId || intent.state !== "expired" || intent.receipt !== null || intent.grantId !== null
+    || !sameTestStoreV3Quote(intent.quote, value.quote) || Date.parse((value.closure as PaidVideoCheckoutV3Closure).closedAt) < Date.parse(intent.createdAt)) return fail("invalid_response");
+  const seen = new Set<string>();
+  for (const action of value.closureAttempts) {
+    if (!keys(action, ["requestId", "sessionGeneration", "state"]) || !testStoreUuid(action.requestId) || seen.has(action.requestId)
+      || !testStoreUuid(action.sessionGeneration) || !choice(action.state, ["prepared", "unknown", "recorded"])) return fail("invalid_response");
+    seen.add(action.requestId);
+  }
+  if (!value.closureAttempts.some(a => a.state === "recorded" && a.sessionGeneration === value.observedSessionGeneration)) return fail("invalid_response");
+  return copy(value as unknown as PaidVideoCheckoutV3Attempt);
+}
 const queues = new Map<string, Promise<void>>(), poisoned = new Set<string>();
 async function exclusive<T>(key: string, operation: () => Promise<T>) {
   const previous = queues.get(key) ?? Promise.resolve(); let release!: () => void;

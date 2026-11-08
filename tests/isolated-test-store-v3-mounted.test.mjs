@@ -6,7 +6,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { webcrypto } from "node:crypto";
 import ts from "typescript";
-import { A, B, clone, customer as defaultCustomer, digest as defaultDigest, quote as defaultQuote, registration, uuid } from "./helpers/isolated-test-store-v3-fixtures.mjs";
+import { A, B, clone, customer as defaultCustomer, digest as defaultDigest, quote as defaultQuote, registration, uuid, capturedPurchaseChain } from "./helpers/isolated-test-store-v3-fixtures.mjs";
 
 // Real component/actions/parsers/journals; only platform, storage and transport
 // boundaries are controlled here. Synthetic success is not provider evidence.
@@ -52,6 +52,31 @@ test("lost preparation survives restart and status recovery never sends the old 
   const f=fixture();await f.render();await f.press("paid-video-v3-bind");f.losePrepare();const p=await prepare(f);assert.equal(p.attempt.state,"unknown");await f.dispose();
   const reopened=fixture({memory:f.memory,server:f.server,nativeState:f.nativeState});t.after(()=>reopened.dispose());await reopened.render();
   await reopened.press(`paid-video-v3-recover-${p.requestId}`);assert.equal((await reopened.preparations().list())[0].attempt.state,"intent_prepared");assert.equal(reopened.coreCalls.some(c=>c.command==="prepare"),false);
+});
+test("refused allocation can explicitly close then start a new purchase without forgetting old history",async t=>{
+  const f=fixture();await f.render();await f.press("paid-video-v3-bind");f.refuseAllocation();const a=await allocate(f),p=(await f.preparations().list())[0];
+  assert.equal(a.allocation,null);assert.equal(a.initiationReleased,false);assert.equal(f.node(`paid-video-v3-allocate-${p.requestId}`).props.disabled,true);
+  assert.equal(f.node(`paid-video-v3-close-${p.requestId}`).props.disabled,false);await f.press(`paid-video-v3-close-${p.requestId}`);
+  assert.equal((await f.journal().list())[0].initiationReleased,true);assert.equal(f.nativeCalls.length,0);await f.dispose();
+  const reopened=fixture({memory:f.memory,server:f.server,nativeState:f.nativeState});t.after(()=>reopened.dispose());await reopened.render();
+  const next=await allocate(reopened);assert.notEqual(next.intentId,a.intentId);assert.equal((await reopened.journal().list()).length,2);await purchase(reopened,next);
+  assert.equal(reopened.nativeCalls.filter(c=>c[0]==="purchase").length,1);
+});
+test("lost committed allocation cannot be closed as absent, while status recovery retains its allocation",async t=>{
+  const f=fixture();t.after(()=>f.dispose());await f.render();await f.press("paid-video-v3-bind");f.loseAllocation();const a=await allocate(f),p=(await f.preparations().list())[0];
+  assert.equal(a.allocation,null);await f.press(`paid-video-v3-close-${p.requestId}`);
+  assert.notEqual((await f.preparations().list())[0].attempt.state,"closed");assert.equal((await f.journal().list())[0].initiationReleased,false);
+  await f.press(`paid-video-v3-status-${a.intentId}`);assert.ok((await f.journal().list())[0].allocation);
+  assert.equal(f.node(`paid-video-v3-close-${p.requestId}`).props.disabled,true);assert.equal(f.nativeCalls.filter(c=>c[0]==="purchase").length,0);
+});
+test("restart repairs local release projection after server closure was durably saved",async t=>{
+  const f=fixture();await f.render();await f.press("paid-video-v3-bind");f.refuseAllocation();await allocate(f);const p=(await f.preparations().list())[0];
+  await f.press(`paid-video-v3-close-${p.requestId}`);await f.dispose();
+  const key="@chillywood/isolated-test-store-v3/installation-journal",document=JSON.parse(f.memory.get(key));
+  delete document.attempts[0].unallocatedRelease;f.memory.set(key,JSON.stringify(document));
+  const reopened=fixture({memory:f.memory,server:f.server,nativeState:f.nativeState});t.after(()=>reopened.dispose());await reopened.render();
+  assert.equal((await reopened.journal().list())[0].initiationReleased,true);assert.equal(reopened.coreCalls.some(c=>c.command==="abandon"),false);
+  await allocate(reopened);assert.equal((await reopened.journal().list()).length,2);
 });
 test("lost claim and restart cannot recreate the consumed SDK opportunity",async t=>{
   const f=fixture();await f.render();await f.press("paid-video-v3-bind");const a=await allocate(f);f.loseClaim();await purchase(f,a);await f.dispose();
@@ -199,8 +224,7 @@ if(process.env.ISOLATED_PAID_VIDEO_CHECKOUT_V3_FIXTURE)test("mounted preparation
 });
 if(process.env.ISOLATED_TEST_STORE_V3_FIXTURE)test("mounted retained allocation uses unchanged actual PostgreSQL read and one-use claim before native boundary",async t=>{
   const captures=JSON.parse(fs.readFileSync(process.env.ISOLATED_TEST_STORE_V3_FIXTURE,"utf8")).cases;
-  const b=captures.find(e=>e.command==="bind"&&e.response.result.status==="customer_bound"),a=captures.find(e=>e.command==="allocate"&&e.response.result.customer.id===b.response.result.customer.id);
-  const r=captures.find(e=>e.command==="read"&&e.payload.intentId===a.payload.intentId&&e.response.result.status==="offering_ready"),c=captures.find(e=>e.command==="claim"&&e.payload.intentId===a.payload.intentId&&e.response.result.dispatchAllowed);assert.ok(b&&a&&r&&c);
+  const { b, a, r, c } = capturedPurchaseChain(captures);
   const actor=b.actor,authority={...A,userId:actor.userId,accountId:actor.userId,sessionGeneration:actor.sessionId},profile={authority,digest:b.configurationDigest,quote:a.payload.expectedQuote,customer:b.response.result.customer};
   const ids=[uuid(9010),r.requestId,c.requestId],seen=[];
   const replay=body=>{const found=[r,c].find(e=>e.command===body.command&&e.requestId===body.requestId);if(!found)return undefined;
@@ -218,7 +242,7 @@ function fixture({ memory = new Map(), server = null, nativeState = null, initia
   const buyer = profile?.authority ?? initial, customer = profile?.customer ?? defaultCustomer, quote = profile?.quote ?? defaultQuote, digest = profile?.digest ?? defaultDigest;
   let current = buyer, nodes = [], now = epoch ?? Date.parse("2026-11-07T12:00:00Z"), cacheMissing = false, lostClaim = false, lostAdvance = false, heldRead = null, nativeOutcome = "sdk_success";
   const listeners = new Set(), calls = [], nativeCalls = [], coreCalls = [];
-  let lostPrepare=false, lostClose=false, lostPreparedClose=false, dropPreparedClose=false; const playback=[];
+  let lostPrepare=false, lostClose=false, lostPreparedClose=false, dropPreparedClose=false, refuseAllocation=false, loseAllocation=false; const playback=[];
   const state = server ?? { quote:clone(quote), preparationAllowed:true, bound: false, serial: 100, revision: 1, active: null, core: new Map(), allocations: new Map(), held: false, verified: new Set() };
   state.preparedClosed ??= new Map(); state.closeRequests ??= new Map(); state.allocationSessions ??= new Map(); state.selectedGrants ??= new Map(); state.receiptStates ??= new Map();
   const device = nativeState ?? { customer: null, retired: false, active: null, invocations: new Map(), handles: new Map() };
@@ -308,17 +332,18 @@ function fixture({ memory = new Map(), server = null, nativeState = null, initia
       if(replay){const found=await replay(body);if(found!==undefined)return {ok:true,json:async()=>found};}
       let a = null, status;
       if (body.command === "bind") { state.bound = true; a = state.active ? state.allocations.get(state.active) : null; }
-      else if (body.command === "allocate") {
+      else if (body.command === "allocate" && !refuseAllocation) {
         assert.equal(state.active, null); a = { id: `scv3_allocation_${uuid(++state.serial)}`, intentId: p.intentId, dispatchId: uuid(++state.serial),
           customerBindingId: customer.id, configurationDigest: digest, productId: registration.productId, quote: clone(p.expectedQuote),
           acceptPurchaseUntil: new Clock(now + 60_000).toISOString(), registration: { ...registration, id: `scv3_registration_${uuid(++state.serial)}`, offeringIdentifier: `intent_${state.serial}` } };
         state.allocations.set(a.id, a); state.active = a.id; state.revision++;
         state.allocationSessions.set(a.id,body.expectedSessionId);
+        if(loseAllocation)throw Error("allocation reply lost");
       } else a = [...state.allocations.values()].find(x => x.intentId === p.intentId);
       if (body.command === "claim") { assert.equal(state.preparedClosed.has(a.id),false);a.claimed = true; if (lostClaim) throw Error("claim response lost"); }
       if (body.command === "advance") { assert.equal(state.active, a.id); assert.equal(state.revision, p.expectedReservationRevision); state.active = null; state.revision++; status = "released"; if (lostAdvance) throw Error("advance response lost"); }
       const receipt = a && state.verified.has(a.id) ? { id: `scv1_receipt_${a.dispatchId}`, state: "verified", providerTransactionId: `tx_${a.dispatchId}`, originalTransactionId: `original_${a.dispatchId}`, purchasedAt: "2026-11-07T12:00:00Z" } : null;
-      status = state.held ? "held" : status ?? (receipt ? "verified" : !a ? "customer_bound" : state.preparedClosed.has(a.id)?"expired":body.command === "claim" ? "dispatch_claimed" : a.claimed ? "pending" : "offering_ready");
+      status = state.held ? "held" : status ?? (receipt ? "verified" : !a ? body.command === "bind" ? "customer_bound" : "unavailable" : state.preparedClosed.has(a.id)?"expired":body.command === "claim" ? "dispatch_claimed" : a.claimed ? "pending" : "offering_ready");
       const clean = a ? Object.fromEntries(Object.entries(a).filter(([k]) => k !== "claimed")) : null;
       const result = { protocol: "isolated-test-store-v3", command: body.command, requestId: body.requestId, actor: { userId: current.userId, sessionId: body.expectedSessionId }, generation: 1, environment: "sandbox",
         result: { status, reason: status, dispatchAllowed: body.command === "claim" && !state.held, retryProviderMutation: false, grantsAccess: false, notPayable: true,
@@ -329,8 +354,8 @@ function fixture({ memory = new Map(), server = null, nativeState = null, initia
       return { ok: true, json: async () => { if (wait) await wait.promise; return result; } };
     } });
   const closures = load("_lib/isolatedTestStoreV3PreparedClosures.ts", { "@react-native-async-storage/async-storage": storage, "./isolatedPaidVideoCheckoutV3": coreApi, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract }, globals);
-  const journal = load("_lib/isolatedTestStoreV3Attempts.ts", { "@react-native-async-storage/async-storage": storage, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3PreparedClosures": closures }, globals);
   const coreJournal = load("_lib/isolatedPaidVideoCheckoutV3Attempts.ts", { "@react-native-async-storage/async-storage": storage, "./isolatedPaidVideoCheckoutV3": coreApi,"./isolatedTestStoreContract":v1,"./isolatedTestStoreV3Contract":contract }, globals);
+  const journal = load("_lib/isolatedTestStoreV3Attempts.ts", { "@react-native-async-storage/async-storage": storage, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3PreparedClosures": closures, "./isolatedPaidVideoCheckoutV3Attempts": coreJournal }, globals);
   const preparations = load("_lib/isolatedTestStoreV3Preparations.ts", { "@react-native-async-storage/async-storage": storage, "./isolatedPaidVideoCheckoutV3Attempts": coreJournal, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3Attempts": journal }, globals);
   const sdk = load("_lib/isolatedTestStoreV3Sdk.ts", { "./accountSessionAuthority": authority, "./isolatedTestStoreV3Build": build, "./isolatedTestStoreV3Contract": contract }, globals);
   const actions = load("_lib/isolatedTestStoreV3Actions.ts", { "./accountSessionAuthority": authority, "./isolatedPaidVideoCheckoutV3": coreApi, "./isolatedTestStoreV3Contract": contract,
@@ -346,6 +371,7 @@ function fixture({ memory = new Map(), server = null, nativeState = null, initia
     preparations: () => preparations.createIsolatedTestStoreV3Preparations({ userId: current.userId, installationId: customer.installationId, configurationDigest: digest }),
     closures: () => closures.createTestStoreV3PreparedClosureJournal({userId:current.userId,installationId:customer.installationId,configurationDigest:digest}),
     losePrepare(){lostPrepare=true;},loseClose(){lostClose=true;},allowClose(){lostClose=false;},changeQuote(fn){fn(state.quote);},unavailable(){state.preparationAllowed=false;},
+    refuseAllocation(){refuseAllocation=true;},allowAllocation(){refuseAllocation=false;},loseAllocation(){loseAllocation=true;},
     async render(equivalentAuthority = false) { nodes = []; await React.act(async () => { const child = React.createElement(component.IsolatedTestStoreV3Checkout, { authority: equivalentAuthority ? { ...current } : current, offerId:offerEnabled?quote.offerId:null }); root.render(strictMode ? React.createElement(React.StrictMode, null, child) : child); }); },
     node: id => visible().findLast(n => n.props.testID === id), text: () => visible().filter(n => n.name === "Text").flatMap(n => n.props.children).join("\n"),
     async press(id) { const n = visible().findLast(n => n.props.testID === id); assert.ok(n, id); assert.notEqual(n.props.disabled, true, id); await React.act(async () => { n.props.onPress(); await new Promise(done => setImmediate(done)); }); },

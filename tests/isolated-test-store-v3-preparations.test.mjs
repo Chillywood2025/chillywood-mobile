@@ -15,7 +15,7 @@ function fixture() {
   const commerce = load("_lib/isolatedPaidVideoCheckoutV3.ts", { "react-native-get-random-values":{}, "./accountBoundSupabaseMutation": {}, "./supabase": {}, "react-native": { Platform: { OS: "ios" } }, "./accountSessionAuthority": {}, "./isolatedTestStoreContract":v1,"./isolatedTestStoreV3Contract":contract });
   const core = load("_lib/isolatedPaidVideoCheckoutV3Attempts.ts", { "@react-native-async-storage/async-storage": { default: storage }, "./isolatedPaidVideoCheckoutV3": commerce,"./isolatedTestStoreContract":v1,"./isolatedTestStoreV3Contract":contract });
   const closures = load("_lib/isolatedTestStoreV3PreparedClosures.ts", { "@react-native-async-storage/async-storage": { default: storage }, "./isolatedPaidVideoCheckoutV3": commerce, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract });
-  const provider = load("_lib/isolatedTestStoreV3Attempts.ts", { "@react-native-async-storage/async-storage": { default: storage }, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3PreparedClosures": closures });
+  const provider = load("_lib/isolatedTestStoreV3Attempts.ts", { "@react-native-async-storage/async-storage": { default: storage }, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3PreparedClosures": closures, "./isolatedPaidVideoCheckoutV3Attempts": core });
   const coordinator = load("_lib/isolatedTestStoreV3Preparations.ts", { "@react-native-async-storage/async-storage": { default: storage },
     "./isolatedPaidVideoCheckoutV3Attempts": core, "./isolatedTestStoreContract": v1, "./isolatedTestStoreV3Contract": contract, "./isolatedTestStoreV3Attempts": provider });
   const options = { userId: A.userId, configurationDigest: digest, installationId: customer.installationId, storage, now:()=>time };
@@ -173,4 +173,3 @@ test("stored index quote/session corruption cannot adopt a different valid core 
     f.data.set(indexKey, JSON.stringify(saved)); await assert.rejects(f.coordinator.list(), blocked);
   }
 });
-

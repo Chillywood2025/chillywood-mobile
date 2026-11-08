@@ -1,3 +1,4 @@
+import { isS3ObjectVersion } from '../isolated-paid-video-worker/private-object.mjs';
 import fs from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
@@ -112,8 +113,7 @@ function retainedTicket(result, binding) {
     || Object.keys(binding).some(k => result.binding?.[k] !== binding[k]) || Object.keys(result.binding).length !== Object.keys(binding).length
     || t?.protocol !== 'scpv-worker-ticket-v1' || t.profile !== 'scpv-mp4-h264-aac-v1' || !uuid.test(t.ticketId)
     || !/^scpv_upload_[a-f0-9-]{36}$/u.test(t.uploadId) || !uuid.test(t.uploadId.slice(12)) || !uuid.test(t.incarnation)
-    || t.routeId !== binding.routeId || t.provider !== 's3' || typeof t.objectVersion !== 'string' || t.objectVersion === 'null'
-    || !/^[A-Za-z0-9._-]{1,256}$/u.test(t.objectVersion) || !Number.isFinite(Date.parse(t.expiresAt))) fail('paid_video_runner_ticket_invalid');
+    || t.routeId !== binding.routeId || t.provider !== 's3' || !isS3ObjectVersion(t.objectVersion) || !Number.isFinite(Date.parse(t.expiresAt))) fail('paid_video_runner_ticket_invalid');
   return t;
 }
 function validTicket(result, binding, now) {

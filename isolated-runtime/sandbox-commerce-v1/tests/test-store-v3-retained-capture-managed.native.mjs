@@ -75,7 +75,7 @@ const sourcePath=f=>Object.hasOwn(frozen.files,'isolated-runtime/sandbox-commerc
 for(const [name,expected] of Object.entries(frozen.files)) assert.equal(createHash('sha256').update(fs.readFileSync(path.join(reference,name))).digest('hex'),expected);
 const profileManifestPath=path.join(root,'candidates/paid-video-capture-composed/retained-source-manifest.json');
 const profileManifestRaw=fs.readFileSync(profileManifestPath),profileManifest=JSON.parse(profileManifestRaw);
-assert.equal(createHash('sha256').update(profileManifestRaw).digest('hex'),'4f2f12150bf7b010cda011e1b9ca43aa38dd4d15168125d6ea4b0ce8e930bb7e');
+assert.equal(createHash('sha256').update(profileManifestRaw).digest('hex'),'39f259c62d0683c750be6b4fa01d254aa91a8dc3cefb9d74219398c70eb36a37');
 for(const entry of profileManifest.executedModules){const key=path.relative('isolated-runtime/sandbox-commerce-v1',entry.path);assert.equal(createHash('sha256').update(fs.readFileSync(sourcePath(key))).digest('hex'),entry.sha256);}
 const retainedCaptureSource=fs.readFileSync(path.resolve(root,'../test-store-capture-v1/capture.sql'),'utf8');
 assert.equal(createHash('sha256').update(retainedCaptureSource).digest('hex'),'ea98dc0230a1026a40fe8c23e60e97f6c29c13dc19f2bf1b12c94f04a5289e81');
@@ -441,13 +441,13 @@ try {
  captureRowLock.child.stdin.end('rollback;\n');assert.equal((await captureRowLock.closed).code,0);
  const identity=JSON.parse(q('select row_to_json(i) from sandbox_commerce_v1.test_store_v3_capture_identity i;'));
  assert.equal(identity.source_sha256,profileManifest.installationSourceSha256);
- assert.notEqual(identity.source_sha256,'5b4eee14864d5e039114ae8c605407f7b3f9baaca90511172267d31b4fd1356e');
+ assert.notEqual(identity.source_sha256,'09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563');
  const target={protocol:'scv3-capture-recovery-target-v1',installationId:identity.installation_id,sourceSha256:identity.source_sha256,
   consumerBinding:captureBinding,projectId:V3_FIXTURE.projectId,connectionId:receipts.connection.connectionId,connectionRevision:1,
   providerConfigurationDigest:receipts.connection.providerConfigurationDigest};
  const pending=service(`public.isolated_test_store_capture_pending_v3(${sqlJson(target)},null,16)`);assert.equal(pending.rows[0].ingressId,deferred.receiptId);
  const deliveries=q('select count(*) from sandbox_commerce_v1.test_store_v3_deliveries;');
- rejected(servicePrefix+`select public.isolated_test_store_capture_reconcile_v3(${sqlJson({...target,sourceSha256:'5b4eee14864d5e039114ae8c605407f7b3f9baaca90511172267d31b4fd1356e'})},'${deferred.receiptId}');`,/test_store_v3_capture_recovery_target_mismatch/u);
+ rejected(servicePrefix+`select public.isolated_test_store_capture_reconcile_v3(${sqlJson({...target,sourceSha256:'09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563'})},'${deferred.receiptId}');`,/test_store_v3_capture_recovery_target_mismatch/u);
  assert.equal(q('select count(*) from sandbox_commerce_v1.test_store_v3_deliveries;'),deliveries);
  const providerCalls=provider.calls.length;
  const reconciled=service(`public.isolated_test_store_capture_reconcile_v3(${sqlJson(target)},'${deferred.receiptId}')`);

@@ -576,4 +576,3 @@ grant execute on function public.isolated_test_store_v3_provisioning_claim_v1(uu
  public.isolated_test_store_v3_provisioning_plan_v1(uuid,uuid) to service_role;
 reset role;
 revoke create on schema public from sbx_v1_core_owner;
-
