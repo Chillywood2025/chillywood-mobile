@@ -364,6 +364,8 @@ jobs:
           make install
       - name: Run all isolated native suites and their actual-response client bridge
         run: node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"
+      - name: Verify native store sandbox durable receipt journal
+        run: node isolated-runtime/native-store-sandbox-v1/journal.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
       - name: Verify prerequisite and caller-owned image identity controls
         run: |
           python3 scripts/ci/paid-video-prerequisites/provision_test.py
