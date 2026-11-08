@@ -1,0 +1,38 @@
+{
+  "protocol": "scpv-current-grant-publication-v1",
+  "status": "local-source-qualified-inactive",
+  "source": {
+    "path": "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-current-grant/resolve.sql",
+    "sha256": "4d790421c86984f035f6ff9880fb89508fe994a94dab447863db916eaa5886ed"
+  },
+  "harness": {
+    "path": "isolated-runtime/sandbox-commerce-v1/tests/test-store-v3-current-grant-managed.native.mjs",
+    "sha256": "9705827c36fb653a651e0a1dc2cebfd92ed9aced74ee9ced9c3bf84776904712"
+  },
+  "privateEvidence": {
+    "proof": {
+      "artifactName": "test-store-v3-current-grant-managed-f24f00103e1f.json",
+      "sha256": "f24f00103e1f6b382cb544b36d6edc8340b73da4cc0088677ba33e54a35a1471",
+      "caseCount": 28,
+      "cleanup": {
+        "sessionsClosed": true,
+        "clusterStopped": true,
+        "clusterNotRunningVerified": true,
+        "directoryRemoved": true
+      }
+    },
+    "orderedSourceManifest": {
+      "artifactName": "test-store-v3-current-grant-managed-manifest-c3115ce8ca79.json",
+      "sha256": "c3115ce8ca79030808151c72b04ddd233b02952222462ba6105516385e8528b9"
+    },
+    "captures": {
+      "artifactName": "paid-video-current-grant-captures-f24f00103e1f.json",
+      "sha256": "33685f0a28b16b52d3ba30e6209682a13e14faf8d792d681ad45b76efd60592a",
+      "count": 15
+    }
+  },
+  "selectedV2Commit": "12335a768fb683267ac281b1a180f9650479a98d",
+  "productionOrProviderQualified": false,
+  "captureAdmissionComposed": false,
+  "note": "Portable publication metadata only. Historical source-manifest and private evidence bytes remain unchanged; evidence artifacts are not repository inputs."
+}

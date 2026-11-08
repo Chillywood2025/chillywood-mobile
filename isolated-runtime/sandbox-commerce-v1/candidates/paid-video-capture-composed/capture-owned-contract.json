@@ -1,0 +1,994 @@
+{
+  "functions": [
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner,service_role=X/rcq_v1_owner}",
+      "arguments": "p_connection_id uuid, p_connection_revision integer, p_envelope jsonb, p_observation jsonb",
+      "definitionSha256": "3ebed613d135eb7f369d12150fa6a6e58d1c8cb09c519315b1793431cb8a4ed9",
+      "name": "isolated_test_store_capture_ingest_v1",
+      "owner": "rcq_v1_owner",
+      "schema": "public"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "",
+      "definitionSha256": "f40499f135d9f0d64752d1fa32c512cf246d52c69a23ec6f3ba5f9b5884fb2a7",
+      "name": "arm_transaction_timeout",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "",
+      "definitionSha256": "edb8bf70ac7138f021f0cf4a0cba17ee032e9746d881cfa7addaf6491a44cf3e",
+      "name": "assert_consumer_context",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "",
+      "definitionSha256": "4541fee9dc266251150806fcce80e186134b924abe8863382366afdbc92b3d17",
+      "name": "assert_provider_service",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner,rcq_v1_consumer=X/rcq_v1_owner}",
+      "arguments": "p_project text, p_binding text",
+      "definitionSha256": "6cc68c625599a08b169c6e04b112cf97db2818f4a800735684fa05fa682508ba",
+      "name": "commerce_admission",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner,rcq_v1_operator=X/rcq_v1_owner}",
+      "arguments": "p_id uuid, p_revision integer, p_project text, p_app text, p_auth_version text, p_storage_id text",
+      "definitionSha256": "eb7d34368e88c1c8ab0a949271513a78942e554a4e79227d9aabe97c2898f40e",
+      "name": "configure_capture",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner,rcq_v1_consumer=X/rcq_v1_owner}",
+      "arguments": "p_project text, p_raw_sha256 text, p_event_id text, p_original_id text, p_transaction_id text, p_customer_id text",
+      "definitionSha256": "5226b9f80a0e44508d361cb9d5713b3a1f3529b39d218cc94601248be719d8be",
+      "name": "history_gate",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "",
+      "definitionSha256": "b3310c6134ff1a2f5ff38dbb952f972487d6393155fde965800eb300207cca6a",
+      "name": "immutable_evidence",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "p_project text, p_binding text",
+      "definitionSha256": "ad84f5c67bde85189ff2c7ac743b3f624a63d95a61505d153c34e42f09621882",
+      "name": "reserve_economic_project",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "",
+      "definitionSha256": "6fcf27f468749c614cef30a06080b0eb7809ef97609751f80c9a57891c65610f",
+      "name": "test_store_qualification_control_guard",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "p_project text, p_raw_sha256 text, p_event_id text, p_original_id text, p_transaction_id text, p_customer_id text",
+      "definitionSha256": "7dbcb672d09656a947195525009feebf65c48c55b75f348b3237403b47033cab",
+      "name": "test_store_qualification_gate",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "p_connection uuid, p_revision integer, p_envelope jsonb, p_observation jsonb",
+      "definitionSha256": "62a22940053ed1b050fe1bb6d3be8bed21c307a1ca9172d08dce00687953ba75",
+      "name": "test_store_qualification_ingest",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "p_common jsonb, p_project text, p_app text",
+      "definitionSha256": "3d9f3ccec057dd0d1a565024f7f69b9ef6c473ff197fcf6afdea603c60638ede",
+      "name": "test_store_qualification_observation",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "p_encoded text, p_sha256 text",
+      "definitionSha256": "2d3784193bbb3ed02beb7f6919576892373c99ab3640a43de645e33a4a0304cc",
+      "name": "test_store_qualification_safe_common",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner}",
+      "arguments": "p_value jsonb",
+      "definitionSha256": "5857cc1e3ee4f9498f6281149da5a3891ae51ae52275813bef05c3e3d25a4cba",
+      "name": "test_store_qualification_text",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    },
+    {
+      "acl": "{rcq_v1_owner=X/rcq_v1_owner,rcq_v1_operator=X/rcq_v1_owner}",
+      "arguments": "p_phase text, p_connection uuid, p_revision integer, p_max_entries integer, p_max_deliveries integer, p_max_total_bytes bigint",
+      "definitionSha256": "a8d56dd17b56cab1714bb2c8fa71a9e3565965f926dc1b3cf7256d4fd39ebf86",
+      "name": "test_store_qualification_transition",
+      "owner": "rcq_v1_owner",
+      "schema": "rc_qualification_capture_v1"
+    }
+  ],
+  "protocol": "rcq-owned-dependency-contract-v1",
+  "relations": [
+    {
+      "acl": "{rcq_v1_owner=arwdDxtm/rcq_v1_owner}",
+      "columns": [
+        {
+          "default": null,
+          "generated": "",
+          "name": "project_id",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "purpose",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "binding",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": "clock_timestamp()",
+          "generated": "",
+          "name": "created_at",
+          "notNull": true,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "constraints": [
+        {
+          "definition": "CHECK ((((length(binding) >= 1) AND (length(binding) <= 128)) AND (binding = TRIM(BOTH FROM binding)) AND (binding !~ '[[:cntrl:]]'::text)))",
+          "kind": "c",
+          "name": "project_reservations_binding_check",
+          "validated": true
+        },
+        {
+          "definition": "PRIMARY KEY (project_id)",
+          "kind": "p",
+          "name": "project_reservations_pkey",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((project_id ~ '^[A-Za-z0-9_-]{1,128}$'::text))",
+          "kind": "c",
+          "name": "project_reservations_project_id_check",
+          "validated": true
+        },
+        {
+          "definition": "UNIQUE (project_id, purpose, binding)",
+          "kind": "u",
+          "name": "project_reservations_project_id_purpose_binding_key",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((purpose = ANY (ARRAY['capture'::text, 'economic'::text])))",
+          "kind": "c",
+          "name": "project_reservations_purpose_check",
+          "validated": true
+        }
+      ],
+      "forceRls": true,
+      "kind": "r",
+      "name": "project_reservations",
+      "owner": "rcq_v1_owner",
+      "policies": [
+        {
+          "check": "true",
+          "command": "*",
+          "name": "owner",
+          "permissive": true,
+          "roles": [
+            "rcq_v1_owner"
+          ],
+          "using": "true"
+        }
+      ],
+      "rls": true,
+      "triggers": [
+        {
+          "definition": "CREATE TRIGGER immutable BEFORE DELETE OR UPDATE ON rc_qualification_capture_v1.project_reservations FOR EACH ROW EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "immutable"
+        },
+        {
+          "definition": "CREATE TRIGGER no_truncate BEFORE TRUNCATE ON rc_qualification_capture_v1.project_reservations FOR EACH STATEMENT EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "no_truncate"
+        }
+      ]
+    },
+    {
+      "acl": "{rcq_v1_owner=arwdDxtm/rcq_v1_owner}",
+      "columns": [
+        {
+          "default": "gen_random_uuid()",
+          "generated": "",
+          "name": "id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "project_id",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "entry_id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "delivery_id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "reason",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": "clock_timestamp()",
+          "generated": "",
+          "name": "received_at",
+          "notNull": true,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "constraints": [
+        {
+          "definition": "FOREIGN KEY (delivery_id) REFERENCES rc_qualification_capture_v1.test_store_qualification_deliveries(id)",
+          "kind": "f",
+          "name": "test_store_qualification_conflicts_delivery_id_fkey",
+          "validated": true
+        },
+        {
+          "definition": "FOREIGN KEY (entry_id) REFERENCES rc_qualification_capture_v1.test_store_qualification_entries(id)",
+          "kind": "f",
+          "name": "test_store_qualification_conflicts_entry_id_fkey",
+          "validated": true
+        },
+        {
+          "definition": "PRIMARY KEY (id)",
+          "kind": "p",
+          "name": "test_store_qualification_conflicts_pkey",
+          "validated": true
+        }
+      ],
+      "forceRls": true,
+      "kind": "r",
+      "name": "test_store_qualification_conflicts",
+      "owner": "rcq_v1_owner",
+      "policies": [
+        {
+          "check": "true",
+          "command": "*",
+          "name": "core_owner",
+          "permissive": true,
+          "roles": [
+            "rcq_v1_owner"
+          ],
+          "using": "true"
+        }
+      ],
+      "rls": true,
+      "triggers": [
+        {
+          "definition": "CREATE TRIGGER immutable BEFORE DELETE OR UPDATE ON rc_qualification_capture_v1.test_store_qualification_conflicts FOR EACH ROW EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "immutable"
+        },
+        {
+          "definition": "CREATE TRIGGER no_truncate BEFORE TRUNCATE ON rc_qualification_capture_v1.test_store_qualification_conflicts FOR EACH STATEMENT EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "no_truncate"
+        }
+      ]
+    },
+    {
+      "acl": "{rcq_v1_owner=arwdDxtm/rcq_v1_owner}",
+      "columns": [
+        {
+          "default": null,
+          "generated": "",
+          "name": "id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "revision",
+          "notNull": true,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "project_id",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "app_id",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "auth_key_version",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "storage_key_id",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": "'capture'::text",
+          "generated": "",
+          "name": "reservation_purpose",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": "(id)::text",
+          "generated": "s",
+          "name": "reservation_binding",
+          "notNull": false,
+          "type": "text"
+        }
+      ],
+      "constraints": [
+        {
+          "definition": "FOREIGN KEY (project_id, reservation_purpose, reservation_binding) REFERENCES rc_qualification_capture_v1.project_reservations(project_id, purpose, binding)",
+          "kind": "f",
+          "name": "test_store_qualification_conn_project_id_reservation_purpo_fkey",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((app_id ~ '^[A-Za-z0-9_-]{1,128}$'::text))",
+          "kind": "c",
+          "name": "test_store_qualification_connections_app_id_check",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (((length(auth_key_version) >= 1) AND (length(auth_key_version) <= 512)))",
+          "kind": "c",
+          "name": "test_store_qualification_connections_auth_key_version_check",
+          "validated": true
+        },
+        {
+          "definition": "PRIMARY KEY (id, revision)",
+          "kind": "p",
+          "name": "test_store_qualification_connections_pkey",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((project_id ~ '^[A-Za-z0-9_-]{1,128}$'::text))",
+          "kind": "c",
+          "name": "test_store_qualification_connections_project_id_check",
+          "validated": true
+        },
+        {
+          "definition": "UNIQUE (project_id)",
+          "kind": "u",
+          "name": "test_store_qualification_connections_project_id_key",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((reservation_purpose = 'capture'::text))",
+          "kind": "c",
+          "name": "test_store_qualification_connections_reservation_purpose_check",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((revision > 0))",
+          "kind": "c",
+          "name": "test_store_qualification_connections_revision_check",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (((length(storage_key_id) >= 1) AND (length(storage_key_id) <= 512)))",
+          "kind": "c",
+          "name": "test_store_qualification_connections_storage_key_id_check",
+          "validated": true
+        }
+      ],
+      "forceRls": true,
+      "kind": "r",
+      "name": "test_store_qualification_connections",
+      "owner": "rcq_v1_owner",
+      "policies": [
+        {
+          "check": "true",
+          "command": "*",
+          "name": "core_owner",
+          "permissive": true,
+          "roles": [
+            "rcq_v1_owner"
+          ],
+          "using": "true"
+        }
+      ],
+      "rls": true,
+      "triggers": [
+        {
+          "definition": "CREATE TRIGGER immutable BEFORE DELETE OR UPDATE ON rc_qualification_capture_v1.test_store_qualification_connections FOR EACH ROW EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "immutable"
+        },
+        {
+          "definition": "CREATE TRIGGER no_truncate BEFORE TRUNCATE ON rc_qualification_capture_v1.test_store_qualification_connections FOR EACH STATEMENT EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "no_truncate"
+        }
+      ]
+    },
+    {
+      "acl": "{rcq_v1_owner=arwdDxtm/rcq_v1_owner}",
+      "columns": [
+        {
+          "default": "true",
+          "generated": "",
+          "name": "singleton",
+          "notNull": true,
+          "type": "boolean"
+        },
+        {
+          "default": "'disabled'::text",
+          "generated": "",
+          "name": "phase",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "connection_id",
+          "notNull": false,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "connection_revision",
+          "notNull": false,
+          "type": "integer"
+        },
+        {
+          "default": "0",
+          "generated": "",
+          "name": "max_entries",
+          "notNull": true,
+          "type": "integer"
+        },
+        {
+          "default": "0",
+          "generated": "",
+          "name": "max_deliveries",
+          "notNull": true,
+          "type": "integer"
+        },
+        {
+          "default": "0",
+          "generated": "",
+          "name": "max_total_bytes",
+          "notNull": true,
+          "type": "bigint"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "started_at",
+          "notNull": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "sealed_at",
+          "notNull": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "seal_sha256",
+          "notNull": false,
+          "type": "text"
+        }
+      ],
+      "constraints": [
+        {
+          "definition": "FOREIGN KEY (connection_id, connection_revision) REFERENCES rc_qualification_capture_v1.test_store_qualification_connections(id, revision)",
+          "kind": "f",
+          "name": "test_store_qualification_cont_connection_id_connection_rev_fkey",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (((connection_id IS NULL) = (connection_revision IS NULL)))",
+          "kind": "c",
+          "name": "test_store_qualification_controls_check",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((((phase = 'disabled'::text) AND (connection_id IS NULL) AND (started_at IS NULL) AND (sealed_at IS NULL) AND (seal_sha256 IS NULL)) OR ((phase = 'capturing'::text) AND (connection_id IS NOT NULL) AND (started_at IS NOT NULL) AND (sealed_at IS NULL) AND (seal_sha256 IS NULL)) OR ((phase = 'sealed'::text) AND (connection_id IS NOT NULL) AND (started_at IS NOT NULL) AND (sealed_at IS NOT NULL) AND (seal_sha256 ~ '^[a-f0-9]{64}$'::text) AND (seal_sha256 IS NOT NULL))))",
+          "kind": "c",
+          "name": "test_store_qualification_controls_check1",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (((phase = 'disabled'::text) OR ((max_entries > 0) AND (max_deliveries > 0) AND (max_total_bytes > 0))))",
+          "kind": "c",
+          "name": "test_store_qualification_controls_check2",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (((max_deliveries >= 0) AND (max_deliveries <= 1024)))",
+          "kind": "c",
+          "name": "test_store_qualification_controls_max_deliveries_check",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (((max_entries >= 0) AND (max_entries <= 256)))",
+          "kind": "c",
+          "name": "test_store_qualification_controls_max_entries_check",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (((max_total_bytes >= 0) AND (max_total_bytes <= 67108864)))",
+          "kind": "c",
+          "name": "test_store_qualification_controls_max_total_bytes_check",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((phase = ANY (ARRAY['disabled'::text, 'capturing'::text, 'sealed'::text])))",
+          "kind": "c",
+          "name": "test_store_qualification_controls_phase_check",
+          "validated": true
+        },
+        {
+          "definition": "PRIMARY KEY (singleton)",
+          "kind": "p",
+          "name": "test_store_qualification_controls_pkey",
+          "validated": true
+        },
+        {
+          "definition": "CHECK (singleton)",
+          "kind": "c",
+          "name": "test_store_qualification_controls_singleton_check",
+          "validated": true
+        }
+      ],
+      "forceRls": true,
+      "kind": "r",
+      "name": "test_store_qualification_controls",
+      "owner": "rcq_v1_owner",
+      "policies": [
+        {
+          "check": "true",
+          "command": "*",
+          "name": "core_owner",
+          "permissive": true,
+          "roles": [
+            "rcq_v1_owner"
+          ],
+          "using": "true"
+        }
+      ],
+      "rls": true,
+      "triggers": [
+        {
+          "definition": "CREATE TRIGGER monotonic BEFORE DELETE OR UPDATE ON rc_qualification_capture_v1.test_store_qualification_controls FOR EACH ROW EXECUTE FUNCTION rc_qualification_capture_v1.test_store_qualification_control_guard()",
+          "enabled": "O",
+          "name": "monotonic"
+        },
+        {
+          "definition": "CREATE TRIGGER no_truncate BEFORE TRUNCATE ON rc_qualification_capture_v1.test_store_qualification_controls FOR EACH STATEMENT EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "no_truncate"
+        }
+      ]
+    },
+    {
+      "acl": "{rcq_v1_owner=arwdDxtm/rcq_v1_owner}",
+      "columns": [
+        {
+          "default": "gen_random_uuid()",
+          "generated": "",
+          "name": "id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "entry_id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "envelope",
+          "notNull": true,
+          "type": "jsonb"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "observation",
+          "notNull": true,
+          "type": "jsonb"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "stored_bytes",
+          "notNull": true,
+          "type": "integer"
+        },
+        {
+          "default": "clock_timestamp()",
+          "generated": "",
+          "name": "received_at",
+          "notNull": true,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "constraints": [
+        {
+          "definition": "FOREIGN KEY (entry_id) REFERENCES rc_qualification_capture_v1.test_store_qualification_entries(id)",
+          "kind": "f",
+          "name": "test_store_qualification_deliveries_entry_id_fkey",
+          "validated": true
+        },
+        {
+          "definition": "PRIMARY KEY (id)",
+          "kind": "p",
+          "name": "test_store_qualification_deliveries_pkey",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((stored_bytes > 0))",
+          "kind": "c",
+          "name": "test_store_qualification_deliveries_stored_bytes_check",
+          "validated": true
+        }
+      ],
+      "forceRls": true,
+      "kind": "r",
+      "name": "test_store_qualification_deliveries",
+      "owner": "rcq_v1_owner",
+      "policies": [
+        {
+          "check": "true",
+          "command": "*",
+          "name": "core_owner",
+          "permissive": true,
+          "roles": [
+            "rcq_v1_owner"
+          ],
+          "using": "true"
+        }
+      ],
+      "rls": true,
+      "triggers": [
+        {
+          "definition": "CREATE TRIGGER immutable BEFORE DELETE OR UPDATE ON rc_qualification_capture_v1.test_store_qualification_deliveries FOR EACH ROW EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "immutable"
+        },
+        {
+          "definition": "CREATE TRIGGER no_truncate BEFORE TRUNCATE ON rc_qualification_capture_v1.test_store_qualification_deliveries FOR EACH STATEMENT EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "no_truncate"
+        }
+      ]
+    },
+    {
+      "acl": "{rcq_v1_owner=arwdDxtm/rcq_v1_owner}",
+      "columns": [
+        {
+          "default": "gen_random_uuid()",
+          "generated": "",
+          "name": "id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "connection_id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "connection_revision",
+          "notNull": true,
+          "type": "integer"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "project_id",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "raw_sha256",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "provider_event_id",
+          "notNull": false,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "envelope",
+          "notNull": true,
+          "type": "jsonb"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "observation",
+          "notNull": true,
+          "type": "jsonb"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "lineage_unknown",
+          "notNull": true,
+          "type": "boolean"
+        },
+        {
+          "default": "clock_timestamp()",
+          "generated": "",
+          "name": "received_at",
+          "notNull": true,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "constraints": [
+        {
+          "definition": "FOREIGN KEY (connection_id, connection_revision) REFERENCES rc_qualification_capture_v1.test_store_qualification_connections(id, revision)",
+          "kind": "f",
+          "name": "test_store_qualification_entr_connection_id_connection_rev_fkey",
+          "validated": true
+        },
+        {
+          "definition": "PRIMARY KEY (id)",
+          "kind": "p",
+          "name": "test_store_qualification_entries_pkey",
+          "validated": true
+        },
+        {
+          "definition": "UNIQUE (project_id, raw_sha256)",
+          "kind": "u",
+          "name": "test_store_qualification_entries_project_id_raw_sha256_key",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((raw_sha256 ~ '^[a-f0-9]{64}$'::text))",
+          "kind": "c",
+          "name": "test_store_qualification_entries_raw_sha256_check",
+          "validated": true
+        }
+      ],
+      "forceRls": true,
+      "kind": "r",
+      "name": "test_store_qualification_entries",
+      "owner": "rcq_v1_owner",
+      "policies": [
+        {
+          "check": "true",
+          "command": "*",
+          "name": "core_owner",
+          "permissive": true,
+          "roles": [
+            "rcq_v1_owner"
+          ],
+          "using": "true"
+        }
+      ],
+      "rls": true,
+      "triggers": [
+        {
+          "definition": "CREATE TRIGGER immutable BEFORE DELETE OR UPDATE ON rc_qualification_capture_v1.test_store_qualification_entries FOR EACH ROW EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "immutable"
+        },
+        {
+          "definition": "CREATE TRIGGER no_truncate BEFORE TRUNCATE ON rc_qualification_capture_v1.test_store_qualification_entries FOR EACH STATEMENT EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "no_truncate"
+        }
+      ]
+    },
+    {
+      "acl": "{rcq_v1_owner=arwdDxtm/rcq_v1_owner}",
+      "columns": [
+        {
+          "default": null,
+          "generated": "",
+          "name": "project_id",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "kind",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "key",
+          "notNull": true,
+          "type": "text"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "entry_id",
+          "notNull": true,
+          "type": "uuid"
+        },
+        {
+          "default": null,
+          "generated": "",
+          "name": "delivery_id",
+          "notNull": true,
+          "type": "uuid"
+        }
+      ],
+      "constraints": [
+        {
+          "definition": "FOREIGN KEY (delivery_id) REFERENCES rc_qualification_capture_v1.test_store_qualification_deliveries(id)",
+          "kind": "f",
+          "name": "test_store_qualification_exclusions_delivery_id_fkey",
+          "validated": true
+        },
+        {
+          "definition": "FOREIGN KEY (entry_id) REFERENCES rc_qualification_capture_v1.test_store_qualification_entries(id)",
+          "kind": "f",
+          "name": "test_store_qualification_exclusions_entry_id_fkey",
+          "validated": true
+        },
+        {
+          "definition": "CHECK ((kind = ANY (ARRAY['raw'::text, 'event'::text, 'original'::text, 'transaction'::text, 'customer'::text])))",
+          "kind": "c",
+          "name": "test_store_qualification_exclusions_kind_check",
+          "validated": true
+        },
+        {
+          "definition": "PRIMARY KEY (project_id, kind, key)",
+          "kind": "p",
+          "name": "test_store_qualification_exclusions_pkey",
+          "validated": true
+        }
+      ],
+      "forceRls": true,
+      "kind": "r",
+      "name": "test_store_qualification_exclusions",
+      "owner": "rcq_v1_owner",
+      "policies": [
+        {
+          "check": "true",
+          "command": "*",
+          "name": "core_owner",
+          "permissive": true,
+          "roles": [
+            "rcq_v1_owner"
+          ],
+          "using": "true"
+        }
+      ],
+      "rls": true,
+      "triggers": [
+        {
+          "definition": "CREATE TRIGGER immutable BEFORE DELETE OR UPDATE ON rc_qualification_capture_v1.test_store_qualification_exclusions FOR EACH ROW EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "immutable"
+        },
+        {
+          "definition": "CREATE TRIGGER no_truncate BEFORE TRUNCATE ON rc_qualification_capture_v1.test_store_qualification_exclusions FOR EACH STATEMENT EXECUTE FUNCTION rc_qualification_capture_v1.immutable_evidence()",
+          "enabled": "O",
+          "name": "no_truncate"
+        }
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "bypassRls": false,
+      "config": null,
+      "createDb": false,
+      "createRole": false,
+      "inherit": false,
+      "login": false,
+      "name": "rcq_v1_consumer",
+      "super": false
+    },
+    {
+      "bypassRls": false,
+      "config": null,
+      "createDb": false,
+      "createRole": false,
+      "inherit": false,
+      "login": false,
+      "name": "rcq_v1_operator",
+      "super": false
+    },
+    {
+      "bypassRls": false,
+      "config": null,
+      "createDb": false,
+      "createRole": false,
+      "inherit": false,
+      "login": false,
+      "name": "rcq_v1_owner",
+      "super": false
+    }
+  ],
+  "schema": {
+    "acl": "{rcq_v1_owner=UC/rcq_v1_owner,rcq_v1_operator=U/rcq_v1_owner,rcq_v1_consumer=U/rcq_v1_owner}",
+    "owner": "rcq_v1_owner"
+  }
+}

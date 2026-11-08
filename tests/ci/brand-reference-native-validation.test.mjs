@@ -133,7 +133,7 @@ test('Results executes failure checks for missing or skipped applicable native q
   const run = needs => spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', step.run], {
     encoding: 'utf8', env: {PATH: process.env.PATH, NEEDS_JSON: JSON.stringify(needs)},
   });
-  const base = {plan: {result: 'success', outputs: {database: 'true'}}, core: {result: 'success'}};
+  const base = {plan: {result: 'success', outputs: {database: 'true'}}, core: {result: 'success'}, 'database-isolated-sandbox-native': {result: 'success'}};
   assert.equal(run({...base, [jobId]: {result: 'success'}}).status, 0);
   for (const result of ['failure', 'cancelled', 'skipped', 'timed_out']) {
     assert.equal(run({...base, [jobId]: {result}}).status, 1, result);

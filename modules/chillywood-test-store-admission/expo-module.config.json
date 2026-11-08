@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["ChillywoodTestStoreAdmissionModule", "ChillywoodTestStoreV2Module", "ChillywoodTestStoreV3Module"] },
+  "android": { "modules": ["expo.modules.chillywoodteststore.ChillywoodTestStoreAdmissionModule", "expo.modules.chillywoodteststore.ChillywoodTestStoreV2Module", "expo.modules.chillywoodteststore.ChillywoodTestStoreV3Module"] }
+}

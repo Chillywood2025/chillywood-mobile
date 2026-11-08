@@ -1,0 +1,4 @@
+# Reviewed per-function configuration fragment; not an instruction to deploy.
+[functions.isolated-test-store-capture-v1]
+# The handler authenticates the exact dedicated provider Authorization value.
+verify_jwt = false

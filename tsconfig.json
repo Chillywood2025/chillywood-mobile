@@ -17,6 +17,7 @@
   ],
   "exclude": [
     "supabase/functions/**/*",
+    "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained*/listener.ts",
     "artifacts/**/*"
   ]
 }

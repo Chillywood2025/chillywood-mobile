@@ -1,0 +1,28 @@
+{
+  "status": "qualified-local-inactive-candidate",
+  "source": {
+    "path": "candidates/paid-video-prepared-closure/close.sql",
+    "sha256": "ad521a1cc86e09967aa2860c31061c696156f686a3527624c5e24c6e5646568e"
+  },
+  "harness": {
+    "path": "tests/test-store-v3-prepared-closure-managed.native.mjs",
+    "sha256": "51181516f85ee819492acf248ffbd5837fea26f897a900aca91e32665d953f5d"
+  },
+  "proof": {
+    "file": "test-store-v3-prepared-closure-managed-5567c12de5ca.json",
+    "sha256": "5567c12de5ca9ea9497bf76ccd7865f6c4b0d5d5a4659b8eb1e3045d75cd26d2",
+    "caseCount": 26,
+    "cleanup": true
+  },
+  "orderedSourceManifest": {
+    "file": "test-store-v3-prepared-closure-managed-manifest-365c4b34e825.json",
+    "sha256": "365c4b34e825159f9044c15a21452eb35878450bef0986007f48be1bdad13ccc"
+  },
+  "captures": {
+    "file": "paid-video-prepared-closure-captures-5567c12de5ca.json",
+    "sha256": "25cf395fe3a5cadb39db038f77138e6e53ff7b1aa73467932cdc0a3224ca04e1",
+    "count": 8
+  },
+  "selectedV2Commit": "12335a768fb683267ac281b1a180f9650479a98d",
+  "productionOrProviderQualified": false
+}

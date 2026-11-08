@@ -8,7 +8,7 @@ created by this change. Android external checkout must remain unavailable.
 
 ## Admission and launch
 
-1. The native PBL 8.2.1 adapter checks actual `EXTERNAL_CONTENT_LINK` runtime
+1. The native PBL 8.3.0 adapter checks actual `EXTERNAL_CONTENT_LINK` runtime
    eligibility and generates a fresh reporting token immediately before the
    external flow. Unsupported, unknown, failed, canceled, or disconnected flows
    cannot use a browser fallback.
