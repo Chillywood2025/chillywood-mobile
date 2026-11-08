@@ -16,9 +16,17 @@ const precedingCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node
 const followingCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-commerce-fee-concurrency-postgres.mjs';
 const videoCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-creator-video-engagement-concurrency.mjs';
 const profileCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs';
+const socialDeployCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-social-engagement-exact-deploy-postgres.mjs';
 const contractHash=contract=>createHash('sha256').update(JSON.stringify(contract)).digest('hex');
 const rebuildStep=job=>job.steps.find(step=>step.name==='Rebuild and test the local database');
 const assertJob=job=>{
+ assert.equal(job.steps.flatMap(step=>(step.run??'').split('\n')).filter(line=>line===socialDeployCommand).length,1);
+ const socialNormalized=structuredClone(job),socialStep=rebuildStep(socialNormalized),socialLines=socialStep.run.split('\n');
+ const socialPosition=socialLines.indexOf(socialDeployCommand);
+ assert.ok(socialPosition>0);
+ assert.equal(socialLines[socialPosition-1],precedingCommand);
+ assert.equal(socialLines[socialPosition+1],cutoverCommand);
+ socialLines.splice(socialPosition,1);socialStep.run=socialLines.join('\n');job=socialNormalized;
  // Assert the added proof independently, then prove the entire prior contract
  // remains byte-for-byte unchanged. Do not bless a replacement baseline hash.
  assert.equal(job.steps.flatMap(step=>(step.run??'').split('\n')).filter(line=>line===videoCommand).length,1);
@@ -77,6 +85,16 @@ test('creator video concurrency proof is mandatory, singular and beside the exis
   job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand,videoCommand+'\n'+videoCommand);},
   job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand+'\n','')+videoCommand+'\n';},
   job=>{const step=rebuildStep(job);step.run=step.run.replace(videoCommand+'\n','');job.steps.push({run:videoCommand});},
+ ]){const mutant=structuredClone(workflow.jobs.database);mutate(mutant);assert.throws(()=>assertJob(mutant),assert.AssertionError);}
+});
+
+test('exact social deployment proof is mandatory and preserves the prior complete contract',()=>{
+ for(const mutate of [
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(socialDeployCommand+'\n','');},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(socialDeployCommand,socialDeployCommand+' || true');},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(socialDeployCommand,socialDeployCommand+'\n'+socialDeployCommand);},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(socialDeployCommand+'\n','')+socialDeployCommand+'\n';},
+  job=>{const step=rebuildStep(job);step.run=step.run.replace(socialDeployCommand+'\n','');job.steps.push({run:socialDeployCommand});},
  ]){const mutant=structuredClone(workflow.jobs.database);mutate(mutant);assert.throws(()=>assertJob(mutant),assert.AssertionError);}
 });
 

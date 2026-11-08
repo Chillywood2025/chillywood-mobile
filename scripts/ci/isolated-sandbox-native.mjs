@@ -214,6 +214,7 @@ export function collectSourceManifest(){
   'tests/ci/qualification-validation.test.mjs',
   'tests/ci/isolated-sandbox-native-validation.test.mjs','.github/workflows/required-validation.yml'];
  const visit=relative=>{for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){
+  if(entry.isDirectory()&&entry.name==='__pycache__')continue;
   if(relative.startsWith('qualification/test-store-debug')&&(['node_modules','.expo'].includes(entry.name)
     ||(relative==='qualification/test-store-debug'&&['ios','android'].includes(entry.name))))continue;
   const next=`${relative}/${entry.name}`;assert.ok(!entry.isSymbolicLink(),`Source symlink rejected: ${next}`);
@@ -396,7 +397,7 @@ function main(argv){
  const save=()=>fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify(report,null,2)+'\n');
  const execute=(name,args)=>{
   // Harnesses own shutdown and removal. Do not kill their process on an outer
-  // per-stage timeout and then claim cleanup; the hosted job has a 25m limit.
+  // per-stage timeout and then claim cleanup; the combined hosted job has a 60m limit.
   const result=spawnSync(process.execPath,args,{cwd:root,env,encoding:'utf8',maxBuffer:16*1024*1024});
   fs.writeFileSync(path.join(output,name+'.stdout'),result.stdout??'');
   fs.writeFileSync(path.join(output,name+'.stderr'),result.stderr??'');

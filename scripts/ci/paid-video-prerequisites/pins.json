@@ -1,0 +1,48 @@
+{
+  "protocol": "scpv-hosted-prerequisites-v1",
+  "host": {
+    "id": "ubuntu",
+    "version": "24.04",
+    "architecture": "x86_64"
+  },
+  "ffmpegPackageVersion": "7:6.1.1-3ubuntu5",
+  "clamavVersion": "1.5.4",
+  "clamav": {
+    "url": "https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.5.4/clamav-1.5.4.linux.x86_64.deb",
+    "sha256": "28d6efc5b4423e7830c3559339552eb53870a9eac51ac4efb37d60530d329886",
+    "bytes": 105819396
+  },
+  "signature": {
+    "url": "https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.5.4/clamav-1.5.4.linux.x86_64.deb.sig",
+    "sha256": "1fa7a94df398345b89aeaf8eb4098834946296560266ff17b4cd05f9d8679a15",
+    "bytes": 801
+  },
+  "talosKey": {
+    "url": "https://raw.githubusercontent.com/Cisco-Talos/clamav-documentation/main/src/manual/cisco-talos.gpg",
+    "sha256": "5bfca75f112f04b89cd992f5f925018e8dfc28e0e7f6e33f6a4c33ed9e29d911",
+    "bytes": 3858,
+    "fingerprint": "5BADCA2665EF59DCF8A23D8B707F0DB480836771"
+  },
+  "denoVersion": "2.7.14",
+  "deno": {
+    "url": "https://github.com/denoland/deno/releases/download/v2.7.14/deno-x86_64-unknown-linux-gnu.zip",
+    "sha256": "3287efef53606966469cb6a02781327be22b908959397f976e2996dc1b64ae0f",
+    "bytes": 50293548
+  },
+  "httpProfile": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/harness/v2-source.json",
+  "httpLock": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/deno.lock",
+  "httpSourceManifest": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/manifest.json",
+  "httpPrepare": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/prepare.py",
+  "publishedBaselines": [
+    {
+      "commit": "0d1d3b3a959295dfc44a6485ab8f7067d933bb43",
+      "tree": "5e9b8f86792c2fab606ed216037aec916f094b7c"
+    },
+    {
+      "commit": "a4396fc787cb3b1656f59559854ab18a9b96c9da",
+      "tree": "b055c3931cf4f53275e0f95f740b64d34bef9b12"
+    }
+  ],
+  "imageChains": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/image-chains.json",
+  "imageValidator": "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/harness/image_chain.py"
+}

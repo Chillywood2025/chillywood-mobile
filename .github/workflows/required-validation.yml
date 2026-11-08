@@ -171,6 +171,8 @@ jobs:
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/notification-device-tokens/index.ts
       - name: Typecheck the inactive receipt router and dedicated Test Store Edge boundaries
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-receipt-router-v1/index.ts supabase/functions/isolated-sandbox-test-store-v1/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts supabase/functions/isolated-sandbox-test-store-v2/index.ts supabase/functions/isolated-test-store-provisioner-v2/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v2/index.ts supabase/functions/isolated-test-store-qualification-v1/index.ts supabase/functions/isolated-test-store-capture-v1/index.ts
+      - name: Typecheck inactive PaidVideo and protocol 3 Edge boundaries
+        run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/isolated-paid-video-authoring-v2/index.ts supabase/functions/isolated-paid-video-upload-v2/index.ts supabase/functions/isolated-paid-video-range-v1/index.ts supabase/functions/isolated-paid-video-checkout-v3/index.ts supabase/functions/isolated-sandbox-test-store-v3/index.ts supabase/functions/isolated-test-store-provisioner-v3/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v3/index.ts
       - name: Typecheck creator commerce and reporting Edge boundaries
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/create-creator-tip-checkout/index.ts supabase/functions/stripe-tip-webhook/index.ts supabase/functions/stripe-event-auction-checkout/index.ts supabase/functions/stripe-event-auction-webhook/index.ts supabase/functions/stripe-room-auction-checkout/index.ts supabase/functions/stripe-room-auction-webhook/index.ts supabase/functions/google-play-external-reporter/index.ts supabase/functions/stripe-merch-checkout/index.ts supabase/functions/stripe-merch-webhook/index.ts supabase/functions/stripe-merch-cost-reconcile/index.ts supabase/functions/merch-tracking-webhook/index.ts supabase/functions/merch-tracking-reconcile/index.ts supabase/functions/creator-event-broadcast/index.ts supabase/functions/stripe-auction-cost-reconcile/index.ts supabase/functions/stripe-auction-test-transfer/index.ts supabase/functions/merch-reconciliation-driver/index.ts supabase/functions/auction-observation-driver/index.ts supabase/functions/auction-approved-automation/index.ts supabase/functions/stripe-fee-report-import/index.ts
       - name: Run exact role and explicit permission checks
@@ -232,6 +234,7 @@ jobs:
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-cashout-execution-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-sandbox-cashout-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-sandbox-payout-notification-exact-deploy-postgres.mjs
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-social-engagement-exact-deploy-postgres.mjs
           node ops/automatic-commerce-cutover/run-native.mjs --docker supabase_db_chillywood-mobile
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-commerce-fee-concurrency-postgres.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-clip-export-concurrency-postgres.mjs
@@ -334,10 +337,14 @@ jobs:
     if: needs.plan.outputs.database == 'true'
     needs: plan
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Includes signed scanner prerequisites and the distinct retained Auth/HTTP
+    # successor. Every stage remains mandatory and owns bounded local cleanup.
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 20, cache: npm }
       - run: npm ci
@@ -357,6 +364,25 @@ jobs:
           make install
       - name: Run all isolated native suites and their actual-response client bridge
         run: node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"
+      - name: Verify prerequisite and caller-owned image identity controls
+        run: |
+          python3 scripts/ci/paid-video-prerequisites/provision_test.py
+          python3 isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/image_chain_test.py
+      - name: Provision verified public prerequisites for disposable PaidVideo qualification
+        run: python3 scripts/ci/paid-video-prerequisites/provision.py --repo "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/paid-video-prerequisites"
+      - name: Run actual PaidVideo PostgreSQL, scanner, Auth, HTTP and app bridges
+        run: node scripts/ci/paid-video-validation.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$RUNNER_TEMP/paid-video-canonical" --database "$RUNNER_TEMP/paid-video-prerequisites/database" --certificates /usr/local/etc/certs --deno "$RUNNER_TEMP/paid-video-prerequisites/deno"
+      - name: Preserve bounded PaidVideo qualification reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: paid-video-canonical-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/paid-video-canonical/summary.json
+            ${{ runner.temp }}/paid-video-canonical/retained-http-proof.json
+            ${{ runner.temp }}/paid-video-prerequisites/prerequisite-proof.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Preserve isolated source attempt evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

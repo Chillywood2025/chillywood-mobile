@@ -17,7 +17,9 @@ import { runWorker, workerStatus, journalState, hash } from './runner.mjs';
 assert.equal(process.argv.length, 8, 'Use --local-bin /pg17/bin --database /clamdb --certificates /certs');
 assert.equal(process.argv[2], '--local-bin'); assert.equal(process.argv[4], '--database'); assert.equal(process.argv[6], '--certificates');
 const here = path.dirname(fileURLToPath(import.meta.url)), repo = path.resolve(here, '../..');
-const baseline = '12335a768fb683267ac281b1a180f9650479a98d';
+const baseline = '0d1d3b3a959295dfc44a6485ab8f7067d933bb43';
+assert.equal(execFileSync('git',['rev-parse','--verify',baseline+'^{tree}'],{cwd:repo,encoding:'utf8'}).trim(),
+ '5e9b8f86792c2fab606ed216037aec916f094b7c','Published baseline tree changed');
 const sourceHashes = {}, read = file => { const text = fs.readFileSync(path.join(repo, file), 'utf8'); sourceHashes[file] = hash(text); return text; };
 const baseFiles = new Set(['core.sql','premium-authority.sql','authority.sql','commands.sql','receipts.sql','test-store.sql','test-store-offerings-core.sql',
  'test-store-qualification.sql','test-store-offerings-provisioning.sql','test-store-offerings-commands.sql','test-store-offerings-receipts.sql',

@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createRequire } from "node:module";
 import { parse } from "yaml";
 import { computeValidationPlan } from "../../scripts/ci/required-validation.mjs";
-import { requireTestStoreV3Sources, parseTestStoreV3NativePolicyReport, prepareExpoCryptoSourceCompile,
+import { requireTestStoreV3Sources, parseTestStoreV3NativePolicyReport, prepareExpoCryptoSourceCompile, prebuildBeforeExpoCryptoSourceCompile, withNormalPrebuildPackageForChecks,
   resolveExpoCryptoSourceProject, expoCryptoCompileTasks, verifyExpoCryptoRuntimeGraph,
   collectPaidVideoAndroidArtifacts, collectPaidVideoIosArtifacts } from "../../scripts/ci/paid-video-native-closure.mjs";
 
@@ -54,6 +56,61 @@ function cryptoFixture(t) {
   write(temporary, "node_modules/expo-crypto/ios/CryptoModule.swift", "// fixture source\n");
   return { temporary, pkg, lock };
 }
+
+test("both normal prebuilds precede the disposable Crypto override and preserve the real picker guard", t => {
+  const { temporary } = cryptoFixture(t), order = [];
+  const picker = createRequire(import.meta.url)(path.join(root, "plugins/withExpoImagePickerAndroidResultRetention.js")).__test;
+  const receipt = prebuildBeforeExpoCryptoSourceCompile(temporary, ["android", "ios"], platform => {
+    // Use the actual product guard; a copied/reimplemented permissive guard
+    // would miss the exact regression that stopped the real Expo prebuild.
+    picker.assertSourceBuildConfigured(temporary); order.push(platform);
+    fs.mkdirSync(path.join(temporary, platform));
+  });
+  assert.deepEqual(order, ["android", "ios"]); assert.equal(receipt.overrideAppliedAfterAllPrebuilds, true);
+  assert.deepEqual(receipt.prebuilds.map(value => value.platform), order);
+  assert.equal(receipt.prebuilds[1].packageAfterSha256, receipt.packageSourceSha256);
+  assert.throws(() => picker.assertSourceBuildConfigured(temporary), /reviewed Android buildFromSource patterns required/u,
+    "The compiler override must remain inadmissible to normal product prebuild");
+  let called = false;
+  assert.throws(() => prebuildBeforeExpoCryptoSourceCompile(temporary, ["ios"], () => { called = true; }), /normal package/u);
+  assert.equal(called, false);
+  const source = fs.readFileSync(path.join(root, "scripts/compile-native-camera-effects.mjs"), "utf8");
+  const prepare = source.indexOf("receipt.expoCryptoSourceCompile = prebuildBeforeExpoCryptoSourceCompile(project, platforms,");
+  const resolve = source.indexOf("const resolution = JSON.parse(run(", prepare);
+  assert(prepare >= 0 && resolve > prepare, "Actual runner must freshly resolve autolinking after normal prebuilds and override");
+});
+
+test("failed, incomplete or config-mutating prebuild cannot reach the Crypto source override", t => {
+  for (const mode of ["failed", "missing-directory", "changed-patterns"]) {
+    const { temporary } = cryptoFixture(t);
+    assert.throws(() => prebuildBeforeExpoCryptoSourceCompile(temporary, ["android", "ios"], platform => {
+      if (mode === "failed") throw Error("actual prebuild failed");
+      if (mode === "missing-directory") return;
+      const pkg = JSON.parse(fs.readFileSync(path.join(temporary, "package.json")));
+      pkg.expo.autolinking.android.buildFromSource.push("^unreviewed$");
+      write(temporary, "package.json", JSON.stringify(pkg)); fs.mkdirSync(path.join(temporary, platform));
+    }));
+    assert(!JSON.parse(fs.readFileSync(path.join(temporary, "package.json"))).expo.autolinking.android.buildFromSource.includes("^expo-crypto$"));
+  }
+});
+
+test("postcompile picker checks use the exact normal package and restore compiler bytes on failure", t => {
+  const { temporary } = cryptoFixture(t), filename = path.join(temporary, "package.json"), normal = fs.readFileSync(filename);
+  const picker = createRequire(import.meta.url)(path.join(root, "plugins/withExpoImagePickerAndroidResultRetention.js")).__test;
+  const receipt = prepareExpoCryptoSourceCompile(temporary), compiled = fs.readFileSync(filename);
+  assert.equal(withNormalPrebuildPackageForChecks(temporary, normal, receipt, () => { picker.assertSourceBuildConfigured(temporary); return "passed"; }), "passed");
+  assert.deepEqual(fs.readFileSync(filename), compiled);
+  assert.throws(() => withNormalPrebuildPackageForChecks(temporary, normal, receipt, () => { picker.assertSourceBuildConfigured(temporary); throw Error("actual check failed"); }), /actual check failed/u);
+  assert.deepEqual(fs.readFileSync(filename), compiled);
+  let called = false;
+  assert.throws(() => withNormalPrebuildPackageForChecks(temporary, Buffer.from("wrong package"), receipt, () => { called = true; }));
+  assert.equal(called, false);
+  assert.throws(() => withNormalPrebuildPackageForChecks(temporary, normal, receipt, () => { fs.writeFileSync(filename, "changed"); }), /must not change/u);
+  assert.deepEqual(fs.readFileSync(filename), compiled);
+  assert.throws(() => withNormalPrebuildPackageForChecks(temporary, normal, receipt, () => { fs.unlinkSync(filename); }), /ENOENT/u);
+  assert.deepEqual(fs.readFileSync(filename), compiled);
+  assert.throws(() => picker.assertSourceBuildConfigured(temporary), /reviewed Android buildFromSource patterns required/u);
+});
 
 test("Crypto source override is confined to the disposable package and rejects lock or installation drift", t => {
   const { temporary, lock } = cryptoFixture(t), originalLock = fs.readFileSync(path.join(temporary, "package-lock.json"));

@@ -1,0 +1,22 @@
+{
+  "protocol": "scpv-hosted-prerequisites-source-v1",
+  "files": {
+    "pins.json": "e0e7f70c907838e948bb1138607e69bf598a49914edbc43b24c9a2afa9aed95d",
+    "provision.py": "c696233f9de67b7087cb4a668a501f4a441ce0b5ff29cda8e3a1f59504d4a9f7",
+    "provision_test.py": "fdf4e01714496b58a966ee20eb9343eb53afb59ea3195cb157d5b09e6299e8e6",
+    "README.md": "eb46fce9b61ab224afd89d2f8ad2a90af70431645391ddf5512ab692f42791ef"
+  },
+  "hostedProvisioningExecuted": false,
+  "offlineUnitGroups": 7,
+  "downloadedOfficialClamavPackageSha256": "28d6efc5b4423e7830c3559339552eb53870a9eac51ac4efb37d60530d329886",
+  "downloadedOfficialSignatureSha256": "1fa7a94df398345b89aeaf8eb4098834946296560266ff17b4cd05f9d8679a15",
+  "publicKeyFingerprint": "5BADCA2665EF59DCF8A23D8B707F0DB480836771",
+  "limits": [
+    "Actual GitHub-hosted provisioning, fresh official CDN definitions and full hosted integration must still pass.",
+    "The mount-free Ubuntu check proves exact Apt package availability and ClamAV package signature; it is not a hosted job.",
+    "No private database/binary/log/credential is a repository input."
+  ],
+  "actualUbuntuAptExactFfmpegInstalled": true,
+  "actualUbuntuClamavPackageGpgVerified": true,
+  "freshclamConfigurationBeforeVersionRequired": true
+}

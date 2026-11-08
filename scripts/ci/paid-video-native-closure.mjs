@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -73,6 +74,57 @@ export function prepareExpoCryptoSourceCompile(projectRoot) {
   fs.writeFileSync(filename, generated);
   return { version: EXPO_CRYPTO_VERSION, integrity: pin.integrity, packageSourceSha256: hash(original),
     disposablePackageSha256: hash(generated), sourceFiles, compileFromSourceOverride: true, signedArtifactEquivalent: false };
+}
+
+// Every requested prebuild must finish with the normal product configuration.
+// In particular, the Android picker plugin deliberately rejects any additional
+// buildFromSource pattern. Apply the compiler-only Crypto override after *all*
+// prebuilds, so a subsequent iOS generation cannot observe the Android override.
+export function prebuildBeforeExpoCryptoSourceCompile(projectRoot, platforms, prebuild) {
+  assert(Array.isArray(platforms) && platforms.length > 0 && platforms.length <= 2
+    && platforms.every(platform => platform === "android" || platform === "ios")
+    && new Set(platforms).size === platforms.length, "Explicit unique prebuild platforms required");
+  assert.equal(typeof prebuild, "function");
+  const filename = path.join(projectRoot, "package.json");
+  const normal = readJson(filename).expo?.autolinking?.android?.buildFromSource;
+  assert(Array.isArray(normal) && normal.every(value => typeof value === "string")
+    && !normal.includes("^expo-crypto$"), "Prebuild requires the normal package before the disposable Crypto override");
+  const prebuilds = platforms.map(platform => {
+    assert.deepEqual(readJson(filename).expo?.autolinking?.android?.buildFromSource, normal);
+    const packageBeforeSha256 = hash(fs.readFileSync(filename));
+    const result = prebuild(platform);
+    assert(!result?.then, "Native prebuild must complete before applying source overrides");
+    assert.deepEqual(readJson(filename).expo?.autolinking?.android?.buildFromSource, normal,
+      "Prebuild must preserve the reviewed product source patterns");
+    const generated = path.join(projectRoot, platform);
+    assert(fs.lstatSync(generated).isDirectory() && !fs.lstatSync(generated).isSymbolicLink(),
+      "Actual platform prebuild must produce a contained native directory");
+    return { platform, packageBeforeSha256, packageAfterSha256: hash(fs.readFileSync(filename)) };
+  });
+  return { ...prepareExpoCryptoSourceCompile(projectRoot), prebuilds, overrideAppliedAfterAllPrebuilds: true };
+}
+
+// Existing product regression checks re-run the exact picker plugin guard.
+// Restore the captured normal package only for those synchronous checks, then
+// restore the byte-exact compiler override even when a check fails. Neither
+// configuration is guessed or reconstructed from mutable package fields.
+export function withNormalPrebuildPackageForChecks(projectRoot, normalPackage, receipt, check) {
+  assert(Buffer.isBuffer(normalPackage) && hash(normalPackage) === receipt.packageSourceSha256,
+    "Checks require the exact package captured after normal prebuild");
+  const filename = path.join(projectRoot, "package.json"), compiledPackage = fs.readFileSync(filename);
+  assert.equal(hash(compiledPackage), receipt.disposablePackageSha256, "Compiler override changed before normal-config checks");
+  assert.equal(typeof check, "function");
+  fs.writeFileSync(filename, normalPackage);
+  try {
+    const result = check();
+    assert(!result?.then, "Normal-config checks must complete synchronously");
+    return result;
+  } finally {
+    let unchanged = false;
+    try { unchanged = fs.readFileSync(filename).equals(normalPackage); }
+    finally { fs.writeFileSync(filename, compiledPackage); }
+    assert(unchanged, "Regression checks must not change the captured normal package");
+  }
 }
 
 export function resolveExpoCryptoSourceProject(resolution, projectRoot, platform) {

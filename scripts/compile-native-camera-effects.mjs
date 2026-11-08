@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { ARTIFACTS } from "./test-local-camera-inference-offline.mjs";
 import { assertLocalCameraProviderClosure } from "./camera-provider-closure.mjs";
-import { requireTestStoreV3Sources, parseTestStoreV3NativePolicyReport, prepareExpoCryptoSourceCompile,
+import { requireTestStoreV3Sources, parseTestStoreV3NativePolicyReport, prebuildBeforeExpoCryptoSourceCompile, withNormalPrebuildPackageForChecks,
   resolveExpoCryptoSourceProject, expoCryptoCompileTasks, verifyExpoCryptoRuntimeGraph,
   collectPaidVideoAndroidArtifacts, collectPaidVideoIosArtifacts } from "./ci/paid-video-native-closure.mjs";
 
@@ -485,8 +485,6 @@ try {
     if (fs.existsSync(source)) fs.cpSync(source, path.join(project, relative), { recursive: true, verbatimSymlinks: true });
   }
   assertIsolatedLinks(project);
-  receipt.expoCryptoSourceCompile = prepareExpoCryptoSourceCompile(project);
-  saveReceipt();
   // Firebase's Expo plugin requires config files even for a camera-library
   // compile. These explicit nonfunctional fixtures are ONLY in the isolated
   // project; no app is launched and no Firebase account or credentials are used.
@@ -546,11 +544,22 @@ try {
       "tests/isolated-test-store-v3-native.test.mjs"))).digest("hex");
     saveReceipt();
   }
-  for (const platform of platforms) {
-    console.log(`Generating isolated ${platform} project with the actual Expo plugins`);
+  const platformInputs = Object.fromEntries(platforms.map(platform => {
     const easSource = platform === "android" ? fs.readFileSync(path.join(project, "eas.json"), "utf8") : undefined;
-    const platformEnv = platform === "android" ? resolveAndroidProfileEnvironment(JSON.parse(easSource))
-      : { CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM: platform, EAS_BUILD_PROFILE: `${platform}-internal-v2` };
+    return [platform, { easSource, platformEnv: platform === "android" ? resolveAndroidProfileEnvironment(JSON.parse(easSource))
+      : { CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM: platform, EAS_BUILD_PROFILE: `${platform}-internal-v2` } }];
+  }));
+  let normalPrebuildPackage;
+  receipt.expoCryptoSourceCompile = prebuildBeforeExpoCryptoSourceCompile(project, platforms, platform => {
+    console.log(`Generating isolated ${platform} project with the actual Expo plugins`);
+    run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformInputs[platform].platformEnv);
+    normalPrebuildPackage = fs.readFileSync(path.join(project, "package.json"));
+  });
+  saveReceipt();
+  for (const platform of platforms) {
+    const { easSource, platformEnv } = platformInputs[platform];
+    // Resolve afresh after normal prebuild and the disposable source override.
+    // The subsequent Gradle/Pods graph checks bind these exact source paths.
     const resolution = JSON.parse(run(process.execPath, ["node_modules/expo-modules-autolinking/bin/expo-modules-autolinking.js",
       "resolve", "--platform", platform === "ios" ? "apple" : "android", "--json"], project, platformEnv));
     assert(resolution.modules.some(module => module.packageName === "chillywood-camera-effects"), `${platform}: real module must autolink`);
@@ -569,7 +578,6 @@ try {
     const v3SourceFiles = requireTestStoreV3Sources(resolution, project, platform, admissionProject);
     for (const source of v3SourceFiles) assert.deepEqual(receipt.testStoreV3SourceFiles.find(file => file.path === source.path), source);
     const cryptoProject = resolveExpoCryptoSourceProject(resolution, project, platform);
-    run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformEnv);
     const generated = path.join(project, platform);
     assert(fs.existsSync(generated), `Expo must generate ${platform} sources`);
     const digest = createHash("sha256");
@@ -798,8 +806,12 @@ allprojects { p ->
       console.log(run("bash", ["modules/chillywood-camera-effects/android/run-math-tests.sh"], project, platformEnv).trim());
       receipts.android.realJarContracts = true;
       receipts.android.mathAndMutationControls = true;
-      const pickerRetention = run(process.execPath, [path.join(root, "scripts/test-android-picker-result-retention.mjs"), project], root, platformEnv);
+      const pickerRetention = withNormalPrebuildPackageForChecks(project, normalPrebuildPackage, receipt.expoCryptoSourceCompile,
+        () => run(process.execPath, [path.join(root, "scripts/test-android-picker-result-retention.mjs"), project], root, platformEnv));
       receipts.android.pickerResultRetention = JSON.parse(pickerRetention);
+      assert.deepEqual(collectPaidVideoAndroidArtifacts(project), receipts.android.paidVideoNativeArtifacts,
+        "Normal-config picker checks must preserve the already compiled V3 and Crypto artifacts");
+      receipts.android.pickerChecksUsedNormalPackageSha256 = receipt.expoCryptoSourceCompile.packageSourceSha256;
       saveReceipt();
     } else {
       run("xcrun", ["--sdk", "iphonesimulator", "--show-sdk-path"]);

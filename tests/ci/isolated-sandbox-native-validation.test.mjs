@@ -13,6 +13,9 @@ const policy = JSON.parse(readFileSync('config/ci/required-validation-v1.json', 
 const jobId = 'database-isolated-sandbox-native';
 const jobName = 'Validation / Isolated Sandbox Native PostgreSQL 17.6';
 const command = 'node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"';
+const paidVideoPrerequisites='python3 scripts/ci/paid-video-prerequisites/provision.py --repo "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/paid-video-prerequisites"';
+const paidVideoCommand='node scripts/ci/paid-video-validation.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$RUNNER_TEMP/paid-video-canonical" --database "$RUNNER_TEMP/paid-video-prerequisites/database" --certificates /usr/local/etc/certs --deno "$RUNNER_TEMP/paid-video-prerequisites/deno"';
+const paidVideoControlCommand='python3 scripts/ci/paid-video-prerequisites/provision_test.py\npython3 isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/image_chain_test.py\n';
 const edgeCommand = 'DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-receipt-router-v1/index.ts supabase/functions/isolated-sandbox-test-store-v1/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts supabase/functions/isolated-sandbox-test-store-v2/index.ts supabase/functions/isolated-test-store-provisioner-v2/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v2/index.ts supabase/functions/isolated-test-store-qualification-v1/index.ts supabase/functions/isolated-test-store-capture-v1/index.ts';
 const postgresSha256 = 'e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0';
 const postgresArchiveUrl = 'https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2';
@@ -97,7 +100,7 @@ function assertNativeGate(candidate) {
   assert.equal(job.if, "needs.plan.outputs.database == 'true'");
   assert.equal(job.needs, 'plan');
   assert.equal(job['runs-on'], 'ubuntu-24.04');
-  assert.equal(job['timeout-minutes'], 25);
+  assert.equal(job['timeout-minutes'], 60);
   assert.equal(job['continue-on-error'], undefined);
   assert.equal(job.permissions, undefined, 'inherit only read permissions');
   assert.equal(job.environment, undefined, 'source qualification receives no protected environment');
@@ -107,10 +110,21 @@ function assertNativeGate(candidate) {
   assert.equal(runners.length, 1, 'one nonoptional native runner invocation');
   assert.equal(runners[0].run.trim(), command, 'no fallback, shell swallowing or partial mode');
   assert.equal(runners[0].if, undefined);
+  assert.deepEqual(job.env,{PYTHONDONTWRITEBYTECODE:'1'});
+  const successor=job.steps.filter(step=>step.run?.includes('node scripts/ci/paid-video-validation.mjs'));
+  const prerequisites=job.steps.filter(step=>step.run?.includes('python3 scripts/ci/paid-video-prerequisites/provision.py'));
+  assert.equal(successor.length,1);assert.equal(prerequisites.length,1);
+  assert.equal(successor[0].run,paidVideoCommand);assert.equal(prerequisites[0].run,paidVideoPrerequisites);
+  assert.equal(successor[0].if,undefined);assert.equal(prerequisites[0].if,undefined);
+  assert.ok(job.steps.indexOf(prerequisites[0])<job.steps.indexOf(successor[0]));
+  const controls=job.steps.filter(step=>step.run?.includes('python3 scripts/ci/paid-video-prerequisites/provision_test.py'));
+  assert.equal(controls.length,1);assert.equal(controls[0].run,paidVideoControlCommand);assert.equal(controls[0].if,undefined);
+  assert.ok(job.steps.indexOf(controls[0])<job.steps.indexOf(successor[0]));
   for (const step of job.steps) assert.equal(step['continue-on-error'], undefined);
   const checkout = job.steps.filter(step => step.uses?.startsWith('actions/checkout@'));
   assert.equal(checkout.length, 1);
   assert.equal(checkout[0].with?.['persist-credentials'], false);
+  assert.equal(checkout[0].with?.['fetch-depth'], 0, 'Published V1/V2 baseline objects are mandatory');
   const node = job.steps.filter(step => step.uses?.startsWith('actions/setup-node@'));
   assert.equal(node.length, 1);
   assert.equal(Number(node[0].with?.['node-version']), 20);
@@ -128,10 +142,13 @@ function assertNativeGate(candidate) {
   assert.doesNotMatch(builds[0].run, /postgresql-17\.6\.tar\.gz|--gzip/u);
   assert.match(builds[0].run, /sha256sum\s+(?:-c|--check)\b/u);
   assert.ok(job.steps.indexOf(builds[0]) < job.steps.indexOf(runners[0]));
-  const upload = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'));
+  const upload = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@')&&step.with?.path==='isolated-sandbox-native-evidence');
   assert.equal(upload.length, 1);
   assert.equal(upload[0].if, 'always()');
   assert.equal(upload[0].with.path, 'isolated-sandbox-native-evidence');
+  const paidUpload=job.steps.filter(step=>step.uses?.startsWith('actions/upload-artifact@')&&step.with?.name?.startsWith('paid-video-canonical-'));
+  assert.equal(paidUpload.length,1);assert.equal(paidUpload[0].if,'always()');
+  assert.equal(paidUpload[0].with.path,'${{ runner.temp }}/paid-video-canonical/summary.json\n${{ runner.temp }}/paid-video-canonical/retained-http-proof.json\n${{ runner.temp }}/paid-video-prerequisites/prerequisite-proof.json\n');
   assert.equal(candidate.jobs.result.if, 'always()');
   assert.equal(candidate.jobs.result.needs.filter(name => name === jobId).length, 1);
   const edgeSteps = candidate.jobs.sensitive.steps.filter(step => step.run?.includes('supabase/functions/revenuecat-receipt-router-v1/index.ts'));
@@ -166,6 +183,15 @@ test('isolated native qualification is a credential-free canonical database obli
     'isolated-runtime/receipt-router-v1/tests/router.native.mjs',
     'isolated-runtime/receipt-router-v1/tests/legacy-source-bridge.fixture.mjs',
     'app/sandbox-tips/studio.tsx',
+    'app/sandbox-videos/index.tsx',
+    'app/sandbox-videos/offer/[offerId].tsx',
+    'components/monetization/isolated-paid-video-v2-screens.tsx',
+    'components/monetization/isolated-paid-video-player.tsx',
+    '_lib/isolatedPaidVideoCheckoutV3.ts',
+    'tests/isolated-paid-video-retained-http-bridge.test.mjs',
+    'tests/creator-money/isolated-paid-video-checkout-v3.test.mjs',
+    'ops/isolated-paid-video-operations-v2/runner.test.mjs',
+    'ops/isolated-paid-video-worker/scan.mjs',
     'app/sandbox-tips/offer/[offerId].tsx',
     'app/(tabs)/my-list.tsx',
     'components/monetization/isolated-tip-screens.tsx',
@@ -224,6 +250,12 @@ test('isolated native wiring rejects removed, skipped, weakened and credential-b
     'production secret': candidate => { candidate.jobs[jobId].env = {SECRET: '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}'}; },
     'missing result dependency': candidate => { candidate.jobs.result.needs = candidate.jobs.result.needs.filter(name => name !== jobId); },
     'skip runner': (candidate, runner) => { runner.if = 'false'; },
+    'remove successor runner': candidate=>{candidate.jobs[jobId].steps=candidate.jobs[jobId].steps.filter(step=>step.run!==paidVideoCommand);},
+    'skip successor runner': candidate=>{candidate.jobs[jobId].steps.find(step=>step.run===paidVideoCommand).if='false';},
+    'swallow successor failure': candidate=>{candidate.jobs[jobId].steps.find(step=>step.run===paidVideoCommand).run+=' || true';},
+    'skip verified prerequisites': candidate=>{candidate.jobs[jobId].steps.find(step=>step.run===paidVideoPrerequisites).if='false';},
+    'skip image identity controls': candidate=>{candidate.jobs[jobId].steps.find(step=>step.run===paidVideoControlCommand).if='false';},
+    'swap prerequisite database': candidate=>{candidate.jobs[jobId].steps.find(step=>step.run===paidVideoCommand).run=paidVideoCommand.replace('paid-video-prerequisites/database','unqualified/database');},
     'ignore runner failure': (candidate, runner) => { runner['continue-on-error'] = true; },
     'remove runner': (candidate, runner) => { candidate.jobs[jobId].steps = candidate.jobs[jobId].steps.filter(step => step !== runner); },
     'duplicate runner': (candidate, runner) => { candidate.jobs[jobId].steps.push(structuredClone(runner)); },
@@ -244,8 +276,9 @@ test('isolated native wiring rejects removed, skipped, weakened and credential-b
     'skip standalone qualification compilation': candidate => { candidate.jobs['native-sdk'].steps.find(step=>step.run===qualificationNativeCommand).if='false'; },
     'swallow standalone qualification compile failure': candidate => { candidate.jobs['native-sdk'].steps.find(step=>step.run===qualificationNativeCommand).run+=' || true'; },
     'remove standalone qualification compile': candidate => { candidate.jobs['native-sdk'].steps=candidate.jobs['native-sdk'].steps.filter(step=>step.run!==qualificationNativeCommand); },
-    'skip failure artifact': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).if = 'success()'; },
-    'artifact parent traversal': candidate => { candidate.jobs[jobId].steps.find(step => step.uses?.startsWith('actions/upload-artifact@')).with.path = '../isolated-sandbox-native-evidence'; },
+    'skip failure artifact': candidate => { candidate.jobs[jobId].steps.find(step => step.with?.path==='isolated-sandbox-native-evidence').if = 'success()'; },
+    'artifact parent traversal': candidate => { candidate.jobs[jobId].steps.find(step => step.with?.path==='isolated-sandbox-native-evidence').with.path = '../isolated-sandbox-native-evidence'; },
+    'upload private successor tree': candidate=>{candidate.jobs[jobId].steps.find(step=>step.with?.name?.startsWith('paid-video-canonical-')).with.path='${{ runner.temp }}/paid-video-canonical';},
   };
   for (const [name, mutate] of Object.entries(mutations)) {
     const candidate = structuredClone(workflow);
