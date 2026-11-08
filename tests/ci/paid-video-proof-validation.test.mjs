@@ -81,6 +81,11 @@ test("retained PostgreSQL proof binds capture sources and requires retained orig
 });
 
 function http(t) {
+  // Synthetic evidence uses an explicit whole-second clock inside the attempt.
+  // Native filesystem sub-millisecond mtimes can exceed integer Date.now() in
+  // the same tick. Do not weaken the production stale/future rejection for this.
+  const evidenceTimeMs = Math.floor(Date.now() / 1000) * 1000 - 1000;
+  const attemptStartedAtMs = evidenceTimeMs - 1000;
   const parent = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "paid-video-validator-"));
   const expectedRunId=randomBytes(16).toString('hex'),evidenceDirectory=path.join(parent,'chillywood-local-auth-'+expectedRunId);
   fs.mkdirSync(evidenceDirectory,{mode:0o700});t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
@@ -113,10 +118,16 @@ function http(t) {
     "generic-delivery-isolation-proof.json": { privateServiceExecutionDenied: true, publicRpcAbsent: true, privateSchemaNotExposed: true, coreOwnerStillOwnsPrivateGraph: true },
     "range-deadline-proof.json": { clientStartedAtMs: 10, clientReceivedAtMs: 20, serverAuthorizedUntilMs: 100, remainingMilliseconds: 80 },
   });
-  const write = (name, value) => fs.writeFileSync(path.join(evidenceDirectory, name), JSON.stringify(value, null, 2) + "\n");
+  const write = (name, value) => {
+    const file = path.join(evidenceDirectory, name);
+    fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
+    fs.utimesSync(file, evidenceTimeMs / 1000, evidenceTimeMs / 1000);
+    const mtime = fs.statSync(file).mtimeMs;
+    assert.ok(Number.isInteger(mtime) && mtime > attemptStartedAtMs && mtime < Date.now());
+  };
   for (const [name, value] of Object.entries(artifacts)) write(name, value);
   return { summary, evidenceDirectory,expectedEvidenceDirectory:evidenceDirectory,expectedRunId, executionInputs,
-    templateManifestSha256:hash(fs.readFileSync(new URL('source-manifest.json',template))), attemptStartedAtMs: Date.now() - 1000,
+    templateManifestSha256:hash(fs.readFileSync(new URL('source-manifest.json',template))), attemptStartedAtMs, evidenceTimeMs,
     artifacts, write, read: (name) => fs.readFileSync(path.join(evidenceDirectory, name)) };
 }
 
@@ -149,9 +160,12 @@ test('HTTP identity rejects old artifacts recopied with fresh timestamps and for
   fixture.write('ownership.json',fixture.artifacts['ownership.json']);
   const newRunId='aa'.repeat(16),newRoot=path.join(path.dirname(fixture.evidenceDirectory),'chillywood-local-auth-'+newRunId);
   fs.mkdirSync(newRoot,{mode:0o700});
-  for(const name of Object.keys(fixture.artifacts))fs.writeFileSync(path.join(newRoot,name),fixture.read(name));
+  for(const name of Object.keys(fixture.artifacts)){
+    const file=path.join(newRoot,name);fs.writeFileSync(file,fixture.read(name));
+    fs.utimesSync(file,fixture.evidenceTimeMs/1000,fixture.evidenceTimeMs/1000);
+  }
   assert.throws(()=>aggregatePaidVideoRetainedHttpProof({...fixture,evidenceDirectory:newRoot,expectedEvidenceDirectory:newRoot,
-    expectedRunId:newRunId,attemptStartedAtMs:Date.now()-1000}),/PAID_VIDEO_PROOF/u);
+    expectedRunId:newRunId,attemptStartedAtMs:fixture.attemptStartedAtMs}),/PAID_VIDEO_PROOF/u);
   for(const change of [{expectedRunId:newRunId},{expectedEvidenceDirectory:newRoot},{expectedRunId:undefined}])
     assert.throws(()=>validatePaidVideoPlatformHttpAggregate(old,{...old.expectedAttempt,...change}),/PAID_VIDEO_PROOF/u);
   const historical={...old,protocol:'scpv-retained-auth-http-proof-v1'};
@@ -202,6 +216,10 @@ test("HTTP aggregator rejects every cleanup, source, identity and count mismatch
 test("HTTP aggregator rejects stale, missing, symlinked evidence and physically retained secret files", (t) => {
   const fixture = http(t), file = path.join(fixture.evidenceDirectory, "final-gateway-proof.json");
   fs.utimesSync(file, 1, 1);
+  assert.throws(() => aggregatePaidVideoRetainedHttpProof(fixture), /HTTP_STALE_EVIDENCE/u);
+  fixture.write("final-gateway-proof.json", fixture.artifacts["final-gateway-proof.json"]);
+  const futureSeconds = Math.ceil(Date.now() / 1000) + 60;
+  fs.utimesSync(file, futureSeconds, futureSeconds);
   assert.throws(() => aggregatePaidVideoRetainedHttpProof(fixture), /HTTP_STALE_EVIDENCE/u);
   fixture.write("final-gateway-proof.json", fixture.artifacts["final-gateway-proof.json"]);
   fs.unlinkSync(file);
