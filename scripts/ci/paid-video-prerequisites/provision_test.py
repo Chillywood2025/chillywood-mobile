@@ -1,4 +1,5 @@
-import hashlib, importlib.util, io, json, tempfile, unittest
+import hashlib, importlib.util, io, json, subprocess, tempfile, unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("provision", Path(__file__).with_name("provision.py"))
@@ -70,5 +71,58 @@ class PrerequisiteBoundaries(unittest.TestCase):
             self.assertRegex(pins[name]['sha256'],r'^[a-f0-9]{64}$'); module.validate_download_url(pins[name]['url'])
         self.assertNotIn('database.clamav.net',json.dumps(pins))
         self.assertEqual(pins['clamavVersion'],'1.5.4'); self.assertEqual(pins['denoVersion'],'2.7.14')
+
+class PinnedImageRetries(unittest.TestCase):
+    image = "public.ecr.aws/supabase/kong@sha256:" + "1" * 64
+    docker = ["docker", "--config", "/private/empty-public-config", "--host", "unix:///var/run/docker.sock"]
+
+    def fixture(self, outcomes, durations=None):
+        clock = [0]; calls = []; sleeps = []; queue = list(outcomes); durations = iter(durations or [0] * len(queue))
+        def runner(args, **kwargs):
+            calls.append((list(args), kwargs)); clock[0] += next(durations)
+            value = queue.pop(0)
+            if isinstance(value, Exception): raise value
+            return SimpleNamespace(returncode=0 if value is None else 1, stdout="pulled", stderr=value or "")
+        def sleep(seconds): sleeps.append(seconds); clock[0] += seconds
+        return dict(runner=runner, sleep=sleep, monotonic=lambda: clock[0]), calls, sleeps
+
+    def test_success_has_no_retry_and_keeps_exact_public_command(self):
+        options, calls, sleeps = self.fixture([None])
+        self.assertEqual(module.pull_pinned_image(self.docker, self.image, **options), "pulled")
+        self.assertEqual(calls, [(self.docker + ["pull", "--platform", "linux/amd64", self.image], dict(capture_output=True, text=True, timeout=240))]); self.assertEqual(sleeps, [])
+
+    def test_only_exact_ecr_throttles_retry_same_digest(self):
+        options, calls, sleeps = self.fixture(["toomanyrequests: Rate exceeded", "Error response from daemon: toomanyrequests: Rate exceeded", None])
+        module.pull_pinned_image(self.docker, self.image, **options)
+        self.assertEqual(sleeps, [15, 45]); self.assertEqual(len(calls), 3)
+        self.assertTrue(all(args == calls[0][0] for args, _ in calls)); self.assertEqual([kw["timeout"] for _, kw in calls], [240, 240, 240])
+
+    def test_throttle_exhaustion_stops_after_three_attempts(self):
+        options, calls, sleeps = self.fixture(["toomanyrequests: Rate exceeded"] * 4)
+        with self.assertRaises(RuntimeError): module.pull_pinned_image(self.docker, self.image, **options)
+        self.assertEqual(len(calls), 3); self.assertEqual(sleeps, [15, 45])
+
+    def test_quota_auth_network_manifest_and_digest_errors_never_retry(self):
+        for reason in ["toomanyrequests: You have reached your pull rate limit. 6 hours", "quota exceeded", "unauthorized", "denied", "manifest unknown", "digest mismatch", "connection reset", "429 Too Many Requests", "toomanyrequests: Rate exceeded; quota exhausted"]:
+            with self.subTest(reason=reason):
+                options, calls, sleeps = self.fixture([reason])
+                with self.assertRaises(RuntimeError): module.pull_pinned_image(self.docker, self.image, **options)
+                self.assertEqual(len(calls), 1); self.assertEqual(sleeps, [])
+
+    def test_timeout_is_not_retried(self):
+        options, calls, sleeps = self.fixture([subprocess.TimeoutExpired("docker", 240)])
+        with self.assertRaises(subprocess.TimeoutExpired): module.pull_pinned_image(self.docker, self.image, **options)
+        self.assertEqual(len(calls), 1); self.assertEqual(sleeps, [])
+
+    def test_deadline_caps_remaining_attempt_and_forbids_extra_backoff(self):
+        options, calls, sleeps = self.fixture(["toomanyrequests: Rate exceeded"] * 2, [240, 40])
+        with self.assertRaises(TimeoutError): module.pull_pinned_image(self.docker, self.image, **options)
+        self.assertEqual([kw["timeout"] for _, kw in calls], [240, 45]); self.assertEqual(sleeps, [15])
+
+    def test_unpinned_or_other_registry_never_executes(self):
+        for image in ["public.ecr.aws/supabase/kong:latest", self.image.replace("public.ecr.aws", "docker.io")]:
+            options, calls, sleeps = self.fixture([])
+            with self.assertRaises(ValueError): module.pull_pinned_image(self.docker, image, **options)
+            self.assertEqual(calls, []); self.assertEqual(sleeps, [])
 
 if __name__ == '__main__': unittest.main()

@@ -25,6 +25,30 @@ def run(args, *, env=None, timeout=120):
         raise RuntimeError("Dependency command failed: " + Path(args[0]).name + ": " + result.stderr[-3000:])
     return result.stdout
 
+def pull_pinned_image(docker, image, *, runner=subprocess.run, sleep=time.sleep, monotonic=time.monotonic):
+    """Retry only the observed public ECR rate throttle, never a provider action."""
+    if not re.fullmatch(r"public\.ecr\.aws/supabase/[a-z]+@sha256:[a-f0-9]{64}", image):
+        raise ValueError("Unpinned fixture image")
+    command = [*docker, "pull", "--platform", "linux/amd64", image]
+    deadline = monotonic() + 300
+    delays = (15, 45)
+    for attempt in range(3):
+        remaining = deadline - monotonic()
+        if remaining <= 0: raise TimeoutError("Public pinned image pull budget exhausted")
+        # TimeoutExpired is intentionally not retried. Each invocation remains
+        # bounded even when a registry hangs rather than returning its throttle.
+        result = runner(list(command), capture_output=True, text=True, timeout=min(240, remaining))
+        if monotonic() > deadline: raise TimeoutError("Public pinned image pull budget exhausted")
+        if result.returncode == 0: return result.stdout
+        reason = result.stderr.strip()
+        transient = reason in ("toomanyrequests: Rate exceeded", "Error response from daemon: toomanyrequests: Rate exceeded")
+        if not transient or attempt == 2:
+            raise RuntimeError("Dependency command failed: docker: " + result.stderr[-3000:])
+        delay = delays[attempt]
+        if deadline - monotonic() <= delay: raise TimeoutError("Public pinned image pull budget exhausted")
+        print(f"Public ECR rate throttle; retry {attempt + 2}/3 after {delay}s: {image}", flush=True)
+        sleep(delay)
+
 def validate_download_url(url):
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in DOWNLOAD_HOSTS or parsed.username or parsed.password or parsed.port:
@@ -177,7 +201,7 @@ def provision(repo, output):
     for name, image in profile["images"].items():
         if not re.fullmatch(r"public\.ecr\.aws/supabase/[a-z]+@sha256:[a-f0-9]{64}", image):
             raise ValueError("Unpinned fixture image")
-        run(docker + ["pull", "--platform", "linux/amd64", image], timeout=240)
+        pull_pinned_image(docker, image)
         observed = json.loads(run(docker + ["image", "inspect", image]))[0]
         chain = validator.validate_image(image_pins["images"][name], image, observed)
         record("cached-image", name=name, image=image, imageId=observed["Id"], chain=chain)

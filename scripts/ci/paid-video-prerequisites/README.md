@@ -76,3 +76,12 @@ Official references reviewed for this design:
 `python3 scripts/ci/paid-video-prerequisites/provision_test.py` tests the source
 boundaries with local byte fixtures. It does not claim a Linux package install,
 hosted network access or actual hosted readiness.
+
+Public ECR image pulls retry only the exact `toomanyrequests: Rate exceeded`
+response (with or without Docker's daemon prefix). The identical immutable
+image/platform and empty public Docker configuration are retained for at most
+three attempts, with 15s/45s backoff and a 300s monotonic total budget; each pull
+has at most 240s or the remaining budget. Authentication, quota/pull-limit,
+manifest/digest, network and timeout failures are not retried. Every successful
+pull still requires the complete pinned image-chain verification. This does not
+change FreshClam's single-attempt official CDN policy.
