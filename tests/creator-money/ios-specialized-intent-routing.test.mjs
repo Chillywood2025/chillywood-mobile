@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 import { TERMS_ID } from "../fixtures/event-purchase-contract.mjs";
+import { runKeyedSingleFlight } from "../../_lib/actionSingleFlight.mjs";
 
 const CREATOR_ID = "11111111-1111-4111-8111-111111111111";
 const VIEWER_ID = "22222222-2222-4222-8222-222222222222";
@@ -651,12 +652,14 @@ test("RevenueCat purchase mutations require the selected exact product and a com
     restoreOnly: false,
   };
   let purchaseResult;
+  let purchaseCalls = 0;
   const purchases = {
     addCustomerInfoUpdateListener: () => undefined,
     configure: () => undefined,
     getAppUserID: async () => VIEWER_ID,
-    purchaseStoreProduct: async () => purchaseResult,
-    purchasePackage: async () => purchaseResult,
+    purchaseStoreProduct: async () => { purchaseCalls++; return purchaseResult; },
+    purchasePackage: async () => { purchaseCalls++; return purchaseResult; },
+    restorePurchases: async () => purchaseResult,
     setLogHandler: () => undefined,
     setLogLevel: () => undefined,
   };
@@ -675,7 +678,7 @@ test("RevenueCat purchase mutations require the selected exact product and a com
       sameAccountSessionAuthority: (left, right) => left === right,
     },
     "./actionSingleFlight.mjs": {
-      runKeyedSingleFlight: (_registry, _key, operation) => operation(),
+      runKeyedSingleFlight,
     },
     "./entitlementAuthority": {
       withAuthorityReadDeadline: async (promise) => await promise,
@@ -715,6 +718,52 @@ test("RevenueCat purchase mutations require the selected exact product and a com
       purchaseToken: "google-token-exact-1",
     },
   };
+  purchaseResult = exactResult;
+  // Distinct resources can use the same SKU. Neither same-frame calls nor
+  // cross-entrypoint calls may receive the first caller's transaction.
+  for (const firstIsPackage of [false, true]) {
+    let settle;
+    purchaseResult = new Promise(resolve => { settle = resolve; });
+    const before = purchaseCalls;
+    const pkg = { identifier: "package", product };
+    const first = firstIsPackage
+      ? revenuecat.purchaseRevenueCatPackage(pkg, { authority: sessionAuthority })
+      : revenuecat.purchaseRevenueCatStoreProduct(product, { authority: sessionAuthority });
+    await assert.rejects(revenuecat.purchaseRevenueCatStoreProduct({ ...product }, { authority: sessionAuthority }), /already in progress/u);
+    await assert.rejects(revenuecat.purchaseRevenueCatPackage(pkg, { authority: sessionAuthority }), /already in progress/u);
+    settle(exactResult);
+    assert.equal(await first, exactResult);
+    assert.equal(purchaseCalls, before + 1);
+  }
+  // Failure releases the latch but never hands its result to another caller.
+  let rejectPurchase;
+  purchaseResult = new Promise((_resolve, reject) => { rejectPurchase = reject; });
+  const failed = revenuecat.purchaseRevenueCatStoreProduct(product, { authority: sessionAuthority });
+  const rejection = assert.rejects(failed, /SDK cancelled/u);
+  await assert.rejects(revenuecat.purchaseRevenueCatStoreProduct(product, { authority: sessionAuthority }), /already in progress/u);
+  rejectPurchase(new Error("SDK cancelled"));
+  await rejection;
+  // Restore retains its existing read/reconciliation coalescing behavior.
+  let restoreDone;
+  purchaseResult = new Promise(resolve => { restoreDone = resolve; });
+  const restoreA = revenuecat.restoreRevenueCatPurchases({ authority: sessionAuthority });
+  const restoreB = revenuecat.restoreRevenueCatPurchases({ authority: sessionAuthority });
+  assert.equal(restoreA, restoreB);
+  restoreDone(customerInfo);
+  assert.equal(await restoreA, customerInfo);
+  // The identity queue must not dispatch a caller-mutated product/package.
+  for (const wrapper of ["product", "package-product", "package-id"]) {
+    const mutableProduct = { ...product };
+    const mutablePackage = { identifier: "package", product: mutableProduct };
+    const before = purchaseCalls;
+    const pending = wrapper === "product"
+      ? revenuecat.purchaseRevenueCatStoreProduct(mutableProduct, { authority: sessionAuthority })
+      : revenuecat.purchaseRevenueCatPackage(mutablePackage, { authority: sessionAuthority });
+    if (wrapper === "package-id") mutablePackage.identifier = "another-package";
+    else mutableProduct.identifier = "another-sku";
+    await assert.rejects(pending, /identity changed before purchase/u);
+    assert.equal(purchaseCalls, before);
+  }
   purchaseResult = exactResult;
   assert.equal(
     (await revenuecat.purchaseRevenueCatStoreProduct(product, { authority: sessionAuthority })).productIdentifier,

@@ -210,11 +210,11 @@ test("same-class async room entry and creation actions use synchronous latches",
   assert.match(createHandler, /if \(preparedTargetPartyId\)[\s\S]*navigationAccepted = navigateToRoom\([\s\S]*return;/u);
 });
 
-test("purchase and Restore calls coalesce before the provider mutation and remain authority-bound", () => {
+test("purchase collisions reject while Restore coalesces and mutations remain authority-bound", () => {
   assert.match(revenueCat, /revenueCatMutationFlights/u);
   assert.match(revenueCat, /runKeyedSingleFlight\(revenueCatMutationFlights, exactFlightKey/u);
-  assert.match(revenueCat, /purchase-package:\$\{expectedProductIdentifier\}/u);
-  assert.match(revenueCat, /purchase-product:\$\{expectedProductIdentifier\}/u);
+  assert.match(revenueCat, /purchase:\$\{expectedProductIdentifier\}/u);
+  assert.match(revenueCat, /mutationKey.startsWith\("purchase:"\) && revenueCatMutationFlights.has\(exactFlightKey\)/u);
   assert.match(revenueCat, /runRevenueCatMutation\("restore"/u);
   assert.match(revenueCat, /authorityHint\?\.sessionGeneration/u);
   assert.match(moneyAuthority, /perform pg_advisory_xact_lock\(hashtextextended\([\s\S]{0,180}'google-money-intent:'/u);

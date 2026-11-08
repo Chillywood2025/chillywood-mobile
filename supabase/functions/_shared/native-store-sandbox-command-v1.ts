@@ -1,13 +1,13 @@
 /** Normal-app quote/preparation only. No purchase SDK or provider mutation. */
 export type NativeStoreSandboxActorV1 = { userId:string;accountId:string;sessionGeneration:string };
 export type NativeStoreSandboxRequestV1 = { protocol:"native-store-sandbox-command-v1";requestId:string;
- command:"offer"|"prepare"|"recover";payload:Record<string,unknown> };
+ command:"offer"|"prepare"|"recover"|"claim"|"claim-recover";payload:Record<string,unknown> };
 const row=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==="object"&&!Array.isArray(v);
 const keys=(v:Record<string,unknown>,names:string[])=>Object.keys(v).length===names.length&&names.every(k=>Object.hasOwn(v,k));
 const uuid=(v:unknown):v is string=>typeof v==="string"&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(v);
 const id=(v:unknown,prefix:string)=>typeof v==="string"&&v.startsWith(prefix)&&uuid(v.slice(prefix.length));
 const positive=(v:unknown)=>typeof v==="number"&&Number.isSafeInteger(v)&&v>0;
-const text=(v:unknown)=>typeof v==="string"&&v.length>0&&v.length<=512&&v===v.trim()&&!/[\u0000-\u001f\u007f]/u.test(v);
+const text=(v:unknown)=>typeof v==="string"&&v.length>0&&new TextEncoder().encode(v).length<=512&&v===v.trim()&&!/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(v);
 const canonical=(v:unknown):string=>JSON.stringify(v,(_k,x)=>row(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
 export function validNativeStoreSandboxQuoteV1(v:unknown):v is Record<string,unknown> {
  if(!row(v)||!keys(v,["offerId","offerRevision","resourceId","resourceRevision","creatorId","kind","amountMinor","currency","asset","catalog","quoteDigest"])
@@ -25,6 +25,8 @@ export function validNativeStoreSandboxQuoteV1(v:unknown):v is Record<string,unk
 export function parseNativeStoreSandboxRequestV1(v:unknown):NativeStoreSandboxRequestV1|null {
  if(!row(v)||!keys(v,["protocol","requestId","command","payload"])||v.protocol!=="native-store-sandbox-command-v1"||!uuid(v.requestId)||!row(v.payload))return null;
  const p=v.payload;
+ if(v.command==="claim"||v.command==="claim-recover")return keys(p,v.command==="claim"?["selectionId","transactionIdentifier","productIdentifier"]:["selectionId"])
+ &&id(p.selectionId,"nssv1_selection_")&&(v.command==="claim-recover"||(text(p.transactionIdentifier)&&text(p.productIdentifier)))?v as NativeStoreSandboxRequestV1:null;
  if(v.command==="recover")return keys(p,["originalRequestId"])&&uuid(p.originalRequestId)?v as NativeStoreSandboxRequestV1:null;
  if(v.command!=="offer"&&v.command!=="prepare")return null;
  if(!keys(p,v.command==="offer"?["offerId","store"]:["offerId","store","expectedQuote"])||!id(p.offerId,"scv1_offer_")||!["APP_STORE","PLAY_STORE"].includes(p.store as string))return null;
@@ -35,10 +37,15 @@ export function validateNativeStoreSandboxResultV1(v:unknown,actor:NativeStoreSa
  if(!row(v)||!keys(v,["protocol","command","requestId","actor","status","data","dispatchAllowed","correlation"])
  ||v.protocol!==request.protocol||v.command!==request.command||v.requestId!==request.requestId||canonical(v.actor)!==canonical(actor)
  ||v.dispatchAllowed!==false||v.correlation!=="unsupported"||!row(v.data)||!["ok","held","unknown"].includes(v.status as string))return false;
- const d=v.data,key=request.command==="offer"?"quote":"selection";
+ const d=v.data,key=request.command.startsWith("claim")?"claim":request.command==="offer"?"quote":"selection";
  if(!keys(d,[key,"reason"]))return false;
- if(v.status!=="ok")return d[key]===null&&text(d.reason)&&(v.status!=="unknown"||request.command==="recover");
+ if(v.status!=="ok")return d[key]===null&&text(d.reason)&&(v.status!=="unknown"||request.command==="recover"||request.command==="claim-recover");
  if(d.reason!==null)return false;
+ if(request.command==="claim"||request.command==="claim-recover"){
+  if(!validNativeStoreSandboxClaimV1(d.claim)||d.claim.selectionId!==request.payload.selectionId)return false;
+  return request.command==="claim-recover"||(d.claim.originalRequestId===request.requestId&&d.claim.originalSessionGeneration===actor.sessionGeneration
+   &&d.claim.transactionIdentifier===request.payload.transactionIdentifier&&d.claim.productIdentifier===request.payload.productIdentifier);
+ }
  if(request.command==="offer")return validNativeStoreSandboxQuoteV1(d.quote)&&d.quote.offerId===request.payload.offerId&&row(d.quote.catalog)&&d.quote.catalog.store===request.payload.store&&d.quote.creatorId!==actor.userId;
  if(!row(d.selection)||!keys(d.selection,["id","originalRequestId","originalSessionGeneration","createdAt","quote"]))return false;
  const s=d.selection;
@@ -46,6 +53,12 @@ export function validateNativeStoreSandboxResultV1(v:unknown,actor:NativeStoreSa
  ||!validNativeStoreSandboxQuoteV1(s.quote)||s.quote.creatorId===actor.userId)return false;
  return request.command==="recover"?s.originalRequestId===request.payload.originalRequestId
  :s.originalRequestId===request.requestId&&s.originalSessionGeneration===actor.sessionGeneration&&canonical(s.quote)===canonical(request.payload.expectedQuote);
+}
+export function validNativeStoreSandboxClaimV1(v:unknown):v is Record<string,unknown>{
+ return row(v)&&keys(v,["id","selectionId","originalRequestId","originalSessionGeneration","createdAt","transactionIdentifier","productIdentifier","evidence","settlementAllowed"])
+ &&id(v.id,"nssv1_claim_")&&id(v.selectionId,"nssv1_selection_")&&uuid(v.originalRequestId)&&uuid(v.originalSessionGeneration)
+ &&typeof v.createdAt==="string"&&Number.isFinite(Date.parse(v.createdAt))&&text(v.transactionIdentifier)&&text(v.productIdentifier)
+ &&v.evidence==="client_assertion"&&v.settlementAllowed===false;
 }
 export function createNativeStoreSandboxCommandHandlerV1(deps:{authenticate:(request:Request)=>Promise<NativeStoreSandboxActorV1|null>;
  execute:(input:{actor:NativeStoreSandboxActorV1;request:NativeStoreSandboxRequestV1})=>Promise<unknown>}) {

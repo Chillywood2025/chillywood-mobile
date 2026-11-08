@@ -20,7 +20,7 @@ const install='begin;create role anon nologin;create role authenticated nologin;
  +'alter default privileges for role postgres grant execute on functions to authenticated;'+source('core.sql')
  +source('tests/premium-authority.fixture.sql')+authority.replace(declaration,'-- declarations supplied by real core')
  +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'+files.map(source).join('\n')
- +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
+ +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+fs.readFileSync(path.join(here,'claim.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
 const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),port='55490',db='quote_'+randomUUID().replaceAll('-','');
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PG')));
 const args=database=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U','postgres','-d',database];
@@ -141,6 +141,64 @@ try{
   assert.deepEqual(actualRecovered.data.selection,actualPrepared.data.selection);assert.equal(memory.size,1);
   await assert.rejects(client.prepare(quote),e=>e.code==='saved_selection_requires_recovery');
  }finally{client.dispose();}cases++;
+ // Assertions capture uncertainty; they cannot reserve/allocate any purchase.
+ const claimPayload={selectionId:prepared.data.selection.id,transactionIdentifier:'synthetic-transaction',productIdentifier:nativeCatalog.wireProductId},claimRequest=randomUUID();
+ assert.equal((await http('claim-recover',{selectionId:claimPayload.selectionId})).status,'unknown');
+ const claimed=await http('claim',claimPayload,claimRequest);assert.equal(claimed.data.claim.evidence,'client_assertion');
+ assert.equal(claimed.data.claim.settlementAllowed,false);assert.deepEqual((await http('claim',claimPayload,claimRequest)).data.claim,claimed.data.claim);
+ assert.deepEqual((await http('claim-recover',{selectionId:claimPayload.selectionId})).data.claim,claimed.data.claim);cases++;
+ rejects(service+'select '+expression('claim',{...claimPayload,transactionIdentifier:'different'},claimRequest)+';',/native_store_claim_conflict/u);
+ rejects(service+'select '+expression('claim',claimPayload,randomUUID())+';',/native_store_claim_conflict/u);
+ assert.deepEqual(call('claim-recover',{selectionId:claimPayload.selectionId},randomUUID(),newActor).data.claim,claimed.data.claim);
+ rejects(service+'select '+expression('claim',claimPayload,claimRequest,newActor)+';',/native_store_claim_conflict/u);cases++;
+ const another=(await http('prepare',preparePayload)).data.selection;
+ rejects(service+'select '+expression('claim',{...claimPayload,selectionId:another.id,productIdentifier:'wrong'})+';',/native_store_claim_product_mismatch/u);
+ for(const transactionIdentifier of [' bad','bad\tvalue','\u00a0bad','😀'.repeat(257)])rejects(service+'select '+expression('claim',{...claimPayload,selectionId:another.id,transactionIdentifier})+';',/native_store_claim_invalid/u);
+ assert.equal(q('select count(*) from sandbox_commerce_v1.native_store_claims;'),'1');cases++;
+ const historicalSelection=(await http('prepare',preparePayload)).data.selection;
+ const historical=call('claim',{...claimPayload,selectionId:historicalSelection.id},randomUUID(),newActor);
+ assert.equal(historical.data.claim.originalSessionGeneration,newSession);assert.equal(historical.dispatchAllowed,false);assert.equal(historical.data.claim.settlementAllowed,false);cases++;
+ // A different account's fabricated same-ID assertion does not squat the ID,
+ // and neither account may recover/read the other account's assertion.
+ const otherActor={userId:other,sessionGeneration:otherSession};
+ assert.equal(call('claim-recover',{selectionId:claimPayload.selectionId},randomUUID(),otherActor).status,'unknown');
+ rejects(service+'select '+expression('claim',claimPayload,randomUUID(),otherActor)+';',/native_store_selection_unavailable/u);
+ const otherSelection=call('prepare',preparePayload,randomUUID(),otherActor).data.selection;
+ const otherClaim=call('claim',{...claimPayload,selectionId:otherSelection.id},randomUUID(),otherActor).data.claim;
+ const rightfulAgain=await http('claim',{...claimPayload,selectionId:another.id});
+ assert.notEqual(otherClaim.id,rightfulAgain.data.claim.id);assert.equal(rightfulAgain.data.claim.settlementAllowed,false);cases++;
+ const readClaim=id=>JSON.parse(q(service+`select public.native_store_sandbox_claim_read_v1('${id.slice('nssv1_claim_'.length)}');`));
+ const retained=readClaim(claimed.data.claim.id);assert.deepEqual(retained.quote,quote);assert.equal(retained.buyerId,buyer);assert.deepEqual(retained.claim,claimed.data.claim);
+ assert.equal(readClaim(historical.data.claim.id).selectionSessionGeneration,session);
+ for(const role of ['anon','authenticated']){
+  rejects(`set role ${role};select public.native_store_sandbox_claim_read_v1('${randomUUID()}');`,/permission denied/u);
+  rejects(`set role ${role};select ${expression('claim',claimPayload)};`,/permission denied/u);
+ }
+ rejects('set role service_role;select * from sandbox_commerce_v1.native_store_claims;',/permission denied/u);
+ rejects(`update sandbox_commerce_v1.native_store_claims set transaction_identifier='changed';`,/native_store_quote_immutable/u);cases++;
+ q(`update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${session}';`);
+ rejects(service+'select '+expression('claim-recover',{selectionId:claimPayload.selectionId})+';',/sandbox_.*required/u);
+ q(`update auth.sessions set not_after=clock_timestamp()+interval '1 hour' where id='${session}';`);cases++;
+ // Actual persisted claim -> real authenticated envelope -> original decrypt
+ // and comparison. Provider bytes/config here are explicitly synthetic.
+ const modules=new Map();function load(name){if(modules.has(name))return modules.get(name);const result={};modules.set(name,result);
+  new Function('exports','require',ts.transpileModule(fs.readFileSync(path.join(root,'supabase/functions/_shared',name),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(result,s=>load(s.replace(/^\.\//u,'')));return result;}
+ const conf={bridgeProtocol:'native-store-sandbox-v1',connectionId:randomUUID(),connectionRevision:1,projectId:nativeCatalog.projectId,appId:nativeCatalog.appId,store:'APP_STORE',environment:'SANDBOX',
+  authentication:{method:'shared_secret',keyVersion:'synthetic-v1',secret:'synthetic-not-a-real-secret-'.repeat(2)},encryption:{keyId:'synthetic-key',key:new Uint8Array(32).fill(17)}};
+ const envelope=(await load('native-store-sandbox-bridge-v1.ts').prepareNativeStoreSandboxIntakeV1(new Request('https://local.invalid',{method:'POST',headers:{authorization:conf.authentication.secret},body:JSON.stringify({api_version:'1.0',event:{id:'synthetic-event',type:'NON_RENEWING_PURCHASE',app_id:conf.appId,store:conf.store,environment:'SANDBOX',app_user_id:buyer,original_app_user_id:buyer,transaction_id:claimPayload.transactionIdentifier,original_transaction_id:claimPayload.transactionIdentifier,product_id:claimPayload.productIdentifier,event_timestamp_ms:1794139200000}})}),conf)).envelope;
+ const row={id:randomUUID(),project_id:conf.projectId,connection_id:conf.connectionId,connection_revision:1,raw_sha256:envelope.rawSha256,raw_byte_length:envelope.rawByteLength,envelope};
+ const reconcile=load('native-store-sandbox-reconcile-v1.ts').reconcileNativeStoreSandboxClaimV1;
+ const match=await reconcile(retained,row,conf,false);assert.equal(match.oneTimeCandidate,true);assert.equal(match.settlementAllowed,false);
+ const squat=await reconcile(readClaim(otherClaim.id),row,conf,false);assert.equal(squat.oneTimeCandidate,false);assert.ok(squat.reasons.includes('buyer_mismatch'));
+ assert.equal((await reconcile(readClaim(rightfulAgain.data.claim.id),row,conf,false)).settlementAllowed,false);cases++;
+ // Claim retries are nonwaiting and exactly recoverable after commit.
+ const raceSelection=(await http('prepare',preparePayload)).data.selection,raceClaimId=randomUUID(),racePayload={...claimPayload,selectionId:raceSelection.id};
+ let claimOut='',claimErr='';const claimant=spawn(path.join(bin,'psql'),args(db),{env,stdio:['pipe','pipe','pipe']});children.push(claimant);
+ claimant.stdout.on('data',v=>claimOut+=v);claimant.stderr.on('data',v=>claimErr+=v);const claimDone=new Promise(resolve=>claimant.once('exit',resolve));
+ claimant.stdin.write('begin;'+service+'select '+expression('claim',racePayload,raceClaimId)+";select 'claim_ready';\n");
+ const claimUntil=Date.now()+3000;while(!claimOut.includes('claim_ready')&&Date.now()<claimUntil)await delay(10);assert.ok(claimOut.includes('claim_ready'),claimErr);
+ rejects(service+'select '+expression('claim',racePayload,raceClaimId)+';',/native_store_claim_busy/u);
+ claimant.stdin.end('commit;\n');assert.equal(await claimDone,0,claimErr);assert.equal(call('claim',racePayload,raceClaimId).data.claim.originalRequestId,raceClaimId);cases++;
  q(`update sandbox_commerce_v1.offers set revision=2 where id='${offer}';`);
  assert.equal((await http('offer',payload)).status,'held');cases++;
  assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');cases++;

@@ -520,6 +520,14 @@ const runRevenueCatMutation = <T>(
     authorityHint?.restoreOnly ?? false,
   ]);
 
+  // A shared SKU is not an intent/resource identity. Returning an existing
+  // purchase promise would let two independent callers claim one transaction.
+  // Restore remains safely coalesced. The original purchase belongs to its
+  // initiating caller; uncertain outcomes require reconciliation, not another
+  // purchase. Package and product share this key.
+  if (mutationKey.startsWith("purchase:") && revenueCatMutationFlights.has(exactFlightKey)) {
+    return Promise.reject(new Error("A purchase for this product is already in progress."));
+  }
   return runKeyedSingleFlight(revenueCatMutationFlights, exactFlightKey, async () => {
     const expectedAuthority = options?.authority ?? await readCurrentAccountSessionAuthority();
     if (!expectedAuthority) {
@@ -541,13 +549,20 @@ export function purchaseRevenueCatPackage(pkg: PurchasesPackage, options?: Reven
   if (!appStorePurchasesEnabled()) return Promise.reject(new Error("App Store purchases are disabled for this build."));
   if (!isPackage(pkg)) return Promise.reject(new Error("RevenueCat package is malformed."));
   const expectedProductIdentifier = normalizeIdentityText(pkg.product.identifier);
+  const expectedPackageIdentifier = pkg.identifier;
   if (pkg.product.identifier !== expectedProductIdentifier) {
     return Promise.reject(new Error("RevenueCat package product identity is malformed."));
   }
   return runRevenueCatMutation(
-    `purchase-package:${expectedProductIdentifier}`,
+    `purchase:${expectedProductIdentifier}`,
     options,
-    () => Purchases.purchasePackage(pkg),
+    () => {
+      if (!isPackage(pkg) || pkg.identifier !== expectedPackageIdentifier
+        || pkg.product.identifier !== expectedProductIdentifier) {
+        return Promise.reject(new Error("RevenueCat package identity changed before purchase."));
+      }
+      return Purchases.purchasePackage(pkg);
+    },
     (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
   );
 }
@@ -562,9 +577,14 @@ export function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct, o
     return Promise.reject(new Error("RevenueCat product identity is malformed."));
   }
   return runRevenueCatMutation(
-    `purchase-product:${expectedProductIdentifier}`,
+    `purchase:${expectedProductIdentifier}`,
     options,
-    () => Purchases.purchaseStoreProduct(product),
+    () => {
+      if (!isStoreProduct(product) || product.identifier !== expectedProductIdentifier) {
+        return Promise.reject(new Error("RevenueCat product identity changed before purchase."));
+      }
+      return Purchases.purchaseStoreProduct(product);
+    },
     (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
   );
 }

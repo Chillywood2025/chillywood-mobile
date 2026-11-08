@@ -81,15 +81,32 @@ test('quote and key snapshots cannot mutate between persistence and transport',a
 const noop=()=>{},doc={addEventListener:noop,removeEventListener:noop,defaultView:globalThis,nodeType:9};
 const container=()=>({addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'});
 doc.documentElement=container();globalThis.document=doc;globalThis.window=globalThis;globalThis.HTMLIFrameElement=class{};globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-function mountFixture(f, flavor=0) {
+function mountFixture(f, flavor=0, sessionOverride=null, canGoBack=true) {
+  const navigation=[];
   let nodes=[];const primitive=name=>function NativePrimitive(props){nodes.push({name,props});return ['Text','ActivityIndicator'].includes(name)?null:React.createElement(React.Fragment,null,props.children);};
-  const native={Platform:{OS:'ios'},StyleSheet:{create:v=>v},...Object.fromEntries(['ActivityIndicator','Pressable','ScrollView','Text','View'].map(n=>[n,primitive(n)]))};
-  const component=load('../../components/monetization/native-store-sandbox-quote-screen.tsx',{'react':React,'react-native':native,'react-native-safe-area-context':{SafeAreaView:primitive('SafeAreaView')},'expo-router':{useLocalSearchParams:()=>({offerId}),useRouter:()=>({back(){}})},
-    '../../_lib/session':{useSession:()=>({user:{id:f.current().userId},authority:f.current(),isLoading:false})},'../../_lib/isolatedTestStoreBuild':{isIsolatedTestStoreFlavor:()=>flavor===1},'../../_lib/isolatedTestStoreV2Build':{isIsolatedTestStoreV2Flavor:()=>flavor===2},'../../_lib/isolatedTestStoreV3Build':{isIsolatedTestStoreV3Flavor:()=>flavor===3},'../../_lib/nativeStoreSandboxQuote':f.api,'../navigation/app-back-button':{AppBackButton:()=>null}});
+  const native={Platform:{OS:'ios'},StyleSheet:{create:v=>v,absoluteFillObject:{position:'absolute',top:0,right:0,bottom:0,left:0}},...Object.fromEntries(['ActivityIndicator','ImageBackground','Pressable','ScrollView','Text','View'].map(n=>[n,primitive(n)]))};
+  const visual=load('../../components/ui/chillywood-visual-system.tsx',{'react':React,'react-native':native,'react-native-svg':{}});
+  const background={asset:'assets/images/chillywood-branded-background.png'};
+  const component=load('../../components/monetization/native-store-sandbox-quote-screen.tsx',{'react':React,'react-native':native,'react-native-safe-area-context':{SafeAreaView:primitive('SafeAreaView')},'expo-router':{useLocalSearchParams:()=>({offerId}),useRouter:()=>({canGoBack:()=>canGoBack,back(){navigation.push('back');},replace(path){navigation.push(path);}})},
+    '../../assets/images/chillywood-branded-background.png':background,'../ui/chillywood-visual-system':visual,
+    '../../_lib/session':{useSession:()=>sessionOverride??({user:{id:f.current().userId},authority:f.current(),isLoading:false})},'../../_lib/isolatedTestStoreBuild':{isIsolatedTestStoreFlavor:()=>flavor===1},'../../_lib/isolatedTestStoreV2Build':{isIsolatedTestStoreV2Flavor:()=>flavor===2},'../../_lib/isolatedTestStoreV3Build':{isIsolatedTestStoreV3Flavor:()=>flavor===3},'../../_lib/nativeStoreSandboxQuote':f.api,'../navigation/app-back-button':{AppBackButton:primitive('AppBackButton')}});
   const root=createRoot(container());const flush=()=>React.act(async()=>{await new Promise(r=>setTimeout(r,0));});
   const button=id=>nodes.filter(n=>n.props.testID===id).at(-1).props;
-  return {button,flush,nodes:()=>nodes,clear(){nodes=[];},render:()=>React.act(async()=>root.render(React.createElement(component.NativeStoreSandboxQuoteScreen))),unmount:()=>React.act(async()=>root.unmount())};
+  return {button,flush,background,visual:visual.CHILLYWOOD_VISUAL,navigation,nodes:()=>nodes,clear(){nodes=[];},render:()=>React.act(async()=>root.render(React.createElement(component.NativeStoreSandboxQuoteScreen))),unmount:()=>React.act(async()=>root.unmount())};
 }
+test('shared branded background and transparent safe-area layout remain on ready, loading, signed-out and held screens; back has Library fallback',async()=>{
+  assert.ok(fs.existsSync(new URL('../../assets/images/chillywood-branded-background.png',import.meta.url)));
+  for(const state of ['ready','loading','signed-out','held']){
+    const session=state==='loading'?{user:null,authority:null,isLoading:true}:state==='signed-out'?{user:null,authority:null,isLoading:false}:null;
+    const m=mountFixture(fixture(),state==='held'?3:0,session,state!=='signed-out');await m.render();await m.flush();
+    const bg=m.nodes().find(n=>n.name==='ImageBackground');assert.equal(bg.props.source,m.background);assert.equal(bg.props.resizeMode,'cover');
+    for(const n of m.nodes().filter(n=>['ImageBackground','SafeAreaView'].includes(n.name)))assert.equal(n.props.style.backgroundColor,undefined,'opaque inner surfaces must not hide branding');
+    assert.ok(m.nodes().some(n=>n.name==='View'&&n.props.pointerEvents==='none'&&n.props.style.backgroundColor==='rgba(0,0,0,0.76)'));
+    assert.ok(m.nodes().some(n=>n.name==='ScrollView'&&n.props.contentContainerStyle.paddingBottom===48));
+    if(state==='ready'){assert.ok(m.nodes().some(n=>n.name==='View'&&n.props.style?.backgroundColor===m.visual.glassBackground));assert.equal(m.button('native-sandbox-prepare').style[0].backgroundColor,m.visual.controlBackground);}
+    m.button('native-sandbox-back').onPress();assert.deepEqual(m.navigation,[state==='signed-out'?'/(tabs)/my-list':'back']);await m.unmount();
+  }
+});
 test('mounted normal screen prepares and recovers for ordinary active user without any store invocation',async()=>{
   const f=fixture(),m=mountFixture(f);await m.render();await m.flush();
   assert.equal(m.button('native-sandbox-prepare').disabled,false);

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSession } from "../../_lib/session";
@@ -9,6 +9,7 @@ import { isIsolatedTestStoreFlavor } from "../../_lib/isolatedTestStoreBuild";
 import { isIsolatedTestStoreV2Flavor } from "../../_lib/isolatedTestStoreV2Build";
 import { captureNativeSandboxQuoteClient, type NativeSandboxQuote, type NativeSandboxQuoteClient, type NativeSandboxSelection, type NativeSandboxStore } from "../../_lib/nativeStoreSandboxQuote";
 import { AppBackButton } from "../navigation/app-back-button";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 // Normal-app, any active account. No admin role or second RevenueCat SDK owner.
 // This screen prepares/reconciles a selection only; it never invokes a store.
@@ -16,15 +17,17 @@ export function NativeStoreSandboxQuoteScreen() {
   const { user, authority, isLoading } = useSession(); const router = useRouter();
   const params = useLocalSearchParams<{ offerId?: string }>(); const offerId = typeof params.offerId === "string" ? params.offerId : "";
   const store = Platform.OS === "ios" ? "APP_STORE" : Platform.OS === "android" ? "PLAY_STORE" : null;
-  return <SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.content}>
-    <AppBackButton accessibilityLabel="Back from store sandbox preparation" testID="native-sandbox-back" onPress={() => router.back()} />
+  return <ImageBackground source={require("../../assets/images/chillywood-branded-background.png")} resizeMode="cover" style={styles.screen}>
+    <View pointerEvents="none" style={styles.overlay} />
+    <SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.content}>
+    <AppBackButton accessibilityLabel="Back from store sandbox preparation" testID="native-sandbox-back" onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/my-list"); }} />
     <Text accessibilityRole="header" style={styles.heading}>Store sandbox preparation</Text>
     <Text style={styles.body}>Review and save a test selection. No store purchase is started here. This does not unlock playback or create payable earnings.</Text>
     {isLoading ? <ActivityIndicator /> : !user || !authority || authority.restoreOnly || authority.state !== "ACTIVE" || user.id !== authority.userId
       ? <Text style={styles.body}>Sign in with an active account to prepare your own selection.</Text>
       : !store || isIsolatedTestStoreFlavor() || isIsolatedTestStoreV2Flavor() || isIsolatedTestStoreV3Flavor() ? <Text style={styles.body}>Use the normal internal iOS or Android app for this store preparation. Test Store debug purchases use their separate flow.</Text>
       : <QuoteSession key={`${offerId}:${store}:${authority.userId}:${authority.sessionGeneration}`} offerId={offerId} store={store} authority={authority} />}
-  </ScrollView></SafeAreaView>;
+  </ScrollView></SafeAreaView></ImageBackground>;
 }
 function Button({ id, children, disabled, action }: { id: string; children: React.ReactNode; disabled: boolean; action(): void }) {
   return <Pressable testID={id} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={action} style={[styles.button, disabled && styles.disabled]}><Text style={styles.buttonText}>{children}</Text></Pressable>;
@@ -75,6 +78,9 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
     <Text style={styles.body}>Native one-time receipt correlation still needs qualification. A displayed price, saved selection or SDK result is not proof of paid access.</Text>
   </View>;
 }
-const styles = StyleSheet.create({ screen: { flex: 1, backgroundColor: "#08111d" }, content: { padding: 20, gap: 16, maxWidth: 760, width: "100%", alignSelf: "center" },
-  heading: { color: "#fff", fontSize: 24, fontWeight: "700" }, body: { color: "#dce6f2", fontSize: 16, lineHeight: 24 }, card: { padding: 16, gap: 14, backgroundColor: "#142235", borderRadius: 14 },
-  button: { minHeight: 48, padding: 14, backgroundColor: "#2b547a", borderRadius: 10 }, buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" }, disabled: { opacity: 0.45 } });
+const styles = StyleSheet.create({ screen: { flex: 1 }, overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.76)" },
+  content: { padding: 20, paddingBottom: 48, gap: 16, maxWidth: 760, width: "100%", alignSelf: "center" },
+  heading: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 26, fontWeight: "900" }, body: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 16, lineHeight: 24 },
+  card: { padding: 16, gap: 14, backgroundColor: CHILLYWOOD_VISUAL.glassBackground, borderColor: CHILLYWOOD_VISUAL.glassBorder, borderWidth: 1, borderRadius: 16 },
+  button: { minHeight: 48, padding: 14, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, borderColor: CHILLYWOOD_VISUAL.controlBorder, borderWidth: 1, borderRadius: 10 },
+  buttonText: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 16, fontWeight: "700" }, disabled: { opacity: 0.45 } });

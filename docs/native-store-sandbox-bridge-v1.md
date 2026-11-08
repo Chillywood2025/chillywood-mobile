@@ -1,9 +1,12 @@
-# Native store sandbox bridge v1: preparatory intake only
+# Native store sandbox bridge v1: source integration
 
 This separate protocol is for normal Apple/Google store evidence. It does not
 change the existing normal RevenueCat SDK identity owner, existing webhook,
 legacy entitlements, Test Store V3 DEBUG restrictions, or any provider setting.
-There is no new deployed endpoint, purchase path or grant writer. The companion
+There is no new deployed endpoint, SDK purchase path or grant writer. The normal
+app now has a source-only quote, durable preparation and recovery route through
+`native-store-sandbox-command-v1`, for ordinary active accounts without an admin
+gate. See `native-store-sandbox-ui-v1.md` and the companion `QUOTE.md`. The companion
 `isolated-runtime/native-store-sandbox-v1` package now supplies a source-only,
 default-off durable journal, tested in disposable PostgreSQL, not installed in
 the app's backend.
@@ -13,10 +16,10 @@ secret and retains bounded original bytes using the existing lossless encrypted
 envelope. Configuration is server-owned and snapshotted before asynchronous
 work. Scope includes the version, project, app, native store and SANDBOX. The
 project comes from the authenticated connection, not the payload. A connection
-revision must immutably pin its app/store configuration in future persistence.
+revision immutably pins its app/store configuration in the journal registry.
 The inherited AES AAD binds connection revision and project, not the bridge,
-app and store tuple directly. A future registry must enforce that immutable
-mapping and revalidate it on replay. `scopeKey` alone is not cryptographic proof.
+app and store tuple directly. The journal registry enforces that immutable
+mapping, and historical replay revalidates it. `scopeKey` alone is not cryptographic proof.
 
 The result is worker-private: observation fields, reconciliation subjects and
 the base64 observation metadata contain plaintext or easily decoded identities.

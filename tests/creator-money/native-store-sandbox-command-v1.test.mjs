@@ -44,3 +44,11 @@ test('actor is detached while request streams',async()=>{
  await new Promise(resolve=>setTimeout(resolve,0));mutable.userId=id(99);mutable.sessionGeneration=id(99);
  controller.enqueue(new TextEncoder().encode(JSON.stringify(input)));controller.close();assert.equal((await response).status,200);
 });
+test('claim request is exact and response never upgrades a client assertion',()=>{
+ const request={...input,command:'claim',payload:{selectionId:'nssv1_selection_'+id(9),transactionIdentifier:'synthetic-tx',productIdentifier:'synthetic-product'}};
+ assert.deepEqual(api.parseNativeStoreSandboxRequestV1(request),request);
+ for(const patch of [{transactionIdentifier:' bad'},{transactionIdentifier:'\ud800'},{productIdentifier:'x'.repeat(513)},{buyerId:id(9)}])assert.equal(api.parseNativeStoreSandboxRequestV1({...request,payload:{...request.payload,...patch}}),null);
+ const claim={id:'nssv1_claim_'+id(10),selectionId:request.payload.selectionId,originalRequestId:request.requestId,originalSessionGeneration:actor.sessionGeneration,createdAt:'2026-11-08T01:00:00Z',transactionIdentifier:'synthetic-tx',productIdentifier:'synthetic-product',evidence:'client_assertion',settlementAllowed:false};
+ const response={...held(request),status:'ok',data:{claim,reason:null}};assert.equal(api.validateNativeStoreSandboxResultV1(response,actor,request),true);
+ for(const patch of [{evidence:'provider_verified'},{settlementAllowed:true},{selectionId:'nssv1_selection_'+id(88)},{transactionIdentifier:'other'},{originalSessionGeneration:id(88)}])assert.equal(api.validateNativeStoreSandboxResultV1({...response,data:{claim:{...claim,...patch},reason:null}},actor,request),false);
+});
