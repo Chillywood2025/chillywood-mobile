@@ -10,8 +10,8 @@ import {setTimeout as delay} from 'node:timers/promises';import process from 'no
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 globalThis.crypto??=webcrypto;
 assert.equal(process.argv[2],'--local-bin');assert.ok([4,5,6].includes(process.argv.length));const flags=process.argv.slice(4);
-assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof'].includes(f)));
-const managed=flags.includes('--managed-install'),reservationProof=flags.includes('--reservation-proof');if(reservationProof)assert.ok(managed);
+assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof','--dispatch-proof'].includes(f)));
+const managed=flags.includes('--managed-install'),reservationProof=flags.includes('--reservation-proof');if(reservationProof||flags.includes('--dispatch-proof'))assert.ok(managed);
 const bin=process.argv[3];assert.ok(path.isAbsolute(bin));const administrator=managed?'fixture_admin':'postgres';
 const here=path.dirname(fileURLToPath(import.meta.url)),runtime=path.resolve(here,'../sandbox-commerce-v1'),root=path.resolve(here,'../..');
 const source=name=>fs.readFileSync(path.join(runtime,name),'utf8');
@@ -323,6 +323,7 @@ try{
  rejects(service+'select '+expression('claim',racePayload,raceClaimId)+';',/native_store_claim_busy/u);
  claimant.stdin.end('commit;\n');assert.equal(await claimDone,0,claimErr);assert.equal(call('claim',racePayload,raceClaimId).data.claim.originalRequestId,raceClaimId);cases++;
  if(reservationProof)await (await import('./reservation.native-cases.mjs')).runReservationCases({q,run,args,bin,env,children,service,json,literal,call,actor,buyer,session,seller,offer,resource,asset,route,binding,nativeCatalog,preparePayload,other,otherSession,newSession,root,ts,...freshNativeFixture('reservation-proof-product')});
+ if(flags.includes('--dispatch-proof'))await (await import('./dispatch-attempt.native-cases.mjs')).runDispatchAttemptCases({q,args,bin,env,children,json,call,actor,buyer,session,other,otherSession,newSession,here,route,asset,clientBindings,clientSource,api,freshNativeFixture,...freshNativeFixture('dispatch-proof-product')});
  q(`update sandbox_commerce_v1.offers set revision=2 where id='${offer}';`);
  assert.equal((await http('offer',payload)).status,'held');cases++;
  assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');cases++;

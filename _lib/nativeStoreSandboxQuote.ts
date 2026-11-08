@@ -23,7 +23,8 @@ export type NativeSandboxClaim = { id: string; selectionId: string; originalRequ
 // originalSessionGeneration here records the local first attempt only. The
 // authenticated server response retains the session of its first insertion,
 // which may be a newer same-account session if that attempt never arrived.
-type SavedClaim = { version: 1; userId: string; prepareRequestId: string; quoteDigest: string; selectionId: string; originalRequestId: string; originalSessionGeneration: string; transactionIdentifier: string; productIdentifier: string };
+export type NativeSandboxConsumedAttemptEvidence = { id: string; reservationId: string; selectionId: string; originalRequestId: string; originalSessionGeneration: string; quoteDigest: string; createdAt: string; state: "consumed"; dispatchAllowed: false; providerQualified: false };
+type SavedClaim = { version: 1 | 2; consumedAttempt?: NativeSandboxConsumedAttemptEvidence; userId: string; prepareRequestId: string; quoteDigest: string; selectionId: string; originalRequestId: string; originalSessionGeneration: string; transactionIdentifier: string; productIdentifier: string };
 type ReservedAttempt = { version: 1; state: "dispatch_reserved"; userId: string; attemptId: string; originalSessionGeneration: string; selectionId: string; prepareRequestId: string; quote: NativeSandboxQuote };
 export type NativeSandboxResponse = { protocol: typeof NATIVE_STORE_SANDBOX_PROTOCOL; command: Command; requestId: string; actor: Actor;
   status: "ok" | "held" | "unknown"; data: { quote?: NativeSandboxQuote | null; selection?: NativeSandboxSelection | null; claim?: NativeSandboxClaim | null; reservation?: NativeSandboxReservation | null; reason: string | null };
@@ -54,6 +55,10 @@ export function validNativeSandboxQuote(v: unknown): v is NativeSandboxQuote {
     && id(v.catalog.bindingId, "nssv1_catalog_") && integer(v.catalog.revision) && text(v.catalog.projectId) && text(v.catalog.appId)
     && ["APP_STORE", "PLAY_STORE"].includes(String(v.catalog.store)) && v.catalog.environment === "SANDBOX" && text(v.catalog.wireProductId);
 }
+const validConsumedAttempt = (v: unknown): v is NativeSandboxConsumedAttemptEvidence => keys(v, ["id", "reservationId", "selectionId", "originalRequestId", "originalSessionGeneration", "quoteDigest", "createdAt", "state", "dispatchAllowed", "providerQualified"])
+  && id(v.id, "nssv1_attempt_") && id(v.reservationId, "nssv1_reservation_") && id(v.selectionId, "nssv1_selection_")
+  && uuid(v.originalRequestId) && uuid(v.originalSessionGeneration) && digest(v.quoteDigest) && typeof v.createdAt === "string"
+  && /^\d{4}-\d\d-\d\dT/u.test(v.createdAt) && Number.isFinite(Date.parse(v.createdAt)) && v.state === "consumed" && v.dispatchAllowed === false && v.providerQualified === false;
 const canonical = (v: unknown): string => JSON.stringify(v, (_k, x) => row(x) ? Object.fromEntries(Object.keys(x).sort().map(k => [k, x[k]])) : x);
 function frozen<T>(v: T): T { if (v && typeof v === "object") { Object.values(v).forEach(frozen); Object.freeze(v); } return v; }
 const copy = <T,>(v: T): T => frozen(JSON.parse(JSON.stringify(v)) as T);
@@ -150,10 +155,12 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
   const readClaim = async (saved: NativeSandboxSaved): Promise<SavedClaim | null> => {
     current(); const raw = await bounded(() => storage.getItem(claimKey)); current(); if (raw === null) return null;
     try { if (raw.length > 4096) return fail("unavailable"); const c: unknown = JSON.parse(raw);
-      if (!keys(c, ["version", "userId", "prepareRequestId", "quoteDigest", "selectionId", "originalRequestId", "originalSessionGeneration", "transactionIdentifier", "productIdentifier"])
-        || c.version !== 1 || c.userId !== actor.userId || c.prepareRequestId !== saved.originalRequestId || c.quoteDigest !== saved.quote.quoteDigest
+      if (!row(c) || !keys(c, ["version", "userId", "prepareRequestId", "quoteDigest", "selectionId", "originalRequestId", "originalSessionGeneration", "transactionIdentifier", "productIdentifier", ...(c.version === 2 ? ["consumedAttempt"] : [])])
+        || ![1, 2].includes(c.version as number) || c.userId !== actor.userId || c.prepareRequestId !== saved.originalRequestId || c.quoteDigest !== saved.quote.quoteDigest
         || !id(c.selectionId, "nssv1_selection_") || !uuid(c.originalRequestId) || !uuid(c.originalSessionGeneration)
         || !claimText(c.transactionIdentifier) || !claimText(c.productIdentifier) || c.productIdentifier !== saved.quote.catalog.wireProductId) return fail("unavailable");
+      if (c.version === 2 && (!validConsumedAttempt(c.consumedAttempt) || c.consumedAttempt.selectionId !== c.selectionId
+        || c.consumedAttempt.quoteDigest !== c.quoteDigest || c.consumedAttempt.originalSessionGeneration !== c.originalSessionGeneration)) return fail("unavailable");
       return copy(c as unknown as SavedClaim);
     } catch { return fail("unavailable"); }
   };
@@ -239,6 +246,42 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
       return Object.freeze({ status: !attempt ? preparingKeys.has(attemptKey(saved.quote)) ? "reservation_write_uncertain" as const : "none" as const : matchesAttempt(attempt, saved, confirmedSelection?.id) ? "dispatch_reserved" as const : "blocked_by_other_selection" as const,
         serverReservationConfirmed: !!attempt && confirmedReservation?.selectionId === attempt.selectionId,
         dispatchAllowed: false as const, providerQualified: false as const });
+    }),
+    // No normal caller/issuer exists yet. The supplied consumed-attempt object
+    // is retained evidence, NEVER provider admission or server attestation.
+    // Capture this closure while its original account is active, before SDK work.
+    createCallbackRetainer: (selectionId: string, consumedEvidence: NativeSandboxConsumedAttemptEvidence) => exclusive(async () => {
+      const selected = confirmedSelection, reservation = confirmedReservation;
+      if (!selected || selected.id !== selectionId || !reservation || reservation.selectionId !== selectionId
+        || !validConsumedAttempt(consumedEvidence) || consumedEvidence.selectionId !== selectionId || consumedEvidence.reservationId !== reservation.id
+        || consumedEvidence.quoteDigest !== selected.quote.quoteDigest || consumedEvidence.originalSessionGeneration !== actor.sessionGeneration) return fail("invalid_request");
+      const consumedAttempt = copy(consumedEvidence), selection = copy(selected);
+      if (preparingKeys.has(claimKey)) return fail("saved_selection_requires_recovery"); preparingKeys.add(claimKey);
+      let retained = false;
+      try {
+        const saved = await readSaved(); if (!saved || saved.originalRequestId !== selection.originalRequestId || canonical(saved.quote) !== canonical(selection.quote)) return fail("invalid_request");
+        const attempt = await readAttempt(saved); if (!attempt || !matchesAttempt(attempt, saved, selectionId) || attempt.attemptId !== reservation.originalRequestId) return fail("invalid_request");
+        if (await readClaim(saved)) { retained = true; return fail("saved_selection_requires_recovery"); }
+        const requestId = newId(); retained = true;
+        let evidenceKey: string | null = null, persistence: Promise<void> | null = null;
+        return (evidence: Readonly<{ productIdentifier: string; transactionIdentifier: string }>, originalAuthority: Readonly<AccountSessionAuthorityBinding>): Promise<void> => {
+          // Deliberately no current(), authentication, send(), or SDK call here:
+          // account retirement cannot discard evidence belonging to this owner.
+          if (!sameAccountSessionAuthority(expected, originalAuthority) || !keys(evidence, ["productIdentifier", "transactionIdentifier"])
+            || evidence.productIdentifier !== saved.quote.catalog.wireProductId || !claimText(evidence.productIdentifier) || !claimText(evidence.transactionIdentifier)) return Promise.reject(new NativeSandboxQuoteError("invalid_request"));
+          const exact = canonical(evidence);
+          if (persistence) return exact === evidenceKey ? persistence : Promise.reject(new NativeSandboxQuoteError("outcome_unknown"));
+          evidenceKey = exact;
+          const claim: SavedClaim = { version: 2, userId: actor.userId, prepareRequestId: saved.originalRequestId, quoteDigest: saved.quote.quoteDigest,
+            selectionId, originalRequestId: requestId, originalSessionGeneration: actor.sessionGeneration, productIdentifier: evidence.productIdentifier,
+            transactionIdentifier: evidence.transactionIdentifier, consumedAttempt };
+          // Snapshot before awaiting storage; uncertainty retains the exact
+          // promise/ID and never permits replacement or automatic retry.
+          const raw = JSON.stringify(claim);
+          persistence = bounded(() => storage.setItem(claimKey, raw)).then(() => undefined).catch(() => fail("outcome_unknown"));
+          return persistence;
+        };
+      } finally { if (!retained) preparingKeys.delete(claimKey); }
     }),
     // Dormant callback sink, not a purchase dispatcher. Only whitelist the
     // transaction ID and exact product; never persist tokens or raw receipts.

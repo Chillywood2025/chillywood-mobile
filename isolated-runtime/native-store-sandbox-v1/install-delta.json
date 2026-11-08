@@ -1,18 +1,18 @@
 {
   "protocol": "native-store-install-delta-v1",
-  "sourceDigest": "edf88fbb5135df9fffe39ca2ba6603ed0256cf31e057d6663af7d85b346c46e2",
-  "addedCatalogSha256": "c2ba5f8795675345bf5686b4447cec00126a510483cd9792e358fe11ed7ffe60",
+  "sourceDigest": "c5baec26fee51c85fe0332105f5785bcde099eac64728709d6c273cb268f85f7",
+  "addedCatalogSha256": "c34db01ff7f21da2d4766570cc7361716cc9e85bae8b14415630e5d9dad358c7",
   "counts": {
-    "column": 1031,
-    "constraint": 675,
-    "function": 192,
-    "index": 252,
+    "column": 1037,
+    "constraint": 679,
+    "function": 193,
+    "index": 255,
     "membership": 8,
-    "policy": 141,
-    "relation": 142,
+    "policy": 142,
+    "relation": 143,
     "role": 4,
     "schema": 2,
-    "trigger": 1003
+    "trigger": 1009
   },
   "publicFunctions": [
     "isolated_paid_video_abandon_v3(p_buyer_id uuid, p_session_id uuid, p_command text, p_request_id uuid, p_configuration_digest text, p_payload jsonb)",

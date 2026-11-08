@@ -58,3 +58,46 @@ flavors. Native provider purchase, refund/restore, signed build and installed
 device behavior remain unproved. Before claiming checkout works, qualify both
 platforms' initial one-time sandbox correlation and test real installed user
 flows, interruption/relaunch, account switch, receipt delay and negative events.
+
+## Dormant original-purchaser evidence retention
+
+The shared RevenueCat purchase owner accepts an optional local evidence retainer.
+It snapshots that callback and the initiating authority before asynchronous work,
+then retains only exact product and transaction identifiers before post-SDK account
+validation can reject a retired session. Restore never invokes this seam. Existing
+callers without a retainer keep their purchase behavior. The seam has no active
+normal-app caller, does not invoke an SDK itself, and grants no dispatch permission.
+
+`createCallbackRetainer(selectionId, consumedEvidence)` must be captured while the
+original account is active, against its exact server-confirmed selection,
+reservation, retained local request and quote. It freezes the consumed-attempt
+identity and returns a local-only sink. Supplied consumed evidence is NOT server
+attestation or provider qualification; there is no authenticated consumed-attempt
+issuer connected to this client. A supplied `consumed` state does not admit an SDK
+call. The sink remains able to save original-account evidence after disposal or
+an account switch, without reading current authentication or making a network call.
+
+The local SavedClaim version 2 record contains only the transaction/product
+whitelist, existing original-account/request/selection scope, and consumed-attempt
+linkage. It stores no raw receipt, purchase token, signature or SDK customer data.
+Exact duplicate callbacks share the same persistence promise; conflicting evidence
+cannot replace the original. Local writes and wrapper retention are bounded.
+A timeout or rejected write is reconciliation-required, never a harmless canceled
+purchase or permission to buy again. A late write may still complete. Changes to
+SDK identifiers while retention is pending cause the wrapper to reject rather
+than return identifiers different from the retained evidence.
+
+Only a later authenticated session of the same original account can use existing
+claim recovery/resend. The public claim payload remains selection, transaction and
+product only: local consumed-attempt linkage is not presented as server-validated
+purchase evidence. The assertion remains unqualified, correlation unsupported and
+settlement disabled. Evidence retention does not solve process death before a
+callback arrives; durable reservation/consumption fences must preserve that
+uncertainty. Real provider receipt correlation and installed no-charge qualification
+are still required before any purchase dispatcher can be enabled.
+
+Focused tests exercise the actual shared wrapper with synthetic deferred SDK
+results, retirement during SDK work and persistence, immutable identifier checks,
+controlled retention deadlines, strict UTF-8 limits, original-account local storage,
+exact/conflicting callbacks and original-account-only recovery. These are source
+proofs, not successful purchases or hosted deployment evidence.

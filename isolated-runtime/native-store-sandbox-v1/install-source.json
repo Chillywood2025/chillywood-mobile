@@ -6,6 +6,7 @@
     "isolated-runtime/native-store-sandbox-v1/quote.sql": "0fa036a446433f8eb52d608bc21f478a476eb9b6c2daf4cc1893321aa7167410",
     "isolated-runtime/native-store-sandbox-v1/claim.sql": "f47ffcf6c52498f55c9c67ef6bbdf1f11a63fcd689186ee756789072ed194ab0",
     "isolated-runtime/native-store-sandbox-v1/reservation.sql": "c53c52864c6328ca6a022fca6b576773db9954b2edbf628b4435ff32080a9e54",
-    "isolated-runtime/native-store-sandbox-v1/install-check.sql": "fbadce2de21bc18f45ebfad56daa3e5fa64ae57910d9c9096a167d97952109f6"
+    "isolated-runtime/native-store-sandbox-v1/install-check.sql": "5d1f0fb1baf803c01485861ba0e1b3a3413703d213e7b9c222f412e9841a771b",
+    "isolated-runtime/native-store-sandbox-v1/dispatch-attempt.sql": "68196483976cdb4cde359c480108a122c6078c34593f235a33b143413e79bd80"
   }
 }

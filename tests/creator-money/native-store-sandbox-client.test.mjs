@@ -348,3 +348,31 @@ test('mounted reservation reads are single-flight and discarded after account re
   if(stop==='account')await m.unmount();
  }
 });
+const consumedEvidence=(selection,reservation)=>({id:`nssv1_attempt_${uuid(95)}`,reservationId:reservation.id,selectionId:selection.id,originalRequestId:uuid(96),originalSessionGeneration:A.sessionGeneration,quoteDigest:selection.quote.quoteDigest,createdAt:'2026-11-08T00:00:00Z',state:'consumed',dispatchAllowed:false,providerQualified:false});
+test('dormant retainer persists original-account evidence after retirement, with exact duplicate-only callbacks',async()=>{
+ const f=fixture(),c=await f.connect(),selection=(await c.prepare(quote())).data.selection;await c.retainPurchaseAttempt(selection.id);const reservation=(await c.recoverPurchaseAttempt()).data.reservation;
+ const consumed=consumedEvidence(selection,reservation),retain=await c.createCallbackRetainer(selection.id,consumed),start=f.calls.length;
+ consumed.id=`nssv1_attempt_${uuid(99)}`;const wait=f.delayStore(),evidence={productIdentifier:'one_time',transactionIdentifier:'original'};
+ const pending=retain(evidence,A);evidence.transactionIdentifier='mutated';f.change(B);c.dispose();
+ const duplicate=retain({productIdentifier:'one_time',transactionIdentifier:'original'},A);assert.equal(duplicate,pending);
+ await assert.rejects(retain({productIdentifier:'one_time',transactionIdentifier:'different'},A),e=>e.code==='outcome_unknown');
+ wait.resolve();await pending;assert.equal(f.calls.length,start);
+ const claim=[...f.memory.values()].map(v=>JSON.parse(v)).find(v=>v.version===2);assert.equal(claim.userId,A.userId);assert.equal(claim.transactionIdentifier,'original');assert.equal(claim.consumedAttempt.id,`nssv1_attempt_${uuid(95)}`);
+ const other=fixture({memory:f.memory});other.change(B);const wrong=await other.connect();await assert.rejects(wrong.retrySavedClaim(),e=>e.code==='invalid_request');assert.equal(other.calls.length,0);wrong.dispose();
+ const restart=fixture({memory:f.memory});restart.change({...A,sessionGeneration:uuid(98)});restart.setTransport(async body=>({ok:true,text:async()=>JSON.stringify(restart.result(body,{claim:claimFor(body,uuid(98)),reason:null}))}));
+ const original=await restart.connect();assert.equal((await original.retrySavedClaim()).data.claim.transactionIdentifier,'original');assert.deepEqual(Object.keys(restart.calls[0].body.payload).sort(),['productIdentifier','selectionId','transactionIdentifier']);original.dispose();
+});
+test('retainer factory refuses absent/incorrect reservation, consumed scope and nonoriginal authority',async()=>{
+ const f=fixture(),c=await f.connect(),selection=(await c.prepare(quote())).data.selection;
+ await assert.rejects(c.createCallbackRetainer(selection.id,{}),e=>e.code==='invalid_request');await c.retainPurchaseAttempt(selection.id);const reservation=(await c.recoverPurchaseAttempt()).data.reservation,good=consumedEvidence(selection,reservation);
+ for(const patch of [{reservationId:`nssv1_reservation_${uuid(99)}`},{selectionId:`nssv1_selection_${uuid(99)}`},{quoteDigest:'e'.repeat(64)},{originalSessionGeneration:uuid(99)},{dispatchAllowed:true},{providerQualified:true},{state:'reserved'}])await assert.rejects(c.createCallbackRetainer(selection.id,{...good,...patch}),e=>e.code==='invalid_request');
+ const retain=await c.createCallbackRetainer(selection.id,good);await assert.rejects(retain({productIdentifier:'one_time',transactionIdentifier:'txn'},B),e=>e.code==='invalid_request');
+ await assert.rejects(retain({productIdentifier:'one_time',transactionIdentifier:'txn',rawReceipt:'secret'},A),e=>e.code==='invalid_request');assert.equal(f.memory.size,2);c.dispose();
+});
+test('retired local retainer timeout stays uncertain, never sends or replaces original evidence',async()=>{
+ const f=fixture({deadlineMs:30}),c=await f.connect(),selection=(await c.prepare(quote())).data.selection;await c.retainPurchaseAttempt(selection.id);const reservation=(await c.recoverPurchaseAttempt()).data.reservation;
+ const retain=await c.createCallbackRetainer(selection.id,consumedEvidence(selection,reservation)),wait=f.delayStore(),start=f.calls.length,evidence={productIdentifier:'one_time',transactionIdentifier:'retained'};
+ c.dispose();const pending=retain(evidence,A);await assert.rejects(pending,e=>e.code==='outcome_unknown');assert.equal(retain(evidence,A),pending);
+ await assert.rejects(retain({...evidence,transactionIdentifier:'replacement'},A),e=>e.code==='outcome_unknown');wait.resolve();await new Promise(r=>setTimeout(r,0));
+ assert.equal(f.calls.length,start);assert.equal([...f.memory.values()].map(v=>JSON.parse(v)).find(v=>v.version===2).transactionIdentifier,'retained');
+});

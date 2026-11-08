@@ -12,6 +12,7 @@ begin
   or exists(select 1 from sandbox_commerce_v1.native_store_catalog_bindings)
   or exists(select 1 from sandbox_commerce_v1.native_store_selections)
   or exists(select 1 from sandbox_commerce_v1.native_store_claims)
+  or exists(select 1 from sandbox_commerce_v1.native_store_dispatch_attempts)
   or exists(select 1 from sandbox_commerce_v1.native_store_reservations)
  then raise exception 'native_store_install_finalization_required';end if;
  return null;

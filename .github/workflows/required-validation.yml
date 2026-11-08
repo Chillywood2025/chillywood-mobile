@@ -380,6 +380,8 @@ jobs:
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install
       - name: Verify native shared-SKU server reservation without purchase dispatch
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --reservation-proof
+      - name: Verify dormant one-shot native attempt consumption and crash recovery
+        run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --dispatch-proof
       - name: Verify prerequisite and caller-owned image identity controls
         run: |
           python3 scripts/ci/paid-video-prerequisites/provision_test.py

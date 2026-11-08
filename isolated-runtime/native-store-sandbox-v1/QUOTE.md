@@ -1,5 +1,29 @@
 # Normal-app native-store quote preparation
 
+## Dormant consumption evidence
+
+`dispatch-attempt.sql` adds an owner-private, append-only attempt per reservation.
+It has no public RPC or grants to application/service roles. First consumption
+rechecks current account, creator, complete quote/media/catalog and default-off
+preparation control within the original transaction budget. The same request
+returns `newlyConsumed:false` after commit; concurrent same-request calls fail
+without waiting. Recovery never inserts or reissues an attempt. Every response
+retains `dispatchAllowed:false` and `providerQualified:false`: consumption is
+not a usable SDK permit, platform qualification, or evidence that purchase ran.
+
+Crash after commit, lost response, SDK errors and cancellation cannot release
+this record for another purchase. Transaction rollback/expiry before commit
+does not consume it. A future qualified dispatcher must observe commit before
+considering any result; no such dispatcher or qualification gate exists here.
+The 40-module source install requires an empty attempt table at commit.
+
+`quote.native.mjs --managed-install --dispatch-proof` exercises actual private
+SQL, repeated and concurrent consumers, expiry rollback, current-media checks,
+and real client retention of the exact returned attempt after account retirement.
+The original account can later resend only its retained unqualified transaction
+assertion through the existing Edge/SQL path. Locally retained attempt fields
+are not authenticated server attestation and do not expand the claim payload.
+
 `quote.sql` is source-only, initially preparation-disabled, installed after the
 current paid-video source and before permissions finalization in a disposable
 test database. No deployment or provider provisioning follows from this file.
@@ -98,7 +122,7 @@ receipt reconciliation. The local reservation alone cannot qualify that workflow
 
 ### Server reservation source proof (not hosted deployed)
 
-`reservation.sql` is included in the pinned 39-module managed install closure.
+`reservation.sql` is included in the pinned 40-module managed install closure.
 Its service-only RPC is routed through the existing authenticated command endpoint
 and dormant mobile client, without SDK activation. The local proof reserves an exact existing selection
 under a database uniqueness constraint for buyer/project/app/store/environment/SKU.
@@ -116,7 +140,7 @@ The helper is not executable by anonymous, authenticated or service roles.
 
 Run `quote.native.mjs --local-bin /absolute/postgresql-17.6/bin --managed-install
 --reservation-proof` for the local proof. The reservation module is now included in the complete
-39-module managed source closure, installed in the disposable database under its
+40-module managed source closure, installed in the disposable database under its
 bounded NOSUPERUSER installer CREATE interval.
 Twenty-two reservation cases and the thirty-three quote/claim/reservation integration cases passed,
 including real HTTP-handler-to-SQL execution, shared-SKU contention with controlled

@@ -44,7 +44,7 @@ test('source binding accepts a clean exact committed closure, rejects wrong head
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   git('init','-q');git('add','.');git('-c','user.name=Synthetic Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Synthetic source binding fixture');const head=git('rev-parse','HEAD');
   const {sourceBinding}=await import(pathToFileURL(path.join(dir,'scripts/native-store-install-prepare.mjs')).href);
-  assert.equal(sourceBinding(head).source,head);assert.equal(sourceBinding(head).modules,39);
+  assert.equal(sourceBinding(head).source,head);assert.equal(sourceBinding(head).modules,40);
   assert.throws(()=>sourceBinding('0'.repeat(40)),/SOURCE_HEAD_MISMATCH/u);
   fs.appendFileSync(path.join(dir,prefix+'claim.sql'),'\n-- mutation during hypothetical transport');
   assert.throws(()=>sourceBinding(head),/TRACKED_SOURCE_DIRTY/u);
