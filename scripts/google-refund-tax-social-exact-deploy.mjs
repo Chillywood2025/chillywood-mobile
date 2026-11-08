@@ -6,7 +6,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {collectSourceBundle,gitReader,sha256} from '../ops/creator-backend-rollout/prepare-edge.mjs';
-import {diagnosticManagementQuery,validateReadContext,HELPER_ERROR_CODES} from './live-room-exact-deploy.mjs';
+import {diagnosticManagementQuery,validateReadContext,HELPER_ERROR_CODES,redundantNotNull} from './live-room-exact-deploy.mjs';
 import {holdsSQL as existingHoldsSQL} from './native-tip-exact-deploy.mjs';
 import {MIGRATIONS as SOCIAL_MIGRATIONS,catalogSQL as socialCatalogSQL,loadBundle as loadSocialBundle} from './social-engagement-exact-deploy.mjs';
 
@@ -58,7 +58,9 @@ export function catalogHashSQL(added=false){
     `select jsonb_build_array('function',n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),pg_get_functiondef(p.oid),p.proacl::text,p.proowner::regrole::text) item from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prokind in ('f','p') and ${fn}`,
     `select jsonb_build_array('relation',n.nspname,c.relname,c.relkind,c.relowner::regrole::text,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity,c.reloptions,c.relpersistence,c.relreplident,case when c.relkind in ('v','m') then pg_get_viewdef(c.oid) else null end) from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind in ('r','p','v','m','S','f') and ${rel}`,
     `select jsonb_build_array('column',n.nspname,c.relname,a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attacl::text,pg_get_expr(d.adbin,d.adrelid),a.attidentity,a.attgenerated,a.attcollation::regcollation::text) from pg_class c join pg_namespace n on n.oid=c.relnamespace join pg_attribute a on a.attrelid=c.oid left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum where c.relkind in ('r','p','v','m','S','f') and a.attnum>0 and not a.attisdropped and ${rel}`,
-    `select jsonb_build_array('constraint',n.nspname,c.relname,k.conname,pg_get_constraintdef(k.oid),k.convalidated) from pg_constraint k join pg_class c on c.oid=k.conrelid join pg_namespace n on n.oid=c.relnamespace where ${rel}`,
+    // PG18 duplicates ordinary NOT NULL in pg_constraint; PG17 represents it
+    // only in pg_attribute. Keep attnotnull above and every nonredundant row.
+    `select jsonb_build_array('constraint',n.nspname,c.relname,k.conname,pg_get_constraintdef(k.oid),k.convalidated) from pg_constraint k join pg_class c on c.oid=k.conrelid join pg_namespace n on n.oid=c.relnamespace where ${rel} and not ${redundantNotNull('k')}`,
     `select jsonb_build_array('index',n.nspname,c.relname,pg_get_indexdef(i.indexrelid),i.indisvalid,i.indisready) from pg_index i join pg_class c on c.oid=i.indrelid join pg_namespace n on n.oid=c.relnamespace where ${rel}`,
     `select jsonb_build_array('trigger',n.nspname,c.relname,t.tgname,pg_get_triggerdef(t.oid),t.tgenabled) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and ${rel}`,
     `select jsonb_build_array('policy',n.nspname,c.relname,p.polname,p.polcmd,p.polpermissive,(select array_agg(r::regrole::text order by r::regrole::text) from unnest(p.polroles) r),pg_get_expr(p.polqual,p.polrelid),pg_get_expr(p.polwithcheck,p.polrelid)) from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace where ${rel}`,

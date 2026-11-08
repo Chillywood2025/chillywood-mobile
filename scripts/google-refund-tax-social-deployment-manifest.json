@@ -26,7 +26,7 @@
     "deployReady": false,
     "meaning": "Read-only SELECT observation before all three predecessors. No credentials accessed. This is not a post-predecessor baseline or Management API transport qualification."
   },
-  "addedCatalogSha256": "39159c6f49dd220468376fa243c4be2b42c859342b92d0e1b916e694458dcba9",
+  "addedCatalogSha256": "10bffb46a67a595be1e04869b5a73b438a1b33b158d1c59ad8e5a5774e9a7054",
   "edge": [
     {
       "name": "google-play-external-reporter",

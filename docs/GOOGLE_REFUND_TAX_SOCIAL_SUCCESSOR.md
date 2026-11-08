@@ -39,3 +39,33 @@ Existing locking and rollback behavior is unchanged: bounded table-lock waits,
 transactional migration plus exact history receipt, no provider call, activation,
 schedule or write retry. Lost write responses require independent readback. A
 committed installation is retained for forward repair, not destructive rollback.
+
+## Native catalog portability
+
+The successor normalizes only the existing reviewed `redundantNotNull` predicate:
+PostgreSQL 18 duplicates ordinary, enforced table NOT NULL constraints in
+`pg_constraint`; PostgreSQL 17 stores their semantics in `pg_attribute` alone.
+Column `attnotnull` remains fingerprinted, and unusual/nonredundant constraints
+remain included. The original runner, manifest and migration are not changed.
+
+Independent installation of the immutable target source in local PostgreSQL
+17.6 and PGlite/PostgreSQL 18.3 produces the same normalized target digest:
+`10bffb46a67a595be1e04869b5a73b438a1b33b158d1c59ad8e5a5774e9a7054`.
+The older unnormalized PGlite digest differs only by seven redundant NOT NULL
+rows. Neither digest was adopted from the production target.
+
+`tests/google-refund-tax-social-catalog.test.mjs` verifies source derivation and
+rejects actual nullability, check, foreign-key, grant, RLS and default drift.
+To additionally run native PostgreSQL 17 qualification, set
+`NATIVE_DEPLOYMENT_PG_BIN` to local PostgreSQL 17 binaries with pgcrypto/pg_trgm
+installed and `NATIVE_PG_DRIVER` to an absolute `pg@8.16.3/lib/index.js` path.
+The native adapter creates its own temporary cluster and unique Unix socket,
+disables TCP, verifies its actual data directory and cleans up its owned server.
+It never connects to an existing server using PGHOST/PGPORT or credentials.
+
+The full replay uses a synthetic historical fixture, not the production
+baseline. Native replay additionally proves a real second-session migration
+history lock wait and rejection of a plan made stale by the other transaction.
+It also covers rollback and reconciliation after a simulated lost response to a
+successful local commit. These checks do not satisfy the independent live
+baseline or Management/Edge transport prerequisites above.
