@@ -46,11 +46,14 @@ Install `claim.sql` after `quote.sql`, before permissions finalization. The same
 authenticated command endpoint accepts `claim` with `{selectionId,
 transactionIdentifier,productIdentifier}` and `claim-recover` with `{selectionId}`.
 `data.claim` retains an immutable client assertion, never a receipt or allocation.
-An exact retry must retain its request ID, payload and submitting session. A
+An exact retry must retain its request ID and payload. A
 different current session of the same account can submit a historical selection's
 previously unrecorded assertion or recover an existing one after logout/crash.
 The claim's `originalSessionGeneration` identifies its original SUBMITTING session;
-the selection retains its own originating session independently. Other accounts
+the selection retains its own originating session independently. An exact
+same-account resend from a new valid session returns the first committed
+assertion unchanged, or inserts it using the current session if the old request
+never committed. It never replaces the assertion or invokes a purchase. Other accounts
 cannot submit/read it, and historical capture does not reauthorize withdrawn media.
 
 Assertions are unique per selection, not globally per transaction. Unverified

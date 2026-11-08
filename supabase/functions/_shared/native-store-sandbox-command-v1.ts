@@ -43,7 +43,7 @@ export function validateNativeStoreSandboxResultV1(v:unknown,actor:NativeStoreSa
  if(d.reason!==null)return false;
  if(request.command==="claim"||request.command==="claim-recover"){
   if(!validNativeStoreSandboxClaimV1(d.claim)||d.claim.selectionId!==request.payload.selectionId)return false;
-  return request.command==="claim-recover"||(d.claim.originalRequestId===request.requestId&&d.claim.originalSessionGeneration===actor.sessionGeneration
+  return request.command==="claim-recover"||(d.claim.originalRequestId===request.requestId
    &&d.claim.transactionIdentifier===request.payload.transactionIdentifier&&d.claim.productIdentifier===request.payload.productIdentifier);
  }
  if(request.command==="offer")return validNativeStoreSandboxQuoteV1(d.quote)&&d.quote.offerId===request.payload.offerId&&row(d.quote.catalog)&&d.quote.catalog.store===request.payload.store&&d.quote.creatorId!==actor.userId;

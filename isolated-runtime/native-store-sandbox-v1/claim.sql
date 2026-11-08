@@ -48,8 +48,10 @@ begin
   select * into c from sandbox_commerce_v1.native_store_claims where buyer_id=p_user and selection_id=sid;
   if p_command='claim' then
    if c.id is not null then
-    if row(c.session_id,c.request_id,c.transaction_identifier,c.product_identifier) is distinct from
-       row(p_session,p_request,p_payload->>'transactionIdentifier',p_payload->>'productIdentifier') then raise exception 'native_store_claim_conflict';end if;
+    -- Exact same-account assertion resends may cross sessions after an unknown
+    -- write. The first successful insertion's submitting session stays immutable.
+    if row(c.request_id,c.transaction_identifier,c.product_identifier) is distinct from
+       row(p_request,p_payload->>'transactionIdentifier',p_payload->>'productIdentifier') then raise exception 'native_store_claim_conflict';end if;
    else
     -- A current session may retain a same-account historical SDK assertion
     -- after logout/crash. session_id below is the submitting session, not proof

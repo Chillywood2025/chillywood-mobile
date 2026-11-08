@@ -17,9 +17,14 @@ export type NativeSandboxQuote = {
 };
 export type NativeSandboxSelection = { id: string; originalRequestId: string; originalSessionGeneration: string; createdAt: string; quote: NativeSandboxQuote };
 type Actor = { userId: string; accountId: string; sessionGeneration: string };
-type Command = "offer" | "prepare" | "recover";
+type Command = "offer" | "prepare" | "recover" | "claim" | "claim-recover";
+export type NativeSandboxClaim = { id: string; selectionId: string; originalRequestId: string; originalSessionGeneration: string; createdAt: string; transactionIdentifier: string; productIdentifier: string; evidence: "client_assertion"; settlementAllowed: false };
+// originalSessionGeneration here records the local first attempt only. The
+// authenticated server response retains the session of its first insertion,
+// which may be a newer same-account session if that attempt never arrived.
+type SavedClaim = { version: 1; userId: string; prepareRequestId: string; quoteDigest: string; selectionId: string; originalRequestId: string; originalSessionGeneration: string; transactionIdentifier: string; productIdentifier: string };
 export type NativeSandboxResponse = { protocol: typeof NATIVE_STORE_SANDBOX_PROTOCOL; command: Command; requestId: string; actor: Actor;
-  status: "ok" | "held" | "unknown"; data: { quote?: NativeSandboxQuote | null; selection?: NativeSandboxSelection | null; reason: string | null };
+  status: "ok" | "held" | "unknown"; data: { quote?: NativeSandboxQuote | null; selection?: NativeSandboxSelection | null; claim?: NativeSandboxClaim | null; reason: string | null };
   dispatchAllowed: false; correlation: "unsupported" };
 export type NativeSandboxSaved = { version: 1; userId: string; originalSessionGeneration: string; originalRequestId: string; quote: NativeSandboxQuote };
 type Storage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<unknown> };
@@ -31,6 +36,10 @@ const id = (v: unknown, prefix: string): v is string => typeof v === "string" &&
 const integer = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
 const text = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 512 && v.trim() === v && !/[\u0000-\u001f\u007f]/u.test(v)
   && !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(v);
+// Match the claim endpoint's byte limit and scalar restrictions without relying
+// on a TextEncoder polyfill being present in the native JS runtime.
+const claimText = (v: unknown): v is string => text(v) && !/[\ud800-\udfff]/u.test(v)
+  && [...v].reduce((bytes, ch) => { const point = ch.codePointAt(0)!; return bytes + (point < 128 ? 1 : point < 2048 ? 2 : point <= 0xffff ? 3 : 4); }, 0) <= 512;
 const digest = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/u.test(v);
 export function validNativeSandboxQuote(v: unknown): v is NativeSandboxQuote {
   return keys(v, ["offerId", "offerRevision", "resourceId", "resourceRevision", "creatorId", "kind", "amountMinor", "currency", "asset", "catalog", "quoteDigest"])
@@ -55,13 +64,25 @@ const fail = (code: NativeSandboxQuoteError["code"]): never => { throw new Nativ
 const preparingKeys = new Set<string>();
 const newId = () => { const b = new Uint8Array(16); crypto.getRandomValues(b); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
   const h = [...b].map(n => n.toString(16).padStart(2, "0")).join(""); return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`; };
-export function parseNativeSandboxResponse(value: unknown, expected: { actor: Actor; command: Command; requestId: string; offerId: string; store: NativeSandboxStore; saved?: NativeSandboxSaved }): NativeSandboxResponse {
+export function parseNativeSandboxResponse(value: unknown, expected: { actor: Actor; command: Command; requestId: string; offerId: string; store: NativeSandboxStore; saved?: NativeSandboxSaved; claim?: SavedClaim; initialClaim?: boolean }): NativeSandboxResponse {
   if (!keys(value, ["protocol", "command", "requestId", "actor", "status", "data", "dispatchAllowed", "correlation"])
     || value.protocol !== NATIVE_STORE_SANDBOX_PROTOCOL || value.command !== expected.command || value.requestId !== expected.requestId
     || !keys(value.actor, ["userId", "accountId", "sessionGeneration"]) || canonical(value.actor) !== canonical(expected.actor)
-    || !["ok", "held", "unknown"].includes(String(value.status)) || value.status === "unknown" && expected.command !== "recover"
+    || !["ok", "held", "unknown"].includes(String(value.status)) || value.status === "unknown" && expected.command !== "recover" && expected.command !== "claim-recover"
     || value.dispatchAllowed !== false || value.correlation !== "unsupported") return fail("invalid_response");
   const data = value.data;
+  if (expected.command === "claim" || expected.command === "claim-recover") {
+    if (!keys(data, ["claim", "reason"])) return fail("invalid_response");
+    const c = data.claim, s = expected.claim;
+    if (value.status !== "ok") {
+      if (c !== null || typeof data.reason !== "string" || !/^[a-z][a-z0-9_]{0,95}$/u.test(data.reason)) return fail("invalid_response");
+    } else if (!s || data.reason !== null || !keys(c, ["id", "selectionId", "originalRequestId", "originalSessionGeneration", "createdAt", "transactionIdentifier", "productIdentifier", "evidence", "settlementAllowed"])
+      || !id(c.id, "nssv1_claim_") || c.selectionId !== s.selectionId || c.originalRequestId !== s.originalRequestId || !uuid(c.originalSessionGeneration)
+      || expected.initialClaim === true && c.originalSessionGeneration !== expected.actor.sessionGeneration
+      || c.transactionIdentifier !== s.transactionIdentifier || c.productIdentifier !== s.productIdentifier || c.evidence !== "client_assertion" || c.settlementAllowed !== false
+      || typeof c.createdAt !== "string" || !/^\d{4}-\d\d-\d\dT/u.test(c.createdAt) || !Number.isFinite(Date.parse(c.createdAt))) return fail("invalid_response");
+    return copy(value as unknown as NativeSandboxResponse);
+  }
   if (!keys(data, [expected.command === "offer" ? "quote" : "selection", "reason"])
     || !(data.reason === null || typeof data.reason === "string" && /^[a-z][a-z0-9_]{0,95}$/u.test(data.reason))) return fail("invalid_response");
   const selected = expected.command === "offer" ? data.quote : row(data.selection) ? data.selection.quote : null;
@@ -78,7 +99,8 @@ export function parseNativeSandboxResponse(value: unknown, expected: { actor: Ac
 }
 
 /** Each retained key belongs to one account/offer/store. Save BEFORE dispatch;
- * unknown replies never permit a replacement prepare. Recovery is read-only. */
+ * Unknown replies never permit a replacement prepare or purchase. Recovery
+ * reads are separate from explicit resending of an identical saved assertion. */
 export async function captureNativeSandboxQuoteClient(authority: AccountSessionAuthorityBinding, offerId: string, store: NativeSandboxStore,
   options: { storage?: Storage; deadlineMs?: number } = {}) {
   const expected = Object.freeze({ ...authority }), storage = options.storage ?? AsyncStorage, timeout = options.deadlineMs ?? 15000;
@@ -99,6 +121,8 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
   catch { retired = true; unsubscribe(); return fail("authority_retired"); }
   const actor = Object.freeze({ userId: expected.userId, accountId: expected.accountId, sessionGeneration: expected.sessionGeneration });
   const storageKey = `@chillywood/native-store-quote:v1:${actor.userId}:${store}:${offerId}`;
+  const claimKey = `${storageKey}:claim`;
+  let confirmedSelection: NativeSandboxSelection | null = null;
   const readSaved = async (): Promise<NativeSandboxSaved | null> => {
     current(); const raw = await bounded(() => storage.getItem(storageKey)); current(); if (raw === null) return null;
     try { if (raw.length > 16384) return fail("unavailable"); const v: unknown = JSON.parse(raw);
@@ -108,15 +132,27 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
       return copy(v as unknown as NativeSandboxSaved);
     } catch { return fail("unavailable"); }
   };
-  const send = async (command: Command, payload: unknown, saved?: NativeSandboxSaved): Promise<NativeSandboxResponse> => {
-    current(); const requestId = command === "prepare" ? saved!.originalRequestId : newId();
+  const readClaim = async (saved: NativeSandboxSaved): Promise<SavedClaim | null> => {
+    current(); const raw = await bounded(() => storage.getItem(claimKey)); current(); if (raw === null) return null;
+    try { if (raw.length > 4096) return fail("unavailable"); const c: unknown = JSON.parse(raw);
+      if (!keys(c, ["version", "userId", "prepareRequestId", "quoteDigest", "selectionId", "originalRequestId", "originalSessionGeneration", "transactionIdentifier", "productIdentifier"])
+        || c.version !== 1 || c.userId !== actor.userId || c.prepareRequestId !== saved.originalRequestId || c.quoteDigest !== saved.quote.quoteDigest
+        || !id(c.selectionId, "nssv1_selection_") || !uuid(c.originalRequestId) || !uuid(c.originalSessionGeneration)
+        || !claimText(c.transactionIdentifier) || !claimText(c.productIdentifier) || c.productIdentifier !== saved.quote.catalog.wireProductId) return fail("unavailable");
+      return copy(c as unknown as SavedClaim);
+    } catch { return fail("unavailable"); }
+  };
+  const send = async (command: Command, payload: unknown, saved?: NativeSandboxSaved, claim?: SavedClaim, initialClaim = false): Promise<NativeSandboxResponse> => {
+    current(); const requestId = command === "prepare" ? saved!.originalRequestId : command === "claim" ? claim!.originalRequestId : newId();
     try { const value = await bounded(async signal => {
       const response = await fetch(`${SUPABASE_URL.replace(/\/+$/u, "")}/functions/v1/native-store-sandbox-command-v1`, { method: "POST", signal,
         headers: { Authorization: `Bearer ${captured.accessToken}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json", "x-chillywood-platform": store === "APP_STORE" ? "ios" : "android" },
         body: JSON.stringify({ protocol: NATIVE_STORE_SANDBOX_PROTOCOL, command, requestId, payload }) });
       current(); if (!response.ok) return fail("unavailable"); const body = await response.text(); current(); if (body.length > 65536) return fail("invalid_response"); return JSON.parse(body) as unknown;
-    }); current(); return parseNativeSandboxResponse(value, { actor, command, requestId, offerId, store, saved }); }
-    catch { current(); return fail(command === "prepare" ? "outcome_unknown" : "unavailable"); }
+    }); current(); const parsed = parseNativeSandboxResponse(value, { actor, command, requestId, offerId, store, saved, claim, initialClaim });
+      if (command === "prepare" || command === "recover") confirmedSelection = parsed.data.selection ?? null;
+      return parsed; }
+    catch { current(); return fail(command === "prepare" || command === "claim" ? "outcome_unknown" : "unavailable"); }
   };
   const exclusive = async <T,>(operation: () => Promise<T>): Promise<T> => { current(); if (busy) return fail("unavailable"); busy = true; try { return await operation(); } finally { busy = false; } };
   return Object.freeze({ actor, readSaved,
@@ -135,6 +171,32 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
       } finally { if (!retainGuard) preparingKeys.delete(storageKey); }
     }),
     recover: () => exclusive(async () => { const saved = await readSaved(); if (!saved) return fail("invalid_request"); return send("recover", { originalRequestId: saved.originalRequestId }, saved); }),
+    // Dormant callback sink, not a purchase dispatcher. Only whitelist the
+    // transaction ID and exact product; never persist tokens or raw receipts.
+    captureCallback: (selectionId: string, callback: unknown) => exclusive(async () => {
+      const selection = confirmedSelection;
+      if (!selection || selection.id !== selectionId || !row(callback) || callback.productIdentifier !== selection.quote.catalog.wireProductId
+        || !row(callback.transaction) || callback.transaction.productIdentifier !== callback.productIdentifier || !claimText(callback.productIdentifier) || !claimText(callback.transaction.transactionIdentifier)) return fail("invalid_request");
+      const transactionIdentifier = callback.transaction.transactionIdentifier, productIdentifier = selection.quote.catalog.wireProductId;
+      if (preparingKeys.has(claimKey)) return fail("saved_selection_requires_recovery"); preparingKeys.add(claimKey);
+      let retainGuard = false;
+      try {
+        const saved = await readSaved(); if (!saved || canonical(saved.quote) !== canonical(selection.quote) || saved.originalRequestId !== selection.originalRequestId) return fail("invalid_request");
+        if (await readClaim(saved)) { retainGuard = true; return fail("saved_selection_requires_recovery"); }
+        const claim: SavedClaim = { version: 1, userId: actor.userId, prepareRequestId: saved.originalRequestId, quoteDigest: saved.quote.quoteDigest,
+          selectionId, originalRequestId: newId(), originalSessionGeneration: actor.sessionGeneration, transactionIdentifier, productIdentifier };
+        retainGuard = true;
+        await bounded(() => storage.setItem(claimKey, JSON.stringify(claim))); current();
+        return await send("claim", { selectionId, transactionIdentifier, productIdentifier }, saved, claim, true);
+      } finally { if (!retainGuard) preparingKeys.delete(claimKey); }
+    }),
+    recoverClaim: () => exclusive(async () => { const saved = await readSaved(); if (!saved) return fail("invalid_request");
+      const claim = await readClaim(saved); if (!claim) return fail("invalid_request"); return send("claim-recover", { selectionId: claim.selectionId }, saved, claim); }),
+    // Explicit evidence resubmission only. Same immutable request and payload;
+    // never starts a purchase or invents a replacement assertion after timeout.
+    retrySavedClaim: () => exclusive(async () => { const saved = await readSaved(); if (!saved) return fail("invalid_request");
+      const claim = await readClaim(saved); if (!claim) return fail("invalid_request");
+      return send("claim", { selectionId: claim.selectionId, transactionIdentifier: claim.transactionIdentifier, productIdentifier: claim.productIdentifier }, saved, claim); }),
   });
 }
 export type NativeSandboxQuoteClient = Awaited<ReturnType<typeof captureNativeSandboxQuoteClient>>;

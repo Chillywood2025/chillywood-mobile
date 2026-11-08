@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { webcrypto } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 const require = createRequire(import.meta.url), ts = require('typescript'), React = require('react'), { createRoot } = require('react-dom/client');
 const uuid = n => `e0000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const A = { userId:uuid(1),accountId:uuid(1),sessionGeneration:uuid(2),state:'ACTIVE',restoreOnly:false }, B = {...A,userId:uuid(3),accountId:uuid(3),sessionGeneration:uuid(4)};
@@ -79,6 +80,85 @@ test('quote and key snapshots cannot mutate between persistence and transport',a
 });
 
 const noop=()=>{},doc={addEventListener:noop,removeEventListener:noop,defaultView:globalThis,nodeType:9};
+const sdkCallback=(transactionIdentifier='native-txn-1')=>({productIdentifier:'one_time',transaction:{transactionIdentifier,productIdentifier:'one_time',purchaseDate:'2026-11-08T01:00:00Z',purchaseToken:'MUST_NOT_PERSIST'},rawReceipt:'MUST_NOT_PERSIST'});
+const claimFor=(body,session=A.sessionGeneration)=>({id:`nssv1_claim_${uuid(25)}`,selectionId:body.payload.selectionId,originalRequestId:body.requestId,originalSessionGeneration:session,createdAt:'2026-11-08T01:00:00Z',transactionIdentifier:body.payload.transactionIdentifier,productIdentifier:body.payload.productIdentifier,evidence:'client_assertion',settlementAllowed:false});
+test('callback stores only exact transaction assertion before claim and process restart recovers same-account claim',async()=>{
+  const f=fixture(),c=await f.connect(),s=(await c.prepare(quote())).data.selection;
+  let serverClaim;
+  f.setTransport(async body=>{assert.equal(body.command,'claim');assert.ok([...f.memory.values()].some(v=>v.includes(body.requestId)));serverClaim=claimFor(body);return{ok:true,text:async()=>JSON.stringify(f.result(body,{claim:serverClaim,reason:null}))};});
+  const response=await c.captureCallback(s.id,sdkCallback());assert.equal(response.data.claim.evidence,'client_assertion');assert.equal(response.data.claim.settlementAllowed,false);
+  assert.equal([...f.memory.values()].some(v=>v.includes('MUST_NOT_PERSIST')||v.includes('purchaseDate')||v.includes('purchaseToken')),false);
+  await assert.rejects(c.captureCallback(s.id,sdkCallback('another')),e=>e.code==='saved_selection_requires_recovery');c.dispose();
+  const restarted=fixture({memory:f.memory});restarted.change({...A,sessionGeneration:uuid(26)});
+  restarted.setTransport(async body=>{assert.equal(body.command,'claim-recover');assert.deepEqual(body.payload,{selectionId:s.id});return{ok:true,text:async()=>JSON.stringify(restarted.result(body,{claim:serverClaim,reason:null}))};});
+  const next=await restarted.connect();assert.equal((await next.recoverClaim()).data.claim.originalRequestId,serverClaim.originalRequestId);next.dispose();
+  const other=fixture({memory:f.memory});other.change(B);const wrong=await other.connect();await assert.rejects(wrong.recoverClaim(),e=>e.code==='invalid_request');assert.equal(other.calls.length,0);wrong.dispose();
+});
+test('unknown claim response is recovery-only across restart and never redispatches callback',async()=>{
+  const f=fixture({deadlineMs:30}),c=await f.connect(),s=(await c.prepare(quote())).data.selection;let recorded;
+  f.setTransport(body=>{recorded=claimFor(body);return new Promise(()=>{});});
+  await assert.rejects(c.captureCallback(s.id,sdkCallback()),e=>e.code==='outcome_unknown');await assert.rejects(c.captureCallback(s.id,sdkCallback()),e=>e.code==='saved_selection_requires_recovery');c.dispose();
+  const restarted=fixture({memory:f.memory});restarted.setTransport(async body=>({ok:true,text:async()=>JSON.stringify(restarted.result(body,{claim:recorded,reason:null}))}));
+  const next=await restarted.connect();assert.equal((await next.recoverClaim()).data.claim.transactionIdentifier,'native-txn-1');assert.deepEqual(restarted.calls.map(c=>c.body.command),['claim-recover']);next.dispose();
+});
+test('claim recovery rejects changed ownership, assertion, transaction, or authority fields',async()=>{
+  const f=fixture(),c=await f.connect(),s=(await c.prepare(quote())).data.selection;let original;
+  f.setTransport(async body=>{original=claimFor(body);return{ok:true,text:async()=>JSON.stringify(f.result(body,{claim:original,reason:null}))};});await c.captureCallback(s.id,sdkCallback());
+  for(const mutate of [v=>v.actor.userId=B.userId,v=>v.dispatchAllowed=true,v=>v.correlation='verified',v=>v.data.claim.settlementAllowed=true,v=>v.data.claim.evidence='provider_verified',v=>v.data.claim.selectionId=`nssv1_selection_${uuid(99)}`,v=>v.data.claim.transactionIdentifier='other',v=>v.data.claim.productIdentifier='other',v=>v.data.claim.originalRequestId=uuid(99),v=>v.data.claim.originalSessionGeneration='invalid',v=>v.data.claim.extra='grant']){
+    f.setTransport(async body=>{const value=f.result(body,{claim:clone(original),reason:null});mutate(value);return{ok:true,text:async()=>JSON.stringify(value)};});await assert.rejects(c.recoverClaim(),e=>e.code==='unavailable');
+  }
+  f.setTransport(async body=>({ok:true,text:async()=>JSON.stringify(f.result(body,{claim:null,reason:'claim_unknown'},'unknown'))}));assert.equal((await c.recoverClaim()).status,'unknown');c.dispose();
+});
+test('explicit saved assertion retry keeps exact request across a new session whether old write committed or never arrived',async()=>{
+  for(const committed of [false,true]){
+    const f=fixture({deadlineMs:30}),c=await f.connect(),selection=(await c.prepare(quote())).data.selection;let first,serverClaim=null;
+    f.setTransport(body=>{first=body;if(committed)serverClaim=claimFor(body);return new Promise(()=>{});});
+    await assert.rejects(c.captureCallback(selection.id,sdkCallback()),e=>e.code==='outcome_unknown');c.dispose();const before=[...f.memory.entries()];
+    const restarted=fixture({memory:f.memory});restarted.change({...A,sessionGeneration:uuid(27)});
+    restarted.setTransport(async body=>{
+      if(body.command==='claim-recover')return{ok:true,text:async()=>JSON.stringify(restarted.result(body,{claim:serverClaim,reason:serverClaim?null:'claim_unknown'},serverClaim?'ok':'unknown'))};
+      assert.deepEqual(body,first);serverClaim??=claimFor(body,restarted.current().sessionGeneration);
+      return{ok:true,text:async()=>JSON.stringify(restarted.result(body,{claim:serverClaim,reason:null}))};
+    });
+    const next=await restarted.connect();assert.equal((await next.recoverClaim()).status,committed?'ok':'unknown');
+    const retry=await next.retrySavedClaim();assert.equal(retry.data.claim.originalSessionGeneration,committed?A.sessionGeneration:uuid(27));
+    assert.equal((await next.retrySavedClaim()).data.claim.id,retry.data.claim.id);assert.deepEqual([...f.memory.entries()],before);
+    assert.deepEqual(restarted.calls.map(v=>v.body.command),['claim-recover','claim','claim']);next.dispose();
+    const other=fixture({memory:f.memory});other.change(B);const wrong=await other.connect();await assert.rejects(wrong.retrySavedClaim(),e=>e.code==='invalid_request');assert.equal(other.calls.length,0);wrong.dispose();
+  }
+});
+test('callback transaction metadata honors UTF-8 byte bounds and rejects newline and lone surrogates',async()=>{
+  const f=fixture(),c=await f.connect(),s=(await c.prepare(quote())).data.selection;
+  for(const tx of ['😀'.repeat(129),'txn\nvalue','txn\ud800','txn\udfff'])await assert.rejects(c.captureCallback(s.id,sdkCallback(tx)),e=>e.code==='invalid_request');
+  assert.equal(f.calls.length,1);
+  f.setTransport(async body=>({ok:true,text:async()=>JSON.stringify(f.result(body,{claim:claimFor(body),reason:null}))}));
+  const tx='😀'.repeat(128);assert.equal(Buffer.byteLength(tx,'utf8'),512);
+  assert.equal((await c.captureCallback(s.id,sdkCallback(tx))).data.claim.transactionIdentifier,tx);c.dispose();
+});
+test('multiple uncertain same-account retries preserve the intermediate session that actually inserted the assertion',async()=>{
+  const f=fixture({deadlineMs:30}),c=await f.connect(),selection=(await c.prepare(quote())).data.selection;let request,claim;
+  f.setTransport(body=>{request=body;return new Promise(()=>{});});await assert.rejects(c.captureCallback(selection.id,sdkCallback()),e=>e.code==='outcome_unknown');c.dispose();
+  const middle=fixture({memory:f.memory,deadlineMs:30});middle.change({...A,sessionGeneration:uuid(28)});middle.setTransport(body=>{assert.deepEqual(body,request);claim=claimFor(body,uuid(28));return new Promise(()=>{});});
+  const second=await middle.connect();await assert.rejects(second.retrySavedClaim(),e=>e.code==='outcome_unknown');second.dispose();
+  const latest=fixture({memory:f.memory});latest.change({...A,sessionGeneration:uuid(29)});latest.setTransport(async body=>{assert.deepEqual(body,request);return{ok:true,text:async()=>JSON.stringify(latest.result(body,{claim,reason:null}))};});
+  const third=await latest.connect();assert.equal((await third.retrySavedClaim()).data.claim.originalSessionGeneration,uuid(28));third.dispose();
+});
+test('callback rejects unconfirmed/mismatched selection or product and snapshots identifiers before storage wait',async()=>{
+  const f=fixture(),c=await f.connect();await assert.rejects(c.captureCallback(`nssv1_selection_${uuid(11)}`,sdkCallback()),e=>e.code==='invalid_request');const s=(await c.prepare(quote())).data.selection;
+  for(const [selected,cb] of [[`nssv1_selection_${uuid(99)}`,sdkCallback()],[s.id,{...sdkCallback(),productIdentifier:'other'}],[s.id,{...sdkCallback(),transaction:{...sdkCallback().transaction,productIdentifier:'other'}}],[s.id,sdkCallback('')],[s.id,sdkCallback(' txn ')],[s.id,sdkCallback('a'.repeat(513))]])await assert.rejects(c.captureCallback(selected,cb),e=>e.code==='invalid_request');
+  assert.equal(f.calls.length,1);const wait=f.delayStore(),cb=sdkCallback();
+  f.setTransport(async body=>({ok:true,text:async()=>JSON.stringify(f.result(body,{claim:claimFor(body),reason:null}))}));
+  const pending=c.captureCallback(s.id,cb);cb.transaction.transactionIdentifier='mutated';cb.productIdentifier='other';wait.resolve();
+  assert.equal((await pending).data.claim.transactionIdentifier,'native-txn-1');c.dispose();
+});
+test('late or failed callback persistence never dispatches or permits a concurrent replacement; authority gaps retire late claims',async()=>{
+  const f=fixture({deadlineMs:30}),c=await f.connect(),s=(await c.prepare(quote())).data.selection,wait=f.delayStore();
+  await assert.rejects(c.captureCallback(s.id,sdkCallback()),e=>e.code==='unavailable');const other=await f.connect();await other.recover();
+  await assert.rejects(other.captureCallback(s.id,sdkCallback('replacement')),e=>e.code==='saved_selection_requires_recovery');wait.resolve();await new Promise(r=>setTimeout(r,0));assert.equal(f.calls.some(c=>c.body.command==='claim'),false);c.dispose();other.dispose();
+  const g=fixture(),d=await g.connect(),sel=(await d.prepare(quote())).data.selection,late=deferred();let body;
+  g.setTransport(async b=>{body=b;await late.promise;return{ok:true,text:async()=>JSON.stringify(g.result(b,{claim:claimFor(body),reason:null}))};});
+  const pending=d.captureCallback(sel.id,sdkCallback());const rejected=assert.rejects(pending,e=>e.code==='authority_retired');await new Promise(r=>setTimeout(r,0));g.change(B);g.change(A);late.resolve();await rejected;d.dispose();
+});
 const container=()=>({addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'});
 doc.documentElement=container();globalThis.document=doc;globalThis.window=globalThis;globalThis.HTMLIFrameElement=class{};globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 function mountFixture(f, flavor=0, sessionOverride=null, canGoBack=true) {

@@ -135,13 +135,53 @@ try{
  const clientSource=ts.transpileModule(fs.readFileSync(path.join(root,'_lib/nativeStoreSandboxQuote.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
  new Function('exports','require','fetch',clientSource)(clientApi,name=>{assert.ok(Object.hasOwn(clientBindings,name));return clientBindings[name];},async(url,options)=>handler(new Request(url,options)));
  const client=await clientApi.captureNativeSandboxQuoteClient(authority,payload.offerId,payload.store,{storage});
+ let clientClaim;
  try{
   const actualQuote=await client.offer();assert.deepEqual(actualQuote.data.quote,quote);
   const actualPrepared=await client.prepare(actualQuote.data.quote),actualRecovered=await client.recover();
   assert.deepEqual(actualRecovered.data.selection,actualPrepared.data.selection);assert.equal(memory.size,1);
   await assert.rejects(client.prepare(quote),e=>e.code==='saved_selection_requires_recovery');
+  clientClaim=await client.captureCallback(actualPrepared.data.selection.id,{productIdentifier:nativeCatalog.wireProductId,
+   transaction:{productIdentifier:nativeCatalog.wireProductId,transactionIdentifier:'synthetic-client-callback',purchaseToken:'synthetic-secret-token',originalJson:'synthetic-private-receipt',signature:'synthetic-private-signature'},customerInfo:{private:'synthetic-private-customer'}});
+  assert.equal(clientClaim.data.claim.evidence,'client_assertion');assert.equal(clientClaim.data.claim.settlementAllowed,false);
+  assert.equal(clientClaim.dispatchAllowed,false);assert.equal(clientClaim.correlation,'unsupported');
+  assert.deepEqual((await client.recoverClaim()).data.claim,clientClaim.data.claim);assert.equal(memory.size,2);
+  for(const secret of ['synthetic-secret-token','synthetic-private-receipt','synthetic-private-signature','synthetic-private-customer'])assert.equal([...memory.values()].join('').includes(secret),false);
+  await assert.rejects(client.captureCallback(actualPrepared.data.selection.id,{productIdentifier:nativeCatalog.wireProductId,transaction:{productIdentifier:nativeCatalog.wireProductId,transactionIdentifier:'synthetic-client-callback'}}),e=>e.code==='saved_selection_requires_recovery');
  }finally{client.dispose();}cases++;
+ const restartedClient=await clientApi.captureNativeSandboxQuoteClient(authority,payload.offerId,payload.store,{storage});
+ try{assert.deepEqual((await restartedClient.recoverClaim()).data.claim,clientClaim.data.claim);}
+ finally{restartedClient.dispose();}cases++;
+ // Both sides of an uncertain claim write, through the actual client after a
+ // same-account session change. Retry sends only the persisted assertion.
+ for(const committed of [false,true]){
+  const savedMemory=new Map(),savedStorage={getItem:async key=>savedMemory.get(key)??null,setItem:async(key,value)=>{savedMemory.set(key,value);}};
+  let liveAuthority={...authority},dropClaim=true;const retryApi={};let assertionSends=0;
+  const retryBindings={...clientBindings,'./accountSessionAuthority':{...clientBindings['./accountSessionAuthority'],getCurrentAccountSessionAuthoritySnapshot:()=>liveAuthority},
+   './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority:liveAuthority,accessToken:'synthetic-local-auth'})}};
+  const retryHandler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>({userId:liveAuthority.userId,accountId:liveAuthority.accountId,sessionGeneration:liveAuthority.sessionGeneration}),execute:async({actor:a,request:r})=>call(r.command,r.payload,r.requestId,a)});
+  new Function('exports','require','fetch',clientSource)(retryApi,name=>{assert.ok(Object.hasOwn(retryBindings,name));return retryBindings[name];},async(url,options)=>{
+   const command=JSON.parse(options.body).command;
+   if(command==='claim'){assertionSends++;if(dropClaim){if(committed)await retryHandler(new Request(url,options));throw Error('synthetic interrupted transport');}}
+   return retryHandler(new Request(url,options));
+  });
+  const before=await retryApi.captureNativeSandboxQuoteClient(liveAuthority,payload.offerId,payload.store,{storage:savedStorage});
+  try{
+   const selection=(await before.prepare((await before.offer()).data.quote)).data.selection;
+   await assert.rejects(before.captureCallback(selection.id,{productIdentifier:nativeCatalog.wireProductId,transaction:{productIdentifier:nativeCatalog.wireProductId,transactionIdentifier:'synthetic-unknown-'+committed}}),e=>e.code==='outcome_unknown');
+  }finally{before.dispose();}
+  liveAuthority={...authority,sessionGeneration:newSession};dropClaim=false;
+  const after=await retryApi.captureNativeSandboxQuoteClient(liveAuthority,payload.offerId,payload.store,{storage:savedStorage});
+  try{
+   const recovered=await after.recoverClaim();assert.equal(recovered.status,committed?'ok':'unknown');
+   const retry=await after.retrySavedClaim();assert.equal(retry.data.claim.originalSessionGeneration,committed?session:newSession);
+   assert.equal(retry.actor.sessionGeneration,newSession);assert.equal(retry.dispatchAllowed,false);assert.equal(retry.data.claim.settlementAllowed,false);
+   assert.deepEqual((await after.retrySavedClaim()).data.claim,retry.data.claim);
+   assert.deepEqual((await after.recoverClaim()).data.claim,retry.data.claim);assert.equal(assertionSends,3);
+  }finally{after.dispose();}cases++;
+ }
  // Assertions capture uncertainty; they cannot reserve/allocate any purchase.
+ const priorClaimCount=Number(q('select count(*) from sandbox_commerce_v1.native_store_claims;'));
  const claimPayload={selectionId:prepared.data.selection.id,transactionIdentifier:'synthetic-transaction',productIdentifier:nativeCatalog.wireProductId},claimRequest=randomUUID();
  assert.equal((await http('claim-recover',{selectionId:claimPayload.selectionId})).status,'unknown');
  const claimed=await http('claim',claimPayload,claimRequest);assert.equal(claimed.data.claim.evidence,'client_assertion');
@@ -150,11 +190,11 @@ try{
  rejects(service+'select '+expression('claim',{...claimPayload,transactionIdentifier:'different'},claimRequest)+';',/native_store_claim_conflict/u);
  rejects(service+'select '+expression('claim',claimPayload,randomUUID())+';',/native_store_claim_conflict/u);
  assert.deepEqual(call('claim-recover',{selectionId:claimPayload.selectionId},randomUUID(),newActor).data.claim,claimed.data.claim);
- rejects(service+'select '+expression('claim',claimPayload,claimRequest,newActor)+';',/native_store_claim_conflict/u);cases++;
+ assert.deepEqual(call('claim',claimPayload,claimRequest,newActor).data.claim,claimed.data.claim);cases++;
  const another=(await http('prepare',preparePayload)).data.selection;
  rejects(service+'select '+expression('claim',{...claimPayload,selectionId:another.id,productIdentifier:'wrong'})+';',/native_store_claim_product_mismatch/u);
  for(const transactionIdentifier of [' bad','bad\tvalue','\u00a0bad','😀'.repeat(257)])rejects(service+'select '+expression('claim',{...claimPayload,selectionId:another.id,transactionIdentifier})+';',/native_store_claim_invalid/u);
- assert.equal(q('select count(*) from sandbox_commerce_v1.native_store_claims;'),'1');cases++;
+ assert.equal(Number(q('select count(*) from sandbox_commerce_v1.native_store_claims;')),priorClaimCount+1);cases++;
  const historicalSelection=(await http('prepare',preparePayload)).data.selection;
  const historical=call('claim',{...claimPayload,selectionId:historicalSelection.id},randomUUID(),newActor);
  assert.equal(historical.data.claim.originalSessionGeneration,newSession);assert.equal(historical.dispatchAllowed,false);assert.equal(historical.data.claim.settlementAllowed,false);cases++;

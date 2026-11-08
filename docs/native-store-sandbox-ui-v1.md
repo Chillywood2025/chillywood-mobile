@@ -29,10 +29,26 @@ quote, original request/session and negative authority flags. Neither a quote
 nor a selection enables a store call, access grant, playback, earnings or payout.
 This client imports no RevenueCat SDK. It sends only to the new command endpoint.
 
+## Dormant callback capture
+
+`captureCallback` accepts a callback only against the same client's server-confirmed
+prepared or recovered selection. It snapshots and persists the exact transaction
+and product identifiers before sending an explicit client assertion. It stores
+neither purchase tokens nor raw receipts. A missing transaction identifier cannot
+fall back to a token or inferred user/SKU match. `recoverClaim` preserves the
+original request across process restart and a new active session of the same
+account; uncertain writes never authorize a replacement claim or purchase.
+
+This sink is not connected to a purchase button or SDK invocation. Its result
+remains `client_assertion` with settlement disabled, even if identifiers match.
+It must not be used as evidence that a callback came from a sandbox transaction.
+
 ## Accessibility, rollback and proof limits
 
 The screen has a header, back action, labeled buttons with disabled state,
 48-point minimum controls, a live status announcement and scrollable content.
+It uses the shared Chi’llywood branded background and visual tokens, transparent
+safe area, and the existing back-or-Library navigation fallback in every state.
 Removing the normal-offer link or leaving the source endpoint uninstalled
 returns the flow to unavailable without affecting existing purchases or grants.
 
