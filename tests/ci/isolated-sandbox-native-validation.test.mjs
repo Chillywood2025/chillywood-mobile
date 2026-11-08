@@ -125,6 +125,10 @@ function assertNativeGate(candidate) {
   assert.equal(checkout.length, 1);
   assert.equal(checkout[0].with?.['persist-credentials'], false);
   assert.equal(checkout[0].with?.['fetch-depth'], 0, 'Published V1/V2 baseline objects are mandatory');
+  const policyCheckout = candidate.jobs.policy.steps.filter(step => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(policyCheckout.length, 1);
+  assert.equal(policyCheckout[0].with?.['fetch-depth'], 0, 'Policy baseline tests require the actual published Git history');
+  assert.equal(policyCheckout[0].with?.['persist-credentials'], false);
   const node = job.steps.filter(step => step.uses?.startsWith('actions/setup-node@'));
   assert.equal(node.length, 1);
   assert.equal(Number(node[0].with?.['node-version']), 20);
@@ -241,6 +245,7 @@ test('isolated native qualification is a credential-free canonical database obli
 
 test('isolated native wiring rejects removed, skipped, weakened and credential-bearing work', () => {
   const mutations = {
+    'shallow policy history': candidate => { candidate.jobs.policy.steps.find(step => step.uses?.startsWith('actions/checkout@')).with['fetch-depth'] = 1; },
     'missing job': candidate => { delete candidate.jobs[jobId]; },
     'skip job': candidate => { candidate.jobs[jobId].if = 'false'; },
     'ignore job failure': candidate => { candidate.jobs[jobId]['continue-on-error'] = true; },
