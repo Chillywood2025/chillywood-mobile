@@ -370,6 +370,10 @@ jobs:
         run: node isolated-runtime/native-store-sandbox-v1/journal.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
       - name: Verify normal native store quote preparation and recovery
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
+      - name: Verify native store default-off managed installation closure
+        run: node isolated-runtime/native-store-sandbox-v1/install-managed.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
+      - name: Verify native store quote and claim runtime under managed installation owners
+        run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install
       - name: Verify prerequisite and caller-owned image identity controls
         run: |
           python3 scripts/ci/paid-video-prerequisites/provision_test.py

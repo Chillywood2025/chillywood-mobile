@@ -4,12 +4,28 @@ create role native_store_sandbox_v1_owner nologin noinherit nosuperuser nocreate
 grant native_store_sandbox_v1_owner to postgres with inherit true,set true;
 create schema native_store_sandbox_v1 authorization native_store_sandbox_v1_owner;
 revoke all on schema native_store_sandbox_v1 from public,anon,authenticated,service_role;
+-- Managed non-super installers must give the proposed NEW function owner
+-- CREATE on public for ALTER OWNER of the bounded wrappers below. Revoke before
+-- COMMIT; this does not grant an existing runtime role new authority.
+grant usage,create on schema public to native_store_sandbox_v1_owner;
 set local role native_store_sandbox_v1_owner;
 
 create table native_store_sandbox_v1.control (
   singleton boolean primary key default true check(singleton), enabled boolean not null default false
 );
-insert into native_store_sandbox_v1.control values(true,false);
+create function native_store_sandbox_v1.install_commit_check() returns trigger
+language plpgsql security definer set search_path='' as $$
+begin
+ if (select enabled from native_store_sandbox_v1.control where singleton) is distinct from false
+  or has_schema_privilege('native_store_sandbox_v1_owner','public','CREATE')
+  or exists(select 1 from pg_auth_members m join pg_roles r on r.oid=m.roleid join pg_roles member_role on member_role.oid=m.member
+    where member_role.rolname='postgres' and r.rolname='native_store_sandbox_v1_owner' and (m.set_option or m.inherit_option))
+ then raise exception 'native_store_install_finalization_required';end if;
+ return null;
+end $$;
+revoke all on function native_store_sandbox_v1.install_commit_check() from public,anon,authenticated,service_role;
+create constraint trigger native_store_finalized_before_commit after insert on native_store_sandbox_v1.control
+ deferrable initially deferred for each row execute function native_store_sandbox_v1.install_commit_check();
 create table native_store_sandbox_v1.connections (
   id uuid not null, revision bigint not null check(revision>0),
   project_id text not null check(length(project_id) between 1 and 512),
@@ -173,4 +189,8 @@ end $$;
 alter function public.native_store_sandbox_journal_read_v1(uuid) owner to native_store_sandbox_v1_owner;
 revoke all on function public.native_store_sandbox_journal_read_v1(uuid) from public,anon,authenticated;
 grant execute on function public.native_store_sandbox_journal_read_v1(uuid) to service_role;
+set local role native_store_sandbox_v1_owner;
+insert into native_store_sandbox_v1.control values(true,false);
+reset role;
+revoke create on schema public from native_store_sandbox_v1_owner;
 grant native_store_sandbox_v1_owner to postgres with inherit false,set false;

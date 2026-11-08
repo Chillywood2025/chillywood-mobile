@@ -6,24 +6,26 @@ import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {fileURLToPath} from 'node:url';import {createRequire} from 'node:module';
 import {spawnSync,spawn} from 'node:child_process';import {randomUUID,webcrypto} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';import process from 'node:process';
+import {nativeStoreInstallProfile} from './install-profile.mjs';
 globalThis.crypto??=webcrypto;
-assert.equal(process.argv[2],'--local-bin');assert.equal(process.argv.length,4);const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
+assert.equal(process.argv[2],'--local-bin');assert.ok([4,5].includes(process.argv.length));const managed=process.argv.length===5;if(managed)assert.equal(process.argv[4],'--managed-install');
+const bin=process.argv[3];assert.ok(path.isAbsolute(bin));const administrator=managed?'fixture_admin':'postgres';
 const here=path.dirname(fileURLToPath(import.meta.url)),runtime=path.resolve(here,'../sandbox-commerce-v1'),root=path.resolve(here,'../..');
 const source=name=>fs.readFileSync(path.join(runtime,name),'utf8');
 const declaration='create table sandbox_commerce_v1.declarations(user_id uuid primary key,session_id uuid,\n declared_18_plus boolean,country_code text,region_code text,declaration_version text,updated_at timestamptz);';
-const authority=source('tests/authority.fixture.sql');assert.equal(authority.split(declaration).length,2);
+const authoritySource=source('tests/authority.fixture.sql');assert.equal(authoritySource.split(declaration).length,2);
 const files=['premium-authority.sql','authority.sql','commands.sql','receipts.sql','test-store.sql','test-store-offerings-core.sql',
  'test-store-qualification.sql','test-store-offerings-provisioning.sql','test-store-offerings-commands.sql','test-store-offerings-receipts.sql',
  'history.sql','resource-graphs.sql','delivery-authority.sql','paid-video-media.sql','paid-video-upload.sql','paid-video-commands.sql',
  'test-store-paid-video-core.sql','test-store-paid-video-commands.sql','test-store-paid-video-provisioning.sql','test-store-paid-video-receipts.sql','paid-video-access.sql'];
 const install='begin;create role anon nologin;create role authenticated nologin;create role service_role nologin;'
  +'alter default privileges for role postgres grant execute on functions to authenticated;'+source('core.sql')
- +source('tests/premium-authority.fixture.sql')+authority.replace(declaration,'-- declarations supplied by real core')
+ +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declarations supplied by real core')
  +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'+files.map(source).join('\n')
  +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+fs.readFileSync(path.join(here,'claim.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
 const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),port='55490',db='quote_'+randomUUID().replaceAll('-','');
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PG')));
-const args=database=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U','postgres','-d',database];
+const args=(database,user=administrator)=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U',user,'-d',database];
 const run=(tool,argv,input)=>spawnSync(path.join(bin,tool),argv,{input,encoding:'utf8',env,timeout:30000,maxBuffer:8*1024*1024});
 const invoke=(tool,argv,input)=>{const r=run(tool,argv,input);assert.equal(r.status,0,r.stderr||r.error?.message);return r.stdout.trim();};
 const q=sql=>invoke('psql',args(db),sql),literal=v=>"'"+String(v).replaceAll("'","''")+"'",json=v=>literal(JSON.stringify(v))+'::jsonb';
@@ -44,9 +46,20 @@ const http=async(command,payload,requestId=randomUUID())=>{const body={protocol:
 let started=false,cases=0;const children=[];
 try{
  assert.match(invoke('postgres',['--version']),/PostgreSQL\) 17\.6/u);
- invoke('initdb',['-D',data,'-U','postgres','--encoding=UTF8','--no-locale','--auth=trust']);
+ invoke('initdb',['-D',data,'-U',administrator,'--encoding=UTF8','--no-locale','--auth=trust']);
  invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(work,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c autovacuum=off`,'start']);started=true;
- invoke('psql',args('postgres'),`create database ${db};`);q(install);
+ if(managed){
+  invoke('psql',args('postgres'),`create role postgres login createrole bypassrls nosuperuser nocreatedb noinherit;create database ${db} owner postgres;`);
+  q('create role anon nologin;create role authenticated nologin;create role service_role nologin;'
+   +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declaration supplied by actual source')
+   +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'
+   +`grant usage on schema auth to postgres;do $$declare t record;begin for t in select n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in('auth','public') and c.relkind='r' loop
+    execute format('grant select,maintain on table %I.%I to postgres',t.nspname,t.relname);
+    execute format('alter table %I.%I enable row level security',t.nspname,t.relname);execute format('alter table %I.%I force row level security',t.nspname,t.relname);end loop;end$$;
+    alter default privileges for role postgres grant execute on functions to authenticated;`);
+  invoke('psql',args(db,'postgres'),nativeStoreInstallProfile().sql);
+  assert.equal(q("select rolsuper,rolcreaterole,rolbypassrls from pg_roles where rolname='postgres';"),'f|t|t');
+ }else{invoke('psql',args('postgres'),`create database ${db};`);q(install);}
  q(`select authority_fixture.reset();insert into auth.users(id,email_confirmed_at,raw_app_meta_data) values('${buyer}',clock_timestamp(),'{}');
  insert into auth.sessions values('${session}','${buyer}',clock_timestamp()+interval '1 hour');
  insert into public.wave1_legal_acceptances select '${buyer}','${session}',document_key,version,market,capability,'member',null from public.wave1_legal_document_versions where capability='account';
@@ -242,7 +255,7 @@ try{
  q(`update sandbox_commerce_v1.offers set revision=2 where id='${offer}';`);
  assert.equal((await http('offer',payload)).status,'held');cases++;
  assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');cases++;
- console.log(JSON.stringify({protocol:'native-store-normal-quote-proof-v1',cases,passed:cases,providerQualified:false,dispatchAllowed:false}));
+ console.log(JSON.stringify({protocol:'native-store-normal-quote-proof-v1',cases,passed:cases,managedInstall:managed,sourceDigest:managed?nativeStoreInstallProfile().sourceDigest:null,providerQualified:false,dispatchAllowed:false}));
 }finally{
  for(const child of children)if(child.exitCode===null)child.kill('SIGTERM');
  if(started)invoke('pg_ctl',['-D',data,'-m','immediate','-w','stop']);fs.rmSync(work,{recursive:true,force:true});
