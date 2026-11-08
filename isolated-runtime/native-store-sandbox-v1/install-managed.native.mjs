@@ -6,8 +6,10 @@ import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_proce
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 import {installEventTriggerParity} from './event-trigger-parity.fixture.mjs';
 import {readbackSQL,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
-assert.ok([4,5].includes(process.argv.length));assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
-const triggerParity=process.argv.length===5;if(triggerParity)assert.equal(process.argv[4],'--event-trigger-parity');
+import {deltaSnapshotSQL,verifyNativeInstallDelta} from './install-delta.mjs';
+assert.ok(process.argv.length>=4&&process.argv.length<=6);assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
+const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding'].includes(f)));
+const triggerParity=flags.includes('--event-trigger-parity'),oidPadding=flags.includes('--oid-padding');
 const here=path.dirname(fileURLToPath(import.meta.url)),base=path.resolve(here,'../sandbox-commerce-v1'),profile=nativeStoreInstallProfile();
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'native-managed-')),data=path.join(directory,'data'),port='55491';
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!k.startsWith('PG')));
@@ -39,6 +41,7 @@ try{
  execute format('alter table %I.%I enable row level security',t.nspname,t.relname);execute format('alter table %I.%I force row level security',t.nspname,t.relname);end loop;end$$;
  alter default privileges for role postgres grant execute on functions to authenticated;`);
  assert.equal(q("select rolsuper,rolcreaterole,rolbypassrls,rolinherit from pg_roles where rolname='postgres';"),'f|t|t|f');cases++;
+ if(oidPadding){q(`create schema fixture_oid_padding;do $$begin for i in 1..64 loop execute format('create table fixture_oid_padding.padding_%s(id integer)',i);end loop;end$$;drop schema fixture_oid_padding cascade;`);cases++;}
  const probe=fs.readFileSync(path.join(here,'dependency-probe.sql'),'utf8');
  const dependencies=JSON.parse(q('begin read only;'+probe+'rollback;'));
  assert.equal(dependencies.transactionReadOnly,'on');assert.equal(dependencies.relations.length,21);
@@ -78,7 +81,25 @@ try{
  assert.equal(q("select count(*) from pg_namespace where nspname='sandbox_commerce_v1';"),'0');q('drop role native_store_sandbox_v1_owner;');absent();cases++;
  q('create schema native_store_sandbox_v1;');reject(profile.sql,/already exists/u);
  assert.equal(q("select count(*) from pg_roles where rolname='native_store_sandbox_v1_owner';"),'0');q('drop schema native_store_sandbox_v1;');absent();cases++;
+ const beforeInstall=JSON.parse(q(deltaSnapshotSQL));
  const result=attempt(profile.sql);assert.equal(result.status,0,result.stderr);cases++;
+ const afterInstall=JSON.parse(q(deltaSnapshotSQL));
+ const sourceDelta=verifyNativeInstallDelta(beforeInstall,afterInstall);cases++;
+ for(const [mutation,reason] of [
+  ['alter table auth.sessions add column unexpected text;','native_delta_existing_catalog_changed'],
+  ['create function public.unexpected_native_delta() returns integer language sql as $$select 1$$;','native_delta_existing_catalog_changed'],
+  ['grant create on schema public to sbx_v1_core_owner;','native_delta_public_acl_changed'],
+  ['grant sbx_v1_core_owner to authenticated;','native_delta_membership_changed'],
+  ['alter role native_store_sandbox_v1_owner login;','native_delta_role_authority_changed'],
+  ['alter default privileges for role postgres grant execute on functions to service_role;','native_delta_existing_catalog_changed'],
+  ['alter default privileges for role sbx_v1_core_owner grant execute on functions to service_role;','native_delta_default_acl_added'],
+  ['alter function native_store_sandbox_v1.immutable() cost 101;','native_delta_added_catalog_mismatch'],
+  ['grant select on native_store_sandbox_v1.control to service_role;','native_delta_added_catalog_mismatch'],
+  ['drop function public.native_store_sandbox_claim_read_v1(uuid);','native_delta_public_wrapper_missing']
+ ]){
+  const changed=JSON.parse(q('begin;'+mutation+deltaSnapshotSQL+'rollback;'));
+  assert.throws(()=>verifyNativeInstallDelta(beforeInstall,changed),e=>e.message===reason);cases++;
+ }
  assert.equal(q('select state from sandbox_commerce_v1.lifecycle;'),'disabled');
  assert.equal(q('select enabled from sandbox_commerce_v1.paid_video_gateway_controls;'),'f');
  assert.equal(q('select preparation_enabled from sandbox_commerce_v1.native_store_quote_controls;'),'f');
@@ -93,5 +114,5 @@ try{
   const r=run('psql',args(),`set role ${role};select public.native_store_sandbox_claim_read_v1(gen_random_uuid());`);assert.notEqual(r.status,0);assert.match(r.stderr,/permission denied/u);
  }
  assert.equal(q("set role service_role;set request.jwt.claims='{\"role\":\"service_role\"}';select public.native_store_sandbox_claim_read_v1(gen_random_uuid()) is null;"),'t');cases++;
- console.log(JSON.stringify({protocol:'native-store-managed-install-proof-v1',cases,passed:cases,sourceDigest:profile.sourceDigest,modules:profile.files.length,eventTriggerParity:triggerParity,hostedQualified:false,dispatchAllowed:false}));
+ console.log(JSON.stringify({protocol:'native-store-managed-install-proof-v1',cases,passed:cases,sourceDigest:profile.sourceDigest,addedCatalogSha256:sourceDelta.addedCatalogSha256,modules:profile.files.length,eventTriggerParity:triggerParity,oidPadding,hostedQualified:false,dispatchAllowed:false}));
 }finally{if(started)invoke('pg_ctl',['-D',data,'-m','immediate','-w','stop']);fs.rmSync(directory,{recursive:true,force:true});}

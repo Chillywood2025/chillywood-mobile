@@ -105,9 +105,46 @@ Only bounded hashes/status are printed. A read-only transaction whose actual
 current/session identity is postgres still fails the existing required
 supabase_read_only_user identity guard. Local tests exercise both real SQL paths.
 
-A later exact executor still needs a reviewed migration identity and expected
-added-object contract. It must account explicitly for new-role memberships and
-new-role USAGE entries on the existing public schema. Cashout's unchanged-old-
-catalog comparison cannot be copied verbatim. A synthetic fixture snapshot cannot
+A later exact executor still needs a reviewed migration identity and atomic
+integration of the added-object contract below. It must account explicitly for
+new-role memberships and new-role USAGE entries on the existing public schema.
+Cashout's unchanged-old-catalog comparison cannot be copied verbatim. A synthetic fixture snapshot cannot
 populate a hosted baseline, and missing read-transport qualification must not be
 worked around by changing identity checks.
+
+## Exact added-object and existing-object delta
+
+`install-delta.mjs` compares before/after snapshots from the **same database**.
+`install-delta.json` pins the independently observed added catalog of the fixed
+38-module local managed install, not any hosted baseline. The contract covers
+2 schemas, 4 roles, 8 role-membership rows, 188 functions (35 public wrappers),
+141 relations, 1,019 columns, 668 constraints, 248 indexes, 140 policies and 997
+triggers. Existing catalog rows, roles, memberships, defaults and event triggers
+must remain unchanged. Only the public schema ACL receives two explicit additions:
+USAGE without grant option for the new core and journal owner roles. No CREATE
+privilege or other old ACL change is allowed.
+
+PostgreSQL 17 creates two grants per new role: a bootstrap-superuser ADMIN-only
+membership to postgres, plus the explicit postgres-granted membership with ADMIN,
+INHERIT and SET all false after finalization. Both are checked exactly; no runtime
+role receives a membership. Bootstrap identity is verified from the actual local
+catalog, not guessed from the name. Added ACLs use sorted semantic grantor/grantee
+names and privileges. Internal referential-integrity triggers retain their owning
+constraint and definition; only generated OID-derived trigger names are normalized.
+All old metadata remains target-local and exact.
+
+The CI runs independent clusters with different catalog OID allocations and
+requires the same pinned added digest. Actual rolled-back mutations to old
+objects/default ACLs, fresh-role authority, memberships, public CREATE, new
+function definitions, new-table grants, new-role default ACLs and missing wrappers
+must be rejected. The source preparation binding includes both delta files and
+prints the expected added digest, but still cannot qualify a hosted baseline or
+apply a migration. The install source/digest itself is unchanged by this contract.
+
+The added digest is precisely SHA-256 of JavaScript `JSON.stringify` applied to
+the lexicographically sorted array of individually `JSON.stringify`-serialized
+normalized rows. It is **not** a hash of PostgreSQL `jsonb::text`. A future atomic
+SQL postcheck must implement and independently prove equivalent canonicalization,
+or compare pinned expected normalized rows semantically as JSONB. Copying the
+digest into a different SQL hashing formula would not implement this contract.
+This manifest alone is therefore not an executable transactional postcheck.
