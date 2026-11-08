@@ -1,0 +1,31 @@
+{
+  "protocol": "scpv-retained-platform-auth-http-source-v1",
+  "status": "local-qualification-pending",
+  "files": {
+    "README.md": "1f20cbcc829d166fe99635a05012e378cac69c0aa1a19e2d73a13f507e4493ba",
+    "capture-seed.mjs": "23c965ac68573b427df578b4f7669c2d362f471b0e42c63c2ff12d86ebbebc4d",
+    "deno.lock": "73abd3656e02a27b64a1049c6ae68c017ffdbe459a287fc95e4f353e98a9605b",
+    "harness/image_chain.py": "cb62c903271aad2f8c19abc19ffad0d15dc50f00cb6e2f695748d6a07c210813",
+    "harness/run.py": "ef9b6defc3425386d817bb6dc40469bcddfd417301d1c7a5f324c64444fd7758",
+    "harness/runtime.py": "5e0080381609c79efefffe8df34e343ccb547f02854135991ecd795c07bb3726",
+    "harness/stack.py": "ee1967c2dbbab6c1d957b8835858ea8585070bc130875ea0eeab15ff4e7377b2",
+    "harness/v2-source.json": "a0fdd62271373f9258cdebfe50cbd70b7570bd9ac76640ffbd5c0f14cca062de",
+    "image-chains.json": "1e223c1d89821bb5d7a9c18fd56aae1eb560943dc3c07596cb4abc96b83b460e",
+    "image_chain_test.py": "c9c4a662589d9553e8c533511241168ba445c20c76e0b198dd78e4d4bb6616c1",
+    "is_account_access_restricted.sql": "b5024583b2a53bddca870f2bc54cf6b400790f463b5af8cd037d107289006cf7",
+    "is_account_deletion_scheduled.sql": "244602bf2426b16c766fdb49f82bed167bd86537e521ceb3d9dc4848892193e4",
+    "listener.ts": "e22a1a6002fc2b068f1eb69b6be58920b9ae583007a9b20565007c03ad56bcda",
+    "manifest.json": "15ab13a621f197606912b9074f4b50345f1bbe8c2a600fa2c2066488fc2b73d3",
+    "prepare.py": "d920f3c76ba0b943ebbb47059f12fa8ab17d6c2602f0c924055fce8b22cdb7eb",
+    "seed.mjs": "17e7ce50cbe1e2b67c6df8e51658089e0e5f379d64f5ef514c4ebec9e62b30b5",
+    "settlement.mjs": "a3815d795057ca1f14247f5310085b6e9d866c65963e2db98bde342a5b2fdcc3",
+    "wave1_session_authority_readback.sql": "7275600e78a07bacfdd80250f3dfb6b782b9c85bbf77f807782b89422199bc65"
+  },
+  "productionEntries": 4,
+  "sourceSha256": "25134c0952bcf71be1274da91bf36013fe662a065db11dfc6a91cfcab3ef51c0",
+  "retainedInstallationSourceSha256": "a899f70795d5b9234fdb1e44f694c56da2cff6224a2e71b2fd3508d86b4b0e11",
+  "providerOrNativeQualified": false,
+  "noCredentialsOrPrivateEvidenceIncluded": true,
+  "supersedesTemplateOnly": "c10eab7068955599b86963eaeb65413cf6a6c9e3ea70bbc128aef7bdf5dd2c82",
+  "callerOwnedAttemptIdentityRequired": true
+}

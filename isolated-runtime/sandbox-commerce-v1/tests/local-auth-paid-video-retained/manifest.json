@@ -1,0 +1,419 @@
+{
+  "profile": "retained-capture-real-local-Auth-PostgREST-four-Edge-with-synthetic-provider-and-scanner",
+  "source": "25134c0952bcf71be1274da91bf36013fe662a065db11dfc6a91cfcab3ef51c0",
+  "files": {
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/capture-dependency.sql": {
+      "sha256": "48f600455a8805d6b649924965306c0173f5c70f55c7298f203b698000a5dd99",
+      "bytes": 33557
+    },
+    "isolated-runtime/sandbox-commerce-v1/core.sql": {
+      "sha256": "c5a55a9f7aa9f35cd12039028e010ed8f496d200008f13c7e324889e81913e5a",
+      "bytes": 14747
+    },
+    "isolated-runtime/sandbox-commerce-v1/premium-authority.sql": {
+      "sha256": "ec1d16265f4dcf9eb5904303c4c9c50a2f003bf2d7a53ec9040c9d1b7dc4b418",
+      "bytes": 15852
+    },
+    "isolated-runtime/sandbox-commerce-v1/authority.sql": {
+      "sha256": "8e077e8801bbd79f4bc0594bfbcaa47cd1d0c80a42f5320ebadd9f7bd1113ff4",
+      "bytes": 14197
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/legacy_commands.sql": {
+      "sha256": "8be451986af607fa82e773ba661b15641ab417818c57a2c602c1515500af32be",
+      "bytes": 19797
+    },
+    "isolated-runtime/sandbox-commerce-v1/receipts.sql": {
+      "sha256": "bd89841ed746267b4623798dad61873ad65e317a62dfa82fac65ac7293d4c2b1",
+      "bytes": 37333
+    },
+    "isolated-runtime/sandbox-commerce-v1/test-store.sql": {
+      "sha256": "4beb6b360a371985b39345a036bd9eee44bf75b5010030cb985aa37b1d1bff6a",
+      "bytes": 45599
+    },
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-core.sql": {
+      "sha256": "24a8875b1abe1c9624e9f0a029af2784b38fb58b558a8e7ae309fef16dd8eedc",
+      "bytes": 19596
+    },
+    "isolated-runtime/sandbox-commerce-v1/test-store-qualification.sql": {
+      "sha256": "b08c416b9bca7b8d5496a3d097d16d4e5f3b780e68c2a4e97a9a578a2c3f279f",
+      "bytes": 27398
+    },
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-commands.sql": {
+      "sha256": "5f4b82b1e7b83471975bf27b5e067b0fe78230fcd7eb901240171fb61579d4e3",
+      "bytes": 29260
+    },
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-provisioning.sql": {
+      "sha256": "57f7ea45d1e6a23dc8093331e329838678af04f861d10f82529c36188efde9b3",
+      "bytes": 51715
+    },
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-receipts.sql": {
+      "sha256": "20a3f444ac4cdeeea0a86942c5efa85fef2adc9eccffa941728b7f149ab5ff32",
+      "bytes": 35247
+    },
+    "isolated-runtime/sandbox-commerce-v1/history.sql": {
+      "sha256": "d7ea655a49aaa5ed6fb4daf4982e5ce1ba10d8e054a1472f755472b0139c8f19",
+      "bytes": 28674
+    },
+    "isolated-runtime/sandbox-commerce-v1/resource-graphs.sql": {
+      "sha256": "f0b72465c8699010890a93412bcb771988cf94cfc0d34d046952f5fc04e4c57f",
+      "bytes": 17957
+    },
+    "isolated-runtime/sandbox-commerce-v1/delivery-authority.sql": {
+      "sha256": "49a92c9f810218dea66ea896e98f10a22ff34ef15af2f722f573ec3a85242545",
+      "bytes": 35068
+    },
+    "isolated-runtime/sandbox-commerce-v1/paid-video-install-context-v2.sql": {
+      "sha256": "c6be30214316891be4c627d655a19ef335ec140c6f2ac67a6c31439a783acbd6",
+      "bytes": 2230
+    },
+    "isolated-runtime/sandbox-commerce-v1/paid-video-install-grant-v2.sql": {
+      "sha256": "34198830d90c0b97ea57d2cdecdf82033768fc344f38fbdcb515118c1546a791",
+      "bytes": 630
+    },
+    "isolated-runtime/sandbox-commerce-v1/paid-video-media.sql": {
+      "sha256": "9e23896785b374b11f65ccedaa05f2018889420e23a4fcd75b72dbd4f8d676f9",
+      "bytes": 18415
+    },
+    "isolated-runtime/sandbox-commerce-v1/paid-video-upload.sql": {
+      "sha256": "b6510506762fe8b579c1af3b0d75ea626a1dbc147cfcc36753bae5fff3e02514",
+      "bytes": 5466
+    },
+    "isolated-runtime/sandbox-commerce-v1/paid-video-commands.sql": {
+      "sha256": "b5c4fb3fd7d3a41ea85d2822623062aab31f230c21ce4a26bacafe764b7e4e1f",
+      "bytes": 17626
+    },
+    "isolated-runtime/sandbox-commerce-v1/paid-video-install-revoke-v2.sql": {
+      "sha256": "51d4cba3786e2db06a36e57667a1d8a20431d1525a8cb57d36f516dd5635b1b4",
+      "bytes": 682
+    },
+    "isolated-runtime/sandbox-commerce-v1/test-store-paid-video-core.sql": {
+      "sha256": "b35ff1b171e78a20aee5e11eabb7dd6160db4d4cff2268aca20e00c5a47552ed",
+      "bytes": 27195
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/retained-identity.sql": {
+      "sha256": "cdc90dde0fbf967ea18d31125400f52394d141b2742aaf9de3dbd461ca66a139",
+      "bytes": 1421
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/admission.sql": {
+      "sha256": "70c8e07a040d6b2207d34b384763c9ff26855f921285b57dde26dcc491907131",
+      "bytes": 5430
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-plan-lifecycle/lifecycle.sql": {
+      "sha256": "c4f3f91ef03bd7c6f2bee3c413168a9bc41d2703cc23020365237471c235ae2a",
+      "bytes": 13158
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/commands.sql": {
+      "sha256": "f1bae5237667bd0f345c068579a1ee2dff1109c3f5253a796e4b2516c6976412",
+      "bytes": 46860
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-checkout-recovery/abandon.sql": {
+      "sha256": "ea264090eb8527ee4d2a9f219979d46649beddc46faf3e6a440a3dd3cf42415b",
+      "bytes": 11501
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-prepared-closure/close.sql": {
+      "sha256": "ad521a1cc86e09967aa2860c31061c696156f686a3527624c5e24c6e5646568e",
+      "bytes": 15201
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/provisioning.sql": {
+      "sha256": "6c48b0f0017f2ca79fa41cd555bb434e229d14e92cb60d4eadddbf4a687808b4",
+      "bytes": 53259
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/receipts.sql": {
+      "sha256": "6e976a10f1d9311c317a57a86eb861b2c68d42234cd1aa084d8fdeef15f776bc",
+      "bytes": 37731
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/access.sql": {
+      "sha256": "2e071b5183929deeaa11a7dcae08071acff83998255ba6073b99d50f4eabc34e",
+      "bytes": 14011
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/gateway.sql": {
+      "sha256": "6fea5ba842b71e5cba7c2e40a8803c16dbcf82cc6039391a0c55a8698baf4d34",
+      "bytes": 28972
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/media.sql": {
+      "sha256": "97321cc09316e76b734c6d689dfd173b69bf6e54711182b3ca4beb65cc942ee3",
+      "bytes": 6739
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-current-grant/resolve.sql": {
+      "sha256": "4d790421c86984f035f6ff9880fb89508fe994a94dab447863db916eaa5886ed",
+      "bytes": 5763
+    },
+    "ops/isolated-paid-video-operations-v2/operations.sql": {
+      "sha256": "32f965cb5e8bb815b17c0958ddc8dc933f149918b89ce9e1a708de42f7973355",
+      "bytes": 20620
+    },
+    "ops/isolated-paid-video-operations-v2/monotonic-removal.sql": {
+      "sha256": "3398dcc95cbce6e45a0bed9934f48ee859cece5ec96979ada8dd15ca95b4b5ee",
+      "bytes": 5710
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/reconcile.sql": {
+      "sha256": "cca3e212f2229f0009c7e606b21f6b77e73deb79336b1fdb6976d591f0dfe838",
+      "bytes": 5971
+    },
+    "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/profile-guard.sql": {
+      "sha256": "9d8bd4418388af08519c4441aad347f1cb2ec9c797beeef0ddb52f4953aecc80",
+      "bytes": 2409
+    },
+    "isolated-runtime/sandbox-commerce-v1/permissions-finalize.sql": {
+      "sha256": "26d1f8ccb2bd55452f79e9fc55bf775b8fa16ee10bf5e61ed4402848092993c8",
+      "bytes": 1207
+    },
+    "isolated-runtime/test-store-capture-v1/capture.sql": {
+      "sha256": "ea98dc0230a1026a40fe8c23e60e97f6c29c13dc19f2bf1b12c94f04a5289e81",
+      "bytes": 37742
+    },
+    "supabase/migrations/20261107233954_isolated_test_store_capture_v1.sql": {
+      "sha256": "b370653b10642d346913027412964aca48e254b749e9a3cb51f4ff1fbeb4ce3c",
+      "bytes": 37857
+    },
+    "isolated-runtime/sandbox-commerce-v1/tests/premium-authority.fixture.sql": {
+      "sha256": "e96c64a0d1b33be9570789854ec0f1e7b9909e3017ee7b9a2ace32b3a50b8ae4",
+      "bytes": 4905
+    },
+    "isolated-runtime/sandbox-commerce-v1/tests/authority.fixture.sql": {
+      "sha256": "09dd8b192ebc32879a3ce6a413863b1140cfc59f0a41b6ad1c461a197c01cfb4",
+      "bytes": 3568
+    },
+    "isolated-runtime/sandbox-commerce-v1/tests/test-store-v3.fixture.mjs": {
+      "sha256": "ad182d4cac2e323f50b93287f3840d3295e09906f217927413218272bcc8e6d6",
+      "bytes": 11714
+    },
+    "isolated-runtime/sandbox-commerce-v1/tests/test-store-v3-provider.fixture.mjs": {
+      "sha256": "403c6c8f38c8c4b9b3b0ac5942a82146b2c34b680170fe9319ffdf59ea778da6",
+      "bytes": 15099
+    },
+    "isolated-runtime/sandbox-commerce-v1/tests/test-store-v3-receipts.fixture.mjs": {
+      "sha256": "8e3156de157381bd014a859166cb9f36dd1ad666b88634c12e76dafa494c351f",
+      "bytes": 3033
+    },
+    "isolated-runtime/sandbox-commerce-v1/tests/test-store.fixture.mjs": {
+      "sha256": "84cf36398afe8fb2723d4621c50d4337a7706643b0436a6b53345113b519e968",
+      "bytes": 10750
+    },
+    "isolated-runtime/sandbox-commerce-v1/tests/receipts.fixture.mjs": {
+      "sha256": "8a0512bc606436a71ea323e59f3e87d36e60542e9b3b1d6c5fbbf244c9118f08",
+      "bytes": 11057
+    },
+    "ops/isolated-paid-video-operations-v2/manifest.mjs": {
+      "sha256": "02331add4ef1d8f81f7d8e198dbb511fe2b97a0cb0361dfa98d3eebf6b424bad",
+      "bytes": 1130
+    },
+    "ops/isolated-paid-video-operations-v2/reviewer.mjs": {
+      "sha256": "aa34da52331906e6ed5394b03ee26572dcf6831f59f60c6c3db8a6b82a3e19fa",
+      "bytes": 5804
+    },
+    "ops/isolated-paid-video-operations-v2/runner.mjs": {
+      "sha256": "da3509cb86e798eb1f30f0967fcd3c9a29cf7bb6f8ced6ee6c571efcd8939f5b",
+      "bytes": 19038
+    },
+    "ops/isolated-paid-video-operations-v2/scan-child.mjs": {
+      "sha256": "e9989ef6580d7287c956a4a8dcc0eaaf03a7aa4dd9d41fb803d7b0dc29599822",
+      "bytes": 1402
+    },
+    "ops/isolated-paid-video-operations-v2/worker.mjs": {
+      "sha256": "7df77c2d6aa12c912e66ebf7a20758befd7527288ba11b2653c9e48aca97a3f6",
+      "bytes": 3184
+    },
+    "ops/isolated-paid-video-worker/job.mjs": {
+      "sha256": "9a8cf505762554f41a7eebfe101f2e9f68eb258af9307bd93077220658573d68",
+      "bytes": 2160
+    },
+    "ops/isolated-paid-video-worker/private-object.mjs": {
+      "sha256": "ee847725e5ac8fe53686c97b306ffc44e4da53094ccd0937d67a8d72b0741a30",
+      "bytes": 13007
+    },
+    "ops/isolated-paid-video-worker/scan.mjs": {
+      "sha256": "b7f5375984d47dfe6530334881d28c4ffebc4f6be15108b13396c1a179fc57d9",
+      "bytes": 13275
+    },
+    "ops/isolated-paid-video-operations-v2/source-manifest.json": {
+      "sha256": "08d9305c7dc35d927a946b65aff9a661ebb6ee117f00c8b4b24e77f209348513",
+      "bytes": 1688
+    },
+    "supabase/functions/_shared/isolated-paid-video-checkout-v3.ts": {
+      "sha256": "f6b6d0cd7cad04c5a5d3e3f766d8ceab01e8736f42183f80ea89b8568ffa654d",
+      "bytes": 19418
+    },
+    "supabase/functions/isolated-paid-video-checkout-v3/index.ts": {
+      "sha256": "9861e66d8dca8b358c8dff4cadf3e6aac50f70e9134a238fbe761407ba6bb779",
+      "bytes": 2040
+    },
+    "isolated-runtime/test-store-capture-v1/tests/source-loader.mjs": {
+      "sha256": "93d25a4d9391451597d09d2acca1ad07326929c136adf9723e5648f3e00f3c81",
+      "bytes": 3525
+    },
+    "supabase/functions/_shared/revenuecat-router-envelope.ts": {
+      "sha256": "2c856a0551724761cb8e3a1de10111b68bc796a222fda1f6731c3fea95869d87",
+      "bytes": 14253
+    },
+    "supabase/functions/_shared/isolated-test-store-v3-receipt.ts": {
+      "sha256": "2112dc937b124f77127f2c62318919d42731b31c980ad1fb228ca216627914b5",
+      "bytes": 18977
+    },
+    "supabase/functions/_shared/revenuecat-lossless-envelope.ts": {
+      "sha256": "a0da9474ea51a34fd910fbd9cdd8236892f13f02154528e110e591e136c22813",
+      "bytes": 4380
+    },
+    "supabase/functions/_shared/isolated-test-store-v3-provisioner.ts": {
+      "sha256": "e2c0df56c3403d8c9d69970c4be22ec15c9b1e467e729735518e96dac3d0464f",
+      "bytes": 41632
+    },
+    "supabase/functions/_shared/livekit-session-generation.ts": {
+      "sha256": "01a3b3528ff8a70a641416f5686c3ae06858f94eb65635899992fcaaac8df0a9",
+      "bytes": 2482
+    },
+    "supabase/functions/_shared/stripe-connect.ts": {
+      "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3",
+      "bytes": 51395
+    },
+    "supabase/functions/_shared/exact-subject-authority.ts": {
+      "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231",
+      "bytes": 12066
+    },
+    "supabase/functions/isolated-paid-video-range-v1/index.ts": {
+      "sha256": "bdf968beccc353a62387866bc67641b41116ae7fb79f82a041c215dc85d4dfbd",
+      "bytes": 171
+    },
+    "supabase/functions/_shared/isolated-paid-video-runtime.ts": {
+      "sha256": "651904284540b0d23ce8f059fe066bf5676f5087c324537790d957b66198eaae",
+      "bytes": 2410
+    },
+    "supabase/functions/_shared/isolated-paid-video-boundary.ts": {
+      "sha256": "def8ddbc71b4bca02db7cba1257929d1c675a6f0b8eaadd22ae9fc81840e7659",
+      "bytes": 7718
+    },
+    "supabase/functions/_shared/isolated-paid-video-range.ts": {
+      "sha256": "f8fc2c1974ad7d44a115ece7a30f1c78bd041ff721579c97f53f3e27b483491f",
+      "bytes": 6074
+    },
+    "supabase/functions/_shared/isolated-paid-video-rpc.ts": {
+      "sha256": "47976601f0694393d26614f57a6ab5915542cb3ad39171dab0b5a24ecc903f2e",
+      "bytes": 2005
+    },
+    "supabase/functions/_shared/isolated-paid-video-upload.ts": {
+      "sha256": "bcca6536fab62266c9553aa039d51926da857e2941c40f352ca95baa37c7526d",
+      "bytes": 12012
+    },
+    "ops/isolated-paid-video-worker/upload-broker.mjs": {
+      "sha256": "0ea6fe4b66c73fde696ade2fe6ace07840ddcfd7ee16c53e9962a8cc9b33bd0a",
+      "bytes": 4187
+    },
+    "supabase/functions/_shared/isolated-paid-video-authoring.ts": {
+      "sha256": "4510ae9e250ae97933a4421f6463d2f4dfafb6284dd00d5cf9cf518ca5aa553c",
+      "bytes": 3973
+    },
+    "supabase/functions/_shared/isolated-paid-video-contract.ts": {
+      "sha256": "c5bd58b23512d32457efddc4e272afa67a5654370c09f2380ef6243984687ffe",
+      "bytes": 5525
+    },
+    "isolated-runtime/sandbox-commerce-v1/paid-video-contract-v1.json": {
+      "sha256": "f1636308bc78dd5f674b1d14bc5d8dabda7643d3c282b916bcfabfddfa6e4896",
+      "bytes": 35714
+    },
+    "supabase/functions/_shared/isolated-paid-video-auth.ts": {
+      "sha256": "a05707e8510da3734b2888fa6035893df9b7584e385d04d2efb007f642cd2158",
+      "bytes": 2009
+    },
+    "supabase/functions/isolated-paid-video-upload-v2/index.ts": {
+      "sha256": "df864adf39613d4db365c601e19f56f3ff5d8611f1a2a1b80e562f0be11d924b",
+      "bytes": 172
+    },
+    "supabase/functions/isolated-paid-video-authoring-v2/index.ts": {
+      "sha256": "e9ed2536267c1b146e595381016547ee9e2750a4ffb13d753bf921340e705a6c",
+      "bytes": 175
+    },
+    "supabase/functions/_shared/isolated-test-store-qualification.ts": {
+      "sha256": "5076554531ca31633d7d4cc0b63d7eae7e7fead47f533eb09c149cc2723f032c",
+      "bytes": 12386
+    },
+    "supabase/functions/isolated-test-store-capture-v1/index.ts": {
+      "sha256": "ff68ed032a5e8df73d6fbaf46e9ce33a599e5958eb5648f637de937bd8fd813d",
+      "bytes": 3197
+    }
+  },
+  "entries": [
+    "supabase/functions/isolated-paid-video-authoring-v2/index.ts",
+    "supabase/functions/isolated-paid-video-upload-v2/index.ts",
+    "supabase/functions/isolated-paid-video-range-v1/index.ts",
+    "supabase/functions/isolated-paid-video-checkout-v3/index.ts"
+  ],
+  "externalImports": [
+    "node:assert/strict",
+    "node:buffer",
+    "node:child_process",
+    "node:crypto",
+    "node:fs",
+    "node:fs/promises",
+    "node:module",
+    "node:path",
+    "node:url",
+    "npm:@supabase/supabase-js@2"
+  ],
+  "baselineCommit": "12335a768fb683267ac281b1a180f9650479a98d",
+  "baselineTree": "5e9b8f86792c2fab606ed216037aec916f094b7c",
+  "baselineGitBlobs": {
+    "isolated-runtime/sandbox-commerce-v1/core.sql": "317a653c1f87bc4dbe112fb6b84081a4c62733a6",
+    "isolated-runtime/sandbox-commerce-v1/premium-authority.sql": "dea0f27d10987f3605b7f8a1204b0ffb78cad3bd",
+    "isolated-runtime/sandbox-commerce-v1/authority.sql": "216858dc5874da849c76b990c94f83fa450cb24e",
+    "isolated-runtime/sandbox-commerce-v1/receipts.sql": "b5d926304bcaa6d8733adcb1a1abb6e56ab7143a",
+    "isolated-runtime/sandbox-commerce-v1/test-store.sql": "c8766fa714982af6a34312251ce242826f2fc4bb",
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-core.sql": "190c9964775f723211af6f7f2b82858b823b32a8",
+    "isolated-runtime/sandbox-commerce-v1/test-store-qualification.sql": "e3613886c4d28d5bca5cdd31ba08de490c645c0c",
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-commands.sql": "fa2f2f5109863c635f510519bba384a71e3e12fe",
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-provisioning.sql": "007902cc37e0e37e006d8165f727b9a9f2f4b131",
+    "isolated-runtime/sandbox-commerce-v1/test-store-offerings-receipts.sql": "242f87772a7297c3833541aac0c374921a0730f0",
+    "isolated-runtime/sandbox-commerce-v1/history.sql": "d3e7e2b9278547322faa545764b4dd2e49995454",
+    "isolated-runtime/sandbox-commerce-v1/resource-graphs.sql": "7e0ad12101e0a0e5058abc5c4a3aa282986b6cef",
+    "isolated-runtime/sandbox-commerce-v1/delivery-authority.sql": "74e5e8fbfed919830b3709ebf54abbddad29677d",
+    "isolated-runtime/sandbox-commerce-v1/permissions-finalize.sql": "c6f1b9c4e2f2817cc43b708b567ee8dff647e50c",
+    "isolated-runtime/sandbox-commerce-v1/tests/premium-authority.fixture.sql": "6f029652a97ffa79bd4394305d529f07b4fca56f",
+    "isolated-runtime/sandbox-commerce-v1/tests/authority.fixture.sql": "08df17a5291b1c624f00c9eb8e08cbd043a7897c",
+    "isolated-runtime/sandbox-commerce-v1/tests/test-store.fixture.mjs": "2e2ad9a7154ca306369e3ba09b18e4011e8c1dc9",
+    "isolated-runtime/sandbox-commerce-v1/tests/receipts.fixture.mjs": "ed6e3ef13301ad73e611bd010af0900c8de8144a",
+    "supabase/functions/_shared/revenuecat-router-envelope.ts": "7e480b59988c21aef07578bdb180a2888a7c714a",
+    "supabase/functions/_shared/revenuecat-lossless-envelope.ts": "c42223722c77afd8fc61a0a35aa3461b4131a06b",
+    "supabase/functions/_shared/livekit-session-generation.ts": "e88640fdc3f16e021325988ff00df120a462efc9",
+    "supabase/functions/_shared/stripe-connect.ts": "6756930739edb4d1b99a46ae996bec36a7148a51",
+    "supabase/functions/_shared/exact-subject-authority.ts": "fa5747bb85d6607beb5e3e3b42d2ca856ad174da",
+    "supabase/functions/_shared/isolated-test-store-qualification.ts": "49c0d7d882a94e64512eb6a670c020039e27e8e6"
+  },
+  "sharedAuthorityGitSources": {
+    "is_account_deletion_scheduled": {
+      "exactDefinitionSha256": "244602bf2426b16c766fdb49f82bed167bd86537e521ceb3d9dc4848892193e4",
+      "matchingGitSources": [
+        {
+          "path": "supabase/migrations/20260603014500_self_service_account_deletion_30_day_restore.sql",
+          "gitBlob": "c4218351d81f7301e175489093924e90c98d5529",
+          "wholeSourceSha256": "243d060df7218de061cc835953c006bf503220b19b5863580fa5144b08df23ed"
+        }
+      ],
+      "wholeMigrationExecuted": false
+    },
+    "is_account_access_restricted": {
+      "exactDefinitionSha256": "b5024583b2a53bddca870f2bc54cf6b400790f463b5af8cd037d107289006cf7",
+      "matchingGitSources": [
+        {
+          "path": "supabase/migrations/20260824034109_creator_money_authority_integrity_closeout.sql",
+          "gitBlob": "f1c7ad38aa3d00f34e84fc31adfa2533362d948b",
+          "wholeSourceSha256": "2173f03e97bf25437a38e049decd3a8d4120b97df63293dfdc6ba1b16524eb24"
+        }
+      ],
+      "wholeMigrationExecuted": false
+    },
+    "wave1_session_authority_readback": {
+      "exactDefinitionSha256": "7275600e78a07bacfdd80250f3dfb6b782b9c85bbf77f807782b89422199bc65",
+      "matchingGitSources": [
+        {
+          "path": "supabase/migrations/20260826055737_exact_current_session_not_after_authority.sql",
+          "gitBlob": "c516ee17b94d7357df6e79185907f628511a7ec7",
+          "wholeSourceSha256": "24bbbe7adc10d72ed7c77270535b8c365cf41e667978aaf61f43f01a73cfdf6d"
+        }
+      ],
+      "wholeMigrationExecuted": false
+    }
+  },
+  "installationMode": "retained",
+  "installationSourceSha256": "a899f70795d5b9234fdb1e44f694c56da2cff6224a2e71b2fd3508d86b4b0e11",
+  "operationsSourceSha256": "aeeea8e17622e5a78e95cadcc38bf2fe4081436611be90380dd86d4343315659",
+  "retainedProfileSha256": "4f2f12150bf7b010cda011e1b9ca43aa38dd4d15168125d6ea4b0ce8e930bb7e"
+}

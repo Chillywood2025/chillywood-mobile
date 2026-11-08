@@ -35,6 +35,9 @@ export function nativeSourceSnapshot({ repositoryRoot = process.cwd(), platform,
     if (["package.json", "config/release/production-ota-generation.json", "config/release/internal-native-generation.json"].includes(name)) return false;
     if (REQUIRED.includes(name) || [".npmrc", "google-services.json", "GoogleService-Info.plist"].includes(name)) return true;
     if (/^app\.config\./u.test(name) || /^(?:patches|vendor)\//u.test(name)) return true;
+    // These app.config/plugin imports define native Test Store identities and
+    // generated configuration. Changes require a new matching native cohort.
+    if (/^config\/test-store-debug(?:-[A-Za-z0-9-]+)?\.(?:js|json)$/u.test(name)) return true;
     if (name.startsWith(`${platform}/`) || name.startsWith(`config/${platform}/`)) return true;
     if (name.startsWith("modules/")) return !name.includes(platform === "ios" ? "/android/" : "/ios/");
     if (name.startsWith("plugins/")) {

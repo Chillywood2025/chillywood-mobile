@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
+import { downloadIncomingCallGradle, GRADLE_SHA256 } from "./lib/incoming-call-gradle-download.mjs";
 
 // Executes generated Kotlin, not a JavaScript reimplementation or a source-text
 // assertion. JVM mode uses a local Kotlin compiler and JUnit4/stdlib classpath
@@ -50,7 +51,10 @@ const runAndroid = () => {
   const propertiesPath = path.join(output, "gradle/wrapper/gradle-wrapper.properties");
   const properties = fs.readFileSync(propertiesPath, "utf8");
   assert(properties.includes("gradle-8.14.3-bin.zip"), "Review the native test harness when the locked Expo Gradle version changes.");
-  fs.appendFileSync(propertiesPath, "\ndistributionSha256Sum=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531\n");
+  // Acquire only the pinned official artifact with bounded network retries.
+  // Verify before the wrapper sees it; retain its independent digest check.
+  const distribution = downloadIncomingCallGradle(path.join(output, "gradle-8.14.3-bin.zip"));
+  fs.appendFileSync(propertiesPath, `\nnetworkTimeout=60000\ndistributionUrl=${pathToFileURL(distribution).href}\ndistributionSha256Sum=${GRADLE_SHA256}\n`);
   const versions = fs.readFileSync(path.join(root, "node_modules/@react-native/gradle-plugin/gradle/libs.versions.toml"), "utf8");
   assert(versions.includes('agp = "8.11.0"') && versions.includes('kotlin = "2.1.20"'), "Review native test harness compiler versions after a React Native dependency update.");
   write("local.properties", `sdk.dir=${sdk.replaceAll("\\", "\\\\")}\n`);

@@ -97,7 +97,7 @@ function inspect(input) {
 
 test('all production picker callsites are inventoried and use the explicit shared ownership path', () => {
   assert.deepEqual(inspect(sources), []);
-  assert.equal(inventory.callers.length, 11);
+  assert.equal(inventory.callers.length, 13);
   assert.ok(inventory.callers.every(entry => entry.reason && entry.surfaces.length));
   assert.ok(inventory.wrappers.every(entry => entry.reason));
   assert.match(inventory.boundaries.deviceOnlyPending.android, /does not expose EXTRA_LOCAL_ONLY/);

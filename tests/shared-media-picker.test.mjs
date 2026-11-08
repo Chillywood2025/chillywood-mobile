@@ -52,9 +52,14 @@ function runtime(platform = 'ios') {
 
 async function mount(t, r = runtime()) {
   const { useMediaPicker } = r.load('hooks/useMediaPicker.tsx');
-  const state = { key: 'thread:one', hostVisible: true }; let picker, other;
+  const state = { key: 'thread:one', hostVisible: true, sheetKey: 'original', instance: null }; let picker, other;
   const root = createRoot(container()); let unmounted = false;
-  function Harness() { picker = useMediaPicker(state.key); other = useMediaPicker('other-screen'); return state.hostVisible ? picker.mediaPickerSheet : null; }
+  function Harness() {
+    picker = useMediaPicker(state.key); other = useMediaPicker('other-screen');
+    const sheet = picker.mediaPickerSheet, onMount = sheet?.props.onMount;
+    const recordMount = React.useCallback(instance => { state.instance = instance; onMount?.(instance); }, [onMount]);
+    return state.hostVisible && sheet ? React.cloneElement(sheet, { key: state.sheetKey, onMount: recordMount }) : null;
+  }
   const act = fn => React.act(async () => { await fn(); await tick(); });
   const render = () => act(() => root.render(React.createElement(Harness)));
   const unmount = async () => { if (!unmounted) { unmounted = true; await act(() => root.unmount()); } };
@@ -516,4 +521,38 @@ test('native hidden retention never overrides exact account retirement or explic
     await h.act(() => cancel ? h.picker().cancelMediaPicker() : h.publish(owner('replacement')));
     await h.act(() => held.resolve(asset)); assert.equal(await op.result, null);
   }
+});
+
+test('same physical sheet effect replay fences synchronously then restores only that instance', async t => {
+  const h = await mount(t), held = deferred(); let operation;
+  const result = await h.start({ pick: (_source, op) => { operation = op; return held.promise; } });
+  await h.choose(); await h.dismiss(); assert.equal(operation.isCurrent(), true);
+  const props = h.picker().mediaPickerSheet.props, instance = h.screen.instance;
+  await h.act(() => {
+    props.onUnmount(instance); assert.equal(operation.isCurrent(), false, 'cleanup fences before any promise settles');
+    props.onMount(instance); assert.equal(operation.isCurrent(), true, 'same-instance immediate replay is not a new owner');
+  });
+  await h.act(() => held.resolve(asset)); assert.equal(await result.result, asset);
+});
+
+test('different physical sheet remount cannot accept a late native result', async t => {
+  const h = await mount(t), held = deferred(); let operation;
+  const result = await h.start({ pick: (_source, op) => { operation = op; return held.promise; } });
+  await h.choose(); await h.dismiss(); const original = h.screen.instance;
+  h.screen.sheetKey = 'replacement'; await h.render();
+  assert.notEqual(h.screen.instance, original); assert.equal(operation.isCurrent(), false);
+  await h.act(() => held.resolve(asset)); assert.equal(await result.result, null);
+});
+
+for (const retirement of ['account', 'target', 'cancel', 'unmount']) test(`sheet replay cannot revive ${retirement} retirement or accept late native bytes`, async t => {
+  const h = await mount(t), held = deferred(); let operation;
+  const result = await h.start({ pick: (_source, op) => { operation = op; return held.promise; } });
+  await h.choose(); await h.dismiss();
+  const props = h.picker().mediaPickerSheet.props, instance = h.screen.instance;
+  if (retirement === 'account') await h.act(() => h.publish(owner('replacement')));
+  if (retirement === 'target') { h.screen.key = 'replacement'; await h.render(); }
+  if (retirement === 'cancel') await h.act(() => h.picker().cancelMediaPicker());
+  if (retirement === 'unmount') await h.unmount();
+  await h.act(() => { props.onUnmount(instance); props.onMount(instance); assert.equal(operation.isCurrent(), false); held.resolve(asset); });
+  assert.equal(await result.result, null);
 });

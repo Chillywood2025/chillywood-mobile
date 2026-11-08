@@ -20,6 +20,9 @@ import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { debugLog, reportRuntimeError } from "./logger";
 import { getRuntimeConfig } from "./runtimeConfig";
 import { isRevenueCatPurchaseResultForProduct as validatesPurchaseResultForProduct } from "./revenuecatPurchaseClosure";
+import { isIsolatedTestStoreFlavor } from "./isolatedTestStoreBuild";
+import { isIsolatedTestStoreV2Flavor } from "./isolatedTestStoreV2Build";
+import { isIsolatedTestStoreV3Flavor } from "./isolatedTestStoreV3Build";
 
 export type { PurchasesPackage } from "react-native-purchases";
 
@@ -192,6 +195,12 @@ export function getRevenueCatProductionReadiness(): RevenueCatProductionReadines
 }
 
 export function getRevenueCatConfigurationState(): RevenueCatConfigurationState {
+  // This native flavor has a dedicated SDK owner. Even malformed or release
+  // variants must never fall back to the ordinary Apple/Google project.
+  if (isIsolatedTestStoreFlavor() || isIsolatedTestStoreV2Flavor() || isIsolatedTestStoreV3Flavor()) return {
+    mode: "disabled", apiKey: "", shouldConfigure: false,
+    reason: "Legacy billing is unavailable in the isolated Test Store build.",
+  };
   const runtime = getRuntimeConfig();
   const applicationId = normalizeText(Application.applicationId);
 
@@ -567,6 +576,7 @@ export function restoreRevenueCatPurchases(options?: RevenueCatMutationOptions):
 }
 
 export async function openRevenueCatManageSubscriptions() {
+  if (isIsolatedTestStoreFlavor() || isIsolatedTestStoreV2Flavor() || isIsolatedTestStoreV3Flavor()) return false;
   const applicationId = normalizeText(Application.applicationId) || CHILLYWOOD_ANDROID_PACKAGE;
   const url = ANDROID_PLATFORM
     ? `${PLAY_STORE_SUBSCRIPTIONS_URL}?package=${encodeURIComponent(applicationId)}`

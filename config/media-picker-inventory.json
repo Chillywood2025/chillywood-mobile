@@ -18,6 +18,8 @@
     }
   },
   "callers": [
+    { "file": "components/monetization/isolated-paid-video-screens.tsx", "requests": ["chooseVideoFile"], "surfaces": ["Sandbox video draft"], "reason": "Shared source sheet and operation ownership precede bounded MP4 byte snapshot; account/session retirement and explicit reservation remain mandatory." },
+    { "file": "components/monetization/isolated-paid-video-v2-screens.tsx", "requests": ["chooseVideoFile"], "surfaces": ["Sandbox video draft", "Matching immutable upload file"], "reason": "Shared source sheet preserves exact target/session ownership, MP4/16MiB hashing and separate explicit upload; Files can preserve original bytes when library export differs." },
     { "file": "app/channel-settings.tsx", "requests": ["pickCreatorVideo", "onPickClipCoverFile", "pickPlatformBrandAsset"], "surfaces": ["Studio video", "Clip video", "Clip cover", "Platform hero image", "hero video", "background", "avatar", "logo", "watermark"], "reason": "Video library can import a compatible rendition; Files preserves original video selection. Shared exact editor/session guards and explicit Save remain mandatory." },
     { "file": "app/profile/[userId].tsx", "requests": ["attachProfilePostFile", "attachProfilePostCommentFile", "onChooseProfileMedia"], "surfaces": ["Profile post", "Profile comment", "avatar", "background"], "reason": "Appearance review/save remains explicit; post/comment attachment formats remain surface-specific." },
     { "file": "app/settings.tsx", "requests": ["onChooseProfileMedia"], "surfaces": ["Settings avatar", "Settings background"], "reason": "Appearance Modal is dismissed before the shared source sheet; review/save is retained." },
@@ -31,6 +33,7 @@
     { "file": "app/admin.tsx", "requests": ["submitRachiProfileImage"], "surfaces": ["Official Rachi avatar"], "reason": "Restricted official target and exact current Owner/Admin operator authority remain mandatory." }
   ],
   "wrappers": [
+    { "file": "_lib/isolatedPaidVideoFiles.ts", "reason": "Uses only the registered attachment adapter with the shared operation token. Bounded byte lease preserves MP4 validation, hash identity, cache cleanup and account/session fencing." },
     { "file": "_lib/deviceImagePicker.ts", "reason": "Typed single-image adapter with caller-compatible MIME list." },
     { "file": "_lib/deviceVideoPicker.ts", "reason": "Typed single-video adapter; no direct screen SDK launch." },
     { "file": "_lib/socialAttachmentPicker.ts", "reason": "Preserves social MIME/size validation and truthful missing metadata." },

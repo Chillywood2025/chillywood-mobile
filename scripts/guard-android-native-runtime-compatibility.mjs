@@ -56,14 +56,18 @@ assert.notEqual(easJson.build?.["ios-qa"]?.channel, productionOtaGeneration.chan
 assert.notEqual(productionOtaGeneration.iosRuntimeVersion, appJson.runtimeVersion);
 assert.notEqual(productionOtaGeneration.androidRuntimeVersion, manifest.runtimeVersion);
 assert.equal(internalNativeGeneration.schemaVersion, 1);
-assert.equal(internalNativeGeneration.generation, "internal-native-v19");
+assert.equal(internalNativeGeneration.generation, "internal-native-v21");
 assert.equal(internalNativeGeneration.channels?.android, "android-internal-v2");
 assert.equal(internalNativeGeneration.channels?.ios, "ios-internal-v2");
-assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v19");
-assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v19");
-assert.equal(internalNativeGeneration.supersedes?.generation, "internal-native-v18");
-assert.equal(internalNativeGeneration.supersedes?.androidRuntimeVersion, "1.0.0-android-production-v18");
-assert.equal(internalNativeGeneration.supersedes?.iosRuntimeVersion, "1.0.0-ios-production-v18");
+assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v21");
+assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v21");
+assert.equal(internalNativeGeneration.supersedes?.generation, "internal-native-v20");
+assert.equal(internalNativeGeneration.supersedes?.androidRuntimeVersion, "1.0.0-android-production-v20");
+assert.equal(internalNativeGeneration.supersedes?.iosRuntimeVersion, "1.0.0-ios-production-v20");
+assert.equal(internalNativeGeneration.supersedes?.androidCompatibilityDigest,
+  "44a0ea69f93d99cd811d5dc399aee029b7aeafb5e448d1436f8d8add36765a85");
+assert.equal(internalNativeGeneration.supersedes?.iosCompatibilityDigest,
+  "1e2bcf8d913f11a6aab22c25dc81f773f5650d071a4764f129f6e3a80b078ff4");
 assert.equal(internalNativeGeneration.policy?.internalOnly, true);
 assert.equal(internalNativeGeneration.policy?.publicReleaseAuthorized, false);
 assert.equal(internalNativeGeneration.policy?.storeSubmissionOutsideInternalTestersAuthorized, false);

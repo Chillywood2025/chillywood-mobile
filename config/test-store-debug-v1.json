@@ -1,0 +1,10 @@
+{
+  "protocol": "isolated-test-store-build-v1",
+  "mode": "test-store-debug",
+  "applicationId": "com.chillywood.mobile.teststoredebug",
+  "scheme": "chillywoodteststoredebug",
+  "storageNamespace": "@chillywood/test-store-debug-v1",
+  "iosRuntimeVersion": "1.0.0-test-store-debug-v1-ios",
+  "androidRuntimeVersion": "1.0.0-test-store-debug-v1-android",
+  "providerConfiguration": null
+}
