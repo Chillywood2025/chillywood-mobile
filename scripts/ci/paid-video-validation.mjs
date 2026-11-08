@@ -40,7 +40,7 @@ export function paidVideoAppFiles(repositoryRoot=root){
   .sort().map(name=>`tests/${name}`);
 }
 export function paidVideoValidationPlan(){return {nativeStages:PAID_VIDEO_NATIVE_STAGES,nativeCases:84,
- http:{cases:103,actualGatewayEntries:4},app:{tests:270,files:paidVideoAppFiles(),libraryTestsInExistingCanonicalLane:19,
+ http:{cases:103,actualGatewayEntries:4},app:{tests:273,files:paidVideoAppFiles(),libraryTestsInExistingCanonicalLane:19,
   historicalBridgeExcluded:'tests/isolated-paid-video-http-bridge.test.mjs'},portableStages:PAID_VIDEO_PORTABLE_STAGES,
  execution:'sequential/local-disposable-only',providerOrProductionActions:false};}
 
@@ -58,6 +58,12 @@ export function nodeFailureDiagnostics(tap,repositoryRoot=root,subprocessSignal=
   if(match){const file=path.resolve(match[1]),relative=path.relative(repositoryRoot,file);
    if(!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative)&&/^[a-zA-Z0-9_./-]+\.test\.mjs$/u.test(relative))
     current.location=`${relative}:${Number(match[2])}:${Number(match[3])}`;
+  }
+  match=/^    [a-zA-Z0-9_.<> ]+ \(file:\/\/([^()]+\.test\.mjs):(\d+):(\d+)\)$/u.exec(line);
+  if(match){const file=path.resolve(match[1]),relative=path.relative(repositoryRoot,file);
+   if(!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative)&&/^[a-zA-Z0-9_./-]+\.test\.mjs$/u.test(relative)){
+    current.sourceFrames??=[];if(current.sourceFrames.length<8)current.sourceFrames.push(`${relative}:${Number(match[2])}:${Number(match[3])}`);
+   }
   }
   match=/^  failureType: ['"]?([a-zA-Z]+)['"]?\s*$/u.exec(line);
   if(match&&['testCodeFailure','cancelledByParent','subtestsFailed','testTimeoutFailure','testAborted','hookFailed','uncaughtException','unhandledRejection'].includes(match[1]))current.failureType=match[1];
@@ -85,6 +91,8 @@ export function collectPaidVideoSourceManifest(){
  }
  paths.add('scripts/ci/fixtures/paid-video-v2-baseline.json');
  paths.add('tests/helpers/isolated-test-store-v3-fixtures.mjs');
+ for(const name of ['hooks/useMediaPicker.tsx', 'hooks/useOwnedPickedMediaState.ts', 'components/ui/MediaSourceSheet.tsx', 'components/ui/tokens.ts', 'components/ui/icon-symbol.tsx', 'components/ui/icon-symbol.ios.tsx', 'components/ui/chillywood-visual-system.tsx', '_lib/deviceAttachmentPicker.ts', '_lib/deviceGalleryPicker.ts', '_lib/mediaPickerCoordinator.ts', '_lib/mediaPickerResources.ts', '_lib/userFacingErrors.ts', '_lib/imageUploadPolicy.ts', 'tests/helpers/media-picker-host.mjs'])paths.add(name);
+ visit('modules/chillywood-gallery-picker');
  paths.add('scripts/ci/fixtures/paid-video-native-profiles.json');
  visit('scripts/ci/paid-video-prerequisites');
  for(const name of ['isolated-paid-video-authoring-v2','isolated-paid-video-upload-v2','isolated-paid-video-range-v1',
@@ -220,7 +228,7 @@ function main(args){
    ISOLATED_PAID_VIDEO_PLATFORM_HTTP_RUN_ID:expectedRunId,ISOLATED_PAID_VIDEO_PLATFORM_HTTP_EVIDENCE_DIRECTORY:expectedEvidenceDirectory});
   report.http={cases:103,actualGatewayEntries:4,proofSha256:sha(aggregateBytes),cleanupVerified:true};save();
   const fixtureHashes=Object.fromEntries([...Object.values(fixtures),proofFile,captureFile].map(file=>[file,sha(fs.readFileSync(file))]));
-  const stages=[{name:'app-successor',tests:270,files:paidVideoAppFiles()},...PAID_VIDEO_PORTABLE_STAGES];report.nodeStages=[];
+  const stages=[{name:'app-successor',tests:273,files:paidVideoAppFiles()},...PAID_VIDEO_PORTABLE_STAGES];report.nodeStages=[];
   for(const stage of stages){
    const tap=execute('node-'+stage.name,process.execPath,['--test','--test-reporter=tap',...stage.files]);
    const result=validateNodeTap(tap,stage.tests);report.nodeStages.push({name:stage.name,...result});

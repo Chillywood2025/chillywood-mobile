@@ -67,6 +67,8 @@ type ActiveRequest = {
   id: number;
   retired: boolean;
   choosing: boolean;
+  sheetInstance: object | null;
+  sheetPresent: boolean;
   isCurrent: () => boolean;
   resolveChoice: (source: Choice) => void;
   retainNativeResultWhileHidden?: () => boolean;
@@ -105,19 +107,32 @@ export function useMediaPicker(targetKey: string) {
     }
     close(null);
   }, [close]);
-  const retireHiddenSheet = useCallback((id?: number) => {
+  const retireHiddenSheet = useCallback((id: number | undefined, instance: object) => {
     const request = active.current;
-    if (!request || request.id !== id) return;
+    if (!request || request.id !== id || request.sheetInstance !== instance) return;
     if (!request.choosing && request.isCurrent() && request.retainNativeResultWhileHidden?.()) return;
     // An auth/loading early-return may remove the sheet without unmounting its
     // hook. Native onDismiss cannot be relied on after removal from the tree.
     // Retire without launching; if native already began, its promise still owns
     // the lease and finally is the only place that releases it.
-    request.retired = true;
+    // Fence late results synchronously. Only effect replay on the very same
+    // mounted instance can restore presence before cancellation settles.
+    request.sheetPresent = false;
     if (mounted.current) setPreparingRequestId((current) => current === request.id ? null : current);
-    request.resolveChoice(null);
+    void Promise.resolve().then(() => {
+      if (!request.sheetPresent) { request.retired = true; request.resolveChoice(null); }
+    });
   }, []);
-  const onSheetUnmount = useCallback(() => retireHiddenSheet(sheet?.id), [retireHiddenSheet, sheet?.id]);
+  const onSheetUnmount = useCallback((instance: object) => retireHiddenSheet(sheet?.id, instance), [retireHiddenSheet, sheet?.id]);
+  const onSheetMount = useCallback((instance: object) => {
+    const request = active.current;
+    if (!request || request.id !== sheet?.id || request.retired) return;
+    if (request.sheetInstance && request.sheetInstance !== instance
+      && !(!request.choosing && request.isCurrent() && request.retainNativeResultWhileHidden?.())) {
+      request.retired = true; request.resolveChoice(null); return;
+    }
+    request.sheetInstance = instance; request.sheetPresent = true;
+  }, [sheet?.id]);
 
   useLayoutEffect(() => {
     if (active.current && !active.current.isCurrent()) cancelMediaPicker();
@@ -150,9 +165,9 @@ export function useMediaPicker(targetKey: string) {
     const release = acquireMediaPickerSession();
     if (!release) return null;
     const generation = target.current.generation;
-    const request: ActiveRequest = { id: ++requestGeneration.current, retired: false, choosing: false, isCurrent: () => false, resolveChoice: () => undefined,
+    const request: ActiveRequest = { id: ++requestGeneration.current, retired: false, choosing: false, sheetInstance: null, sheetPresent: true, isCurrent: () => false, resolveChoice: () => undefined,
       retainNativeResultWhileHidden: options.retainNativeResultWhileHidden };
-    const isCurrent = () => mounted.current && active.current === request && !request.retired
+    const isCurrent = () => mounted.current && active.current === request && !request.retired && request.sheetPresent
       && generation === target.current.generation
       && (authority ? sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()) : !getCurrentAccountSessionAuthoritySnapshot())
       && (options.isCurrent?.() ?? true);
@@ -197,7 +212,7 @@ export function useMediaPicker(targetKey: string) {
   }, []);
 
   const preparing = !!sheet && preparingRequestId === sheet.id && !sheet.visible && !!active.current?.isCurrent();
-  const mediaPickerSheet = sheet ? <MediaSourceSheet {...sheet} preparing={preparing} onDismiss={onDismiss} onUnmount={onSheetUnmount}
+  const mediaPickerSheet = sheet ? <MediaSourceSheet {...sheet} preparing={preparing} onDismiss={onDismiss} onMount={onSheetMount} onUnmount={onSheetUnmount}
     onCancel={cancelMediaPicker} onChoose={(source) => {
       if (active.current?.isCurrent()) close(source); else cancelMediaPicker();
     }} /> : null;

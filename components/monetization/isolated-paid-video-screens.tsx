@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSession } from "../../_lib/session";
 import { type AccountSessionAuthorityBinding } from "../../_lib/accountSessionAuthority";
 import { capturePaidVideoActions, type PaidVideoActions, type PaidVideoPresentation, type PaidVideoView } from "../../_lib/isolatedPaidVideoActions";
+import { useMediaPicker } from "../../hooks/useMediaPicker";
 import { type PaidVideoUpload } from "../../_lib/isolatedPaidVideo";
 import { AppBackButton } from "../navigation/app-back-button";
 import { isIsolatedTestStoreV3Flavor } from "../../_lib/isolatedTestStoreV3Build";
@@ -47,6 +48,7 @@ function IsolatedPaidVideoV1Screen({ page }: { page: PaidVideoView["page"] }) {
   return <VideoSession key={`${page}:${id}:${authority.userId}:${authority.sessionGeneration}`} authority={authority} page={page} id={id} />;
 }
 function VideoSession({ authority, page, id }: { authority: AccountSessionAuthorityBinding; page: PaidVideoView["page"]; id: string }) {
+  const { pickMedia, mediaPickerSheet } = useMediaPicker(`sandbox-video:${page}:${id}`);
   const [capturedAuthority] = useState(() => Object.freeze({ ...authority }));
   const router = useRouter(); const [actions, setActions] = useState<PaidVideoActions | null>(null);
   const [state, setState] = useState<PaidVideoPresentation | null>(null); const [connectionError, setConnectionError] = useState(false);
@@ -64,8 +66,12 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
   const unresolved = state?.attempts.some(a => a.state === "prepared" || a.state === "unknown") ?? false;
   const noMutation = unavailable || !state?.journalReady || unresolved;
   const safeRun = (run: (owner: PaidVideoActions) => Promise<void>) => { if (actions) void run(actions); };
+  const chooseVideoFile = () => safeRun(a => a.chooseFile(choose => pickMedia({ title: "Choose sandbox MP4", mediaKind: "video", sources: ["photos", "files"],
+    pick: (source, operation) => choose(source, operation),
+  })));
   const amountMinor = /^\d+(?:\.\d{1,2})?$/u.test(amount) ? Math.round(Number(amount) * 100) : 0;
   return <Frame title={titles[page]}>
+    {mediaPickerSheet}
     <Action testID="paid-video-studio-link" onPress={() => router.push("/sandbox-videos/studio" as Href)}>Creator studio</Action>
     <Action testID="paid-video-history-link" onPress={() => router.push("/sandbox-videos/history" as Href)}>My drafts and saved actions</Action>
     <Text style={styles.body}>File transfer and test checkout are not connected in this authoring version. Saved records can still be reviewed.</Text>
@@ -82,7 +88,7 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
     {page === "studio" && <View style={styles.card}>
       <Text accessibilityRole="header" style={styles.subheading}>Prepare a draft</Text>
       <TextInput testID="paid-video-title" accessibilityLabel="Video title" value={title} onChangeText={setTitle} maxLength={200} editable={!unavailable} placeholder="Video title" placeholderTextColor="#a9b5c5" style={styles.input} />
-      <Action testID="paid-video-select" disabled={unavailable} onPress={() => safeRun(a => a.chooseFile())}>Choose MP4</Action>
+      <Action testID="paid-video-select" disabled={unavailable} onPress={chooseVideoFile}>Choose MP4</Action>
       {state?.file && <Text style={styles.body}>{state.file.name} · {state.file.expectedByteLength.toLocaleString()} bytes inspected locally</Text>}
       <Action testID="paid-video-reserve" disabled={noMutation || !state?.file || !title.trim() || !state.capability?.creatorEligible || !state.capability.uploadRouteAvailable}
         onPress={() => safeRun(a => a.reserve(title))}>Save draft reservation</Action>

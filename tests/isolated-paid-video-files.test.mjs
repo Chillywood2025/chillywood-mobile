@@ -29,9 +29,24 @@ function fixture({ platform = "ios", unavailable = false } = {}) {
     "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => current, sameAccountSessionAuthority: same,
       subscribeToAccountSessionAuthority(fn) { listeners.add(fn); return () => listeners.delete(fn); } },
   };
-  const scope = { exports: {}, Error, require(name) { if (unavailable && name === "expo-crypto") throw Error("native module missing"); assert.ok(name in bindings, name); return bindings[name]; } };
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../_lib/isolatedPaidVideoFiles.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, scope);
-  return { api: scope.exports, calls, asset, initial: Buffer.from(bytes),
+  const cache = new Map();
+  const runtime = file => {
+    if(cache.has(file))return cache.get(file);
+    const scope = { exports: {}, Error, require(name) {
+      if (unavailable && name === "expo-crypto") throw Error("native module missing");
+      if(name in bindings)return bindings[name];
+      assert.ok(name.startsWith("./"),name);return runtime(name.slice(2));
+    } };
+    cache.set(file,scope.exports);
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../_lib/${file}.ts`, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, scope);
+    return scope.exports;
+  };
+  const rawApi=runtime("isolatedPaidVideoFiles"),coordinator=runtime("mediaPickerCoordinator");
+  const api={...rawApi,capturePaidVideoFilePicker(authority){const picker=rawApi.capturePaidVideoFilePicker(authority);return {...picker,choose:async()=>{
+    const release=coordinator.acquireMediaPickerSession();if(!release)return null;
+    try{return await coordinator.runMediaPickerSelection(()=>true,operation=>picker.choose("files",operation));}finally{release();}
+  }};}};
+  return { api, rawApi, calls, asset, initial: Buffer.from(bytes),
     change(value) { current = value; for (const listener of listeners) listener(value); }, cancel() { cancel = true; },
     sizes(value) { size = value; pickedSize = value; }, mismatch() { pickedSize++; }, mutate(value) { bytes = Buffer.from(value); size = bytes.length; },
     delayPicker() { pickerWait = deferred(); return pickerWait; }, delayBytes() { bytesWait = deferred(); return bytesWait; }, delayHash() { hashWait = deferred(); return hashWait; },
@@ -75,8 +90,8 @@ test("file length change during read fails; successful selection invalidates the
   const stable = fixture(), picker = stable.api.capturePaidVideoFilePicker(A); const first = await picker.choose(), second = await picker.choose();
   assert.throws(() => first.takeBytes()); assert.deepEqual(Buffer.from(second.takeBytes()), stable.initial); picker.dispose();
 });
-test("parallel native selections and stale completed leases cannot bypass the captured account", async () => {
+test("parallel shared selections and stale completed leases cannot bypass the captured account", async () => {
   const f = fixture(), owner = f.api.capturePaidVideoFilePicker(A), wait = f.delayPicker(); const pending = owner.choose(); await Promise.resolve();
-  await assert.rejects(owner.choose(), e => e.code === "selection_busy"); wait.resolve(); const lease = await pending;
+  assert.equal(await owner.choose(),null); wait.resolve(); const lease = await pending;
   f.change(B); f.change(A); assert.throws(() => lease.takeBytes(), e => e.code === "authority_retired"); owner.dispose();
 });

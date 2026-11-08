@@ -5,7 +5,7 @@ import { captureIsolatedPaidVideoV2Client, IsolatedPaidVideoV2Error, newPaidVide
 import { createIsolatedPaidVideoV2AttemptJournal, type IsolatedPaidVideoV2Attempt } from "./isolatedPaidVideoV2Attempts";
 import { capturePaidVideoV2TransferClient, IsolatedPaidVideoTransferError, type PaidVideoV2TransferClient } from "./isolatedPaidVideoTransfer";
 import { createIsolatedPaidVideoTransferJournal, type PaidVideoTransferAttempt } from "./isolatedPaidVideoTransferAttempts";
-import { capturePaidVideoFilePicker, type PaidVideoFileExpectation, type PaidVideoFileLease } from "./isolatedPaidVideoFiles";
+import { capturePaidVideoFilePicker, type PaidVideoFileExpectation, type PaidVideoFileLease, type PaidVideoFileSelection } from "./isolatedPaidVideoFiles";
 import { formatPaidVideoOfferCode, parsePaidVideoOfferCode } from "./isolatedPaidVideoOfferCode";
 
 export type PaidVideoV2View = Readonly<{ page: "home" | "studio" | "upload" | "offer" | "history" | "status"; id?: string }>;
@@ -206,7 +206,7 @@ export async function capturePaidVideoV2Actions(authority: AccountSessionAuthori
       const data = await read("studio.read", { limit: 50, cursor }); if (!current()) return;
       const byId = new Map(state.uploads.map(u => [u.id, u])); for (const u of data.uploads) byId.set(u.id, u);
       publish({ uploads: [...byId.values()], nextCursor: data.nextCursor }); }),
-    chooseFile: () => exclusive(async () => { const selected = await picker.choose(); if (!current()) { selected?.dispose(); return; }
+    chooseFile: (select: PaidVideoFileSelection) => exclusive(async () => { const selected = await select(picker.choose); if (!current()) { selected?.dispose(); return; }
       if (selected) { file?.dispose(); file = selected; publish({ file: selected.expectation, notice: "File inspected locally. Server byte verification, scanning and moderation are still required." }); } }),
     reserve: (title: string) => exclusive(async () => {
       const capability = await read("capability.read", {}); if (current()) publish({ capability });

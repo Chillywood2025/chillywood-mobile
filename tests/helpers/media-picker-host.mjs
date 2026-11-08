@@ -45,5 +45,5 @@ export function loadMediaPickerHost({ React, native, host, snapshot, subscribe =
     }, [invokePicker]);
     return {...picker, pickMedia};
   } : hooks.useMediaPicker;
-  return { resources, ownedState: ownership, ...resources, ...ownership, ...hooks, useMediaPicker };
+  return { resources, coordinator, ownedState: ownership, ...resources, ...ownership, ...hooks, useMediaPicker };
 }

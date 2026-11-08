@@ -66,6 +66,38 @@ export function splitSQL(source) {
   return statements;
 }
 
+// Preserve explicit transaction-local role/ACL semantics. Legacy migrations
+// without SET LOCAL ROLE retain the historical statement-by-statement replay.
+export function migrationReplayUnits(source) {
+  const statements = splitSQL(source);
+  const head = sql => sql.replace(/--[^\n]*/gu, '').replace(/\/\*[\s\S]*?\*\//gu, '').trim();
+  if (!statements.some(sql => /^set\s+local\s+role\b/iu.test(head(sql)))) return statements;
+  const units = [];
+  let block = null;
+  for (const sql of statements) {
+    const command = head(sql);
+    if (/^begin\s*;?$/iu.test(command)) {
+      if (block) throw new Error('Nested role-sensitive migration transaction');
+      block = [sql];
+      continue;
+    }
+    if (/^set\s+local\s+role\b/iu.test(command) && !block) throw new Error('SET LOCAL ROLE requires an explicit transaction');
+    if (block) {
+      if (/^create extension.*\b(pg_cron|pg_net)\b/iu.test(command)
+        || /^select public\.recover_media_scan_jobs\(/iu.test(command)) {
+        throw new Error('Role-sensitive transaction cannot contain managed replay substitutions');
+      }
+      block.push(sql);
+      if (/^commit\s*;?$/iu.test(command)) {
+        units.push(block.join(''));
+        block = null;
+      } else if (/^rollback\s*;?$/iu.test(command)) throw new Error('Role-sensitive transaction must commit');
+    } else units.push(sql);
+  }
+  if (block) throw new Error('Unclosed role-sensitive migration transaction');
+  return units;
+}
+
 export async function createDatabase({overlayLiveDrift = false, applyRepair = true, repairInMigrationOrder = true, includeHeldStudio = true,
   implicitApiGrants = true, excludeMigrations = [], databaseFactory = null} = {}) {
   if (applyRepair && !repairMigrationPath) throw new Error('Repair migration is not available');
@@ -131,7 +163,7 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = tr
       && !excludeMigrations.includes(name)
       && (includeHeldStudio || !heldStudioBundleVersions.some(version => name.startsWith(`${version}_`)))).sort();
     for (const file of files) {
-      const statements = splitSQL(fs.readFileSync(path.join(migrationDirectory, file), 'utf8'));
+      const statements = migrationReplayUnits(fs.readFileSync(path.join(migrationDirectory, file), 'utf8'));
       for (let index = 0; index < statements.length; index++) {
         const sql = statements[index];
         const head = sql.replace(/--[^\n]*/gu, '').replace(/\/\*[\s\S]*?\*\//gu, '').trim();

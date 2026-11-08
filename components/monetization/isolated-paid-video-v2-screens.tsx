@@ -9,6 +9,7 @@ import { type PaidVideoV2Upload } from "../../_lib/isolatedPaidVideoV2";
 import { AppBackButton } from "../navigation/app-back-button";
 import { IsolatedTestStoreV3Checkout } from "./isolated-test-store-v3-checkout";
 import { formatPaidVideoOfferCode, parsePaidVideoOfferCode } from "../../_lib/isolatedPaidVideoOfferCode";
+import { useMediaPicker } from "../../hooks/useMediaPicker";
 
 const path = (kind: "upload" | "offer" | "status", id: string) => `/sandbox-videos/${kind}/${encodeURIComponent(id)}` as Href;
 const scalar = (value: string | string[] | undefined) => typeof value === "string" ? value : "";
@@ -44,6 +45,7 @@ export function IsolatedPaidVideoV2Screen({ page }: { page: PaidVideoV2View["pag
   return <VideoSession key={`${page}:${id}:${authority.userId}:${authority.sessionGeneration}`} authority={authority} page={page} id={id} />;
 }
 function VideoSession({ authority, page, id }: { authority: AccountSessionAuthorityBinding; page: PaidVideoV2View["page"]; id: string }) {
+  const { pickMedia, mediaPickerSheet } = useMediaPicker(`sandbox-video-v2:${page}:${id}`);
   const [capturedAuthority] = useState(() => Object.freeze({ ...authority }));
   const router = useRouter(); const [actions, setActions] = useState<PaidVideoV2Actions | null>(null);
   const [state, setState] = useState<PaidVideoV2Presentation | null>(null); const [connectionError, setConnectionError] = useState(false);
@@ -62,8 +64,12 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
   const unresolved = state?.attempts.some(a => a.state === "prepared" || a.state === "unknown") ?? false;
   const noMutation = unavailable || !state?.journalReady || unresolved;
   const safeRun = (run: (owner: PaidVideoV2Actions) => Promise<void>) => { if (actions) void run(actions); };
+  const chooseVideoFile = () => safeRun(a => a.chooseFile(choose => pickMedia({ title: "Choose sandbox MP4", mediaKind: "video", sources: ["photos", "files"],
+    pick: (source, operation) => choose(source, operation),
+  })));
   const amountMinor = /^\d+(?:\.\d{1,2})?$/u.test(amount) ? Math.round(Number(amount) * 100) : 0;
   return <Frame title={titles[page]}>
+    {mediaPickerSheet}
     <Action testID="paid-video-studio-link" onPress={() => router.push("/sandbox-videos/studio" as Href)}>Creator studio</Action>
     <Action testID="paid-video-history-link" onPress={() => router.push("/sandbox-videos/history" as Href)}>My drafts and saved actions</Action>
     <Text style={styles.body}>Upload availability is checked for your account and this build. Stored bytes still require scanning and moderation before publication.</Text>
@@ -89,7 +95,7 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
     {page === "studio" && <View style={styles.card}>
       <Text accessibilityRole="header" style={styles.subheading}>Prepare a draft</Text>
       <TextInput testID="paid-video-title" accessibilityLabel="Video title" value={title} onChangeText={setTitle} maxLength={200} editable={!unavailable} placeholder="Video title" placeholderTextColor="#a9b5c5" style={styles.input} />
-      <Action testID="paid-video-select" disabled={unavailable} onPress={() => safeRun(a => a.chooseFile())}>Choose MP4</Action>
+      <Action testID="paid-video-select" disabled={unavailable} onPress={chooseVideoFile}>Choose MP4</Action>
       {state?.file && <Text style={styles.body}>{state.file.name} · {state.file.expectedByteLength.toLocaleString()} bytes inspected locally</Text>}
       <Action testID="paid-video-reserve" disabled={noMutation || !state?.file || !title.trim() || !state.capability?.creatorEligible || !state.capability.uploadRouteAvailable}
         onPress={() => safeRun(a => a.reserve(title))}>Save draft reservation</Action>
@@ -103,7 +109,7 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
     {state?.upload && <><UploadSummary upload={state.upload} />
       {page !== "upload" && <Action testID="paid-video-open-upload" disabled={unavailable} onPress={() => router.push(path("upload", state.upload!.id))}>Review current draft</Action>}</>}
     {page === "upload" && <View style={styles.card}>
-      <Action testID="paid-video-select-transfer" disabled={unavailable} onPress={() => safeRun(a => a.chooseFile())}>Select matching MP4</Action>
+      <Action testID="paid-video-select-transfer" disabled={unavailable} onPress={chooseVideoFile}>Select matching MP4</Action>
       {state?.file && <Text style={styles.body}>{state.file.name} · {state.file.expectedByteLength.toLocaleString()} locally inspected bytes</Text>}
       <Action testID="paid-video-transfer" disabled={noMutation || !state?.transferReady || !state.file || !state.upload?.transferAvailable
         || state.file.expectedSha256 !== state.upload.expectedSha256 || state.file.expectedByteLength !== state.upload.expectedByteLength

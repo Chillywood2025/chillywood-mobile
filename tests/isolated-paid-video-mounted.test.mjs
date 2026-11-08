@@ -5,6 +5,7 @@ import test from "node:test";
 import { webcrypto, createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { createRequire } from "node:module";
+import { loadMediaPickerHost } from "./helpers/media-picker-host.mjs";
 const require = createRequire(import.meta.url), React = require("react"), ts = require("typescript"), { createRoot } = require("react-dom/client");
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const noop = () => {}, doc = { addEventListener: noop, removeEventListener: noop, defaultView: globalThis, nodeType: 9 };
@@ -26,6 +27,7 @@ function load(file, bindings, extra = {}) {
 }
 function fixture({ initial = A, platform = "ios", memory = new Map(), strict = false } = {}) {
   let current = initial, nodes = [], params = {}, beforeStore = async () => {}, failStorage = false, picked = 0, requestIds = [];
+  let beforeDigest = async () => {}, waitingFor = null;
   const listeners = new Set(), calls = [], navigations = [];
   const authority = { getCurrentAccountSessionAuthoritySnapshot: () => current,
     sameAccountSessionAuthority: (a, b) => !!a && !!b && ["userId", "accountId", "sessionGeneration", "restoreOnly"].every(k => a[k] === b[k]),
@@ -39,10 +41,14 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
   { fetch: async (url, options) => { const body = JSON.parse(options.body); calls.push({ url, options, body }); return { ok: true, json: async () => respond(body) }; } });
   const secureId = api.newPaidVideoRequestId; api.newPaidVideoRequestId = () => requestIds.shift() ?? secureId();
   const journal = load("../_lib/isolatedPaidVideoAttempts.ts", { "@react-native-async-storage/async-storage": storage, "./isolatedPaidVideo": api });
+  const mediaPicker = loadMediaPickerHost({React,native,host:primitive,snapshot:()=>current,subscribe:authority.subscribeToAccountSessionAuthority});
+  const adapter = load("../_lib/deviceAttachmentPicker.ts", {"./mediaPickerCoordinator":mediaPicker.coordinator,
+    "./userFacingErrors":load("../_lib/userFacingErrors.ts",{}),
+    "expo-document-picker": { async getDocumentAsync() { picked++; return { canceled: false, assets: [{ name: "Private.mp4", uri: "file:///private/cache/file.mp4", mimeType: "video/mp4", size: bytes.length }] }; } }});
   const files = load("../_lib/isolatedPaidVideoFiles.ts", { "react-native": native, "./accountSessionAuthority": authority, "./isolatedPaidVideo": api,
-    "expo-document-picker": { async getDocumentAsync() { picked++; return { canceled: false, assets: [{ name: "Private.mp4", uri: "file:///private/cache/file.mp4", mimeType: "video/mp4", size: bytes.length }] }; } },
+    "./deviceAttachmentPicker":adapter,"./mediaPickerResources":mediaPicker.resources,
     "expo-file-system": { File: class { exists = true; size = bytes.length; async arrayBuffer() { return Uint8Array.from(bytes).buffer; } } },
-    "expo-crypto": { CryptoDigestAlgorithm: { SHA256: "SHA-256" }, digest: (algorithm, data) => webcrypto.subtle.digest(algorithm, Buffer.from(data)) } });
+    "expo-crypto": { CryptoDigestAlgorithm: { SHA256: "SHA-256" }, digest: async (algorithm, data) => { await beforeDigest(); return webcrypto.subtle.digest(algorithm, Buffer.from(data)); } } });
   const actions = load("../_lib/isolatedPaidVideoActions.ts", { "./accountSessionAuthority": authority, "./isolatedPaidVideo": api, "./isolatedPaidVideoAttempts": journal, "./isolatedPaidVideoFiles": files });
   const envelope = (body, data, status = "ok") => ({ protocol: "isolated-paid-video-v1", command: body.command, requestId: body.requestId, status,
     actor: { userId: current.userId, accountId: current.accountId, sessionGeneration: current.sessionGeneration }, data });
@@ -55,6 +61,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
     assert.ok(data, body.command); return envelope(body, clone(data), body.command === "upload.recover" ? "unknown" : "ok");
   };
   const ui = load("../components/monetization/isolated-paid-video-screens.tsx", { react: React, "react-native": native,
+    "../../hooks/useMediaPicker":mediaPicker,
     "react-native-safe-area-context": { SafeAreaView: primitive("SafeAreaView") }, "expo-router": { useLocalSearchParams: () => params, useRouter: () => ({ push: p => navigations.push(p), replace: p => navigations.push(p), canGoBack: () => false }) },
     "../../_lib/session": { useSession: () => ({ user: current ? { id: current.userId } : null, authority: current && { ...current }, isLoading: false }) },
     "../../_lib/isolatedPaidVideoActions": actions, "../navigation/app-back-button": { AppBackButton: primitive("AppBackButton") },
@@ -63,10 +70,32 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
   const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(done => setImmediate(done)); };
   const f = { memory, calls, navigations, api, journal: () => journal.createIsolatedPaidVideoAttemptJournal({ userId: initial.userId, storage }), envelope,
     async render(page, next = params) { params = next; nodes = []; await React.act(async () => { const element = React.createElement(ui.IsolatedPaidVideoScreen, { page }); root.render(strict ? React.createElement(React.StrictMode, null, element) : element); await settle(); }); },
-    async press(id) { const n = f.node(id); assert.ok(n, id); assert.equal(n.props.disabled, false, id); await React.act(async () => { n.props.onPress(); await settle(); }); },
+    async press(id, source = "files") {
+      const n = f.node(id); assert.ok(n, id); assert.equal(n.props.disabled, false, id);
+      const before = picked;
+      await React.act(async () => { n.props.onPress(); await settle(); });
+      if (["paid-video-select","paid-video-select-transfer"].includes(id)) {
+        assert.equal(picked,before,"shared source sheet must precede native picker");
+        if (source === null) return;
+        const choice=f.node(`media-source-${source}`);assert.ok(choice);
+        await React.act(async()=>{choice.props.onPress();await settle();});
+        if(platform==="ios")assert.equal(picked,before,"iOS native launch waits for dismissal");
+        await React.act(async()=>{nodes.findLast(n=>n.name==="Modal")?.props.onDismiss();await settle();});
+        await f.waitFor(() => f.node("paid-video-refresh")?.props.disabled === false, "file inspection settles");
+      }
+    },
     async input(id, value) { const n = f.node(id); assert.ok(n, id); await React.act(async () => { n.props.onChangeText(value); await settle(); }); },
     publish(value) { current = value; for (const fn of listeners) fn(value); },
     async change(value) { await React.act(async () => { f.publish(value); await settle(); }); },
+    async waitFor(predicate, label = "expected mounted outcome") {
+      waitingFor = label;
+      const deadline = Date.now() + 5000;
+      while (!(await predicate())) {
+        assert.ok(Date.now() < deadline, label);
+        await React.act(async () => { await new Promise(done => setImmediate(done)); });
+      }
+    },
+    waitingFor: () => waitingFor, beforeDigest(fn) { beforeDigest = fn; },
     async flush() { await React.act(settle); }, async dispose() { await React.act(async () => { root.unmount(); await settle(); }); },
     node: id => visible().filter(n => n.props.testID === id).at(-1), text: () => visible().filter(n => n.name === "Text").flatMap(n => n.props.children).join("\n"),
     respond(fn) { respond = fn; }, get responder() { return respond; }, ids(ids) { requestIds = [...ids]; }, picked: () => picked,
@@ -145,4 +174,30 @@ if (process.env.ISOLATED_PAID_VIDEO_FIXTURE) test("mounted offer and status view
     assert.equal(f.calls.length, 1); assert.doesNotMatch(f.text(), /could not be verified/u);
     if (command === "offer.read") assert.match(f.text(), /Test offer/u); else assert.match(f.text(), /server recorded/u);
   }
+});
+
+test("file selection waits for delayed digest and durable preparation waits for storage", async t => {
+  const f = fixture(); t.after(() => f.dispose()); await f.render("studio"); await f.input("paid-video-title", upload.title);
+  let releaseDigest, enteredDigest = false;
+  const digestGate = new Promise(resolve => { releaseDigest = resolve; });
+  f.beforeDigest(async () => { enteredDigest = true; await digestGate; });
+  const selection = f.press("paid-video-select");
+  // Drain independently of React.act to avoid overlapping act scopes.
+  const deadline = Date.now() + 5000;
+  while (!enteredDigest || f.waitingFor() !== "file inspection settles") { assert.ok(Date.now() < deadline, "digest starts"); await new Promise(resolve => setImmediate(resolve)); }
+  assert.equal(f.calls.some(c => c.body?.command === "upload.reserve"), false);
+  releaseDigest(); await selection;
+  assert.equal(f.node("paid-video-reserve").props.disabled, false);
+  let releaseStore, enteredStore = false;
+  const storeGate = new Promise(resolve => { releaseStore = resolve; });
+  f.beforeStore(async () => { enteredStore = true; await storeGate; });
+  const reserve = f.press("paid-video-reserve");
+  const storeDeadline = Date.now() + 5000;
+  while (!enteredStore) { assert.ok(Date.now() < storeDeadline, "storage starts"); await new Promise(resolve => setImmediate(resolve)); }
+  assert.equal(f.calls.some(c => c.body?.command === "upload.reserve"), false, "no fetch before durable storage");
+  await reserve;
+  assert.equal(f.calls.some(c => c.body?.command === "upload.reserve"), false);
+  releaseStore();
+  await f.waitFor(async () => (await f.journal().list()).at(-1)?.state === "completed", "durable reservation completes");
+  assert.equal(f.calls.filter(c => c.body?.command === "upload.reserve").length, 1);
 });
