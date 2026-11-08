@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {setTimeout as delay} from 'node:timers/promises';
 import {createHistoricalDeploymentDatabase} from './helpers/historical-deployment-schema-fixture.mjs';
+import {databaseFactory as nativeDatabaseFactory} from './helpers/native-deployment-database.mjs';
+import {observerBarrierSql,observerBarrierKey} from './helpers/payout-wrapper-native-drift-fixture.mjs';
 import * as legacy from '../scripts/sandbox-payout-notification-exact-deploy.mjs';
 import {loadBundle,readbackSql,classifyState,buildApplySql,deploy as rawDeploy,expectedSocialForeignKeys,lockTables,VERSION,NAME,HASH,MIGRATION} from '../scripts/sandbox-payout-notification-social588-deploy.mjs';
 import {loadBundle as loadSocial} from '../scripts/social-engagement-exact-deploy.mjs';
@@ -54,11 +57,14 @@ test('missing or asynchronously rejected source validation prevents every write'
 });
 test('actual SQL derives social588 from historical586 without adopting a new production hash', {timeout:300000},async t=>{
  const b=structuredClone(bundle),social=loadSocial();
- const {db}=await createHistoricalDeploymentDatabase({implicitApiGrants:false,excludeMigrations:[MIGRATION.split('/').at(-1)]});t.after(()=>db.close());
+ const {db}=await createHistoricalDeploymentDatabase({implicitApiGrants:false,excludeMigrations:[MIGRATION.split('/').at(-1)],databaseFactory:process.env.NATIVE_DEPLOYMENT_PG_BIN?nativeDatabaseFactory:null});t.after(()=>db.close());
+ const version=Number((await db.query('show server_version_num')).rows[0].server_version_num);
+ assert.equal(Math.floor(version/10000),process.env.NATIVE_DEPLOYMENT_PG_BIN?17:18);
  await db.exec(`create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text not null primary key,statements text[],name text,created_by text,idempotency_key text unique,rollback text[]);
  insert into supabase_migrations.schema_migrations(version,name,statements) select (20000000000000+i)::text,'synthetic_'||i,array['select 1;'] from generate_series(1,585) i;
  create role supabase_read_only_user bypassrls;grant pg_read_all_data to supabase_read_only_user;
- grant select on public.notification_preferences to anon;`);
+ grant select on public.notification_preferences to anon;
+ insert into cron.job(jobname,schedule,command,active) values('notification-activity-worker','10 seconds','select 1',true);`);
  const predecessor=fs.readFileSync('supabase/migrations/20261102194000_sandbox_creator_cashout_execution.sql','utf8');
  await db.query('insert into supabase_migrations.schema_migrations(version,name,statements) values($1,$2,$3)',['20261102194000','sandbox_creator_cashout_execution',[predecessor]]);
  const read=async(sql=readbackSql(b))=>{
@@ -95,5 +101,40 @@ test('actual SQL derives social588 from historical586 without adopting a new pro
   const postDrift=sql.replace('insert into supabase_migrations.schema_migrations',change+' insert into supabase_migrations.schema_migrations');
   await assert.rejects(db.exec(postDrift),/observer_postcheck_failed/);await db.exec('rollback');assert.equal(classifyState(b,await read()),'ready');
  }
- await db.exec(sql);assert.equal(classifyState(b,await read()),'applied');
+ if(db.nativeVersion){
+  const waitForBlock=async holder=>{
+   const pid=Number((await holder.query('select pg_backend_pid() pid')).rows[0].pid),deadline=Date.now()+20000;
+   while(Date.now()<deadline){if((await holder.query('select $1::integer=any(pg_blocking_pids($2::integer)) blocked',[pid,db.backendPid])).rows[0].blocked)return;await delay(20);}
+   assert.fail('native apply did not wait on the exact competing backend');
+  };
+  // Existing source DML must drain before the canonical table lock proceeds.
+  await db.withConnection(async holder=>{
+   await holder.query('begin;lock table public.notification_activity_events in row exclusive mode;');
+   assert.ok(sql.endsWith('commit;'));const pending=db.exec(sql.slice(0,-7)+'rollback;').then(()=>null,error=>error);
+   try{await waitForBlock(holder);}finally{await holder.query('rollback;');}
+   assert.equal(await pending,null);
+  });assert.equal(classifyState(b,await read()),'ready');
+  // A change committed while the apply waits must be rechecked under its locks.
+  await db.withConnection(async holder=>{
+   const originalName=(await holder.query('select name from supabase_migrations.schema_migrations order by version limit 1')).rows[0].name;
+   await holder.query("begin;lock table supabase_migrations.schema_migrations in share row exclusive mode;update supabase_migrations.schema_migrations set name='native_stale_history' where version=(select min(version) from supabase_migrations.schema_migrations);");
+   const pending=db.exec(sql).then(()=>null,error=>error);
+   try{await waitForBlock(holder);}finally{await holder.query('commit;');}
+   assert.match((await pending)?.message??'',/observer_baseline_changed/);await db.exec('rollback');
+   await holder.query('update supabase_migrations.schema_migrations set name=$1 where version=(select min(version) from supabase_migrations.schema_migrations)',[originalName]);
+  });assert.equal(classifyState(b,await read()),'ready');
+  // Counterexample retained deliberately: cron is observed, not frozen. An
+  // independent edit after the final postcheck can commit alongside the DDL.
+  await db.withConnection(async holder=>{
+   await holder.query('begin');await holder.query('select pg_advisory_xact_lock($1)',[observerBarrierKey]);
+   const pending=db.exec(observerBarrierSql(sql,"notify pgrst,'reload schema';",{outsideDo:true})).then(()=>null,error=>error);
+   try{await waitForBlock(holder);await holder.query("update cron.job set schedule='1 minute' where jobname='notification-activity-worker';");}
+   finally{await holder.query('commit;');}
+   assert.equal(await pending,null);
+   const drift=await read();assert.equal(drift.observerHistory.length,1);assert.throws(()=>classifyState(b,drift),/BASELINE_CONTRACT_MISMATCH/);
+   await holder.query("update cron.job set schedule='10 seconds' where jobname='notification-activity-worker';");
+  });
+  t.diagnostic(`${db.nativeVersion}: source-lock wait, post-wait stale rejection, and late independent cron-edit limitation reproduced`);
+ }else await db.exec(sql);
+ assert.equal(classifyState(b,await read()),'applied');
 });

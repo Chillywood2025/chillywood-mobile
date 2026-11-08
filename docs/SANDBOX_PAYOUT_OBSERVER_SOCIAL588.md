@@ -44,3 +44,25 @@ the actual two social migrations, and proves projected invariant equality before
 running the actual observer body. Synthetic fixture values never update the
 production manifest. Native simultaneous-session and real target qualification
 remain separate from these deterministic tests.
+
+## Opt-in native PostgreSQL 17 rehearsal
+
+The same test can use actual PostgreSQL 17 rather than the default PGlite 18
+engine. Set `NATIVE_DEPLOYMENT_PG_BIN` to reviewed local 17.x binaries with
+`pgcrypto` and `pg_trgm` installed, and `NATIVE_PG_DRIVER` to an installed,
+exact `pg@8.16.3/lib/index.js`:
+
+```sh
+NATIVE_DEPLOYMENT_PG_BIN=/absolute/native/bin \
+NATIVE_PG_DRIVER=/absolute/node_modules/pg/lib/index.js \
+node --test tests/sandbox-payout-notification-social588.test.mjs
+```
+
+The adapter creates its own disposable cluster and unique Unix socket, disables
+TCP listeners and rejects password authentication. It never accepts a caller's
+database/server endpoint. Native assertions cover the complete before/after
+SQL replay plus actual competing-session lock wait, history changed while
+waiting, and an independent cron edit committed after the final observation.
+That last counterexample intentionally remains a documented limitation.
+Fixture managed services remain local doubles; this is not provider, production
+role parity, deployed-data parity or installed-device evidence.
