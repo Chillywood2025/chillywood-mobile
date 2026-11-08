@@ -3,8 +3,9 @@
   "baselineManifestSha256": "8b67430c0291b1fe839f1404ca5f164eef304d9da0a07ae0542ed20107732584",
   "files": {
     "isolated-runtime/native-store-sandbox-v1/journal.sql": "363c91af19e26e7a8ba89d392b668d711a542382dbc0a007f8acadf8273a5142",
-    "isolated-runtime/native-store-sandbox-v1/quote.sql": "8533eaeb88ed8121b2570daeea067f7a30988eaa8a2b2f44a315ad9d781bd721",
+    "isolated-runtime/native-store-sandbox-v1/quote.sql": "0fa036a446433f8eb52d608bc21f478a476eb9b6c2daf4cc1893321aa7167410",
     "isolated-runtime/native-store-sandbox-v1/claim.sql": "f47ffcf6c52498f55c9c67ef6bbdf1f11a63fcd689186ee756789072ed194ab0",
-    "isolated-runtime/native-store-sandbox-v1/install-check.sql": "704a15ff4c1190f72187554636f292cde2ecb4214279646f00d0c004b8620f31"
+    "isolated-runtime/native-store-sandbox-v1/reservation.sql": "c53c52864c6328ca6a022fca6b576773db9954b2edbf628b4435ff32080a9e54",
+    "isolated-runtime/native-store-sandbox-v1/install-check.sql": "fbadce2de21bc18f45ebfad56daa3e5fa64ae57910d9c9096a167d97952109f6"
   }
 }

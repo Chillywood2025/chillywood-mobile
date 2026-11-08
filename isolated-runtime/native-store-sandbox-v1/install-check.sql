@@ -1,4 +1,4 @@
--- Fresh combined install only, after journal/quote/claim and before the shared
+-- Fresh combined install only, after journal/quote/claim/reservation and before the shared
 -- permissions-finalize.sql. No existing shared-table privileges are changed.
 set local role sbx_v1_core_owner;
 create function sandbox_commerce_v1.native_store_install_commit_check() returns trigger
@@ -12,6 +12,7 @@ begin
   or exists(select 1 from sandbox_commerce_v1.native_store_catalog_bindings)
   or exists(select 1 from sandbox_commerce_v1.native_store_selections)
   or exists(select 1 from sandbox_commerce_v1.native_store_claims)
+  or exists(select 1 from sandbox_commerce_v1.native_store_reservations)
  then raise exception 'native_store_install_finalization_required';end if;
  return null;
 end $$;

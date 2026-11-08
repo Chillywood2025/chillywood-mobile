@@ -1,18 +1,18 @@
 {
   "protocol": "native-store-install-delta-v1",
-  "sourceDigest": "61b88691bb3e8fa1d40b2d678efa3b84913ef45d5793b91b490b519f97ccb05c",
-  "addedCatalogSha256": "87f51e27918dd83e075a181ed104a0dc9a8e8ec741c7e1fed7425c308712729a",
+  "sourceDigest": "edf88fbb5135df9fffe39ca2ba6603ed0256cf31e057d6663af7d85b346c46e2",
+  "addedCatalogSha256": "c2ba5f8795675345bf5686b4447cec00126a510483cd9792e358fe11ed7ffe60",
   "counts": {
-    "column": 1019,
-    "constraint": 668,
-    "function": 188,
-    "index": 248,
+    "column": 1031,
+    "constraint": 675,
+    "function": 192,
+    "index": 252,
     "membership": 8,
-    "policy": 140,
-    "relation": 141,
+    "policy": 141,
+    "relation": 142,
     "role": 4,
     "schema": 2,
-    "trigger": 997
+    "trigger": 1003
   },
   "publicFunctions": [
     "isolated_paid_video_abandon_v3(p_buyer_id uuid, p_session_id uuid, p_command text, p_request_id uuid, p_configuration_digest text, p_payload jsonb)",
@@ -49,7 +49,8 @@
     "native_store_sandbox_claim_read_v1(p_claim_id uuid)",
     "native_store_sandbox_command_v1(p_user_id uuid, p_session_id uuid, p_command text, p_request_id uuid, p_payload jsonb)",
     "native_store_sandbox_journal_read_v1(p_receipt_id uuid)",
-    "native_store_sandbox_journal_v1(p_intake jsonb)"
+    "native_store_sandbox_journal_v1(p_intake jsonb)",
+    "native_store_sandbox_reservation_v1(p_user_id uuid, p_session_id uuid, p_command text, p_request_id uuid, p_payload jsonb)"
   ],
   "publicUsageRecipients": [
     "native_store_sandbox_v1_owner",

@@ -1,6 +1,6 @@
 import { authenticateRequest,createAuthClient,createAdminClient } from "../_shared/stripe-connect.ts";
 import { readVerifiedSupabaseSessionGeneration } from "../_shared/livekit-session-generation.ts";
-import { createNativeStoreSandboxCommandHandlerV1 } from "../_shared/native-store-sandbox-command-v1.ts";
+import { createNativeStoreSandboxCommandHandlerV1,adaptNativeStoreReservationResultV1 } from "../_shared/native-store-sandbox-command-v1.ts";
 export const handler=createNativeStoreSandboxCommandHandlerV1({
  authenticate:async request=>{
   const authorization=request.headers.get("authorization");if(!authorization||authorization.length>8192)return null;
@@ -12,9 +12,10 @@ export const handler=createNativeStoreSandboxCommandHandlerV1({
  },
  execute:async({actor,request})=>{
   const admin=createAdminClient();if(!admin.configured)throw Error("native_store_backend_unavailable");
-  const {data,error}=await admin.client.rpc("native_store_sandbox_command_v1",{p_user_id:actor.userId,p_session_id:actor.sessionGeneration,
+  const reservation=request.command==="reserve"||request.command==="reserve-recover";
+  const {data,error}=await admin.client.rpc(reservation?"native_store_sandbox_reservation_v1":"native_store_sandbox_command_v1",{p_user_id:actor.userId,p_session_id:actor.sessionGeneration,
    p_command:request.command,p_request_id:request.requestId,p_payload:request.payload});
-  if(error)throw Error("native_store_preparation_uncertain");return data;
+  if(error)throw Error("native_store_preparation_uncertain");return reservation?adaptNativeStoreReservationResultV1(data):data;
  },
 });
 if(import.meta.main)Deno.serve(handler);

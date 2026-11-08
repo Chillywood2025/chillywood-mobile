@@ -37,14 +37,14 @@ test('source binding accepts a clean exact committed closure, rejects wrong head
  const prefix='isolated-runtime/native-store-sandbox-v1/';
  try{
   const files=[...new Set([...nativeStoreInstallProfile().files.map(f=>f.path),prefix+'install-profile.mjs',prefix+'install-source.json',prefix+'dependency-probe.sql',
-   prefix+'install-delta.mjs',prefix+'install-delta.json',
+   prefix+'install-delta.mjs',prefix+'install-delta.json',prefix+'install-atomic.mjs',prefix+'install-atomic-rows.json.gz',
    'isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/source-manifest.json','scripts/native-store-install-prepare.mjs',
    'scripts/live-room-exact-deploy.mjs','scripts/studio-rolling-deploy.mjs','package.json','package-lock.json'])];
   for(const f of files){fs.mkdirSync(path.dirname(path.join(dir,f)),{recursive:true});fs.copyFileSync(path.join(root,f),path.join(dir,f));}
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   git('init','-q');git('add','.');git('-c','user.name=Synthetic Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Synthetic source binding fixture');const head=git('rev-parse','HEAD');
   const {sourceBinding}=await import(pathToFileURL(path.join(dir,'scripts/native-store-install-prepare.mjs')).href);
-  assert.equal(sourceBinding(head).source,head);assert.equal(sourceBinding(head).modules,38);
+  assert.equal(sourceBinding(head).source,head);assert.equal(sourceBinding(head).modules,39);
   assert.throws(()=>sourceBinding('0'.repeat(40)),/SOURCE_HEAD_MISMATCH/u);
   fs.appendFileSync(path.join(dir,prefix+'claim.sql'),'\n-- mutation during hypothetical transport');
   assert.throws(()=>sourceBinding(head),/TRACKED_SOURCE_DIRTY/u);

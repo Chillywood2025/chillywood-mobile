@@ -2,7 +2,7 @@
 
 `install-profile.mjs` extends the **unchanged, hash-pinned combined-readiness
 profile** with native journal, quote, claim and final-install assertions. It
-returns one explicit transaction and its 38-file source digest. It has no target
+returns one explicit transaction and its 39-file source digest. It has no target
 URL, network transport, apply switch or migration-history writer. No fixture is
 part of this closure. `install-source.json` pins both the prior manifest bytes
 and all four native source files. Editing or reordering the baseline fails closed.
@@ -116,9 +116,9 @@ worked around by changing identity checks.
 
 `install-delta.mjs` compares before/after snapshots from the **same database**.
 `install-delta.json` pins the independently observed added catalog of the fixed
-38-module local managed install, not any hosted baseline. The contract covers
-2 schemas, 4 roles, 8 role-membership rows, 188 functions (35 public wrappers),
-141 relations, 1,019 columns, 668 constraints, 248 indexes, 140 policies and 997
+39-module local managed install, not any hosted baseline. The contract covers
+2 schemas, 4 roles, 8 role-membership rows, 192 functions (36 public wrappers),
+142 relations, 1,031 columns, 675 constraints, 252 indexes, 141 policies and 1,003
 triggers. Existing catalog rows, roles, memberships, defaults and event triggers
 must remain unchanged. Only the public schema ACL receives two explicit additions:
 USAGE without grant option for the new core and journal owner roles. No CREATE
@@ -143,8 +143,18 @@ apply a migration. The install source/digest itself is unchanged by this contrac
 
 The added digest is precisely SHA-256 of JavaScript `JSON.stringify` applied to
 the lexicographically sorted array of individually `JSON.stringify`-serialized
-normalized rows. It is **not** a hash of PostgreSQL `jsonb::text`. A future atomic
+normalized rows. It is **not** a hash of PostgreSQL `jsonb::text`. An atomic
 SQL postcheck must implement and independently prove equivalent canonicalization,
-or compare pinned expected normalized rows semantically as JSONB. Copying the
+or compare pinned expected normalized rows semantically as JSONB, as below. Copying the
 digest into a different SQL hashing formula would not implement this contract.
 This manifest alone is therefore not an executable transactional postcheck.
+
+### Executable atomic semantic postcheck (source only)
+
+`nativeStoreAtomicInstallSQL()` in `install-atomic.mjs` wraps the fixed 39-module closure in one transaction. It captures the actual same-database before snapshot in a private temporary table, refuses preexisting native names, forces the original deferred default-off/empty-state guards, and compares both directions using JSONB `EXCEPT ALL` (duplicates matter). Existing catalog rows remain exact except separately checked public schema ACL additions. The added rows are normalized exactly as the portable delta contract and compared semantically against `install-atomic-rows.json`, including exact roles, memberships, ACLs and no new default ACLs. Temporary helpers are dropped before commit; the temporary snapshot drops on commit.
+
+The source-derived row artifact contains no target snapshot or provider data. It is stored as deterministic `install-atomic-rows.json.gz` using built-in Node zlib, preserving the exact canonical JSON bytes while reducing repository/API transfer size. Decoding is bounded to 8 MiB. Before emitting SQL, the assembler validates its original JS canonical digest against the existing `install-delta.json` and fixed source digest. PostgreSQL never guesses that JS digest from `jsonb::text`. Exact source binding compares binary bytes, and tests verify deterministic recompression and reject truncated data. The managed local harness verifies the source pin before optional explicit regeneration with `NATIVE_ATOMIC_PIN_GENERATE=local-fixture-only`; ordinary runs do not rewrite the pin.
+
+For a reviewed source change, explicit `--generate-local-pins` installs only into the harness's disposable local cluster and regenerates both expected delta and semantic rows from its actual catalogs. This mode reports `atomicVerified:false` and `deploymentAllowed:false`, never a successful atomic proof. It preserves old-object/ACL/role delta checks, but does not compare the newly changed catalog with stale expected rows. Normal mandatory CI runs never use generation mode: separate ordinary and shifted-OID atomic verification must pass after regeneration. The quote implementation has an owner-private already-armed helper; the original entry point still arms exactly one transaction budget. The reservation module is included in this 39-module install closure and its table must be empty at the default-off installation commit.
+
+Actual non-superuser PostgreSQL tests execute the atomic wrapper and reject late old-object changes, public CREATE leakage, role LOGIN expansion, old default ACL changes and a duplicated expected row. Each failed attempt restores the full before snapshot and leaves all fresh schemas/roles absent. Independent OID allocation and modeled event-trigger parity remain exercised. This is not an apply executor: it has no network, target URL, transport override, migration-history write or activation. A future executor still needs qualified target identity, expected target baseline/concurrency checks, exact history append, uncertain-write recovery and independent committed readback. No hosted install or checkout qualification is asserted.

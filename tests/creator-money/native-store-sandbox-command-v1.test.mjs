@@ -53,3 +53,18 @@ test('claim request is exact and response never upgrades a client assertion',()=
  assert.equal(api.validateNativeStoreSandboxResultV1({...response,data:{claim:{...claim,originalSessionGeneration:id(88)},reason:null}},actor,request),true);
  for(const patch of [{evidence:'provider_verified'},{settlementAllowed:true},{selectionId:'nssv1_selection_'+id(88)},{transactionIdentifier:'other'},{originalSessionGeneration:'bad'}])assert.equal(api.validateNativeStoreSandboxResultV1({...response,data:{claim:{...claim,...patch},reason:null}},actor,request),false);
 });
+test('existing authenticated command route validates reservation RPC adaptation without laundering authority',async()=>{
+ const command={...input,command:'reserve',payload:{selectionId:'nssv1_selection_'+id(9)}};
+ const reservation={id:'nssv1_reservation_'+id(10),selectionId:command.payload.selectionId,originalRequestId:command.requestId,originalSessionGeneration:actor.sessionGeneration,createdAt:'2026-11-08T00:00:00Z',quoteDigest:'a'.repeat(64),state:'dispatch_reserved',dispatchAllowed:false,providerQualified:false};
+ const rpc={protocol:'native-store-sandbox-reservation-v1',command:'reserve',requestId:command.requestId,actor,status:'ok',data:{reservation,reason:null},dispatchAllowed:false,providerQualified:false};
+ const handler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>actor,execute:async({request})=>{assert.ok(Object.isFrozen(request));assert.ok(Object.isFrozen(request.payload));return api.adaptNativeStoreReservationResultV1(rpc);}});
+ assert.equal((await handler(req(command))).status,200);
+ for(const patch of [{providerQualified:true},{dispatchAllowed:true},{protocol:'other'},{extra:true}])assert.throws(()=>api.adaptNativeStoreReservationResultV1({...rpc,...patch}));
+ for(const patch of [{providerQualified:true},{dispatchAllowed:true},{selectionId:'nssv1_selection_'+id(20)},{originalRequestId:id(20)},{createdAt:'November 8, 2026'},{quoteDigest:'x'}]){
+  assert.equal(api.validateNativeStoreSandboxResultV1(api.adaptNativeStoreReservationResultV1({...rpc,data:{reservation:{...reservation,...patch},reason:null}}),actor,command),false);
+ }
+ const recover={...command,command:'reserve-recover'};
+ const unknown=api.adaptNativeStoreReservationResultV1({...rpc,command:'reserve-recover',status:'unknown',data:{reservation:null,reason:'reservation_unknown'}});
+ assert.equal(api.validateNativeStoreSandboxResultV1(unknown,actor,recover),true);
+ assert.equal(api.parseNativeStoreSandboxRequestV1({...command,payload:{...command.payload,buyerId:actor.userId}}),null);
+});

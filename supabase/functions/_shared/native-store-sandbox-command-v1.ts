@@ -1,7 +1,7 @@
 /** Normal-app quote/preparation only. No purchase SDK or provider mutation. */
 export type NativeStoreSandboxActorV1 = { userId:string;accountId:string;sessionGeneration:string };
 export type NativeStoreSandboxRequestV1 = { protocol:"native-store-sandbox-command-v1";requestId:string;
- command:"offer"|"prepare"|"recover"|"claim"|"claim-recover";payload:Record<string,unknown> };
+ command:"offer"|"prepare"|"recover"|"claim"|"claim-recover"|"reserve"|"reserve-recover";payload:Record<string,unknown> };
 const row=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==="object"&&!Array.isArray(v);
 const keys=(v:Record<string,unknown>,names:string[])=>Object.keys(v).length===names.length&&names.every(k=>Object.hasOwn(v,k));
 const uuid=(v:unknown):v is string=>typeof v==="string"&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(v);
@@ -25,6 +25,7 @@ export function validNativeStoreSandboxQuoteV1(v:unknown):v is Record<string,unk
 export function parseNativeStoreSandboxRequestV1(v:unknown):NativeStoreSandboxRequestV1|null {
  if(!row(v)||!keys(v,["protocol","requestId","command","payload"])||v.protocol!=="native-store-sandbox-command-v1"||!uuid(v.requestId)||!row(v.payload))return null;
  const p=v.payload;
+ if(v.command==="reserve"||v.command==="reserve-recover")return keys(p,["selectionId"])&&id(p.selectionId,"nssv1_selection_")?v as NativeStoreSandboxRequestV1:null;
  if(v.command==="claim"||v.command==="claim-recover")return keys(p,v.command==="claim"?["selectionId","transactionIdentifier","productIdentifier"]:["selectionId"])
  &&id(p.selectionId,"nssv1_selection_")&&(v.command==="claim-recover"||(text(p.transactionIdentifier)&&text(p.productIdentifier)))?v as NativeStoreSandboxRequestV1:null;
  if(v.command==="recover")return keys(p,["originalRequestId"])&&uuid(p.originalRequestId)?v as NativeStoreSandboxRequestV1:null;
@@ -37,6 +38,13 @@ export function validateNativeStoreSandboxResultV1(v:unknown,actor:NativeStoreSa
  if(!row(v)||!keys(v,["protocol","command","requestId","actor","status","data","dispatchAllowed","correlation"])
  ||v.protocol!==request.protocol||v.command!==request.command||v.requestId!==request.requestId||canonical(v.actor)!==canonical(actor)
  ||v.dispatchAllowed!==false||v.correlation!=="unsupported"||!row(v.data)||!["ok","held","unknown"].includes(v.status as string))return false;
+ if(request.command==="reserve"||request.command==="reserve-recover"){
+  const d=v.data,r=d.reservation;
+  if(!keys(d,["reservation","reason"]))return false;
+  if(v.status==="unknown")return request.command==="reserve-recover"&&r===null&&d.reason==="reservation_unknown";
+  return v.status==="ok"&&d.reason===null&&validNativeStoreSandboxReservationV1(r)&&r.selectionId===request.payload.selectionId
+   &&(request.command!=="reserve"||r.originalRequestId===request.requestId);
+ }
  const d=v.data,key=request.command.startsWith("claim")?"claim":request.command==="offer"?"quote":"selection";
  if(!keys(d,[key,"reason"]))return false;
  if(v.status!=="ok")return d[key]===null&&text(d.reason)&&(v.status!=="unknown"||request.command==="recover"||request.command==="claim-recover");
@@ -53,6 +61,20 @@ export function validateNativeStoreSandboxResultV1(v:unknown,actor:NativeStoreSa
  ||!validNativeStoreSandboxQuoteV1(s.quote)||s.quote.creatorId===actor.userId)return false;
  return request.command==="recover"?s.originalRequestId===request.payload.originalRequestId
  :s.originalRequestId===request.requestId&&s.originalSessionGeneration===actor.sessionGeneration&&canonical(s.quote)===canonical(request.payload.expectedQuote);
+}
+export function validNativeStoreSandboxReservationV1(v:unknown):v is Record<string,unknown>{
+ return row(v)&&keys(v,["id","selectionId","originalRequestId","originalSessionGeneration","createdAt","quoteDigest","state","dispatchAllowed","providerQualified"])
+ &&id(v.id,"nssv1_reservation_")&&id(v.selectionId,"nssv1_selection_")&&uuid(v.originalRequestId)&&uuid(v.originalSessionGeneration)
+ &&typeof v.createdAt==="string"&&/^\d{4}-\d\d-\d\dT/u.test(v.createdAt)&&Number.isFinite(Date.parse(v.createdAt))
+ &&typeof v.quoteDigest==="string"&&/^[a-f0-9]{64}$/u.test(v.quoteDigest)&&v.state==="dispatch_reserved"&&v.dispatchAllowed===false&&v.providerQualified===false;
+}
+// Adapt only the known service RPC envelope. Validate BEFORE dropping its
+// providerQualified field, so a hostile provider flag cannot be laundered.
+export function adaptNativeStoreReservationResultV1(v:unknown):unknown{
+ if(!row(v)||!keys(v,["protocol","command","requestId","actor","status","data","dispatchAllowed","providerQualified"])
+ ||v.protocol!=="native-store-sandbox-reservation-v1"||v.providerQualified!==false||v.dispatchAllowed!==false)throw Error("reservation_result_invalid");
+ const {providerQualified: _qualified,...rest}=v;void _qualified;
+ return {...rest,protocol:"native-store-sandbox-command-v1",correlation:"unsupported"};
 }
 export function validNativeStoreSandboxClaimV1(v:unknown):v is Record<string,unknown>{
  return row(v)&&keys(v,["id","selectionId","originalRequestId","originalSessionGeneration","createdAt","transactionIdentifier","productIdentifier","evidence","settlementAllowed"])
@@ -78,6 +100,7 @@ export function createNativeStoreSandboxCommandHandlerV1(deps:{authenticate:(req
    const bytes=new Uint8Array(total);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
    let value:unknown;try{value=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));}catch{return reply(400,{error:"request_invalid"});}
    const parsed=parseNativeStoreSandboxRequestV1(value);if(!parsed)return reply(400,{error:"request_invalid"});
+   Object.freeze(parsed.payload);Object.freeze(parsed);
    const result=await deps.execute({actor,request:parsed});
    if(!validateNativeStoreSandboxResultV1(result,actor,parsed))throw Error("result_invalid");
    return reply(200,result);

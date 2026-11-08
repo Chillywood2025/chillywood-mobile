@@ -66,10 +66,10 @@ export function sourceBinding(source){
  const delta=JSON.parse(fs.readFileSync(path.join(ROOT,prefix+'install-delta.json'),'utf8'));
  requireThat(delta.protocol==='native-store-install-delta-v1'&&delta.sourceDigest===p.sourceDigest&&delta.qualification==='source_delta_only'&&delta.deploymentAllowed===false&&/^[a-f0-9]{64}$/u.test(delta.addedCatalogSha256??''),'NATIVE_SOURCE_DELTA_INVALID');
  const files=[...new Set([...p.files.map(f=>f.path),prefix+'install-profile.mjs',prefix+'install-source.json',prefix+'dependency-probe.sql',
-  prefix+'install-delta.mjs',prefix+'install-delta.json',
+  prefix+'install-delta.mjs',prefix+'install-delta.json',prefix+'install-atomic.mjs',prefix+'install-atomic-rows.json.gz',
   'isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/source-manifest.json',
   'scripts/native-store-install-prepare.mjs','scripts/live-room-exact-deploy.mjs','scripts/studio-rolling-deploy.mjs','package.json','package-lock.json'])];
- for(const file of files){requireThat(git('ls-files','--error-unmatch',file)===file,'SOURCE_NOT_COMMITTED');requireThat(fs.readFileSync(path.join(ROOT,file),'utf8')===execFileSync('git',['show',`${source}:${file}`],{cwd:ROOT,encoding:'utf8'}),'SOURCE_BYTES_CHANGED');}
+ for(const file of files){requireThat(git('ls-files','--error-unmatch',file)===file,'SOURCE_NOT_COMMITTED');requireThat(fs.readFileSync(path.join(ROOT,file)).equals(execFileSync('git',['show',`${source}:${file}`],{cwd:ROOT,maxBuffer:8*1024*1024})),'SOURCE_BYTES_CHANGED');}
  return {source,tree:git('rev-parse','HEAD^{tree}'),sourceDigest:p.sourceDigest,modules:p.files.length,expectedAddedCatalogSha256:delta.addedCatalogSha256};
 }
 async function main(){

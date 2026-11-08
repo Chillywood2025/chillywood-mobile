@@ -36,14 +36,18 @@ returns jsonb language sql stable set search_path='' as $$
  select jsonb_build_object('id','nssv1_selection_'||s.id,'originalRequestId',s.request_id,
  'originalSessionGeneration',s.session_id,'createdAt',s.created_at,'quote',s.quote);
 $$;
-create function sandbox_commerce_v1.native_store_quote_command(p_user uuid,p_session uuid,p_command text,p_request uuid,p_payload jsonb)
+-- Owner-private composition helper. Only wrappers that already armed the one
+-- absolute transaction budget may call this; there is no client bypass flag.
+create function sandbox_commerce_v1.native_store_quote_command_armed(p_user uuid,p_session uuid,p_command text,p_request uuid,p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare allowed text[];buyer jsonb;seller jsonb;prior sandbox_commerce_v1.native_store_selections;
  o sandbox_commerce_v1.offers;r sandbox_commerce_v1.resources;v sandbox_commerce_v1.resource_versions;
  terms sandbox_commerce_v1.video_terms;a sandbox_commerce_v1.delivery_assets;b sandbox_commerce_v1.native_store_catalog_bindings;
  cat jsonb;quote jsonb;body jsonb;status text:='ok';matches integer;enabled boolean;owner_until timestamptz;
 begin
- perform sandbox_commerce_v1.arm_transaction_timeout();
+ if current_setting('transaction_timeout')::interval<=interval '0 seconds'
+  or current_setting('transaction_timeout')::interval>interval '5 seconds'
+ then raise exception 'native_store_quote_unarmed' using errcode='42501';end if;
  perform sandbox_commerce_v1.assert_provider_service();perform sandbox_commerce_v1.assert_generation(false);
  if p_user is null or p_session is null or p_request is null or jsonb_typeof(p_payload) is distinct from 'object' or octet_length(p_payload::text)>8192
  then raise exception 'native_store_quote_request_invalid';end if;
@@ -134,8 +138,14 @@ begin
   'actor',jsonb_build_object('userId',p_user,'accountId',p_user,'sessionGeneration',p_session),'status',status,'data',body,
   'dispatchAllowed',false,'correlation','unsupported');
 end $$;
+create function sandbox_commerce_v1.native_store_quote_command(p_user uuid,p_session uuid,p_command text,p_request uuid,p_payload jsonb)
+returns jsonb language plpgsql security definer set search_path='' as $$
+begin
+ perform sandbox_commerce_v1.arm_transaction_timeout();
+ return sandbox_commerce_v1.native_store_quote_command_armed(p_user,p_session,p_command,p_request,p_payload);
+end $$;
 revoke all on function sandbox_commerce_v1.native_store_quote_immutable(),sandbox_commerce_v1.native_store_selection_json(sandbox_commerce_v1.native_store_selections),
- sandbox_commerce_v1.native_store_quote_command(uuid,uuid,text,uuid,jsonb) from public,anon,authenticated,service_role;
+ sandbox_commerce_v1.native_store_quote_command(uuid,uuid,text,uuid,jsonb),sandbox_commerce_v1.native_store_quote_command_armed(uuid,uuid,text,uuid,jsonb) from public,anon,authenticated,service_role;
 reset role;
 create function public.native_store_sandbox_command_v1(p_user_id uuid,p_session_id uuid,p_command text,p_request_id uuid,p_payload jsonb)
 returns jsonb language sql security definer set search_path='' as $$select sandbox_commerce_v1.native_store_quote_command(p_user_id,p_session_id,p_command,p_request_id,p_payload)$$;

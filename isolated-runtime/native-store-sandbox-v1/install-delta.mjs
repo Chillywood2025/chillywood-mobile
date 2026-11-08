@@ -21,7 +21,7 @@ export const aclRowsSQL=`select coalesce(jsonb_object_agg(k,v),'{}'::jsonb) from
  union all select 'column:'||a.attrelid::regclass::text||'.'||a.attname,${acl('a.attacl')} from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in('sandbox_commerce_v1','native_store_sandbox_v1') and a.attnum>0 and not a.attisdropped and c.relkind in('r','p','v','m','S')
  ) acl_items;`;
 export const deltaSnapshotSQL=`select jsonb_build_object('bootstrapSuperuser',(select rolname from pg_roles where oid=10 and rolsuper),'rows',(${catalogRowsSQL.replace(/;$/u,'')}),'publicAcl',(${publicAclSQL.replace(/;$/u,'')}),'acls',(${aclRowsSQL.replace(/;$/u,'')}));`;
-function normalizeAdded(row,acls,bootstrap){
+export function normalizeAdded(row,acls,bootstrap){
  const copy=[...row];let key,index;
  if(row[0]==='function'){key=`function:${row[1]}.${row[2]}(${row[3]})`;index=5;}
  if(row[0]==='relation'){key=`relation:${row[1]}.${row[2]}`;index=5;}

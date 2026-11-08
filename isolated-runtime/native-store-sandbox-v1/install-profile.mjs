@@ -13,7 +13,7 @@ export function nativeStoreInstallProfile(){
  if(baseline.protocol!=='scpv-combined-source-profile-v1'||baseline.freshInactiveInstallOnly!==true)throw Error('native_install_baseline_invalid');
  const files=baseline.orderedModules.map(m=>{const sql=fs.readFileSync(path.join(root,m.path),'utf8');if(sha(sql)!==m.sha256)throw Error('native_install_source_drift:'+m.path);return {path:m.path,sha256:m.sha256,sql};});
  const finalizer=files.pop();if(finalizer.path!=='isolated-runtime/sandbox-commerce-v1/permissions-finalize.sql')throw Error('native_install_finalizer_invalid');
- for(const name of ['journal.sql','quote.sql','claim.sql','install-check.sql']){
+ for(const name of ['journal.sql','quote.sql','claim.sql','reservation.sql','install-check.sql']){
   if(name==='quote.sql')files.push({...baselineModule('paid-video-install-grant-v2.sql')});
   if(name==='install-check.sql')files.push({...baselineModule('paid-video-install-revoke-v2.sql')});
   const sourcePath=nativePrefix+name,sql=fs.readFileSync(path.join(root,sourcePath),'utf8');

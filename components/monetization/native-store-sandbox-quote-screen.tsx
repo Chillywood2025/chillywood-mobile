@@ -38,16 +38,21 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
   const [expected] = useState(() => Object.freeze({ ...authority }));
   const [revision, setRevision] = useState(0), [busy, setBusy] = useState(true), [quote, setQuote] = useState<NativeSandboxQuote | null>(null);
   const [selection, setSelection] = useState<NativeSandboxSelection | null>(null), [saved, setSaved] = useState(false), [message, setMessage] = useState("Loading the exact store quote…");
+  const [reservationMessage, setReservationMessage] = useState<string | null>(null), [reservationReadable, setReservationReadable] = useState(false);
+  const describeAttempt = (status: string) => status === "dispatch_reserved"
+    ? "A reservation request is saved on this device. Its server status has not been checked. This is not proof that a purchase ran."
+    : status === "blocked_by_other_selection" ? "This store product has a retained request for another selection. Keep that request; do not start a replacement purchase."
+    : status === "reservation_write_uncertain" ? "The reservation request's local save is unconfirmed. Keep this request; do not start a replacement purchase." : null;
   const owner = useRef<{ client: NativeSandboxQuoteClient; active: boolean; pending: boolean } | null>(null);
   useEffect(() => {
     let active = true; let local: typeof owner.current = null;
-    owner.current = null; setBusy(true); setQuote(null); setSelection(null); setSaved(false);
+    owner.current = null; setBusy(true); setQuote(null); setSelection(null); setSaved(false); setReservationMessage(null); setReservationReadable(false);
     void captureNativeSandboxQuoteClient(expected, offerId, store).then(async client => {
       if (!active) { client.dispose(); return; }
       local = { client, active: true, pending: true }; owner.current = local;
       const retained = await client.readSaved(); if (!active) return;
       setSaved(!!retained);
-      if (retained) { setQuote(retained.quote); setMessage("A selection request is saved. Read its server status before doing anything else."); return; }
+      if (retained) { const attempt = await client.readPurchaseAttempt(); if (!active) return; setReservationMessage(describeAttempt(attempt.status)); setReservationReadable(attempt.status === "dispatch_reserved"); setQuote(retained.quote); setMessage("A selection request is saved. Read its server status before doing anything else."); return; }
       const result = await client.offer(); if (!active) return;
       setQuote(result.data.quote ?? null); setMessage(result.status === "ok" ? "Review the exact quote below. Saving a selection is not a purchase." : "This store offer is not ready for preparation yet.");
     }).catch(() => { if (active) setMessage("Store preparation could not be read. No purchase was started by this screen."); })
@@ -60,12 +65,29 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
     // Retain the recovery state even if the local save or remote reply becomes
     // uncertain. Never expose another prepare button after an attempted write.
     if (mode === "prepare") setSaved(true);
-    void (mode === "prepare" ? local.client.prepare(quote!) : local.client.recover()).then(result => {
+    void (mode === "prepare" ? local.client.prepare(quote!) : local.client.recover()).then(async result => {
       if (!local.active) return;
       const value = result.data.selection ?? null; setSelection(value); if (value) setQuote(value.quote);
+      if (value) {
+        try { const attempt = await local.client.readPurchaseAttempt(); if (!local.active) return;
+          setReservationReadable(attempt.status === "dispatch_reserved"); setReservationMessage(attempt.serverReservationConfirmed
+            ? "The server has this exact reservation. No store purchase or test-account qualification is confirmed." : describeAttempt(attempt.status));
+        } catch { if (!local.active) return; setReservationReadable(false); setReservationMessage("The retained reservation could not be read. Keep the saved request; do not start a replacement purchase."); }
+      }
       setMessage(value ? "Your exact selection is recorded. Store purchase and playback are not enabled by this preparation."
         : "The selection is not confirmed. Keep this saved request and check status later; do not start a replacement.");
     }).catch(() => { if (local.active) setMessage("The result is unconfirmed. Keep the saved request and read status; no store purchase was started by this screen."); })
+      .finally(() => { local.pending = false; if (local.active) setBusy(false); });
+  };
+  const readReservation = () => {
+    const local = owner.current; if (!local?.active || local.pending || !selection || !reservationReadable) return;
+    local.pending = true; setBusy(true);
+    void local.client.recoverPurchaseAttempt().then(result => {
+      if (!local.active) return;
+      setReservationMessage(result.status === "ok"
+        ? "The server has this exact reservation. No store purchase or test-account qualification is confirmed."
+        : "The saved reservation is not confirmed on the server. Keep the original request; do not start a replacement purchase.");
+    }).catch(() => { if (local.active) setReservationMessage("Reservation status could not be confirmed. Keep the original request; do not start a replacement purchase."); })
       .finally(() => { local.pending = false; if (local.active) setBusy(false); });
   };
   const checkDeviceProduct = () => {
@@ -75,6 +97,8 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
       if (!local.active) return;
       setMessage(result.status === "matched"
         ? "This device's store product and price match the server quote. This does not verify a test account or enable a purchase."
+        : result.reason === "sdk_account_unavailable" ? "The store SDK account could not be matched to your current account. No purchase was started."
+        : result.reason === "payments_unavailable" ? "This device is not reporting store payment capability. No purchase was started."
         : "This device's store product and price could not be matched. No purchase was started.");
     }).catch(() => { if (local.active) setMessage("Store availability could not be read. No purchase was started."); })
       .finally(() => { local.pending = false; if (local.active) setBusy(false); });
@@ -87,6 +111,8 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
       <Text style={styles.body}>Offer revision {quote.offerRevision} · content revision {quote.resourceRevision}</Text></>}
     <Button id="native-sandbox-prepare" disabled={busy || !quote || saved || !!selection || !owner.current} action={() => run("prepare")}>Save test selection</Button>
     <Button id="native-sandbox-recover" disabled={busy || !saved || !owner.current} action={() => run("recover")}>Read saved selection status</Button>
+    {reservationMessage && <Text testID="native-sandbox-reservation-status" accessibilityLiveRegion="polite" style={styles.body}>{reservationMessage}</Text>}
+    {reservationReadable && <Button id="native-sandbox-reservation-recover" disabled={busy || !selection || !owner.current} action={readReservation}>Read saved reservation status</Button>}
     <Button id="native-sandbox-refresh" disabled={busy} action={() => setRevision(n => n + 1)}>Reconnect and read status</Button>
     <Button id="native-sandbox-check-product" disabled={busy || !quote || !owner.current} action={checkDeviceProduct}>Check device store availability</Button>
     <Text style={styles.body}>Native one-time receipt correlation still needs qualification. A displayed price, saved selection or SDK result is not proof of paid access.</Text>

@@ -3,12 +3,14 @@
 // fixture_admin supplies explicit synthetic shared dependencies, never a target.
 import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import process from 'node:process';
 import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_process';
+import {gzipSync} from 'node:zlib';
+import {nativeStoreAtomicInstallSQL} from './install-atomic.mjs';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 import {installEventTriggerParity} from './event-trigger-parity.fixture.mjs';
 import {readbackSQL,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
-import {deltaSnapshotSQL,verifyNativeInstallDelta} from './install-delta.mjs';
-assert.ok(process.argv.length>=4&&process.argv.length<=6);assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
-const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding'].includes(f)));
+import {deltaSnapshotSQL,describeNativeInstallDelta,verifyNativeInstallDelta,normalizeAdded} from './install-delta.mjs';
+assert.ok(process.argv.length>=4&&process.argv.length<=7);assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
+const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding','--generate-local-pins'].includes(f)));
 const triggerParity=flags.includes('--event-trigger-parity'),oidPadding=flags.includes('--oid-padding');
 const here=path.dirname(fileURLToPath(import.meta.url)),base=path.resolve(here,'../sandbox-commerce-v1'),profile=nativeStoreInstallProfile();
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'native-managed-')),data=path.join(directory,'data'),port='55491';
@@ -82,9 +84,34 @@ try{
  q('create schema native_store_sandbox_v1;');reject(profile.sql,/already exists/u);
  assert.equal(q("select count(*) from pg_roles where rolname='native_store_sandbox_v1_owner';"),'0');q('drop schema native_store_sandbox_v1;');absent();cases++;
  const beforeInstall=JSON.parse(q(deltaSnapshotSQL));
- const result=attempt(profile.sql);assert.equal(result.status,0,result.stderr);cases++;
+ if(flags.includes('--generate-local-pins')){
+  // Explicit source maintenance only, never hosted qualification or an atomic
+  // verification pass. Normal/CI paths below still require existing exact pins.
+  const installed=attempt(profile.sql);assert.equal(installed.status,0,installed.stderr);
+  const after=JSON.parse(q(deltaSnapshotSQL)),delta=describeNativeInstallDelta(beforeInstall,after);
+  const old=new Set(beforeInstall.rows.map(r=>JSON.stringify(r)));
+  const rows=after.rows.filter(r=>!old.has(JSON.stringify(r))&&!(r[0]==='schema'&&r[1]==='public')).map(r=>normalizeAdded(r,after.acls,after.bootstrapSuperuser));
+  fs.writeFileSync(path.join(here,'install-delta.json'),JSON.stringify(delta,null,2)+'\n');
+  fs.writeFileSync(path.join(here,'install-atomic-rows.json.gz'),gzipSync(JSON.stringify({sourceDigest:profile.sourceDigest,addedCatalogSha256:delta.addedCatalogSha256,rows})+'\n',{level:9}));
+  console.log(JSON.stringify({protocol:'native-store-local-pin-generation-v1',sourceDigest:profile.sourceDigest,addedCatalogSha256:delta.addedCatalogSha256,atomicVerified:false,deploymentAllowed:false}));
+ }else{
+ const atomic=nativeStoreAtomicInstallSQL();
+ for(const [mutation,reason] of [
+  ['create function public.atomic_unexpected() returns integer language sql as $$select 1$$;','native_atomic_existing_catalog_changed'],
+  ['grant create on schema public to native_store_sandbox_v1_owner;','native_store_install_finalization_required'],
+  ['alter role native_store_sandbox_v1_owner login;','native_atomic_added_catalog_changed'],
+  ['alter default privileges for role postgres grant execute on functions to service_role;','native_atomic_existing_catalog_changed']
+ ]){reject(atomic.replace('-- Force the original',()=>mutation+'\n-- Force the original'),new RegExp(reason,'u'));absent();assert.deepEqual(JSON.parse(q(deltaSnapshotSQL)),beforeInstall);cases++;}
+ reject(atomic.replace('select snapshot into strict b from native_atomic_before;',()=>"select snapshot into strict b from native_atomic_before; expected_rows:=expected_rows||jsonb_build_array(expected_rows->0);"),/native_atomic_added_catalog_changed/u);absent();assert.deepEqual(JSON.parse(q(deltaSnapshotSQL)),beforeInstall);cases++;
+ const result=attempt(atomic);assert.equal(result.status,0,result.stderr);cases++;
  const afterInstall=JSON.parse(q(deltaSnapshotSQL));
  const sourceDelta=verifyNativeInstallDelta(beforeInstall,afterInstall);cases++;
+ if(process.env.NATIVE_ATOMIC_PIN_GENERATE==='local-fixture-only'){
+ const old=new Set(beforeInstall.rows.map(r=>JSON.stringify(r)));
+ const rows=afterInstall.rows.filter(r=>!old.has(JSON.stringify(r))&&!(r[0]==='schema'&&r[1]==='public')).map(r=>normalizeAdded(r,afterInstall.acls,afterInstall.bootstrapSuperuser));
+ fs.writeFileSync(path.join(here,'install-atomic-rows.json.gz'),gzipSync(JSON.stringify({sourceDigest:profile.sourceDigest,addedCatalogSha256:sourceDelta.addedCatalogSha256,rows})+'\n',{level:9}));
+ }
+
  for(const [mutation,reason] of [
   ['alter table auth.sessions add column unexpected text;','native_delta_existing_catalog_changed'],
   ['create function public.unexpected_native_delta() returns integer language sql as $$select 1$$;','native_delta_existing_catalog_changed'],
@@ -109,10 +136,11 @@ try{
   assert.equal(q(`select pg_has_role('postgres','${role}','SET'),pg_has_role('postgres','${role}','USAGE');`),'f|f');
  }cases++;
  for(const schema of ['native_store_sandbox_v1','sandbox_commerce_v1'])assert.equal(q(`select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='${schema}' and c.relkind='r' and (not c.relrowsecurity or not c.relforcerowsecurity);`),'0');
- for(const table of ['native_store_sandbox_v1.connections','native_store_sandbox_v1.receipts','sandbox_commerce_v1.native_store_catalog_bindings','sandbox_commerce_v1.native_store_selections','sandbox_commerce_v1.native_store_claims'])assert.equal(q('select count(*) from '+table+';'),'0');cases++;
+ for(const table of ['native_store_sandbox_v1.connections','native_store_sandbox_v1.receipts','sandbox_commerce_v1.native_store_catalog_bindings','sandbox_commerce_v1.native_store_selections','sandbox_commerce_v1.native_store_claims','sandbox_commerce_v1.native_store_reservations'])assert.equal(q('select count(*) from '+table+';'),'0');cases++;
  for(const role of ['anon','authenticated']){
   const r=run('psql',args(),`set role ${role};select public.native_store_sandbox_claim_read_v1(gen_random_uuid());`);assert.notEqual(r.status,0);assert.match(r.stderr,/permission denied/u);
  }
  assert.equal(q("set role service_role;set request.jwt.claims='{\"role\":\"service_role\"}';select public.native_store_sandbox_claim_read_v1(gen_random_uuid()) is null;"),'t');cases++;
  console.log(JSON.stringify({protocol:'native-store-managed-install-proof-v1',cases,passed:cases,sourceDigest:profile.sourceDigest,addedCatalogSha256:sourceDelta.addedCatalogSha256,modules:profile.files.length,eventTriggerParity:triggerParity,oidPadding,hostedQualified:false,dispatchAllowed:false}));
+ }
 }finally{if(started)invoke('pg_ctl',['-D',data,'-m','immediate','-w','stop']);fs.rmSync(directory,{recursive:true,force:true});}

@@ -2,13 +2,16 @@
 // Actual source SQL/account/session/media logic + HTTP handler, synthetic local
 // Auth/provider/media facts only. No remote account, provider or purchase call.
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {fileURLToPath} from 'node:url';import {createRequire} from 'node:module';
 import {spawnSync,spawn} from 'node:child_process';import {randomUUID,webcrypto} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';import process from 'node:process';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 globalThis.crypto??=webcrypto;
-assert.equal(process.argv[2],'--local-bin');assert.ok([4,5].includes(process.argv.length));const managed=process.argv.length===5;if(managed)assert.equal(process.argv[4],'--managed-install');
+assert.equal(process.argv[2],'--local-bin');assert.ok([4,5,6].includes(process.argv.length));const flags=process.argv.slice(4);
+assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof'].includes(f)));
+const managed=flags.includes('--managed-install'),reservationProof=flags.includes('--reservation-proof');if(reservationProof)assert.ok(managed);
 const bin=process.argv[3];assert.ok(path.isAbsolute(bin));const administrator=managed?'fixture_admin':'postgres';
 const here=path.dirname(fileURLToPath(import.meta.url)),runtime=path.resolve(here,'../sandbox-commerce-v1'),root=path.resolve(here,'../..');
 const source=name=>fs.readFileSync(path.join(runtime,name),'utf8');
@@ -22,7 +25,7 @@ const install='begin;create role anon nologin;create role authenticated nologin;
  +'alter default privileges for role postgres grant execute on functions to authenticated;'+source('core.sql')
  +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declarations supplied by real core')
  +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'+files.map(source).join('\n')
- +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+fs.readFileSync(path.join(here,'claim.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
+ +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+fs.readFileSync(path.join(here,'claim.sql'),'utf8')+fs.readFileSync(path.join(here,'reservation.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
 const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),port='55490',db='quote_'+randomUUID().replaceAll('-','');
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PG')));
 const args=(database,user=administrator)=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U',user,'-d',database];
@@ -35,7 +38,7 @@ const buyer='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',session='bbbbbbbb-bbbb-4bbb-8
 const actor={userId:buyer,accountId:buyer,sessionGeneration:session};
 const service="set role service_role;set request.jwt.claims='{\"role\":\"service_role\"}';";
 const expression=(command,payload,requestId=randomUUID(),who=actor)=>`public.native_store_sandbox_command_v1('${who.userId}','${who.sessionGeneration}',${literal(command)},'${requestId}',${json(payload)})`;
-const call=(command,payload,requestId,who)=>JSON.parse(q(service+'select '+expression(command,payload,requestId,who)+';'));
+const call=(command,payload,requestId,who)=>{const reservation=['reserve','reserve-recover'].includes(command);const sql=expression(command,payload,requestId,who).replace('public.native_store_sandbox_command_v1',reservation?'public.native_store_sandbox_reservation_v1':'public.native_store_sandbox_command_v1');const value=JSON.parse(q(service+'select '+sql+';'));return reservation?api.adaptNativeStoreReservationResultV1(value):value;};
 const ts=createRequire(import.meta.url)('typescript');
 const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'supabase/functions/_shared/native-store-sandbox-command-v1.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});
 const api={};new Function('exports',compiled.outputText)(api);
@@ -43,11 +46,19 @@ const handler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()
 const http=async(command,payload,requestId=randomUUID())=>{const body={protocol:'native-store-sandbox-command-v1',command,requestId,payload};
  const response=await handler(new Request('https://local.invalid',{method:'POST',body:JSON.stringify(body)}));
  assert.equal(response.status,200,await response.clone().text());return response.json();};
-let started=false,cases=0;const children=[];
+let cases=0,startOutcomeUncertain=false;const children=[];
+const reportServerLog=()=>{
+ const log=path.join(work,'server.log');let fd;
+ try{fd=fs.openSync(log,'r');const size=fs.fstatSync(fd).size,bytes=Buffer.alloc(Math.min(size,16384));
+  fs.readSync(fd,bytes,0,bytes.length,Math.max(0,size-bytes.length));console.error('quote_native_startup_server_log_tail (max 16384 bytes):\n'+bytes.toString('utf8'));
+ }catch(error){console.error('quote_native_startup_server_log_unavailable: '+error.code);}finally{if(fd!==undefined)fs.closeSync(fd);}
+};
 try{
  assert.match(invoke('postgres',['--version']),/PostgreSQL\) 17\.6/u);
  invoke('initdb',['-D',data,'-U',administrator,'--encoding=UTF8','--no-locale','--auth=trust']);
- invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(work,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c autovacuum=off`,'start']);started=true;
+ try{const start=run('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(work,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c autovacuum=off`,'start']);
+  startOutcomeUncertain=!!start.error||start.status===null;assert.equal(start.status,0,start.stderr||start.error?.message);}
+ catch(error){reportServerLog();throw error;}
  if(managed){
   invoke('psql',args('postgres'),`create role postgres login createrole bypassrls nosuperuser nocreatedb noinherit;create database ${db} owner postgres;`);
   q('create role anon nologin;create role authenticated nologin;create role service_role nologin;'
@@ -84,6 +95,12 @@ try{
  asset:{id:'scv1_asset_'+asset,incarnation,sha256:'a'.repeat(64),byteLength:100,resourceRevision:1,profile:'scpv-mp4-h264-aac-v1'}};
  q(`insert into sandbox_commerce_v1.native_store_catalog_bindings values('${binding}',1,'${offer}',1,'APP_STORE',${json(nativeCatalog)});`);
  const quote=(await http('offer',payload)).data.quote;assert.equal(quote.resourceId,nativeCatalog.resourceId);assert.equal(quote.catalog.wireProductId,nativeCatalog.wireProductId);cases++;
+ const freshNativeFixture=product=>{
+  const freshOffer=randomUUID(),freshBinding=randomUUID(),catalog={...nativeCatalog,bindingId:'nssv1_catalog_'+freshBinding,wireProductId:product};
+  q(`insert into sandbox_commerce_v1.offers(id,resource_id,resource_revision,catalog_id) select '${freshOffer}',resource_id,resource_revision,catalog_id from sandbox_commerce_v1.offers where id='${offer}';`
+   +`insert into sandbox_commerce_v1.native_store_catalog_bindings values('${freshBinding}',1,'${freshOffer}',1,'APP_STORE',${json(catalog)});`);
+  const p={offerId:'scv1_offer_'+freshOffer,store:'APP_STORE'};return {offer:freshOffer,binding:freshBinding,nativeCatalog:catalog,payload:p,preparePayload:{...p,expectedQuote:call('offer',p).data.quote}};
+ };
  const preparePayload={...payload,expectedQuote:quote};assert.equal((await http('prepare',preparePayload)).status,'held');cases++;
  q('update sandbox_commerce_v1.native_store_quote_controls set preparation_enabled=true;');
  const requestId=randomUUID(),prepared=await http('prepare',preparePayload,requestId);assert.equal(prepared.dispatchAllowed,false);
@@ -154,20 +171,71 @@ try{
   const actualPrepared=await client.prepare(actualQuote.data.quote),actualRecovered=await client.recover();
   assert.deepEqual(actualRecovered.data.selection,actualPrepared.data.selection);assert.equal(memory.size,1);
   await assert.rejects(client.prepare(quote),e=>e.code==='saved_selection_requires_recovery');
+  assert.equal((await client.readPurchaseAttempt()).status,'none');
+  const reserved=await client.retainPurchaseAttempt(actualPrepared.data.selection.id);
+  assert.equal(reserved.status,'dispatch_reserved');assert.equal(reserved.dispatchAllowed,false);assert.equal(reserved.providerQualified,false);
+  assert.equal(memory.size,2);
   clientClaim=await client.captureCallback(actualPrepared.data.selection.id,{productIdentifier:nativeCatalog.wireProductId,
    transaction:{productIdentifier:nativeCatalog.wireProductId,transactionIdentifier:'synthetic-client-callback',purchaseToken:'synthetic-secret-token',originalJson:'synthetic-private-receipt',signature:'synthetic-private-signature'},customerInfo:{private:'synthetic-private-customer'}});
   assert.equal(clientClaim.data.claim.evidence,'client_assertion');assert.equal(clientClaim.data.claim.settlementAllowed,false);
   assert.equal(clientClaim.dispatchAllowed,false);assert.equal(clientClaim.correlation,'unsupported');
-  assert.deepEqual((await client.recoverClaim()).data.claim,clientClaim.data.claim);assert.equal(memory.size,2);
+  assert.deepEqual((await client.recoverClaim()).data.claim,clientClaim.data.claim);assert.equal(memory.size,3);
   for(const secret of ['synthetic-secret-token','synthetic-private-receipt','synthetic-private-signature','synthetic-private-customer'])assert.equal([...memory.values()].join('').includes(secret),false);
   await assert.rejects(client.captureCallback(actualPrepared.data.selection.id,{productIdentifier:nativeCatalog.wireProductId,transaction:{productIdentifier:nativeCatalog.wireProductId,transactionIdentifier:'synthetic-client-callback'}}),e=>e.code==='saved_selection_requires_recovery');
  }finally{client.dispose();}cases++;
  const restartedClient=await clientApi.captureNativeSandboxQuoteClient(authority,payload.offerId,payload.store,{storage});
- try{assert.deepEqual((await restartedClient.recoverClaim()).data.claim,clientClaim.data.claim);}
+ try{await restartedClient.recover();assert.equal((await restartedClient.recoverPurchaseAttempt()).status,'ok');assert.equal((await restartedClient.readPurchaseAttempt()).status,'dispatch_reserved');
+  await assert.rejects(restartedClient.retainPurchaseAttempt((await restartedClient.recover()).data.selection.id),e=>e.code==='saved_selection_requires_recovery');
+  assert.deepEqual((await restartedClient.recoverClaim()).data.claim,clientClaim.data.claim);}
  finally{restartedClient.dispose();}cases++;
+ // Reservation uncertainty on both sides of the actual database commit.
+ // A fresh module simulates process restart; only durable storage survives.
+ for(const committed of [false,true]){
+  const independent=freshNativeFixture('unknown-reservation-'+committed),savedMemory=new Map();
+  const savedStorage={getItem:async key=>savedMemory.get(key)??null,setItem:async(key,value)=>{savedMemory.set(key,value);}};
+  let liveAuthority={...authority},dropReserve=true,originalRequest,selection;const requests=[];
+  const bound={...clientBindings,'./accountSessionAuthority':{...clientBindings['./accountSessionAuthority'],getCurrentAccountSessionAuthoritySnapshot:()=>liveAuthority},
+   './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority:liveAuthority,accessToken:'synthetic-local-auth'})}};
+  const actualHandler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>({userId:liveAuthority.userId,accountId:liveAuthority.accountId,sessionGeneration:liveAuthority.sessionGeneration}),execute:async({actor:a,request:r})=>call(r.command,r.payload,r.requestId,a)});
+  const transport=async(url,options)=>{
+   const body=JSON.parse(options.body);requests.push(body);
+   if(body.command==='reserve'){
+    if(!originalRequest)originalRequest=body;else assert.deepEqual(body,originalRequest);
+    if(dropReserve){if(committed){const response=await actualHandler(new Request(url,options));assert.equal(response.status,200,await response.clone().text());}throw Error('synthetic reservation transport interruption');}
+   }
+   return actualHandler(new Request(url,options));
+  };
+  const connect=async()=>{const fresh={};new Function('exports','require','fetch',clientSource)(fresh,name=>{assert.ok(Object.hasOwn(bound,name));return bound[name];},transport);
+   return fresh.captureNativeSandboxQuoteClient(liveAuthority,independent.payload.offerId,independent.payload.store,{storage:savedStorage});};
+  const callback={productIdentifier:independent.nativeCatalog.wireProductId,transaction:{productIdentifier:independent.nativeCatalog.wireProductId,transactionIdentifier:'must-not-submit-unconfirmed'}};
+  const before=await connect();try{
+   selection=(await before.prepare((await before.offer()).data.quote)).data.selection;
+   await assert.rejects(before.retainPurchaseAttempt(selection.id),e=>e.code==='outcome_unknown');
+   assert.equal((await before.readPurchaseAttempt()).serverReservationConfirmed,false);
+   await assert.rejects(before.captureCallback(selection.id,callback),e=>e.code==='invalid_request');
+   assert.equal(savedMemory.size,2);
+  }finally{before.dispose();}
+  assert.equal(q(`select count(*) from sandbox_commerce_v1.native_store_reservations where selection_id='${selection.id.slice('nssv1_selection_'.length)}';`),committed?'1':'0');
+  liveAuthority={...authority,sessionGeneration:newSession};dropReserve=false;
+  const after=await connect();try{
+   await after.recover();assert.equal((await after.readPurchaseAttempt()).serverReservationConfirmed,false);
+   await assert.rejects(after.captureCallback(selection.id,callback),e=>e.code==='invalid_request');
+   const recovered=await after.recoverPurchaseAttempt();assert.equal(recovered.status,committed?'ok':'unknown');
+   if(!committed)await assert.rejects(after.captureCallback(selection.id,callback),e=>e.code==='invalid_request');
+   const replay=await after.retrySavedPurchaseReservation(),r=replay.data.reservation;
+   assert.equal(r.originalRequestId,originalRequest.requestId);assert.equal(r.selectionId,selection.id);assert.equal(r.quoteDigest,selection.quote.quoteDigest);
+   assert.equal(r.originalSessionGeneration,committed?session:newSession);assert.equal(r.dispatchAllowed,false);assert.equal(r.providerQualified,false);
+   assert.equal(replay.actor.sessionGeneration,newSession);assert.equal((await after.readPurchaseAttempt()).serverReservationConfirmed,true);
+   assert.deepEqual((await after.retrySavedPurchaseReservation()).data.reservation,r);
+   assert.deepEqual((await after.recoverPurchaseAttempt()).data.reservation,r);
+   assert.equal(requests.filter(r=>r.command==='reserve').length,3);assert.equal(requests.some(r=>r.command==='claim'),false);
+   assert.equal(savedMemory.size,2);
+  }finally{after.dispose();}cases++;
+ }
  // Both sides of an uncertain claim write, through the actual client after a
  // same-account session change. Retry sends only the persisted assertion.
  for(const committed of [false,true]){
+  const independent=freshNativeFixture('unknown-claim-'+committed);
   const savedMemory=new Map(),savedStorage={getItem:async key=>savedMemory.get(key)??null,setItem:async(key,value)=>{savedMemory.set(key,value);}};
   let liveAuthority={...authority},dropClaim=true;const retryApi={};let assertionSends=0;
   const retryBindings={...clientBindings,'./accountSessionAuthority':{...clientBindings['./accountSessionAuthority'],getCurrentAccountSessionAuthoritySnapshot:()=>liveAuthority},
@@ -178,14 +246,16 @@ try{
    if(command==='claim'){assertionSends++;if(dropClaim){if(committed)await retryHandler(new Request(url,options));throw Error('synthetic interrupted transport');}}
    return retryHandler(new Request(url,options));
   });
-  const before=await retryApi.captureNativeSandboxQuoteClient(liveAuthority,payload.offerId,payload.store,{storage:savedStorage});
+  const before=await retryApi.captureNativeSandboxQuoteClient(liveAuthority,independent.payload.offerId,independent.payload.store,{storage:savedStorage});
   try{
    const selection=(await before.prepare((await before.offer()).data.quote)).data.selection;
-   await assert.rejects(before.captureCallback(selection.id,{productIdentifier:nativeCatalog.wireProductId,transaction:{productIdentifier:nativeCatalog.wireProductId,transactionIdentifier:'synthetic-unknown-'+committed}}),e=>e.code==='outcome_unknown');
+   assert.equal((await before.retainPurchaseAttempt(selection.id)).dispatchAllowed,false);
+   await assert.rejects(before.captureCallback(selection.id,{productIdentifier:independent.nativeCatalog.wireProductId,transaction:{productIdentifier:independent.nativeCatalog.wireProductId,transactionIdentifier:'synthetic-unknown-'+committed}}),e=>e.code==='outcome_unknown');
   }finally{before.dispose();}
   liveAuthority={...authority,sessionGeneration:newSession};dropClaim=false;
-  const after=await retryApi.captureNativeSandboxQuoteClient(liveAuthority,payload.offerId,payload.store,{storage:savedStorage});
+  const after=await retryApi.captureNativeSandboxQuoteClient(liveAuthority,independent.payload.offerId,independent.payload.store,{storage:savedStorage});
   try{
+   await after.recover();assert.equal((await after.readPurchaseAttempt()).status,'dispatch_reserved');
    const recovered=await after.recoverClaim();assert.equal(recovered.status,committed?'ok':'unknown');
    const retry=await after.retrySavedClaim();assert.equal(retry.data.claim.originalSessionGeneration,committed?session:newSession);
    assert.equal(retry.actor.sessionGeneration,newSession);assert.equal(retry.dispatchAllowed,false);assert.equal(retry.data.claim.settlementAllowed,false);
@@ -252,11 +322,19 @@ try{
  const claimUntil=Date.now()+3000;while(!claimOut.includes('claim_ready')&&Date.now()<claimUntil)await delay(10);assert.ok(claimOut.includes('claim_ready'),claimErr);
  rejects(service+'select '+expression('claim',racePayload,raceClaimId)+';',/native_store_claim_busy/u);
  claimant.stdin.end('commit;\n');assert.equal(await claimDone,0,claimErr);assert.equal(call('claim',racePayload,raceClaimId).data.claim.originalRequestId,raceClaimId);cases++;
+ if(reservationProof)await (await import('./reservation.native-cases.mjs')).runReservationCases({q,run,args,bin,env,children,service,json,literal,call,actor,buyer,session,seller,offer,resource,asset,route,binding,nativeCatalog,preparePayload,other,otherSession,newSession,root,ts,...freshNativeFixture('reservation-proof-product')});
  q(`update sandbox_commerce_v1.offers set revision=2 where id='${offer}';`);
  assert.equal((await http('offer',payload)).status,'held');cases++;
  assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');cases++;
  console.log(JSON.stringify({protocol:'native-store-normal-quote-proof-v1',cases,passed:cases,managedInstall:managed,sourceDigest:managed?nativeStoreInstallProfile().sourceDigest:null,providerQualified:false,dispatchAllowed:false}));
 }finally{
  for(const child of children)if(child.exitCode===null)child.kill('SIGTERM');
- if(started)invoke('pg_ctl',['-D',data,'-m','immediate','-w','stop']);fs.rmSync(work,{recursive:true,force:true});
+ // Start can time out after spawning our postmaster. Resolve by this unique
+ // data directory, never by the shared port or an unrelated process's PID.
+ const status=run('pg_ctl',['-D',data,'status']);
+ if(status.status===0){const stopped=run('pg_ctl',['-D',data,'-m','immediate','-w','stop']);
+  if(stopped.status===0)startOutcomeUncertain=false;
+  else{startOutcomeUncertain=true;console.error('quote_native_cleanup_failed: '+(stopped.stderr||stopped.error?.message));process.exitCode=1;}}
+ if(startOutcomeUncertain||status.error||![0,3,4].includes(status.status)||fs.existsSync(path.join(data,'postmaster.pid'))){console.error('quote_native_cleanup_retained_cluster: '+work);process.exitCode=1;}
+ else fs.rmSync(work,{recursive:true,force:true});
 }

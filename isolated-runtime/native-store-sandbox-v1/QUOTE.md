@@ -77,3 +77,84 @@ pairs for each store, interruption recovery and refund linkage remain required.
 The source harness includes actual DB claim rows through HTTP result validation,
 session recovery, ACLs, conflicts, squatting, concurrency and real encrypted
 synthetic receipt comparison. Synthetic cases are not provider qualification.
+
+### Device-local pre-dispatch reservation
+
+The normal client has a dormant `retainPurchaseAttempt(selectionId)` boundary.
+It persists the exact confirmed selection and quote before any future SDK call,
+and fences the buyer/project/app/store/environment/SKU across different offers
+in this app process and retained device storage. `captureCallback` requires that
+same reservation. Restart and same-account session recovery read it without
+clearing it or initiating another purchase. A missing callback does not authorize
+replacement. The state `dispatch_reserved` does not mean the SDK ran, a test
+account was verified, or a transaction succeeded.
+
+Both reservation and recovery return `dispatchAllowed: false` and
+`providerQualified: false`. There is no reservation button or SDK dispatcher.
+AsyncStorage is not server admission or a cross-device/independent-runtime lock;
+storage loss also loses this local protection. Actual purchase activation still
+requires qualified no-charge admission, server-side shared-SKU exclusion and
+receipt reconciliation. The local reservation alone cannot qualify that workflow.
+
+### Server reservation source proof (not hosted deployed)
+
+`reservation.sql` is included in the pinned 39-module managed install closure.
+Its service-only RPC is routed through the existing authenticated command endpoint
+and dormant mobile client, without SDK activation. The local proof reserves an exact existing selection
+under a database uniqueness constraint for buyer/project/app/store/environment/SKU.
+Another buyer can reserve the same SKU; no unverified transaction ID is reserved.
+No expiry, clear, delete, replacement purchase, receipt grant or dispatch admission
+is supplied. `dispatch_reserved` means only a retained reservation, not that the
+SDK ran or the store account is verified no-charge.
+
+New reservations revalidate the full server quote, current buyer/creator session,
+media/scan/route and catalog authority. Exact request recovery crosses valid
+same-account sessions and preserves the first submitting session even after media
+withdrawal. The private already-armed quote helper composes these checks under
+the original five-second transaction budget; public commands still arm once.
+The helper is not executable by anonymous, authenticated or service roles.
+
+Run `quote.native.mjs --local-bin /absolute/postgresql-17.6/bin --managed-install
+--reservation-proof` for the local proof. The reservation module is now included in the complete
+39-module managed source closure, installed in the disposable database under its
+bounded NOSUPERUSER installer CREATE interval.
+Twenty-two reservation cases and the thirty-three quote/claim/reservation integration cases passed,
+including real HTTP-handler-to-SQL execution, shared-SKU contention with controlled
+commit, session replay, stale catalog/media rejection, immutable/RLS boundaries,
+and actual server timeout termination with full reservation rollback. Two handler
+unit tests additionally verify immutable actor/request snapshots and hostile result
+rejection. These are source proofs, not hosted installation or provider/device
+qualification. Source/catalog/atomic pins require independent validation before
+any deployment claim.
+
+
+### Combined normal-app reservation route
+
+The existing authenticated `native-store-sandbox-command-v1` endpoint now accepts
+`reserve` and `reserve-recover`, each with only `selectionId`. It routes to the
+service-only reservation RPC and strictly adapts its envelope to the existing
+command protocol. Old command envelopes are unchanged. Reservation objects retain
+`dispatchAllowed: false` and `providerQualified: false`; correlation remains
+unsupported. There is no second deployed endpoint and no SDK invocation.
+
+The dormant client `retainPurchaseAttempt` now durably retains its original request
+before submitting this authenticated server reservation. `recoverPurchaseAttempt`
+reads it after restart/session change; `retrySavedPurchaseReservation` resends only
+that exact retained request and selection, never a store purchase. Local reads expose
+`serverReservationConfirmed: false` until the current client receives a verified
+server response. Callback capture requires that exact confirmed reservation.
+No new UI action is exposed. A lost/late local write or uncertain server outcome
+never clears or replaces the retained attempt. Device storage loss is not solved
+by this client API, but cannot bypass the server's cross-selection SKU constraint.
+
+Wiring proof: 30 actual client/mounted tests and 8 shared-command tests pass;
+the complete managed installation's real client-to-Edge-to-PostgreSQL path passes
+33 cases plus 22 server-reservation cases. Independent scenarios use fresh valid
+catalog SKUs instead of deleting reservation records or bypassing constraints.
+The two additional real transport-interruption cases cover reservation absent
+before submission and committed with response lost. A fresh client module after
+restart retains the exact request/selection, recovers in a renewed same-account
+session, and preserves the first server insertion session. Callback submission
+remains blocked until server reservation confirmation; no claim or SDK is sent.
+These tests do not establish provider qualification, deployed readiness, or a
+successful no-charge store purchase.
