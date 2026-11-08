@@ -44,7 +44,11 @@ export async function runReservationCases(x){
  reject(service+'select '+expression('reserve',payload,randomUUID(),otherActor)+';',/native_store_selection_unavailable/u);
  const otherSelection=call('prepare',preparePayload,randomUUID(),otherActor).data.selection;assert.equal(reserve('reserve',{selectionId:otherSelection.id},randomUUID(),otherActor).status,'ok');cases++;
  reject("set role service_role;select * from sandbox_commerce_v1.native_store_reservations;",/permission denied/u);
- for(const mutation of ['update sandbox_commerce_v1.native_store_reservations set product_id=\'other\'','delete from sandbox_commerce_v1.native_store_reservations','truncate sandbox_commerce_v1.native_store_reservations'])reject(mutation+';',/native_store_quote_immutable/u);cases++;
+ // The consumption FK rejects a bare parent TRUNCATE before its trigger runs.
+ // Include both tables separately to prove immutable guards still reject the
+ // operation when PostgreSQL's structural FK check is satisfied.
+ reject('truncate sandbox_commerce_v1.native_store_reservations;',/cannot truncate a table referenced in a foreign key constraint/u);
+ for(const mutation of ['update sandbox_commerce_v1.native_store_reservations set product_id=\'other\'','delete from sandbox_commerce_v1.native_store_reservations','truncate sandbox_commerce_v1.native_store_reservations,sandbox_commerce_v1.native_store_dispatch_attempts'])reject(mutation+';',/native_store_quote_immutable/u);cases++;
  const race=alternative('reservation-race-product'),racePayload={selectionId:race.id},raceId=randomUUID();let out='',err='';
  // Obtain actual database connection arguments from the same owning harness.
  const db=q('select current_database();');const child=spawn(path.join(bin,'psql'),args(db),{env,stdio:['pipe','pipe','pipe']});children.push(child);
