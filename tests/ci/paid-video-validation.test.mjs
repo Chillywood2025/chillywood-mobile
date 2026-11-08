@@ -4,8 +4,19 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {spawnSync} from 'node:child_process';
-import {PAID_VIDEO_NATIVE_STAGES,PAID_VIDEO_PORTABLE_STAGES,paidVideoAppFiles,paidVideoValidationPlan,extractPaidVideoFixtures,validateLegacyProof,readPaidVideoHttpSummary,collectPaidVideoSourceManifest}
+import {PAID_VIDEO_NATIVE_STAGES,PAID_VIDEO_PORTABLE_STAGES,paidVideoAppFiles,paidVideoValidationPlan,extractPaidVideoFixtures,validateLegacyProof,readPaidVideoHttpSummary,collectPaidVideoSourceManifest,nodeFailureDiagnostics}
  from '../../scripts/ci/paid-video-validation.mjs';
+
+test('failed Node stage diagnostics retain only bounded source locations and machine metadata',()=>{
+ const root=process.cwd(),privateValue='private-capture-value-must-not-be-emitted';
+ const tap=`not ok 31 - ${privateValue}\n  ---\n  location: '${root}/tests/example.test.mjs:150:2'\n  failureType: 'testCodeFailure'\n  error: '${privateValue}'\n  code: 'ERR_TEST_FAILURE'\n  signal: 'SIGKILL'\n  ...\nnot ok 32 - hidden\n  location: '${root}/../outside.test.mjs:1:1'\n  failureType: '${privateValue}'\n  code: '${privateValue}'\n  ...\n# tests 270\n# pass 269\n# fail 1\n`;
+ const result=nodeFailureDiagnostics(tap,root);
+ assert.deepEqual(result,{counts:{tests:270,pass:269,fail:1},failures:[{ordinal:31,location:'tests/example.test.mjs:150:2',failureType:'testCodeFailure',code:'ERR_TEST_FAILURE',signal:'SIGKILL'},{ordinal:32}]});
+ assert.ok(!JSON.stringify(result).includes(privateValue));
+ assert.equal(nodeFailureDiagnostics(Array.from({length:150},(_,i)=>`not ok ${i+1} - ignored`).join('\n')).failures.length,100);
+ assert.deepEqual(nodeFailureDiagnostics('not ok 1 - ignored\n  code: ERR_PRIVATE_CAPTURE_VALUE',root,'SIGKILL'),{counts:{},failures:[{ordinal:1}],signal:'SIGKILL'});
+ assert.deepEqual(nodeFailureDiagnostics('',root,privateValue),{counts:{},failures:[]});
+});
 
 test('PaidVideo plan requires five actual native profiles and the distinct retained HTTP successor',()=>{
  const plan=paidVideoValidationPlan();

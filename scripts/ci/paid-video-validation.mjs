@@ -44,6 +44,31 @@ export function paidVideoValidationPlan(){return {nativeStages:PAID_VIDEO_NATIVE
   historicalBridgeExcluded:'tests/isolated-paid-video-http-bridge.test.mjs'},portableStages:PAID_VIDEO_PORTABLE_STAGES,
  execution:'sequential/local-disposable-only',providerOrProductionActions:false};}
 
+// Report source locations and bounded machine metadata, never assertion values,
+// test titles, private captures or raw subprocess logs.
+export function nodeFailureDiagnostics(tap,repositoryRoot=root,subprocessSignal=null){
+ const failures=[],counts={};let current=null;
+ for(const line of String(tap).split('\n')){
+  let match=/^\s*not ok (\d+) - /u.exec(line);
+  if(match){current=failures.length<100?{ordinal:Number(match[1])}:null;if(current)failures.push(current);continue;}
+  match=/^# (tests|pass|fail|cancelled|skipped|todo) (\d+)$/u.exec(line);
+  if(match){counts[match[1]]=Number(match[2]);continue;}
+  if(!current)continue;
+  match=/^  location: ['"]?(.+\.test\.mjs):(\d+):(\d+)['"]?\s*$/u.exec(line);
+  if(match){const file=path.resolve(match[1]),relative=path.relative(repositoryRoot,file);
+   if(!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative)&&/^[a-zA-Z0-9_./-]+\.test\.mjs$/u.test(relative))
+    current.location=`${relative}:${Number(match[2])}:${Number(match[3])}`;
+  }
+  match=/^  failureType: ['"]?([a-zA-Z]+)['"]?\s*$/u.exec(line);
+  if(match&&['testCodeFailure','cancelledByParent','subtestsFailed','testTimeoutFailure','testAborted','hookFailed','uncaughtException','unhandledRejection'].includes(match[1]))current.failureType=match[1];
+  match=/^  code: ['"]?(ERR_[A-Z0-9_]{1,70})['"]?\s*$/u.exec(line);
+  if(match&&['ERR_ASSERTION','ERR_TEST_FAILURE','ERR_TEST_TIMEOUT','ERR_INVALID_ARG_TYPE','ERR_INVALID_ARG_VALUE','ERR_MODULE_NOT_FOUND','ERR_CHILD_PROCESS_STDIO_MAXBUFFER'].includes(match[1]))current.code=match[1];
+  match=/^  signal: ['"]?(SIGKILL|SIGTERM|SIGABRT|SIGSEGV)['"]?\s*$/u.exec(line);if(match)current.signal=match[1];
+  if(/^\s*\.\.\.\s*$/u.test(line))current=null;
+ }
+ return {counts,failures,...(['SIGKILL','SIGTERM','SIGABRT','SIGSEGV'].includes(subprocessSignal)?{signal:subprocessSignal}:{})};
+}
+
 export function collectPaidVideoSourceManifest(){
  const paths=new Set(Object.keys(collectSourceManifest()));
  const visit=relative=>{for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){
@@ -146,6 +171,10 @@ function main(args){
  const execute=(name,command,commandArgs)=>{
   const result=spawnSync(command,commandArgs,{cwd:root,env,encoding:'utf8',maxBuffer:32*1024*1024});
   fs.writeFileSync(path.join(output,name+'.stdout'),result.stdout??'',{mode:0o600});fs.writeFileSync(path.join(output,name+'.stderr'),result.stderr??'',{mode:0o600});
+  if(result.status!==0&&name.startsWith('node-')){
+   report.failedNodeStage={name,exitCode:result.status,...nodeFailureDiagnostics(result.stdout,root,result.signal)};save();
+   process.stderr.write(JSON.stringify(report.failedNodeStage)+'\n');
+  }
   assert.equal(result.status,0,`${name} failed; inspect private saved diagnostics`);
   assert.deepEqual(collectPaidVideoSourceManifest(),sources,'Source changed during qualification');return result.stdout;
  };
