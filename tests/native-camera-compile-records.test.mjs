@@ -7,8 +7,17 @@ import { parseGradleRecord, parseAndroidRuntimeRecords, readAndroidVariantManife
   verifyRuntimeAars, verifyRuntimeGraph, redactNativeDiagnostics, resolveAndroidCameraProjects,
   resolveAndroidDevLauncherProject, resolveAndroidProfileEnvironment, androidNativeCompileTasks,
   parseCocoaPodsRubyContext, COCOAPODS_RUNTIME_PROBE, googleExternalLinkCompileTasks,
-  verifyGoogleBillingRuntimeGraph } from "../scripts/compile-native-camera-effects.mjs";
+  verifyGoogleBillingRuntimeGraph, boundedNativeGradleDownload } from "../scripts/compile-native-camera-effects.mjs";
 import { ARTIFACTS } from "../scripts/test-local-camera-inference-offline.mjs";
+
+test("native compiler extends only the disposable Gradle socket timeout before source hashing", () => {
+  const original = "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip\nnetworkTimeout=10000\nvalidateDistributionUrl=true\ndistributionSha256Sum=retained-fixture-pin\n";
+  assert.equal(boundedNativeGradleDownload(original), original + "\nnetworkTimeout=60000\n");
+  assert.throws(() => boundedNativeGradleDownload(original.replace("8.14.3", "8.14.4")));
+  assert.throws(() => boundedNativeGradleDownload(original.replace("networkTimeout=10000", "networkTimeout=0")));
+  const source = fs.readFileSync(new URL("../scripts/compile-native-camera-effects.mjs", import.meta.url), "utf8");
+  assert.match(source, /if \(platform === "android"\) \{\s+const wrapper = path\.join\(generated, "gradle\/wrapper\/gradle-wrapper.properties"\);\s+fs\.writeFileSync\(wrapper, boundedNativeGradleDownload\(fs\.readFileSync\(wrapper, "utf8"\)\)\);\s+\}\s+const digest = createHash/u);
+});
 
 test("external link bridge requires both Kotlin and Java variants and shared Billing/RevenueCat closure", () => {
   assert.deepEqual(googleExternalLinkCompileTasks(), [

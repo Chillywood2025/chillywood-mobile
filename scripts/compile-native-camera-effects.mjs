@@ -14,6 +14,17 @@ import { requireTestStoreV3Sources, parseTestStoreV3NativePolicyReport, prebuild
 const ANDROID_VARIANTS = Object.freeze(["debug", "release"]);
 const variantTitle = variant => variant[0].toUpperCase() + variant.slice(1);
 
+export function boundedNativeGradleDownload(properties) {
+  assert.equal(typeof properties, "string");
+  assert.match(properties, /^distributionUrl=https\\:\/\/services\.gradle\.org\/distributions\/gradle-8\.14\.3-bin\.zip\r?$/mu,
+    "Review the compiler fixture when the locked Expo Gradle distribution changes");
+  assert.match(properties, /^networkTimeout=10000\r?$/mu,
+    "Review the compiler fixture when the locked Expo download policy changes");
+  // Change only the disposable compiler's socket timeout. Java properties use
+  // the last value; distribution validation and all compile deadlines remain.
+  return `${properties}\nnetworkTimeout=60000\n`;
+}
+
 export function googleExternalLinkCompileTasks() {
   return ANDROID_VARIANTS.flatMap(variant => [
     `:chillywood-external-content-links:compile${variantTitle(variant)}Kotlin`,
@@ -580,6 +591,10 @@ try {
     const cryptoProject = resolveExpoCryptoSourceProject(resolution, project, platform);
     const generated = path.join(project, platform);
     assert(fs.existsSync(generated), `Expo must generate ${platform} sources`);
+    if (platform === "android") {
+      const wrapper = path.join(generated, "gradle/wrapper/gradle-wrapper.properties");
+      fs.writeFileSync(wrapper, boundedNativeGradleDownload(fs.readFileSync(wrapper, "utf8")));
+    }
     const digest = createHash("sha256");
     for (const file of files(generated).sort()) { digest.update(path.relative(generated, file)); digest.update(fs.readFileSync(file)); }
     receipts[platform] = { generatedSourceSha256: digest.digest("hex"), compiled: false };
