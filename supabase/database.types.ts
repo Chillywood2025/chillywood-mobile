@@ -20712,6 +20712,34 @@ export type Database = {
         Args: { p_post_ids: string[] }
         Returns: { post_id: string; like_count: number; comment_count: number; liked_by_viewer: boolean }[]
       }
+      read_creator_video_engagement_batch: {
+        Args: { p_video_ids: string[] }
+        Returns: { video_id: string; like_count: number; comment_count: number; liked_by_viewer: boolean; can_like: boolean; repost_count: number; reposted_by_viewer: boolean; can_repost: boolean }[]
+      }
+      read_authorized_creator_video_engagement: {
+        Args: { p_video_id: string }
+        Returns: { video_id: string; like_count: number; comment_count: number; liked_by_viewer: boolean; can_like: boolean; repost_count: number; reposted_by_viewer: boolean; can_repost: boolean }[]
+      }
+      set_creator_video_like: {
+        Args: { p_video_id: string; p_liked: boolean }
+        Returns: boolean
+      }
+      read_comment_likes_batch: {
+        Args: { p_kind: string; p_comment_ids: string[] }
+        Returns: { comment_id: string; like_count: number; liked_by_viewer: boolean; can_like: boolean }[]
+      }
+      set_comment_like: {
+        Args: { p_kind: string; p_comment_id: string; p_liked: boolean }
+        Returns: boolean
+      }
+      set_creator_video_repost: {
+        Args: { p_video_id: string; p_reposted: boolean }
+        Returns: boolean
+      }
+      read_creator_video_reposts: {
+        Args: { p_user_id: string; p_before_created_at?: string | null; p_before_video_id?: string | null; p_limit?: number }
+        Returns: Json
+      }
       wave1_creator_eligibility_readback: { Args: never; Returns: Json }
       wave1_entitlement_authority_readback: { Args: { p_entitlement_key: string }; Returns: Json }
       wave1_legal_requirements_readback: { Args: { p_capability?: string }; Returns: Json }

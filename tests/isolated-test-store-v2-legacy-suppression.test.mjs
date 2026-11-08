@@ -17,6 +17,7 @@ function revenueCat(platform, dev) {
     "./runtimeConfig": { getRuntimeConfig() { throw Error("V2 must not read legacy provider configuration."); } },
     "./revenuecatPurchaseClosure": {}, "./isolatedTestStoreBuild": { isIsolatedTestStoreFlavor: () => false },
     "./isolatedTestStoreV2Build": { isIsolatedTestStoreV2Flavor: () => true },
+    "./isolatedTestStoreV3Build": { isIsolatedTestStoreV3Flavor: () => false },
   };
   const scope = { exports: {}, __DEV__: dev, require(name) { assert.ok(name in bindings, name); return bindings[name]; } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../_lib/revenuecat.ts", import.meta.url), "utf8"), {

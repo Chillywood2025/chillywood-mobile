@@ -47,7 +47,8 @@
       "docs/chat/PR532_AUDITED_CASES.tsv",
       "docs/DATABASE_RUNTIME_AUTHORITY_DEPLOYMENT_2026_10_15.json",
       "tests/**",
-      "qualification/test-store-debug/**"
+      "qualification/test-store-debug/**",
+      "isolated-runtime/test-store-capture-v1/**"
     ],
     "sensitive": [
       "app/_layout.tsx",
@@ -107,6 +108,7 @@
       "config/test-store-debug-*",
       "plugins/withIsolatedTestStoreDebug.js",
       "plugins/withIsolatedTestStoreV2Debug.js",
+      "plugins/withIsolatedTestStoreV3Debug.js",
       "modules/chillywood-test-store-admission/**",
       "scripts/compile-native-camera-effects.mjs",
       "tests/saved-media-screens-mounted.test.mjs",
@@ -179,7 +181,10 @@
       ".github/workflows/*preview*",
       ".github/workflows/*testflight*",
       "qualification/test-store-debug/**",
-      "tests/isolated-test-store-v2-native*.test.mjs"
+      "tests/isolated-test-store-v2-native*.test.mjs",
+      "tests/isolated-test-store-v3-native*.test.mjs",
+      "tests/ci/paid-video-native-closure.test.mjs",
+      "scripts/ci/paid-video-native-closure.mjs"
     ],
     "autonomous": [
       "isolated-runtime/**",

@@ -1,0 +1,2421 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Inactive isolated Paid Video v2 authoring and private upload gateway contract",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "capability.read"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "creatorEligible": {
+              "type": "boolean"
+            },
+            "uploadRouteAvailable": {
+              "type": "boolean"
+            },
+            "transferAvailable": {
+              "type": "boolean"
+            },
+            "checkoutAvailable": {
+              "type": "boolean"
+            },
+            "profile": {
+              "$ref": "#/definitions/profile"
+            }
+          },
+          "required": [
+            "creatorEligible",
+            "uploadRouteAvailable",
+            "transferAvailable",
+            "checkoutAvailable",
+            "profile"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "studio.read"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "uploads": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/upload"
+              },
+              "maxItems": 50
+            },
+            "nextCursor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              ]
+            }
+          },
+          "required": [
+            "uploads",
+            "nextCursor"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "upload.reserve"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "$ref": "#/definitions/upload"
+            }
+          },
+          "required": [
+            "upload"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "upload.reserve"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "held"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "const": "immutable_upload_route_unavailable"
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "upload.read"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "$ref": "#/definitions/upload"
+            },
+            "transfer": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "originalSessionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "configurationDigest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "requestId",
+                    "originalSessionId",
+                    "configurationDigest"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "upload",
+            "transfer"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "upload.finalize"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "upload": {
+              "$ref": "#/definitions/upload"
+            }
+          },
+          "required": [
+            "upload"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "upload.recover"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "recovery": {
+              "$ref": "#/definitions/recoveryRecorded"
+            },
+            "upload": {
+              "$ref": "#/definitions/upload"
+            },
+            "offer": {
+              "$ref": "#/definitions/offer"
+            }
+          },
+          "required": [
+            "recovery",
+            "upload"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "upload.recover"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "unknown"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "recovery": {
+              "$ref": "#/definitions/recoveryUnknown"
+            }
+          },
+          "required": [
+            "recovery"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "resource.read"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "resource": {
+              "$ref": "#/definitions/resource"
+            },
+            "upload": {
+              "$ref": "#/definitions/upload"
+            },
+            "offer": {
+              "$ref": "#/definitions/offer"
+            }
+          },
+          "required": [
+            "resource",
+            "upload"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "offer.publish"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "offer": {
+              "$ref": "#/definitions/offer"
+            },
+            "upload": {
+              "$ref": "#/definitions/upload"
+            }
+          },
+          "required": [
+            "offer",
+            "upload"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "offer.publish"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "held"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "const": "protocol3_catalog_unavailable"
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "offer.retire"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "offer": {
+              "$ref": "#/definitions/offer"
+            },
+            "upload": {
+              "$ref": "#/definitions/upload"
+            }
+          },
+          "required": [
+            "offer",
+            "upload"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "isolated-paid-video-v2"
+        },
+        "command": {
+          "const": "offer.read"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "actor": {
+          "$ref": "#/definitions/actor"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "offer": {
+              "$ref": "#/definitions/offer"
+            },
+            "upload": {
+              "$ref": "#/definitions/upload"
+            }
+          },
+          "required": [
+            "offer"
+          ],
+          "additionalProperties": false
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "capabilityExpiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "command",
+        "requestId",
+        "status",
+        "actor",
+        "data",
+        "configurationDigest",
+        "capabilityExpiresAtMs"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "definitions": {
+    "actor": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sessionGeneration": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "userId",
+        "accountId",
+        "sessionGeneration"
+      ],
+      "additionalProperties": false
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "const": "scpv-mp4-h264-aac-v1"
+        },
+        "maxBytes": {
+          "const": 16777216
+        },
+        "maxDurationMs": {
+          "const": 60000
+        },
+        "maxWidth": {
+          "const": 1920
+        },
+        "maxHeight": {
+          "const": 1080
+        },
+        "maxFramesPerSecond": {
+          "const": 60
+        },
+        "videoCodec": {
+          "const": "h264"
+        },
+        "pixelFormat": {
+          "const": "yuv420p"
+        },
+        "optionalAudioCodec": {
+          "const": "aac"
+        },
+        "maxAudioChannels": {
+          "const": 2
+        },
+        "maxAudioSampleRate": {
+          "const": 48000
+        }
+      },
+      "required": [
+        "id",
+        "maxBytes",
+        "maxDurationMs",
+        "maxWidth",
+        "maxHeight",
+        "maxFramesPerSecond",
+        "videoCodec",
+        "pixelFormat",
+        "optionalAudioCodec",
+        "maxAudioChannels",
+        "maxAudioSampleRate"
+      ],
+      "additionalProperties": false
+    },
+    "upload": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "resourceId": {
+          "type": "string",
+          "pattern": "^scv1_resource_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "assetId": {
+          "type": "string",
+          "pattern": "^scv1_asset_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "incarnation": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "state": {
+          "enum": [
+            "reserved",
+            "scan_pending",
+            "clean",
+            "rejected",
+            "retired"
+          ]
+        },
+        "expectedSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expectedByteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "bytesClean": {
+          "type": "boolean"
+        },
+        "moderation": {
+          "enum": [
+            "unreviewed",
+            "clear",
+            "held",
+            "removed"
+          ]
+        },
+        "profile": {
+          "const": "scpv-mp4-h264-aac-v1"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "transferAvailable": {
+          "type": "boolean"
+        },
+        "checkoutAvailable": {
+          "const": false
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "resourceId",
+        "assetId",
+        "incarnation",
+        "state",
+        "expectedSha256",
+        "expectedByteLength",
+        "bytesClean",
+        "moderation",
+        "profile",
+        "expiresAt",
+        "transferAvailable",
+        "checkoutAvailable"
+      ],
+      "additionalProperties": false
+    },
+    "asset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scv1_asset_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "incarnation": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "resourceRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "profile": {
+          "const": "scpv-mp4-h264-aac-v1"
+        }
+      },
+      "required": [
+        "id",
+        "incarnation",
+        "sha256",
+        "byteLength",
+        "resourceRevision",
+        "profile"
+      ],
+      "additionalProperties": false
+    },
+    "resource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scv1_resource_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "creatorId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "const": "paid_content"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "quarantined",
+            "published",
+            "retired"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "id",
+        "creatorId",
+        "kind",
+        "revision",
+        "status",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "offer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scv1_offer_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "resourceId": {
+          "type": "string",
+          "pattern": "^scv1_resource_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "kind": {
+          "const": "paid_content"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "published",
+            "retired"
+          ]
+        },
+        "amountMinor": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[a-z]{3}$"
+        },
+        "resourceRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "asset": {
+          "$ref": "#/definitions/asset"
+        },
+        "checkoutAvailable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "resourceId",
+        "kind",
+        "revision",
+        "status",
+        "amountMinor",
+        "currency",
+        "resourceRevision",
+        "asset",
+        "checkoutAvailable"
+      ],
+      "additionalProperties": false
+    },
+    "recoveryUnknown": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "const": "unknown"
+        },
+        "originalRequestId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "state",
+        "originalRequestId"
+      ],
+      "additionalProperties": false
+    },
+    "recoveryRecorded": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "const": "recorded"
+        },
+        "originalRequestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "originalCommand": {
+          "enum": [
+            "upload.reserve",
+            "upload.finalize",
+            "offer.publish",
+            "offer.retire"
+          ]
+        },
+        "originalSessionGeneration": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "originalPayload": {
+          "type": "object"
+        },
+        "originalConfigurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "state",
+        "originalRequestId",
+        "originalCommand",
+        "originalSessionGeneration",
+        "originalPayload",
+        "originalConfigurationDigest"
+      ],
+      "additionalProperties": false
+    },
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "capability.read"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "studio.read"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 50
+                },
+                "cursor": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "limit",
+                "cursor"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "upload.reserve"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "expectedSha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "expectedByteLength": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16777216
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "title",
+                "expectedSha256",
+                "expectedByteLength"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "upload.read"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "uploadId": {
+                  "type": "string",
+                  "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "uploadId"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "upload.finalize"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "uploadId": {
+                  "type": "string",
+                  "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "uploadId"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "upload.recover"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "originalRequestId": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "originalRequestId"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "resource.read"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "resourceId": {
+                  "type": "string",
+                  "pattern": "^scv1_resource_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "resourceId"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "offer.publish"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "uploadId": {
+                  "type": "string",
+                  "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 999999999999999
+                },
+                "amountMinor": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 999999999
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[a-z]{3}$"
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "uploadId",
+                "expectedRevision",
+                "amountMinor",
+                "currency"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "offer.retire"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "offerId": {
+                  "type": "string",
+                  "pattern": "^scv1_offer_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 999999999999999
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "offerId",
+                "expectedRevision"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "p_command": {
+              "const": "offer.read"
+            },
+            "p_payload": {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "const": "isolated-paid-video-v1"
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "offerId": {
+                  "type": "string",
+                  "pattern": "^scv1_offer_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "protocol",
+                "requestId",
+                "offerId"
+              ],
+              "additionalProperties": false
+            },
+            "p_expected_account_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_expected_session_generation": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "p_configuration_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "p_command",
+            "p_payload",
+            "p_expected_account_id",
+            "p_expected_session_generation",
+            "p_configuration_digest"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "gatewayRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "capability.read"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "studio.read"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 50
+                },
+                "cursor": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "limit",
+                "cursor"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "upload.reserve"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "expectedSha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "expectedByteLength": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16777216
+                }
+              },
+              "required": [
+                "title",
+                "expectedSha256",
+                "expectedByteLength"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "upload.read"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "uploadId": {
+                  "type": "string",
+                  "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "uploadId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "upload.finalize"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "uploadId": {
+                  "type": "string",
+                  "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "uploadId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "upload.recover"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "originalRequestId": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "originalRequestId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "resource.read"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "resourceId": {
+                  "type": "string",
+                  "pattern": "^scv1_resource_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "resourceId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "offer.publish"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "uploadId": {
+                  "type": "string",
+                  "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 999999999999999
+                },
+                "amountMinor": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 999999999
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[a-z]{3}$"
+                }
+              },
+              "required": [
+                "uploadId",
+                "expectedRevision",
+                "amountMinor",
+                "currency"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "offer.retire"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "offerId": {
+                  "type": "string",
+                  "pattern": "^scv1_offer_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 999999999999999
+                }
+              },
+              "required": [
+                "offerId",
+                "expectedRevision"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "const": "isolated-paid-video-v2"
+            },
+            "command": {
+              "const": "offer.read"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "expectedSessionId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "configurationDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "offerId": {
+                  "type": "string",
+                  "pattern": "^scv1_offer_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "offerId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "protocol",
+            "command",
+            "requestId",
+            "expectedSessionId",
+            "configurationDigest",
+            "payload"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "transferResponse": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "scpv-transfer-v2"
+        },
+        "state": {
+          "enum": [
+            "unknown",
+            "acknowledged",
+            "exists_unverified"
+          ]
+        },
+        "uploadId": {
+          "type": "string",
+          "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "verificationRequired": {
+          "const": true
+        }
+      },
+      "required": [
+        "protocol",
+        "state",
+        "uploadId",
+        "requestId",
+        "verificationRequired"
+      ],
+      "additionalProperties": false
+    },
+    "probeResponse": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "scpv-upload-probe-v2"
+        },
+        "state": {
+          "const": "observed"
+        },
+        "observationRaw": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "protocol",
+        "state",
+        "observationRaw",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "objectReceipt": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "scpv-object-receipt-v2"
+        },
+        "state": {
+          "const": "recorded"
+        },
+        "uploadId": {
+          "type": "string",
+          "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "originalSessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "originalConfigurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "transferId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "incarnation": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "objectVersion": {
+          "type": "string",
+          "pattern": "^(?!null$)[A-Za-z0-9._-]{1,256}$"
+        }
+      },
+      "required": [
+        "protocol",
+        "state",
+        "uploadId",
+        "userId",
+        "originalSessionId",
+        "originalConfigurationDigest",
+        "requestId",
+        "transferId",
+        "incarnation",
+        "sha256",
+        "byteLength",
+        "objectVersion"
+      ],
+      "additionalProperties": false
+    },
+    "reconcileRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "scpv-reconcile-v2"
+        },
+        "observationRaw": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "protocol",
+        "observationRaw",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "objectObservation": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "scpv-object-observation-v2"
+        },
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "uploadId": {
+          "type": "string",
+          "pattern": "^scpv_upload_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "transferId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "originalSessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "configurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "originalConfigurationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifierId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "incarnation": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "objectVersion": {
+          "type": "string",
+          "pattern": "^(?!null$)[A-Za-z0-9._-]{1,256}$"
+        },
+        "checkedAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "protocol",
+        "userId",
+        "sessionId",
+        "uploadId",
+        "requestId",
+        "transferId",
+        "originalSessionId",
+        "configurationDigest",
+        "originalConfigurationDigest",
+        "verifierId",
+        "incarnation",
+        "sha256",
+        "byteLength",
+        "objectVersion",
+        "checkedAtMs",
+        "expiresAtMs"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

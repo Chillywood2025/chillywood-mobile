@@ -1,0 +1,26 @@
+{
+  "protocol": "scpv-retained-auth-http-source-v1",
+  "status": "local-qualification-pending",
+  "files": {
+    "README.md": "a88659037d7bf6679c53640b7faed36c83022745266c00e6539a1f930f7a0463",
+    "capture-seed.mjs": "23c965ac68573b427df578b4f7669c2d362f471b0e42c63c2ff12d86ebbebc4d",
+    "deno.lock": "73abd3656e02a27b64a1049c6ae68c017ffdbe459a287fc95e4f353e98a9605b",
+    "harness/run.py": "680a7c661b073bb665b707d36e3e0d299f4b442278321dc4089b00e00bc42713",
+    "harness/runtime.py": "5e0080381609c79efefffe8df34e343ccb547f02854135991ecd795c07bb3726",
+    "harness/stack.py": "35e93cc3194398c87092a1ef9ae43fa30356ec3246626d5d7d7bfcab738142fd",
+    "harness/v2-source.json": "f284d36259bc3a5b1b2b1702e5d0895232c7ce7c0cd616099d29e45deebfaed7",
+    "is_account_access_restricted.sql": "b5024583b2a53bddca870f2bc54cf6b400790f463b5af8cd037d107289006cf7",
+    "is_account_deletion_scheduled.sql": "244602bf2426b16c766fdb49f82bed167bd86537e521ceb3d9dc4848892193e4",
+    "listener.ts": "e22a1a6002fc2b068f1eb69b6be58920b9ae583007a9b20565007c03ad56bcda",
+    "manifest.json": "e8a211f33a779c56597b9323ec1206305aeb3e8058a6c3e66a3c2856703dda2f",
+    "prepare.py": "d920f3c76ba0b943ebbb47059f12fa8ab17d6c2602f0c924055fce8b22cdb7eb",
+    "seed.mjs": "17e7ce50cbe1e2b67c6df8e51658089e0e5f379d64f5ef514c4ebec9e62b30b5",
+    "settlement.mjs": "a3815d795057ca1f14247f5310085b6e9d866c65963e2db98bde342a5b2fdcc3",
+    "wave1_session_authority_readback.sql": "7275600e78a07bacfdd80250f3dfb6b782b9c85bbf77f807782b89422199bc65"
+  },
+  "productionEntries": 4,
+  "sourceSha256": "25134c0952bcf71be1274da91bf36013fe662a065db11dfc6a91cfcab3ef51c0",
+  "retainedInstallationSourceSha256": "a899f70795d5b9234fdb1e44f694c56da2cff6224a2e71b2fd3508d86b4b0e11",
+  "providerOrNativeQualified": false,
+  "noCredentialsOrPrivateEvidenceIncluded": true
+}

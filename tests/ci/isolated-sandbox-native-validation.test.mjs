@@ -6,13 +6,14 @@ import {parse} from 'yaml';
 import {computeValidationPlan, evaluateRun, evaluateWorkflowSnapshot, expectedJobs} from '../../scripts/ci/required-validation.mjs';
 import {NATIVE_STAGES, NODE_STAGES, EXPECTED_NODE_TESTS, validateNativeProof, validateNodeTap,
   validateCommandFixture, collectSourceManifest} from '../../scripts/ci/isolated-sandbox-native.mjs';
+import {reviewedCaptureInstall,captureMigrationPath} from '../../isolated-runtime/test-store-capture-v1/install.mjs';
 
 const workflow = parse(readFileSync('.github/workflows/required-validation.yml', 'utf8'));
 const policy = JSON.parse(readFileSync('config/ci/required-validation-v1.json', 'utf8'));
 const jobId = 'database-isolated-sandbox-native';
 const jobName = 'Validation / Isolated Sandbox Native PostgreSQL 17.6';
 const command = 'node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"';
-const edgeCommand = 'DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-receipt-router-v1/index.ts supabase/functions/isolated-sandbox-test-store-v1/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts supabase/functions/isolated-sandbox-test-store-v2/index.ts supabase/functions/isolated-test-store-provisioner-v2/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v2/index.ts supabase/functions/isolated-test-store-qualification-v1/index.ts';
+const edgeCommand = 'DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/revenuecat-receipt-router-v1/index.ts supabase/functions/isolated-sandbox-test-store-v1/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v1/index.ts supabase/functions/isolated-sandbox-test-store-v2/index.ts supabase/functions/isolated-test-store-provisioner-v2/index.ts supabase/functions/isolated-test-store-revenuecat-webhook-v2/index.ts supabase/functions/isolated-test-store-qualification-v1/index.ts supabase/functions/isolated-test-store-capture-v1/index.ts';
 const postgresSha256 = 'e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0';
 const postgresArchiveUrl = 'https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2';
 const qualificationNativeCommand='JAVA_HOME="${JAVA_HOME_17_X64:-$JAVA_HOME}" node qualification/test-store-debug/scripts/compile-native.mjs';
@@ -151,6 +152,11 @@ test('isolated native qualification is a credential-free canonical database obli
   assert.equal(policy.jobs.isolatedSandboxNative, jobName);
   for (const path of [
     ...paths,
+    'isolated-runtime/test-store-capture-v1/capture.sql',
+    'isolated-runtime/test-store-capture-v1/tests/capture.native.mjs',
+    'isolated-runtime/test-store-capture-v1/tests/edge.test.mjs',
+    'supabase/functions/isolated-test-store-capture-v1/index.ts',
+    captureMigrationPath,
     'isolated-runtime/sandbox-commerce-v1/tests/managed-install.native.mjs',
     'isolated-runtime/sandbox-commerce-v1/tests/availability.native.mjs',
     'isolated-runtime/sandbox-commerce-v1/tests/receipts-dispatch.fixture.mjs',
@@ -310,12 +316,14 @@ test('the offline runner plan contains every native suite and complete client/pr
   assert.equal(plan.postgres.sha256, postgresSha256);
   const nativeFiles = ['managed-install', 'premium-authority', 'authority', 'core', 'declarations', 'receipts', 'availability', 'history', 'resource-graphs', 'test-store', 'test-store-v2']
     .map(name => `isolated-runtime/sandbox-commerce-v1/tests/${name}.native.mjs`)
-    .concat(['router', 'isolated-source-bridge', 'legacy-source-bridge'].map(name => `isolated-runtime/receipt-router-v1/tests/${name}.native.mjs`));
+    .concat(['router', 'isolated-source-bridge', 'legacy-source-bridge'].map(name => `isolated-runtime/receipt-router-v1/tests/${name}.native.mjs`),
+      'isolated-runtime/test-store-capture-v1/tests/capture.native.mjs');
   assert.deepEqual(plan.nativeStages.map(stage => stage.file).sort(), nativeFiles.sort());
   assert.equal(new Set(plan.nativeStages.map(stage => stage.name)).size, nativeFiles.length);
   assert.deepEqual(Object.fromEntries(plan.nativeStages.map(stage => [stage.name, stage.caseCount])), {
     'premium-authority': 46, authority: 20, core: 11, declarations: 12, receipts: 26, 'managed-install': 20, availability: 21,
     history: 25, 'resource-graphs': 46, 'test-store': 29, 'test-store-v2': 43, 'receipt-router': 22, 'isolated-source-bridge': 16, 'legacy-source-bridge': 49,
+    'independent-capture': 21,
   });
   for (const stage of plan.nativeStages) {
     assert.match(stage.name, /^[a-z][a-z0-9-]+$/u);
@@ -345,9 +353,12 @@ test('the offline runner plan contains every native suite and complete client/pr
     'tests/creator-money/isolated-test-store-v2-receipt.test.mjs',
     'tests/creator-money/isolated-test-store-v2-command.test.mjs',
     'tests/creator-money/isolated-test-store-qualification.test.mjs',
+    'isolated-runtime/test-store-capture-v1/tests/edge.test.mjs',
+    'isolated-runtime/test-store-capture-v1/tests/install.test.mjs',
     'qualification/test-store-debug/tests/client.test.mjs',
     'qualification/test-store-debug/tests/mounted.test.mjs',
     'qualification/test-store-debug/tests/compile-contract.test.mjs',
+    'qualification/test-store-debug/tests/configured-staging.test.mjs',
     'tests/isolated-test-store-v2-client.test.mjs',
     'tests/isolated-test-store-v2-sdk.test.mjs',
     'tests/isolated-test-store-v2-legacy-suppression.test.mjs',
@@ -358,7 +369,7 @@ test('the offline runner plan contains every native suite and complete client/pr
     'tests/isolated-test-store-v2-native-compile.test.mjs',
   ]);
   for (const file of plan.nodeTests) assert.ok(existsSync(file), file);
-  assert.equal(plan.expectedNodeTests, 529);
+  assert.equal(plan.expectedNodeTests, 550);
   assert.deepEqual(Object.fromEntries(plan.nodeStages.map(stage => [stage.name, stage.expectedTests])), {
     'commerce-provider-delivery': 52, 'tip-client': 17, 'tip-mounted': 26, 'tip-journal': 18,
     'tip-checkout-journal': 19, 'library-discovery': 19, 'receipt-router': 18,
@@ -366,8 +377,10 @@ test('the offline runner plan contains every native suite and complete client/pr
     'test-store-legacy-suppression': 6, 'test-store-mounted': 12, 'test-store-attempts': 26, 'test-store-build': 7, 'test-store-native-compile-guard': 6,
     'test-store-v2-provisioner': 38, 'test-store-v2-receipt': 37, 'test-store-v2-command': 22,
     'test-store-qualification': 25,
+    'independent-capture-edge-emitter': 8,
     'test-store-qualification-client': 9, 'test-store-qualification-mounted': 8,
     'test-store-qualification-compile-guard': 6,
+    'test-store-qualification-configured-staging': 13,
     'test-store-v2-client': 10, 'test-store-v2-sdk': 5, 'test-store-v2-legacy-suppression': 6,
     'test-store-v2-mounted': 18, 'test-store-v2-attempts': 30, 'test-store-v2-preparations': 15,
     'test-store-v2-native': 7, 'test-store-v2-native-compile-guard': 3,
@@ -400,6 +413,12 @@ function validatorFixture(stage) {
     passed: Array.from({length: stage.caseCount}, (_, index) => `synthetic router validator ${index}`),
     providerOrProductionCalls: false, actualProviderAuthenticationProven: false, legacyEnforcementProven: false, syntheticProviderEvidence: true,
   });
+  if (stage.proofFormat === 'rcq-native-proof-v1') {Object.assign(proof, {
+    protocol:'rcq-native-proof-v1',passed:true,diagnostics:null,installSqlSha256:reviewedCaptureInstall().sqlSha256,
+    executedMigration:captureMigrationPath,
+    cases:Array.from({length:stage.caseCount},(_,index)=>({name:`synthetic capture validator ${index}`,passed:true})),
+    providerOrProductionCalls:false,actualProviderAuthenticationProven:false,actualDeviceBehaviorProven:false,syntheticProviderEvidence:true,
+  });proof.sourceHashes[captureMigrationPath]=proof.installSqlSha256;sourceHashes[captureMigrationPath]=proof.installSqlSha256;}
   if (stage.providerQualificationField) Object.assign(proof, {providerOrProductionCalls: false,
     [stage.providerQualificationField]: false, legacyEnforcementProven: false, syntheticProviderEvidence: true});
   if (stage.name === 'test-store' || stage.name === 'test-store-v2') Object.assign(proof, {kind: stage.name === 'test-store' ? 'isolated-test-store-native-source-proof' : 'isolated-test-store-v2-native-source-proof',
@@ -441,6 +460,22 @@ test('native proof validator rejects incomplete cases, cleanup and source identi
       'false provider qualification': candidate => { candidate[stage.providerQualificationField] = true; },
       'false legacy qualification': candidate => { candidate.legacyEnforcementProven = true; },
       'missing synthetic boundary': candidate => { delete candidate.syntheticProviderEvidence; },
+    });
+    if (stage.proofFormat === 'rcq-native-proof-v1') Object.assign(mutations, {
+      'failed status':candidate=>{candidate.passed=false;},
+      'changed case count':candidate=>{candidate.cases.pop();},
+      'duplicate case':candidate=>{candidate.cases[1]=candidate.cases[0];},
+      'failed case':candidate=>{candidate.cases[0].passed=false;},
+      'wrong protocol':candidate=>{candidate.protocol='wrong';},
+      'unknown diagnostic':candidate=>{candidate.diagnostics={error:'unknown'};},
+      'missing install digest':candidate=>{delete candidate.installSqlSha256;},
+      'wrong install digest':candidate=>{candidate.installSqlSha256='b'.repeat(64);},
+      'wrong migration':candidate=>{candidate.executedMigration='supabase/migrations/unqualified.sql';},
+      'missing migration':candidate=>{delete candidate.executedMigration;},
+      'provider activity':candidate=>{candidate.providerOrProductionCalls=true;},
+      'false provider proof':candidate=>{candidate.actualProviderAuthenticationProven=true;},
+      'false device proof':candidate=>{candidate.actualDeviceBehaviorProven=true;},
+      'missing synthetic boundary':candidate=>{delete candidate.syntheticProviderEvidence;},
     });
     if (stage.providerQualificationField) Object.assign(mutations, {
       'provider activity': candidate => { candidate.providerOrProductionCalls = true; },

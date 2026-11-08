@@ -155,7 +155,7 @@ async function mountScreen(file, overrides={}) {
   return {state,run,render,flush:()=>run(noop),nodes:()=>elements(state.tree),text:()=>textOf(state.tree),unmount:()=>run(()=>root.unmount())};
 }
 
-test("Library opens isolated sandbox tip tools without mutations and preserves Purchases navigation",async()=>{
+test("Library opens isolated sandbox tip and video tools without mutations and preserves Purchases navigation",async()=>{
   for (const user of [{id:"a"},null]) {
     const h=await mountScreen("app/(tabs)/my-list.tsx",{user});
     try {
@@ -169,6 +169,13 @@ test("Library opens isolated sandbox tip tools without mutations and preserves P
       assert.deepEqual(h.state.pushes,[],"Rendering must not navigate or activate sandbox tools");
       await h.run(()=>entry.props.onPress());
       assert.deepEqual(h.state.pushes,["/sandbox-tips"],"Entry passes no account, offer, or activation parameters");
+      const video=h.nodes().find(x=>x.props?.testID==="library-sandbox-videos-link");
+      assert.ok(video,"Dedicated video drafts and history remain discoverable");
+      assert.equal(video.props.accessibilityRole,"button");
+      assert.equal(video.props.accessibilityLabel,"Open Sandbox video studio");
+      assert.equal(video.props.accessibilityHint,"Review drafts, saved authoring actions and current sandbox availability.");
+      await h.run(()=>video.props.onPress());
+      assert.deepEqual(h.state.pushes,["/sandbox-tips","/sandbox-videos"]);
       assert.deepEqual(h.state.writes,[]);
       assert.deepEqual(h.state.syncRetries,[]);
       assert.deepEqual(h.state.resolutions,[]);
@@ -177,7 +184,7 @@ test("Library opens isolated sandbox tip tools without mutations and preserves P
       assert.equal(purchases.props.accessibilityLabel,"Open Purchases and My Tickets");
       assert.equal(textOf(purchases).trim(),"Purchases & My Tickets");
       await h.run(()=>purchases.props.onPress());
-      assert.deepEqual(h.state.pushes,["/sandbox-tips","/purchases"]);
+      assert.deepEqual(h.state.pushes,["/sandbox-tips","/sandbox-videos","/purchases"]);
       assert.deepEqual(h.state.writes,[]);
     } finally {await h.unmount();}
   }

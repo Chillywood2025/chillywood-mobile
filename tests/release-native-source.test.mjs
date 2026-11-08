@@ -119,6 +119,12 @@ const recordedV19Source = {
   sha: "2ade05522ff312e86a13bf53bcd80684035e4d6f",
   tree: "8b60d4d40adb937fd5aca5b850d8fe747be089da",
 };
+// Published V20 source from PR #686 before PaidVideo Test Store v3 and Expo
+// Crypto. This retains source identity, not signed-build or device evidence.
+const recordedV20Source = {
+  sha: "0d1d3b3a959295dfc44a6485ab8f7067d933bb43",
+  tree: "5e9b8f86792c2fab606ed216037aec916f094b7c",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -385,8 +391,8 @@ test("recorded v19 binds complete picker inputs and preserves all v18 delivery r
   }
 });
 
-test("prospective v20 binds Test Store native inputs without rewriting v19 or widening release authority", () => {
-  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+test("recorded v20 binds Test Store native inputs without rewriting v19 or widening release authority", () => {
+  const generation = JSON.parse(git(repo, "show", `${recordedV20Source.sha}:config/release/internal-native-generation.json`));
   const recorded = JSON.parse(git(repo, "show", `${recordedV19Source.sha}:config/release/internal-native-generation.json`));
   assert.equal(generation.generation, "internal-native-v20");
   assert.equal(generation.supersedes.generation, recorded.generation);
@@ -403,9 +409,48 @@ test("prospective v20 binds Test Store native inputs without rewriting v19 or wi
     const historical = nativeSourceSnapshot({ repositoryRoot: repo, platform,
       sourceSha: recordedV19Source.sha, sourceTree: recordedV19Source.tree });
     assert.equal(historical.digest, recorded.nativeCompatibility[`${platform}Digest`]);
+    const current = nativeSourceSnapshot({ repositoryRoot: repo, platform,
+      sourceSha: recordedV20Source.sha, sourceTree: recordedV20Source.tree });
+    assert.equal(generation.nativeCompatibility[`${platform}Digest`], current.digest);
+    assert.notEqual(current.digest, historical.digest);
+  }
+});
+
+test("prospective v21 binds PaidVideo native inputs without rewriting v20 or widening release authority", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV20Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v21");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+  assert.deepEqual(generation.channels, recorded.channels);
+  const { reason: currentReason, ...currentPolicy } = generation.policy;
+  const { reason: recordedReason, ...recordedPolicy } = recorded.policy;
+  assert.deepEqual(currentPolicy, recordedPolicy, "the new source cohort grants no additional release authority");
+  assert.notEqual(currentReason, recordedReason);
+  const recordedDigests = {
+    android: "44a0ea69f93d99cd811d5dc399aee029b7aeafb5e448d1436f8d8add36765a85",
+    ios: "1e2bcf8d913f11a6aab22c25dc81f773f5650d071a4764f129f6e3a80b078ff4",
+  };
+  for (const platform of ["android", "ios"]) {
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v21`);
+    assert.equal(recorded.runtimeVersions[platform], `1.0.0-${platform}-production-v20`);
+    assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
+    assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recordedDigests[platform]);
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], recordedDigests[platform]);
+    const historical = nativeSourceSnapshot({ repositoryRoot: repo, platform,
+      sourceSha: recordedV20Source.sha, sourceTree: recordedV20Source.tree });
+    assert.equal(historical.digest, recordedDigests[platform]);
     const current = nativeSourceSnapshot({ repositoryRoot: repo, platform, sourceSha: git(repo, "rev-parse", "HEAD") });
     assert.equal(generation.nativeCompatibility[`${platform}Digest`], current.digest);
     assert.notEqual(current.digest, historical.digest);
+    assert.equal(current.input.packageInputs.dependencies["expo-crypto"], "15.0.9");
+    const currentFiles = new Set(current.input.files.map((entry) => entry.path));
+    for (const name of ["config/test-store-debug-v3-config.js", "config/test-store-debug-v3.json",
+      platform === "android"
+        ? "modules/chillywood-test-store-admission/android/src/main/java/expo/modules/chillywoodteststore/ChillywoodTestStoreV3Module.kt"
+        : "modules/chillywood-test-store-admission/ios/ChillywoodTestStoreV3Module.swift"]) {
+      assert.ok(currentFiles.has(name), `${platform} cohort must include ${name}`);
+    }
   }
 });
 
@@ -634,6 +679,46 @@ for (const platform of ["android", "ios"]) {
       write(root, name, original);
       commit(root);
     }
+  });
+}
+
+for (const platform of ["android", "ios"]) {
+  test(`${platform}: PaidVideo v21 inputs cannot reuse the retained v20 binary or runtime`, (t) => {
+    const { root, publish } = fixture(t, recordedV20Source.sha);
+    const retained = copyCanonicalNativeInputs(root, recordedV20Source.sha);
+    const oldBinary = commit(root);
+    assert.equal(nativeSourceSnapshot({ repositoryRoot: root, platform, sourceSha: oldBinary.sha }).digest,
+      retained[platform].digest, "negative control starts from the complete published V20 inputs");
+    const currentSource = git(repo, "rev-parse", "HEAD");
+    const current = copyCanonicalNativeInputs(root, currentSource);
+    assert.ok(current[platform].input.files.some((entry) => entry.path.endsWith(platform === "android"
+      ? "/ChillywoodTestStoreV3Module.kt" : "/ChillywoodTestStoreV3Module.swift")),
+    "the candidate contains the concrete PaidVideo native implementation");
+    assert.equal(current[platform].input.packageInputs.dependencies["expo-crypto"], "15.0.9");
+    assert.notDeepEqual(current[platform].input.packageInputs, retained[platform].input.packageInputs,
+      "the Expo Crypto dependency change is part of native source compatibility");
+    write(root, "config/release/internal-native-generation.json",
+      git(repo, "show", `${recordedV20Source.sha}:config/release/internal-native-generation.json`) + "\n");
+    const changedWithinOldRuntime = commit(root);
+    const oldReceipt = publish(platform, oldBinary);
+    assert.notEqual(oldReceipt.status, 0);
+    assert.match(oldReceipt.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldReceipt.calls, [], "the V20 binary stops before Expo or provider calls");
+    const matchingButOldRuntime = publish(platform, changedWithinOldRuntime);
+    assert.notEqual(matchingButOldRuntime.status, 0);
+    assert.match(matchingButOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.doesNotMatch(matchingButOldRuntime.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(matchingButOldRuntime.calls, [], "a rebuilt candidate cannot redefine the V20 runtime");
+    copyCanonicalNativeInputs(root, currentSource);
+    const successor = commit(root);
+    const oldBinaryOnSuccessor = publish(platform, oldBinary);
+    assert.notEqual(oldBinaryOnSuccessor.status, 0);
+    assert.match(oldBinaryOnSuccessor.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinaryOnSuccessor.calls, [], "V21 still requires its matching native binary");
+    const matchingSuccessor = publish(platform, successor);
+    assert.equal(matchingSuccessor.status, 0, matchingSuccessor.stderr);
+    assert.ok(matchingSuccessor.calls.some((call) => call[0] === "eas-cli" && call[1] === "update"),
+      "only matching V21 reaches the isolated synthetic publisher, never a real provider");
   });
 }
 

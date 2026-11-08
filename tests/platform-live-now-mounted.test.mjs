@@ -58,7 +58,8 @@ async function mount(t,initial=[row()]){
   const surface={AppSection:props=>{tree=props.children;action=props.action;return null;},AppActionButton:'Action',AppEmptyState:'Empty'};
   const button=evaluate(code.button,{'react':React,'react-native':native});
   const component=evaluate(code.component,{'react':React,'react-native':native,'expo-router':{useRouter:()=>({push:path=>routes.push(path)})},
-    '../../_lib/discoveryFeed':feed,'../../_lib/useLiveDiscoveryFeed':hook,'../ui/app-surface':surface,'./new-live-streams-button':button});
+    '../../_lib/discoveryFeed':feed,'../../_lib/useLiveDiscoveryFeed':hook,'../ui/app-surface':surface,'./new-live-streams-button':button,
+    './live-discovery-card':{LiveDiscoveryCard:'LiveDiscoveryCard'}});
   function Host(){return React.createElement(component.PlatformLiveNow,{creatorUserId:creatorId,enabled});}
   const root=createRoot(container());
   const render=()=>React.act(async()=>root.render(React.createElement(Host)));
@@ -67,7 +68,7 @@ async function mount(t,initial=[row()]){
     nodes:type=>descendants(tree,x=>x.type===type),errors:()=>descendants(tree,x=>x.props?.testID==='platform-live-discovery-error'),
     setReader:value=>{reader=value;},async creator(value){creatorId=value;await render();},async account(value){authority=owner(value);await render();},
     async enable(value){enabled=value;await render();},async refresh(value=rows){now+=30000;rows=value;await React.act(async()=>{for(const f of intervals)void f();});},
-    async resolve(d,value){await React.act(async()=>d.resolve(value));},async press(button){await React.act(async()=>button.props.onPress());},
+    async resolve(d,value){await React.act(async()=>d.resolve(value));},async press(button){await React.act(async()=>button.type==='LiveDiscoveryCard'?button.props.onOpen():button.props.onPress());},
   };
 }
 
@@ -81,7 +82,7 @@ test('Platform automatically adds new live cards while retaining browse order an
   await h.refresh([row({id:'stage-two',title:'New stage'}),row()]);
   assert.equal(h.buttons().length,2);
   assert.equal(h.action(),undefined,'no manual acceptance button gates current live discovery');
-  assert.equal(h.buttons()[0].props.accessibilityLabel.includes('Actual standalone stage'),true);
+  assert.equal(h.buttons()[0].props.item.title,'Actual standalone stage');
   assert.equal(h.routes.length,0);
 });
 test('canonical public live Event retains its Event destination',async t=>{

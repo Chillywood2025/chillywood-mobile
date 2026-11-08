@@ -7,6 +7,9 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { ARTIFACTS } from "./test-local-camera-inference-offline.mjs";
 import { assertLocalCameraProviderClosure } from "./camera-provider-closure.mjs";
+import { requireTestStoreV3Sources, parseTestStoreV3NativePolicyReport, prepareExpoCryptoSourceCompile,
+  resolveExpoCryptoSourceProject, expoCryptoCompileTasks, verifyExpoCryptoRuntimeGraph,
+  collectPaidVideoAndroidArtifacts, collectPaidVideoIosArtifacts } from "./ci/paid-video-native-closure.mjs";
 
 const ANDROID_VARIANTS = Object.freeze(["debug", "release"]);
 const variantTitle = variant => variant[0].toUpperCase() + variant.slice(1);
@@ -411,6 +414,7 @@ fs.mkdirSync(scratch);
 const receipts = {};
 const receipt = { scope: "camera-module-native-compile", status: "running", generatedOnly: generateOnly,
   runnerSourceSha256: createHash("sha256").update(fs.readFileSync(fileURLToPath(import.meta.url))).digest("hex"),
+  paidVideoNativeClosureSourceSha256: createHash("sha256").update(fs.readFileSync(new URL("./ci/paid-video-native-closure.mjs", import.meta.url))).digest("hex"),
   receipts, physicalEvidence: false, inferenceExecuted: false, commands: [] };
 const saveReceipt = () => fs.writeFileSync(path.join(workspace, "receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
 saveReceipt();
@@ -481,6 +485,8 @@ try {
     if (fs.existsSync(source)) fs.cpSync(source, path.join(project, relative), { recursive: true, verbatimSymlinks: true });
   }
   assertIsolatedLinks(project);
+  receipt.expoCryptoSourceCompile = prepareExpoCryptoSourceCompile(project);
+  saveReceipt();
   // Firebase's Expo plugin requires config files even for a camera-library
   // compile. These explicit nonfunctional fixtures are ONLY in the isolated
   // project; no app is launched and no Firebase account or credentials are used.
@@ -516,6 +522,15 @@ try {
   assert.equal(v2Sources.length, 6, "All six v2 platform sources must be captured");
   for (const file of v2Sources) { v2Hash.update(path.relative(project, file)); v2Hash.update(fs.readFileSync(file)); }
   receipt.testStoreV2AdmissionSourceSha256 = v2Hash.digest("hex");
+  const v3Hash = createHash("sha256");
+  const v3Sources = files(path.join(project, "modules/chillywood-test-store-admission")).filter(file => /(?:ChillywoodTestStoreV3Module|TestStoreV3Policy|TestStoreV3Contract)\.(?:swift|java|kt)$/u.test(file)).sort();
+  assert.equal(v3Sources.length, 6, "All six V3 native sources must be captured");
+  receipt.testStoreV3SourceFiles = v3Sources.map(file => {
+    const name = path.relative(project, file), bytes = fs.readFileSync(file);
+    v3Hash.update(name); v3Hash.update(bytes);
+    return { path: name, sha256: createHash("sha256").update(bytes).digest("hex") };
+  });
+  receipt.testStoreV3AdmissionSourceSha256 = v3Hash.digest("hex");
   if (platforms.includes("ios") && !generateOnly) {
     assert(env.JAVA_HOME && fs.existsSync(path.join(env.JAVA_HOME, "bin/javac")), "Native policy checks require the runner's Java toolchain");
     receipt.testStoreNativePolicy = parseTestStoreNativePolicyReport(run(process.execPath,
@@ -524,6 +539,11 @@ try {
     receipt.testStoreV2NativePolicy = parseTestStoreV2NativePolicyReport(run(process.execPath,
       ["--test", "--test-reporter=tap", "tests/isolated-test-store-v2-native.test.mjs"], root,
       { ISOLATED_TEST_STORE_V2_NATIVE_POLICY: "1", TEST_STORE_JAVA_HOME: env.JAVA_HOME }));
+    receipt.testStoreV3NativePolicy = parseTestStoreV3NativePolicyReport(run(process.execPath,
+      ["--test", "--test-reporter=tap", "tests/isolated-test-store-v3-native.test.mjs"], root,
+      { ISOLATED_TEST_STORE_V3_NATIVE_POLICY: "1", TEST_STORE_JAVA_HOME: env.JAVA_HOME }));
+    receipt.testStoreV3NativePolicy.sourceSha256 = createHash("sha256").update(fs.readFileSync(path.join(root,
+      "tests/isolated-test-store-v3-native.test.mjs"))).digest("hex");
     saveReceipt();
   }
   for (const platform of platforms) {
@@ -546,6 +566,9 @@ try {
     const pickerProjects = platform === "android" ? resolveAndroidMediaPickerProjects(resolution, project) : undefined;
     const admissionProject = resolveTestStoreAdmissionProject(resolution, project, platform);
     assert.deepEqual(resolveTestStoreV2AdmissionProject(resolution, project, platform), admissionProject);
+    const v3SourceFiles = requireTestStoreV3Sources(resolution, project, platform, admissionProject);
+    for (const source of v3SourceFiles) assert.deepEqual(receipt.testStoreV3SourceFiles.find(file => file.path === source.path), source);
+    const cryptoProject = resolveExpoCryptoSourceProject(resolution, project, platform);
     run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformEnv);
     const generated = path.join(project, platform);
     assert(fs.existsSync(generated), `Expo must generate ${platform} sources`);
@@ -553,6 +576,8 @@ try {
     for (const file of files(generated).sort()) { digest.update(path.relative(generated, file)); digest.update(fs.readFileSync(file)); }
     receipts[platform] = { generatedSourceSha256: digest.digest("hex"), compiled: false };
     receipts[platform].testStoreAdmissionSourceProject = { name: admissionProject.name, sourceDir: path.relative(project, admissionProject.sourceDir) };
+    receipts[platform].testStoreV3SourceFiles = v3SourceFiles;
+    receipts[platform].expoCryptoSourceProject = { name: cryptoProject.name, sourceDir: path.relative(project, cryptoProject.sourceDir) };
     if (platform === "android") {
       receipts.android.profile = { name: platformEnv.EAS_BUILD_PROFILE, literalEnvironment: platformEnv,
         easConfigSha256: createHash("sha256").update(easSource).digest("hex"),
@@ -578,6 +603,7 @@ def expectedCameraProjects = new JsonSlurper().parseText(System.getenv('CHILLYWO
 def expectedDevLauncher = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_CAMERA_DEV_LAUNCHER_PROJECT'))
 def expectedPickerProjects = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_MEDIA_PICKER_SOURCE_PROJECTS'))
 def expectedAdmission = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_TEST_STORE_ADMISSION_SOURCE_PROJECT'))
+def expectedCrypto = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_EXPO_CRYPTO_SOURCE_PROJECT'))
 def expectedCameraRoot = new File(System.getenv('CHILLYWOOD_CAMERA_GRADLE_ROOT')).canonicalFile
 gradle.projectsEvaluated {
   // Init scripts also run for included Expo/React Native plugin builds.
@@ -629,6 +655,16 @@ gradle.projectsEvaluated {
     }
   }
   println('CHILLYWOOD_CAMERA_TEST_STORE_ADMISSION_SOURCE_PROJECT=' + JsonOutput.toJson(expectedAdmission))
+  def crypto = gradle.rootProject.findProject(':' + expectedCrypto.name)
+  if (crypto == null || crypto.projectDir.canonicalFile != new File(expectedCrypto.sourceDir).canonicalFile) {
+    throw new GradleException('Pinned ExpoCrypto source project differs from actual autolinking')
+  }
+  ['Debug', 'Release'].each { variant ->
+    if (crypto.tasks.findByName('compile' + variant + 'Kotlin') == null) {
+      throw new GradleException('Required ExpoCrypto source compile task missing: ' + variant)
+    }
+  }
+  println('CHILLYWOOD_CAMERA_EXPO_CRYPTO_SOURCE_PROJECT=' + JsonOutput.toJson(expectedCrypto))
   def launcher = gradle.rootProject.findProject(':' + expectedDevLauncher.name)
   if (launcher == null || launcher.projectDir.canonicalFile != new File(expectedDevLauncher.sourceDir).canonicalFile ||
       launcher.tasks.findByName('compileDebugKotlin') == null) {
@@ -710,12 +746,13 @@ allprojects { p ->
     }
   }
 }`);
-      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), ...googleExternalLinkCompileTasks(), ...mediaPickerCompileTasks(), ...testStoreAdmissionCompileTasks(), "--init-script", initScript,
+      const output = run("./gradlew", [...androidNativeCompileTasks(cameraProjects), ...googleExternalLinkCompileTasks(), ...mediaPickerCompileTasks(), ...testStoreAdmissionCompileTasks(), ...expoCryptoCompileTasks(), "--init-script", initScript,
         "--no-daemon", "--console=plain"], generated,
       { ...platformEnv, CHILLYWOOD_CAMERA_SOURCE_PROJECTS: JSON.stringify(cameraProjects),
         CHILLYWOOD_CAMERA_DEV_LAUNCHER_PROJECT: JSON.stringify(devLauncherProject),
         CHILLYWOOD_MEDIA_PICKER_SOURCE_PROJECTS: JSON.stringify(pickerProjects),
         CHILLYWOOD_TEST_STORE_ADMISSION_SOURCE_PROJECT: JSON.stringify(admissionProject),
+        CHILLYWOOD_EXPO_CRYPTO_SOURCE_PROJECT: JSON.stringify(cryptoProject),
         CHILLYWOOD_CAMERA_GRADLE_ROOT: fs.realpathSync(generated) });
       assert.deepEqual(parseGradleRecord(output, "SOURCE_PROJECTS"), cameraProjects,
         "Both actual camera Gradle source projects must match autolinking");
@@ -726,6 +763,9 @@ allprojects { p ->
       assert.deepEqual(parseGradleRecord(output, "TEST_STORE_ADMISSION_SOURCE_PROJECT"), admissionProject,
         "Compiled Test Store admission must match actual autolinked source");
       receipts.android.testStoreAdmissionCompileTasks = testStoreAdmissionCompileTasks();
+      assert.deepEqual(parseGradleRecord(output, "EXPO_CRYPTO_SOURCE_PROJECT"), cryptoProject);
+      receipts.android.expoCryptoCompileTasks = expoCryptoCompileTasks();
+      receipts.android.paidVideoNativeArtifacts = collectPaidVideoAndroidArtifacts(project);
       receipts.android.galleryNativeTests = verifyGalleryNativeTestReport(fs.readFileSync(path.join(project,
         "modules/chillywood-gallery-picker/android/build/test-results/testDebugUnitTest/TEST-expo.modules.chillywoodgallerypicker.GalleryPickerActivityTest.xml"), "utf8"));
       assert.deepEqual(parseGradleRecord(output, "DEV_LAUNCHER_SOURCE_PROJECT"), devLauncherProject,
@@ -745,6 +785,7 @@ allprojects { p ->
         verifyGoogleBillingRuntimeGraph(graph);
         verifyMediaPickerRuntimeGraph(graph, manifests[variant].sources);
         verifyTestStoreAdmissionRuntimeGraph(graph);
+        verifyExpoCryptoRuntimeGraph(graph);
         receipts.android.runtimeClosures[variant] = { scope: `app-${variant}-runtime-and-merged-manifest`,
           profile: records[variant].profile, runtimePins, graph,
           pinnedAarArtifacts: artifacts.map(({ coordinate, type }) => ({ coordinate, type })), manifests: manifests[variant].receipts };
@@ -806,11 +847,26 @@ allprojects { p ->
       const admissionTarget = requireTestStoreAdmissionPodTarget(JSON.parse(run("xcodebuild",
         ["-project", "Pods/Pods.xcodeproj", "-list", "-json"], generated, platformEnv)));
       assert.equal(admissionTarget, admissionProject.name, "Resolved pod target must match actual autolinking");
-      run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", admissionTarget, "-configuration", "Debug",
-        "-sdk", "iphonesimulator", "-arch", process.arch === "arm64" ? "arm64" : "x86_64",
+      const podTargets = JSON.parse(run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-list", "-json"], generated, platformEnv));
+      assert.equal(podTargets?.project?.targets?.filter(target => target === cryptoProject.name).length, 1,
+        "Exactly one actual ExpoCrypto pod target must compile");
+      const architecture = process.arch === "arm64" ? "arm64" : "x86_64", paidVideoBuildSettings = {};
+      const paidVideoBuildArguments = ["-sdk", "iphonesimulator", "-arch", architecture,
         "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",
-        `SYMROOT=${path.join(workspace, "ios-build")}`, "build"], generated, platformEnv);
+        `SYMROOT=${path.join(workspace, "ios-build")}`, `OBJROOT=${path.join(workspace, "ios-objects")}`];
+      run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", admissionTarget, "-configuration", "Debug",
+        ...paidVideoBuildArguments, "build"], generated, platformEnv);
       receipts.ios.compiledTargets.push(admissionTarget);
+      run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", cryptoProject.name, "-configuration", "Debug",
+        ...paidVideoBuildArguments, "build"], generated, platformEnv);
+      receipts.ios.compiledTargets.push(cryptoProject.name);
+      for (const target of [admissionTarget, cryptoProject.name]) {
+        const settings = JSON.parse(run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", target, "-configuration", "Debug",
+          ...paidVideoBuildArguments, "-showBuildSettings", "-json"], generated, platformEnv));
+        assert.equal(settings.filter(value => value.target === target).length, 1, "One compiled target settings record is required");
+        paidVideoBuildSettings[target] = settings.find(value => value.target === target).buildSettings;
+      }
+      receipts.ios.paidVideoNativeArtifacts = collectPaidVideoIosArtifacts(workspace, architecture, paidVideoBuildSettings);
       saveReceipt();
     }
     receipts[platform].compiled = true;

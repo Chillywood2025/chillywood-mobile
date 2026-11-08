@@ -7,6 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {reviewedCaptureInstall,captureMigrationPath} from '../../isolated-runtime/test-store-capture-v1/install.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const modulePath='isolated-runtime/sandbox-commerce-v1';
@@ -39,6 +40,11 @@ const testStoreV2Sources=[...allSql.filter(file=>file!=='permissions-finalize.sq
  'supabase/functions/_shared/revenuecat-router-envelope.ts','supabase/functions/_shared/isolated-test-store-v2-provisioner.ts',
  'supabase/functions/_shared/isolated-test-store-v2-receipt.ts','supabase/functions/_shared/isolated-test-store-qualification.ts',
  'supabase/functions/_shared/revenuecat-lossless-envelope.ts');
+const capturePath='isolated-runtime/test-store-capture-v1';
+const captureSources=['README.md','capture.sql','function-config.toml','install.mjs','source-manifest.json',
+ 'tests/capture.native.mjs','tests/cluster.mjs','tests/source-loader.mjs','tests/edge.test.mjs','tests/install.test.mjs']
+ .map(file=>`${capturePath}/${file}`).concat('supabase/functions/isolated-test-store-capture-v1/index.ts',
+ 'supabase/functions/_shared/revenuecat-router-envelope.ts','supabase/functions/_shared/isolated-test-store-qualification.ts',captureMigrationPath);
 const stageSources={
  'premium-authority':['premium-authority.sql'],authority:['authority.sql','premium-authority.sql'],
  core:allSql.filter(file=>file!=='receipts.sql'),declarations:allSql,receipts:allSql,
@@ -61,6 +67,8 @@ export const NATIVE_STAGES=Object.freeze([
   sourceFiles:Object.freeze(testStoreSources),file:`${modulePath}/tests/test-store.native.mjs`}),
  Object.freeze({name:'test-store-v2',caseCount:43,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],sourceBase:'',
   sourceFiles:Object.freeze(testStoreV2Sources),file:`${modulePath}/tests/test-store-v2.native.mjs`}),
+ Object.freeze({name:'independent-capture',caseCount:21,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],sourceBase:'',
+  sourceFiles:Object.freeze(captureSources),file:`${capturePath}/tests/capture.native.mjs`,proofFormat:'rcq-native-proof-v1'}),
  Object.freeze({name:'receipt-router',caseCount:22,cleanupKeys:[...ordinaryCleanup,'sessionsClosed'],
   sourceBase:'',sourceFiles:Object.freeze(routerSources),file:`${routerPath}/tests/router.native.mjs`,proofFormat:'receipt-router-v1',
   proofKind:'actual-local-postgresql-source-proof',providerQualificationField:'actualProviderAuthenticationProven'}),
@@ -93,9 +101,11 @@ export const NODE_STAGES=Object.freeze([
  {name:'test-store-v2-receipt',expectedTests:37,files:['tests/creator-money/isolated-test-store-v2-receipt.test.mjs']},
  {name:'test-store-v2-command',expectedTests:22,files:['tests/creator-money/isolated-test-store-v2-command.test.mjs']},
  {name:'test-store-qualification',expectedTests:25,files:['tests/creator-money/isolated-test-store-qualification.test.mjs']},
+ {name:'independent-capture-edge-emitter',expectedTests:8,files:[`${capturePath}/tests/edge.test.mjs`,`${capturePath}/tests/install.test.mjs`]},
  {name:'test-store-qualification-client',expectedTests:9,files:['qualification/test-store-debug/tests/client.test.mjs']},
  {name:'test-store-qualification-mounted',expectedTests:8,files:['qualification/test-store-debug/tests/mounted.test.mjs']},
  {name:'test-store-qualification-compile-guard',expectedTests:6,files:['qualification/test-store-debug/tests/compile-contract.test.mjs']},
+ {name:'test-store-qualification-configured-staging',expectedTests:13,files:['qualification/test-store-debug/tests/configured-staging.test.mjs']},
  {name:'test-store-v2-client',expectedTests:10,files:['tests/isolated-test-store-v2-client.test.mjs']},
  {name:'test-store-v2-sdk',expectedTests:5,files:['tests/isolated-test-store-v2-sdk.test.mjs']},
  {name:'test-store-v2-legacy-suppression',expectedTests:6,files:['tests/isolated-test-store-v2-legacy-suppression.test.mjs']},
@@ -114,7 +124,18 @@ export const createPlan=()=>({postgres:POSTGRES,nativeStages:NATIVE_STAGES,nodeT
   'Provider classifier and delivery policy tests do not authenticate provider observations or issue real access.']});
 
 export function validateNativeProof(stage,proof,sourceHashes){
- if(stage.proofFormat==='receipt-router-v1'){
+ if(stage.proofFormat==='rcq-native-proof-v1'){
+  assert.equal(proof.protocol,stage.proofFormat);assert.equal(proof.passed,true);assert.equal(proof.diagnostics,null);
+  assert.match(proof.engine??'',/^postgres \(PostgreSQL\) 17\.6$/u);
+  assert.ok(Array.isArray(proof.cases),'Complete capture case array required');
+  assert.equal(proof.cases?.length,stage.caseCount,`${stage.name}: native case count changed`);
+  assert.equal(new Set(proof.cases.map(item=>item.name)).size,stage.caseCount,'Distinct completed capture cases required');
+  for(const item of proof.cases){assert.equal(item.passed,true);assert.equal(typeof item.name,'string');assert.ok(item.name.length>0);}
+  assert.equal(proof.installSqlSha256,reviewedCaptureInstall().sqlSha256);assert.equal(proof.syntheticProviderEvidence,true);
+  assert.equal(proof.executedMigration,captureMigrationPath);
+  assert.equal(proof.sourceHashes?.[captureMigrationPath],proof.installSqlSha256);
+  for(const key of ['providerOrProductionCalls','actualProviderAuthenticationProven','actualDeviceBehaviorProven'])assert.equal(proof[key],false);
+ }else if(stage.proofFormat==='receipt-router-v1'){
   assert.equal(proof.kind,stage.proofKind,`${stage.name}: proof kind`);
   assert.equal(proof.postgres,'17.6');assert.equal(proof.cases,stage.caseCount,`${stage.name}: native case count changed`);
   assert.ok(Array.isArray(proof.passed),`${stage.name}: native cases must be an array`);
@@ -198,11 +219,12 @@ export function collectSourceManifest(){
   const next=`${relative}/${entry.name}`;assert.ok(!entry.isSymbolicLink(),`Source symlink rejected: ${next}`);
   if(entry.isDirectory())visit(next);else if(entry.isFile())files.push(next);
  }};
- for(const directory of [modulePath,routerPath,'app/sandbox-tips','components/monetization',
+ for(const directory of [modulePath,routerPath,capturePath,'app/sandbox-tips','components/monetization',
   'supabase/functions/revenuecat-receipt-router-v1','supabase/functions/isolated-sandbox-test-store-v1',
   'supabase/functions/isolated-test-store-revenuecat-webhook-v1','supabase/functions/isolated-sandbox-test-store-v2',
   'supabase/functions/isolated-test-store-provisioner-v2','supabase/functions/isolated-test-store-revenuecat-webhook-v2',
   'supabase/functions/isolated-test-store-qualification-v1',
+  'supabase/functions/isolated-test-store-capture-v1',
   'modules/chillywood-test-store-admission','qualification/test-store-debug'])visit(directory);
  return Object.fromEntries([...new Set(files)].sort().map(file=>{
   const absolute=path.join(root,file);assert.ok(fs.lstatSync(absolute).isFile(),`Regular source required: ${file}`);

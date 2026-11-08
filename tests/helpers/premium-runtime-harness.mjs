@@ -21,7 +21,7 @@ const load = (path, mocks = {}, overrides = {}) => {
 
 // Full actual monetization module, actual entitlement policy and purchase closure.
 // Only account, database and provider boundaries are modeled; no real purchase occurs.
-export function premiumRuntime(platform = 'android', { independentProjection = false, immediatePolls = false, isolatedTestStore = false, isolatedTestStoreV2 = false } = {}) {
+export function premiumRuntime(platform = 'android', { independentProjection = false, immediatePolls = false, isolatedTestStore = false, isolatedTestStoreV2 = false, isolatedTestStoreV3 = false } = {}) {
   const product = platform === 'ios' ? 'com.chillywood.premium.monthly' : 'premium_subscription';
   const pkg = { identifier: 'monthly', product: { identifier: product } };
   const offering = { identifier: 'premium', availablePackages: [pkg], monthly: pkg };
@@ -44,7 +44,8 @@ export function premiumRuntime(platform = 'android', { independentProjection = f
     './runtimeConfig': { getRuntimeConfig: () => ({ revenueCat: { appStorePurchasesEnabled: true } }), isBetaOperatorIdentity: () => false },
     './isolatedTestStoreBuild': { isIsolatedTestStoreFlavor: () => isolatedTestStore },
     './isolatedTestStoreV2Build': { isIsolatedTestStoreV2Flavor: () => isolatedTestStoreV2 },
-    './revenuecat': { configureRevenueCatOnce: () => ({ shouldConfigure: !(isolatedTestStore || isolatedTestStoreV2), mode: isolatedTestStore || isolatedTestStoreV2 ? 'disabled' : platform === 'ios' ? 'ios-release' : 'android-release', apiKey: isolatedTestStore || isolatedTestStoreV2 ? '' : 'nonsecret-model' }),
+    './isolatedTestStoreV3Build': { isIsolatedTestStoreV3Flavor: () => isolatedTestStoreV3 },
+    './revenuecat': { configureRevenueCatOnce: () => ({ shouldConfigure: !(isolatedTestStore || isolatedTestStoreV2 || isolatedTestStoreV3), mode: isolatedTestStore || isolatedTestStoreV2 || isolatedTestStoreV3 ? 'disabled' : platform === 'ios' ? 'ios-release' : 'android-release', apiKey: isolatedTestStore || isolatedTestStoreV2 || isolatedTestStoreV3 ? '' : 'nonsecret-model' }),
       syncRevenueCatCustomerIdentity: async userId => ({ matchesSourceUser: state.providerIdentity, appUserId: userId, isAnonymous: false }),
       canMakeRevenueCatPurchases: async () => true,
       readRevenueCatCustomerInfo: async () => { state.providerReads++; if (state.providerReader) return state.providerReader();

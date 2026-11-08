@@ -4,6 +4,7 @@ import path from "node:path";
 import type { ConfigContext, ExpoConfig } from "@expo/config";
 import { isolatedTestStoreDebugConfig } from "./config/test-store-debug-config.js";
 import { isolatedTestStoreV2DebugConfig } from "./config/test-store-debug-v2-config.js";
+import { isolatedTestStoreV3DebugConfig } from "./config/test-store-debug-v3-config.js";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
@@ -166,6 +167,17 @@ const buildAndroidAppLinkIntentFilters = (): NonNullable<NonNullable<ExpoConfig[
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const base = config as ExpoConfig;
+  const isolatedTestStoreV3 = isolatedTestStoreV3DebugConfig(base, {
+    EAS_BUILD_PROFILE: process.env.EAS_BUILD_PROFILE,
+    CHILLYWOOD_TEST_STORE_V3_FLAVOR: process.env.CHILLYWOOD_TEST_STORE_V3_FLAVOR,
+    CHILLYWOOD_TEST_STORE_V3_NATIVE_CONFIG: process.env.CHILLYWOOD_TEST_STORE_V3_NATIVE_CONFIG,
+    CHILLYWOOD_TEST_STORE_V2_FLAVOR: process.env.CHILLYWOOD_TEST_STORE_V2_FLAVOR,
+    CHILLYWOOD_TEST_STORE_V2_NATIVE_CONFIG: process.env.CHILLYWOOD_TEST_STORE_V2_NATIVE_CONFIG,
+    CHILLYWOOD_TEST_STORE_FLAVOR: process.env.CHILLYWOOD_TEST_STORE_FLAVOR,
+    CHILLYWOOD_TEST_STORE_NATIVE_CONFIG: process.env.CHILLYWOOD_TEST_STORE_NATIVE_CONFIG,
+    SCQ_NATIVE_DESCRIPTOR: process.env.SCQ_NATIVE_DESCRIPTOR,
+  });
+  if (isolatedTestStoreV3) return isolatedTestStoreV3;
   const isolatedTestStoreV2 = isolatedTestStoreV2DebugConfig(base, {
     EAS_BUILD_PROFILE: process.env.EAS_BUILD_PROFILE,
     CHILLYWOOD_TEST_STORE_V2_FLAVOR: process.env.CHILLYWOOD_TEST_STORE_V2_FLAVOR,

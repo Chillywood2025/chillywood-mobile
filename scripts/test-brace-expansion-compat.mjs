@@ -115,8 +115,11 @@ const expectedSupabasePresenceBackport = Object.freeze({
 // Includes the reviewed 2026-11-07 RevenueCat Test Store SDK upgrade: exactly
 // react-native-purchases/ui 10.15.1, hybrid-mappings/typescript-internal 19.14.1,
 // and purchases-js 1.71.0. All five identities remain bound by this digest.
+// Includes the bounded 2026-11-07 expo-crypto 15.0.9 addition for hashing paid-video
+// uploads. That single new package identity is included; every existing package
+// identity and compatibility exclusion remains unchanged.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "1ac69008e9e08e5b2bfe8a634f3a246da284fe39dd508420f6932575b6aa71d2";
+const expectedUnrelatedPackageGraphSha256 = "79efb029dc6f94af900a01d1f2e2dd81ee7591febc5b59f9a5e7032466bf81b5";
 const compatibilityClosurePaths = new Set([
   "node_modules/@supabase/realtime-js",
   "node_modules/@supabase/supabase-js",
@@ -448,7 +451,7 @@ function killNegativeControls(base) {
   ];
   // Mutate real lock entries, not just the resulting digest, so these controls
   // prove reviewed Expo/Undici/RevenueCat packages and an unchanged dependency stay bound.
-  for (const entryPath of ["node_modules/expo-asset", "node_modules/expo-constants", "node_modules/undici",
+  for (const entryPath of ["node_modules/expo-asset", "node_modules/expo-constants", "node_modules/expo-crypto", "node_modules/undici",
     "node_modules/react-native-purchases", "node_modules/react-native-purchases-ui",
     "node_modules/@revenuecat/purchases-js", "node_modules/@revenuecat/purchases-js-hybrid-mappings",
     "node_modules/@revenuecat/purchases-typescript-internal"]) {

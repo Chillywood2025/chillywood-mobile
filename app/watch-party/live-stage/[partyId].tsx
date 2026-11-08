@@ -2753,7 +2753,7 @@ export default function WatchPartyLiveStageScreen({
     () => Object.fromEntries(stageMediaParticipants.map((participant) => [participant.userId, participant])),
     [stageMediaParticipants],
   );
-  const viewerCount = Math.max(1, displayParticipants.length);
+  const viewerCount = displayParticipants.length;
   const timeLabel = `${Math.floor(sessionSeconds / 60).toString().padStart(2, "0")}:${(sessionSeconds % 60).toString().padStart(2, "0")}`;
   const motionOpacity = motion.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.46] });
   const motionTranslate = motion.interpolate({ inputRange: [0, 1], outputRange: [-16, 16] });
@@ -3414,7 +3414,7 @@ export default function WatchPartyLiveStageScreen({
   const activeStageLookLabel = canUseStageEffects && stageEffectAppliedToCamera
     ? selectedStageEffect.label
     : "";
-  const hybridCommentCountLabel = hybridComments.length === 1 ? "1 comment" : `${hybridComments.length} comments`;
+  const hybridCommentCountLabel = hybridComments.length === 1 ? "1 recent comment" : `${hybridComments.length} recent comments`;
   const hybridCommentPlaceholder = isHost ? "Comment as host" : "Add a comment";
   const hybridCommentDisabled = (!hybridCommentDraft.trim() && !hybridCommentAttachmentFile) || hybridCommentSending;
   const stageEffectsTitle = canUseStageEffects ? CHILLYFECTS_BRAND_NAME : "Chi'llyfects catalog";
@@ -5741,7 +5741,7 @@ export default function WatchPartyLiveStageScreen({
             <Animated.View pointerEvents="none" style={[styles.liveBadgeGlow, { opacity: liveGlowOpacity }]} />
           </Animated.View>
           <Animated.View style={[styles.viewersPill, { opacity: viewersOpacity, transform: [{ scale: viewersScale }] }]}>
-            <Text style={styles.viewersText}>👁 {viewerCount}</Text>
+            <Text style={styles.viewersText} accessibilityLabel={`${viewerCount} people in room`}>👥 {viewerCount} in room</Text>
           </Animated.View>
         </View>
         {isHost && isPreparedEventRoom ? <EventHostBroadcastControls

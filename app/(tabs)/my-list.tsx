@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, type Href } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -458,6 +458,16 @@ export default function MyListScreen() {
                 <ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Sandbox tip tools</Text>
               </TouchableOpacity>
               <Text style={styles.headerBody}>Check creator eligibility and test history. Test checkout is unavailable.</Text>
+              <TouchableOpacity
+                testID="library-sandbox-videos-link"
+                accessibilityRole="button"
+                accessibilityLabel="Open Sandbox video studio"
+                accessibilityHint="Review drafts, saved authoring actions and current sandbox availability."
+                style={[styles.emptyButton, styles.sandboxTipsButton]}
+                onPress={() => router.push("/sandbox-videos" as Href)}
+              >
+                <ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Sandbox video studio</Text>
+              </TouchableOpacity>
               <View style={styles.libraryScopeRow}>
                 {[
                   [savedTitleCount, "Saved"],
