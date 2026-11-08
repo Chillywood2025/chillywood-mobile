@@ -10,9 +10,11 @@ import { isIsolatedTestStoreV2Flavor } from "../../_lib/isolatedTestStoreV2Build
 import { captureNativeSandboxQuoteClient, type NativeSandboxQuote, type NativeSandboxQuoteClient, type NativeSandboxSelection, type NativeSandboxStore } from "../../_lib/nativeStoreSandboxQuote";
 import { AppBackButton } from "../navigation/app-back-button";
 import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
+import { readNativeSandboxDeviceProduct } from "../../_lib/nativeStoreSandboxProduct";
 
 // Normal-app, any active account. No admin role or second RevenueCat SDK owner.
-// This screen prepares/reconciles a selection only; it never invokes a store.
+// Prepares/reconciles a selection and explicitly reads the device catalog.
+// Never invokes purchase or restore, and catalog matches grant no authority.
 export function NativeStoreSandboxQuoteScreen() {
   const { user, authority, isLoading } = useSession(); const router = useRouter();
   const params = useLocalSearchParams<{ offerId?: string }>(); const offerId = typeof params.offerId === "string" ? params.offerId : "";
@@ -66,6 +68,17 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
     }).catch(() => { if (local.active) setMessage("The result is unconfirmed. Keep the saved request and read status; no store purchase was started by this screen."); })
       .finally(() => { local.pending = false; if (local.active) setBusy(false); });
   };
+  const checkDeviceProduct = () => {
+    const local = owner.current; if (!local?.active || local.pending || !quote) return;
+    local.pending = true; setBusy(true);
+    void readNativeSandboxDeviceProduct(expected, quote).then(result => {
+      if (!local.active) return;
+      setMessage(result.status === "matched"
+        ? "This device's store product and price match the server quote. This does not verify a test account or enable a purchase."
+        : "This device's store product and price could not be matched. No purchase was started.");
+    }).catch(() => { if (local.active) setMessage("Store availability could not be read. No purchase was started."); })
+      .finally(() => { local.pending = false; if (local.active) setBusy(false); });
+  };
   return <View style={styles.card}>
     {busy && <ActivityIndicator testID="native-sandbox-loading" />}
     <Text accessibilityLiveRegion="polite" style={styles.body}>{message}</Text>
@@ -75,6 +88,7 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
     <Button id="native-sandbox-prepare" disabled={busy || !quote || saved || !!selection || !owner.current} action={() => run("prepare")}>Save test selection</Button>
     <Button id="native-sandbox-recover" disabled={busy || !saved || !owner.current} action={() => run("recover")}>Read saved selection status</Button>
     <Button id="native-sandbox-refresh" disabled={busy} action={() => setRevision(n => n + 1)}>Reconnect and read status</Button>
+    <Button id="native-sandbox-check-product" disabled={busy || !quote || !owner.current} action={checkDeviceProduct}>Check device store availability</Button>
     <Text style={styles.body}>Native one-time receipt correlation still needs qualification. A displayed price, saved selection or SDK result is not proof of paid access.</Text>
   </View>;
 }

@@ -61,3 +61,15 @@ catalog/resource binding, retained upload qualification, worker/Edge deployment,
 SDK dispatch, settlement or access grant is created. A native quote still uses its
 existing provider-neutral base media checks; installation of the stronger shared
 media helper does not silently upgrade the native quote to verified-byte readiness.
+
+## Command Edge source
+
+`edge-profile.mjs` uses the existing AST dependency collector to prepare the exact
+local command source closure and its fingerprint. The normal command explicitly
+requires JWT verification in `supabase/config.toml`; the handler also authenticates
+the current account/session before invoking its private SQL command. Source
+preparation performs no network request and includes no project ID or credentials.
+Its external dependency inventory currently includes the shared
+`npm:@supabase/supabase-js@2` import. A source fingerprint is not a resolved SDK
+artifact lock: runtime and hosted qualification remain false pending actual
+runtime/deployment verification. It does not enable a purchase or settlement.

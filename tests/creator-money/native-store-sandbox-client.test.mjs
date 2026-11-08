@@ -80,6 +80,29 @@ test('quote and key snapshots cannot mutate between persistence and transport',a
 });
 
 const noop=()=>{},doc={addEventListener:noop,removeEventListener:noop,defaultView:globalThis,nodeType:9};
+function productReader(f,read,platform='ios',flavor=0){return load('../../_lib/nativeStoreSandboxProduct.ts',{
+  'react-native':{Platform:{OS:platform}},'./accountSessionAuthority':f.authority,'./nativeStoreSandboxQuote':f.api,
+  './creatorMoneyStoreQuote':load('../../_lib/creatorMoneyStoreQuote.ts',{}),'./revenuecat':{readRevenueCatNonSubscriptionProducts:read},
+  './entitlementAuthority':{withAuthorityReadDeadline:async(p,fallback)=>{let timer;try{return await Promise.race([p,new Promise(r=>{timer=setTimeout(()=>r(fallback),30);})]);}finally{clearTimeout(timer);}}},
+  './isolatedTestStoreBuild':{isIsolatedTestStoreFlavor:()=>flavor===1},'./isolatedTestStoreV2Build':{isIsolatedTestStoreV2Flavor:()=>flavor===2},'./isolatedTestStoreV3Build':{isIsolatedTestStoreV3Flavor:()=>flavor===3},
+});}
+test('read-only shared-owner preflight matches exact device product/price/currency and never admits purchases',async()=>{
+  for(const platform of ['ios','android']){
+    const f=fixture(),q=quote();q.catalog.store=platform==='ios'?'APP_STORE':'PLAY_STORE';let reads=0;
+    for(const [products,expected] of [[[{identifier:'one_time',price:1.99,currencyCode:'USD'}],'matched'],[[{identifier:'other',price:1.99,currencyCode:'USD'}],'unavailable'],[[{identifier:'one_time',price:2,currencyCode:'USD'}],'unavailable'],[[{identifier:'one_time',price:1.99,currencyCode:'EUR'}],'unavailable'],[[],'unavailable'],[[{identifier:'one_time',price:1.99,currencyCode:'USD'},{identifier:'one_time',price:1.99,currencyCode:'USD'}],'unavailable']]){
+      const api=productReader(f,async ids=>{reads++;assert.deepEqual([...ids],['one_time']);return products;},platform);
+      const result=await api.readNativeSandboxDeviceProduct(A,q);assert.equal(result.status,expected);assert.equal(result.dispatchAllowed,false);assert.equal(result.environmentVerified,false);
+    }assert.equal(reads,6);
+    for(const flavor of [1,2,3])assert.equal((await productReader(f,()=>assert.fail('isolated must not read native SDK'),platform,flavor).readNativeSandboxDeviceProduct(A,q)).status,'unavailable');
+  }
+});
+test('device preflight snapshots quote and permanently retires across account gaps; hung read is bounded',async()=>{
+  const f=fixture(),wait=deferred(),q=quote(),api=productReader(f,()=>wait.promise);const pending=api.readNativeSandboxDeviceProduct(A,q);q.amountMinor=999;
+  wait.resolve([{identifier:'one_time',price:1.99,currencyCode:'USD'}]);assert.equal((await pending).status,'matched');
+  const later=deferred(),late=productReader(f,()=>later.promise).readNativeSandboxDeviceProduct(A,quote());f.change(B);f.change(A);later.resolve([{identifier:'one_time',price:1.99,currencyCode:'USD'}]);assert.equal((await late).status,'unavailable');
+  assert.equal((await productReader(f,()=>new Promise(()=>{})).readNativeSandboxDeviceProduct(A,quote())).status,'unavailable');
+  assert.equal((await productReader(f,()=>assert.fail('web must not read SDK'),'web').readNativeSandboxDeviceProduct(A,quote())).status,'unavailable');
+});
 const sdkCallback=(transactionIdentifier='native-txn-1')=>({productIdentifier:'one_time',transaction:{transactionIdentifier,productIdentifier:'one_time',purchaseDate:'2026-11-08T01:00:00Z',purchaseToken:'MUST_NOT_PERSIST'},rawReceipt:'MUST_NOT_PERSIST'});
 const claimFor=(body,session=A.sessionGeneration)=>({id:`nssv1_claim_${uuid(25)}`,selectionId:body.payload.selectionId,originalRequestId:body.requestId,originalSessionGeneration:session,createdAt:'2026-11-08T01:00:00Z',transactionIdentifier:body.payload.transactionIdentifier,productIdentifier:body.payload.productIdentifier,evidence:'client_assertion',settlementAllowed:false});
 test('callback stores only exact transaction assertion before claim and process restart recovers same-account claim',async()=>{
@@ -161,19 +184,34 @@ test('late or failed callback persistence never dispatches or permits a concurre
 });
 const container=()=>({addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'});
 doc.documentElement=container();globalThis.document=doc;globalThis.window=globalThis;globalThis.HTMLIFrameElement=class{};globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-function mountFixture(f, flavor=0, sessionOverride=null, canGoBack=true) {
+function mountFixture(f, flavor=0, sessionOverride=null, canGoBack=true, readProduct=null) {
   const navigation=[];
+  const productReads=[];
+  const products=productReader(f,async ids=>{productReads.push([...ids]);return readProduct?readProduct():[{identifier:'one_time',price:1.99,currencyCode:'USD'}];});
   let nodes=[];const primitive=name=>function NativePrimitive(props){nodes.push({name,props});return ['Text','ActivityIndicator'].includes(name)?null:React.createElement(React.Fragment,null,props.children);};
   const native={Platform:{OS:'ios'},StyleSheet:{create:v=>v,absoluteFillObject:{position:'absolute',top:0,right:0,bottom:0,left:0}},...Object.fromEntries(['ActivityIndicator','ImageBackground','Pressable','ScrollView','Text','View'].map(n=>[n,primitive(n)]))};
   const visual=load('../../components/ui/chillywood-visual-system.tsx',{'react':React,'react-native':native,'react-native-svg':{}});
   const background={asset:'assets/images/chillywood-branded-background.png'};
   const component=load('../../components/monetization/native-store-sandbox-quote-screen.tsx',{'react':React,'react-native':native,'react-native-safe-area-context':{SafeAreaView:primitive('SafeAreaView')},'expo-router':{useLocalSearchParams:()=>({offerId}),useRouter:()=>({canGoBack:()=>canGoBack,back(){navigation.push('back');},replace(path){navigation.push(path);}})},
     '../../assets/images/chillywood-branded-background.png':background,'../ui/chillywood-visual-system':visual,
+    '../../_lib/nativeStoreSandboxProduct':products,
     '../../_lib/session':{useSession:()=>sessionOverride??({user:{id:f.current().userId},authority:f.current(),isLoading:false})},'../../_lib/isolatedTestStoreBuild':{isIsolatedTestStoreFlavor:()=>flavor===1},'../../_lib/isolatedTestStoreV2Build':{isIsolatedTestStoreV2Flavor:()=>flavor===2},'../../_lib/isolatedTestStoreV3Build':{isIsolatedTestStoreV3Flavor:()=>flavor===3},'../../_lib/nativeStoreSandboxQuote':f.api,'../navigation/app-back-button':{AppBackButton:primitive('AppBackButton')}});
   const root=createRoot(container());const flush=()=>React.act(async()=>{await new Promise(r=>setTimeout(r,0));});
   const button=id=>nodes.filter(n=>n.props.testID===id).at(-1).props;
-  return {button,flush,background,visual:visual.CHILLYWOOD_VISUAL,navigation,nodes:()=>nodes,clear(){nodes=[];},render:()=>React.act(async()=>root.render(React.createElement(component.NativeStoreSandboxQuoteScreen))),unmount:()=>React.act(async()=>root.unmount())};
+  return {button,flush,background,productReads,visual:visual.CHILLYWOOD_VISUAL,navigation,nodes:()=>nodes,clear(){nodes=[];},render:()=>React.act(async()=>root.render(React.createElement(component.NativeStoreSandboxQuoteScreen))),unmount:()=>React.act(async()=>root.unmount())};
 }
+test('mounted store availability action uses read-only shared owner and says neither test-account proof nor purchase permission',async()=>{
+  const f=fixture(),m=mountFixture(f);await m.render();await m.flush();assert.equal(m.productReads.length,0);
+  await React.act(async()=>m.button('native-sandbox-check-product').onPress());await m.flush();assert.deepEqual(m.productReads,[['one_time']]);
+  assert.equal(m.button('native-sandbox-prepare').disabled,false);assert.ok(m.nodes().some(n=>n.props.testID==='native-sandbox-price'&&n.props.children[0]==='1.99'));
+  assert.ok(m.nodes().some(n=>n.name==='Text'&&String(n.props.children).includes('does not verify a test account or enable a purchase')));assert.deepEqual(f.calls.map(v=>v.body.command),['offer']);await m.unmount();
+});
+test('mounted device read is single-flight and late old-account product result cannot update replacement screen',async()=>{
+  const f=fixture(),wait=deferred(),m=mountFixture(f,0,null,true,()=>wait.promise);await m.render();await m.flush();
+  const button=m.button('native-sandbox-check-product');await React.act(async()=>{button.onPress();button.onPress();});assert.equal(m.productReads.length,1);
+  f.change(B);await m.render();await m.flush();m.clear();wait.resolve([{identifier:'one_time',price:1.99,currencyCode:'USD'}]);await m.flush();
+  assert.equal(m.nodes().some(n=>n.name==='Text'&&String(n.props.children).includes("This device's store product and price")),false);await m.unmount();
+});
 test('shared branded background and transparent safe-area layout remain on ready, loading, signed-out and held screens; back has Library fallback',async()=>{
   assert.ok(fs.existsSync(new URL('../../assets/images/chillywood-branded-background.png',import.meta.url)));
   for(const state of ['ready','loading','signed-out','held']){
