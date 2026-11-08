@@ -4,7 +4,10 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import process from 'node:process';
 import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_process';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
-assert.equal(process.argv.length,4);assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
+import {installEventTriggerParity} from './event-trigger-parity.fixture.mjs';
+import {readbackSQL,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
+assert.ok([4,5].includes(process.argv.length));assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
+const triggerParity=process.argv.length===5;if(triggerParity)assert.equal(process.argv[4],'--event-trigger-parity');
 const here=path.dirname(fileURLToPath(import.meta.url)),base=path.resolve(here,'../sandbox-commerce-v1'),profile=nativeStoreInstallProfile();
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'native-managed-')),data=path.join(directory,'data'),port='55491';
 const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>!k.startsWith('PG')));
@@ -42,6 +45,28 @@ try{
  assert.ok(dependencies.relations.every(r=>r.present&&r.missingColumns.length===0&&r.postgresSelect&&r.postgresMaintain));cases++;
  const missing=JSON.parse(q('begin;alter table auth.sessions rename column not_after to fixture_missing;'+probe+'rollback;'));
  assert.deepEqual(missing.relations.find(r=>r.relation==='auth.sessions').missingColumns,['not_after']);cases++;
+ if(triggerParity){
+  installEventTriggerParity(q);
+  q('create role fixture_ddl_owner nologin;create schema fixture_ddl authorization fixture_ddl_owner;grant fixture_ddl_owner to postgres with set true;');
+  assert.equal(q("select has_schema_privilege('fixture_ddl_owner','extensions','USAGE'),has_function_privilege('fixture_ddl_owner','extensions.guard_platform_brand_index_helper_ddl_v1()','EXECUTE');"),'f|f');
+  q('set role fixture_ddl_owner;create table fixture_ddl.example(id integer);create function fixture_ddl.example() returns integer language sql as $$select 1$$;drop function fixture_ddl.example();drop table fixture_ddl.example;','postgres');cases++;
+  const denied=run('psql',args('postgres'),'set role fixture_ddl_owner;select extensions.guard_platform_brand_index_helper_ddl_v1();');assert.notEqual(denied.status,0);assert.match(denied.stderr,/permission denied for schema extensions/u);cases++;
+  const guard=run('psql',args('postgres'),'alter function private.platform_brand_index_jsonb_bytes_v1(jsonb) cost 101;');assert.notEqual(guard.status,0);assert.match(guard.stderr,/brand_index_helper_immutable/u);cases++;
+  const catalog=run('psql',args(),'begin;revoke select on pg_catalog.pg_proc from public;set local role fixture_ddl_owner;create table fixture_ddl.should_fail(id integer);commit;');
+  assert.notEqual(catalog.status,0);assert.match(catalog.stderr,/permission denied for table pg_proc/u);assert.equal(q("select has_table_privilege('fixture_ddl_owner','pg_catalog.pg_proc','SELECT');"),'t');cases++;
+  // Concrete snapshot SQL + unchanged production transport guard, using an
+  // explicitly modeled read-only session identity, never a role-name override.
+  q(`create role supabase_read_only_user login nosuperuser nocreaterole nocreatedb bypassrls;
+   create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text,name text,statements text[]);
+   insert into supabase_migrations.schema_migrations values('20260101000000','synthetic_fixture',array['synthetic only']);
+   insert into public.platform_money_kill_switches select k,case when k in('live_money_enabled','payouts_enabled','cashout_enabled') then 'off' else 'sandbox_only' end from unnest(array['live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled','tips_enabled','creator_monetization_enabled','provider_webhooks_enabled','revenuecat_app_store_enabled','revenuecat_google_play_enabled']) k;
+   grant usage on schema auth,public,supabase_migrations to supabase_read_only_user;grant select on all tables in schema auth,public,supabase_migrations to supabase_read_only_user;
+   grant usage on schema supabase_migrations to postgres;grant select on supabase_migrations.schema_migrations to postgres;`);
+  const snapshot=JSON.parse(invoke('psql',args('supabase_read_only_user'),'begin read only;'+readbackSQL()+'rollback;'));
+  assert.equal(validateSnapshot(snapshot).status,'snapshot_observed_unqualified');assert.equal(validateSnapshot(snapshot).deploymentAllowed,false);cases++;
+  const wrongIdentity=JSON.parse(q('begin read only;'+readbackSQL()+'rollback;','postgres'));
+  assert.throws(()=>validateSnapshot(wrongIdentity),/MANAGEMENT_READ_CONTEXT_MISMATCH/u);cases++;
+ }
  reject(profile.sql.replace('grant usage,create on schema public to native_store_sandbox_v1_owner;',''),/permission denied for schema public/u);absent();cases++;
  reject(profile.sql.replace('revoke create on schema public from native_store_sandbox_v1_owner;',''),/native_store_install_finalization_required/u);absent();cases++;
  reject(profile.sql.replace(profile.files.at(-1).sql,''),/native_store_install_finalization_required/u);absent();cases++;
@@ -68,5 +93,5 @@ try{
   const r=run('psql',args(),`set role ${role};select public.native_store_sandbox_claim_read_v1(gen_random_uuid());`);assert.notEqual(r.status,0);assert.match(r.stderr,/permission denied/u);
  }
  assert.equal(q("set role service_role;set request.jwt.claims='{\"role\":\"service_role\"}';select public.native_store_sandbox_claim_read_v1(gen_random_uuid()) is null;"),'t');cases++;
- console.log(JSON.stringify({protocol:'native-store-managed-install-proof-v1',cases,passed:cases,sourceDigest:profile.sourceDigest,modules:profile.files.length,hostedQualified:false,dispatchAllowed:false}));
+ console.log(JSON.stringify({protocol:'native-store-managed-install-proof-v1',cases,passed:cases,sourceDigest:profile.sourceDigest,modules:profile.files.length,eventTriggerParity:triggerParity,hostedQualified:false,dispatchAllowed:false}));
 }finally{if(started)invoke('pg_ctl',['-D',data,'-m','immediate','-w','stop']);fs.rmSync(directory,{recursive:true,force:true});}

@@ -73,3 +73,41 @@ Its external dependency inventory currently includes the shared
 `npm:@supabase/supabase-js@2` import. A source fingerprint is not a resolved SDK
 artifact lock: runtime and hosted qualification remain false pending actual
 runtime/deployment verification. It does not enable a purchase or settlement.
+
+## Observed event-trigger parity
+
+`install-managed.native.mjs --local-bin /absolute/postgresql-17.6/bin
+--event-trigger-parity` adds the six observed Supabase trigger bodies and the
+existing committed Brand guard template to the **local fixture only**. The Brand
+guard binds local helper OIDs/catalog rows, never hosted OIDs. Extensions schema
+USAGE is absent for fresh owners and Brand guard EXECUTE is postgres-only, as
+observed. Creating/dropping objects under a fresh SET ROLE still invokes the
+event triggers successfully. Direct function lookup is denied; removing public
+pg_proc SELECT makes invoker execution fail, and modifying a protected helper is
+rejected and rolled back. The complete managed install succeeds with all eight
+triggers active. Standard trigger ownership is modeled as supabase_admin; local
+Brand event-trigger ownership uses fixture_admin because vanilla PostgreSQL
+requires a superuser event owner. Its function owner, invoker mode and ACL match
+the observed postgres-owned function without elevating the modeled installer.
+This qualifies the exercised local paths, not the hosted engine's ownership
+exception or any unobserved extension branch. No extension is installed.
+
+## Exact deployment snapshot preparation
+
+`node scripts/native-store-install-prepare.mjs --source FULL_COMMITTED_SHA`
+reuses the existing exact-deploy read-only transport and `validateReadContext`
+unchanged. It requires clean committed source and binds the fixed source closure.
+It collects full history, existing catalog/default-ACL/role/membership/event-trigger
+fingerprints, money holds and the dependency metadata in one read-only request.
+The only successful status is `snapshot_observed_unqualified`; there is **no
+apply switch, write request, migration-history append or deployment permission**.
+Only bounded hashes/status are printed. A read-only transaction whose actual
+current/session identity is postgres still fails the existing required
+supabase_read_only_user identity guard. Local tests exercise both real SQL paths.
+
+A later exact executor still needs a reviewed migration identity and expected
+added-object contract. It must account explicitly for new-role memberships and
+new-role USAGE entries on the existing public schema. Cashout's unchanged-old-
+catalog comparison cannot be copied verbatim. A synthetic fixture snapshot cannot
+populate a hosted baseline, and missing read-transport qualification must not be
+worked around by changing identity checks.
