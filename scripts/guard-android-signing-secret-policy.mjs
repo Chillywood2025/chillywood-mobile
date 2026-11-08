@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 
 const runGit = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const trackedFiles = runGit("ls-files").split("\n").filter(Boolean);
@@ -15,12 +16,36 @@ const forbiddenEnvPath = (file) => {
     && !basename.endsWith(".example");
 };
 
+
+// These exact public dependency fixtures are not credentials. Bind both the
+// working tree and staged blob; a safe working copy cannot conceal staged data.
+const publicLockFixtures = new Set([
+  "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained/deno.lock",
+  "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v1/deno.lock",
+  "isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/deno.lock",
+]);
+const publicLockSha256 = "73abd3656e02a27b64a1049c6ae68c017ffdbe459a287fc95e4f353e98a9605b";
+const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+function approvedPublicLock(file) {
+  if (!publicLockFixtures.has(file)) return false;
+  try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o111) !== 0
+      || sha256(fs.readFileSync(file)) !== publicLockSha256) return false;
+    const entries = runGit("ls-files", "--stage", "--", file).split("\n");
+    if (entries.length !== 1) return false;
+    const match = /^100644 ([a-f0-9]{40}) 0\t(.+)$/u.exec(entries[0]);
+    return Boolean(match && match[2] === file
+      && sha256(execFileSync("git", ["--no-replace-objects", "cat-file", "blob", match[1]])) === publicLockSha256);
+  } catch { return false; }
+}
+
 for (const file of trackedFiles) {
-  assert.ok(!forbiddenPath.test(file), `Signing/private credential material must not be tracked: ${file}`);
+  assert.ok((!forbiddenPath.test(file) || approvedPublicLock(file)), `Signing/private credential material must not be tracked: ${file}`);
   assert.ok(!forbiddenEnvPath(file), `Environment credential material must not be tracked: ${file}`);
 }
 for (const file of stagedFiles) {
-  assert.ok(!forbiddenPath.test(file), `Signing/private credential material must not be staged: ${file}`);
+  assert.ok((!forbiddenPath.test(file) || approvedPublicLock(file)), `Signing/private credential material must not be staged: ${file}`);
   assert.ok(!forbiddenEnvPath(file), `Environment credential material must not be staged: ${file}`);
 }
 

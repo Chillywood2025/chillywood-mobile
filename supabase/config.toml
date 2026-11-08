@@ -326,3 +326,32 @@ verify_jwt = true
 
 [functions.creator-provider-observation-worker]
 verify_jwt = true
+
+[functions.isolated-sandbox-test-store-v1]
+# Exact Supabase user/session authentication plus the private source authority
+# checks; no provider credential or activation is supplied by this definition.
+verify_jwt = true
+
+[functions.isolated-test-store-revenuecat-webhook-v1]
+# Dedicated default-off Test Store shared-secret/raw-byte boundary. Never the
+# legacy RevenueCat destination, and never a fallback to its credential.
+verify_jwt = false
+
+[functions.isolated-sandbox-test-store-v2]
+# Frozen authenticated bearer/session, private immutable registered-Offering
+# admission, and SQL configuration gates. Configuration remains empty/off.
+verify_jwt = true
+
+[functions.isolated-test-store-revenuecat-webhook-v2]
+# Distinct default-off exact-byte Test Store connection; no legacy forwarding.
+verify_jwt = false
+
+[functions.isolated-test-store-provisioner-v2]
+# Exact configured service-key authentication inside the handler. Public users
+# cannot select operations or supply provider IDs, URLs, credentials or facts.
+verify_jwt = false
+
+[functions.isolated-test-store-qualification-v1]
+# Separate default-off configured secret; bounded encrypted record-only intake.
+# Sealing never grants behavioral qualification or economic projection.
+verify_jwt = false

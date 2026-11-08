@@ -1,0 +1,208 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "migration": {
+    "version": "20261104120922",
+    "name": "google_refund_tax_history_checkpoints",
+    "sha256": "6929bccfbdb7f440afc3b8aa37ab1e9bc4001799e301f23840054eb3ef55a2c9"
+  },
+  "originalHistory": {
+    "count": 583,
+    "maximum": "20261101215711",
+    "sha256": "8ef39413e785edf6381b2d52f4c427415a4528e15314e2419c19a4e181ba5310"
+  },
+  "qualification": "pending_social_successor_requalification",
+  "postPredecessorBaseline": null,
+  "prePredecessorObservation": {
+    "observedAt": "2026-11-04T14:48:35.462655+00:00",
+    "historyCount": 583,
+    "historyMaximum": "20261101215711",
+    "historySha256": "8ef39413e785edf6381b2d52f4c427415a4528e15314e2419c19a4e181ba5310",
+    "catalogSha256": "c3a0ec6bbdcf98a82baea17eb8a52daa2f1838afbca9e070ca934a2c13942d4d",
+    "presentGuardedDataSha256": "df846ee84dfc140402d5fff25e92283320e143b2a04f13d5363d039d17fa7018",
+    "holds": true,
+    "discoveryOn": true,
+    "readContextVerified": false,
+    "deployReady": false,
+    "meaning": "Read-only SELECT observation before all three predecessors. No credentials accessed. This is not a post-predecessor baseline or Management API transport qualification."
+  },
+  "addedCatalogSha256": "10bffb46a67a595be1e04869b5a73b438a1b33b158d1c59ad8e5a5774e9a7054",
+  "edge": [
+    {
+      "name": "google-play-external-reporter",
+      "verifyJwt": false,
+      "files": [
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/google-play-external-reporting.ts",
+          "sha256": "e4a2b88c0c1da6186b3e56861432946658d14284e131b45daf76d75fc8cb0927"
+        },
+        {
+          "path": "supabase/functions/_shared/google-play-reporter-oauth.ts",
+          "sha256": "2e5cc619b4d18fbaeb6fc5315439154b1e33ffc338d7ade7420a672e48c26d31"
+        },
+        {
+          "path": "supabase/functions/_shared/google-refund-tax-history.ts",
+          "sha256": "6c73ceb7241085e8891afe996f26a54bc9467035610e4d20d2f2f5baa93dec19"
+        },
+        {
+          "path": "supabase/functions/_shared/google-refund-tax-reconciliation.ts",
+          "sha256": "e2af9aa4d712d3ec7898221c4ebccb11f6d277e7ee10af0a14ac410f2862f730"
+        },
+        {
+          "path": "supabase/functions/_shared/merch-observation-budget.ts",
+          "sha256": "51ea9a2278a2e97afc44803a82dad88c2a0b2ac2fd72f6aa8f9c6528dd64650f"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-history-checkpoint.ts",
+          "sha256": "8d9bf829a7d8dc88cc838ee51bacc8cccb9b7820f5cae2c8eba849e4c404b243"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-refund-tax-evidence.ts",
+          "sha256": "d98403ba574b48f132afd06f0ea6651fda5083bff55e747e2b8d7e8dd54f5921"
+        },
+        {
+          "path": "supabase/functions/google-play-external-reporter/index.ts",
+          "sha256": "ea1bdbf135a4144f4a3fb05621ca59d1568245e7ee83b5ac59a3de85c91ab4c5"
+        }
+      ]
+    },
+    {
+      "name": "stripe-merch-cost-reconcile",
+      "verifyJwt": true,
+      "files": [
+        {
+          "path": "supabase/functions/_shared/commerce-fee-accounting-drain.ts",
+          "sha256": "9b50715dfeb05300f4885fcf7a1ffd9ac2e93b683e0465bb1eb899306c542074"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/merch-dispute-observation.ts",
+          "sha256": "4f95626835b341d12216b261a0541a924852cabf00cf82a37278762b3ea09e7b"
+        },
+        {
+          "path": "supabase/functions/_shared/merch-observation-budget.ts",
+          "sha256": "51ea9a2278a2e97afc44803a82dad88c2a0b2ac2fd72f6aa8f9c6528dd64650f"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-history-checkpoint.ts",
+          "sha256": "8d9bf829a7d8dc88cc838ee51bacc8cccb9b7820f5cae2c8eba849e4c404b243"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-merch-cost-observation.ts",
+          "sha256": "92ea9ebdcd58abd469f5606e4010ed239742342fb7d890153fccd28eb7875d78"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-refund-tax-evidence.ts",
+          "sha256": "d98403ba574b48f132afd06f0ea6651fda5083bff55e747e2b8d7e8dd54f5921"
+        },
+        {
+          "path": "supabase/functions/stripe-merch-cost-reconcile/index.ts",
+          "sha256": "27771dd504d575f0f208930a7972f877839ce338f8e150dc486c112fa41b8a46"
+        }
+      ]
+    },
+    {
+      "name": "stripe-auction-cost-reconcile",
+      "verifyJwt": true,
+      "files": [
+        {
+          "path": "supabase/functions/_shared/commerce-fee-accounting-drain.ts",
+          "sha256": "9b50715dfeb05300f4885fcf7a1ffd9ac2e93b683e0465bb1eb899306c542074"
+        },
+        {
+          "path": "supabase/functions/_shared/exact-subject-authority.ts",
+          "sha256": "69a906524ef2191148de78ccd0c92c6fba3c4873c0f9b9f630eda138ead77231"
+        },
+        {
+          "path": "supabase/functions/_shared/merch-observation-budget.ts",
+          "sha256": "51ea9a2278a2e97afc44803a82dad88c2a0b2ac2fd72f6aa8f9c6528dd64650f"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-auction-cost-observation.ts",
+          "sha256": "7e6344b41d768548333cdd00521356f664fe0ef2de35aa861f9567786f0b297f"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-connect.ts",
+          "sha256": "4943f6182e8e2817b5b31bf7a04b0a973fd911141303b2ded4e4d3b570b64ef3"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-history-checkpoint.ts",
+          "sha256": "8d9bf829a7d8dc88cc838ee51bacc8cccb9b7820f5cae2c8eba849e4c404b243"
+        },
+        {
+          "path": "supabase/functions/_shared/stripe-refund-tax-evidence.ts",
+          "sha256": "d98403ba574b48f132afd06f0ea6651fda5083bff55e747e2b8d7e8dd54f5921"
+        },
+        {
+          "path": "supabase/functions/stripe-auction-cost-reconcile/index.ts",
+          "sha256": "962dbedba85aaeac84d4352efbb19eb285c1c1a8970a50910e4cd7f7a87008a6"
+        }
+      ]
+    }
+  ],
+  "socialMigrations": [
+    {
+      "version": "20261107173220",
+      "name": "creator_video_social_engagement",
+      "sha256": "139f5b6222023682f605cdda160ec7de780bfcbd61748549d6c4c21c6d394c44",
+      "path": "supabase/migrations/20261107173220_creator_video_social_engagement.sql"
+    },
+    {
+      "version": "20261107191000",
+      "name": "comment_likes",
+      "sha256": "4ae184fa4ecfc3358feb5a1485b9e49322fc637d09f3f97dad66aa9843304f8a",
+      "path": "supabase/migrations/20261107191000_comment_likes.sql"
+    }
+  ],
+  "socialCatalogSha256": "25f1e0f2e57a51f6589e40a94c7b933a27bd31c5c21b197ccb7ebaca47e676f6",
+  "revenuecatSource": {
+    "name": "revenuecat-webhook",
+    "verifyJwt": false,
+    "files": [
+      {
+        "path": "supabase/functions/_shared/expo-push-receipt-policy.mjs",
+        "sha256": "28a5ec1060af8e0339ebf279d55f83699e306175a08682234f52dda1c89ca341"
+      },
+      {
+        "path": "supabase/functions/_shared/expo-push-receipts.ts",
+        "sha256": "20ba1d704bfc1d02ff591ea1c4917f0bb834d37518c0a9c4d38db11fb6fb5be6"
+      },
+      {
+        "path": "supabase/functions/_shared/notification-display-labels.ts",
+        "sha256": "78efba5706811729385a4d2e606d9adb1a8b89458bdb1c3808042d8b5b03085e"
+      },
+      {
+        "path": "supabase/functions/_shared/notification-payload.mjs",
+        "sha256": "6e8ccc4d1fb59ddc62af421af38ae786b1f0b0f4e525637bcca16e3dd74e8eeb"
+      },
+      {
+        "path": "supabase/functions/_shared/provider-readiness.ts",
+        "sha256": "54ab9950029568afaf071b33daa1d93d001f96721c2545c3d1fbde3b88f40c5f"
+      },
+      {
+        "path": "supabase/functions/revenuecat-webhook/index.ts",
+        "sha256": "b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935"
+      },
+      {
+        "path": "supabase/functions/revenuecat-webhook/store-policy.mjs",
+        "sha256": "45b282c4b88b76551158c6fb7f03bbe7bd6c60f85a2766b6ece71755fea487e4"
+      }
+    ]
+  },
+  "sourceScope": "Current source inventory only; not deployment proof. Preserve deployed PR685 observer independently; full current readback and clone rehearsal required."
+}

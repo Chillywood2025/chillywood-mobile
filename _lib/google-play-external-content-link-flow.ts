@@ -19,7 +19,7 @@ export function googlePlayExternalLinkSupported(platform: string, native: Google
   try {
     const capability = native.capabilities();
     return capability.apiVersion === 1 && capability.program === "external_content_link"
-      && capability.billingLibraryVersion === "8.2.1";
+      && capability.billingLibraryVersion === "8.3.0";
   } catch { return false; }
 }
 

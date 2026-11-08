@@ -217,3 +217,23 @@ test("all inference, provider closure, model and plugin edits select the require
     assert(expectedJobs(plan).includes("Validation / Native and Release"), file);
   }
 });
+
+test("shared compiler and Test Store native admission edits retain both native and database lanes", () => {
+  for (const file of [
+    "scripts/compile-native-camera-effects.mjs",
+    "modules/chillywood-test-store-admission/android/src/main/java/expo/modules/chillywoodteststore/TestStorePolicy.java",
+    "modules/chillywood-test-store-admission/ios/ChillywoodTestStoreModule.swift",
+    "config/test-store-debug-config.ts",
+    "tests/isolated-test-store-build.test.mjs",
+    "tests/isolated-test-store-native.test.mjs",
+    "tests/isolated-test-store-native-compile.test.mjs",
+  ]) {
+    const plan = computeValidationPlan([file]);
+    assert.equal(plan.categories.nativeRelease, true, file);
+    assert.equal(plan.categories.database, true, file);
+    assert.equal(plan.categories.sensitive, true, file);
+    const jobs = expectedJobs(plan);
+    assert(jobs.includes("Validation / Native and Release"), file);
+    assert(jobs.includes("Validation / Isolated Sandbox Native PostgreSQL 17.6"), file);
+  }
+});

@@ -1,0 +1,45 @@
+{
+  "protocol": "scpv-operations-source-v1",
+  "files": [
+    {
+      "path": "ops/isolated-paid-video-operations-v2/manifest.mjs",
+      "sha256": "02331add4ef1d8f81f7d8e198dbb511fe2b97a0cb0361dfa98d3eebf6b424bad"
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/monotonic-removal.sql",
+      "sha256": "3398dcc95cbce6e45a0bed9934f48ee859cece5ec96979ada8dd15ca95b4b5ee"
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/operations.sql",
+      "sha256": "32f965cb5e8bb815b17c0958ddc8dc933f149918b89ce9e1a708de42f7973355"
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/reviewer.mjs",
+      "sha256": "aa34da52331906e6ed5394b03ee26572dcf6831f59f60c6c3db8a6b82a3e19fa"
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/runner.mjs",
+      "sha256": "938cb5da5b48b94451c11d5dffcb38346ae2e48e6257e7ea4c38a98f1ae95a13"
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/scan-child.mjs",
+      "sha256": "e9989ef6580d7287c956a4a8dcc0eaaf03a7aa4dd9d41fb803d7b0dc29599822"
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/worker.mjs",
+      "sha256": "7df77c2d6aa12c912e66ebf7a20758befd7527288ba11b2653c9e48aca97a3f6"
+    },
+    {
+      "path": "ops/isolated-paid-video-worker/job.mjs",
+      "sha256": "9a8cf505762554f41a7eebfe101f2e9f68eb258af9307bd93077220658573d68"
+    },
+    {
+      "path": "ops/isolated-paid-video-worker/private-object.mjs",
+      "sha256": "9954182fb39cd21be07efa114f7bb9cf60c156375d2b2b6660681711599eef87"
+    },
+    {
+      "path": "ops/isolated-paid-video-worker/scan.mjs",
+      "sha256": "3f18e7de97c1d1caba7d017dfcee126e5fb4b8bfa723e02c3ab29457ed2817ce"
+    }
+  ]
+}

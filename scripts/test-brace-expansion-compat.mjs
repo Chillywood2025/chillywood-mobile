@@ -112,8 +112,14 @@ const expectedSupabasePresenceBackport = Object.freeze({
 // compatibility patch; no other package identity changed in that update.
 // Includes the reviewed 2026-10-24 root Undici 6.28.1 -> 6.29.1 advisory
 // repair; only that lock entry changed, and it remains bound by this digest.
+// Includes the reviewed 2026-11-07 RevenueCat Test Store SDK upgrade: exactly
+// react-native-purchases/ui 10.15.1, hybrid-mappings/typescript-internal 19.14.1,
+// and purchases-js 1.71.0. All five identities remain bound by this digest.
+// Includes the bounded 2026-11-07 expo-crypto 15.0.9 addition for hashing paid-video
+// uploads. That single new package identity is included; every existing package
+// identity and compatibility exclusion remains unchanged.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "8d01d114466a6e69b6e7cabb3984e50e0d6769aed17e7272c2357c72cc544fa4";
+const expectedUnrelatedPackageGraphSha256 = "79efb029dc6f94af900a01d1f2e2dd81ee7591febc5b59f9a5e7032466bf81b5";
 const compatibilityClosurePaths = new Set([
   "node_modules/@supabase/realtime-js",
   "node_modules/@supabase/supabase-js",
@@ -444,8 +450,11 @@ function killNegativeControls(base) {
     ["CHANGE_UNRELATED_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => { m.unrelatedPackageGraphSha256 = "0".repeat(64); }],
   ];
   // Mutate real lock entries, not just the resulting digest, so these controls
-  // prove reviewed Expo/Undici packages and an unchanged dependency stay bound.
-  for (const entryPath of ["node_modules/expo-asset", "node_modules/expo-constants", "node_modules/undici"]) {
+  // prove reviewed Expo/Undici/RevenueCat packages and an unchanged dependency stay bound.
+  for (const entryPath of ["node_modules/expo-asset", "node_modules/expo-constants", "node_modules/expo-crypto", "node_modules/undici",
+    "node_modules/react-native-purchases", "node_modules/react-native-purchases-ui",
+    "node_modules/@revenuecat/purchases-js", "node_modules/@revenuecat/purchases-js-hybrid-mappings",
+    "node_modules/@revenuecat/purchases-typescript-internal"]) {
     for (const [field, value] of Object.entries({
       version: "0.0.0-unreviewed",
       resolved: "https://example.invalid/unreviewed.tgz",

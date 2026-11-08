@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MediaPickerSource } from "../../_lib/mediaPickerCoordinator";
@@ -17,13 +17,18 @@ export type MediaSourceSheetProps = {
   onChoose: (source: MediaPickerSource | "advanced") => void;
   onCancel: () => void;
   onDismiss: () => void;
-  onUnmount?: () => void;
+  onMount?: (instance: object) => void;
+  onUnmount?: (instance: object) => void;
 };
 
 export function MediaSourceSheet(props: MediaSourceSheetProps) {
   const insets = useSafeAreaInsets();
-  const onUnmount = props.onUnmount;
-  useEffect(() => () => onUnmount?.(), [onUnmount]);
+  const onMount = props.onMount, onUnmount = props.onUnmount;
+  const instance = useRef({});
+  useEffect(() => {
+    const identity = instance.current; onMount?.(identity);
+    return () => onUnmount?.(identity);
+  }, [onMount, onUnmount]);
   const video = props.mediaKind === "video";
   const gallery = props.sources.includes("gallery");
   const labels = {
