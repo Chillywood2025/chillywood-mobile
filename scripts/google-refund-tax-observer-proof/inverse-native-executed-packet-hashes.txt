@@ -1,0 +1,3 @@
+2c3527fc7661a3eaea68f99fec9054263685e5cc64dad662166c936cef5d4881  backend-readiness-20261108/inverse-native-source586.sql
+3b7a6458a9a8ec83b6ba6ed47152b4b2d7309b13ed3c03a95e19ce11906a372e  backend-readiness-20261108/inverse-native-source589.sql
+2c7948d2db9ca3366b4a798d6b60b93d0ed57f57ef3fe39f10b2be61db38b0c5  backend-readiness-20261108/inverse-native-capture-manifest.json

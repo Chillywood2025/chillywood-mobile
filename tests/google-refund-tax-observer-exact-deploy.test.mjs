@@ -7,7 +7,7 @@ import {loadBundle,classifyProbe,classifyState,buildApplySql,deploy,requireQuali
 
 const bundle=loadBundle();
 const context={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
-const before=()=>({database:'postgres',context,originalHistorySha256:ORIGINAL_HISTORY.sha256,
+const before=()=>({readbackProtocol:'refund589-bounded-readback-v1',database:'postgres',context,originalHistorySha256:ORIGINAL_HISTORY.sha256,
   historyCount:589,historyMaximum:'20261107191000',
   targets:[...bundle.predecessors,...bundle.social].map(({version,name,statementsSha256})=>({version,name,statementsSha256})),
   addedAbsent:true,socialCatalogSha256:bundle.manifest.socialCatalogSha256,
@@ -21,10 +21,12 @@ const after=()=>({...before(),historyCount:590,addedAbsent:false,addedCatalogSha
 
 test('successor preserves immutable migration and requires full social baseline before any write',async()=>{
   assert.equal(sha256(fs.readFileSync(MIGRATION,'utf8')),HASH);
-  assert.equal(bundle.manifest.postPredecessorBaseline,null);
-  assert.throws(()=>requireQualified(bundle),/REQUALIFICATION_REQUIRED/);
-  await assert.rejects(deploy({bundle,apply:true,query:()=>assert.fail('no transport')}),/REQUALIFICATION_REQUIRED/);
-  const result=await deploy({bundle,query:async(_sql,readOnly)=>{assert.equal(readOnly,true);return before();}});
+  assert.equal(bundle.manifest.postPredecessorBaseline.historyCount,589);
+  assert.equal(requireQualified(bundle).catalogSha256,'c050fc19e7076d5368c860de4ac7bc85e8d73240ea5f6366e1bb9dffb9e41961');
+  const pending={...bundle,manifest:{...bundle.manifest,qualification:'pending_observer_successor_requalification',postPredecessorBaseline:null}};
+  assert.throws(()=>requireQualified(pending),/REQUALIFICATION_REQUIRED/);
+  await assert.rejects(deploy({bundle:pending,apply:true,query:()=>assert.fail('no transport')}),/REQUALIFICATION_REQUIRED/);
+  const result=await deploy({bundle:pending,query:async(_sql,readOnly)=>{assert.equal(readOnly,true);return before();}});
   assert.deepEqual([result.status,result.wrote,result.deployReady],['post_observer_requires_independent_requalification',false,false]);
 });
 test('exact six predecessors and separate social catalog reject missing, duplicate and restamped history',()=>{
@@ -57,9 +59,23 @@ test('unknown write reconciles once without retry; no stale source or Edge prere
   }
   await assert.rejects(deploy({bundle:qualified(),apply:true,recheckSource:()=>{},verifyPrerequisiteEdge:async()=>({}),query:async(_sql,readOnly)=>{assert.ok(readOnly);return before();}}),/EDGE_READBACK_MISMATCH/);
 });
-test('live history and source observations cannot promote the pending qualification',()=>{
-  assert.equal(bundle.manifest.qualification,'pending_observer_successor_requalification');
+test('qualified source remains blocked without current Edge transport and exact baseline',()=>{
+  assert.equal(bundle.manifest.qualification,'independently_reviewed_observer_successor');
   const wrong=qualified();wrong.manifest.postPredecessorBaseline.historyCount=586;assert.throws(()=>requireQualified(wrong));
   const bad=qualified();bad.manifest.postPredecessorBaseline.socialCatalogSha256='d'.repeat(64);assert.throws(()=>requireQualified(bad));
   assert.match(fs.readFileSync('scripts/google-refund-tax-observer-exact-deploy.mjs','utf8'),/if\(apply\)\{requireQualified\(bundle\);throw Error\('CURRENT_PREDECESSOR_EDGE_READBACK_REQUIRED'\);\}/);
+});
+
+test('bounded readback retains strict protocol, same-snapshot stages and unchanged writer ceiling',()=>{
+ const sql=readbackSql(),write=buildApplySql(qualified(),before());
+ assert.match(sql,/begin isolation level repeatable read read only/);
+ assert.match(sql,/set local chillywood\.refund_readback='\{\}'/);
+ assert.equal((sql.match(/do \$refund_readback\$/g)||[]).length,1);
+ assert.equal((sql.match(/into strict /g)||[]).length,3);
+ assert.match(sql,/statement_timeout='30s'/);
+ for(const fragment of ["set local jit=off","set local work_mem='4MB'","set local max_parallel_workers_per_gather=0","set local time zone 'UTC'"]){assert.ok(sql.includes(fragment));assert.ok(write.includes(fragment));}
+ assert.match(write,/statement_timeout='45s'/);assert.doesNotMatch(write,/repeatable read/);
+ assert.ok(write.indexOf('pg_advisory_xact_lock')<write.indexOf('lock table supabase_migrations'));
+ for(const protocol of [undefined,null,'old',true])assert.throws(()=>classifyState(qualified(),{...before(),readbackProtocol:protocol}),/READBACK_PROTOCOL_MISMATCH/);
+ assert.throws(()=>classifyState(qualified(),{readbackProtocol:'refund589-bounded-readback-v1'}));
 });

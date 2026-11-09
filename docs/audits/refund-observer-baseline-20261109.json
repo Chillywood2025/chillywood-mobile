@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "proof": {
+    "status": "database_baseline_proof_verified",
+    "packetSha256": "559f444c2d03fed61b494b94ed2f2c19333faf620ec9f04c5ae4c61892c4edaa",
+    "rawSha256": "64fbc2a9aad1bf64c4d62cc4c98acd02c77958640fb2d8416229d2c9a5b132a7",
+    "evidence": {
+      "holds": true,
+      "protocol": "refund589-staged-database-baseline-offline-v1",
+      "typeFaults": [],
+      "deltaFaults": [],
+      "historyCount": 589,
+      "dataQualified": true,
+      "edgeQualified": false,
+      "finalEnvelope": "refund589-staged-proof-final-v1",
+      "historyMaximum": "20261107191000",
+      "sourceSeedExact": true,
+      "catalogQualified": true,
+      "historyQualified": true,
+      "expectedDataSha256": "1d4161c605808b3d68678feeeeddbd47c04df4e8ccf54dfe562b42aaebf61d9c",
+      "deploymentQualified": false,
+      "expectedCatalogSha256": "c050fc19e7076d5368c860de4ac7bc85e8d73240ea5f6366e1bb9dffb9e41961",
+      "expectedHistorySha256": "7db07e77d788120f17c4c7fa56b141e0cc77eebe3dad75d49be8b76e50ddb4d2",
+      "databaseBaselineQualified": true,
+      "frozenOriginalDataMatches": true,
+      "frozenQualifiedGuardedMatches": true
+    },
+    "edgeQualified": false,
+    "deploymentQualified": false,
+    "sourceManifestChanged": false,
+    "writesPerformed": false,
+    "recovery": {
+      "observedAt": "2026-11-09T02:17:07.820372Z",
+      "databaseStartedAt": "2026-11-09T01:47:00.792721Z",
+      "restartSincePreflight": false,
+      "activeClients": 0,
+      "idleInTransaction": 0,
+      "hiddenClients": 0
+    }
+  },
+  "observationBracket": {
+    "start": "2026-11-09T02:16:18.496193Z",
+    "end": "2026-11-09T02:17:07.820372Z",
+    "exactSnapshotTimestampAvailable": false
+  },
+  "interpretation": "Successful complete baseline proof, not deployment permission. No restart observed across this bounded one-shot. Historical frozen observation is used only with independent full provenance, guards and source-delta proof.",
+  "revenuecatEvidenceSha256": "a23fa5d81a2f9e431a9a731c93a034dea65a10042adf8fd43dd317d8013ea767",
+  "runtimeCaveat": "Previous original queries timed out and database restarted; source uses lower-memory canonical aggregate constructors. Local measurements do not authorize writes or establish target memory headroom."
+}

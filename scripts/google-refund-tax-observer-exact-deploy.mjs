@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Observer589 successor: exact payout observer receipt is now a sixth predecessor.
-// Source-only preparation: the committed qualification is pending. No Edge,
+// Source-bound database qualification only. No Edge deployment,
 // provider, credential provisioning, activation, or migration-history repair.
 import fs from 'node:fs';
+import {canonicalArrayTextSQL} from './google-refund-canonical-array.mjs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
@@ -18,6 +19,9 @@ export const HASH='6929bccfbdb7f440afc3b8aa37ab1e9bc4001799e301f23840054eb3ef55a
 export const MIGRATION=`supabase/migrations/${VERSION}_${NAME}.sql`;
 export const TOOL='scripts/google-refund-tax-observer-exact-deploy.mjs';
 export const MANIFEST='scripts/google-refund-tax-observer-deployment-manifest.json';
+export const BASELINE_AUDIT='docs/audits/refund-observer-baseline-20261109.json';
+export const QUALIFIED_PACKET='scripts/google-refund-tax-observer-proof/evidence/qualified-packet-559f444c.sql';
+export const READBACK_PROTOCOL='refund589-bounded-readback-v1';
 export const ORIGINAL_HISTORY=Object.freeze({count:583,maximum:'20261101215711',sha256:'8ef39413e785edf6381b2d52f4c427415a4528e15314e2419c19a4e181ba5310'});
 export const PREDECESSORS=Object.freeze([
   {version:'20261104032615',name:'native_tip_catalog_amount_policy',sha256:'f18d738818dcc68ab6ff61f737a4755be4dcc4fd02846249c01647c1f5d3fc2b'},
@@ -73,7 +77,7 @@ export function catalogHashSQL(added=false){
     `select jsonb_build_array('membership',roleid::regrole::text,member::regrole::text,admin_option,inherit_option,set_option) from pg_auth_members`,
     `select jsonb_build_array('event_trigger',evtname,evtevent,evtowner::regrole::text,evtfoid::regprocedure::text,evtenabled,evttags) from pg_event_trigger`,
     `select jsonb_build_array('default_acl',d.defaclrole::regrole::text,n.nspname,d.defaclobjtype,d.defaclacl::text) from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace where d.defaclnamespace=0 or ${scope}`);
-  return `(select ${hashSQL("coalesce(jsonb_agg(item order by item::text)::text,'[]')")} from (${rows.join('\nunion all\n')}) catalog_items)`;
+  return `(select ${hashSQL(canonicalArrayTextSQL('item','item::text'))} from (${rows.join('\nunion all\n')}) catalog_items)`;
 }
 export const invariantsHashSQL=catalogHashSQL();
 export const addedCatalogHashSQL=catalogHashSQL(true);
@@ -88,14 +92,14 @@ export const DATA_TABLES=Object.freeze([
   'public.merch_orders','public.money_access_ledger_events','public.money_purchase_intents',
   'private.native_production_ingress_qualifications','private.native_production_ingress_revocations','private.native_production_ingress_observations',...SANDBOX_TABLES,
 ].sort());
-export const dataHashSQL=`(select ${hashSQL("coalesce(jsonb_agg(item order by item::text)::text,'[]')")} from (${DATA_TABLES.map(t=>`select jsonb_build_array(${literal(t)},to_jsonb(t)) item from ${t} t`).join('\nunion all\n')}) guarded_data)`;
+export const dataHashSQL=`(select ${hashSQL(canonicalArrayTextSQL('item','item::text'))} from (${DATA_TABLES.map(t=>`select jsonb_build_array(${literal(t)},to_jsonb(t)) item from ${t} t`).join('\nunion all\n')}) guarded_data)`;
 export const holdsSQL=`(${existingHoldsSQL}) and (select count(*)=1 and bool_and(enabled and collecting and primary_delivery_enabled) from private.discovery_invalidation_worker_config)
  and (select count(*)=1 and bool_and(not enabled) from private.sandbox_cashout_control)
  and ${SANDBOX_TABLES.slice(1).map(t=>`not exists(select 1 from ${t})`).join(' and ')}
  and not exists(select 1 from private.google_play_external_program_config)
  and not exists(select 1 from private.native_production_ingress_qualifications)
  and not exists(select 1 from private.native_production_ingress_revocations)`;
-export const CLOSURE=Object.freeze([TOOL,MANIFEST,MIGRATION,'supabase/config.toml',
+export const CLOSURE=Object.freeze([TOOL,MANIFEST,BASELINE_AUDIT,QUALIFIED_PACKET,'scripts/google-refund-canonical-array.mjs',MIGRATION,'supabase/config.toml',
   'scripts/social-engagement-exact-deploy.mjs','scripts/social-engagement-deployment-manifest.json',...SOCIAL_MIGRATIONS.map(p=>p.path),
   'ops/creator-backend-rollout/prepare-edge.mjs','scripts/live-room-exact-deploy.mjs','scripts/studio-rolling-deploy.mjs','scripts/native-tip-exact-deploy.mjs',
   'scripts/native-tip-deployment-manifest.json','scripts/native-ingress-deployment-manifest.json',
@@ -107,6 +111,15 @@ export function loadBundle(root=ROOT,source){
   requireThat(manifest.schema===1&&manifest.project===PROJECT&&manifest.migration?.version===VERSION&&manifest.migration.name===NAME&&manifest.migration.sha256===HASH,'MANIFEST_INVALID');
   requireThat(sha256(body)===HASH,'MIGRATION_HASH_MISMATCH');
   requireThat(JSON.stringify(manifest.originalHistory)===JSON.stringify(ORIGINAL_HISTORY)&&isHash(manifest.addedCatalogSha256),'MANIFEST_INVALID');
+  if(manifest.postPredecessorBaseline){
+    const audit=JSON.parse(read(BASELINE_AUDIT)),e=audit.proof?.evidence,b=manifest.postPredecessorBaseline;
+    requireThat(audit.project===PROJECT&&audit.proof.packetSha256==='559f444c2d03fed61b494b94ed2f2c19333faf620ec9f04c5ae4c61892c4edaa'
+      &&sha256(read(QUALIFIED_PACKET))===audit.proof.packetSha256
+      &&['databaseBaselineQualified','catalogQualified','dataQualified','historyQualified','frozenOriginalDataMatches','frozenQualifiedGuardedMatches','sourceSeedExact','holds'].every(k=>e?.[k]===true)
+      &&e.edgeQualified===false&&e.deploymentQualified===false&&JSON.stringify(e.deltaFaults)==='[]'&&JSON.stringify(e.typeFaults)==='[]'
+      &&e.historyCount===b.historyCount&&e.historyMaximum===b.historyMaximum&&e.expectedHistorySha256===b.historySha256&&e.expectedCatalogSha256===b.catalogSha256&&e.expectedDataSha256===b.dataSha256,
+      'QUALIFIED_BASELINE_EVIDENCE_MISMATCH');
+  }
   const predecessors=PREDECESSORS.map(p=>{const body=read(`supabase/migrations/${p.version}_${p.name}.sql`);requireThat(sha256(body)===p.sha256,'PREDECESSOR_SOURCE_CHANGED');return {...p,statementsSha256:sha256(JSON.stringify([body]))};});
   const edge=ENDPOINTS.map(e=>{
     const entrypoint=`supabase/functions/${e.name}/index.ts`,bundle=collectSourceBundle(read,entrypoint);
@@ -148,11 +161,19 @@ export function requireQualified(bundle){
     &&b.revenuecat.verifyJwt===false&&JSON.stringify(b.revenuecat.files)===JSON.stringify(bundle.revenuecatExpected.files),'QUALIFIED_BASELINE_INVALID');
   return b;
 }
-const originalHistorySQL=`(select ${hashSQL("coalesce(jsonb_agg(jsonb_build_array(version,name,statements) order by version)::text,'[]')")} from supabase_migrations.schema_migrations where version not in (${targetVersions}))`;
-const priorHistorySQL=`(select ${hashSQL("coalesce(jsonb_agg(jsonb_build_array(version,name,statements) order by version)::text,'[]')")} from supabase_migrations.schema_migrations where version<>${literal(VERSION)})`;
+const originalHistorySQL=`(select ${hashSQL(canonicalArrayTextSQL('jsonb_build_array(version,name,statements)','version'))} from supabase_migrations.schema_migrations where version not in (${targetVersions}))`;
+const priorHistorySQL=`(select ${hashSQL(canonicalArrayTextSQL('jsonb_build_array(version,name,statements)','version'))} from supabase_migrations.schema_migrations where version<>${literal(VERSION)})`;
 const targetsSQL=`coalesce((select jsonb_agg(jsonb_build_object('version',version,'name',name,'statementsSha256',${hashSQL('array_to_json(statements)::text')}) order by version) from supabase_migrations.schema_migrations where version in (${targetVersions})),'[]'::jsonb)`;
 const absentSQL=`to_regclass('private.google_refund_tax_history') is null and not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where (n.nspname,p.proname) in (('private','lock_google_refund_tax_history_context'),('public','begin_google_refund_tax_history'),('public','save_google_refund_tax_history')))`;
-export function probeSql(){return `set local search_path=pg_catalog,public; select jsonb_build_object('database',current_database(),'context',${contextSQL},'originalHistorySha256',${originalHistorySQL},'historyCount',(select count(*) from supabase_migrations.schema_migrations),'historyMaximum',(select max(version) from supabase_migrations.schema_migrations),'targets',${targetsSQL},'socialCatalogSha256',${socialCatalogSQL(true)},'addedAbsent',(${absentSQL})) state;`;}
+// The separately reviewed social catalog keeps its exact projection and order.
+// Only this explicit aggregate constructor changes; reject upstream shape drift.
+function lowMemorySocialCatalogSQL(){
+  const source=socialCatalogSQL(true),anchor="coalesce(jsonb_agg(item order by item::text collate \"C\")::text,'[]')";
+  requireThat(source.split(anchor).length===2,'SOCIAL_CATALOG_AGGREGATE_SOURCE_CHANGED');
+  return source.replace(anchor,()=>canonicalArrayTextSQL('item','item::text collate "C"'));
+}
+const readControls="set local search_path=pg_catalog,public; set local standard_conforming_strings=on; set local time zone 'UTC'; set local jit=off; set local work_mem='4MB'; set local max_parallel_workers_per_gather=0; set local statement_timeout='30s'; set local lock_timeout='5s'; set local idle_in_transaction_session_timeout='60s';";
+export function probeSql(){return `begin isolation level repeatable read read only; ${readControls} select jsonb_build_object('database',current_database(),'context',${contextSQL},'originalHistorySha256',${originalHistorySQL},'historyCount',(select count(*) from supabase_migrations.schema_migrations),'historyMaximum',(select max(version) from supabase_migrations.schema_migrations),'targets',${targetsSQL},'socialCatalogSha256',${lowMemorySocialCatalogSQL()},'addedAbsent',(${absentSQL})) state; rollback;`;}
 export function classifyProbe(bundle,state){
   validateReadContext(state?.context);
   const original=bundle.manifest.originalHistory;
@@ -167,8 +188,19 @@ export function classifyProbe(bundle,state){
   else requireThat(state.addedAbsent===true,'PARTIAL_REFUND_OBJECTS');
   return refund?'applied_requires_full_readback':'post_observer_requires_independent_requalification';
 }
-export function readbackSql(){return `set local search_path=pg_catalog,public; select jsonb_build_object('database',current_database(),'context',${contextSQL},'originalHistorySha256',${originalHistorySQL},'priorHistorySha256',${priorHistorySQL},'historyCount',(select count(*) from supabase_migrations.schema_migrations),'historyMaximum',(select max(version) from supabase_migrations.schema_migrations),'targets',${targetsSQL},'socialCatalogSha256',${socialCatalogSQL(true)},'addedAbsent',(${absentSQL}),'catalogSha256',${invariantsHashSQL},'dataSha256',${dataHashSQL},'holds',coalesce((${holdsSQL}),false),'addedCatalogSha256',${addedCatalogHashSQL}) state;`;}
+export function readbackSql(){return `begin isolation level repeatable read read only;
+${readControls}
+set local chillywood.refund_readback='{}';
+do $refund_readback$ declare identity_state jsonb; catalog_state jsonb; data_state jsonb; begin
+ select jsonb_build_object('database',current_database(),'context',${contextSQL},'originalHistorySha256',${originalHistorySQL},'priorHistorySha256',${priorHistorySQL},'historyCount',(select count(*) from supabase_migrations.schema_migrations),'historyMaximum',(select max(version) from supabase_migrations.schema_migrations),'targets',${targetsSQL},'socialCatalogSha256',${lowMemorySocialCatalogSQL()},'addedAbsent',(${absentSQL})) into strict identity_state;
+ select jsonb_build_object('catalogSha256',${invariantsHashSQL},'addedCatalogSha256',${addedCatalogHashSQL}) into strict catalog_state;
+ select jsonb_build_object('dataSha256',${dataHashSQL},'holds',coalesce((${holdsSQL}),false)) into strict data_state;
+ perform set_config('chillywood.refund_readback',(identity_state||catalog_state||data_state||jsonb_build_object('readbackProtocol','${READBACK_PROTOCOL}'))::text,true);
+end $refund_readback$;
+select case when current_setting('chillywood.refund_readback')::jsonb->>'readbackProtocol'='${READBACK_PROTOCOL}' then current_setting('chillywood.refund_readback')::jsonb else null end state;
+rollback;`;}
 export function classifyState(bundle,state){
+  requireThat(state?.readbackProtocol===READBACK_PROTOCOL,'READBACK_PROTOCOL_MISMATCH');
   const b=requireQualified(bundle),phase=classifyProbe(bundle,state);
   requireThat(['post_observer_requires_independent_requalification','applied_requires_full_readback'].includes(phase),'EXACT_PREDECESSORS_REQUIRED');
   requireThat(state.priorHistorySha256===b.historySha256&&state.catalogSha256===b.catalogSha256&&state.dataSha256===b.dataSha256,'BASELINE_CONTRACT_MISMATCH');
@@ -178,10 +210,14 @@ export function classifyState(bundle,state){
 }
 export function buildApplySql(bundle,state){
   const b=requireQualified(bundle);requireThat(classifyState(bundle,state)==='ready','APPLY_REQUIRES_ABSENT_TARGETS');
-  const exact=`${originalHistorySQL}=${literal(bundle.manifest.originalHistory.sha256)} and ${priorHistorySQL}=${literal(b.historySha256)} and ${invariantsHashSQL}=${literal(b.catalogSha256)} and ${socialCatalogSQL(true)}=${literal(bundle.manifest.socialCatalogSha256)} and ${dataHashSQL}=${literal(b.dataSha256)} and (${holdsSQL})`;
+  const exact=`${originalHistorySQL}=${literal(bundle.manifest.originalHistory.sha256)} and ${priorHistorySQL}=${literal(b.historySha256)} and ${invariantsHashSQL}=${literal(b.catalogSha256)} and ${lowMemorySocialCatalogSQL()}=${literal(bundle.manifest.socialCatalogSha256)} and ${dataHashSQL}=${literal(b.dataSha256)} and (${holdsSQL})`;
   return `begin;
 set local search_path=pg_catalog,public;
 set local standard_conforming_strings=on;
+set local time zone 'UTC';
+set local jit=off;
+set local work_mem='4MB';
+set local max_parallel_workers_per_gather=0;
 set local lock_timeout='5s';
 set local statement_timeout='45s';
 set local idle_in_transaction_session_timeout='60s';
@@ -202,7 +238,7 @@ commit;`;
 // The SQL-only Management transport cannot verify an Edge prerequisite. A future
 // reviewed caller must supply a current, exact readback, not a boolean assertion.
 export async function deploy({bundle,apply=false,query,recheckSource,verifyPrerequisiteEdge}){
-  if(apply)requireQualified(bundle); // Before network/credential-dependent work.
+  if(apply)requireQualified(bundle); // Still requires exact current Edge/source checks below.
   const probe=await query(probeSql(),true),phase=classifyProbe(bundle,probe);
   if(!bundle.manifest.postPredecessorBaseline)return {status:phase,deployReady:false,wrote:false,probe};
   const before=await query(readbackSql(),true),mode=classifyState(bundle,before);
@@ -219,7 +255,7 @@ export async function deploy({bundle,apply=false,query,recheckSource,verifyPrere
 export const safeError=e=>HELPER_ERROR_CODES.includes(e?.message)||['POST_PREDECESSOR_REQUALIFICATION_REQUIRED','CURRENT_PREDECESSOR_EDGE_READBACK_REQUIRED'].includes(e?.message)?e.message:'GOOGLE_REFUND_DEPLOY_BLOCKED';
 async function main(){
   const args=process.argv.slice(2);
-  if(args.length===1&&args[0]==='--help'){process.stdout.write('Usage: node scripts/google-refund-tax-observer-exact-deploy.mjs --source FULL_COMMIT_SHA [--apply]\nSource-only observer589 successor. Pending qualification rejects --apply before credentials/network. Current CLI has no verified predecessor Edge transport and cannot apply even after baseline qualification. No baseline overrides, activation, Edge deployments or write retries.\n');return;}
+  if(args.length===1&&args[0]==='--help'){process.stdout.write('Usage: node scripts/google-refund-tax-observer-exact-deploy.mjs --source FULL_COMMIT_SHA [--apply]\nSource-qualified observer589 database baseline only. Current CLI has no verified fresh predecessor Edge transport and cannot apply. No deployment authority is implied. No baseline overrides, activation, Edge deployments or write retries.\n');return;}
   requireThat(args.filter(x=>x==='--source').length===1,'EXACT_SOURCE_REQUIRED');
   const i=args.indexOf('--source'),source=args[i+1],rest=args.filter((_,j)=>j!==i&&j!==i+1);
   requireThat(rest.length===0||(rest.length===1&&rest[0]==='--apply'),'ARGUMENT_INVALID');
