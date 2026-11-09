@@ -1,13 +1,15 @@
+import * as historicalTool from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
+import {loadHistoricalBundle} from './helpers/historical-revenuecat-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import {createHistoricalDeploymentDatabase} from './helpers/historical-deployment-schema-fixture.mjs';
 import {databaseFactory as nativeDatabaseFactory} from './helpers/native-deployment-database.mjs';
-import {loadBundle,probeSql,readbackSql,classifyProbe,classifyState,buildApplySql,deploy,addedCatalogHashSQL,PROJECT,MIGRATION,PREDECESSORS} from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
+import {probeSql,readbackSql,classifyProbe,classifyState,buildApplySql,deploy,addedCatalogHashSQL,PROJECT,MIGRATION,PREDECESSORS} from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
 
 test('local PostgreSQL replay preserves exact social catalog across refund install, rollback and lost response', {timeout:300000},async t=>{
-  const bundle=loadBundle(),paths=[...PREDECESSORS.map(p=>`supabase/migrations/${p.version}_${p.name}.sql`),...bundle.social.map(p=>p.path)];
+  const bundle=loadHistoricalBundle(historicalTool),paths=[...PREDECESSORS.map(p=>`supabase/migrations/${p.version}_${p.name}.sql`),...bundle.social.map(p=>p.path)];
   const excluded=[MIGRATION,...paths,'supabase/migrations/20261105010859_sandbox_cashout_status_notifications.sql',
     'supabase/migrations/20261102093836_creator_clip_export_bounded_pool.sql','supabase/migrations/20261102094308_creator_clip_scale_lifecycle_ledger.sql'].map(p=>path.basename(p));
   const {db}=await createHistoricalDeploymentDatabase({implicitApiGrants:false,excludeMigrations:excluded,

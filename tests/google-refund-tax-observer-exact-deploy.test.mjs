@@ -1,11 +1,13 @@
+import * as historicalTool from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
+import {loadHistoricalBundle} from './helpers/historical-revenuecat-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {sha256} from '../ops/creator-backend-rollout/prepare-edge.mjs';
-import {loadBundle,classifyProbe,classifyState,buildApplySql,deploy,requireQualified,probeSql,readbackSql,
+import {classifyProbe,classifyState,buildApplySql,deploy,requireQualified,probeSql,readbackSql,
   ORIGINAL_HISTORY,PROJECT,VERSION,NAME,HASH,MIGRATION} from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
 
-const bundle=loadBundle();
+const bundle=loadHistoricalBundle(historicalTool);
 const context={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
 const before=()=>({readbackProtocol:'refund589-bounded-readback-v1',database:'postgres',context,originalHistorySha256:ORIGINAL_HISTORY.sha256,
   historyCount:589,historyMaximum:'20261107191000',

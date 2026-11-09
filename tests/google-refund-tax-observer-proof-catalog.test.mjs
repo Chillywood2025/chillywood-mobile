@@ -1,7 +1,9 @@
+import {materializeHistoricalProofPackage} from './helpers/historical-revenuecat-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
-import {sql} from '../scripts/google-refund-tax-observer-proof/catalog.mjs';
+const historicalProof=materializeHistoricalProofPackage();
+const {sql}=await import(new URL('catalog.mjs',historicalProof));
 const start=sql.indexOf(' expected_types as materialized ('),end=sql.indexOf(',\n proof as materialized (',start);
 assert.ok(start>0&&end>start);
 const typeQuery=`with ${sql.slice(start,end)} select key from type_faults order by key`;

@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "scope": "Test-only supplemental frozen closure. No deployment qualification.",
+  "files": {
+    "scripts/google-refund-tax-social-exact-deploy.mjs": "22152afd2c780e69e3e32f99d30905d685a876c03c4af0142a1bc9227b351e15",
+    "supabase/functions/revenuecat-webhook/store-policy.mjs": "45b282c4b88b76551158c6fb7f03bbe7bd6c60f85a2766b6ece71755fea487e4",
+    "supabase/functions/_shared/notification-payload.mjs": "6e8ccc4d1fb59ddc62af421af38ae786b1f0b0f4e525637bcca16e3dd74e8eeb",
+    "supabase/functions/_shared/expo-push-receipt-policy.mjs": "28a5ec1060af8e0339ebf279d55f83699e306175a08682234f52dda1c89ca341",
+    "scripts/google-refund-tax-observer-proof/catalog.mjs": "94f3a648de6718306aff09998bbad79742804b71f4b0a54f1f6de55368a03762",
+    "scripts/google-refund-tax-observer-proof/generate.mjs": "99a75b0fd67b6615bb422c3fd9ee42080dcec1c8af29196098e57635687aacc5",
+    "scripts/google-refund-tax-observer-proof/inverse.mjs": "d330bcd71a11daff5e57b594aa529ce9cf7566f8c611b036dee3a5884a70a80b",
+    "scripts/google-refund-tax-observer-proof/predicates.mjs": "8fc1f57492507e8c5f87ca55e196cfaa5e641dd120600a36f5cbcaf4c64c68f0",
+    "scripts/google-refund-tax-observer-proof/prepare-native-capture.mjs": "70f33065f784f16090a6ef2de16ccecd016c87444ea4527faac5cd9a1e8aba70",
+    "scripts/google-refund-tax-observer-proof/qualifier.mjs": "47c4601ea07756935f49de1b0c5f5ca1eb0f28fc41ef2d7d20932fd8ab93cb69",
+    "scripts/google-refund-tax-observer-proof/staged.mjs": "ff45ace7b20fb2abf8f54bf3cc8a64152cc9fa0f493efbf403abdf1e328158be",
+    "scripts/google-refund-tax-observer-proof/verify-inputs.mjs": "23ded6989e4811ffcc1cc4f553fc545d0708c40059f5ef0c9099cd9ba2cf4d20",
+    "scripts/google-refund-tax-observer-proof/verify-native-captures.mjs": "f7ad562d20d099f11099e0a153e3e4240139eb257349acace0755111a455808e"
+  }
+}

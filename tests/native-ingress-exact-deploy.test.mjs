@@ -1,3 +1,5 @@
+import * as historicalTool from '../scripts/native-ingress-exact-deploy.mjs';
+import {loadHistoricalBundle,materializeHistoricalBundle,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -5,10 +7,10 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHistoricalDeploymentDatabase} from './helpers/historical-deployment-schema-fixture.mjs';
-import {loadBundle,readbackSql,classifyState,buildApplySql,deploy,sourceBinding,safeError,MANIFEST,MIGRATION,VERSION,NAME,HASH,CLOSURE,EDGE_FILES} from '../scripts/native-ingress-exact-deploy.mjs';
+import {loadBundle,readbackSql,classifyState,buildApplySql,deploy,sourceBinding,safeError,MANIFEST,MIGRATION,VERSION,NAME,HASH,EDGE_FILES} from '../scripts/native-ingress-exact-deploy.mjs';
 import {MIGRATION as TIP_MIGRATION,VERSION as TIP_VERSION,NAME as TIP_NAME} from '../scripts/native-tip-exact-deploy.mjs';
 
-const bundle=loadBundle();
+const bundle=loadHistoricalBundle(historicalTool);
 const context={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
 const ready=()=>({schema:1,database:'postgres',context:{...context},priorHistorySha256:bundle.manifest.baselineHistory.sha256,historyCount:584,historyMaximum:TIP_VERSION,invariantsSha256:bundle.manifest.invariantsSha256,dataSha256:bundle.manifest.dataSha256,holds:true,tipPrerequisite:true,baselineDispatch:true,finalDispatch:false,addedAbsent:true,addedPresent:false,addedCatalogSha256:'0'.repeat(64),targets:[]});
 const applied=()=>({...ready(),historyCount:585,baselineDispatch:false,finalDispatch:true,addedAbsent:false,addedPresent:true,addedCatalogSha256:bundle.manifest.addedCatalogSha256,targets:[{version:VERSION,name:NAME,statementsSha256:bundle.statementsSha256}]});
@@ -19,7 +21,7 @@ test('immutable schema and seven-file Edge source closure; no generic replacemen
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-ingress-deploy-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:'pipe'}).trim();
   git('init');git('config','user.name','Fixture');git('config','user.email','fixture@example.invalid');
-  for(const file of CLOSURE){fs.mkdirSync(path.dirname(path.join(dir,file)),{recursive:true});fs.copyFileSync(file,path.join(dir,file));}
+  materializeHistoricalBundle(dir,historicalTool);
   git('add','.');git('commit','-m','synthetic source closure');const source=git('rev-parse','HEAD');
   assert.equal(sourceBinding(dir,source).source,source);assert.equal(loadBundle(dir,source).body,bundle.body);
   assert.throws(()=>sourceBinding(dir,'0'.repeat(40)),/SOURCE_HEAD_MISMATCH/);
@@ -28,7 +30,7 @@ test('immutable schema and seven-file Edge source closure; no generic replacemen
   fs.writeFileSync(path.join(dir,MIGRATION),bundle.body);
   fs.appendFileSync(path.join(dir,EDGE_FILES[0]),'\n// dirty');
   assert.throws(()=>loadBundle(dir),/EDGE_HASH_MISMATCH/);
-  fs.copyFileSync(EDGE_FILES[0],path.join(dir,EDGE_FILES[0]));
+  fs.writeFileSync(path.join(dir,EDGE_FILES[0]),readPinnedHistoricalSource(EDGE_FILES[0]));
   const manifest=JSON.parse(fs.readFileSync(path.join(dir,MANIFEST),'utf8'));manifest.migration.version='20261103005001';fs.writeFileSync(path.join(dir,MANIFEST),JSON.stringify(manifest));
   assert.throws(()=>loadBundle(dir),/MANIFEST_INVALID/);
   assert.equal(safeError(Error('ARBITRARY_SECRET')),'NATIVE_INGRESS_DEPLOY_BLOCKED');
