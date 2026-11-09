@@ -391,6 +391,10 @@ jobs:
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --reservation-proof
       - name: Verify dormant one-shot native attempt consumption and crash recovery
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --dispatch-proof
+      - name: Qualify native pending receipt delivery fences on actual managed source
+        run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --pending-fence-proof
+      - name: Qualify dormant native dispatch against actual managed source
+        run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --qualified-dispatch-proof
       - name: Verify prerequisite and caller-owned image identity controls
         run: |
           python3 scripts/ci/paid-video-prerequisites/provision_test.py
@@ -463,6 +467,8 @@ jobs:
           bash modules/chillywood-camera-effects/android/run-lifecycle-tests.sh
           cc -std=c11 -Wall -Wextra -Werror -pedantic modules/chillywood-camera-effects/ios/tests/camera_effect_math_test.c -lm -o "$RUNNER_TEMP/camera-effect-math-test"
           "$RUNNER_TEMP/camera-effect-math-test"
+      - name: Typecheck read-only StoreKit app evidence and execute native policy (no store read)
+        run: bash tests/native-app-evidence/check-apple-sdk.sh
       - name: Verify PaidVideo native source and compile-evidence boundaries
         run: node --test tests/ci/paid-video-native-closure.test.mjs
       - name: Compile actual Android and iOS camera, Test Store and Crypto modules without signing or provider credentials

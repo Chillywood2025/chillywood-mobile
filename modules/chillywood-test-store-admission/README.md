@@ -13,3 +13,32 @@ The existing RevenueCat native bridge is unchanged. App source must suppress all
 Local qualification uses fixture-only configuration. The default build test registers seven portable JavaScript groups, with no skipped native test. The explicit macOS check `ISOLATED_TEST_STORE_NATIVE_POLICY=1 node --test tests/isolated-test-store-build.test.mjs` registers an eighth group that compiles and runs ten process scenarios against the actual Java and Swift policy sources, including a Swift Release executable. These callbacks do not initialize a real provider. Full Expo bridge compilation, generated project inspection and eventual installed-device/provider rehearsal are separate evidence; a policy test does not establish them.
 
 Before any real rehearsal, independently qualify the exclusive Test Store project/app, native descriptor, backend digest/catalog, isolated authentication callback, real Debug artifact and one-user process lifecycle. Nothing here authorizes EAS publication, installation, provider configuration changes, receipt activation or live money operations.
+
+### Read-only app transaction evidence (not admission)
+
+`readAppTransactionEvidence()` is a dormant iOS-only explicit read, independent of the
+unchanged debug Test Store gates. On iOS 16+ it reads `AppTransaction.shared` and accepts
+only StoreKit `.verified` app transactions with both signed and installed bundle IDs
+`com.chillywood.mobile`. Unsupported OS, verification failure, unavailable data and
+wrong bundles return no transaction fields. Known environments are reported, including
+production and Xcode; none grants permission. Android has no corresponding adapter.
+
+This is **app evidence**, not IAP verification, account qualification, server attestation,
+or proof of an exact installed build. `signedAppVersion` is Apple's app-version string;
+`unsignedNativeVersion` and `unsignedNativeBuild` are separately labeled Bundle values.
+All dispatch, provider, IAP, account and exact-build qualification flags are always false.
+No receipt/JWS, app transaction identifier, raw error, or account identifier is exported.
+There is no purchase, refresh, sign-in call, automatic startup read, or RevenueCat change.
+Apple's shared read may require network/authentication; absence of OS UI is not promised.
+Do not invoke it automatically as admission or until an explicit device observation.
+
+Official API: https://developer.apple.com/documentation/storekit/apptransaction/shared
+and https://developer.apple.com/documentation/storekit/apptransaction/appversion.
+Run `bash tests/native-app-evidence/check-apple-sdk.sh` on an existing Xcode Mac: actual
+Apple SDK iOS 15.1-target typecheck plus executable pure policy tests, never a StoreKit
+read. This is compile/policy evidence only, not installed no-charge qualification.
+
+Local verification (2026-11-09): Xcode 26.5 (17F42), Swift 6.3.2 and installed
+IPhoneSimulator26.5 SDK successfully typechecked the actual adapter for iOS 15.1;
+10 pure native policy cases executed successfully. The Expo wrapper remains covered by
+the existing full native-module compile CI lane. No app transaction was read on a device.

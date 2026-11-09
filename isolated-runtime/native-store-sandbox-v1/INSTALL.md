@@ -116,7 +116,7 @@ worked around by changing identity checks.
 
 `install-delta.mjs` compares before/after snapshots from the **same database**.
 `install-delta.json` pins the independently observed added catalog of the fixed
-40-module local managed install, not any hosted baseline. The contract covers
+42-module local managed install, not any hosted baseline. The contract covers
 2 schemas, 4 roles, 8 role-membership rows, 193 functions (36 public wrappers),
 143 relations, 1,037 columns, 679 constraints, 255 indexes, 142 policies and 1,009
 triggers. Existing catalog rows, roles, memberships, defaults and event triggers
@@ -151,18 +151,18 @@ This manifest alone is therefore not an executable transactional postcheck.
 
 ### Executable atomic semantic postcheck (source only)
 
-`nativeStoreAtomicInstallSQL()` in `install-atomic.mjs` wraps the fixed 40-module closure in one transaction. It captures the actual same-database before snapshot in a private temporary table, refuses preexisting native names, forces the original deferred default-off/empty-state guards, and compares both directions using JSONB `EXCEPT ALL` (duplicates matter). Existing catalog rows remain exact except separately checked public schema ACL additions. The added rows are normalized exactly as the portable delta contract and compared semantically against `install-atomic-rows.json`, including exact roles, memberships, ACLs and no new default ACLs. Temporary helpers are dropped before commit; the temporary snapshot drops on commit.
+`nativeStoreAtomicInstallSQL()` in `install-atomic.mjs` wraps the fixed 42-module closure in one transaction. It captures the actual same-database before snapshot in a private temporary table, refuses preexisting native names, forces the original deferred default-off/empty-state guards, and compares both directions using JSONB `EXCEPT ALL` (duplicates matter). Existing catalog rows remain exact except separately checked public schema ACL additions. The added rows are normalized exactly as the portable delta contract and compared semantically against `install-atomic-rows.json`, including exact roles, memberships, ACLs and no new default ACLs. Temporary helpers are dropped before commit; the temporary snapshot drops on commit.
 
 The source-derived row artifact contains no target snapshot or provider data. It is stored as deterministic `install-atomic-rows.json.gz` using built-in Node zlib, preserving the exact canonical JSON bytes while reducing repository/API transfer size. Decoding is bounded to 8 MiB. Before emitting SQL, the assembler validates its original JS canonical digest against the existing `install-delta.json` and fixed source digest. PostgreSQL never guesses that JS digest from `jsonb::text`. Exact source binding compares binary bytes, and tests verify deterministic recompression and reject truncated data. The managed local harness verifies the source pin before optional explicit regeneration with `NATIVE_ATOMIC_PIN_GENERATE=local-fixture-only`; ordinary runs do not rewrite the pin.
 
-For a reviewed source change, explicit `--generate-local-pins` installs only into the harness's disposable local cluster and regenerates both expected delta and semantic rows from its actual catalogs. This mode reports `atomicVerified:false` and `deploymentAllowed:false`, never a successful atomic proof. It preserves old-object/ACL/role delta checks, but does not compare the newly changed catalog with stale expected rows. Normal mandatory CI runs never use generation mode: separate ordinary and shifted-OID atomic verification must pass after regeneration. The quote implementation has an owner-private already-armed helper; the original entry point still arms exactly one transaction budget. The reservation and dormant owner-private consumption modules are included in this 40-module install closure. Both tables must be empty at the default-off installation commit. Consumption has no public wrapper, service grant, provider qualification, or SDK dispatch authority.
+For a reviewed source change, explicit `--generate-local-pins` installs only into the harness's disposable local cluster and regenerates both expected delta and semantic rows from its actual catalogs. This mode reports `atomicVerified:false` and `deploymentAllowed:false`, never a successful atomic proof. It preserves old-object/ACL/role delta checks, but does not compare the newly changed catalog with stale expected rows. Normal mandatory CI runs never use generation mode: separate ordinary and shifted-OID atomic verification must pass after regeneration. The quote implementation has an owner-private already-armed helper; the original entry point still arms exactly one transaction budget. The reservation and dormant owner-private consumption modules are included in this 42-module install closure. Both tables must be empty at the default-off installation commit. Consumption has no public wrapper, service grant, provider qualification, or SDK dispatch authority.
 
 Actual non-superuser PostgreSQL tests execute the atomic wrapper and reject late old-object changes, public CREATE leakage, role LOGIN expansion, old default ACL changes and a duplicated expected row. Each failed attempt restores the full before snapshot and leaves all fresh schemas/roles absent. Independent OID allocation and modeled event-trigger parity remain exercised. This is not an apply executor: it has no network, target URL, transport override, migration-history write or activation. A future executor still needs qualified target identity, expected target baseline/concurrency checks, exact history append, uncertain-write recovery and independent committed readback. No hosted install or checkout qualification is asserted.
 
 ### Offline transaction envelope, not hosted deployment eligibility
 
 `install-envelope.mjs` is a separate source-only assembler around that unchanged
-40-module atomic installer. Its default migration identity and baseline are null;
+42-module atomic installer. Its default migration identity and baseline are null;
 normal default use rejects SQL emission. An explicit independently reviewed
 identity and exact baseline must be supplied. The local tests supply only a
 clearly synthetic version/name and a real disposable-database snapshot, never
@@ -203,3 +203,5 @@ these offline tests pass. Future target work needs an independently reviewed,
 staged resource-bounded readback plan, suitable transport identity, operational
 headroom and confirmation that the hold is lifted. No such target read is part
 of this source increment.
+
+The pending raw-receipt fence is included in the 42-module closure (source only). Native core links and pending evidence must be empty at install commit; all switches remain off. The mandatory fence harness requires closure-created objects and never transplants fixture SQL. See SETTLEMENT.md for lifecycle limitations.

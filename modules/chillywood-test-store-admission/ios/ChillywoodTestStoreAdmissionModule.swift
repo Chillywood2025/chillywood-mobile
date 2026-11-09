@@ -16,6 +16,9 @@ public final class ChillywoodTestStoreAdmissionModule: Module {
       else { result["build"] = NSNull() }
       return result
     }
+    AsyncFunction("readAppTransactionEvidence") { () async -> [String: Any] in
+      await AppTransactionEvidence.read()
+    }
     AsyncFunction("configureTestStore") { (providerAppUserId: String) async throws -> [String: Any] in
       try await MainActor.run {
         let config = self.nativeConfig()

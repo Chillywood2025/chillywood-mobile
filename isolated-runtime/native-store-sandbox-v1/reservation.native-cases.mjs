@@ -48,7 +48,7 @@ export async function runReservationCases(x){
  // Include both tables separately to prove immutable guards still reject the
  // operation when PostgreSQL's structural FK check is satisfied.
  reject('truncate sandbox_commerce_v1.native_store_reservations;',/cannot truncate a table referenced in a foreign key constraint/u);
- for(const mutation of ['update sandbox_commerce_v1.native_store_reservations set product_id=\'other\'','delete from sandbox_commerce_v1.native_store_reservations','truncate sandbox_commerce_v1.native_store_reservations,sandbox_commerce_v1.native_store_dispatch_attempts'])reject(mutation+';',/native_store_quote_immutable/u);cases++;
+ for(const mutation of ['update sandbox_commerce_v1.native_store_reservations set product_id=\'other\'','delete from sandbox_commerce_v1.native_store_reservations','truncate sandbox_commerce_v1.native_store_reservations,sandbox_commerce_v1.native_store_dispatch_attempts,sandbox_commerce_v1.native_store_qualified_attempts'])reject(mutation+';',/native_store_quote_immutable/u);cases++;
  const race=alternative('reservation-race-product'),racePayload={selectionId:race.id},raceId=randomUUID();let out='',err='';
  // Obtain actual database connection arguments from the same owning harness.
  const db=q('select current_database();');const child=spawn(path.join(bin,'psql'),args(db),{env,stdio:['pipe','pipe','pipe']});children.push(child);

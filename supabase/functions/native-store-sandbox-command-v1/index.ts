@@ -12,8 +12,9 @@ export const handler=createNativeStoreSandboxCommandHandlerV1({
  },
  execute:async({actor,request})=>{
   const admin=createAdminClient();if(!admin.configured)throw Error("native_store_backend_unavailable");
+  const dispatch=request.command.startsWith("dispatch-");
   const reservation=request.command==="reserve"||request.command==="reserve-recover";
-  const {data,error}=await admin.client.rpc(reservation?"native_store_sandbox_reservation_v1":"native_store_sandbox_command_v1",{p_user_id:actor.userId,p_session_id:actor.sessionGeneration,
+  const {data,error}=await admin.client.rpc(dispatch?"native_store_sandbox_dispatch_v1":reservation?"native_store_sandbox_reservation_v1":"native_store_sandbox_command_v1",{p_user_id:actor.userId,p_session_id:actor.sessionGeneration,
    p_command:request.command,p_request_id:request.requestId,p_payload:request.payload});
   if(error)throw Error("native_store_preparation_uncertain");return reservation?adaptNativeStoreReservationResultV1(data):data;
  },

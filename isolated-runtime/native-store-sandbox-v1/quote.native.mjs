@@ -10,8 +10,8 @@ import {setTimeout as delay} from 'node:timers/promises';import process from 'no
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 globalThis.crypto??=webcrypto;
 assert.equal(process.argv[2],'--local-bin');assert.ok([4,5,6].includes(process.argv.length));const flags=process.argv.slice(4);
-assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof','--dispatch-proof'].includes(f)));
-const managed=flags.includes('--managed-install'),reservationProof=flags.includes('--reservation-proof');if(reservationProof||flags.includes('--dispatch-proof'))assert.ok(managed);
+assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof','--dispatch-proof','--pending-fence-proof','--qualified-dispatch-proof'].includes(f)));
+const managed=flags.includes('--managed-install'),reservationProof=flags.includes('--reservation-proof');if(reservationProof||flags.includes('--dispatch-proof')||flags.includes('--pending-fence-proof')||flags.includes('--qualified-dispatch-proof'))assert.ok(managed);
 const bin=process.argv[3];assert.ok(path.isAbsolute(bin));const administrator=managed?'fixture_admin':'postgres';
 const here=path.dirname(fileURLToPath(import.meta.url)),runtime=path.resolve(here,'../sandbox-commerce-v1'),root=path.resolve(here,'../..');
 const source=name=>fs.readFileSync(path.join(runtime,name),'utf8');
@@ -26,7 +26,7 @@ const install='begin;create role anon nologin;create role authenticated nologin;
  +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declarations supplied by real core')
  +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'+files.map(source).join('\n')
  +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+fs.readFileSync(path.join(here,'claim.sql'),'utf8')+fs.readFileSync(path.join(here,'reservation.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
-const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),port='55490',db='quote_'+randomUUID().replaceAll('-','');
+const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),port=flags.includes('--qualified-dispatch-proof')?'55494':flags.includes('--pending-fence-proof')?'55492':'55490',db='quote_'+randomUUID().replaceAll('-','');
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PG')));
 const args=(database,user=administrator)=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U',user,'-d',database];
 const run=(tool,argv,input)=>spawnSync(path.join(bin,tool),argv,{input,encoding:'utf8',env,timeout:30000,maxBuffer:8*1024*1024});
@@ -38,10 +38,11 @@ const buyer='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',session='bbbbbbbb-bbbb-4bbb-8
 const actor={userId:buyer,accountId:buyer,sessionGeneration:session};
 const service="set role service_role;set request.jwt.claims='{\"role\":\"service_role\"}';";
 const expression=(command,payload,requestId=randomUUID(),who=actor)=>`public.native_store_sandbox_command_v1('${who.userId}','${who.sessionGeneration}',${literal(command)},'${requestId}',${json(payload)})`;
-const call=(command,payload,requestId,who)=>{const reservation=['reserve','reserve-recover'].includes(command);const sql=expression(command,payload,requestId,who).replace('public.native_store_sandbox_command_v1',reservation?'public.native_store_sandbox_reservation_v1':'public.native_store_sandbox_command_v1');const value=JSON.parse(q(service+'select '+sql+';'));return reservation?api.adaptNativeStoreReservationResultV1(value):value;};
+const call=(command,payload,requestId,who)=>{const reservation=['reserve','reserve-recover'].includes(command);const sql=expression(command,payload,requestId,who).replace('public.native_store_sandbox_command_v1',command.startsWith('dispatch-')?'public.native_store_sandbox_dispatch_v1':reservation?'public.native_store_sandbox_reservation_v1':'public.native_store_sandbox_command_v1');const value=JSON.parse(q(service+'select '+sql+';'));return reservation?api.adaptNativeStoreReservationResultV1(value):value;};
 const ts=createRequire(import.meta.url)('typescript');
-const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'supabase/functions/_shared/native-store-sandbox-command-v1.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});
-const api={};new Function('exports',compiled.outputText)(api);
+ const modules=new Map();function load(name){if(modules.has(name))return modules.get(name);const result={};modules.set(name,result);
+  new Function('exports','require',ts.transpileModule(fs.readFileSync(path.join(root,'supabase/functions/_shared',name),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(result,s=>load(s.replace(/^\.\//u,'')));return result;}
+const api=load('native-store-sandbox-command-v1.ts');
 const handler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>actor,execute:async({actor:a,request:r})=>call(r.command,r.payload,r.requestId,a)});
 const http=async(command,payload,requestId=randomUUID())=>{const body={protocol:'native-store-sandbox-command-v1',command,requestId,payload};
  const response=await handler(new Request('https://local.invalid',{method:'POST',body:JSON.stringify(body)}));
@@ -157,7 +158,7 @@ try{
  // adapters are synthetic; no handwritten response replaces a database result.
  const authority={...actor,state:'ACTIVE',restoreOnly:false},memory=new Map(),clientApi={};
  const storage={getItem:async key=>memory.get(key)??null,setItem:async(key,value)=>{memory.set(key,value);}};
- const clientBindings={'@react-native-async-storage/async-storage':storage,'react-native-get-random-values':{},
+ const clientBindings={'../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1':load('native-store-sandbox-dispatch-contract-v1.ts'),'@react-native-async-storage/async-storage':storage,'react-native-get-random-values':{},
   './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,
    sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&['userId','accountId','sessionGeneration','state','restoreOnly'].every(k=>a[k]===b[k]),subscribeToAccountSessionAuthority:()=>()=>{}},
   './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority,accessToken:'synthetic-local-auth'})},
@@ -304,8 +305,6 @@ try{
  q(`update auth.sessions set not_after=clock_timestamp()+interval '1 hour' where id='${session}';`);cases++;
  // Actual persisted claim -> real authenticated envelope -> original decrypt
  // and comparison. Provider bytes/config here are explicitly synthetic.
- const modules=new Map();function load(name){if(modules.has(name))return modules.get(name);const result={};modules.set(name,result);
-  new Function('exports','require',ts.transpileModule(fs.readFileSync(path.join(root,'supabase/functions/_shared',name),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(result,s=>load(s.replace(/^\.\//u,'')));return result;}
  const conf={bridgeProtocol:'native-store-sandbox-v1',connectionId:randomUUID(),connectionRevision:1,projectId:nativeCatalog.projectId,appId:nativeCatalog.appId,store:'APP_STORE',environment:'SANDBOX',
   authentication:{method:'shared_secret',keyVersion:'synthetic-v1',secret:'synthetic-not-a-real-secret-'.repeat(2)},encryption:{keyId:'synthetic-key',key:new Uint8Array(32).fill(17)}};
  const envelope=(await load('native-store-sandbox-bridge-v1.ts').prepareNativeStoreSandboxIntakeV1(new Request('https://local.invalid',{method:'POST',headers:{authorization:conf.authentication.secret},body:JSON.stringify({api_version:'1.0',event:{id:'synthetic-event',type:'NON_RENEWING_PURCHASE',app_id:conf.appId,store:conf.store,environment:'SANDBOX',app_user_id:buyer,original_app_user_id:buyer,transaction_id:claimPayload.transactionIdentifier,original_transaction_id:claimPayload.transactionIdentifier,product_id:claimPayload.productIdentifier,event_timestamp_ms:1794139200000}})}),conf)).envelope;
@@ -322,11 +321,13 @@ try{
  const claimUntil=Date.now()+3000;while(!claimOut.includes('claim_ready')&&Date.now()<claimUntil)await delay(10);assert.ok(claimOut.includes('claim_ready'),claimErr);
  rejects(service+'select '+expression('claim',racePayload,raceClaimId)+';',/native_store_claim_busy/u);
  claimant.stdin.end('commit;\n');assert.equal(await claimDone,0,claimErr);assert.equal(call('claim',racePayload,raceClaimId).data.claim.originalRequestId,raceClaimId);cases++;
+ if(flags.includes('--qualified-dispatch-proof'))await (await import('./qualified-dispatch.native-cases.mjs')).runQualifiedDispatchCases({q,run,args,bin,env,children,json,literal,call,actor,buyer,session,other,otherSession,newSession,offer,resource,asset,route,binding,here,load,db,freshNativeFixture,root,ts});
  if(reservationProof)await (await import('./reservation.native-cases.mjs')).runReservationCases({q,run,args,bin,env,children,service,json,literal,call,actor,buyer,session,seller,offer,resource,asset,route,binding,nativeCatalog,preparePayload,other,otherSession,newSession,root,ts,...freshNativeFixture('reservation-proof-product')});
  if(flags.includes('--dispatch-proof'))await (await import('./dispatch-attempt.native-cases.mjs')).runDispatchAttemptCases({q,args,bin,env,children,json,call,actor,buyer,session,other,otherSession,newSession,here,route,asset,clientBindings,clientSource,api,freshNativeFixture,...freshNativeFixture('dispatch-proof-product')});
  q(`update sandbox_commerce_v1.offers set revision=2 where id='${offer}';`);
  assert.equal((await http('offer',payload)).status,'held');cases++;
  assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');cases++;
+ if(flags.includes('--pending-fence-proof'))await (await import('./pending-fence.native-cases.mjs')).runPendingFenceCases({q,run,args,bin,env,children,json,literal,buyer,session,seller,offer,resource,asset,here,load,db});
  console.log(JSON.stringify({protocol:'native-store-normal-quote-proof-v1',cases,passed:cases,managedInstall:managed,sourceDigest:managed?nativeStoreInstallProfile().sourceDigest:null,providerQualified:false,dispatchAllowed:false}));
 }finally{
  for(const child of children)if(child.exitCode===null)child.kill('SIGTERM');

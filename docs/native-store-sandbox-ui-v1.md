@@ -101,3 +101,59 @@ results, retirement during SDK work and persistence, immutable identifier checks
 controlled retention deadlines, strict UTF-8 limits, original-account local storage,
 exact/conflicting callbacks and original-account-only recovery. These are source
 proofs, not successful purchases or hosted deployment evidence.
+
+### Explicit app evidence and draft dispatch wire contract
+
+The normal client now has a bounded, explicit `readNativeSandboxAppEvidence` read of
+its actual native adapter. It never runs during catalog lookup/startup, returns only
+whitelisted app fields, rejects account gaps and native permission claims, and remains
+nonqualifying on iOS; Android is unsupported. No caller supplies the native evidence.
+
+The existing authenticated command endpoint recognizes `dispatch-consume` and
+`dispatch-recover` with only selection/reservation IDs and an immutable request ID.
+It routes to `native_store_sandbox_dispatch_v1`, whose qualification/consume SQL is
+in the fixed 42-module, default-off source closure. No real qualification record is
+seeded, and this does not establish hosted installation or provider readiness. A missing
+RPC stays uncertain and never retries a purchase. The pure response validator binds first consume to the
+current session and exact request/reservation; replay/recovery never allows dispatch.
+Android remains blocked even with an operator qualification row. Qualification fields
+are trusted server evidence, not caller assertions or proof of an executing build.
+A future iOS dispatcher must separately read actual native Sandbox app evidence and
+compare its local build/version and signed app-version string; local Bundle values are not server attestation.
+
+`dispatchPreparedNativeSandboxPurchase` now supplies the dormant normal-client
+orchestration. The normal screen first exposes a read-only qualification check; the
+explicit checkout action remains disabled unless exact server metadata is available
+and the existing build gate is already enabled. It never enables that build gate. It creates its own authenticated client,
+recovers the exact selection, discovers qualification without writes, explicitly reads actual native app evidence,
+and checks existing SDK identity/payment capability/product price. No caller supplies
+qualification or an app-evidence boolean. Only after discovery and local preflight may
+an explicit checkout create a new reservation; missing qualification does not strand
+a fresh selection in a permanent reservation. Consume revalidates current evidence. A persisted request precedes server consume;
+a committed first-consume response is followed by durable `consumed` and `sdk_started`
+markers before the existing SDK owner is invoked. Missing qualification, wrong local
+build/version, wrong scope, storage failure, or uncertain consume response prevents SDK
+invocation. An uncertain server reply is recovered using the exact original request;
+replay/recovery cannot return permission. No consumed/started record can repurchase. The per-offer marker currently prevents a
+later legitimate replacement selection too; a future explicit terminal-disposition
+protocol is required, never a timeout reset or rearm.
+
+The optional recovery-only mode performs no OS/SDK reads or purchase, and may read
+historical server state after a same-account session change. Callback evidence remains
+bound to its original account even when that account retires during the SDK result.
+SDK result success does not settle or grant access. `sdkVersion` currently means the
+exact JavaScript `react-native-purchases` dependency, 10.15.1. Android stays unsupported:
+normal internal track is not no-charge proof, and no current billing-account attestation
+API is invented here. No real SDK call was made; tests use the real wrapper and client
+with a synthetic SDK boundary, never an installed no-charge purchase.
+
+
+Local PostgreSQL integration now executes the real normal client, shared Edge handler,
+actual qualification/reservation/consumption SQL, existing SDK owner wrapper with a
+synthetic SDK boundary, durable callback retainer, and actual assertion claim SQL.
+Seven cases prove no reservation on missing qualification, write-before-SDK ordering,
+private callback whitelisting, no replay purchase, lost-before/after-commit recovery
+with the same request across sessions, and original-account retention after retirement.
+The combined qualification harness passes 34 cases plus 33 normal-command cases.
+This is not an observed provider purchase or callback/webhook mapping qualification;
+settlement still requires a separate real-observation qualification and projection.

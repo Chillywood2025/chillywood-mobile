@@ -15,11 +15,17 @@ Crash after commit, lost response, SDK errors and cancellation cannot release
 this record for another purchase. Transaction rollback/expiry before commit
 does not consume it. A future qualified dispatcher must observe commit before
 considering any result; no such dispatcher or qualification gate exists here.
-The 40-module source install requires an empty attempt table at commit.
+The 42-module source install requires an empty attempt table at commit.
 
 `quote.native.mjs --managed-install --dispatch-proof` exercises actual private
 SQL, repeated and concurrent consumers, expiry rollback, current-media checks,
 and real client retention of the exact returned attempt after account retirement.
+The 19-case consumption proof now composes the actual shared RevenueCat purchase
+wrapper with the actual client retainer and PostgreSQL. Only the physical SDK is
+replaced by a test-only deferred boundary. Account retirement retains original
+evidence before the wrapper rejects success; interruption before callback leaves
+no claim and cannot reissue consumption. Forged authority flags and substituted
+reservation IDs cannot create a retainer. No production dispatcher is introduced.
 The original account can later resend only its retained unqualified transaction
 assertion through the existing Edge/SQL path. Locally retained attempt fields
 are not authenticated server attestation and do not expand the claim payload.
@@ -122,7 +128,7 @@ receipt reconciliation. The local reservation alone cannot qualify that workflow
 
 ### Server reservation source proof (not hosted deployed)
 
-`reservation.sql` is included in the pinned 40-module managed install closure.
+`reservation.sql` is included in the pinned 42-module managed install closure.
 Its service-only RPC is routed through the existing authenticated command endpoint
 and dormant mobile client, without SDK activation. The local proof reserves an exact existing selection
 under a database uniqueness constraint for buyer/project/app/store/environment/SKU.
@@ -140,7 +146,7 @@ The helper is not executable by anonymous, authenticated or service roles.
 
 Run `quote.native.mjs --local-bin /absolute/postgresql-17.6/bin --managed-install
 --reservation-proof` for the local proof. The reservation module is now included in the complete
-40-module managed source closure, installed in the disposable database under its
+42-module managed source closure, installed in the disposable database under its
 bounded NOSUPERUSER installer CREATE interval.
 Twenty-two reservation cases and the thirty-three quote/claim/reservation integration cases passed,
 including real HTTP-handler-to-SQL execution, shared-SKU contention with controlled

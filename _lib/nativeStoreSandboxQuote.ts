@@ -1,3 +1,4 @@
+import { validNativeDispatchData, type NativeDispatchQualification } from "../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import "react-native-get-random-values";
 import { captureAccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
@@ -246,6 +247,48 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
       return Object.freeze({ status: !attempt ? preparingKeys.has(attemptKey(saved.quote)) ? "reservation_write_uncertain" as const : "none" as const : matchesAttempt(attempt, saved, confirmedSelection?.id) ? "dispatch_reserved" as const : "blocked_by_other_selection" as const,
         serverReservationConfirmed: !!attempt && confirmedReservation?.selectionId === attempt.selectionId,
         dispatchAllowed: false as const, providerQualified: false as const });
+    }),
+    // Internal authenticated admission read/consume for the dormant orchestrator.
+    // No qualification, actor, build, or consumed-attempt object comes from caller.
+    readDispatchQualification: () => exclusive(async () => {
+      const selection = confirmedSelection; const requestId = newId();
+      if (!selection) return fail("invalid_request");
+      const command = "dispatch-qualification";
+      const value = await bounded(async signal => {
+        const response = await fetch(`${SUPABASE_URL.replace(/\/+$/u, "")}/functions/v1/native-store-sandbox-command-v1`, { method: "POST", signal,
+          headers: { Authorization: `Bearer ${captured.accessToken}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json", "x-chillywood-platform": store === "APP_STORE" ? "ios" : "android" },
+          body: JSON.stringify({ protocol: NATIVE_STORE_SANDBOX_PROTOCOL, command, requestId, payload: { selectionId: selection.id } }) });
+        current(); if (!response.ok) return fail("outcome_unknown"); const body = await response.text(); current(); if (body.length > 65536) return fail("invalid_response"); return JSON.parse(body) as unknown;
+      }); current();
+      if (!keys(value, ["protocol", "command", "requestId", "actor", "status", "data", "dispatchAllowed", "correlation"])
+        || value.protocol !== NATIVE_STORE_SANDBOX_PROTOCOL || value.command !== command || value.requestId !== requestId || canonical(value.actor) !== canonical(actor)
+        || value.correlation !== "unsupported" || !validNativeDispatchData(value.data, { command, requestId, selectionId: selection.id, reservationId: undefined,
+          sessionGeneration: actor.sessionGeneration, status: value.status, dispatchAllowed: value.dispatchAllowed })) return fail("invalid_response");
+      const data = value.data as { qualification: NativeDispatchQualification | null; reason: string | null };
+      const q = data.qualification, c = selection.quote.catalog;
+      if (q && (q.quoteDigest !== selection.quote.quoteDigest || q.catalogBindingId !== c.bindingId || q.catalogRevision !== c.revision || q.projectId !== c.projectId
+        || q.appId !== c.appId || q.store !== c.store || q.environment !== c.environment || q.wireProductId !== c.wireProductId)) return fail("invalid_response");
+      return copy({ status: value.status as "ok" | "held", data, dispatchAllowed: false as const });
+    }),
+    readDispatchAdmission: (requestId: string, recoverOnly: boolean) => exclusive(async () => {
+      const selection = confirmedSelection, reservation = confirmedReservation;
+      if (!uuid(requestId) || typeof recoverOnly !== "boolean" || !selection || !reservation || reservation.selectionId !== selection.id) return fail("invalid_request");
+      const command = recoverOnly ? "dispatch-recover" : "dispatch-consume";
+      const value = await bounded(async signal => {
+        const response = await fetch(`${SUPABASE_URL.replace(/\/+$/u, "")}/functions/v1/native-store-sandbox-command-v1`, { method: "POST", signal,
+          headers: { Authorization: `Bearer ${captured.accessToken}`, apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json", "x-chillywood-platform": store === "APP_STORE" ? "ios" : "android" },
+          body: JSON.stringify({ protocol: NATIVE_STORE_SANDBOX_PROTOCOL, command, requestId, payload: { selectionId: selection.id, reservationId: reservation.id } }) });
+        current(); if (!response.ok) return fail("outcome_unknown"); const body = await response.text(); current(); if (body.length > 65536) return fail("invalid_response"); return JSON.parse(body) as unknown;
+      }); current();
+      if (!keys(value, ["protocol", "command", "requestId", "actor", "status", "data", "dispatchAllowed", "correlation"])
+        || value.protocol !== NATIVE_STORE_SANDBOX_PROTOCOL || value.command !== command || value.requestId !== requestId || canonical(value.actor) !== canonical(actor)
+        || value.correlation !== "unsupported" || !validNativeDispatchData(value.data, { command, requestId, selectionId: selection.id, reservationId: reservation.id,
+          sessionGeneration: actor.sessionGeneration, status: value.status, dispatchAllowed: value.dispatchAllowed })) return fail("invalid_response");
+      const data = value.data as { attempt: NativeSandboxConsumedAttemptEvidence | null; qualification: NativeDispatchQualification | null; newlyConsumed: boolean; reason: string | null };
+      const q = data.qualification, c = selection.quote.catalog;
+      if (q && (q.quoteDigest !== selection.quote.quoteDigest || q.catalogBindingId !== c.bindingId || q.catalogRevision !== c.revision || q.projectId !== c.projectId
+        || q.appId !== c.appId || q.store !== c.store || q.environment !== c.environment || q.wireProductId !== c.wireProductId)) return fail("invalid_response");
+      return copy({ status: value.status as "ok" | "held" | "unknown", data, dispatchAllowed: value.dispatchAllowed === true });
     }),
     // No normal caller/issuer exists yet. The supplied consumed-attempt object
     // is retained evidence, NEVER provider admission or server attestation.

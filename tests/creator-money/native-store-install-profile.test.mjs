@@ -3,7 +3,7 @@ import {nativeStoreInstallProfile} from '../../isolated-runtime/native-store-san
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const prefix='isolated-runtime/native-store-sandbox-v1/',baseline='isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/source-manifest.json';
 test('fixed closure retains combined source, appends only native inactive files with bounded grant intervals',()=>{
- const p=nativeStoreInstallProfile();assert.equal(p.files.length,40);assert.equal(p.files.at(-1).path,'isolated-runtime/sandbox-commerce-v1/permissions-finalize.sql');
+ const p=nativeStoreInstallProfile();assert.equal(p.files.length,42);assert.equal(p.files.at(-1).path,'isolated-runtime/sandbox-commerce-v1/permissions-finalize.sql');
  assert.equal(p.files.filter(f=>f.path.endsWith('/paid-video-install-grant-v2.sql')).length,3);
  assert.equal(p.files.filter(f=>f.path.endsWith('/paid-video-install-revoke-v2.sql')).length,3);
  assert.equal(p.files.some(f=>/fixture/u.test(f.path)),false);assert.match(p.sql,/^begin;/u);assert.match(p.sql,/commit;\s*$/u);
