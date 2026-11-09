@@ -2,7 +2,7 @@
 
 `install-profile.mjs` extends the **unchanged, hash-pinned combined-readiness
 profile** with native journal, quote, claim and final-install assertions. It
-returns one explicit transaction and its 47-file source digest. It has no target
+returns one explicit transaction and its 48-file source digest. It has no target
 URL, network transport, apply switch or migration-history writer. No fixture is
 part of this closure. `install-source.json` pins both the prior manifest bytes
 and all four native source files. Editing or reordering the baseline fails closed.
@@ -116,8 +116,8 @@ worked around by changing identity checks.
 
 `install-delta.mjs` compares before/after snapshots from the **same database**.
 `install-delta.json` pins the independently observed added catalog of the fixed
-47-module local managed install, not any hosted baseline. The contract covers
-2 schemas, 4 roles, 8 role-membership rows, 221 functions (42 public wrappers),
+48-module local managed install, not any hosted baseline. The contract covers
+2 schemas, 4 roles, 8 role-membership rows, 223 functions (43 public wrappers),
 154 relations, 1,129 columns, 754 constraints, 286 indexes, 153 policies and 1,137
 triggers. Existing catalog rows, roles, memberships, defaults and event triggers
 must remain unchanged. Only the public schema ACL receives two explicit additions:
@@ -151,18 +151,20 @@ This manifest alone is therefore not an executable transactional postcheck.
 
 ### Executable atomic semantic postcheck (source only)
 
-`nativeStoreAtomicInstallSQL()` in `install-atomic.mjs` wraps the fixed 47-module closure in one transaction. It captures the actual same-database before snapshot in a private temporary table, refuses preexisting native names, forces the original deferred default-off/empty-state guards, and compares both directions using JSONB `EXCEPT ALL` (duplicates matter). Existing catalog rows remain exact except separately checked public schema ACL additions. The added rows are normalized exactly as the portable delta contract and compared semantically against `install-atomic-rows.json`, including exact roles, memberships, ACLs and no new default ACLs. Temporary helpers are dropped before commit; the temporary snapshot drops on commit.
+`nativeStoreAtomicInstallSQL()` in `install-atomic.mjs` wraps the fixed 48-module closure in one transaction. It captures actual same-database before and after catalog rows in private rowwise temporary tables, refuses preexisting native names, forces the original deferred default-off/empty-state guards, and compares both directions using JSONB `EXCEPT ALL` (duplicates matter). Existing catalog rows remain exact except separately checked public schema ACL additions. The added rows are normalized exactly as the portable delta contract and compared semantically against `install-atomic-rows.json`, including exact roles, memberships, ACLs and no new default ACLs. Temporary helpers are dropped before commit; all temporary row/metadata/ACL tables drop on commit.
+
+The verifier does not aggregate entire before/after catalogs or the expected pin into retained JSONB arrays. It inserts expected rows in bounded 32-row batches and keeps semantic ACLs in a keyed temporary table. `SET LOCAL enable_hashagg=off` selects sort-based `EXCEPT ALL`, which can spill under the caller's bounded `work_mem`, rather than PostgreSQL's non-spilling hashed SetOp. JSONB equality, including numeric spelling equivalence and duplicate multiplicity, is unchanged. No statement/transaction deadline is rearmed. Catalog rows, ACL items and bootstrap/public-ACL metadata are captured together in one data-modifying-CTE statement snapshot for each phase, preserving the original READ COMMITTED observation boundary. The outer envelope also keeps history as individual JSONB rows and compares exact multisets after the receipt append; statement-array order and JSON nulls remain significant. Its baseline history digest uses the already-qualified canonical text-array serializer, byte-equivalent to the prior JSONB array text. The receipt, 22 locks and original deadlines are unchanged.
 
 The source-derived row artifact contains no target snapshot or provider data. It is stored as deterministic `install-atomic-rows.json.gz` using built-in Node zlib, preserving the exact canonical JSON bytes while reducing repository/API transfer size. Decoding is bounded to 8 MiB. Before emitting SQL, the assembler validates its original JS canonical digest against the existing `install-delta.json` and fixed source digest. PostgreSQL never guesses that JS digest from `jsonb::text`. Exact source binding compares binary bytes, and tests verify deterministic recompression and reject truncated data. The managed local harness verifies the source pin before optional explicit regeneration with `NATIVE_ATOMIC_PIN_GENERATE=local-fixture-only`; ordinary runs do not rewrite the pin.
 
-For a reviewed source change, explicit `--generate-local-pins` installs only into the harness's disposable local cluster and regenerates both expected delta and semantic rows from its actual catalogs. This mode reports `atomicVerified:false` and `deploymentAllowed:false`, never a successful atomic proof. It preserves old-object/ACL/role delta checks, but does not compare the newly changed catalog with stale expected rows. Normal mandatory CI runs never use generation mode: separate ordinary and shifted-OID atomic verification must pass after regeneration. The quote implementation has an owner-private already-armed helper; the original entry point still arms exactly one transaction budget. The reservation and dormant owner-private consumption modules are included in this 47-module install closure. Both tables must be empty at the default-off installation commit. Consumption has no public wrapper, service grant, provider qualification, or SDK dispatch authority.
+For a reviewed source change, explicit `--generate-local-pins` installs only into the harness's disposable local cluster and regenerates both expected delta and semantic rows from its actual catalogs. This mode reports `atomicVerified:false` and `deploymentAllowed:false`, never a successful atomic proof. It preserves old-object/ACL/role delta checks, but does not compare the newly changed catalog with stale expected rows. Normal mandatory CI runs never use generation mode: separate ordinary and shifted-OID atomic verification must pass after regeneration. The quote implementation has an owner-private already-armed helper; the original entry point still arms exactly one transaction budget. The reservation and dormant owner-private consumption modules are included in this 48-module install closure. Both tables must be empty at the default-off installation commit. Consumption has no public wrapper, service grant, provider qualification, or SDK dispatch authority.
 
-Actual non-superuser PostgreSQL tests execute the atomic wrapper and reject late old-object changes, public CREATE leakage, role LOGIN expansion, old default ACL changes and a duplicated expected row. Each failed attempt restores the full before snapshot and leaves all fresh schemas/roles absent. Independent OID allocation and modeled event-trigger parity remain exercised. This is not an apply executor: it has no network, target URL, transport override, migration-history write or activation. A future executor still needs qualified target identity, expected target baseline/concurrency checks, exact history append, uncertain-write recovery and independent committed readback. No hosted install or checkout qualification is asserted.
+Actual non-superuser PostgreSQL tests execute the atomic wrapper and reject late old-object changes, public CREATE leakage, role LOGIN expansion, old default ACL changes duplicated/missing expected or existing rows, JSON null additions, and missing semantic ACL entries. Each failed attempt restores the full before snapshot and leaves all fresh schemas/roles absent. Independent OID allocation and modeled event-trigger parity remain exercised. This is not an apply executor: it has no network, target URL, transport override, migration-history write or activation. A future executor still needs qualified target identity, expected target baseline/concurrency checks, exact history append, uncertain-write recovery and independent committed readback. No hosted install or checkout qualification is asserted.
 
 ### Offline transaction envelope, not hosted deployment eligibility
 
 `install-envelope.mjs` is a separate source-only assembler around that unchanged
-47-module atomic installer. Its default migration identity and baseline are null;
+48-module atomic installer. Its default migration identity and baseline are null;
 normal default use rejects SQL emission. An explicit independently reviewed
 identity and exact baseline must be supplied. The local tests supply only a
 clearly synthetic version/name and a real disposable-database snapshot, never
@@ -204,4 +206,37 @@ staged resource-bounded readback plan, suitable transport identity, operational
 headroom and confirmation that the hold is lifted. No such target read is part
 of this source increment.
 
-The pending raw-receipt fence is included in the 47-module closure (source only). Native core links and pending evidence must be empty at install commit; all switches remain off. The mandatory fence harness requires closure-created objects and never transplants fixture SQL. See SETTLEMENT.md for lifecycle limitations.
+The pending raw-receipt fence is included in the 48-module closure (source only). Native core links and pending evidence must be empty at install commit; all switches remain off. The mandatory fence harness requires closure-created objects and never transplants fixture SQL. See SETTLEMENT.md for lifecycle limitations.
+
+## Bounded private state after installation
+
+Module 48 installs the fixed private-state reader in the same atomic transaction,
+after shared permission finalization and with its own bounded owner intervals.
+The existing `supabase_read_only_user` is a prerequisite, never provisioned here.
+Only that actual login can observe bounded emptiness/default-off booleans under
+READ ONLY REPEATABLE READ and <=5s statement/transaction limits. No table reads
+are granted to it; no private row values are returned. See `PRIVATE-STATE.md`.
+The pinned generator, exact generated SQL and preparation source binding agree;
+this additional observation never grants deployment, activation or retry authority.
+
+### Offline combined source packet
+
+`node isolated-runtime/native-store-sandbox-v1/deployment-packet.mjs EXACT_40_CHARACTER_APP_COMMIT`
+emits a review manifest only. It binds the existing atomic SQL assembler,
+ordered SQL source and added-catalog pins independently from the four exact Edge
+source/lock profiles and their configured JWT boundaries. All included source
+and pin bytes must equal that immutable Git commit; dirty substitutions, missing
+files and JWT drift fail closed. It does not carry credentials, target URLs,
+transport operations or deployment authority. Its digest covers this combined
+manifest, not observed hosted state or an installed application build.
+
+Runtime, hosted parity, provider/no-charge evidence, app-build qualification and
+the capacity window remain unqualified in every packet. Passing local source
+validation cannot remove those holds. Existing exact runtime tests and SQL
+qualification remain separate evidence. The current source profile is fresh and
+default-off only; this packet does not authorize applying it to a populated target.
+
+The packet checks the exact committed HEAD/tree and clean tracked source through
+the existing SQL sourceBinding contract, then binds its own generator and the
+transitive SQL preparation scripts in provenance. This is source identity only,
+not evidence of an installed application build or hosted runtime parity.

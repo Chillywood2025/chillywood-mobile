@@ -7,6 +7,7 @@ export async function prepareEnvelopeNativeProof({q,args,bin,env,attempt,absent}
  let cases=0;
  // Fixture privilege only: managed installer has normal migration-writer access.
  q('grant insert,update,delete,maintain on supabase_migrations.schema_migrations to postgres;');
+ q("insert into supabase_migrations.schema_migrations(version,name,statements) values('20260101000001','synthetic_history_array_order',array['first','second',null,'é']);");
  const baseline=JSON.parse(q('begin read only;'+readbackSQL()+'rollback;','supabase_read_only_user'));
  const review={baseline,migration:{version:'20010101000000',name:'native_store_sandbox_synthetic_fixture',sourceDigest:nativeStoreInstallProfile().sourceDigest}};
  const bundle=buildNativeInstallEnvelope(review);
@@ -25,6 +26,12 @@ export async function prepareEnvelopeNativeProof({q,args,bin,env,attempt,absent}
  const oldHistory=structuredClone(review);oldHistory.baseline.historySha256='1'.repeat(64);reject(buildNativeInstallEnvelope(oldHistory).sql,/native_envelope_baseline_changed/u);cases++;
  const oldMoney=structuredClone(review);oldMoney.baseline.moneyControlsSha256='2'.repeat(64);reject(buildNativeInstallEnvelope(oldMoney).sql,/native_envelope_baseline_changed/u);cases++;
  reject(bundle.sql.replace('do $native_envelope_after$',()=>"update supabase_migrations.schema_migrations set name='mutated_existing_history' where version='20260101000000';do $native_envelope_after$"),/native_envelope_history_changed/u);cases++;
+ for(const mutation of [
+  'insert into native_envelope_history select rows from native_envelope_history limit 1;',
+  'delete from native_envelope_history where ctid=(select ctid from native_envelope_history limit 1);',
+  "update supabase_migrations.schema_migrations set statements=array['second','first',null,'é'] where version='20260101000001';",
+  "update supabase_migrations.schema_migrations set statements=array['first','second','é'] where version='20260101000001';"
+ ]){reject(bundle.sql.replace('do $native_envelope_after$',()=>mutation+'do $native_envelope_after$'),/native_envelope_history_changed/u);cases++;}
  reject(bundle.sql.replace("statement_timeout='20s'","statement_timeout='1ms'"),/statement timeout/u);cases++;
  assert.equal(classifyNativeInstallOutcome({before,after:snapshot(),receipt:bundle.receipt}).status,'unchanged_observed');cases++;
  // Separate actual session holds history mutation lock. The installer must fail

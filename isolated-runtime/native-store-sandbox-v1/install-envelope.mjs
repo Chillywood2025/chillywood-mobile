@@ -3,14 +3,15 @@
 import {createHash} from 'node:crypto';
 import {nativeStoreAtomicInstallSQL} from './install-atomic.mjs';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
-import {catalogDigestSQL,dependencyRelations,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
+import {catalogDigestSQL,canonicalItemArrayTextSQL,dependencyRelations,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
 import {verifyNativeInstallDelta} from './install-delta.mjs';
 import {validateReadContext} from '../../scripts/live-room-exact-deploy.mjs';
 const literal=s=>"'"+s.replaceAll("'","''")+"'";
 const sha=s=>createHash('sha256').update(s).digest('hex');
 export const NATIVE_INSTALL_REVIEW=Object.freeze({migration:null,baseline:null});
 export const envelopeHistorySQL="select coalesce(jsonb_agg(jsonb_build_array(version,name,statements) order by version collate \"C\"),'[]'::jsonb) from supabase_migrations.schema_migrations";
-const historyDigestSQL="(select encode(sha256(convert_to(coalesce(jsonb_agg(item order by item::text collate \"C\")::text,'[]'),'UTF8')),'hex') from (select jsonb_build_array(version,name,statements) item from supabase_migrations.schema_migrations) h)";
+const historyItemsSQL="select jsonb_build_array(version,name,statements) item from supabase_migrations.schema_migrations";
+const historyDigestSQL=`(select encode(sha256(convert_to(${canonicalItemArrayTextSQL},'UTF8')),'hex') from (${historyItemsSQL}) h)`;
 const moneyDigestSQL="(select encode(sha256(convert_to(coalesce(jsonb_agg(item order by item::text collate \"C\")::text,'[]'),'UTF8')),'hex') from (select jsonb_build_array(key,state) item from public.platform_money_kill_switches) m)";
 export const envelopeLockRelations=()=>[...new Set([...dependencyRelations(),'supabase_migrations.schema_migrations'])].sort();
 const check=(v,c)=>{if(!v)throw Error(c);};
@@ -41,15 +42,17 @@ export function buildNativeInstallEnvelope(review=NATIVE_INSTALL_REVIEW){
  if exists(select 1 from supabase_migrations.schema_migrations where version=${literal(m.version)}) then raise exception 'native_envelope_history_collision';end if;
  end $native_envelope_before$;
  create temporary table native_envelope_history(rows jsonb) on commit drop;
- insert into native_envelope_history ${envelopeHistorySQL};
+ insert into native_envelope_history ${historyItemsSQL};
  `;
  const append=`
  insert into supabase_migrations.schema_migrations(version,name,statements) values(${literal(m.version)},${literal(m.name)},array[${literal(body)}]::text[]);
- do $native_envelope_after$ declare expected jsonb;actual jsonb;begin
- select rows||jsonb_build_array(${literal(JSON.stringify(receipt))}::jsonb) into strict expected from native_envelope_history;
- ${envelopeHistorySQL} into actual;
- if exists((select value from jsonb_array_elements(expected) except all select value from jsonb_array_elements(actual)) union all
- (select value from jsonb_array_elements(actual) except all select value from jsonb_array_elements(expected))) then raise exception 'native_envelope_history_changed';end if;
+ do $native_envelope_after$ begin
+ if exists(
+ (select rows from native_envelope_history union all select ${literal(JSON.stringify(receipt))}::jsonb
+ except all ${historyItemsSQL})
+ union all
+ (${historyItemsSQL} except all (select rows from native_envelope_history union all select ${literal(JSON.stringify(receipt))}::jsonb))
+ ) then raise exception 'native_envelope_history_changed';end if;
  if ${moneyDigestSQL}<>${literal(b.moneyControlsSha256)} then raise exception 'native_envelope_money_changed';end if;
  end $native_envelope_after$;
  `;

@@ -1,6 +1,7 @@
 // Fixed fresh/default-off source closure. No network, target URL, apply switch,
 // fixture SQL, migration history mutation or provider configuration.
 import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';import {createHash} from 'node:crypto';
+import {nativePrivateStateModuleSQL} from './private-state-readback.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const baselinePath='isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/source-manifest.json';
@@ -23,6 +24,10 @@ export function nativeStoreInstallProfile(){
  function baselineModule(name){const module=baseline.orderedModules.find(m=>m.path==='isolated-runtime/sandbox-commerce-v1/'+name);
   const sql=fs.readFileSync(path.join(root,module.path),'utf8');if(sha(sql)!==module.sha256)throw Error('native_install_source_drift');return {path:module.path,sha256:module.sha256,sql};}
  files.push(finalizer);
+ const readerPath=nativePrefix+'private-state.sql',readerSQL=fs.readFileSync(path.join(root,readerPath),'utf8');
+ const helperPath=nativePrefix+'private-state-readback.mjs';
+ if(sha(fs.readFileSync(path.join(root,helperPath)))!==pinned.files[helperPath]||sha(readerSQL)!==pinned.files[readerPath]||readerSQL!==nativePrivateStateModuleSQL())throw Error('native_install_reader_source_drift');
+ files.push({path:readerPath,sha256:sha(readerSQL),sql:readerSQL});
  return {protocol:'native-store-default-off-install-source-v1',baselineManifestSha256:sha(fs.readFileSync(path.join(root,baselinePath))),
   sourceDigest:sha(JSON.stringify(files.map(({path,sha256})=>({path,sha256})))),files,
   sql:'begin;\n'+files.map(f=>`\n-- SOURCE ${f.path} SHA256 ${f.sha256}\n${f.sql}`).join('\n')+'\ncommit;\n'};

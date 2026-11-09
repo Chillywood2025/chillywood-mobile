@@ -15,7 +15,11 @@ test('semantic rows are bound to existing portable source digest without SQL str
 });
 test('atomic assembler uses actual same-transaction baseline, multiset semantics and deferred checks before sole commit',()=>{
  const sql=nativeStoreAtomicInstallSQL();
- assert.match(sql,/create temporary table native_atomic_before\(snapshot jsonb\) on commit drop/u);
+ assert.match(sql,/create temporary table native_atomic_before\(r jsonb not null\) on commit drop/u);
+ assert.match(sql,/set local enable_hashagg=off;/u);
+ assert.match(sql,/with captured as \(insert into native_atomic_before/u);
+ assert.match(sql,/captured_acls as \(insert into native_atomic_acls/u);
+ assert.doesNotMatch(sql,/jsonb_agg\(item|jsonb_object_agg\(k,v\)|expected_rows jsonb/u);
  assert.match(sql,/set constraints all immediate;/u);assert.match(sql,/except all/iu);
  assert.match(sql,/native_atomic_existing_catalog_changed/u);assert.match(sql,/native_atomic_public_acl_changed/u);
  assert.ok(sql.indexOf('native_atomic_added_catalog_changed')<sql.lastIndexOf('commit;'));

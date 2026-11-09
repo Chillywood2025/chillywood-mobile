@@ -29,7 +29,7 @@ const authoritySource=source('tests/authority.fixture.sql');assert.equal(authori
 // quote/claim/reservation subset silently missed terminal dependencies. Fixtures
 // provide external facts only, never replacement native tables or helpers.
 const installProfile=nativeStoreInstallProfile();
-const externalFixtures='create role anon nologin;create role authenticated nologin;create role service_role nologin;'
+const externalFixtures='create role supabase_read_only_user login nosuperuser nocreaterole nocreatedb noreplication bypassrls;create role anon nologin;create role authenticated nologin;create role service_role nologin;'
  +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declarations supplied by real core')
  +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);';
 // Ask the OS for an available loopback port instead of colliding with a fixed

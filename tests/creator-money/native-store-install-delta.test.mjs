@@ -1,11 +1,16 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {gunzipSync} from 'node:zlib';
 import {describeNativeInstallDelta,verifyNativeInstallDelta,NATIVE_ROLES,deltaSnapshotSQL} from '../../isolated-runtime/native-store-sandbox-v1/install-delta.mjs';
 import {nativeStoreInstallProfile} from '../../isolated-runtime/native-store-sandbox-v1/install-profile.mjs';
 const manifest=JSON.parse(fs.readFileSync(new URL('../../isolated-runtime/native-store-sandbox-v1/install-delta.json',import.meta.url),'utf8'));
 test('pinned added catalog belongs to fixed source closure and remains non-authoritative',()=>{
  assert.equal(manifest.sourceDigest,nativeStoreInstallProfile().sourceDigest);assert.match(manifest.addedCatalogSha256,/^[a-f0-9]{64}$/u);
- assert.equal(manifest.publicFunctions.length,42);assert.equal(new Set(manifest.publicFunctions).size,42);
+ assert.equal(manifest.publicFunctions.length,43);assert.equal(new Set(manifest.publicFunctions).size,43);
  assert.equal(manifest.publicFunctions.filter(name=>name.startsWith('native_store_sandbox_dispatch_v1(')).length,1);
+ assert.ok(manifest.publicFunctions.includes('native_store_private_install_state_v1()'));
+ const pin=JSON.parse(gunzipSync(fs.readFileSync(new URL('../../isolated-runtime/native-store-sandbox-v1/install-atomic-rows.json.gz',import.meta.url))));
+ const readers=pin.rows.filter(row=>row[0]==='function'&&row[1]==='public'&&row[2]==='native_store_private_install_state_v1');
+ assert.equal(readers.length,1);assert.equal(readers[0][3],'');assert.equal(readers[0][6],'sbx_v1_core_owner');
+ assert.deepEqual(readers[0][5],[['sbx_v1_core_owner','sbx_v1_core_owner','EXECUTE',false],['sbx_v1_core_owner','supabase_read_only_user','EXECUTE',false]]);
  assert.equal(manifest.counts.membership,8);assert.equal(manifest.counts.role,4);assert.equal(NATIVE_ROLES.length,4);
  assert.equal(manifest.qualification,'source_delta_only');assert.equal(manifest.deploymentAllowed,false);
 });
