@@ -1,0 +1,192 @@
+[
+  {
+    "typtype": "b",
+    "formatted_type": "bigint",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "boolean",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "bytea",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "character varying(255)",
+    "type_collation": "\"default\""
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "character varying(64)",
+    "type_collation": "\"default\""
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "cognitive_capability_status",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "cognitive_data_class",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "cognitive_environment",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "cognitive_evaluation_status",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "cognitive_platform",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "cognitive_task_status",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "date",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "governance_approval_status",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "governance_decision_status",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "e",
+    "formatted_type": "governance_deliberation_status",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "inet",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "integer",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "integer[]",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "interval",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "json",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "jsonb",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(10,4)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(12,4)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(12,6)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(20,4)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(4,3)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(5,2)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(5,4)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "numeric(8,5)",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "oid",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "smallint",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "text",
+    "type_collation": "\"default\""
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "text[]",
+    "type_collation": "\"default\""
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "timestamp with time zone",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "timestamp without time zone",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "uuid",
+    "type_collation": "-"
+  },
+  {
+    "typtype": "b",
+    "formatted_type": "uuid[]",
+    "type_collation": "-"
+  }
+]

@@ -11,8 +11,55 @@
     "maximum": "20261101215711",
     "sha256": "8ef39413e785edf6381b2d52f4c427415a4528e15314e2419c19a4e181ba5310"
   },
-  "qualification": "pending_observer_successor_requalification",
-  "postPredecessorBaseline": null,
+  "qualification": "independently_reviewed_observer_successor",
+  "postPredecessorBaseline": {
+    "historyCount": 589,
+    "historyMaximum": "20261107191000",
+    "historySha256": "7db07e77d788120f17c4c7fa56b141e0cc77eebe3dad75d49be8b76e50ddb4d2",
+    "catalogSha256": "c050fc19e7076d5368c860de4ac7bc85e8d73240ea5f6366e1bb9dffb9e41961",
+    "dataSha256": "1d4161c605808b3d68678feeeeddbd47c04df4e8ccf54dfe562b42aaebf61d9c",
+    "socialCatalogSha256": "25f1e0f2e57a51f6589e40a94c7b933a27bd31c5c21b197ccb7ebaca47e676f6",
+    "observedAt": "2026-11-09T02:17:07.820372Z",
+    "observedAtMeaning": "Completion upper bound, not exact SQL snapshot timestamp; proof bracket 2026-11-09T02:16:18.496193Z through 2026-11-09T02:17:07.820372Z.",
+    "revenuecat": {
+      "project": "bmkkhihfbmsnnmcqkoly",
+      "status": "ACTIVE",
+      "name": "revenuecat-webhook",
+      "version": 94,
+      "verifyJwt": false,
+      "files": [
+        {
+          "path": "supabase/functions/_shared/expo-push-receipt-policy.mjs",
+          "sha256": "28a5ec1060af8e0339ebf279d55f83699e306175a08682234f52dda1c89ca341"
+        },
+        {
+          "path": "supabase/functions/_shared/expo-push-receipts.ts",
+          "sha256": "20ba1d704bfc1d02ff591ea1c4917f0bb834d37518c0a9c4d38db11fb6fb5be6"
+        },
+        {
+          "path": "supabase/functions/_shared/notification-display-labels.ts",
+          "sha256": "78efba5706811729385a4d2e606d9adb1a8b89458bdb1c3808042d8b5b03085e"
+        },
+        {
+          "path": "supabase/functions/_shared/notification-payload.mjs",
+          "sha256": "6e8ccc4d1fb59ddc62af421af38ae786b1f0b0f4e525637bcca16e3dd74e8eeb"
+        },
+        {
+          "path": "supabase/functions/_shared/provider-readiness.ts",
+          "sha256": "54ab9950029568afaf071b33daa1d93d001f96721c2545c3d1fbde3b88f40c5f"
+        },
+        {
+          "path": "supabase/functions/revenuecat-webhook/index.ts",
+          "sha256": "b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935"
+        },
+        {
+          "path": "supabase/functions/revenuecat-webhook/store-policy.mjs",
+          "sha256": "45b282c4b88b76551158c6fb7f03bbe7bd6c60f85a2766b6ece71755fea487e4"
+        }
+      ]
+    },
+    "evidence": "docs/audits/refund-observer-baseline-20261109.json"
+  },
   "prePredecessorObservation": {
     "observedAt": "2026-11-04T14:48:35.462655+00:00",
     "historyCount": 583,
@@ -204,5 +251,5 @@
       }
     ]
   },
-  "sourceScope": "Current source inventory only; observer589 successor. Exact six predecessor receipts required. Complete independent catalog and data qualification remains pending; observed hashes cannot promote this manifest."
+  "sourceScope": "Independently authenticated observer589 database baseline, exact six receipts and fresh RevenueCat94 prerequisite closure. No target writes, Edge deployment, provider activation or deployment authorization. CLI remains blocked without a current verified Edge transport."
 }

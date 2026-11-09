@@ -21,8 +21,8 @@ test('local PostgreSQL replay preserves exact social catalog across refund insta
     update private.discovery_invalidation_worker_config set enabled=true,collecting=true,primary_delivery_enabled=true,token_sha256=repeat('0',64);
     create role supabase_read_only_user bypassrls;grant usage on schema public,private,auth,supabase_migrations to supabase_read_only_user;
     grant select on all tables in schema public,private,auth,supabase_migrations to supabase_read_only_user;`);
-  const read=async(sql=readbackSql())=>{await db.exec('set session authorization supabase_read_only_user;begin read only;');
-    try{return (await db.exec(sql)).at(-1).rows[0].state;}finally{await db.exec('rollback;set session authorization postgres;');}};
+  const read=async(sql=readbackSql())=>{await db.exec('set session authorization supabase_read_only_user;');
+    try{return (await db.exec(sql)).find(r=>r.rows?.[0]?.state)?.rows[0].state;}finally{await db.exec('rollback;set session authorization postgres;');}};
   const original=await read(probeSql());
   for(const [i,p] of [...bundle.predecessors,...bundle.social].entries()){
     const body=fs.readFileSync(paths[i],'utf8');await db.exec(body);
@@ -30,6 +30,9 @@ test('local PostgreSQL replay preserves exact social catalog across refund insta
   }
   await db.exec('grant select on all tables in schema public,private,auth,supabase_migrations to supabase_read_only_user;');
   const before=await read(),local={...bundle,manifest:{...bundle.manifest,originalHistory:{count:1,maximum:'20261101215711',sha256:original.originalHistorySha256}}};
+  await db.exec(`set chillywood.refund_readback='{"readbackProtocol":"refund589-bounded-readback-v1","injected":true}'`);
+  assert.deepEqual(await read(),before,'stale session payload cannot bypass initialized readback stages');
+  await db.exec('reset chillywood.refund_readback');
   assert.equal(before.socialCatalogSha256,bundle.manifest.socialCatalogSha256,'social target matches separately frozen source catalog');
   assert.equal(classifyProbe(local,before),'post_observer_requires_independent_requalification');assert.ok(before.holds);
   local.manifest.qualification='independently_reviewed_observer_successor';
