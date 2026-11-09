@@ -1,0 +1,11 @@
+[
+  {
+    "file": "_lib/nativeStoreSandboxProduct.ts",
+    "function": "readNativeSandboxAppEvidence",
+    "receiver": "v",
+    "property": "schema",
+    "operator": "!==",
+    "literal": "app-transaction-evidence-v1",
+    "reason": "Readonly native AppTransaction evidence discriminator, not a Supabase schema method."
+  }
+]

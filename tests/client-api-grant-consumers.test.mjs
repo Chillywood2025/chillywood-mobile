@@ -143,3 +143,22 @@ test('finite table sources and wrapper parameters cannot be mutated behind the a
   assert.throws(() => check([['_lib/platformFinance.ts', `function readTableCount(table: string) {
     table = 'new_table'; return client.from(table).select('*'); } readTableCount('known_table');`]]), /mutated/u);
 });
+
+
+test('native app evidence discriminator has one exact non-Data-API classification, not a file exemption',()=>{
+ const file='_lib/nativeStoreSandboxProduct.ts';
+ const source='export function readNativeSandboxAppEvidence(){ const v = evidence; return v.schema !== "app-transaction-evidence-v1"; }';
+ assert.deepEqual(discover([[file,source]]),[]);
+ for(const [name,changed] of [
+  ['app/probe.ts',source],
+  [file,source.replace('readNativeSandboxAppEvidence','otherFunction')],
+  [file,source.replace('app-transaction-evidence-v1','different-schema')],
+  [file,source.replace('v.schema','v.from')],
+  [file,source.replace('v.schema','client.schema')],
+  [file,source.replace('!==','===')],
+  [file,source.replace('v.schema !== "app-transaction-evidence-v1"','v["schema"] !== "app-transaction-evidence-v1"')],
+  [file,source.replace('return v.schema !== "app-transaction-evidence-v1"','const extracted = v.schema; return extracted')],
+  [file,source.replace('return v.schema !== "app-transaction-evidence-v1"','return v.schema("private").from("known_table").select("*")')],
+  [file,source+' client.from("new_table").delete();'],
+ ])assert.throws(()=>assertClientGrantCoverage(discover([[name,changed]]),fixture),/unclassified|not covered|Unclassified/u);
+});
