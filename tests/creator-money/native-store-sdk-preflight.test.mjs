@@ -10,6 +10,7 @@ function fixture({identity=async()=>A.userId,payments=async()=>true,products=asy
  let current=A,productReads=0;const listeners=new Set();
  const quote={creatorId:'creator',amountMinor:199,currency:'usd',catalog:{store:'APP_STORE',wireProductId:'sku'}};
  const bindings={
+  'expo-modules-core':{requireOptionalNativeModule:()=>null},
   'react-native':{Platform:{OS:'ios'}},
   './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>current,sameAccountSessionAuthority:(a,b)=>JSON.stringify(a)===JSON.stringify(b),subscribeToAccountSessionAuthority:f=>{listeners.add(f);return()=>listeners.delete(f);}},
   './entitlementAuthority':{withAuthorityReadDeadline:async(p,fallback)=>{let timer;try{return await Promise.race([p,new Promise(r=>{timer=setTimeout(()=>r(fallback),25);})]);}finally{clearTimeout(timer);}}},

@@ -12,11 +12,13 @@ async function fixture(mode:Mode,command="offer",payload:Record<string,unknown>=
   calls.push({path,body,authorization:req.headers.get("authorization"),apikey:req.headers.get("apikey")});
   if(path==="/auth/v1/user")return Response.json(mode==="auth-failed"?{message:"invalid token"}:{id:user,email:"synthetic@example.invalid"},{status:mode==="auth-failed"?401:200});
   if(path==="/rest/v1/rpc/wave1_session_authority_readback")return Response.json({authoritative:true,state:"ACTIVE",restoreOnly:false,userId:mode==="wrong-user"?uuid(8):user,accountId:user,sessionGeneration:mode==="session-mismatch"?uuid(9):session});
-  if(path==="/rest/v1/rpc/native_store_sandbox_command_v1"||path==="/rest/v1/rpc/native_store_sandbox_reservation_v1"){
+  if(path==="/rest/v1/rpc/native_store_sandbox_command_v1"||path==="/rest/v1/rpc/native_store_sandbox_reservation_v1"||path==="/rest/v1/rpc/native_store_sandbox_dispatch_v1"||path==="/rest/v1/rpc/native_store_sandbox_terminal_v1"){
    if(mode==="rpc-loss")return null;
    const reservation=command==="reserve-recover";
+   const terminal=command==="cancel-preparation"||command==="terminal-recover";
+   const dispatch=command.startsWith("dispatch-");
    return Response.json({protocol:reservation?"native-store-sandbox-reservation-v1":"native-store-sandbox-command-v1",command,requestId,actor:{userId:mode==="forged-result"?uuid(8):user,accountId:user,sessionGeneration:session},
-    status:reservation?"unknown":"held",data:reservation?{reservation:null,reason:"reservation_unknown"}:{quote:null,reason:"catalog_unavailable"},dispatchAllowed:false,...reservation?{providerQualified:false}:{correlation:"unsupported"}});
+    status:reservation?"unknown":"held",data:reservation?{reservation:null,reason:"reservation_unknown"}:terminal?{terminal:null,reason:"consumption_unresolved"}:dispatch?command==="dispatch-qualification"?{qualification:null,reason:"qualification_unavailable"}:{attempt:null,qualification:null,newlyConsumed:false,reason:"qualification_unavailable"}:{quote:null,reason:"catalog_unavailable"},dispatchAllowed:false,...reservation?{providerQualified:false}:{correlation:"unsupported"}});
   }
   return new Response("unexpected route",{status:500});
  };
@@ -47,3 +49,17 @@ for(const mode of ["auth-failed","session-mismatch","wrong-user"] as const)Deno.
 Deno.test("exact endpoint rejects client-authored buyer or service scope",async()=>{const r=await fixture("ok","offer",{offerId:`scv1_offer_${uuid(4)}`,store:"APP_STORE",p_user_id:uuid(8),serviceRole:true});check(r.status===400);check(r.calls.length===2);});
 Deno.test("exact endpoint adapts reservation RPC with no dispatch authority",async()=>{const r=await fixture("ok","reserve-recover",{selectionId:`nssv1_selection_${uuid(5)}`});check(r.status===200);check(r.calls[2].path.endsWith("native_store_sandbox_reservation_v1"));check(r.response.status==="unknown"&&r.response.dispatchAllowed===false&&r.response.correlation==="unsupported");});
 for(const mode of ["rpc-loss","forged-result"] as const)Deno.test(`exact endpoint keeps ${mode} uncertain without retry`,async()=>{const r=await fixture(mode);check(r.status===503);check(r.response.retryPurchase===false);check(r.calls.length===3);});
+
+for(const command of ["dispatch-qualification","dispatch-consume"] as const)Deno.test(`exact SDK routes ${command} to server-owned qualification RPC without caller authority`,async()=>{
+ const payload=command==="dispatch-qualification"?{selectionId:`nssv1_selection_${uuid(5)}`}:{selectionId:`nssv1_selection_${uuid(5)}`,reservationId:`nssv1_reservation_${uuid(6)}`};
+ const r=await fixture("ok",command,payload);check(r.status===200);check(r.calls.length===3);const c=r.calls[2];check(c.path.endsWith("native_store_sandbox_dispatch_v1"));check(c.authorization==="Bearer synthetic-service");
+ check(JSON.stringify(c.body)===JSON.stringify({p_user_id:user,p_session_id:session,p_command:command,p_request_id:requestId,p_payload:payload}));check(r.response.status==="held"&&r.response.dispatchAllowed===false&&r.response.data.qualification===null);
+ const bad=await fixture("ok",command,{...payload,verified:true});check(bad.status===400);check(bad.calls.length===2);
+});
+
+for(const command of ["cancel-preparation","terminal-recover"] as const)Deno.test(`exact endpoint routes ${command} to bound terminal RPC without purchase authority`,async()=>{
+ const payload={selectionId:`nssv1_selection_${uuid(5)}`},r=await fixture("ok",command,payload);check(r.status===200);check(r.calls.length===3);
+ check(r.calls[2].path.endsWith("native_store_sandbox_terminal_v1"));check(r.calls[2].authorization==="Bearer synthetic-service");
+ check(JSON.stringify(r.calls[2].body)===JSON.stringify({p_user_id:user,p_session_id:session,p_command:command,p_request_id:requestId,p_payload:payload}));
+ check(r.response.dispatchAllowed===false&&r.response.data.terminal===null&&r.response.status==="held");
+});

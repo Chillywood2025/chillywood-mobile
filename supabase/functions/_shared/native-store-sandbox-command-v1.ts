@@ -1,7 +1,10 @@
-/** Normal-app quote/preparation only. No purchase SDK or provider mutation. */
+import { validNativeTerminalData } from "./native-store-sandbox-terminal-contract-v1.ts";
+import { validNativeDispatchData } from "./native-store-sandbox-dispatch-contract-v1.ts";
+/** Normal-app command boundary. No purchase SDK or provider mutation.
+ * Dispatch evidence is accepted only from the authenticated server executor. */
 export type NativeStoreSandboxActorV1 = { userId:string;accountId:string;sessionGeneration:string };
 export type NativeStoreSandboxRequestV1 = { protocol:"native-store-sandbox-command-v1";requestId:string;
- command:"offer"|"prepare"|"recover"|"claim"|"claim-recover"|"reserve"|"reserve-recover";payload:Record<string,unknown> };
+ command:"cancel-preparation"|"terminal-recover"|"offer"|"prepare"|"recover"|"claim"|"claim-recover"|"reserve"|"reserve-recover"|"dispatch-consume"|"dispatch-recover"|"dispatch-qualification";payload:Record<string,unknown> };
 const row=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==="object"&&!Array.isArray(v);
 const keys=(v:Record<string,unknown>,names:string[])=>Object.keys(v).length===names.length&&names.every(k=>Object.hasOwn(v,k));
 const uuid=(v:unknown):v is string=>typeof v==="string"&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(v);
@@ -25,6 +28,9 @@ export function validNativeStoreSandboxQuoteV1(v:unknown):v is Record<string,unk
 export function parseNativeStoreSandboxRequestV1(v:unknown):NativeStoreSandboxRequestV1|null {
  if(!row(v)||!keys(v,["protocol","requestId","command","payload"])||v.protocol!=="native-store-sandbox-command-v1"||!uuid(v.requestId)||!row(v.payload))return null;
  const p=v.payload;
+ if(v.command==="cancel-preparation"||v.command==="terminal-recover")return keys(p,["selectionId"])&&id(p.selectionId,"nssv1_selection_")?v as NativeStoreSandboxRequestV1:null;
+ if(v.command==="dispatch-qualification")return keys(p,["selectionId"])&&id(p.selectionId,"nssv1_selection_")?v as NativeStoreSandboxRequestV1:null;
+ if(v.command==="dispatch-consume"||v.command==="dispatch-recover")return keys(p,["selectionId","reservationId"])&&id(p.selectionId,"nssv1_selection_")&&id(p.reservationId,"nssv1_reservation_")?v as NativeStoreSandboxRequestV1:null;
  if(v.command==="reserve"||v.command==="reserve-recover")return keys(p,["selectionId"])&&id(p.selectionId,"nssv1_selection_")?v as NativeStoreSandboxRequestV1:null;
  if(v.command==="claim"||v.command==="claim-recover")return keys(p,v.command==="claim"?["selectionId","transactionIdentifier","productIdentifier"]:["selectionId"])
  &&id(p.selectionId,"nssv1_selection_")&&(v.command==="claim-recover"||(text(p.transactionIdentifier)&&text(p.productIdentifier)))?v as NativeStoreSandboxRequestV1:null;
@@ -37,10 +43,13 @@ export function parseNativeStoreSandboxRequestV1(v:unknown):NativeStoreSandboxRe
 export function validateNativeStoreSandboxResultV1(v:unknown,actor:NativeStoreSandboxActorV1,request:NativeStoreSandboxRequestV1):boolean {
  if(!row(v)||!keys(v,["protocol","command","requestId","actor","status","data","dispatchAllowed","correlation"])
  ||v.protocol!==request.protocol||v.command!==request.command||v.requestId!==request.requestId||canonical(v.actor)!==canonical(actor)
- ||v.dispatchAllowed!==false||v.correlation!=="unsupported"||!row(v.data)||!["ok","held","unknown"].includes(v.status as string))return false;
+ ||(!request.command.startsWith("dispatch-")&&v.dispatchAllowed!==false)||v.correlation!=="unsupported"||!row(v.data)||!["ok","held","unknown"].includes(v.status as string))return false;
+ if(request.command==="cancel-preparation"||request.command==="terminal-recover")return validNativeTerminalData(v.data,{command:request.command,requestId:request.requestId,selectionId:request.payload.selectionId,status:v.status,dispatchAllowed:v.dispatchAllowed});
+ if(request.command.startsWith("dispatch-"))return validNativeDispatchData(v.data,{command:request.command,requestId:request.requestId,selectionId:request.payload.selectionId,reservationId:request.payload.reservationId,sessionGeneration:actor.sessionGeneration,status:v.status,dispatchAllowed:v.dispatchAllowed});
  if(request.command==="reserve"||request.command==="reserve-recover"){
   const d=v.data,r=d.reservation;
   if(!keys(d,["reservation","reason"]))return false;
+  if(v.status==="held")return r===null&&["reservation_terminal","selection_terminal"].includes(d.reason as string);
   if(v.status==="unknown")return request.command==="reserve-recover"&&r===null&&d.reason==="reservation_unknown";
   return v.status==="ok"&&d.reason===null&&validNativeStoreSandboxReservationV1(r)&&r.selectionId===request.payload.selectionId
    &&(request.command!=="reserve"||r.originalRequestId===request.requestId);

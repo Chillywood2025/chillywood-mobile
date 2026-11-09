@@ -5,8 +5,15 @@
     "isolated-runtime/native-store-sandbox-v1/journal.sql": "363c91af19e26e7a8ba89d392b668d711a542382dbc0a007f8acadf8273a5142",
     "isolated-runtime/native-store-sandbox-v1/quote.sql": "0fa036a446433f8eb52d608bc21f478a476eb9b6c2daf4cc1893321aa7167410",
     "isolated-runtime/native-store-sandbox-v1/claim.sql": "f47ffcf6c52498f55c9c67ef6bbdf1f11a63fcd689186ee756789072ed194ab0",
-    "isolated-runtime/native-store-sandbox-v1/reservation.sql": "c53c52864c6328ca6a022fca6b576773db9954b2edbf628b4435ff32080a9e54",
-    "isolated-runtime/native-store-sandbox-v1/install-check.sql": "5d1f0fb1baf803c01485861ba0e1b3a3413703d213e7b9c222f412e9841a771b",
-    "isolated-runtime/native-store-sandbox-v1/dispatch-attempt.sql": "68196483976cdb4cde359c480108a122c6078c34593f235a33b143413e79bd80"
+    "isolated-runtime/native-store-sandbox-v1/reservation.sql": "54b6b1d0ec98cc5aa1d74f649c8da8615694df25f6735680604a7c67a7f7649f",
+    "isolated-runtime/native-store-sandbox-v1/install-check.sql": "9c3fe1cf99816acd8e5f6c171ac45c5632f4ee167594a0fa61590079b327b694",
+    "isolated-runtime/native-store-sandbox-v1/dispatch-attempt.sql": "68196483976cdb4cde359c480108a122c6078c34593f235a33b143413e79bd80",
+    "isolated-runtime/native-store-sandbox-v1/pending-fence.sql": "23bae691cf2fa3352d8079d841b8e200c5b3ef4c050848aae027d52acc6ad7b0",
+    "isolated-runtime/native-store-sandbox-v1/qualified-dispatch.sql": "40a2bf37428d2f6f6d26c1f96afe38fabef9f662d41ffdfcbc189bde0edc932f",
+    "isolated-runtime/native-store-sandbox-v1/settlement-source.sql": "abef692f6436dcdf2845f22f4646663ebe9dd188f0fca76df04117fab55d207a",
+    "isolated-runtime/native-store-sandbox-v1/settlement-effects.sql": "3b56554f199e07cc0e0b346de08af3a5d15258f46b10ec1eafac4a63af0883a4",
+    "isolated-runtime/native-store-sandbox-v1/terminal.sql": "a05f5c59e9c1f73374c192a5fb47c7c27ac2cbaa8a45859675047bb6aaffbb9b",
+    "isolated-runtime/native-store-sandbox-v1/effect-candidate.sql": "4d49510298a628b83a6190517bba0fdbb16d6b822be3cb4f19b3c9ec86b60c39",
+    "isolated-runtime/native-store-sandbox-v1/native-access.sql": "88f33c4a051498359ca14e0dfcf83e17a8ff3320cc9b4420704f14b676a8dc24"
   }
 }

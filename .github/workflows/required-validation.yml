@@ -181,6 +181,20 @@ jobs:
           native_deno="$GITHUB_WORKSPACE/isolated-runtime/native-store-edge-tool/node_modules/@deno/linux-x64-glibc/deno"
           "$native_deno" cache --config supabase/functions/native-store-sandbox-command-v1/deno.json --frozen supabase/functions/native-store-sandbox-command-v1/index.ts
           node isolated-runtime/native-store-sandbox-v1/edge-runtime.mjs --deno "$native_deno"
+      - name: Verify pinned native private-range endpoint and playback boundary
+        run: |
+          native_deno="$GITHUB_WORKSPACE/isolated-runtime/native-store-edge-tool/node_modules/@deno/linux-x64-glibc/deno"
+          "$native_deno" cache --config supabase/functions/native-store-paid-video-range-v1/deno.json --frozen supabase/functions/native-store-paid-video-range-v1/index.ts
+          node isolated-runtime/native-store-sandbox-v1/range-edge-runtime.mjs --deno "$native_deno"
+          node --test ops/isolated-paid-video-worker/native-range.test.mjs tests/creator-money/native-store-private-range.test.mjs tests/creator-money/native-store-range-profile.test.mjs tests/native-store-paid-video-playback.test.mjs
+      - name: Qualify default-off native ingress and reconciliation runtimes on loopback only
+        env:
+          DENO_DIR: ${{ runner.temp }}/native-store-edge-deno-cache
+        run: |
+          native_deno="$GITHUB_WORKSPACE/isolated-runtime/native-store-edge-tool/node_modules/@deno/linux-x64-glibc/deno"
+          "$native_deno" cache --config supabase/functions/native-store-ingress-v1/deno.json --frozen supabase/functions/native-store-ingress-v1/index.ts
+          "$native_deno" cache --config supabase/functions/native-store-reconcile-v1/deno.json --frozen supabase/functions/native-store-reconcile-v1/index.ts
+          node isolated-runtime/native-store-sandbox-v1/worker-edge-runtime.mjs --deno "$native_deno"
       - name: Typecheck creator commerce and reporting Edge boundaries
         run: DENO_NO_PACKAGE_JSON=1 deno check --node-modules-dir=none --no-lock supabase/functions/create-creator-tip-checkout/index.ts supabase/functions/stripe-tip-webhook/index.ts supabase/functions/stripe-event-auction-checkout/index.ts supabase/functions/stripe-event-auction-webhook/index.ts supabase/functions/stripe-room-auction-checkout/index.ts supabase/functions/stripe-room-auction-webhook/index.ts supabase/functions/google-play-external-reporter/index.ts supabase/functions/stripe-merch-checkout/index.ts supabase/functions/stripe-merch-webhook/index.ts supabase/functions/stripe-merch-cost-reconcile/index.ts supabase/functions/merch-tracking-webhook/index.ts supabase/functions/merch-tracking-reconcile/index.ts supabase/functions/creator-event-broadcast/index.ts supabase/functions/stripe-auction-cost-reconcile/index.ts supabase/functions/stripe-auction-test-transfer/index.ts supabase/functions/merch-reconciliation-driver/index.ts supabase/functions/auction-observation-driver/index.ts supabase/functions/auction-approved-automation/index.ts supabase/functions/stripe-fee-report-import/index.ts
       - name: Run exact role and explicit permission checks
@@ -391,6 +405,12 @@ jobs:
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --reservation-proof
       - name: Verify dormant one-shot native attempt consumption and crash recovery
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --dispatch-proof
+      - name: Qualify native pending receipt delivery fences on actual managed source
+        run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --pending-fence-proof
+      - name: Qualify dormant native dispatch against actual managed source
+        run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --qualified-dispatch-proof
+      - name: Qualify private native effects, terminal slots and authenticated replay on actual managed source
+        run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --managed-install --qualified-dispatch-proof --effects-proof
       - name: Verify prerequisite and caller-owned image identity controls
         run: |
           python3 scripts/ci/paid-video-prerequisites/provision_test.py
@@ -463,6 +483,8 @@ jobs:
           bash modules/chillywood-camera-effects/android/run-lifecycle-tests.sh
           cc -std=c11 -Wall -Wextra -Werror -pedantic modules/chillywood-camera-effects/ios/tests/camera_effect_math_test.c -lm -o "$RUNNER_TEMP/camera-effect-math-test"
           "$RUNNER_TEMP/camera-effect-math-test"
+      - name: Typecheck read-only StoreKit app evidence and execute native policy (no store read)
+        run: bash tests/native-app-evidence/check-apple-sdk.sh
       - name: Verify PaidVideo native source and compile-evidence boundaries
         run: node --test tests/ci/paid-video-native-closure.test.mjs
       - name: Compile actual Android and iOS camera, Test Store and Crypto modules without signing or provider credentials

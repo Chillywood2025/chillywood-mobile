@@ -360,3 +360,15 @@ verify_jwt = false
 # Normal-app authenticated quote/assertion boundary. SQL controls remain off;
 # this declaration grants neither native purchase dispatch nor settlement.
 verify_jwt = true
+
+[functions.native-store-paid-video-range-v1]
+# Separate authenticated private-range boundary; native and gateway runtime
+# controls remain default off. No public asset URL or purchase authority.
+verify_jwt = true
+# Dormant service-only reconciliation; exact service bearer is checked in-handler.
+[functions.native-store-reconcile-v1]
+verify_jwt = true
+
+# Provider shared-secret authentication is performed by dormant ingress.
+[functions.native-store-ingress-v1]
+verify_jwt = false

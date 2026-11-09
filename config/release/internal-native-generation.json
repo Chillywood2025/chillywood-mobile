@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v21",
+  "generation": "internal-native-v22",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v21",
-    "ios": "1.0.0-ios-production-v21"
+    "android": "1.0.0-android-production-v22",
+    "ios": "1.0.0-ios-production-v22"
   },
   "supersedes": {
-    "generation": "internal-native-v20",
-    "androidRuntimeVersion": "1.0.0-android-production-v20",
-    "iosRuntimeVersion": "1.0.0-ios-production-v20",
-    "androidCompatibilityDigest": "44a0ea69f93d99cd811d5dc399aee029b7aeafb5e448d1436f8d8add36765a85",
-    "iosCompatibilityDigest": "1e2bcf8d913f11a6aab22c25dc81f773f5650d071a4764f129f6e3a80b078ff4"
+    "generation": "internal-native-v21",
+    "androidRuntimeVersion": "1.0.0-android-production-v21",
+    "iosRuntimeVersion": "1.0.0-ios-production-v21",
+    "androidCompatibilityDigest": "a0d0bdf51a6029e52186ae056c2e931f33b63cb2f9d76acdb1e706aa9c9c4dc5",
+    "iosCompatibilityDigest": "d71f53ce412fc4fb36c1b0985ec9db20e36dcdb192089eefbd250c06c1c26114"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "a0d0bdf51a6029e52186ae056c2e931f33b63cb2f9d76acdb1e706aa9c9c4dc5",
-    "iosDigest": "d71f53ce412fc4fb36c1b0985ec9db20e36dcdb192089eefbd250c06c1c26114"
+    "androidDigest": "6b8900bcf2c05520edf001ab661bfab0e9b9037534b179af7bcd79bbb3f0c9a4",
+    "iosDigest": "90a2fc454799dce3e2cfcb5d9c8c04babc4115c88424500e891d0b1b3cc0d30a"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V21 is a prospective source cohort for PaidVideo Test Store v3 native admission, its debug configuration and pinned Expo Crypto dependency. V20 and earlier runtimes, signed artifacts and canonical compatibility digests remain immutable. Existing internal channels, tester audiences, app-owned activation, production generation and held Android106 restrictions are unchanged. Fresh matching signed binaries and platform-specific native and physical qualification are required; this metadata grants no build, deployment, submission, OTA, public release or payment activation authority. Provider identity, sandbox financial qualification, billing capability and production readiness remain separate gates."
+    "reason": "V22 is a prospective source cohort for the dormant read-only StoreKit AppTransaction evidence adapter and native module inputs. V21 and earlier runtimes, signed artifacts and canonical compatibility digests remain immutable. Existing internal channels, tester audiences, app-owned activation, production generation and held Android106 restrictions are unchanged. Fresh matching signed binaries and platform-specific native and physical qualification are required; this metadata grants no build, deployment, submission, OTA, public release or payment activation authority. AppTransaction evidence alone is not purchase, account, exact-build or provider qualification."
   }
 }

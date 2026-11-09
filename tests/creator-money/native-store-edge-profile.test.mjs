@@ -11,7 +11,7 @@ test('native command preparation includes exact transitive local closure and exp
  assert.equal(result.verify_jwt,true);assert.equal(result.hostedQualified,false);assert.equal(result.runtimeQualified,false);assert.equal(result.dispatchAllowed,false);
  assert.deepEqual(result.files.map(file=>file.name),[
   'supabase/functions/_shared/exact-subject-authority.ts','supabase/functions/_shared/livekit-session-generation.ts',
-  'supabase/functions/_shared/native-store-sandbox-command-v1.ts','supabase/functions/_shared/stripe-connect.ts',
+  'supabase/functions/_shared/native-store-sandbox-command-v1.ts','supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1.ts','supabase/functions/_shared/native-store-sandbox-terminal-contract-v1.ts','supabase/functions/_shared/stripe-connect.ts',
   'supabase/functions/native-store-sandbox-command-v1/deno.json','supabase/functions/native-store-sandbox-command-v1/deno.lock',
   'supabase/functions/native-store-sandbox-command-v1/index.ts',
  ]);

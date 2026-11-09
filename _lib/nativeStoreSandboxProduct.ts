@@ -1,3 +1,4 @@
+import { requireOptionalNativeModule } from "expo-modules-core";
 import { Platform } from "react-native";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
@@ -33,5 +34,40 @@ export async function readNativeSandboxDeviceProduct(authority: AccountSessionAu
     if (retired || !sameAccountSessionAuthority(expected, getCurrentAccountSessionAuthoritySnapshot()) || sdkUser !== expected.userId) return held("sdk_account_unavailable");
     return { status: "matched" as const, reason: null, dispatchAllowed: false as const, environmentVerified: false as const };
   } catch { return held(); }
+  finally { unsubscribe(); }
+}
+
+/** Explicit OS app evidence read, never purchase admission. Not run on startup
+ * or by catalog availability. Apple may require network/authentication/UI. */
+export async function readNativeSandboxAppEvidence(authority: AccountSessionAuthorityBinding) {
+  const expected = Object.freeze({ ...authority });
+  const unavailable = () => Object.freeze({ status: "unavailable" as const, evidence: null,
+    dispatchAllowed: false as const, providerQualified: false as const });
+  if (Platform.OS !== "ios" || expected.state !== "ACTIVE" || expected.restoreOnly || expected.userId !== expected.accountId
+    || !sameAccountSessionAuthority(expected, getCurrentAccountSessionAuthoritySnapshot())
+    || isIsolatedTestStoreFlavor() || isIsolatedTestStoreV2Flavor() || isIsolatedTestStoreV3Flavor()) return unavailable();
+  let retired = false;
+  const unsubscribe = subscribeToAccountSessionAuthority(current => { if (!sameAccountSessionAuthority(expected, current)) retired = true; });
+  try {
+    const native = requireOptionalNativeModule<{ readAppTransactionEvidence?: () => Promise<unknown> }>("ChillywoodTestStoreAdmission");
+    if (!native?.readAppTransactionEvidence) return unavailable();
+    const value = await withAuthorityReadDeadline(native.readAppTransactionEvidence(), null);
+    if (retired || !sameAccountSessionAuthority(expected, getCurrentAccountSessionAuthoritySnapshot()) || !value || typeof value !== "object" || Array.isArray(value)) return unavailable();
+    const v = value as Record<string, unknown>;
+    const fields = ["schema", "status", "evidenceScope", "environment", "bundleID", "signedAppVersion", "unsignedNativeVersion", "unsignedNativeBuild", "dispatchAllowed", "providerQualified", "iapQualified", "accountQualified", "exactBuildVerified"];
+    const scalar = (x: unknown): x is string => typeof x === "string" && x.length > 0 && x.length <= 512 && x.trim() === x && !/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(x);
+    if (Object.keys(v).length !== fields.length || !fields.every(k => Object.hasOwn(v, k))
+      || v.schema !== "app-transaction-evidence-v1" || v.evidenceScope !== "app_only" || v.status !== "verified"
+      || !["SANDBOX", "PRODUCTION", "XCODE"].includes(String(v.environment)) || v.bundleID !== "com.chillywood.mobile"
+      || !scalar(v.signedAppVersion) || !(v.unsignedNativeVersion === null || scalar(v.unsignedNativeVersion))
+      || !(v.unsignedNativeBuild === null || scalar(v.unsignedNativeBuild))
+      || ["dispatchAllowed", "providerQualified", "iapQualified", "accountQualified", "exactBuildVerified"].some(k => v[k] !== false)) return unavailable();
+    // Whitelist scalars; never pass through a native error, receipt or identifier.
+    return Object.freeze({ status: "observed" as const, evidence: Object.freeze({ environment: v.environment as "SANDBOX" | "PRODUCTION" | "XCODE",
+      bundleID: v.bundleID, signedAppVersion: v.signedAppVersion, unsignedNativeVersion: v.unsignedNativeVersion as string | null,
+      unsignedNativeBuild: v.unsignedNativeBuild as string | null, evidenceScope: "app_only" as const,
+      iapQualified: false as const, accountQualified: false as const, exactBuildVerified: false as const }),
+      dispatchAllowed: false as const, providerQualified: false as const });
+  } catch { return unavailable(); }
   finally { unsubscribe(); }
 }

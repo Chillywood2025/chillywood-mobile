@@ -1,3 +1,4 @@
+import {syntheticNativePurchaseOwner} from '../../tests/helpers/native-store-sdk-owner.mjs';
 import assert from 'node:assert/strict';import path from 'node:path';import {randomUUID} from 'node:crypto';import {spawn} from 'node:child_process';import {setTimeout as delay} from 'node:timers/promises';
 export async function runDispatchAttemptCases(x){
  const {q,args,bin,env,children,json,call,actor,buyer,session,other,otherSession,newSession,offer,route,asset,nativeCatalog,preparePayload,clientBindings,clientSource,api,freshNativeFixture}=x;
@@ -21,7 +22,7 @@ export async function runDispatchAttemptCases(x){
  const first=consume(r.id,id);assert.equal(first.newlyConsumed,true);assert.equal(first.dispatchAllowed,false);assert.equal(first.attempt.state,'consumed');assert.equal(first.attempt.originalSessionGeneration,session);cases++;
  for(const who of [actor,{userId:buyer,sessionGeneration:newSession}]){const repeated=consume(r.id,id,false,who);assert.equal(repeated.newlyConsumed,false);assert.deepEqual(repeated.attempt,first.attempt);assert.equal(consume(r.id,randomUUID(),true,who).newlyConsumed,false);}cases++;
  reject(owner+'select '+expression(r.id,randomUUID())+';',/native_store_attempt_conflict/u);
- for(const sql of ['update sandbox_commerce_v1.native_store_dispatch_attempts set request_id=gen_random_uuid()','delete from sandbox_commerce_v1.native_store_dispatch_attempts','truncate sandbox_commerce_v1.native_store_dispatch_attempts'])reject(sql+';',/native_store_quote_immutable/u);cases++;
+ for(const sql of ['update sandbox_commerce_v1.native_store_dispatch_attempts set request_id=gen_random_uuid()','delete from sandbox_commerce_v1.native_store_dispatch_attempts','truncate sandbox_commerce_v1.native_store_dispatch_attempts,sandbox_commerce_v1.native_store_qualified_attempts,sandbox_commerce_v1.native_store_allocations,sandbox_commerce_v1.native_store_reservation_terminals'])reject(sql+';',/native_store_quote_immutable/u);cases++;
  // A lost response after commit and a crash before hypothetical SDK invocation
  // both leave the same durable, non-reissuable evidence. No SDK exists here.
  const lost=alternative(),lostId=randomUUID();consume(lost.id,lostId);assert.equal(consume(lost.id,lostId).newlyConsumed,false);cases++;
@@ -50,6 +51,33 @@ export async function runDispatchAttemptCases(x){
  assert.deepEqual(saved.consumedAttempt,consumed.attempt);assert.equal(saved.userId,buyer);
  live={...original,sessionGeneration:newSession};const restarted=await connect();
  try{const result=await restarted.retrySavedClaim();assert.equal(result.data.claim.transactionIdentifier,'synthetic-original-owner-consumed');assert.equal(result.data.claim.evidence,'client_assertion');assert.equal(result.dispatchAllowed,false);assert.equal(result.data.claim.settlementAllowed,false);}finally{restarted.dispose();}cases++;
+ // Join the actual shared wrapper to the actual retained client and actual SQL.
+ // The only SDK boundary is syntheticNativePurchaseOwner's deferred test double.
+ for(const crash of [false,true]){
+  const scope=freshNativeFixture('wrapper-consume-'+crash),savedMemory=new Map(),savedStorage={getItem:async key=>savedMemory.get(key)??null,setItem:async(key,value)=>{savedMemory.set(key,value);}};
+  live={...original};let network=0,sdkCalls=0,complete,fail,entered;
+  const reached=new Promise(resolve=>entered=resolve),sdkResult=new Promise((resolve,reject)=>{complete=resolve;fail=reject;});
+  const connectScope=async()=>{const exports={};new Function('exports','require','fetch',clientSource)(exports,n=>bindings[n],async(url,opts)=>{network++;return handler(new Request(url,opts));});return exports.captureNativeSandboxQuoteClient(live,scope.payload.offerId,scope.payload.store,{storage:savedStorage});};
+  const before=await connectScope(),selection=(await before.prepare((await before.offer()).data.quote)).data.selection;await before.retainPurchaseAttempt(selection.id);
+  const reservation=(await before.recoverPurchaseAttempt()).data.reservation,consumeId=randomUUID(),evidence=consume(reservation.id,consumeId);
+  assert.equal(evidence.dispatchAllowed,false);assert.equal(evidence.providerQualified,false);
+  // Fabricated flags or substituted reservation never even create a sink.
+  for(const patch of [{dispatchAllowed:true},{providerQualified:true},{reservationId:'nssv1_reservation_'+randomUUID()}])await assert.rejects(before.createCallbackRetainer(selection.id,{...evidence.attempt,...patch}),e=>e.code==='invalid_request');
+  const sink=await before.createCallbackRetainer(selection.id,evidence.attempt),priorNetwork=network;
+  const wrapper=syntheticNativePurchaseOwner({readAuthority:()=>live,purchase:async()=>{sdkCalls++;entered();return sdkResult;}});
+  const product={identifier:scope.nativeCatalog.wireProductId,price:selection.quote.amountMinor/100,priceString:'synthetic price',title:'Synthetic',description:'Test only'};
+  const invoked=wrapper.purchaseRevenueCatStoreProduct(product,{authority:original,retainPurchaseEvidence:sink});
+  const rejected=assert.rejects(invoked,crash?/synthetic process interruption/u:/authority/u);await reached;
+  live={...original,userId:other,accountId:other,sessionGeneration:otherSession};before.dispose();
+  if(crash)fail(Error('synthetic process interruption before callback'));else complete({productIdentifier:product.identifier,transaction:{productIdentifier:product.identifier,transactionIdentifier:'wrapper-original-'+crash,purchaseDate:'2026-11-09T00:00:00Z',purchaseToken:'DO_NOT_RETAIN'},customerInfo:{entitlements:{active:{},all:{}},activeSubscriptions:[],originalAppUserId:buyer}});
+  await rejected;assert.equal(sdkCalls,1);assert.equal(network,priorNetwork);assert.equal([...savedMemory.values()].join('').includes('DO_NOT_RETAIN'),false);
+  assert.equal(consume(reservation.id,consumeId,true,{userId:buyer,sessionGeneration:newSession}).newlyConsumed,false);
+  assert.equal(consume(reservation.id,consumeId,false,{userId:buyer,sessionGeneration:newSession}).newlyConsumed,false);
+  live={...original,sessionGeneration:newSession};const after=await connectScope();try{
+   if(crash){await assert.rejects(after.retrySavedClaim(),e=>e.code==='invalid_request');assert.equal(savedMemory.size,2);}
+   else{const result=await after.retrySavedClaim();assert.equal(result.data.claim.transactionIdentifier,'wrapper-original-false');assert.equal(result.data.claim.evidence,'client_assertion');assert.equal(result.data.claim.settlementAllowed,false);assert.equal(result.dispatchAllowed,false);}
+  }finally{after.dispose();}assert.equal(sdkCalls,1);cases++;
+ }
  assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');cases++;
  console.log(JSON.stringify({protocol:'native-store-private-consume-proof-v1',cases,passed:cases,dispatchAllowed:false,providerQualified:false}));
 }
