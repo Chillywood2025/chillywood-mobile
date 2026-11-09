@@ -14,12 +14,13 @@ export const catalogRowsSQL=`select coalesce(jsonb_agg(item order by item::text 
 export const publicAclSQL=`select coalesce(jsonb_agg(jsonb_build_array(pg_get_userbyid(a.grantor),case when a.grantee=0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end,a.privilege_type,a.is_grantable) order by pg_get_userbyid(a.grantor) collate "C",a.grantee,a.privilege_type,a.is_grantable),'[]'::jsonb) from pg_namespace n cross join lateral aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) a where n.nspname='public';`;
 const relationSchema=x=>typeof x==='string'?schemas.find(s=>x.startsWith(s+'.')):null;
 const acl=(value,type,owner)=>`(select coalesce(jsonb_agg(jsonb_build_array(pg_get_userbyid(a.grantor),case when a.grantee=0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end,a.privilege_type,a.is_grantable) order by pg_get_userbyid(a.grantor) collate "C",case when a.grantee=0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end collate "C",a.privilege_type,a.is_grantable),'[]'::jsonb) from aclexplode(${type?`coalesce(${value},acldefault(${type},${owner}))`:value}) a)`;
-export const aclRowsSQL=`select coalesce(jsonb_object_agg(k,v),'{}'::jsonb) from (
+export const aclItemsSQL=`
  select 'function:'||n.nspname||'.'||p.proname||'('||pg_get_function_identity_arguments(p.oid)||')' k,${acl('p.proacl',"'f'",'p.proowner')} v from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in('sandbox_commerce_v1','native_store_sandbox_v1','public') and p.prokind in('f','p')
  union all select 'relation:'||n.nspname||'.'||c.relname,${acl('c.relacl',"case when c.relkind='S' then 'S'::\"char\" else 'r'::\"char\" end",'c.relowner')} from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in('sandbox_commerce_v1','native_store_sandbox_v1') and c.relkind in('r','p','v','m','S')
  union all select 'schema:'||n.nspname,${acl('n.nspacl',"'n'",'n.nspowner')} from pg_namespace n where n.nspname in('sandbox_commerce_v1','native_store_sandbox_v1')
  union all select 'column:'||a.attrelid::regclass::text||'.'||a.attname,${acl('a.attacl')} from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in('sandbox_commerce_v1','native_store_sandbox_v1') and a.attnum>0 and not a.attisdropped and c.relkind in('r','p','v','m','S')
- ) acl_items;`;
+ `;
+export const aclRowsSQL=`select coalesce(jsonb_object_agg(k,v),'{}'::jsonb) from (${aclItemsSQL}) acl_items;`;
 export const deltaSnapshotSQL=`select jsonb_build_object('bootstrapSuperuser',(select rolname from pg_roles where oid=10 and rolsuper),'rows',(${catalogRowsSQL.replace(/;$/u,'')}),'publicAcl',(${publicAclSQL.replace(/;$/u,'')}),'acls',(${aclRowsSQL.replace(/;$/u,'')}));`;
 export function normalizeAdded(row,acls,bootstrap){
  const copy=[...row];let key,index;

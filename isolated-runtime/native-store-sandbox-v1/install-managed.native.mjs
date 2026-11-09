@@ -125,7 +125,24 @@ try{
   ['alter role native_store_sandbox_v1_owner login;','native_atomic_added_catalog_changed'],
   ['alter default privileges for role postgres grant execute on functions to service_role;','native_atomic_existing_catalog_changed']
  ]){reject(atomic.replace('-- Force the original',()=>mutation+'\n-- Force the original'),new RegExp(reason,'u'));absent();assert.deepEqual(JSON.parse(q(deltaSnapshotSQL)),beforeInstall);cases++;}
- reject(atomic.replace('select snapshot into strict b from native_atomic_before;',()=>"select snapshot into strict b from native_atomic_before; expected_rows:=expected_rows||jsonb_build_array(expected_rows->0);"),/native_atomic_added_catalog_changed/u);absent();assert.deepEqual(JSON.parse(q(deltaSnapshotSQL)),beforeInstall);cases++;
+ for(const mutation of [
+  'insert into native_atomic_expected select r from native_atomic_expected limit 1;',
+  'delete from native_atomic_expected where ctid=(select ctid from native_atomic_expected limit 1);',
+  "insert into native_atomic_expected values('null'::jsonb);"
+ ]){reject(atomic.replace('create temporary table native_atomic_added_rows',()=>mutation+'create temporary table native_atomic_added_rows'),/native_atomic_added_catalog_changed/u);absent();assert.deepEqual(JSON.parse(q(deltaSnapshotSQL)),beforeInstall);cases++;}
+ for(const mutation of [
+  'insert into native_atomic_before select r from native_atomic_before limit 1;',
+  'delete from native_atomic_before where ctid=(select ctid from native_atomic_before limit 1);'
+ ]){reject(atomic.replace('-- Force the original',()=>mutation+'-- Force the original'),/native_atomic_existing_catalog_changed/u);absent();assert.deepEqual(JSON.parse(q(deltaSnapshotSQL)),beforeInstall);cases++;}
+ reject(atomic.replace('create temporary table native_atomic_added_rows',()=>"delete from native_atomic_acls where k='function:public.native_store_private_install_state_v1()'; create temporary table native_atomic_added_rows"),/native_atomic_acl_missing/u);absent();assert.deepEqual(JSON.parse(q(deltaSnapshotSQL)),beforeInstall);cases++;
+ // The rowwise verifier retains PostgreSQL JSONB equality (including numeric
+ // spelling), duplicates and NULL-valued JSON elements, not text equality.
+ assert.equal(q(`begin;set local enable_hashagg=off;set local work_mem='64kB';
+ select count(*) from ((select v from (values ('1'::jsonb),('1.00'::jsonb),('null'::jsonb),('["é",null]'::jsonb)) a(v)
+ except all select v from (values ('1.0'::jsonb),('null'::jsonb),('["é",null]'::jsonb)) b(v))) differences;rollback;`),'1');cases++;
+ const setPlan=JSON.parse(q("begin;set local enable_hashagg=off;explain (format json) select v from (values ('1'::jsonb),('1'::jsonb)) a(v) except all select '1'::jsonb;rollback;"));
+ assert.equal(setPlan[0].Plan['Node Type'],'SetOp');assert.equal(setPlan[0].Plan.Strategy,'Sorted');cases++;
+
  const result=attempt(atomic);assert.equal(result.status,0,result.stderr);cases++;
  const afterInstall=JSON.parse(q(deltaSnapshotSQL));
  const sourceDelta=verifyNativeInstallDelta(beforeInstall,afterInstall);cases++;

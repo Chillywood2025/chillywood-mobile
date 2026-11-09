@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {buildNativeInstallEnvelope,classifyNativeInstallOutcome,envelopeLockRelations} from '../../isolated-runtime/native-store-sandbox-v1/install-envelope.mjs';
 import {nativeStoreInstallProfile} from '../../isolated-runtime/native-store-sandbox-v1/install-profile.mjs';
@@ -27,4 +28,11 @@ test('uncertain outcome needs exact read context/catalog/history and never autho
  assert.deepEqual(classifyNativeInstallOutcome({before,after:structuredClone(before),receipt:bundle.receipt}),{status:'unchanged_observed',retryAllowed:false,deploymentAllowed:false});
  for(const after of [null,{}, {...before,catalog:null},{...before,moneyControlsSha256:'d'.repeat(64)},{...before,history:[]},{...before,context:{...context,transactionReadOnly:false}}])assert.deepEqual(classifyNativeInstallOutcome({before,after,receipt:bundle.receipt}),{status:'outcome_unknown',retryAllowed:false,deploymentAllowed:false});
  assert.equal(classifyNativeInstallOutcome({before,after:before,receipt:['20010101000000','native_store_sandbox_fixture',['wrong source']]}).status,'outcome_unknown');
+});
+
+test('history verification is rowwise multiset with unchanged canonical text digest and no budget reset',()=>{
+ const source=fs.readFileSync(new URL('../../isolated-runtime/native-store-sandbox-v1/install-envelope.mjs',import.meta.url),'utf8');
+ assert.match(source,/insert into native_envelope_history \$\{historyItemsSQL\}/u);
+ assert.match(source,/canonicalItemArrayTextSQL/u);
+ assert.doesNotMatch(source,/declare expected jsonb;actual jsonb|rows\|\|jsonb_build_array/u);
 });
