@@ -7,10 +7,12 @@ import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {fileURLToPath} from 'node:url';import {createRequire} from 'node:module';
 import {spawnSync,spawn} from 'node:child_process';import {randomUUID,webcrypto} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';import process from 'node:process';
+import {createServer} from 'node:net';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 globalThis.crypto??=webcrypto;
 assert.equal(process.argv[2],'--local-bin');assert.ok([4,5,6].includes(process.argv.length));const flags=process.argv.slice(4);
-assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof','--dispatch-proof','--pending-fence-proof','--qualified-dispatch-proof'].includes(f)));
+assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof','--dispatch-proof','--pending-fence-proof','--qualified-dispatch-proof','--startup-collision-proof'].includes(f)));
+const collisionProof=flags.includes('--startup-collision-proof');if(collisionProof)assert.deepEqual(flags,['--startup-collision-proof']);
 const managed=flags.includes('--managed-install'),reservationProof=flags.includes('--reservation-proof');if(reservationProof||flags.includes('--dispatch-proof')||flags.includes('--pending-fence-proof')||flags.includes('--qualified-dispatch-proof'))assert.ok(managed);
 const bin=process.argv[3];assert.ok(path.isAbsolute(bin));const administrator=managed?'fixture_admin':'postgres';
 const here=path.dirname(fileURLToPath(import.meta.url)),runtime=path.resolve(here,'../sandbox-commerce-v1'),root=path.resolve(here,'../..');
@@ -26,7 +28,22 @@ const install='begin;create role anon nologin;create role authenticated nologin;
  +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declarations supplied by real core')
  +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'+files.map(source).join('\n')
  +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+fs.readFileSync(path.join(here,'claim.sql'),'utf8')+fs.readFileSync(path.join(here,'reservation.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
-const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),port=flags.includes('--qualified-dispatch-proof')?'55494':flags.includes('--pending-fence-proof')?'55492':'55490',db='quote_'+randomUUID().replaceAll('-','');
+// Ask the OS for an available loopback port instead of colliding with a fixed
+// high/ephemeral port. Closing before pg_ctl is necessarily TOCTOU: a competing
+// bind still fails closed with the original bounded diagnostics; never retry
+// against or stop a process based on its port.
+async function availableLoopbackPort(){
+ const server=createServer();
+ return new Promise((resolve,reject)=>{
+  server.once('error',reject);
+  server.listen({host:'127.0.0.1',port:0,exclusive:true},()=>{
+   const address=server.address();
+   server.close(error=>error?reject(error):resolve(String(address.port)));
+  });
+ });
+}
+const port=collisionProof?'55490':await availableLoopbackPort();
+const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),db='quote_'+randomUUID().replaceAll('-','');
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PG')));
 const args=(database,user=administrator)=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U',user,'-d',database];
 const run=(tool,argv,input)=>spawnSync(path.join(bin,tool),argv,{input,encoding:'utf8',env,timeout:30000,maxBuffer:8*1024*1024});

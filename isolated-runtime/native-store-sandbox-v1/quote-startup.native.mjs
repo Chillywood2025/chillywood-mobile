@@ -16,7 +16,7 @@ try{
  ok('initdb',['-D',data,'-U','postgres','--encoding=UTF8','--no-locale','--auth=trust']);
  ok('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(work,'occupant.log'),'-o',"-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p 55490",'start']);
  const pid=fs.readFileSync(path.join(data,'postmaster.pid'),'utf8').split('\n')[0];
- const result=spawnSync(process.execPath,[fileURLToPath(new URL('./quote.native.mjs',import.meta.url)),'--local-bin',bin],{env:{...env,TMPDIR:childTemp},encoding:'utf8',timeout:45000,maxBuffer:1024*1024});
+ const result=spawnSync(process.execPath,[fileURLToPath(new URL('./quote.native.mjs',import.meta.url)),'--local-bin',bin,'--startup-collision-proof'],{env:{...env,TMPDIR:childTemp},encoding:'utf8',timeout:45000,maxBuffer:1024*1024});
  assert.equal(result.error,undefined);assert.notEqual(result.status,0);assert.match(result.stderr,/quote_native_startup_server_log_tail/u);
  assert.match(result.stderr,/Address already in use|could not create any TCP\/IP sockets/u);
  assert.equal(fs.readFileSync(path.join(data,'postmaster.pid'),'utf8').split('\n')[0],pid);
