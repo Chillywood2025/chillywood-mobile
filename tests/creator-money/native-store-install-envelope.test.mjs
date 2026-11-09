@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {buildNativeInstallEnvelope,classifyNativeInstallOutcome,envelopeLockRelations} from '../../isolated-runtime/native-store-sandbox-v1/install-envelope.mjs';
 import {nativeStoreInstallProfile} from '../../isolated-runtime/native-store-sandbox-v1/install-profile.mjs';
@@ -35,4 +36,17 @@ test('history verification is rowwise multiset with unchanged canonical text dig
  assert.match(source,/insert into native_envelope_history \$\{historyItemsSQL\}/u);
  assert.match(source,/canonicalItemArrayTextSQL/u);
  assert.doesNotMatch(source,/declare expected jsonb;actual jsonb|rows\|\|jsonb_build_array/u);
+});
+
+test('one independent typed expected receipt is reused without RETURNING or duplicated literals',()=>{
+ const b=buildNativeInstallEnvelope(review()),literal=x=>"'"+x.replaceAll("'","''")+"'";
+ assert.equal(b.sql.split(literal(b.receipt[2][0])).length-1,1);
+ assert.equal(b.sql.includes(literal(JSON.stringify(b.receipt))),false);
+ assert.equal((b.sql.match(/select jsonb_build_array\(version,name,statements\) from native_envelope_expected_receipt/gu)||[]).length,2);
+ assert.ok(b.sql.indexOf('insert into native_envelope_expected_receipt')<b.sql.indexOf('insert into supabase_migrations.schema_migrations'));
+ assert.match(b.sql,/native_envelope_expected_receipt\(version text,name text,statements text\[\]\) on commit drop/u);
+ assert.ok(b.sql.includes(createHash('sha256').update(b.receipt[2][0]).digest('hex')));
+ assert.match(b.sql,/count\(\*\) from native_envelope_expected_receipt\)<>1/u);
+ assert.match(b.sql,/array_ndims\(statements\)=1 and array_lower\(statements,1\)=1 and cardinality\(statements\)=1/u);
+ assert.doesNotMatch(b.sql,/insert into supabase_migrations\.schema_migrations[^;]*returning/iu);
 });

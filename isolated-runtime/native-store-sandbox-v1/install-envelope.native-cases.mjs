@@ -27,6 +27,13 @@ export async function prepareEnvelopeNativeProof({q,args,bin,env,attempt,absent}
  const oldMoney=structuredClone(review);oldMoney.baseline.moneyControlsSha256='2'.repeat(64);reject(buildNativeInstallEnvelope(oldMoney).sql,/native_envelope_baseline_changed/u);cases++;
  reject(bundle.sql.replace('do $native_envelope_after$',()=>"update supabase_migrations.schema_migrations set name='mutated_existing_history' where version='20260101000000';do $native_envelope_after$"),/native_envelope_history_changed/u);cases++;
  for(const mutation of [
+  "update native_envelope_expected_receipt set statements=array['coherently changed'];update supabase_migrations.schema_migrations set statements=array['coherently changed'] where version='20010101000000';",
+  "delete from native_envelope_expected_receipt;delete from supabase_migrations.schema_migrations where version='20010101000000';",
+  'insert into native_envelope_expected_receipt select * from native_envelope_expected_receipt;',
+  'delete from native_envelope_expected_receipt;',
+  "update native_envelope_expected_receipt set statements=array[null]::text[];",
+  "update supabase_migrations.schema_migrations set statements=array[statements[1],null] where version='20010101000000';",
+  "update supabase_migrations.schema_migrations set name='changed_new_receipt' where version='20010101000000';",
   'insert into native_envelope_history select rows from native_envelope_history limit 1;',
   'delete from native_envelope_history where ctid=(select ctid from native_envelope_history limit 1);',
   "update supabase_migrations.schema_migrations set statements=array['second','first',null,'é'] where version='20260101000001';",
