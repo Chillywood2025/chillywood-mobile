@@ -51,3 +51,51 @@ control/revocation contention in both directions, historical raw-parent replay
 after rotation/revocation, malformed retained evidence, and off-switch behavior. The required
 native PostgreSQL CI job runs this harness using its already verified engine.
 These are synthetic local tests, not store/provider or installed-device proof.
+
+## Exact local command endpoint runtime
+
+The normal command endpoint has its own `deno.json`, remapping the shared
+`npm:@supabase/supabase-js@2` import to official `2.110.6`. Other endpoints and
+mobile dependencies are unchanged. Its genuine Deno v5 lock pins all nine npm
+packages by SHA-512 integrity. The source profile includes the configuration and
+lock bytes and explicitly supplies `import_map_path`; unrecognized external
+imports, missing locks and floating configuration fail closed.
+
+Prepare the isolated official Linux x64 Deno tool (no lifecycle scripts), resolve
+only the committed frozen endpoint dependencies, then test the exact prepared
+bundle in a new temporary directory:
+
+```sh
+npm ci --ignore-scripts --no-audit --no-fund --prefix isolated-runtime/native-store-edge-tool
+export DENO_DIR=/tmp/native-store-edge-deno-cache
+native_deno="$PWD/isolated-runtime/native-store-edge-tool/node_modules/@deno/linux-x64-glibc/deno"
+"$native_deno" cache --config supabase/functions/native-store-sandbox-command-v1/deno.json --frozen supabase/functions/native-store-sandbox-command-v1/index.ts
+node isolated-runtime/native-store-sandbox-v1/edge-runtime.mjs --deno "$native_deno"
+```
+
+The runner requires exact Deno 2.9.6, removes inherited application environment,
+uses cached-only dependencies, and permits networking only to `127.0.0.1`.
+Eight actual-entrypoint/real-SDK tests verify caller bearer + anon-key verification,
+exact session readback, service credentials only on subsequent RPC, body injection
+rejection, failed auth/session mismatch, reservation-envelope adaptation, forged
+results and a genuine command-RPC TCP disconnect with no automatic retry. HTTP
+Auth/RPC responses are synthetic loopback fixtures, not a hosted Supabase project
+or actual PostgreSQL. Existing native database proofs remain separate.
+
+Only the successful local runner emits `localRuntimeQualified:true` for its exact
+source/lock digests. Static source preparation still reports runtime qualification
+false. Hosted gateway behavior, deployment/readback and hosted lock enforcement
+remain unqualified; provider qualification and dispatch stay false. In particular,
+Deno 2.9.6 local success is not a claim that Supabase's hosted runtime is identical.
+
+Official guidance checked November 9, 2026:
+- https://supabase.com/docs/guides/functions/dependencies recommends isolated
+  per-function `deno.json` for deployment; legacy import maps need explicit paths.
+- https://supabase.com/docs/guides/security/npm-security recommends exact Edge
+  pins and committed integrity locks.
+- https://supabase.com/changelog.md identifies CLI v3 local-default target changes
+  and the November 10 legacy TLS-cipher removal. No CLI deployment, target query,
+  security-setting change or TLS bypass is part of this proof.
+
+Mandatory Required Validation uses this endpoint-specific tool/config/lock rather
+than changing the versions or floating dependency behavior of unrelated jobs.
