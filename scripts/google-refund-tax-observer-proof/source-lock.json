@@ -24,7 +24,7 @@
     "scripts/google-refund-tax-deployment-manifest.json": "d1f9627fbf836747b34ea2a943071c371359f7b5f8331aae3e5559ab90321687",
     "scripts/google-refund-tax-exact-deploy.mjs": "2dcf77149709e0838028f2c4ae72e0c6ad0e0bedba5b721d2164f5b2b301fd7e",
     "scripts/google-refund-tax-observer-deployment-manifest.json": "6f2ac12577ac867a3aa7cd268fe29d71aec65599f53a597a076664fad5be3133",
-    "scripts/google-refund-tax-observer-exact-deploy.mjs": "d031ffba23ee6c5b0071b7189cc8550ff129afd0a7882a982d774aea9f8c1481",
+    "scripts/google-refund-tax-observer-exact-deploy.mjs": "616c91e5febc892bb772a4981051d44e1e43c1922ccc65620aeb0f48e9824309",
     "scripts/google-refund-tax-observer-proof/inverse-catalog-delta.json": "c382b549eada157ab2880b37d2738c6118935f56bb733cf16e6a0bb70ef3e0e5",
     "scripts/google-refund-tax-observer-proof/inverse-native-capture-manifest.json": "2c7948d2db9ca3366b4a798d6b60b93d0ed57f57ef3fe39f10b2be61db38b0c5",
     "scripts/google-refund-tax-observer-proof/inverse-native-executed-packet-hashes.txt": "3de3e65c9ce9f1386ea680d820030c2b07f4b1bf98ebccac3406e189f3a40b5a",
