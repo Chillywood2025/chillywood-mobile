@@ -494,7 +494,13 @@ export async function readRevenueCatSubscriptionProducts(productIdentifiers: str
   }
 }
 
-export type RevenueCatMutationOptions = { authority?: AccountSessionAuthorityBinding | null };
+export type RevenueCatPurchaseEvidence = Readonly<{ productIdentifier: string; transactionIdentifier: string }>;
+const validRetainedPurchaseText = (value: unknown): value is string => typeof value === "string" && !!value
+  && value.length <= 512 && value.trim() === value && !/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(value)
+  && [...value].reduce((bytes, char) => { const point = char.codePointAt(0)!; return bytes + (point < 128 ? 1 : point < 2048 ? 2 : point <= 0xffff ? 3 : 4); }, 0) <= 512;
+export type RevenueCatMutationOptions = { authority?: AccountSessionAuthorityBinding | null;
+  // Dormant local-only evidence sink. Never purchase permission or receipt proof.
+  retainPurchaseEvidence?: (evidence: RevenueCatPurchaseEvidence, originalAuthority: Readonly<AccountSessionAuthorityBinding>) => Promise<void> };
 const requireRevenueCatMutationAuthority = async (options?: RevenueCatMutationOptions) => {
   const current = await readCurrentAccountSessionAuthority();
   const expected = options?.authority === undefined ? current : options.authority;
@@ -511,7 +517,10 @@ const runRevenueCatMutation = <T>(
   operation: () => Promise<unknown>,
   valid: (value: unknown) => value is T,
 ) => {
-  const authorityHint = options?.authority ?? getCurrentAccountSessionAuthoritySnapshot();
+  const suppliedAuthority = options?.authority;
+  const retainEvidence = mutationKey.startsWith("purchase:") ? options?.retainPurchaseEvidence : undefined;
+  const authorityHint = suppliedAuthority ?? getCurrentAccountSessionAuthoritySnapshot();
+  const expectedSnapshot = retainEvidence && authorityHint ? Object.freeze({ ...authorityHint }) : authorityHint;
   const exactFlightKey = JSON.stringify([
     mutationKey,
     authorityHint?.userId ?? "read-current-authority",
@@ -520,14 +529,44 @@ const runRevenueCatMutation = <T>(
     authorityHint?.restoreOnly ?? false,
   ]);
 
+  // A shared SKU is not an intent/resource identity. Returning an existing
+  // purchase promise would let two independent callers claim one transaction.
+  // Restore remains safely coalesced. The original purchase belongs to its
+  // initiating caller; uncertain outcomes require reconciliation, not another
+  // purchase. Package and product share this key.
+  if (mutationKey.startsWith("purchase:") && revenueCatMutationFlights.has(exactFlightKey)) {
+    return Promise.reject(new Error("A purchase for this product is already in progress."));
+  }
   return runKeyedSingleFlight(revenueCatMutationFlights, exactFlightKey, async () => {
-    const expectedAuthority = options?.authority ?? await readCurrentAccountSessionAuthority();
+    const expectedAuthority = retainEvidence ? expectedSnapshot : suppliedAuthority ?? await readCurrentAccountSessionAuthority();
     if (!expectedAuthority) {
       throw new Error("RevenueCat mutation authority is unavailable for the current account.");
     }
     return serializeRevenueCatIdentityOperation(async () => {
       const authority = await requireRevenueCatMutationAuthority({ authority: expectedAuthority });
       const result = await operation();
+      if (retainEvidence) {
+        // Capture the exact transaction whitelist before current-account checks
+        // can retire this operation. The sink belongs to its original purchaser.
+        const expectedProduct = mutationKey.slice("purchase:".length);
+        if (!record(result) || result.productIdentifier !== expectedProduct || !record(result.transaction)
+          || result.transaction.productIdentifier !== expectedProduct || !validRetainedPurchaseText(expectedProduct)
+          || !validRetainedPurchaseText(result.transaction.transactionIdentifier)) {
+          throw new Error("RevenueCat purchase outcome requires reconciliation: evidence unavailable.");
+        }
+        const evidence = Object.freeze({ productIdentifier: expectedProduct, transactionIdentifier: result.transaction.transactionIdentifier });
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try { await Promise.race([retainEvidence(evidence, Object.freeze({ ...authority })), new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("evidence retention deadline")), 15000);
+        })]); }
+        catch { throw new Error("RevenueCat purchase outcome requires reconciliation: evidence retention unconfirmed."); }
+        finally { clearTimeout(timer); }
+        if (result.productIdentifier !== evidence.productIdentifier || !record(result.transaction)
+          || result.transaction.productIdentifier !== evidence.productIdentifier
+          || result.transaction.transactionIdentifier !== evidence.transactionIdentifier) {
+          throw new Error("RevenueCat purchase outcome requires reconciliation: retained evidence changed.");
+        }
+      }
       if (!valid(result)) throw new Error("RevenueCat returned a malformed mutation result.");
       await requireRevenueCatMutationAuthority({ authority });
       return result;
@@ -541,13 +580,20 @@ export function purchaseRevenueCatPackage(pkg: PurchasesPackage, options?: Reven
   if (!appStorePurchasesEnabled()) return Promise.reject(new Error("App Store purchases are disabled for this build."));
   if (!isPackage(pkg)) return Promise.reject(new Error("RevenueCat package is malformed."));
   const expectedProductIdentifier = normalizeIdentityText(pkg.product.identifier);
+  const expectedPackageIdentifier = pkg.identifier;
   if (pkg.product.identifier !== expectedProductIdentifier) {
     return Promise.reject(new Error("RevenueCat package product identity is malformed."));
   }
   return runRevenueCatMutation(
-    `purchase-package:${expectedProductIdentifier}`,
+    `purchase:${expectedProductIdentifier}`,
     options,
-    () => Purchases.purchasePackage(pkg),
+    () => {
+      if (!isPackage(pkg) || pkg.identifier !== expectedPackageIdentifier
+        || pkg.product.identifier !== expectedProductIdentifier) {
+        return Promise.reject(new Error("RevenueCat package identity changed before purchase."));
+      }
+      return Purchases.purchasePackage(pkg);
+    },
     (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
   );
 }
@@ -562,9 +608,14 @@ export function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct, o
     return Promise.reject(new Error("RevenueCat product identity is malformed."));
   }
   return runRevenueCatMutation(
-    `purchase-product:${expectedProductIdentifier}`,
+    `purchase:${expectedProductIdentifier}`,
     options,
-    () => Purchases.purchaseStoreProduct(product),
+    () => {
+      if (!isStoreProduct(product) || product.identifier !== expectedProductIdentifier) {
+        return Promise.reject(new Error("RevenueCat product identity changed before purchase."));
+      }
+      return Purchases.purchaseStoreProduct(product);
+    },
     (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
   );
 }

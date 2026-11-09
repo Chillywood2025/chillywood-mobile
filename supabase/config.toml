@@ -355,3 +355,8 @@ verify_jwt = false
 # Separate default-off configured secret; bounded encrypted record-only intake.
 # Sealing never grants behavioral qualification or economic projection.
 verify_jwt = false
+
+[functions.native-store-sandbox-command-v1]
+# Normal-app authenticated quote/assertion boundary. SQL controls remain off;
+# this declaration grants neither native purchase dispatch nor settlement.
+verify_jwt = true

@@ -9,6 +9,8 @@ import { useMediaPicker } from "../../hooks/useMediaPicker";
 import { type PaidVideoUpload } from "../../_lib/isolatedPaidVideo";
 import { AppBackButton } from "../navigation/app-back-button";
 import { isIsolatedTestStoreV3Flavor } from "../../_lib/isolatedTestStoreV3Build";
+import { isIsolatedTestStoreFlavor } from "../../_lib/isolatedTestStoreBuild";
+import { isIsolatedTestStoreV2Flavor } from "../../_lib/isolatedTestStoreV2Build";
 import { IsolatedPaidVideoV2Screen } from "./isolated-paid-video-v2-screens";
 
 const path = (kind: "upload" | "offer" | "status", id: string) => `/sandbox-videos/${kind}/${encodeURIComponent(id)}` as Href;
@@ -114,6 +116,7 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
       <Text style={styles.body}>{(state.offer.amountMinor / 100).toFixed(2)} {state.offer.currency.toUpperCase()}</Text>
       <Text style={styles.body}>A published offer does not establish a completed purchase or playback access.</Text>
       <Action testID="paid-video-offer-link" disabled={unavailable} onPress={() => router.push(path("offer", state.offer!.id))}>Review offer</Action>
+      {!isIsolatedTestStoreFlavor() && !isIsolatedTestStoreV2Flavor() && <Action testID="paid-video-native-store-quote" disabled={unavailable} onPress={() => router.push(`/sandbox-videos/native-offer/${encodeURIComponent(state.offer!.id)}` as Href)}>Review native store sandbox quote</Action>}
       <Action testID="paid-video-retire" disabled={noMutation || !state.upload || state.offer.status !== "published"} onPress={() => safeRun(a => a.retireOffer())}>Retire test offer</Action>
     </View>}
     {(page === "offer" || page === "upload") && <Action testID="paid-video-checkout" disabled onPress={() => undefined}>Test checkout unavailable</Action>}

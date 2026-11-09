@@ -65,6 +65,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
     "react-native-safe-area-context": { SafeAreaView: primitive("SafeAreaView") }, "expo-router": { useLocalSearchParams: () => params, useRouter: () => ({ push: p => navigations.push(p), replace: p => navigations.push(p), canGoBack: () => false }) },
     "../../_lib/session": { useSession: () => ({ user: current ? { id: current.userId } : null, authority: current && { ...current }, isLoading: false }) },
     "../../_lib/isolatedPaidVideoActions": actions, "../navigation/app-back-button": { AppBackButton: primitive("AppBackButton") },
+    "../../_lib/isolatedTestStoreBuild": { isIsolatedTestStoreFlavor: () => false }, "../../_lib/isolatedTestStoreV2Build": { isIsolatedTestStoreV2Flavor: () => false },
     "../../_lib/isolatedTestStoreV3Build": { isIsolatedTestStoreV3Flavor: () => false }, "./isolated-paid-video-v2-screens": { IsolatedPaidVideoV2Screen: () => { throw Error("Wrong native flavor"); } } });
   const root = createRoot(container()); const visible = () => nodes.slice(Math.max(0, nodes.findLastIndex(n => n.name === "ImageBackground")));
   const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(done => setImmediate(done)); };
