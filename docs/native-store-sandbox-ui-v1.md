@@ -175,3 +175,76 @@ non-macOS platforms. We therefore do not assume a mapping. OriginalAppVersion's
 sandbox constant is not used as current appVersion evidence. Synthetic tests
 intentionally use different signed, build and marketing values; they are not
 installed-app qualification or signed-build attestation.
+
+### Terminal disposition client boundary
+
+The existing authenticated command endpoint now routes `cancel-preparation`
+and `terminal-recover` to the distinct service-only terminal RPC. The client
+persists the original cancellation UUID before sending and reuses it after an
+uncertain response; it never erases the saved selection, reservation, callback,
+or SDK marker. Cancellation is a server request to prove no consumption, not
+interpretation of an SDK cancellation. All terminal responses keep dispatch
+false. An allocated terminal carries an exact grant identifier for a future
+fresh gateway check, not cached access permission. Refunded-before-allocation
+terminals carry no grant. A cancellation before any reservation can have a null
+reservation ID without creating a slot merely to abandon preparation.
+
+Successor storage is append-only: a fresh authenticated terminal for the exact
+old selection permits a deterministic successor pointer, never deletion or
+rearming of the original quote, callback, cancellation or SDK record. Captured
+clients pin their generation. Late original writes therefore cannot overwrite a
+new generation. The shared-SKU marker advances by the same terminal-backed
+rule, including across offers. Reads revalidate terminal evidence, are bounded,
+and stop closed on missing/conflicting records. This is a local device fence;
+server active-slot/consumption locking remains authoritative across devices.
+
+The normal branded screen exposes explicit terminal read, abandon-unconsumed,
+and new-selection actions. Consumed/uncertain attempts cannot be abandoned by
+interpreting an SDK cancellation. Allocated terminals still require fresh media
+access checks; refunded-before-allocation terminals grant no access. Dispatcher
+markers are now per selection; any matching original per-offer marker remains a
+fallback fence. No timeout resets or purchase retries are introduced. Synthetic
+client/mounted/orchestrator tests pass; actual backend terminal integration and
+native playback qualification remain separate checks, not claimed here.
+
+### Distinct native playback UI
+
+Only an authenticated `allocated` terminal supplies the normal screen's native
+playback reference: exact grant ID, resource ID and retained native quote. That
+reference is not permission to read bytes. Explicit Open obtains a fresh private
+range lease through `native-store-paid-video-range-v1`; Play remains a separate
+user action. Cancelled or refunded-before-allocation terminals expose no player.
+The normal shared background stays in place, and the native player uses the
+shared visual tokens. The Test Store V3 player and quote parser are unchanged.
+
+The native component retires its exact player on route blur, backgrounding,
+account/session changes, held/expired gateway lease, native errors and unmount.
+It disables caching, ambient/background playback, external playback and picture
+in picture. Clearing/releasing the player does not claim buffered bytes were
+physically erased. Mounted tests use the actual native adapter/component with
+synthetic network and native player boundaries, not an installed-device playback
+or provider observation. Real allocation/gateway proof remains separately scoped.
+### Dormant ingress and service reconciliation runtimes
+
+`native-store-ingress-v1` and `native-store-reconcile-v1` are source-only,
+independently default-off boundaries. Neither is configured or deployed by these
+changes. Both prepared bundles include the function-local frozen Deno lock and
+Supabase SDK 2.110.6. Mandatory Deno 2.9.6 tests use synthetic credentials and
+loopback-only networking with application environment variables stripped.
+
+Ingress requires its exact configured connection revision and provider secret.
+Even a durable retained delivery returns non-2xx: dedicated provider routing and
+acknowledgement remain unqualified. It never retries a persistence operation.
+Reconciliation requires the exact configured legacy service-role Bearer key,
+not a decoded role claim or a new-format secret-key fallback. JWT verification
+remains enabled for that service endpoint. Its bounded POST body contains only
+`rawReceiptId`. The worker reads the original immutable registry and key ID;
+missing original key material never falls back to the latest connection revision.
+Only generic processing status is returned, not retained identities, raw receipts,
+keys, private effects or access authority. Unknown writes remain uncertain.
+
+The enable variables are `NATIVE_STORE_INGRESS_ENABLED` and
+`NATIVE_STORE_RECONCILE_ENABLED`; both require the literal `true`. Server-owned
+`NATIVE_STORE_CONNECTIONS_JSON` is parsed strictly and is never supplied by a
+request. No real values are included or installed. There is no scheduler,
+provider fetch, live-money activation or automatic acknowledgement.

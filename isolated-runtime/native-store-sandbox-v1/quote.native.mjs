@@ -10,9 +10,15 @@ import {setTimeout as delay} from 'node:timers/promises';import process from 'no
 import {createServer} from 'node:net';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 globalThis.crypto??=webcrypto;
-assert.equal(process.argv[2],'--local-bin');assert.ok([4,5,6].includes(process.argv.length));const flags=process.argv.slice(4);
-assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--managed-install','--reservation-proof','--dispatch-proof','--pending-fence-proof','--qualified-dispatch-proof','--startup-collision-proof'].includes(f)));
-const collisionProof=flags.includes('--startup-collision-proof');if(collisionProof)assert.deepEqual(flags,['--startup-collision-proof']);
+assert.equal(process.argv[2],'--local-bin');assert.ok([4,5,6,7].includes(process.argv.length));const flags=process.argv.slice(4);
+assert.equal(new Set(flags).size,flags.length);
+const collisionProof=flags.includes('--startup-collision-proof');let collisionPort;
+if(collisionProof){
+ assert.equal(flags.length,2);assert.equal(flags[0],'--startup-collision-proof');
+ assert.match(flags[1],/^--collision-port=[1-9][0-9]{0,4}$/u);
+ collisionPort=flags[1].slice('--collision-port='.length);assert.ok(Number(collisionPort)<=65535);
+}else assert.ok(flags.every(f=>['--managed-install','--reservation-proof','--dispatch-proof','--pending-fence-proof','--qualified-dispatch-proof','--effects-proof'].includes(f)));
+if(flags.includes('--effects-proof'))assert.ok(flags.includes('--qualified-dispatch-proof')&&flags.includes('--managed-install'));
 const managed=flags.includes('--managed-install'),reservationProof=flags.includes('--reservation-proof');if(reservationProof||flags.includes('--dispatch-proof')||flags.includes('--pending-fence-proof')||flags.includes('--qualified-dispatch-proof'))assert.ok(managed);
 const bin=process.argv[3];assert.ok(path.isAbsolute(bin));const administrator=managed?'fixture_admin':'postgres';
 const here=path.dirname(fileURLToPath(import.meta.url)),runtime=path.resolve(here,'../sandbox-commerce-v1'),root=path.resolve(here,'../..');
@@ -42,7 +48,7 @@ async function availableLoopbackPort(){
   });
  });
 }
-const port=collisionProof?'55490':await availableLoopbackPort();
+const port=collisionProof?collisionPort:await availableLoopbackPort();
 const work=fs.mkdtempSync(path.join(os.tmpdir(),'native-store-quote-')),data=path.join(work,'data'),db='quote_'+randomUUID().replaceAll('-','');
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PG')));
 const args=(database,user=administrator)=>['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',port,'-U',user,'-d',database];
@@ -55,7 +61,7 @@ const buyer='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',session='bbbbbbbb-bbbb-4bbb-8
 const actor={userId:buyer,accountId:buyer,sessionGeneration:session};
 const service="set role service_role;set request.jwt.claims='{\"role\":\"service_role\"}';";
 const expression=(command,payload,requestId=randomUUID(),who=actor)=>`public.native_store_sandbox_command_v1('${who.userId}','${who.sessionGeneration}',${literal(command)},'${requestId}',${json(payload)})`;
-const call=(command,payload,requestId,who)=>{const reservation=['reserve','reserve-recover'].includes(command);const sql=expression(command,payload,requestId,who).replace('public.native_store_sandbox_command_v1',command.startsWith('dispatch-')?'public.native_store_sandbox_dispatch_v1':reservation?'public.native_store_sandbox_reservation_v1':'public.native_store_sandbox_command_v1');const value=JSON.parse(q(service+'select '+sql+';'));return reservation?api.adaptNativeStoreReservationResultV1(value):value;};
+const call=(command,payload,requestId,who)=>{const reservation=['reserve','reserve-recover'].includes(command);const sql=expression(command,payload,requestId,who).replace('public.native_store_sandbox_command_v1',['cancel-preparation','terminal-recover'].includes(command)?'public.native_store_sandbox_terminal_v1':command.startsWith('dispatch-')?'public.native_store_sandbox_dispatch_v1':reservation?'public.native_store_sandbox_reservation_v1':'public.native_store_sandbox_command_v1');const value=JSON.parse(q(service+'select '+sql+';'));return reservation?api.adaptNativeStoreReservationResultV1(value):value;};
 const ts=createRequire(import.meta.url)('typescript');
  const modules=new Map();function load(name){if(modules.has(name))return modules.get(name);const result={};modules.set(name,result);
   new Function('exports','require',ts.transpileModule(fs.readFileSync(path.join(root,'supabase/functions/_shared',name),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(result,s=>load(s.replace(/^\.\//u,'')));return result;}
@@ -175,7 +181,7 @@ try{
  // adapters are synthetic; no handwritten response replaces a database result.
  const authority={...actor,state:'ACTIVE',restoreOnly:false},memory=new Map(),clientApi={};
  const storage={getItem:async key=>memory.get(key)??null,setItem:async(key,value)=>{memory.set(key,value);}};
- const clientBindings={'../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1':load('native-store-sandbox-dispatch-contract-v1.ts'),'@react-native-async-storage/async-storage':storage,'react-native-get-random-values':{},
+ const clientBindings={'../supabase/functions/_shared/native-store-sandbox-terminal-contract-v1':load('native-store-sandbox-terminal-contract-v1.ts'),'../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1':load('native-store-sandbox-dispatch-contract-v1.ts'),'@react-native-async-storage/async-storage':storage,'react-native-get-random-values':{},
   './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,
    sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&['userId','accountId','sessionGeneration','state','restoreOnly'].every(k=>a[k]===b[k]),subscribeToAccountSessionAuthority:()=>()=>{}},
   './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority,accessToken:'synthetic-local-auth'})},
@@ -338,12 +344,13 @@ try{
  const claimUntil=Date.now()+3000;while(!claimOut.includes('claim_ready')&&Date.now()<claimUntil)await delay(10);assert.ok(claimOut.includes('claim_ready'),claimErr);
  rejects(service+'select '+expression('claim',racePayload,raceClaimId)+';',/native_store_claim_busy/u);
  claimant.stdin.end('commit;\n');assert.equal(await claimDone,0,claimErr);assert.equal(call('claim',racePayload,raceClaimId).data.claim.originalRequestId,raceClaimId);cases++;
- if(flags.includes('--qualified-dispatch-proof'))await (await import('./qualified-dispatch.native-cases.mjs')).runQualifiedDispatchCases({q,run,args,bin,env,children,json,literal,call,actor,buyer,session,other,otherSession,newSession,offer,resource,asset,route,binding,here,load,db,freshNativeFixture,root,ts});
+ if(flags.includes('--qualified-dispatch-proof'))await (await import('./qualified-dispatch.native-cases.mjs')).runQualifiedDispatchCases({q,run,args,bin,env,children,json,literal,call,actor,buyer,session,other,otherSession,newSession,offer,resource,asset,route,binding,here,load,db,freshNativeFixture,root,ts,effectsProof:flags.includes('--effects-proof')});
  if(reservationProof)await (await import('./reservation.native-cases.mjs')).runReservationCases({q,run,args,bin,env,children,service,json,literal,call,actor,buyer,session,seller,offer,resource,asset,route,binding,nativeCatalog,preparePayload,other,otherSession,newSession,root,ts,...freshNativeFixture('reservation-proof-product')});
  if(flags.includes('--dispatch-proof'))await (await import('./dispatch-attempt.native-cases.mjs')).runDispatchAttemptCases({q,args,bin,env,children,json,call,actor,buyer,session,other,otherSession,newSession,here,route,asset,clientBindings,clientSource,api,freshNativeFixture,...freshNativeFixture('dispatch-proof-product')});
  q(`update sandbox_commerce_v1.offers set revision=2 where id='${offer}';`);
  assert.equal((await http('offer',payload)).status,'held');cases++;
- assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');cases++;
+ if(!flags.includes('--effects-proof')){assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');}
+ else {assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),q('select count(*) from sandbox_commerce_v1.native_store_allocations;'));assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),q('select count(*) from sandbox_commerce_v1.native_store_allocations;'));}cases++;
  if(flags.includes('--pending-fence-proof'))await (await import('./pending-fence.native-cases.mjs')).runPendingFenceCases({q,run,args,bin,env,children,json,literal,buyer,session,seller,offer,resource,asset,here,load,db});
  console.log(JSON.stringify({protocol:'native-store-normal-quote-proof-v1',cases,passed:cases,managedInstall:managed,sourceDigest:managed?nativeStoreInstallProfile().sourceDigest:null,providerQualified:false,dispatchAllowed:false}));
 }finally{

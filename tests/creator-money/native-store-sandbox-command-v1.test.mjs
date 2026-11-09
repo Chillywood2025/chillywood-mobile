@@ -98,3 +98,18 @@ test('qualification discovery accepts only selection and never returns dispatch 
  assert.equal(api.validateNativeStoreSandboxResultV1({...value,dispatchAllowed:true},actor,request),false);
  assert.equal(api.validateNativeStoreSandboxResultV1({...value,data:{...value.data,attempt:null}},actor,request),false);
 });
+
+test('terminal commands bind exact selection and keep dispositions separate from purchase or access authority',async()=>{
+ const selectionId='nssv1_selection_'+id(91),request={...input,command:'terminal-recover',payload:{selectionId}};
+ for(const kind of ['allocated','cancelled_before_consume','refunded_before_allocation']){
+  const terminal={id:'nssv1_terminal_'+id(92),selectionId,reservationId:kind==='cancelled_before_consume'?null:'nssv1_reservation_'+id(93),kind,
+   allocationId:kind==='allocated'?'nssv1_allocation_'+id(94):null,grantId:kind==='allocated'?'scv1_grant_'+id(95):null,originalRequestId:kind==='cancelled_before_consume'?id(96):null,createdAt:'2026-11-09T00:00:00Z'};
+  const result={...held(request),status:'ok',data:{terminal,reason:null}};
+  assert.ok(api.parseNativeStoreSandboxRequestV1(request));assert.ok(api.validateNativeStoreSandboxResultV1(result,actor,request));
+  for(const change of [v=>v.dispatchAllowed=true,v=>v.data.terminal.selectionId='nssv1_selection_'+id(99),v=>v.data.terminal.extra=true,v=>v.data.terminal.kind='expired']){const bad=structuredClone(result);change(bad);assert.equal(api.validateNativeStoreSandboxResultV1(bad,actor,request),false);}
+  const handler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>actor,execute:async()=>result});assert.equal((await handler(req(request))).status,200);
+ }
+ assert.equal(api.parseNativeStoreSandboxRequestV1({...request,payload:{selectionId,verified:true}}),null);
+ const cancel={...request,command:'cancel-preparation'};assert.equal(api.validateNativeStoreSandboxResultV1({...held(cancel),data:{terminal:null,reason:'consumption_unresolved'}},actor,cancel),true);
+ assert.equal(api.validateNativeStoreSandboxResultV1({...held(cancel),status:'unknown',data:{terminal:null,reason:'terminal_unknown'}},actor,cancel),false);
+});

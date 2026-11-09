@@ -23,13 +23,13 @@ function fixture({deadlineMs=1000,memory=new Map()}={}) {
   let current=A,transport,captureWait=null,storeWait=null,storageFailed=false,readFailed=false;const calls=[],listeners=new Set();
   const authority={getCurrentAccountSessionAuthoritySnapshot:()=>current,sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&['userId','accountId','sessionGeneration','state','restoreOnly'].every(k=>a[k]===b[k]),subscribeToAccountSessionAuthority(fn){listeners.add(fn);return()=>listeners.delete(fn);}};
   const storage={async getItem(key){if(readFailed)throw Error('read');return memory.get(key)??null;},async setItem(key,value){if(storageFailed)throw Error('disk');if(storeWait)await storeWait.promise;memory.set(key,value);}};
-  const api=load('../../_lib/nativeStoreSandboxQuote.ts',{'../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1':load('../../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1.ts',{}),'@react-native-async-storage/async-storage':storage,'react-native-get-random-values':{},'./accountSessionAuthority':authority,
+  const api=load('../../_lib/nativeStoreSandboxQuote.ts',{'../supabase/functions/_shared/native-store-sandbox-terminal-contract-v1':load('../../supabase/functions/_shared/native-store-sandbox-terminal-contract-v1.ts',{}),'../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1':load('../../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1.ts',{}),'@react-native-async-storage/async-storage':storage,'react-native-get-random-values':{},'./accountSessionAuthority':authority,
     './accountBoundSupabaseMutation':{async captureAccountBoundSupabaseMutationSubject(){const captured={authority:current,accessToken:'synthetic-token'};if(captureWait)await captureWait.promise;return captured;}},'./supabase':{SUPABASE_URL:'https://local.invalid',SUPABASE_ANON_KEY:'public-test'}},
     {fetch:async(url,options)=>{const body=JSON.parse(options.body);calls.push({url,options,body});return transport(body);}});
   const actor=()=>({userId:current.userId,accountId:current.accountId,sessionGeneration:current.sessionGeneration});
   const result=(body,data,status='ok')=>({protocol:api.NATIVE_STORE_SANDBOX_PROTOCOL,command:body.command,requestId:body.requestId,actor:actor(),status,data,dispatchAllowed:false,correlation:'unsupported'});
   let selection=null;
-  transport=async body=>{if(body.command==='reserve'||body.command==='reserve-recover') {
+  transport=async body=>{if(body.command==='terminal-recover')return{ok:true,text:async()=>JSON.stringify(result(body,{terminal:null,reason:'terminal_unknown'},'unknown'))};if(body.command==='reserve'||body.command==='reserve-recover') {
       const attempt=[...memory.values()].map(v=>JSON.parse(v)).find(v=>v.attemptId&&v.selectionId===body.payload.selectionId);
       const reservation={id:`nssv1_reservation_${uuid(90)}`,selectionId:attempt.selectionId,originalRequestId:attempt.attemptId,originalSessionGeneration:attempt.originalSessionGeneration,createdAt:'2026-11-08T00:00:00Z',quoteDigest:attempt.quote.quoteDigest,state:'dispatch_reserved',dispatchAllowed:false,providerQualified:false};
       return{ok:true,text:async()=>JSON.stringify(result(body,{reservation,reason:null}))};
@@ -116,8 +116,8 @@ test('native reservation fences same-SKU different offers, survives restart with
   await assert.rejects(c.captureCallback(first.id,sdkCallback()),e=>e.code==='invalid_request');
   const result=await c.retainPurchaseAttempt(first.id);assert.equal(result.status,'dispatch_reserved');assert.equal(result.dispatchAllowed,false);assert.equal(result.providerQualified,false);
   await assert.rejects(d.retainPurchaseAttempt(second.id),e=>e.code==='saved_selection_requires_recovery');assert.equal((await d.readPurchaseAttempt()).status,'blocked_by_other_selection');
-  await assert.rejects(d.captureCallback(second.id,sdkCallback()),e=>e.code==='invalid_request');assert.equal(f.calls.length,3);c.dispose();d.dispose();
-  const restart=fixture({memory:f.memory});restart.change({...A,sessionGeneration:uuid(42)});restart.setTransport(async body=>({ok:true,text:async()=>JSON.stringify(restart.result(body,{selection:first,reason:null}))}));
+  await assert.rejects(d.captureCallback(second.id,sdkCallback()),e=>e.code==='invalid_request');assert.equal(f.calls.filter(c=>c.body.command!=='terminal-recover').length,3);c.dispose();d.dispose();
+  const restart=fixture({memory:f.memory});restart.change({...A,sessionGeneration:uuid(42)});restart.setTransport(async body=>({ok:true,text:async()=>JSON.stringify(restart.result(body,body.command==='terminal-recover'?{terminal:null,reason:'terminal_unknown'}:{selection:first,reason:null},body.command==='terminal-recover'?'unknown':'ok'))}));
   const recovered=await restart.connect();assert.equal((await recovered.readPurchaseAttempt()).status,'dispatch_reserved');await recovered.recover();
   await assert.rejects(recovered.retainPurchaseAttempt(first.id),e=>e.code==='saved_selection_requires_recovery');assert.equal(restart.calls.length,1);recovered.dispose();
   const blocked=await restart.connect(otherOffer);assert.equal((await blocked.readPurchaseAttempt()).status,'blocked_by_other_selection');blocked.dispose();
@@ -127,7 +127,7 @@ test('reservation cross-offer race and delayed persistence never permit replacem
   const first=(await c.prepare(quote())).data.selection,second=(await d.prepare({...quote(),offerId:otherOffer})).data.selection,wait=f.delayStore();
   const pending=c.retainPurchaseAttempt(first.id);await assert.rejects(d.retainPurchaseAttempt(second.id),e=>e.code==='saved_selection_requires_recovery');await assert.rejects(pending,e=>e.code==='unavailable');
   assert.equal((await c.readPurchaseAttempt()).status,'reservation_write_uncertain');await assert.rejects(c.captureCallback(first.id,sdkCallback()),e=>e.code==='invalid_request');
-  wait.resolve();await new Promise(r=>setTimeout(r,0));assert.equal((await c.readPurchaseAttempt()).status,'dispatch_reserved');assert.equal((await d.readPurchaseAttempt()).status,'blocked_by_other_selection');assert.equal(f.calls.length,2);c.dispose();d.dispose();
+  wait.resolve();await new Promise(r=>setTimeout(r,0));assert.equal((await c.readPurchaseAttempt()).status,'dispatch_reserved');assert.equal((await d.readPurchaseAttempt()).status,'blocked_by_other_selection');assert.equal(f.calls.filter(c=>c.body.command!=='terminal-recover').length,2);c.dispose();d.dispose();
 });
 test('reservation storage failure and authority gaps remain non-dispatching; corrupted or changed scope is rejected',async()=>{
   const f=fixture(),c=await f.connect(),selection=(await c.prepare(quote())).data.selection;f.failStorage();await assert.rejects(c.retainPurchaseAttempt(selection.id));
@@ -227,7 +227,7 @@ function mountFixture(f, flavor=0, sessionOverride=null, canGoBack=true, readPro
   const native={Platform:{OS:'ios'},StyleSheet:{create:v=>v,absoluteFillObject:{position:'absolute',top:0,right:0,bottom:0,left:0}},...Object.fromEntries(['ActivityIndicator','ImageBackground','Pressable','ScrollView','Text','View'].map(n=>[n,primitive(n)]))};
   const visual=load('../../components/ui/chillywood-visual-system.tsx',{'react':React,'react-native':native,'react-native-svg':{}});
   const background={asset:'assets/images/chillywood-branded-background.png'};
-  const component=load('../../components/monetization/native-store-sandbox-quote-screen.tsx',{'react':React,'react-native':native,'react-native-safe-area-context':{SafeAreaView:primitive('SafeAreaView')},'expo-router':{useLocalSearchParams:()=>({offerId}),useRouter:()=>({canGoBack:()=>canGoBack,back(){navigation.push('back');},replace(path){navigation.push(path);}})},
+  const component=load('../../components/monetization/native-store-sandbox-quote-screen.tsx',{'@react-navigation/native':{useIsFocused:()=>true},'./native-store-paid-video-player':{NativeStorePaidVideoPlayer:primitive('NativeStorePaidVideoPlayer')},'react':React,'react-native':native,'react-native-safe-area-context':{SafeAreaView:primitive('SafeAreaView')},'expo-router':{useLocalSearchParams:()=>({offerId}),useRouter:()=>({canGoBack:()=>canGoBack,back(){navigation.push('back');},replace(path){navigation.push(path);}})},
     '../../assets/images/chillywood-branded-background.png':background,'../ui/chillywood-visual-system':visual,
     '../../_lib/runtimeConfig':{getRuntimeConfig:()=>({revenueCat:{appStorePurchasesEnabled:true}})},'../../_lib/nativeStoreSandboxProduct':products,'../../_lib/nativeStoreSandboxDispatch':{dispatchPreparedNativeSandboxPurchase:dispatch??(()=>assert.fail('No test checkout should run implicitly'))},
     '../../_lib/session':{useSession:()=>sessionOverride??({user:{id:f.current().userId},authority:f.current(),isLoading:false})},'../../_lib/isolatedTestStoreBuild':{isIsolatedTestStoreFlavor:()=>flavor===1},'../../_lib/isolatedTestStoreV2Build':{isIsolatedTestStoreV2Flavor:()=>flavor===2},'../../_lib/isolatedTestStoreV3Build':{isIsolatedTestStoreV3Flavor:()=>flavor===3},'../../_lib/nativeStoreSandboxQuote':f.api,'../navigation/app-back-button':{AppBackButton:primitive('AppBackButton')}});
@@ -399,4 +399,100 @@ test('first checkout uncertainty immediately exposes read-only recovery without 
  assert.equal(m.button('native-sandbox-checkout-recover').disabled,false);assert.equal(m.button('native-sandbox-checkout').disabled,true);
  assert.ok(m.nodes().some(n=>n.name==='Text'&&String(n.props.children).includes('Checkout outcome is unconfirmed')));
  await React.act(async()=>m.button('native-sandbox-checkout-recover').onPress());await m.flush();assert.equal(calls.length,2);assert.equal(calls[0][4].recoverOnly,false);assert.equal(calls[1][4].recoverOnly,true);assert.equal(f.calls.some(c=>c.body.command==='reserve'),false);await m.unmount();
+});
+
+test('explicit preparation cancellation persists original request and recovers terminal without erasing evidence',async()=>{
+ const f=fixture(),c=await f.connect(),s=(await c.prepare(quote())).data.selection;
+ const original=[...f.memory.entries()];let terminal=null,lose=true;
+ f.setTransport(async b=>{
+  if(b.command==='recover')return{ok:true,text:async()=>JSON.stringify(f.result(b,{selection:s,reason:null}))};
+  if(b.command==='cancel-preparation'){
+   const saved=[...f.memory.values()].map(JSON.parse).find(v=>v.requestId===b.requestId);assert.equal(saved.selectionId,s.id);
+   terminal??={id:`nssv1_terminal_${uuid(92)}`,selectionId:s.id,reservationId:null,kind:'cancelled_before_consume',allocationId:null,grantId:null,originalRequestId:b.requestId,createdAt:'2026-11-09T00:00:00Z'};
+   if(lose)throw Error('committed response lost');
+  }
+  return{ok:true,text:async()=>JSON.stringify(f.result(b,{terminal,reason:null}))};
+ });
+ await assert.rejects(c.cancelPreparation());assert.equal((await c.recoverTerminal()).data.terminal.id,terminal.id);
+ c.dispose();f.change({...A,sessionGeneration:uuid(98)});const next=await f.connect();await next.recover();lose=false;
+ assert.equal((await next.cancelPreparation()).data.terminal.originalRequestId,terminal.originalRequestId);
+ assert.equal(new Set(f.calls.filter(x=>x.body.command==='cancel-preparation').map(x=>x.body.requestId)).size,1);
+ for(const [k,v] of original)assert.equal(f.memory.get(k),v);next.dispose();
+});
+test('terminal response rejects forged scope, grants, request and authority',async()=>{
+ const f=fixture(),c=await f.connect(),s=(await c.prepare(quote())).data.selection;
+ for(const patch of [{selectionId:`nssv1_selection_${uuid(99)}`},{grantId:`scv1_grant_${uuid(99)}`},{allocationId:`nssv1_allocation_${uuid(99)}`},{originalRequestId:uuid(99)},{kind:'sdk_cancelled'}]){
+  f.setTransport(async b=>({ok:true,text:async()=>JSON.stringify(f.result(b,{terminal:{id:`nssv1_terminal_${uuid(92)}`,selectionId:s.id,reservationId:null,kind:'cancelled_before_consume',allocationId:null,grantId:null,originalRequestId:b.requestId,createdAt:'2026-11-09T00:00:00Z',...patch},reason:null}))}));
+  await assert.rejects(c.cancelPreparation());
+ }
+ c.dispose();
+});
+
+function lifecycleTransport(f,kind='cancelled_before_consume') {
+ const selections=new Map(),terminals=new Map(),reservations=new Map();
+ f.setTransport(async b=>{let data,status='ok';const selection=selections.get(b.payload.originalRequestId)||[...selections.values()].find(s=>s.id===b.payload.selectionId);
+  if(b.command==='prepare'){const s={id:`nssv1_selection_${b.requestId}`,originalRequestId:b.requestId,originalSessionGeneration:f.current().sessionGeneration,createdAt:'2026-11-09T00:00:00Z',quote:b.payload.expectedQuote};selections.set(b.requestId,s);data={selection:s,reason:null};}
+  else if(b.command==='recover')data={selection,reason:null};
+  else if(b.command==='offer')data={quote:quote(),reason:null};
+  else if(b.command==='reserve'||b.command==='reserve-recover'){
+   let r=reservations.get(selection.id);if(!r&&b.command==='reserve'){r={id:`nssv1_reservation_${b.requestId}`,selectionId:selection.id,originalRequestId:b.requestId,originalSessionGeneration:f.current().sessionGeneration,createdAt:'2026-11-09T00:00:00Z',quoteDigest:selection.quote.quoteDigest,state:'dispatch_reserved',dispatchAllowed:false,providerQualified:false};reservations.set(selection.id,r);}
+   data={reservation:r,reason:null};
+  }else if(b.command==='cancel-preparation'||b.command==='terminal-recover'){
+   if(b.command==='cancel-preparation'&&!terminals.has(selection.id))terminals.set(selection.id,{id:`nssv1_terminal_${b.requestId}`,selectionId:selection.id,reservationId:reservations.get(selection.id)?.id??null,kind,allocationId:kind==='allocated'?`nssv1_allocation_${uuid(74)}`:null,grantId:kind==='allocated'?`scv1_grant_${uuid(75)}`:null,originalRequestId:kind==='cancelled_before_consume'?b.requestId:null,createdAt:'2026-11-09T00:00:00Z'});
+   const terminal=terminals.get(selection.id)??null;data={terminal,reason:terminal?null:'terminal_unknown'};if(!terminal)status='unknown';
+  }else throw Error('unmodeled '+b.command);
+  return{ok:true,text:async()=>JSON.stringify(f.result(b,data,status))};
+ });return{selections,terminals,reservations};
+}
+test('verified terminal opens a distinct immutable selection and SKU generation; old records and late writes survive',async()=>{
+ for(const kind of ['cancelled_before_consume','allocated','refunded_before_allocation']){
+  const f=fixture();lifecycleTransport(f,kind);const first=await f.connect();const a=(await first.prepare(quote())).data.selection;await first.retainPurchaseAttempt(a.id);
+  const original=[...f.memory.entries()];await first.cancelPreparation();await first.advanceAfterTerminal();await assert.rejects(first.recover());
+  const next=await f.connect();assert.equal(await next.readSaved(),null);const b=(await next.prepare(quote())).data.selection;assert.notEqual(a.id,b.id);
+  assert.equal((await next.readPurchaseAttempt()).status,'terminal_slot_available');await next.retainPurchaseAttempt(b.id);assert.equal((await next.recoverPurchaseAttempt()).data.reservation.selectionId,b.id);
+  for(const [k,v] of original){assert.equal(f.memory.get(k),v);await f.storage.setItem(k,v);} // late original completion touches only original keys
+  next.dispose();const restarted=await f.connect();assert.equal((await restarted.recover()).data.selection.id,b.id);assert.equal((await restarted.recoverPurchaseAttempt()).data.reservation.selectionId,b.id);restarted.dispose();
+ }
+});
+test('successor requires fresh authenticated terminal evidence, not a cached pointer or absence',async()=>{
+ const f=fixture(),server=lifecycleTransport(f),first=await f.connect(),a=(await first.prepare(quote())).data.selection;
+ await assert.rejects(first.advanceAfterTerminal());assert.equal([...f.memory.keys()].some(k=>k.endsWith(':successor')),false);
+ await first.cancelPreparation();await first.advanceAfterTerminal();server.terminals.delete(a.id);
+ const next=await f.connect();await assert.rejects(next.readSaved());next.dispose();
+});
+
+test('uncertain successor save never clears old preparation and late completion exposes only terminal-backed generation',async()=>{
+ const f=fixture({deadlineMs:30});lifecycleTransport(f);const first=await f.connect();await first.prepare(quote());await first.cancelPreparation();const original=[...f.memory.entries()],wait=f.delayStore();
+ await assert.rejects(first.advanceAfterTerminal());const before=await f.connect();assert.ok(await before.readSaved());await assert.rejects(before.prepare(quote()));before.dispose();
+ wait.resolve();await new Promise(r=>setTimeout(r,0));const after=await f.connect();assert.equal(await after.readSaved(),null);for(const[k,v]of original)assert.equal(f.memory.get(k),v);first.dispose();after.dispose();
+});
+test('mounted explicit abandon and new selection require terminal evidence and retain shared background without SDK',async()=>{
+ const f=fixture();lifecycleTransport(f);let sdk=0;const m=mountFixture(f,0,null,true,null,async()=>{sdk++;throw Error('must not purchase');});await m.render();await m.flush();await React.act(async()=>m.button('native-sandbox-prepare').onPress());await m.flush();
+ await React.act(async()=>m.button('native-sandbox-terminal-recover').onPress());await m.flush();assert.equal(m.nodes().some(n=>n.props.testID==='native-sandbox-next-selection'),false);
+ const old=[...f.memory.entries()];await React.act(async()=>m.button('native-sandbox-cancel-preparation').onPress());await m.flush();assert.equal(m.button('native-sandbox-next-selection').disabled,false);assert.equal(m.button('native-sandbox-checkout').disabled,true);
+ await React.act(async()=>m.button('native-sandbox-next-selection').onPress());await m.flush();assert.equal(m.button('native-sandbox-prepare').disabled,false);for(const[k,v]of old)assert.equal(f.memory.get(k),v);assert.equal(sdk,0);assert.equal(m.nodes().find(n=>n.name==='ImageBackground').props.source,m.background);await m.unmount();
+});
+
+test('stale client pinned to terminal generation cannot poison an empty successor SKU slot',async()=>{
+ const f=fixture();lifecycleTransport(f);const first=await f.connect(),a=(await first.prepare(quote())).data.selection;await first.retainPurchaseAttempt(a.id);
+ const stale=await f.connect();await stale.recover();await first.cancelPreparation();await first.advanceAfterTerminal();
+ const next=await f.connect(),b=(await next.prepare(quote())).data.selection;
+ // The authenticated pointer write completes, then the first read of its
+ // empty successor slot fails before any slot latch or record is created.
+ const originalGet=f.storage.getItem;let once=true;f.storage.getItem=async k=>{if(once&&k.startsWith('@chillywood/native-store-attempt:')&&k.includes(':generation:')&&!k.endsWith(':successor')){once=false;throw Error('synthetic successor read failure');}return originalGet(k);};
+ await assert.rejects(next.retainPurchaseAttempt(b.id));const before=[...f.memory.entries()];await assert.rejects(stale.retainPurchaseAttempt(a.id));assert.deepEqual([...f.memory.entries()],before);
+ assert.equal((await stale.recoverPurchaseAttempt()).data.reservation.selectionId,a.id);
+ await next.retainPurchaseAttempt(b.id);assert.equal((await next.recoverPurchaseAttempt()).data.reservation.selectionId,b.id);
+ stale.dispose();next.dispose();
+});
+
+test('normal screen supplies native player only exact allocated terminal reference, never callback or refund authority',async()=>{
+ for(const kind of ['allocated','cancelled_before_consume','refunded_before_allocation']){
+  const f=fixture();lifecycleTransport(f,kind);const c=await f.connect(),selection=(await c.prepare(quote())).data.selection;await c.retainPurchaseAttempt(selection.id);c.dispose();
+  const m=mountFixture(f);await m.render();await m.flush();await React.act(async()=>m.button('native-sandbox-recover').onPress());await m.flush();assert.equal(m.nodes().some(n=>n.name==='NativeStorePaidVideoPlayer'),false);
+  const abandon=m.button('native-sandbox-cancel-preparation');m.clear();await React.act(async()=>abandon.onPress());await m.flush();const player=m.nodes().filter(n=>n.name==='NativeStorePaidVideoPlayer').at(-1);
+  if(kind==='allocated'){assert.ok(player);assert.equal(player.props.selection.grantId,`scv1_grant_${uuid(75)}`);assert.equal(player.props.selection.resourceId,selection.quote.resourceId);assert.deepEqual(clone(player.props.selection.quote),clone(selection.quote));assert.equal(player.props.authority.userId,A.userId);}
+  else assert.equal(player,undefined);
+  assert.equal(f.calls.some(x=>x.body.command==='dispatch-consume'),false);await m.unmount();
+ }
 });

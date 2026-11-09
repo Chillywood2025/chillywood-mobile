@@ -1,3 +1,6 @@
+import { useIsFocused } from "@react-navigation/native";
+import { NativeStorePaidVideoPlayer } from "./native-store-paid-video-player";
+import type { NativeStorePaidVideoPlaybackSelection } from "../../_lib/nativeStorePaidVideoPlayback";
 import { getRuntimeConfig } from "../../_lib/runtimeConfig";
 import { dispatchPreparedNativeSandboxPurchase } from "../../_lib/nativeStoreSandboxDispatch";
 import React, { useEffect, useRef, useState } from "react";
@@ -19,6 +22,7 @@ import { readNativeSandboxDeviceProduct } from "../../_lib/nativeStoreSandboxPro
 // Checkout remains unavailable without server qualification; the dispatcher
 // rechecks native evidence and one-shot consumption. Catalog reads never admit it.
 export function NativeStoreSandboxQuoteScreen() {
+  const focused = useIsFocused();
   const { user, authority, isLoading } = useSession(); const router = useRouter();
   const params = useLocalSearchParams<{ offerId?: string }>(); const offerId = typeof params.offerId === "string" ? params.offerId : "";
   const store = Platform.OS === "ios" ? "APP_STORE" : Platform.OS === "android" ? "PLAY_STORE" : null;
@@ -31,16 +35,18 @@ export function NativeStoreSandboxQuoteScreen() {
     {isLoading ? <ActivityIndicator /> : !user || !authority || authority.restoreOnly || authority.state !== "ACTIVE" || user.id !== authority.userId
       ? <Text style={styles.body}>Sign in with an active account to prepare your own selection.</Text>
       : !store || isIsolatedTestStoreFlavor() || isIsolatedTestStoreV2Flavor() || isIsolatedTestStoreV3Flavor() ? <Text style={styles.body}>Use the normal internal iOS or Android app for this store preparation. Test Store debug purchases use their separate flow.</Text>
-      : <QuoteSession key={`${offerId}:${store}:${authority.userId}:${authority.sessionGeneration}`} offerId={offerId} store={store} authority={authority} />}
+      : <QuoteSession key={`${offerId}:${store}:${authority.userId}:${authority.sessionGeneration}`} offerId={offerId} store={store} authority={authority} focused={focused} />}
   </ScrollView></SafeAreaView></ImageBackground>;
 }
 function Button({ id, children, disabled, action }: { id: string; children: React.ReactNode; disabled: boolean; action(): void }) {
   return <Pressable testID={id} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={action} style={[styles.button, disabled && styles.disabled]}><Text style={styles.buttonText}>{children}</Text></Pressable>;
 }
-function QuoteSession({ offerId, store, authority }: { offerId: string; store: NativeSandboxStore; authority: AccountSessionAuthorityBinding }) {
+function QuoteSession({ offerId, store, authority, focused }: { offerId: string; store: NativeSandboxStore; authority: AccountSessionAuthorityBinding; focused: boolean }) {
   const [expected] = useState(() => Object.freeze({ ...authority }));
   const [revision, setRevision] = useState(0), [busy, setBusy] = useState(true), [quote, setQuote] = useState<NativeSandboxQuote | null>(null);
   const [selection, setSelection] = useState<NativeSandboxSelection | null>(null), [saved, setSaved] = useState(false), [message, setMessage] = useState("Loading the exact store quote…");
+  const [playbackSelection, setPlaybackSelection] = useState<NativeStorePaidVideoPlaybackSelection | null>(null);
+  const [terminalReady, setTerminalReady] = useState(false), [terminalMessage, setTerminalMessage] = useState<string | null>(null);
   const [checkoutAttempted, setCheckoutAttempted] = useState(false);
   const [qualificationReady, setQualificationReady] = useState(false), [qualificationMessage, setQualificationMessage] = useState("Test checkout qualification has not been checked.");
   const [reservationMessage, setReservationMessage] = useState<string | null>(null), [reservationReadable, setReservationReadable] = useState(false);
@@ -51,7 +57,7 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
   const owner = useRef<{ client: NativeSandboxQuoteClient; active: boolean; pending: boolean } | null>(null);
   useEffect(() => {
     let active = true; let local: typeof owner.current = null;
-    owner.current = null; setBusy(true); setQuote(null); setSelection(null); setSaved(false); setReservationMessage(null); setReservationReadable(false); setQualificationReady(false); setCheckoutAttempted(false); setQualificationMessage("Test checkout qualification has not been checked.");
+    owner.current = null; setPlaybackSelection(null); setTerminalReady(false); setTerminalMessage(null); setBusy(true); setQuote(null); setSelection(null); setSaved(false); setReservationMessage(null); setReservationReadable(false); setQualificationReady(false); setCheckoutAttempted(false); setQualificationMessage("Test checkout qualification has not been checked.");
     void captureNativeSandboxQuoteClient(expected, offerId, store).then(async client => {
       if (!active) { client.dispose(); return; }
       local = { client, active: true, pending: true }; owner.current = local;
@@ -123,6 +129,22 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
     }).catch(() => { if (local.active) setQualificationMessage("Checkout outcome is unconfirmed. Keep the original request and read saved checkout status; do not start a replacement purchase."); })
       .finally(() => { local.pending = false; if (local.active) setBusy(false); });
   };
+  const terminalAction = (action: "read" | "cancel" | "next") => {
+    const local = owner.current; if (!local?.active || local.pending || !selection || action === "next" && !terminalReady) return;
+    local.pending = true; setBusy(true); setQualificationReady(false); setPlaybackSelection(null);
+    void (async () => {
+      if (action === "next") { await local.client.advanceAfterTerminal(); if (local.active) setRevision(n => n + 1); return; }
+      const result = await (action === "cancel" ? local.client.cancelPreparation() : local.client.recoverTerminal());
+      if (!local.active) return;
+      const terminal = result.data.terminal; setTerminalReady(result.status === "ok" && !!terminal);
+      if (result.status === "ok" && terminal?.kind === "allocated" && terminal.grantId) setPlaybackSelection({ resourceId: selection.quote.resourceId, grantId: terminal.grantId, quote: selection.quote });
+      setTerminalMessage(terminal?.kind === "allocated" ? "This selection has a recorded allocation. Playback still needs a fresh access check. The original purchase evidence is retained."
+        : terminal?.kind === "refunded_before_allocation" ? "This selection was refunded before allocation. It grants no playback access. The original evidence is retained."
+        : terminal?.kind === "cancelled_before_consume" ? "Preparation was closed before any attempt was consumed. No store purchase was started by this cancellation."
+        : "This selection is not terminal. Any consumed or uncertain checkout remains retained; do not start a replacement purchase.");
+    })().catch(() => { if (local.active) { setTerminalReady(false); setTerminalMessage("Disposition is unconfirmed. Keep the original request and read terminal status; do not replace the purchase."); } })
+      .finally(() => { local.pending = false; if (local.active) setBusy(false); });
+  };
   const checkDeviceProduct = () => {
     const local = owner.current; if (!local?.active || local.pending || !quote) return;
     local.pending = true; setBusy(true);
@@ -149,9 +171,14 @@ function QuoteSession({ offerId, store, authority }: { offerId: string; store: N
     <Button id="native-sandbox-refresh" disabled={busy} action={() => setRevision(n => n + 1)}>Reconnect and read status</Button>
     <Button id="native-sandbox-check-product" disabled={busy || !quote || !owner.current} action={checkDeviceProduct}>Check device store availability</Button>
     <Text testID="native-sandbox-qualification-status" accessibilityLiveRegion="polite" style={styles.body}>{qualificationMessage}</Text>
-    <Button id="native-sandbox-check-qualification" disabled={busy || !selection || !owner.current} action={checkQualification}>Check test checkout qualification</Button>
-    <Button id="native-sandbox-checkout" disabled={busy || !selection || !qualificationReady || store !== "APP_STORE" || !owner.current} action={() => checkout()}>Start qualified test purchase</Button>
+    <Button id="native-sandbox-check-qualification" disabled={busy || terminalReady || !selection || !owner.current} action={checkQualification}>Check test checkout qualification</Button>
+    <Button id="native-sandbox-checkout" disabled={busy || terminalReady || !selection || !qualificationReady || store !== "APP_STORE" || !owner.current} action={() => checkout()}>Start qualified test purchase</Button>
     {(reservationReadable || checkoutAttempted) && <Button id="native-sandbox-checkout-recover" disabled={busy || !selection || !owner.current} action={() => checkout(true)}>Read saved checkout status</Button>}
+    {playbackSelection && <NativeStorePaidVideoPlayer authority={expected} selection={playbackSelection} focused={focused} blocked={busy} />}
+    {terminalMessage && <Text testID="native-sandbox-terminal-status" accessibilityLiveRegion="polite" style={styles.body}>{terminalMessage}</Text>}
+    <Button id="native-sandbox-terminal-recover" disabled={busy || !selection || !owner.current} action={() => terminalAction("read")}>Read terminal status</Button>
+    <Button id="native-sandbox-cancel-preparation" disabled={busy || terminalReady || !selection || !owner.current} action={() => terminalAction("cancel")}>Abandon only unconsumed preparation</Button>
+    {terminalReady && <Button id="native-sandbox-next-selection" disabled={busy || !owner.current} action={() => terminalAction("next")}>Start a new selection</Button>}
     <Text style={styles.body}>Native one-time receipt correlation still needs qualification. A displayed price, saved selection or SDK result is not proof of paid access.</Text>
   </View>;
 }

@@ -3,6 +3,7 @@ globalThis.crypto??=webcrypto;const ts=createRequire(import.meta.url)('typescrip
 function load(name){if(cache.has(name))return cache.get(name);const api={};cache.set(name,api);
  new Function('exports','require',ts.transpileModule(readFileSync(new URL('../../supabase/functions/_shared/'+name,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(api,s=>load(s.replace(/^\.\//u,'')));return api;}
 const {projectNativeStoreSandboxMoneyV1:project}=load('native-store-sandbox-money-v1.ts');
+const {projectNativeStoreSandboxRefundV1:refund}=load('native-store-sandbox-money-v1.ts');
 const id=n=>`d0000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const stored=()=>({buyerId:id(1),selectionSessionGeneration:id(5),claim:{id:'nssv1_claim_'+id(2),selectionId:'nssv1_selection_'+id(3),originalRequestId:id(4),originalSessionGeneration:id(5),createdAt:'2026-11-08T01:00:00Z',transactionIdentifier:'synthetic-tx',productIdentifier:'synthetic-product',evidence:'client_assertion',settlementAllowed:false},
  quote:{offerId:'scv1_offer_'+id(6),offerRevision:1,resourceId:'scv1_resource_'+id(7),resourceRevision:1,creatorId:id(8),kind:'paid_content',amountMinor:199,currency:'usd',
@@ -35,6 +36,23 @@ test('native scope, buyer, negative lifecycle and revoked connection cannot beco
 });
 test('claim and original key are detached before async replay; no unknown fields leak',async()=>{
  const {row,config}=await fixture({secret_unrelated:'do-not-output'});const c=stored(),pending=project(c,row,config,false);c.quote.amountMinor=299;c.buyerId=id(99);config.encryption.key.fill(0);const r=await pending;assert.equal(r.monetaryCandidate,true);assert.equal(r.amountMinor,199);assert.equal(JSON.stringify(r).includes('do-not-output'),false);
+});
+test('exact authenticated historical refund is negative evidence, never hold-clear or acknowledgement authority',async()=>{
+ const {row,config}=await fixture({type:'CANCELLATION',cancel_reason:'CUSTOMER_SUPPORT',secret_unrelated:'do-not-output'});
+ for(const revoked of [false,true]){const r=await refund(row,config,revoked);assert.equal(r.refundCandidate,true);assert.equal(r.originalRevisionRevoked,revoked);
+  for(const k of ['dispatchAllowed','settlementAllowed','grantsAccess','acknowledgementAllowed','financialAuthority','payable'])assert.equal(r[k],false);
+  assert.equal(JSON.stringify(r).includes('synthetic-tx'),false);assert.equal(JSON.stringify(r).includes('do-not-output'),false);}
+});
+test('negative parser rejects inferred refund, ambiguous identity, wrong scope and rounded/future time',async()=>{
+ for(const patch of [{type:'NON_RENEWING_PURCHASE'},{type:'TRANSFER'},{cancel_reason:undefined},{cancel_reason:'UNSUBSCRIBE'},
+  {app_user_id:null},{app_user_id:'anonymous'},{product_id:null},{transaction_id:null},{original_transaction_id:null},{transferred_from:[id(1)]},
+  {environment:'PRODUCTION'},{store:'TEST_STORE'},{app_id:'other'},{event_timestamp_ms:0},{event_timestamp_ms:8640000000000000}]){
+  const {row,config}=await fixture({type:'CANCELLATION',cancel_reason:'CUSTOMER_SUPPORT',...patch});assert.equal((await refund(row,config,false)).refundCandidate,false,JSON.stringify(patch));
+ }
+ for(const transform of [x=>x.replace('1794139200000','1794139200000.00000001'),x=>x.replace('"cancel_reason":"CUSTOMER_SUPPORT"','"cancel_reason":"UNSUBSCRIBE","cancel_reason":"CUSTOMER_SUPPORT"')]){
+  const {row,config}=await fixture({type:'CANCELLATION',cancel_reason:'CUSTOMER_SUPPORT'},transform);assert.equal((await refund(row,config,false)).refundCandidate,false);
+ }
+ const {row,config}=await fixture({type:'CANCELLATION',cancel_reason:'CUSTOMER_SUPPORT'});const pending=refund(row,config,false);row.raw_sha256='f'.repeat(64);config.encryption.key.fill(0);assert.equal((await pending).refundCandidate,true);
 });
 test('nested scalars cannot replace event economics and all duplicate keys remain invalid',async()=>{
  for(const patch of [{price_in_purchased_currency:{price_in_purchased_currency:1.99}},{price_in_purchased_currency:[1.99]},{quantity:{quantity:1}}]){

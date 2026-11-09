@@ -76,3 +76,20 @@ test('native endpoint lock still rejects executable index mode and symlink workt
  const r=repository(t);r.write(nativeLock,nativeBytes);r.stage(nativeLock);r.git('update-index','--chmod=+x','--',nativeLock);rejects(r);
  r.git('update-index','--chmod=-x','--',nativeLock);r.write('native-copy',nativeBytes);fs.unlinkSync(path.join(r.dir,nativeLock));fs.symlinkSync(path.join(r.dir,'native-copy'),path.join(r.dir,nativeLock));rejects(r);
 });
+
+const nativeRangeLock='supabase/functions/native-store-paid-video-range-v1/deno.lock';
+test('native range dependency lock accepts only exact regular staged bytes',t=>{
+ const r=repository(t);r.write(nativeRangeLock,nativeBytes);r.stage(nativeRangeLock);assert.equal(r.check().status,0);
+ r.write(nativeRangeLock,'modified');rejects(r);
+ r.stage(nativeRangeLock);r.write(nativeRangeLock,nativeBytes);rejects(r);
+});
+test('native range lock rejects executable and symlink representations',t=>{
+ const r=repository(t);r.write(nativeRangeLock,nativeBytes);r.stage(nativeRangeLock);r.git('update-index','--chmod=+x','--',nativeRangeLock);rejects(r);
+ r.git('update-index','--chmod=-x','--',nativeRangeLock);r.write('range-copy',nativeBytes);fs.unlinkSync(path.join(r.dir,nativeRangeLock));fs.symlinkSync(path.join(r.dir,'range-copy'),path.join(r.dir,nativeRangeLock));rejects(r);
+});
+for(const name of ['native-store-ingress-v1','native-store-reconcile-v1']) {
+ const file=`supabase/functions/${name}/deno.lock`,bytes=fs.readFileSync(path.join(root,file));
+ test(`${name} exact public lock passes`,t=>{const r=repository(t);r.write(file,bytes);r.stage(file);assert.equal(r.check().status,0);});
+ test(`${name} working tamper rejected`,t=>{const r=repository(t);r.write(file,bytes);r.stage(file);r.write(file,Buffer.concat([bytes,Buffer.from('\n')]));rejects(r);});
+ test(`${name} staged tamper rejected`,t=>{const r=repository(t);r.write(file,'substituted');r.stage(file);r.write(file,bytes);rejects(r);});
+}

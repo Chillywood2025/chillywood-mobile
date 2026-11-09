@@ -20,7 +20,7 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
   const expected = Object.freeze({ ...authority }), storage = options.storage ?? AsyncStorage, timeout = options.deadlineMs ?? 15000;
   if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 15000 || store !== "APP_STORE" || (options.recoverOnly !== undefined && typeof options.recoverOnly !== "boolean")) throw failure();
   const recoverOnly = options.recoverOnly === true;
-  const key = `@chillywood/native-store-dispatch:v1:${expected.userId}:${store}:${offerId}`;
+  const key = `@chillywood/native-store-dispatch:v2:${expected.userId}:${store}:${offerId}:${selectionId}`;
   if (!recoverOnly && flights.has(key)) throw failure(); if (!recoverOnly) flights.add(key);
   let retired = false;
   const current = () => { if (retired || !sameAccountSessionAuthority(expected, getCurrentAccountSessionAuthoritySnapshot())) throw failure(); };
@@ -35,7 +35,12 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
     current(); client = await captureNativeSandboxQuoteClient(expected, offerId, store, { storage, deadlineMs: timeout }); current();
     const selected = (await client.recover()).data.selection; current();
     if (!selected || selected.id !== selectionId) throw failure();
-    const raw = await bounded(storage.getItem(key)); current(); let saved: Record | null = null;
+    let raw = await bounded(storage.getItem(key)); current();
+    if (raw === null) {
+      const legacy = await bounded(storage.getItem(`@chillywood/native-store-dispatch:v1:${expected.userId}:${store}:${offerId}`)); current();
+      if (legacy !== null) { if (legacy.length > 4096) throw failure(); const old = JSON.parse(legacy); if (old.selectionId === selectionId) raw = legacy; }
+    }
+    let saved: Record | null = null;
     if (raw !== null) {
       if (raw.length > 4096) throw failure(); const v = JSON.parse(raw);
       if (!v || typeof v !== "object" || Array.isArray(v) || Object.keys(v).sort().join(",") !== "quoteDigest,requestId,reservationId,selectionId,state,userId,version"
@@ -67,7 +72,7 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
     if (metadata.platform !== "ios" || metadata.noChargeAccountScope !== "testflight_distribution" || metadata.nativeBuild !== app.evidence.unsignedNativeBuild
       || metadata.nativeVersion !== app.evidence.unsignedNativeVersion || metadata.signedAppVersion !== app.evidence.signedAppVersion || metadata.sdkVersion !== "10.15.1") throw failure();
     const retained = await client.readPurchaseAttempt(); current();
-    if (retained.status === "none") await client.retainPurchaseAttempt(selectionId);
+    if (retained.status === "none" || retained.status === "terminal_slot_available") await client.retainPurchaseAttempt(selectionId);
     else if (retained.status !== "dispatch_reserved") throw failure();
     current(); const reservation = (await client.recoverPurchaseAttempt()).data.reservation; current();
     if (!reservation || reservation.selectionId !== selectionId || saved && saved.reservationId !== reservation.id) throw failure();

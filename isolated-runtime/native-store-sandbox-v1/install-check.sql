@@ -19,6 +19,13 @@ begin
   or exists(select 1 from sandbox_commerce_v1.native_store_protocol_qualifications)
   or exists(select 1 from sandbox_commerce_v1.native_store_protocol_revocations)
   or exists(select 1 from sandbox_commerce_v1.native_store_qualified_attempts)
+
+  or exists(select 1 from sandbox_commerce_v1.native_store_settlement_protocols)
+  or exists(select 1 from sandbox_commerce_v1.native_store_settlement_revocations)
+  or exists(select 1 from sandbox_commerce_v1.native_store_negative_tombstones)
+  or exists(select 1 from sandbox_commerce_v1.native_store_allocations)
+  or exists(select 1 from sandbox_commerce_v1.native_store_raw_effects)
+  or exists(select 1 from sandbox_commerce_v1.native_store_reservation_terminals)
  then raise exception 'native_store_install_finalization_required';end if;
  return null;
 end $$;

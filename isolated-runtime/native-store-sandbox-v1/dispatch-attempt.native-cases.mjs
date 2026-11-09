@@ -22,7 +22,7 @@ export async function runDispatchAttemptCases(x){
  const first=consume(r.id,id);assert.equal(first.newlyConsumed,true);assert.equal(first.dispatchAllowed,false);assert.equal(first.attempt.state,'consumed');assert.equal(first.attempt.originalSessionGeneration,session);cases++;
  for(const who of [actor,{userId:buyer,sessionGeneration:newSession}]){const repeated=consume(r.id,id,false,who);assert.equal(repeated.newlyConsumed,false);assert.deepEqual(repeated.attempt,first.attempt);assert.equal(consume(r.id,randomUUID(),true,who).newlyConsumed,false);}cases++;
  reject(owner+'select '+expression(r.id,randomUUID())+';',/native_store_attempt_conflict/u);
- for(const sql of ['update sandbox_commerce_v1.native_store_dispatch_attempts set request_id=gen_random_uuid()','delete from sandbox_commerce_v1.native_store_dispatch_attempts','truncate sandbox_commerce_v1.native_store_dispatch_attempts,sandbox_commerce_v1.native_store_qualified_attempts'])reject(sql+';',/native_store_quote_immutable/u);cases++;
+ for(const sql of ['update sandbox_commerce_v1.native_store_dispatch_attempts set request_id=gen_random_uuid()','delete from sandbox_commerce_v1.native_store_dispatch_attempts','truncate sandbox_commerce_v1.native_store_dispatch_attempts,sandbox_commerce_v1.native_store_qualified_attempts,sandbox_commerce_v1.native_store_allocations,sandbox_commerce_v1.native_store_reservation_terminals'])reject(sql+';',/native_store_quote_immutable/u);cases++;
  // A lost response after commit and a crash before hypothetical SDK invocation
  // both leave the same durable, non-reissuable evidence. No SDK exists here.
  const lost=alternative(),lostId=randomUUID();consume(lost.id,lostId);assert.equal(consume(lost.id,lostId).newlyConsumed,false);cases++;

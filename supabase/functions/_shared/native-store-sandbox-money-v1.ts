@@ -100,3 +100,35 @@ export async function projectNativeStoreSandboxMoneyV1(claim: NativeStoreSandbox
     correlation: "unsupported" as const, dispatchAllowed: false as const, settlementAllowed: false as const,
     grantsAccess: false as const, financialAuthority: false as const, payable: false as const });
 }
+
+/** Historical negative evidence only. A revoked original revision remains
+ * replayable; only the separately qualified SQL effect may record a terminal
+ * negative disposition. This helper never clears holds or acknowledges a hook.
+ */
+export async function projectNativeStoreSandboxRefundV1(receipt: NativeStoreSandboxReceiptRowV1,
+  originalConnection: NativeStoreSandboxConnectionV1, originalRevisionRevoked: boolean) {
+  const observedAt = Date.now(), row = structuredClone(receipt), connection = structuredClone(originalConnection);
+  connection.encryption.key = new Uint8Array(connection.encryption.key);
+  const replay = await replayNativeStoreSandboxReceiptV1(row, connection, originalRevisionRevoked);
+  const o = replay.observation, reasons: string[] = [];
+  if (o.parseStatus !== "valid" || o.issues.length) reasons.push("receipt_invalid");
+  if (o.appId !== connection.appId || o.store !== connection.store || o.environment !== "SANDBOX") reasons.push("scope_mismatch");
+  if (o.eventType !== "CANCELLATION" || !o.userId || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(o.userId)
+    || !o.productId || !o.transactionId || !o.originalTransactionId || o.conflictingUserIds.length || o.transferredFrom.length || o.transferredTo.length)
+    reasons.push("negative_identity_incomplete");
+  let eventAt: string | null = null;
+  if (o.parseStatus === "valid" && !o.issues.length) {
+    const raw = await decryptLosslessRouterEnvelope(row.envelope, connection);
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(raw), event = JSON.parse(text).event as Record<string, unknown>;
+    const token = eventScalarTokens(text).get("event_timestamp_ms");
+    const ms = typeof event.event_timestamp_ms === "number" ? scaledInteger(token, 0) : null;
+    if (ms !== null && ms > 0 && ms <= observedAt && Number.isFinite(new Date(ms).getTime())) eventAt = new Date(ms).toISOString();
+    if (!eventAt) reasons.push("negative_time_invalid");
+    if (event.cancel_reason !== "CUSTOMER_SUPPORT") reasons.push("refund_reason_unsupported");
+  }
+  return Object.freeze({ protocol: "native-store-sandbox-refund-v1" as const, receiptId: replay.receiptId,
+    rawSha256: replay.rawSha256, eventAt, refundCandidate: reasons.length === 0, originalRevisionRevoked,
+    reasons: Object.freeze([...reasons, "refund_mapping_and_lifecycle_unqualified"]),
+    dispatchAllowed: false as const, settlementAllowed: false as const, grantsAccess: false as const,
+    acknowledgementAllowed: false as const, financialAuthority: false as const, payable: false as const });
+}

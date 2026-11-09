@@ -4,7 +4,7 @@ import {nativeStoreInstallProfile} from '../../isolated-runtime/native-store-san
 const manifest=JSON.parse(fs.readFileSync(new URL('../../isolated-runtime/native-store-sandbox-v1/install-delta.json',import.meta.url),'utf8'));
 test('pinned added catalog belongs to fixed source closure and remains non-authoritative',()=>{
  assert.equal(manifest.sourceDigest,nativeStoreInstallProfile().sourceDigest);assert.match(manifest.addedCatalogSha256,/^[a-f0-9]{64}$/u);
- assert.equal(manifest.publicFunctions.length,37);assert.equal(new Set(manifest.publicFunctions).size,37);
+ assert.equal(manifest.publicFunctions.length,42);assert.equal(new Set(manifest.publicFunctions).size,42);
  assert.equal(manifest.publicFunctions.filter(name=>name.startsWith('native_store_sandbox_dispatch_v1(')).length,1);
  assert.equal(manifest.counts.membership,8);assert.equal(manifest.counts.role,4);assert.equal(NATIVE_ROLES.length,4);
  assert.equal(manifest.qualification,'source_delta_only');assert.equal(manifest.deploymentAllowed,false);

@@ -45,12 +45,13 @@ native-linked grants when new unprocessed/conflicting/negative evidence arrives,
 and block new allocations while such evidence remains unresolved. Raw evidence
 must remain replayable across connection revocation. No queue-only delayed hold,
 newest-pending lookup, timeout-based hold reset or automatic negative clearance
-is acceptable. The qualified effect worker, allocation and settlement are not implemented.
-The following source-only pending fence now establishes the initial hold boundary.
+is acceptable. The dormant worker, exact candidate read, atomic effects and private
+access path are now source-implemented and exercised with authenticated synthetic
+receipts on disposable managed PostgreSQL. No real provider mapping is qualified.
 
 ## Pending receipt fence
 
-`pending-fence.sql` is included in the fixed forty-two-module default-off closure.
+`pending-fence.sql` is included in the fixed forty-seven-module default-off closure.
 The mandatory local `--managed-install --pending-fence-proof` quote harness mode
 requires that the managed non-superuser install itself created the tables and
 trigger. It never fixture-installs missing objects. The fixed source, added
@@ -86,7 +87,7 @@ not a working purchase projector or a complete revocation/hold-release policy.
 
 ## Dormant qualified dispatch
 
-`qualified-dispatch.sql` extends the fixed 42-module closure with immutable
+`qualified-dispatch.sql` extends the fixed 47-module closure with immutable
 operator-owned qualification evidence, append-only revocations and original
 attempt-to-qualification links. All three tables must be empty at installation
 commit. There is no client/service qualification writer and no real provider
@@ -110,8 +111,8 @@ invoked. Android remains held: a configured Play license-scope string does not
 prove the current device billing account is a licensed no-charge tester.
 
 This source checkpoint does not invoke the SDK, configure a provider or enable a
-worker. It still lacks processed-evidence completion, terminal shared-SKU slot
-release and native atomic receipt/allocation/grant projection. A negative event's
+worker. It now includes append-only processing completion, terminal shared-SKU
+slot release and atomic receipt/allocation/link/grant projection, all default-off. A negative event's
 processing completion must never restore its revoked receipt; a processed refund
 also must not permanently block unrelated future project purchases. Unknown,
 malformed or conflicting evidence remains unresolved until explicitly proven.
@@ -123,12 +124,11 @@ prevents absent qualification from stranding a permanent SKU reservation merely
 because the normal screen opened. Consume still revalidates after the explicit
 user action; discovery is neither a capability token nor durable permission.
 
-The generic core grant reader can currently read a native grant that was inserted
-without a native link. The fence fixture deliberately seeds such a grant before
-linking solely to test the subsequent hold. This is not universal protection or
-a permissible future issuer sequence: native allocation must create receipt,
-link and grant atomically under the project lock, and a narrow native-link guard
-in the generic reader is recommended before any native grant issuer is enabled.
+The generic core grant reader now applies the native current-allocation predicate
+only to native-store receipts. Unlinked or manually seeded native grants are denied;
+existing Test Store branches are unchanged. The legacy fence fixture proves this
+negative case. The separate effects fixture proves a genuine atomic allocation,
+including its original receipt/effect/claim/attempt links and current private access.
 
 
 The mandatory qualified-dispatch harness also runs seven real-client integration cases
@@ -144,3 +144,61 @@ Signed `AppTransaction.appVersion` is stored as its own required opaque
 verified native signed value, never inferred from `CFBundleVersion` or
 `CFBundleShortVersionString`. Local fixtures deliberately use three different
 values (signed `100.7`, build `101`, marketing `1.0.0`); none are real observations.
+## Private effect orchestration source
+
+`native-store-effect-worker-v1.ts` accepts only a trusted service work item of
+immutable raw receipt, optional claim and settlement-protocol IDs. It reads the
+effect context and original journal registry, resolves the original key only,
+replays exact bytes, and submits one exact economic or refund projection to the
+effect RPC. Missing, conflicting or mismatched evidence never calls the writer.
+Refund parsing retains historical negative evidence when intake is off or the
+original revision is revoked; SQL remains responsible for current qualification
+and permanent negative effects. No original secret or provider body is returned.
+
+The worker uses a bounded monotonic deadline. An uncertain write is never
+automatically retried. A successful result identifies only the native consumer;
+the top-level shared-webhook acknowledgement remains false. This is not yet an
+enabled HTTP endpoint, scheduler or hosted worker. The private candidate router
+is now source-implemented. Separate integration cases use genuinely authenticated
+synthetic receipts with actual managed PostgreSQL candidate/context/effect RPCs,
+not mocked SQL success. None of that qualifies real provider observations.
+
+## Integrated dormant effects and access
+
+The trusted service worker resolves a unique exact candidate from persisted raw
+identity. It never chooses newest pending, accepts client qualification, or reserves
+transactions from assertions. Original bytes and registry are replayed before the
+service-only effect RPC. SQL trusts that authenticated backend boundary, not a
+fictional database cryptographic attestation. One project lock orders journal
+pending evidence, receipt-specific holds, completion and allocation. A positive
+transaction atomically creates core intent/receipt, unique allocation, effect,
+link, protected core grant and terminal disposition. Any late failure rolls back
+all of them. Historical session expiry does not discard authenticated evidence;
+current private access always checks the active buyer session and eligibility.
+
+Qualified refunds retain immutable transaction/chain tombstones, permanent exact
+receipt holds and grant revocation. Completion resolves only that raw row's pending
+holds. Refund-before-purchase produces a terminal tombstoned allocation attempt,
+never a grant; unrelated later transactions can proceed. Unknown, conflicting,
+malformed and productless transfer evidence remains pending. A consumed uncertain
+attempt cannot be canceled or timed out into a new purchase. No real mapping or
+lifecycle evidence is seeded. Native-consumer completion never acknowledges an
+entire shared provider webhook. Actual provider observation, hosted deployment,
+private media/scanner operations and routing activation remain separate requirements.
+
+## Automatic inline processing, still default off
+
+The authenticated ingress now optionally enters the same private candidate/replay/
+effect worker immediately after confirmed durable journal persistence. The server
+must explicitly enable native reconciliation; no client flag or supplied work ID
+can enable it. Confirmed duplicates may re-enter idempotent processing. Conflicts
+and uncertain persistence never invoke effects. Intake and processing share one
+bounded deadline; an uncertain effect response is not retried inside the request.
+Provider redelivery can recover the immutable identity without a manual service
+call. The separately authenticated reconciliation endpoint remains a recovery path.
+
+Ingress still returns HTTP 503 with acknowledgement false even when this native
+consumer completed. It does not assert that every other shared-webhook consumer
+has durably processed the delivery. Enabling this source is not a provider routing
+or acknowledgement decision. All runtime flags and real qualification records
+remain absent/off until separately qualified and deployed.

@@ -24,7 +24,9 @@ export async function runPendingFenceCases(x){
  q(armed+link(native)+'commit;');
  reject(armed+link(unrelated)+'commit;',/native_store_exact_core_link_required/u);cases++;
  const delivery=`select sandbox_commerce_v1.authorize_resource_delivery('${buyer}','${session}','${resource}',1,'${resource}',1,'play_video');`;
- assert.ok(q(armed+delivery+'commit;').includes('media_signer'));cases++;
+ // A manually seeded native receipt/link is no longer an allocation: the
+ // generic reader must deny it even before any pending evidence exists.
+ reject(armed+delivery+'commit;',/sandbox_current_exact_resource_grant_required/u);cases++;
  const positive=await intake();const first=JSON.parse(q(journal(positive)));assert.equal(first.status,'recorded');assert.equal(count(),'1|1|1');
  assert.equal(q(`select receipt_id from sandbox_commerce_v1.resource_delivery_holds;`),native);
  reject(armed+delivery+'commit;',/sandbox_current_exact_resource_grant_required/u);cases++;
@@ -34,7 +36,7 @@ export async function runPendingFenceCases(x){
  q(journal(await intake({},'{broken-json')));assert.equal(count(),'4|4|4');cases++;
  const next=receipt('APP_STORE');reject(armed+link(next)+'commit;',/native_store_project_evidence_pending/u);cases++;
  for(const role of ['anon','authenticated','service_role'])for(const table of ['native_store_core_links','native_store_pending_raw'])reject(`set role ${role};select * from sandbox_commerce_v1.${table};`,/permission denied/u);cases++;
- for(const table of ['native_store_core_links','native_store_pending_raw'])for(const op of [`update sandbox_commerce_v1.${table} set project_id='changed'`,`delete from sandbox_commerce_v1.${table}`,`truncate sandbox_commerce_v1.${table}`])reject(op+';',/native_store_quote_immutable/u);cases++;
+ for(const table of ['native_store_core_links','native_store_pending_raw'])for(const op of [`update sandbox_commerce_v1.${table} set project_id='changed'`,`delete from sandbox_commerce_v1.${table}`,`truncate sandbox_commerce_v1.${table}${table==='native_store_pending_raw'?',sandbox_commerce_v1.native_store_negative_tombstones,sandbox_commerce_v1.native_store_allocations,sandbox_commerce_v1.native_store_raw_effects,sandbox_commerce_v1.native_store_reservation_terminals':''}`])reject(op+';',/native_store_quote_immutable/u);cases++;
  const rollback=await intake();q('begin;'+journal(rollback)+'rollback;');assert.equal(count(),'4|4|4');cases++;
  reject('begin isolation level repeatable read;'+journal(rollback)+'commit;',/native_store_fence_context_required/u);assert.equal(count(),'4|4|4');cases++;
  // Controlled rendezvous, no fixed holder sleep. A delivery SHARE lock makes

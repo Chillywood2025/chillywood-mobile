@@ -10,9 +10,13 @@ begin
  perform sandbox_commerce_v1.assert_provider_service();perform sandbox_commerce_v1.assert_generation(false);
  if p_user is null or p_session is null or p_reservation is null or p_request is null or p_recover is null then raise exception 'native_store_attempt_invalid';end if;
  buyer:=sandbox_commerce_v1.assert_authority(p_user,p_session,'delivery');
+ if not pg_try_advisory_xact_lock(hashtextextended('native-store-reserve:'||p_user,691)) then raise exception 'native_store_attempt_busy' using errcode='55P03';end if;
  if not pg_try_advisory_xact_lock(hashtextextended('native-store-consume:'||p_user,691)) then raise exception 'native_store_attempt_busy' using errcode='55P03';end if;
  select * into r from sandbox_commerce_v1.native_store_reservations where id=p_reservation and buyer_id=p_user;
  if r.id is null then raise exception 'native_store_attempt_unavailable';end if;
+ perform sandbox_commerce_v1.native_store_lock_project(r.project_id);
+ if exists(select 1 from sandbox_commerce_v1.native_store_reservation_terminals where selection_id=r.selection_id)
+ then raise exception 'native_store_attempt_terminal';end if;
  select * into a from sandbox_commerce_v1.native_store_dispatch_attempts where reservation_id=r.id and buyer_id=p_user;
  if a.id is not null and not p_recover and a.request_id<>p_request then raise exception 'native_store_attempt_conflict';end if;
  if a.id is null and not p_recover then
@@ -122,7 +126,7 @@ begin
  perform 1 from sandbox_commerce_v1.native_store_quote_controls where singleton and preparation_enabled for share nowait;
  if not found then return jsonb_build_object('qualification',null,'reason','preparation_disabled');end if;
  perform sandbox_commerce_v1.native_store_lock_project(p_quote#>>'{catalog,projectId}');
- if exists(select 1 from sandbox_commerce_v1.native_store_pending_raw where project_id=p_quote#>>'{catalog,projectId}') then reason:='project_evidence_pending';
+ if sandbox_commerce_v1.native_store_project_pending(p_quote#>>'{catalog,projectId}') then reason:='project_evidence_pending';
  else
   lock table sandbox_commerce_v1.native_store_protocol_qualifications,sandbox_commerce_v1.native_store_protocol_revocations in share mode nowait;
   select count(*) into n from sandbox_commerce_v1.native_store_protocol_qualifications x
@@ -163,6 +167,7 @@ begin
  if p_command='dispatch-qualification' then
   select * into s from sandbox_commerce_v1.native_store_selections where id=sid and buyer_id=p_user;
   if s.id is null then reason:='selection_unavailable';
+  elsif exists(select 1 from sandbox_commerce_v1.native_store_reservation_terminals where selection_id=s.id) then reason:='selection_terminal';
   else
    fresh:=sandbox_commerce_v1.native_store_quote_command_armed(p_user,p_session,'offer',p_request,jsonb_build_object('offerId',s.quote->>'offerId','store',s.quote#>>'{catalog,store}'));
    if fresh->>'status'<>'ok' or fresh#>'{data,quote}' is distinct from s.quote then reason:='quote_unavailable';
@@ -177,6 +182,7 @@ begin
  end if;
  select * into r from sandbox_commerce_v1.native_store_reservations where id=rid and selection_id=sid and buyer_id=p_user;
  if r.id is null then status:=case when p_command='dispatch-recover' then 'unknown' else 'held' end;reason:='reservation_unavailable';
+ elsif exists(select 1 from sandbox_commerce_v1.native_store_reservation_terminals where selection_id=sid) then reason:='selection_terminal';
  else
   select * into strict s from sandbox_commerce_v1.native_store_selections where id=sid and buyer_id=p_user;
   if r.quote is distinct from s.quote then raise exception 'native_store_dispatch_quote_mismatch';end if;

@@ -7,8 +7,7 @@ create table sandbox_commerce_v1.native_store_reservations(
  buyer_id uuid not null,session_id uuid not null,request_id uuid not null,
  project_id text not null,app_id text not null,store text not null check(store in('APP_STORE','PLAY_STORE')),
  environment text not null check(environment='SANDBOX'),product_id text not null,quote jsonb not null,
- created_at timestamptz not null default clock_timestamp(),unique(buyer_id,request_id),
- unique(buyer_id,project_id,app_id,store,environment,product_id)
+ created_at timestamptz not null default clock_timestamp(),unique(buyer_id,request_id)
 );
 alter table sandbox_commerce_v1.native_store_reservations enable row level security;
 alter table sandbox_commerce_v1.native_store_reservations force row level security;
@@ -41,7 +40,10 @@ begin
  if s.id is null then
   if p_command='reserve' then raise exception 'native_store_selection_unavailable';end if;
   status:='unknown';body:=jsonb_build_object('reservation',null,'reason','reservation_unknown');
+ elsif exists(select 1 from sandbox_commerce_v1.native_store_reservation_terminals where selection_id=sid) then
+  status:='held';body:=jsonb_build_object('reservation',null,'reason','selection_terminal');
  else
+  if p_command='reserve' then perform sandbox_commerce_v1.native_store_lock_project(s.quote#>>'{catalog,projectId}');end if;
   select * into r from sandbox_commerce_v1.native_store_reservations where buyer_id=p_user and selection_id=sid;
   if p_command='reserve' then
    if r.id is not null then
@@ -62,7 +64,8 @@ begin
     owner_until:=sandbox_commerce_v1.resource_owner_delivery_deadline((s.quote->>'creatorId')::uuid,p_user);
     if exists(select 1 from sandbox_commerce_v1.native_store_reservations x where x.buyer_id=p_user
       and x.project_id=s.quote#>>'{catalog,projectId}' and x.app_id=s.quote#>>'{catalog,appId}' and x.store=s.quote#>>'{catalog,store}'
-      and x.environment=s.quote#>>'{catalog,environment}' and x.product_id=s.quote#>>'{catalog,wireProductId}')
+      and x.environment=s.quote#>>'{catalog,environment}' and x.product_id=s.quote#>>'{catalog,wireProductId}'
+      and not exists(select 1 from sandbox_commerce_v1.native_store_reservation_terminals t where t.reservation_id=x.id))
     then raise exception 'native_store_shared_sku_reserved';end if;
     perform sandbox_commerce_v1.assert_fresh(buyer);perform sandbox_commerce_v1.assert_fresh(seller);
     if clock_timestamp()>=owner_until then raise exception 'native_store_owner_expired';end if;
