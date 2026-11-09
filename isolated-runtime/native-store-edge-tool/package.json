@@ -1,0 +1,7 @@
+{
+  "name": "@chillywood/native-store-edge-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local/CI-only exact official Linux Deno binary; never a mobile or deployed dependency.",
+  "dependencies": { "@deno/linux-x64-glibc": "2.9.6" }
+}

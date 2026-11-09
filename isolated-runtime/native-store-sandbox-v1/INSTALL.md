@@ -158,3 +158,48 @@ The source-derived row artifact contains no target snapshot or provider data. It
 For a reviewed source change, explicit `--generate-local-pins` installs only into the harness's disposable local cluster and regenerates both expected delta and semantic rows from its actual catalogs. This mode reports `atomicVerified:false` and `deploymentAllowed:false`, never a successful atomic proof. It preserves old-object/ACL/role delta checks, but does not compare the newly changed catalog with stale expected rows. Normal mandatory CI runs never use generation mode: separate ordinary and shifted-OID atomic verification must pass after regeneration. The quote implementation has an owner-private already-armed helper; the original entry point still arms exactly one transaction budget. The reservation and dormant owner-private consumption modules are included in this 40-module install closure. Both tables must be empty at the default-off installation commit. Consumption has no public wrapper, service grant, provider qualification, or SDK dispatch authority.
 
 Actual non-superuser PostgreSQL tests execute the atomic wrapper and reject late old-object changes, public CREATE leakage, role LOGIN expansion, old default ACL changes and a duplicated expected row. Each failed attempt restores the full before snapshot and leaves all fresh schemas/roles absent. Independent OID allocation and modeled event-trigger parity remain exercised. This is not an apply executor: it has no network, target URL, transport override, migration-history write or activation. A future executor still needs qualified target identity, expected target baseline/concurrency checks, exact history append, uncertain-write recovery and independent committed readback. No hosted install or checkout qualification is asserted.
+
+### Offline transaction envelope, not hosted deployment eligibility
+
+`install-envelope.mjs` is a separate source-only assembler around that unchanged
+40-module atomic installer. Its default migration identity and baseline are null;
+normal default use rejects SQL emission. An explicit independently reviewed
+identity and exact baseline must be supplied. The local tests supply only a
+clearly synthetic version/name and a real disposable-database snapshot, never
+an invented hosted baseline. There is no apply CLI, connector or target request.
+
+The envelope sets JIT off, work memory to 8 MiB, parallel query workers to zero,
+statement timeout to 20 seconds and transaction timeout to 25 seconds BEFORE
+catalog/history work. These settings bound individual work but do not prove a
+safe aggregate memory ceiling. It takes an advisory fence and NOWAIT share-row-
+exclusive locks on the exact 21 prerequisite relations plus migration history,
+then rechecks catalog/history/money fingerprints under those locks. This can
+block application writes for the transaction lifetime. A single exact source
+receipt is appended before the existing atomic postcheck; a failed history,
+money, catalog or deferred default-off check rolls everything back together.
+
+Relation locks and the cooperative advisory fence do NOT exclude concurrent
+administrative role, schema, function, event-trigger or other catalog DDL.
+Pre/post catalog comparison detects visible drift, not arbitrary edits after
+the final observation. External operational coordination is still required.
+`deploymentAllowed` and `administrativeConcurrencyExcluded` remain false.
+
+The outcome classifier accepts one independently obtained, correct-read-identity
+consistent snapshot, never fields assembled across independent transactions.
+The local proof collects context, history, catalog and money state in one SQL
+statement inside one read-only repeatable-read transaction. A future transport
+must preserve that consistency rather than merely label mixed reads a snapshot.
+It distinguishes unchanged evidence from an exact source receipt plus
+catalog delta; incomplete, conflicting or changed evidence stays unknown. Every
+result has `retryAllowed:false`: even an unchanged observation is not permission
+to repeat an uncertain write. Exact catalog/history evidence does not prove
+runtime controls are still disabled or data is still empty. A separately
+qualified private-state read path remains required; the classifier reports
+`exact_source_receipt_observed_runtime_unqualified`, never deployed/activated.
+
+The current hosted capacity hold remains in force. In particular, the existing
+broad `readbackSQL()` catalog/history aggregation must NOT be run just because
+these offline tests pass. Future target work needs an independently reviewed,
+staged resource-bounded readback plan, suitable transport identity, operational
+headroom and confirmation that the hold is lifted. No such target read is part
+of this source increment.
