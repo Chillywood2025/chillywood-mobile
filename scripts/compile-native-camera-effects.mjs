@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { ARTIFACTS } from "./test-local-camera-inference-offline.mjs";
 import { assertLocalCameraProviderClosure } from "./camera-provider-closure.mjs";
+import { prepareNativeCameraGradle } from "./lib/native-camera-gradle-acquisition.mjs";
 import { requireTestStoreV3Sources, parseTestStoreV3NativePolicyReport, prebuildBeforeExpoCryptoSourceCompile, withNormalPrebuildPackageForChecks,
   resolveExpoCryptoSourceProject, expoCryptoCompileTasks, verifyExpoCryptoRuntimeGraph,
   collectPaidVideoAndroidArtifacts, collectPaidVideoIosArtifacts } from "./ci/paid-video-native-closure.mjs";
@@ -615,6 +616,13 @@ try {
     if (generateOnly) continue;
     if (platform === "android") {
       assert(env.ANDROID_HOME || env.ANDROID_SDK_ROOT, "Android SDK must be supplied by the runner; no automatic license acceptance");
+      receipts.android.generatedBeforeAcquisitionSha256 = receipts.android.generatedSourceSha256;
+      receipts.android.gradleDistribution = prepareNativeCameraGradle(
+        path.join(generated, "gradle/wrapper/gradle-wrapper.properties"), workspace);
+      const effectiveDigest = createHash("sha256");
+      for (const file of files(generated).sort()) { effectiveDigest.update(path.relative(generated, file)); effectiveDigest.update(fs.readFileSync(file)); }
+      receipts.android.generatedSourceSha256 = effectiveDigest.digest("hex");
+      saveReceipt();
       const initScript = path.join(workspace, "camera-classpath.gradle");
       fs.writeFileSync(initScript, `import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
