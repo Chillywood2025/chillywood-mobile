@@ -12,9 +12,10 @@ import {installEventTriggerParity} from './event-trigger-parity.fixture.mjs';
 import {readbackSQL,validateSnapshot,canonicalItemArrayTextSQL} from '../../scripts/native-store-install-prepare.mjs';
 import {deltaSnapshotSQL,describeNativeInstallDelta,verifyNativeInstallDelta,normalizeAdded} from './install-delta.mjs';
 assert.ok(process.argv.length>=4&&process.argv.length<=7);assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
-const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding','--generate-local-pins','--envelope-proof','--private-state-proof'].includes(f)));
+const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding','--generate-local-pins','--envelope-proof','--private-state-proof','--recovery-proof'].includes(f)));
 if(flags.includes('--private-state-proof'))assert.equal(flags.length,1);
 if(flags.includes('--envelope-proof'))assert.ok(flags.includes('--event-trigger-parity')&&!flags.includes('--generate-local-pins'));
+if(flags.includes('--recovery-proof'))assert.ok(flags.includes('--event-trigger-parity')&&!flags.includes('--generate-local-pins')&&!flags.includes('--envelope-proof'));
 const triggerParity=flags.includes('--event-trigger-parity'),oidPadding=flags.includes('--oid-padding');
 const here=path.dirname(fileURLToPath(import.meta.url)),base=path.resolve(here,'../sandbox-commerce-v1'),profile=nativeStoreInstallProfile();
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'native-managed-')),data=path.join(directory,'data'),port='55491';
@@ -117,7 +118,7 @@ try{
   fs.writeFileSync(path.join(here,'install-atomic-rows.json.gz'),gzipSync(JSON.stringify({sourceDigest:profile.sourceDigest,addedCatalogSha256:delta.addedCatalogSha256,rows})+'\n',{level:9}));
   console.log(JSON.stringify({protocol:'native-store-local-pin-generation-v1',sourceDigest:profile.sourceDigest,addedCatalogSha256:delta.addedCatalogSha256,atomicVerified:false,deploymentAllowed:false}));
  }else{
- const envelopeProof=flags.includes('--envelope-proof')?await prepareEnvelopeNativeProof({q,run,args,bin,env,attempt,absent}):null;
+ const envelopeProof=flags.includes('--envelope-proof')?await prepareEnvelopeNativeProof({q,run,args,bin,env,attempt,absent}):flags.includes('--recovery-proof')?(await import('./install-recovery.native-cases.mjs')).prepareRecoveryNativeProof({q,run,args}):null;
  const atomic=envelopeProof?.sql??nativeStoreAtomicInstallSQL();
  for(const [mutation,reason] of [
   ['create function public.atomic_unexpected() returns integer language sql as $$select 1$$;','native_atomic_existing_catalog_changed'],

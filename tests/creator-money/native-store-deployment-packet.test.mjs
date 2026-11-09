@@ -8,6 +8,7 @@ test('one exact app source binds all four Edge closures separately from SQL cata
  for(const [key,value] of Object.entries(p.qualification))assert.equal(value,key==='sourceBound');assert.match(p.packetDigest,/^[a-f0-9]{64}$/u);
  assert.equal(nativeStoreDeploymentPacket(commit).packetDigest,p.packetDigest);assert.ok(p.edges.every(x=>x.files.some(f=>f.name.endsWith('/deno.lock'))));
  assert.equal('sqlText' in p.sql,false);assert.equal('target' in p,false);
+ assert.ok(p.provenance.some(x=>x.name==='isolated-runtime/native-store-sandbox-v1/install-recovery.mjs'));
 });
 test('exact commit required, no ref names or caller activation switches',()=>{for(const c of ['HEAD','main','--help','a'.repeat(39),null])assert.throws(()=>nativeStoreDeploymentPacket(c),/Exact/);});
 test('JWT substitution or duplicate section is rejected',()=>{for(const change of [s=>s.replace('[functions.native-store-ingress-v1]\nverify_jwt = false','[functions.native-store-ingress-v1]\nverify_jwt = true'),s=>s+'\n[functions.native-store-ingress-v1]\nverify_jwt = false\n'])assert.throws(()=>nativeStoreDeploymentPacket(commit,{readFile:n=>n==='supabase/config.toml'?change(read(n).toString()):read(n)}),/JWT/);});
@@ -18,6 +19,8 @@ test('SQL source, catalog, lock and missing source substitutions fail closed',()
  ['isolated-runtime/native-store-sandbox-v1/install-delta.json',s=>s.replace(/"sourceDigest": "[a-f0-9]+"/u,'"sourceDigest": "'+ '0'.repeat(64)+'"')],
  ['supabase/functions/native-store-reconcile-v1/deno.lock',s=>s+'\n'],
  ['supabase/functions/native-store-reconcile-v1/index.ts',()=>null],
+ ['isolated-runtime/native-store-sandbox-v1/install-recovery.mjs',s=>s+'\n// changed recovery\n'],
+ ['isolated-runtime/native-store-sandbox-v1/install-recovery.mjs',()=>null],
  ])assert.throws(()=>nativeStoreDeploymentPacket(commit,{readFile:n=>n===file?change(read(n).toString()):read(n)}));
 });
 
@@ -30,6 +33,6 @@ test('dirty packet or transitive SQL generator cannot label output with the comm
   git('init','-q');git('add','.');git('-c','user.name=Synthetic Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Synthetic packet fixture');const head=git('rev-parse','HEAD');
   const {nativeStoreDeploymentPacket:check}=await import(pathToFileURL(path.join(dir,'isolated-runtime/native-store-sandbox-v1/deployment-packet.mjs')).href);
   assert.equal(check(head).appSourceTree,git('rev-parse','HEAD^{tree}'));
-  for(const name of ['isolated-runtime/native-store-sandbox-v1/deployment-packet.mjs','scripts/native-store-install-prepare.mjs']){const file=path.join(dir,name),original=fs.readFileSync(file);fs.appendFileSync(file,'\n// changed generator\n');assert.throws(()=>check(head),/TRACKED_SOURCE_DIRTY/u);fs.writeFileSync(file,original);}
+  for(const name of ['isolated-runtime/native-store-sandbox-v1/deployment-packet.mjs','isolated-runtime/native-store-sandbox-v1/install-recovery.mjs','scripts/native-store-install-prepare.mjs']){const file=path.join(dir,name),original=fs.readFileSync(file);fs.appendFileSync(file,'\n// changed generator\n');assert.throws(()=>check(head),/TRACKED_SOURCE_DIRTY/u);fs.writeFileSync(file,original);}
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

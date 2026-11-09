@@ -28,7 +28,7 @@ export function nativeStoreDeploymentPacket(sourceCommit,{readFile=readLocal}={}
  // The existing assembler validates its semantic catalog pin. Bind those exact
  // source and generator bytes separately from all Edge runtime closures.
  for(const f of sql.files)if(sha256(read(f.path))!==f.sha256)throw Error('SQL source mismatch');
- for(const name of ['deployment-packet.mjs','dependency-probe.sql','install-envelope.mjs','install-source.json','install-atomic-rows.json.gz','install-profile.mjs','install-atomic.mjs','install-delta.mjs','private-state-readback.mjs','edge-profile.mjs','range-edge-profile.mjs','worker-edge-profile.mjs'])required(prefix+name);
+ for(const name of ['deployment-packet.mjs','dependency-probe.sql','install-envelope.mjs','install-recovery.mjs','install-source.json','install-atomic-rows.json.gz','install-profile.mjs','install-atomic.mjs','install-delta.mjs','private-state-readback.mjs','edge-profile.mjs','range-edge-profile.mjs','worker-edge-profile.mjs'])required(prefix+name);
  required('isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/source-manifest.json');
  required('ops/creator-backend-rollout/prepare-edge.mjs');
  for(const name of ['scripts/native-store-install-prepare.mjs','scripts/live-room-exact-deploy.mjs','scripts/studio-rolling-deploy.mjs','package.json','package-lock.json'])required(name);

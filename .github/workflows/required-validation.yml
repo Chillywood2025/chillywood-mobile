@@ -399,6 +399,8 @@ jobs:
         run: node isolated-runtime/native-store-sandbox-v1/install-managed.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --event-trigger-parity --oid-padding
       - name: Verify offline native install transaction envelope and uncertain outcome classification
         run: node isolated-runtime/native-store-sandbox-v1/install-managed.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --event-trigger-parity --envelope-proof
+      - name: Verify compact native recovery with exact readonly identity and fail-closed mutations
+        run: node isolated-runtime/native-store-sandbox-v1/install-managed.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --event-trigger-parity --oid-padding --recovery-proof
       - name: Verify bounded private native post-install readback candidate
         run: |
           node --test tests/creator-money/native-store-private-state-readback.test.mjs
