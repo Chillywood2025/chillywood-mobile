@@ -37,7 +37,7 @@ test('source binding accepts a clean exact committed closure, rejects wrong head
  const prefix='isolated-runtime/native-store-sandbox-v1/';
  try{
   const files=[...new Set([...nativeStoreInstallProfile().files.map(f=>f.path),prefix+'install-profile.mjs',prefix+'install-source.json',prefix+'dependency-probe.sql',
-   prefix+'install-delta.mjs',prefix+'install-delta.json',prefix+'install-atomic.mjs',prefix+'install-atomic-rows.json.gz',
+   prefix+'install-delta.mjs',prefix+'install-delta.json',prefix+'install-atomic.mjs',prefix+'install-atomic-rows.json.gz',prefix+'install-envelope.mjs',
    'isolated-runtime/sandbox-commerce-v1/candidates/paid-video-combined-readiness/source-manifest.json','scripts/native-store-install-prepare.mjs',
    'scripts/live-room-exact-deploy.mjs','scripts/studio-rolling-deploy.mjs','package.json','package-lock.json'])];
   for(const f of files){fs.mkdirSync(path.dirname(path.join(dir,f)),{recursive:true});fs.copyFileSync(path.join(root,f),path.join(dir,f));}
