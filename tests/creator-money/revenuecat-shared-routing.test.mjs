@@ -218,11 +218,15 @@ test('late journal, legacy or effect completion never becomes success or starts 
     assert.equal(h.calls.filter(c=>c.name==='native_store_sandbox_effect_v1').length,phase==='effect'?1:0);
   }
 });
-test('late asynchronous encryption cannot start the journal after its intake deadline',async()=>{
-  let tick=0;const h=await harness({clock:{now:()=>tick}}),original=crypto.subtle.encrypt;
-  crypto.subtle.encrypt=async function(...args){const value=await original.apply(this,args);tick+=10001;return value;};
-  try {assert.equal((await h.send()).status,503);assert.equal(h.calls.some(c=>c.name==='native_store_sandbox_journal_v1'),false);}
-  finally {crypto.subtle.encrypt=original;}
+test('late preliminary and native-intake encryption cannot start the journal after their deadlines',async()=>{
+  for(const delayedEncryption of [1,2]) {
+    let tick=0,encryptions=0;const h=await harness({clock:{now:()=>tick}}),original=crypto.subtle.encrypt;
+    crypto.subtle.encrypt=async function(...args){const value=await original.apply(this,args);if(++encryptions===delayedEncryption)tick+=10001;return value;};
+    try {
+      assert.equal((await h.send()).status,503);assert.equal(encryptions,delayedEncryption);
+      assert.equal(h.calls.some(c=>c.name==='native_store_sandbox_journal_v1'),false);
+    } finally {crypto.subtle.encrypt=original;}
+  }
 });
 
 test('actual migrated SQL supplies exclusion receipts and retains ignored-charge obligations across shared ACK and replay',

@@ -1,8 +1,8 @@
 import { createAdminClient, readOptionalEnv, verifySharedWebhookSecret } from "./provider-readiness.ts";
-import { readAuthenticatedRevenueCatBytes, RouterBoundaryError } from "./revenuecat-router-envelope.ts";
+import { RouterBoundaryError } from "./revenuecat-router-envelope.ts";
 import { processConfiguredNativeStoreReceiptV1 } from "./native-store-configured-process-v1.ts";
 import { parseNativeStoreRuntimeConnectionsV1 } from "./native-store-runtime-config-v1.ts";
-import { createRevenueCatSharedHandlerV1, parseRevenueCatSharedRoutesV1, type RevenueCatLegacyHandlerV1 } from "./revenuecat-shared-routing-v1.ts";
+import { createRevenueCatSharedHandlerV1, parseRevenueCatSharedRoutesV1, readAuthenticatedRevenueCatBytes, type RevenueCatLegacyHandlerV1 } from "./revenuecat-shared-routing-v1.ts";
 
 /** No activation or provider mutation. Existing standalone native ingress keeps
  * its no-shared-ACK contract; this mounts only at the existing shared endpoint. */

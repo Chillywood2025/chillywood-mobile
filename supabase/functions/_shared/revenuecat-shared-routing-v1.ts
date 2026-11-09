@@ -1,7 +1,7 @@
 /** Optional composition at the EXISTING shared RevenueCat webhook. The legacy
  * consumer always runs. Native-only success never stands in for legacy work.
  * Route manifests are server-owned catalog inventories, not provider hints. */
-import { bytesHex, observeRevenueCatBytes, readAuthenticatedRevenueCatBytes, RouterBoundaryError } from "./revenuecat-router-envelope.ts";
+import { authenticateRevenueCatEnvelope, bytesHex, decryptRouterEnvelope, observeRevenueCatBytes, RouterBoundaryError } from "./revenuecat-router-envelope.ts";
 import { persistNativeStoreSandboxIntakeV1, type NativeStoreSandboxConnectionV1, type NativeStoreSandboxIntakeV1 } from "./native-store-sandbox-bridge-v1.ts";
 import { selectNativeStoreIngressConnectionV1 } from "./native-store-runtime-config-v1.ts";
 
@@ -15,6 +15,13 @@ const unavailable = () => new RouterBoundaryError("shared_routing_unavailable", 
 export type SharedRouteV1 = Readonly<{ connection: NativeStoreSandboxConnectionV1; nativeProducts: readonly string[]; legacyProducts: readonly string[] }>;
 export type RevenueCatLegacyObserverV1 = Readonly<{ nativeExcluded(rawSha256: string): void }>;
 export type RevenueCatLegacyHandlerV1 = (request: Request, observer?: RevenueCatLegacyObserverV1) => Promise<Response>;
+
+/** Reuse the immutable qualified authentication/encryption boundary rather than
+ * changing its pinned source. The ephemeral envelope is never persisted, and
+ * the authenticated bytes remain private to this handler. */
+export async function readAuthenticatedRevenueCatBytes(request: Request, connection: NativeStoreSandboxConnectionV1): Promise<Uint8Array> {
+  return decryptRouterEnvelope(await authenticateRevenueCatEnvelope(request, connection), connection);
+}
 
 /** Select active revisions explicitly. Retained old keys in CONNECTIONS_JSON
  * remain replay-only; never choose the newest revision by sorting. */
