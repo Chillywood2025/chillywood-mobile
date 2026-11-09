@@ -25,15 +25,13 @@ const here=path.dirname(fileURLToPath(import.meta.url)),runtime=path.resolve(her
 const source=name=>fs.readFileSync(path.join(runtime,name),'utf8');
 const declaration='create table sandbox_commerce_v1.declarations(user_id uuid primary key,session_id uuid,\n declared_18_plus boolean,country_code text,region_code text,declaration_version text,updated_at timestamptz);';
 const authoritySource=source('tests/authority.fixture.sql');assert.equal(authoritySource.split(declaration).length,2);
-const files=['premium-authority.sql','authority.sql','commands.sql','receipts.sql','test-store.sql','test-store-offerings-core.sql',
- 'test-store-qualification.sql','test-store-offerings-provisioning.sql','test-store-offerings-commands.sql','test-store-offerings-receipts.sql',
- 'history.sql','resource-graphs.sql','delivery-authority.sql','paid-video-media.sql','paid-video-upload.sql','paid-video-commands.sql',
- 'test-store-paid-video-core.sql','test-store-paid-video-commands.sql','test-store-paid-video-provisioning.sql','test-store-paid-video-receipts.sql','paid-video-access.sql'];
-const install='begin;create role anon nologin;create role authenticated nologin;create role service_role nologin;'
- +'alter default privileges for role postgres grant execute on functions to authenticated;'+source('core.sql')
+// Both privilege modes install the exact fixed source closure. A handwritten
+// quote/claim/reservation subset silently missed terminal dependencies. Fixtures
+// provide external facts only, never replacement native tables or helpers.
+const installProfile=nativeStoreInstallProfile();
+const externalFixtures='create role anon nologin;create role authenticated nologin;create role service_role nologin;'
  +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declarations supplied by real core')
- +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'+files.map(source).join('\n')
- +fs.readFileSync(path.join(here,'quote.sql'),'utf8')+fs.readFileSync(path.join(here,'claim.sql'),'utf8')+fs.readFileSync(path.join(here,'reservation.sql'),'utf8')+source('permissions-finalize.sql')+'commit;';
+ +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);';
 // Ask the OS for an available loopback port instead of colliding with a fixed
 // high/ephemeral port. Closing before pg_ctl is necessarily TOCTOU: a competing
 // bind still fails closed with the original bounded diagnostics; never retry
@@ -66,7 +64,7 @@ const ts=createRequire(import.meta.url)('typescript');
  const modules=new Map();function load(name){if(modules.has(name))return modules.get(name);const result={};modules.set(name,result);
   new Function('exports','require',ts.transpileModule(fs.readFileSync(path.join(root,'supabase/functions/_shared',name),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(result,s=>load(s.replace(/^\.\//u,'')));return result;}
 const api=load('native-store-sandbox-command-v1.ts');
-const handler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>actor,execute:async({actor:a,request:r})=>call(r.command,r.payload,r.requestId,a)});
+const handler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>actor,execute:async({actor:a,request:r})=>{try{return call(r.command,r.payload,r.requestId,a);}catch(error){console.error("quote_native_local_rpc_failure",r.command,String(error.message).slice(0,16384));throw error;}}});
 const http=async(command,payload,requestId=randomUUID())=>{const body={protocol:'native-store-sandbox-command-v1',command,requestId,payload};
  const response=await handler(new Request('https://local.invalid',{method:'POST',body:JSON.stringify(body)}));
  assert.equal(response.status,200,await response.clone().text());return response.json();};
@@ -85,16 +83,15 @@ try{
  catch(error){reportServerLog();throw error;}
  if(managed){
   invoke('psql',args('postgres'),`create role postgres login createrole bypassrls nosuperuser nocreatedb noinherit;create database ${db} owner postgres;`);
-  q('create role anon nologin;create role authenticated nologin;create role service_role nologin;'
-   +source('tests/premium-authority.fixture.sql')+authoritySource.replace(declaration,'-- declaration supplied by actual source')
-   +'create table public.channel_audience_blocks(channel_user_id text,blocked_user_id text);'
+  q(externalFixtures
    +`grant usage on schema auth to postgres;do $$declare t record;begin for t in select n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in('auth','public') and c.relkind='r' loop
     execute format('grant select,maintain on table %I.%I to postgres',t.nspname,t.relname);
     execute format('alter table %I.%I enable row level security',t.nspname,t.relname);execute format('alter table %I.%I force row level security',t.nspname,t.relname);end loop;end$$;
     alter default privileges for role postgres grant execute on functions to authenticated;`);
-  invoke('psql',args(db,'postgres'),nativeStoreInstallProfile().sql);
+  invoke('psql',args(db,'postgres'),installProfile.sql);
   assert.equal(q("select rolsuper,rolcreaterole,rolbypassrls from pg_roles where rolname='postgres';"),'f|t|t');
- }else{invoke('psql',args('postgres'),`create database ${db};`);q(install);}
+ }else{invoke('psql',args('postgres'),`create database ${db};`);q(externalFixtures+'alter default privileges for role postgres grant execute on functions to authenticated;');q(installProfile.sql);}
+ assert.equal(q("select to_regclass('sandbox_commerce_v1.native_store_reservation_terminals') is not null and to_regclass('sandbox_commerce_v1.native_store_allocations') is not null;"),'t');
  q(`select authority_fixture.reset();insert into auth.users(id,email_confirmed_at,raw_app_meta_data) values('${buyer}',clock_timestamp(),'{}');
  insert into auth.sessions values('${session}','${buyer}',clock_timestamp()+interval '1 hour');
  insert into public.wave1_legal_acceptances select '${buyer}','${session}',document_key,version,market,capability,'member',null from public.wave1_legal_document_versions where capability='account';
@@ -220,7 +217,7 @@ try{
   let liveAuthority={...authority},dropReserve=true,originalRequest,selection;const requests=[];
   const bound={...clientBindings,'./accountSessionAuthority':{...clientBindings['./accountSessionAuthority'],getCurrentAccountSessionAuthoritySnapshot:()=>liveAuthority},
    './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority:liveAuthority,accessToken:'synthetic-local-auth'})}};
-  const actualHandler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>({userId:liveAuthority.userId,accountId:liveAuthority.accountId,sessionGeneration:liveAuthority.sessionGeneration}),execute:async({actor:a,request:r})=>call(r.command,r.payload,r.requestId,a)});
+  const actualHandler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>({userId:liveAuthority.userId,accountId:liveAuthority.accountId,sessionGeneration:liveAuthority.sessionGeneration}),execute:async({actor:a,request:r})=>{try{return call(r.command,r.payload,r.requestId,a);}catch(error){console.error("quote_native_local_rpc_failure",r.command,String(error.message).slice(0,16384));throw error;}}});
   const transport=async(url,options)=>{
    const body=JSON.parse(options.body);requests.push(body);
    if(body.command==='reserve'){
@@ -264,7 +261,7 @@ try{
   let liveAuthority={...authority},dropClaim=true;const retryApi={};let assertionSends=0;
   const retryBindings={...clientBindings,'./accountSessionAuthority':{...clientBindings['./accountSessionAuthority'],getCurrentAccountSessionAuthoritySnapshot:()=>liveAuthority},
    './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority:liveAuthority,accessToken:'synthetic-local-auth'})}};
-  const retryHandler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>({userId:liveAuthority.userId,accountId:liveAuthority.accountId,sessionGeneration:liveAuthority.sessionGeneration}),execute:async({actor:a,request:r})=>call(r.command,r.payload,r.requestId,a)});
+  const retryHandler=api.createNativeStoreSandboxCommandHandlerV1({authenticate:async()=>({userId:liveAuthority.userId,accountId:liveAuthority.accountId,sessionGeneration:liveAuthority.sessionGeneration}),execute:async({actor:a,request:r})=>{try{return call(r.command,r.payload,r.requestId,a);}catch(error){console.error("quote_native_local_rpc_failure",r.command,String(error.message).slice(0,16384));throw error;}}});
   new Function('exports','require','fetch',clientSource)(retryApi,name=>{assert.ok(Object.hasOwn(retryBindings,name));return retryBindings[name];},async(url,options)=>{
    const command=JSON.parse(options.body).command;
    if(command==='claim'){assertionSends++;if(dropClaim){if(committed)await retryHandler(new Request(url,options));throw Error('synthetic interrupted transport');}}
@@ -352,7 +349,7 @@ try{
  if(!flags.includes('--effects-proof')){assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),'0');assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),'0');}
  else {assert.equal(q('select count(*) from sandbox_commerce_v1.intents;'),q('select count(*) from sandbox_commerce_v1.native_store_allocations;'));assert.equal(q('select count(*) from sandbox_commerce_v1.resource_grants;'),q('select count(*) from sandbox_commerce_v1.native_store_allocations;'));}cases++;
  if(flags.includes('--pending-fence-proof'))await (await import('./pending-fence.native-cases.mjs')).runPendingFenceCases({q,run,args,bin,env,children,json,literal,buyer,session,seller,offer,resource,asset,here,load,db});
- console.log(JSON.stringify({protocol:'native-store-normal-quote-proof-v1',cases,passed:cases,managedInstall:managed,sourceDigest:managed?nativeStoreInstallProfile().sourceDigest:null,providerQualified:false,dispatchAllowed:false}));
+ console.log(JSON.stringify({protocol:'native-store-normal-quote-proof-v1',cases,passed:cases,managedInstall:managed,sourceDigest:installProfile.sourceDigest,providerQualified:false,dispatchAllowed:false}));
 }finally{
  for(const child of children)if(child.exitCode===null)child.kill('SIGTERM');
  // Start can time out after spawning our postmaster. Resolve by this unique
