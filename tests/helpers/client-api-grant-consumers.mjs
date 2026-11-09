@@ -14,6 +14,9 @@ const wrappers = new Set([
   '_lib/platformUsage.ts:readTableCountWhereEq',
   '_lib/platformUsage.ts:readTableCountForProvider',
 ]);
+// Explicit non-Data-API scalar discriminators. This is not a file exemption:
+// only the exact comparison shape is classified; extraction/calls still fail.
+const nonDataComparisons = JSON.parse(fs.readFileSync(new URL('../fixtures/explicit-api-nondata-properties.json', import.meta.url), 'utf8'));
 const operations = new Set(['select', 'insert', 'update', 'upsert', 'delete']);
 
 export function readClientSources(root) {
@@ -211,6 +214,15 @@ export function discoverClientGrantConsumers(sources) {
       if (ts.isPropertyAccessExpression(node.expression)) checkReceiver(node.expression.expression, next);
     }
   }
+  function classifiedNonDataComparison(node) {
+    const comparison=node.parent;
+    if(!ts.isBinaryExpression(comparison)||comparison.left!==node||comparison.operatorToken.kind!==ts.SyntaxKind.ExclamationEqualsEqualsToken
+      ||!ts.isStringLiteral(comparison.right)||!ts.isIdentifier(node.expression))return false;
+    let owner=node.parent;while(owner&&!ts.isFunctionLike(owner))owner=owner.parent;
+    if(!owner||!ts.isFunctionDeclaration(owner)||!owner.name)return false;
+    return nonDataComparisons.some(c=>c.file===node.getSourceFile().fileName&&c.function===owner.name.text
+      &&c.receiver===node.expression.text&&c.property===node.name.text&&c.operator==='!=='&&c.literal===comparison.right.text);
+  }
   const consumers = [];
   for (const source of files.values()) walk(source, node => {
     if (ts.isBindingElement(node)) {
@@ -230,7 +242,7 @@ export function discoverClientGrantConsumers(sources) {
     // into a local variable must not turn an unknown API boundary into no calls.
     if (ts.isCallExpression(node) && operations.has(methodName(node.expression))) checkReceiver(node.expression.expression);
     if (ts.isPropertyAccessExpression(node) && ['from', 'schema'].includes(node.name.text)
-      && !(ts.isCallExpression(node.parent) && node.parent.expression === node)) fail(node, 'extracted from/schema method requires classification');
+      && !(ts.isCallExpression(node.parent) && node.parent.expression === node)&&!classifiedNonDataComparison(node)) fail(node, 'extracted from/schema method requires classification');
     if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)
       || node.expression.name.text !== 'from') return;
     const receiver = node.expression.expression;

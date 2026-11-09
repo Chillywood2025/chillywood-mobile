@@ -15,7 +15,7 @@ test('portable package pins reviewed statement; materialization is the sole quer
  assert.match(sql,/'edgeQualified',false,'deploymentQualified',false/);
 });
 test('arbitrary delta, type mapping, source bytes and unknown inputs fail locked provenance',()=>{
- for(const name of ['scripts/google-refund-tax-observer-proof/inverse-catalog-delta.json','scripts/google-refund-tax-observer-proof/refund-native-types.json','ops/automatic-commerce-cutover/catalog.mjs']){
+ for(const name of ['scripts/google-refund-tax-observer-proof/inverse-catalog-delta.json','scripts/google-refund-tax-observer-proof/refund-native-types.json','ops/automatic-commerce-cutover/catalog.mjs','supabase/config.toml','tests/helpers/client-api-grant-consumers.mjs','tests/fixtures/explicit-api-nondata-properties.json']){
   const bytes=fs.readFileSync(new URL('../'+name,import.meta.url));
   assert.doesNotThrow(()=>assertPinned(name,bytes));
   assert.throws(()=>assertPinned(name,Buffer.concat([bytes,Buffer.from(' ')])),/PROOF_SOURCE_DRIFT/);
