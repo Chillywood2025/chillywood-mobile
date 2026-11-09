@@ -157,3 +157,21 @@ with the same request across sessions, and original-account retention after reti
 The combined qualification harness passes 34 cases plus 33 normal-command cases.
 This is not an observed provider purchase or callback/webhook mapping qualification;
 settlement still requires a separate real-observation qualification and projection.
+
+### Signed app version is an independent observed value
+
+The operator qualification requires `signedAppVersion`, the exact raw
+`AppTransaction.appVersion` observed for the qualified app transaction. It is
+not inferred from either unsigned `CFBundleVersion` (`nativeBuild`) or unsigned
+`CFBundleShortVersionString` (`nativeVersion`). All three comparisons remain
+independent; missing or mismatched signed values block dispatch. No real value
+is seeded by this source change.
+
+Apple's [appVersion documentation](https://developer.apple.com/documentation/storekit/apptransaction/appversion)
+describes a machine-readable Xcode version but does not establish equality to
+the marketing version. Its [originalAppVersion documentation](https://developer.apple.com/documentation/storekit/apptransaction/originalappversion)
+says that property is comparable to appVersion and uses CFBundleVersion on
+non-macOS platforms. We therefore do not assume a mapping. OriginalAppVersion's
+sandbox constant is not used as current appVersion evidence. Synthetic tests
+intentionally use different signed, build and marketing values; they are not
+installed-app qualification or signed-build attestation.

@@ -11,15 +11,15 @@ const digest = (v: unknown) => typeof v === "string" && /^[a-f0-9]{64}$/u.test(v
 export type NativeDispatchQualification = {
  id: string; revision: number; projectId: string; appId: string; store: "APP_STORE" | "PLAY_STORE"; environment: "SANDBOX";
  wireProductId: string; catalogBindingId: string; catalogRevision: number; quoteDigest: string; connectionId: string; connectionRevision: number;
- protocolEvidenceSha256: string; platform: "ios" | "android"; nativeBuild: string; nativeVersion: string; sdkVersion: string;
+ protocolEvidenceSha256: string; platform: "ios" | "android"; nativeBuild: string; nativeVersion: string; signedAppVersion: string; sdkVersion: string;
  noChargeAccountScope: "testflight_distribution" | "play_license_account"; accountEvidenceSha256: string;
 };
 export function validNativeDispatchQualification(v: unknown): v is NativeDispatchQualification {
- return keys(v, ["id", "revision", "projectId", "appId", "store", "environment", "wireProductId", "catalogBindingId", "catalogRevision", "quoteDigest", "connectionId", "connectionRevision", "protocolEvidenceSha256", "platform", "nativeBuild", "nativeVersion", "sdkVersion", "noChargeAccountScope", "accountEvidenceSha256"])
+ return keys(v, ["id", "revision", "projectId", "appId", "store", "environment", "wireProductId", "catalogBindingId", "catalogRevision", "quoteDigest", "connectionId", "connectionRevision", "protocolEvidenceSha256", "platform", "nativeBuild", "nativeVersion", "signedAppVersion", "sdkVersion", "noChargeAccountScope", "accountEvidenceSha256"])
  && id(v.id, "nssv1_qualification_") && positive(v.revision) && text(v.projectId) && text(v.appId) && v.environment === "SANDBOX"
  && text(v.wireProductId) && id(v.catalogBindingId, "nssv1_catalog_") && positive(v.catalogRevision) && digest(v.quoteDigest)
  && uuid(v.connectionId) && positive(v.connectionRevision) && digest(v.protocolEvidenceSha256) && digest(v.accountEvidenceSha256)
- && text(v.nativeBuild) && text(v.nativeVersion) && text(v.sdkVersion)
+ && text(v.nativeBuild) && text(v.nativeVersion) && text(v.signedAppVersion) && text(v.sdkVersion)
  && (v.store === "APP_STORE" && v.platform === "ios" && v.noChargeAccountScope === "testflight_distribution"
    || v.store === "PLAY_STORE" && v.platform === "android" && v.noChargeAccountScope === "play_license_account");
 }

@@ -54,6 +54,7 @@ create table sandbox_commerce_v1.native_store_protocol_qualifications(
  protocol_evidence_sha256 text not null check(protocol_evidence_sha256~'^[a-f0-9]{64}$'),
  platform text not null check(platform in('ios','android')),
  native_build text not null check(length(native_build) between 1 and 128 and native_build=btrim(native_build) and native_build!~'[[:cntrl:]]'),native_version text not null check(length(native_version) between 1 and 128 and native_version=btrim(native_version) and native_version!~'[[:cntrl:]]'),
+ signed_app_version text not null check(length(signed_app_version) between 1 and 128 and signed_app_version=btrim(signed_app_version) and signed_app_version!~'[[:cntrl:]]'),
  sdk_version text not null check(length(sdk_version) between 1 and 128 and sdk_version=btrim(sdk_version) and sdk_version!~'[[:cntrl:]]'),
  no_charge_account_scope text not null check(no_charge_account_scope in('testflight_distribution','play_license_account')),
  account_evidence_sha256 text not null check(account_evidence_sha256~'^[a-f0-9]{64}$'),
@@ -87,7 +88,7 @@ language sql stable security invoker set search_path='' as $$
  'projectId',p_quote#>>'{catalog,projectId}','appId',p_quote#>>'{catalog,appId}','store',p_quote#>>'{catalog,store}',
  'environment','SANDBOX','wireProductId',p_quote#>>'{catalog,wireProductId}','catalogBindingId','nssv1_catalog_'||q.catalog_binding_id,
  'catalogRevision',q.catalog_revision,'quoteDigest',q.quote_digest,'connectionId',q.connection_id,'connectionRevision',q.connection_revision,
- 'protocolEvidenceSha256',q.protocol_evidence_sha256,'platform',q.platform,'nativeBuild',q.native_build,'nativeVersion',q.native_version,
+ 'protocolEvidenceSha256',q.protocol_evidence_sha256,'platform',q.platform,'nativeBuild',q.native_build,'nativeVersion',q.native_version,'signedAppVersion',q.signed_app_version,
  'sdkVersion',q.sdk_version,'noChargeAccountScope',q.no_charge_account_scope,'accountEvidenceSha256',q.account_evidence_sha256)
  from sandbox_commerce_v1.native_store_protocol_qualifications q where q.id=p_id and q.revision=p_revision;
 $$;

@@ -6,10 +6,10 @@ const quote=()=>({offerId,offerRevision:1,resourceId:'scv1_resource_'+id(6),reso
 const load=(path,bindings,extra={})=>{const scope={exports:{},crypto:webcrypto,AbortController,setTimeout,clearTimeout,...extra,require:name=>{assert.ok(Object.hasOwn(bindings,name),'unmodeled import '+name);return bindings[name];}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../../'+path,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,scope);return scope.exports;};
 const gate=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
 async function fixture({reserve=true}={}){
- let current=A,selection,reservation,consumed=null,qualified=true,failStage=null,loseResponse=false,beforeServer=false,sdkGate=null,callback=()=>{},appEnvironment='SANDBOX',signedVersion='1.0',qualPatch={},buildEnabled=true,holdStage=null,storageGate=null;const listeners=new Set(),memory=new Map(),events=[],requests=[];let purchases=0;
+ let current=A,selection,reservation,consumed=null,qualified=true,failStage=null,loseResponse=false,beforeServer=false,sdkGate=null,callback=()=>{},appEnvironment='SANDBOX',signedVersion='42.7',qualPatch={},buildEnabled=true,holdStage=null,storageGate=null;const listeners=new Set(),memory=new Map(),events=[],requests=[];let purchases=0;
  const authority={getCurrentAccountSessionAuthoritySnapshot:()=>current,sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&['userId','accountId','sessionGeneration','state','restoreOnly'].every(k=>a[k]===b[k]),subscribeToAccountSessionAuthority:f=>{listeners.add(f);return()=>listeners.delete(f);}};
  const storage={getItem:async k=>memory.get(k)??null,setItem:async(k,v)=>{const row=JSON.parse(v);if(row.state===failStage)throw Error('disk');if(row.state===holdStage){events.push('writing:'+row.state);await storageGate.promise;}memory.set(k,v);events.push(row.state??'saved');}};
- const q=quote(),qualification=()=>({id:'nssv1_qualification_'+id(20),revision:1,projectId:q.catalog.projectId,appId:q.catalog.appId,store:'APP_STORE',environment:'SANDBOX',wireProductId:q.catalog.wireProductId,catalogBindingId:q.catalog.bindingId,catalogRevision:1,quoteDigest:q.quoteDigest,connectionId:id(21),connectionRevision:1,protocolEvidenceSha256:'c'.repeat(64),platform:'ios',nativeBuild:'43',nativeVersion:'1.0',sdkVersion:'10.15.1',noChargeAccountScope:'testflight_distribution',accountEvidenceSha256:'d'.repeat(64),...qualPatch});
+ const q=quote(),qualification=()=>({id:'nssv1_qualification_'+id(20),revision:1,projectId:q.catalog.projectId,appId:q.catalog.appId,store:'APP_STORE',environment:'SANDBOX',wireProductId:q.catalog.wireProductId,catalogBindingId:q.catalog.bindingId,catalogRevision:1,quoteDigest:q.quoteDigest,connectionId:id(21),connectionRevision:1,protocolEvidenceSha256:'c'.repeat(64),platform:'ios',nativeBuild:'43',nativeVersion:'1.0',signedAppVersion:'42.7',sdkVersion:'10.15.1',noChargeAccountScope:'testflight_distribution',accountEvidenceSha256:'d'.repeat(64),...qualPatch});
  const transport=async(_url,options)=>{const b=JSON.parse(options.body);requests.push(b);const actor={userId:current.userId,accountId:current.accountId,sessionGeneration:current.sessionGeneration};let data,status='ok',dispatchAllowed=false;
   if(b.command==='prepare'){selection={id:selectionId,originalRequestId:b.requestId,originalSessionGeneration:current.sessionGeneration,createdAt:'2026-11-09T00:00:00Z',quote:q};data={selection,reason:null};}
   else if(b.command==='recover')data={selection,reason:null};
@@ -70,4 +70,13 @@ test('qualified SDK contract version is the exact app JavaScript dependency',()=
 test('fresh checkout discovers qualification before reserving; absent evidence creates no permanent reservation',async()=>{
  const missing=await fixture({reserve:false});missing.setQualified(false);assert.equal((await missing.run()).status,'blocked');assert.equal(missing.requests.some(r=>r.command==='reserve'),false);assert.equal(missing.counts(),0);
  const ready=await fixture({reserve:false});assert.equal((await ready.run()).status,'callback_retained');assert.equal(ready.counts(),1);const commands=ready.requests.map(r=>r.command);assert.ok(commands.indexOf('dispatch-qualification')<commands.indexOf('reserve'));assert.ok(commands.indexOf('reserve')<commands.indexOf('dispatch-consume'));
+});
+
+test('signed AppTransaction version is matched independently from unsigned build and marketing version',async()=>{
+ const f=await fixture();assert.equal((await f.run()).status,'callback_retained');assert.equal(f.counts(),1);
+ // Fixture values intentionally differ: signed 42.7, installed build 43, marketing 1.0.
+ for(const signedAppVersion of [undefined,'','1.0','43','42.70']){
+  const bad=await fixture();bad.setQualification({signedAppVersion});await assert.rejects(bad.run());assert.equal(bad.counts(),0);
+  assert.equal(bad.requests.some(r=>r.command==='dispatch-consume'),false);
+ }
 });

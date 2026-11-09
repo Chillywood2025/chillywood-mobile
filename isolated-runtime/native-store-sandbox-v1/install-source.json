@@ -9,6 +9,6 @@
     "isolated-runtime/native-store-sandbox-v1/install-check.sql": "fae95357b4bae0667e09f7227278bb76c94bf1ed11cd0366cf870bd15e581484",
     "isolated-runtime/native-store-sandbox-v1/dispatch-attempt.sql": "68196483976cdb4cde359c480108a122c6078c34593f235a33b143413e79bd80",
     "isolated-runtime/native-store-sandbox-v1/pending-fence.sql": "23bae691cf2fa3352d8079d841b8e200c5b3ef4c050848aae027d52acc6ad7b0",
-    "isolated-runtime/native-store-sandbox-v1/qualified-dispatch.sql": "93ae395d1754defca15643328d4d0b280323966760d61d1a6ef79a1e811f3fe9"
+    "isolated-runtime/native-store-sandbox-v1/qualified-dispatch.sql": "8a640d7f3353278d8b52829bad78d96cbd926e21c38e3325ea941715661456f3"
   }
 }

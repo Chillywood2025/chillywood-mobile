@@ -6,8 +6,8 @@ import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority,
 import { canMakeRevenueCatPurchases, getRevenueCatAppUserId, readRevenueCatNonSubscriptionProducts, purchaseRevenueCatStoreProduct } from "./revenuecat";
 import { isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 
-// No normal screen invokes this dormant function. Only a first committed
-// authenticated consume response can reach the existing purchase owner. Missing
+// The explicit normal-screen action requires a first committed authenticated
+// consume response before it can reach the existing purchase owner. Missing
 // qualification remains blocked; this source does not seed or activate one.
 type Storage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<unknown> };
 type Record = { version: 1; userId: string; selectionId: string; reservationId: string; quoteDigest: string; requestId: string; state: "consume_pending" | "consumed" | "sdk_started" };
@@ -65,7 +65,7 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
     if (!products || products.length !== 1 || !isCreatorMoneyStoreQuoteMatch(products[0], { productId: selected.quote.catalog.wireProductId, amountMinor: selected.quote.amountMinor, currency: selected.quote.currency })) throw failure();
     const product = JSON.parse(JSON.stringify(products[0])) as typeof products[0];
     if (metadata.platform !== "ios" || metadata.noChargeAccountScope !== "testflight_distribution" || metadata.nativeBuild !== app.evidence.unsignedNativeBuild
-      || metadata.nativeVersion !== app.evidence.unsignedNativeVersion || metadata.nativeVersion !== app.evidence.signedAppVersion || metadata.sdkVersion !== "10.15.1") throw failure();
+      || metadata.nativeVersion !== app.evidence.unsignedNativeVersion || metadata.signedAppVersion !== app.evidence.signedAppVersion || metadata.sdkVersion !== "10.15.1") throw failure();
     const retained = await client.readPurchaseAttempt(); current();
     if (retained.status === "none") await client.retainPurchaseAttempt(selectionId);
     else if (retained.status !== "dispatch_reserved") throw failure();
@@ -86,7 +86,7 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
     }
     const q = response.data.qualification;
     if (q.platform !== "ios" || q.noChargeAccountScope !== "testflight_distribution" || q.nativeBuild !== app.evidence.unsignedNativeBuild
-      || q.nativeVersion !== app.evidence.unsignedNativeVersion || q.nativeVersion !== app.evidence.signedAppVersion || q.sdkVersion !== "10.15.1") throw failure();
+      || q.nativeVersion !== app.evidence.unsignedNativeVersion || q.signedAppVersion !== app.evidence.signedAppVersion || q.sdkVersion !== "10.15.1") throw failure();
     await bounded(storage.setItem(key, JSON.stringify({ ...saved, state: "consumed" }))); current();
     const retain = await client.createCallbackRetainer(selectionId, response.data.attempt); current();
     await bounded(storage.setItem(key, JSON.stringify({ ...saved, state: "sdk_started" }))); current();

@@ -105,8 +105,7 @@ response or crash before SDK invocation. Previously consumed unqualified attempt
 cannot be upgraded. Nested attempt evidence remains authority-false. Pending raw
 project evidence blocks fresh consumption. Qualification build/SDK evidence is
 operator-owned protocol history, not a remote attestation of the caller's phone.
-The client must separately match verified local Sandbox AppTransaction and exact
-native build/version plus the installed JS SDK before its existing SDK owner is
+The client must separately match verified local Sandbox AppTransaction and explicit expected raw signed app version, independently of the unsigned native build/marketing version, plus the installed JS SDK before its existing SDK owner is
 invoked. Android remains held: a configured Play license-scope string does not
 prove the current device billing account is a licensed no-charge tester.
 
@@ -139,3 +138,9 @@ These cases prove actual Edge/SQL discovery, reservation, first consumption, ori
 callback retention and claim insertion, including cross-session transport uncertainty.
 The combined local result is 34 qualified-dispatch cases plus 33 normal-command cases.
 No test qualification row or synthetic evidence is carried into the default-off install.
+
+Signed `AppTransaction.appVersion` is stored as its own required opaque
+`signed_app_version` qualification field. It is compared only with the raw
+verified native signed value, never inferred from `CFBundleVersion` or
+`CFBundleShortVersionString`. Local fixtures deliberately use three different
+values (signed `100.7`, build `101`, marketing `1.0.0`); none are real observations.
