@@ -15,7 +15,7 @@ Crash after commit, lost response, SDK errors and cancellation cannot release
 this record for another purchase. Transaction rollback/expiry before commit
 does not consume it. A future qualified dispatcher must observe commit before
 considering any result; no such dispatcher or qualification gate exists here.
-The 47-module source install requires an empty attempt table at commit.
+The 48-module source install requires an empty attempt table at commit.
 
 `quote.native.mjs --managed-install --dispatch-proof` exercises actual private
 SQL, repeated and concurrent consumers, expiry rollback, current-media checks,
@@ -128,7 +128,7 @@ receipt reconciliation. The local reservation alone cannot qualify that workflow
 
 ### Server reservation source proof (not hosted deployed)
 
-`reservation.sql` is included in the pinned 47-module managed install closure.
+`reservation.sql` is included in the pinned 48-module managed install closure.
 Its service-only RPC is routed through the existing authenticated command endpoint
 and dormant mobile client, without SDK activation. The local proof reserves an exact existing selection
 under a database uniqueness constraint for buyer/project/app/store/environment/SKU.
@@ -146,7 +146,7 @@ The helper is not executable by anonymous, authenticated or service roles.
 
 Run `quote.native.mjs --local-bin /absolute/postgresql-17.6/bin --managed-install
 --reservation-proof` for the local proof. The reservation module is now included in the complete
-47-module managed source closure, installed in the disposable database under its
+48-module managed source closure, installed in the disposable database under its
 bounded NOSUPERUSER installer CREATE interval.
 Twenty-two reservation cases and the thirty-three quote/claim/reservation integration cases passed,
 including real HTTP-handler-to-SQL execution, shared-SKU contention with controlled

@@ -14,6 +14,8 @@
     "isolated-runtime/native-store-sandbox-v1/settlement-effects.sql": "3b56554f199e07cc0e0b346de08af3a5d15258f46b10ec1eafac4a63af0883a4",
     "isolated-runtime/native-store-sandbox-v1/terminal.sql": "a05f5c59e9c1f73374c192a5fb47c7c27ac2cbaa8a45859675047bb6aaffbb9b",
     "isolated-runtime/native-store-sandbox-v1/effect-candidate.sql": "4d49510298a628b83a6190517bba0fdbb16d6b822be3cb4f19b3c9ec86b60c39",
-    "isolated-runtime/native-store-sandbox-v1/native-access.sql": "88f33c4a051498359ca14e0dfcf83e17a8ff3320cc9b4420704f14b676a8dc24"
+    "isolated-runtime/native-store-sandbox-v1/native-access.sql": "88f33c4a051498359ca14e0dfcf83e17a8ff3320cc9b4420704f14b676a8dc24",
+    "isolated-runtime/native-store-sandbox-v1/private-state.sql": "8213b72dfde714d9386cc0db284b7f57cc855e3af50d56d9b9421e4c1d325514",
+    "isolated-runtime/native-store-sandbox-v1/private-state-readback.mjs": "72dade59a6431f1c373136195c79d3b2fa0263d3367c6ab0c6db8e55b2e601ba"
   }
 }

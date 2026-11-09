@@ -6,12 +6,14 @@ import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_proce
 import {gzipSync} from 'node:zlib';
 import {nativeStoreAtomicInstallSQL} from './install-atomic.mjs';
 import {prepareEnvelopeNativeProof} from './install-envelope.native-cases.mjs';
+import {nativePrivateStateReadSQL,validateNativePrivateState} from './private-state-readback.mjs';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 import {installEventTriggerParity} from './event-trigger-parity.fixture.mjs';
 import {readbackSQL,validateSnapshot,canonicalItemArrayTextSQL} from '../../scripts/native-store-install-prepare.mjs';
 import {deltaSnapshotSQL,describeNativeInstallDelta,verifyNativeInstallDelta,normalizeAdded} from './install-delta.mjs';
 assert.ok(process.argv.length>=4&&process.argv.length<=7);assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
-const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding','--generate-local-pins','--envelope-proof'].includes(f)));
+const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding','--generate-local-pins','--envelope-proof','--private-state-proof'].includes(f)));
+if(flags.includes('--private-state-proof'))assert.equal(flags.length,1);
 if(flags.includes('--envelope-proof'))assert.ok(flags.includes('--event-trigger-parity')&&!flags.includes('--generate-local-pins'));
 const triggerParity=flags.includes('--event-trigger-parity'),oidPadding=flags.includes('--oid-padding');
 const here=path.dirname(fileURLToPath(import.meta.url)),base=path.resolve(here,'../sandbox-commerce-v1'),profile=nativeStoreInstallProfile();
@@ -32,6 +34,7 @@ try{
  invoke('initdb',['-D',data,'-U','fixture_admin','--encoding=UTF8','--no-locale','--auth=trust']);
  invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(directory,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c autovacuum=off`,'start']);started=true;
  invoke('psql',args('fixture_admin','postgres'),'create role postgres login createrole bypassrls nosuperuser nocreatedb noinherit;create database permission_fixture owner postgres;');
+ q('create role supabase_read_only_user login nosuperuser nocreaterole nocreatedb noreplication bypassrls;');
  q('create role anon nologin;create role authenticated nologin;create role service_role nologin;');
  // Real PostgreSQL serializer regression: SQL NULL is not omitted; all scalar,
  // array/object, Unicode and numeric canonical spellings retain exact bytes.
@@ -62,6 +65,7 @@ try{
  assert.ok(dependencies.relations.every(r=>r.present&&r.missingColumns.length===0&&r.postgresSelect&&r.postgresMaintain));cases++;
  const missing=JSON.parse(q('begin;alter table auth.sessions rename column not_after to fixture_missing;'+probe+'rollback;'));
  assert.deepEqual(missing.relations.find(r=>r.relation==='auth.sessions').missingColumns,['not_after']);cases++;
+ q('drop role supabase_read_only_user;');reject(profile.sql,/native_private_existing_reader_required/u);absent();q('create role supabase_read_only_user login nosuperuser nocreaterole nocreatedb noreplication bypassrls;');cases++;
  if(triggerParity){
   installEventTriggerParity(q);
   q('create role fixture_ddl_owner nologin;create schema fixture_ddl authorization fixture_ddl_owner;grant fixture_ddl_owner to postgres with set true;');
@@ -73,7 +77,7 @@ try{
   assert.notEqual(catalog.status,0);assert.match(catalog.stderr,/permission denied for table pg_proc/u);assert.equal(q("select has_table_privilege('fixture_ddl_owner','pg_catalog.pg_proc','SELECT');"),'t');cases++;
   // Concrete snapshot SQL + unchanged production transport guard, using an
   // explicitly modeled read-only session identity, never a role-name override.
-  q(`create role supabase_read_only_user login nosuperuser nocreaterole nocreatedb bypassrls;
+  q(`
    create schema supabase_migrations;create table supabase_migrations.schema_migrations(version text,name text,statements text[]);
    insert into supabase_migrations.schema_migrations values('20260101000000','synthetic_fixture',array['synthetic only']);
    insert into public.platform_money_kill_switches select k,case when k in('live_money_enabled','payouts_enabled','cashout_enabled') then 'off' else 'sandbox_only' end from unnest(array['live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled','tips_enabled','creator_monetization_enabled','provider_webhooks_enabled','revenuecat_app_store_enabled','revenuecat_google_play_enabled']) k;
@@ -87,9 +91,12 @@ try{
   const wrongIdentity=JSON.parse(q('begin read only;'+readbackSQL()+'rollback;','postgres'));
   assert.throws(()=>validateSnapshot(wrongIdentity),/MANAGEMENT_READ_CONTEXT_MISMATCH/u);cases++;
  }
+ q('alter role supabase_read_only_user createdb;');reject(profile.sql,/native_private_existing_reader_required/u);absent();q('alter role supabase_read_only_user nocreatedb;');cases++;
+ const readerModule=profile.files.at(-1).sql;
+ reject(profile.sql.replace(readerModule,()=>readerModule.replace('revoke create on schema public from sbx_v1_core_owner;','')),/native_private_owner_interval_leaked/u);absent();cases++;
  reject(profile.sql.replace('grant usage,create on schema public to native_store_sandbox_v1_owner;',''),/permission denied for schema public/u);absent();cases++;
- reject(profile.sql.replace('revoke create on schema public from native_store_sandbox_v1_owner;',''),/native_store_install_finalization_required/u);absent();cases++;
- reject(profile.sql.replace(profile.files.at(-1).sql,''),/native_store_install_finalization_required/u);absent();cases++;
+ reject(profile.sql.replace('revoke create on schema public from native_store_sandbox_v1_owner;',''),/native_private_owner_interval_required/u);absent();cases++;
+ reject(profile.sql.replace(profile.files.find(f=>f.path.endsWith('/permissions-finalize.sql')).sql,''),/native_private_owner_interval_required/u);absent();cases++;
  reject(beforeCommit("grant native_store_sandbox_v1_owner to postgres with inherit true,set true;set local role native_store_sandbox_v1_owner;update native_store_sandbox_v1.control set enabled=true;reset role;"),/native_store_install_finalization_required/u);absent();cases++;
  reject(beforeCommit("grant sbx_v1_core_owner to postgres with inherit true,set true;set local role sbx_v1_core_owner;update sandbox_commerce_v1.native_store_quote_controls set preparation_enabled=true;reset role;"),/native_store_install_finalization_required/u);absent();cases++;
  reject(beforeCommit("do $$begin raise exception 'native_install_late_failure';end$$;"),/native_install_late_failure/u);absent();cases++;
@@ -158,6 +165,8 @@ try{
   const r=run('psql',args(),`set role ${role};select public.native_store_sandbox_claim_read_v1(gen_random_uuid());`);assert.notEqual(r.status,0);assert.match(r.stderr,/permission denied/u);
  }
  assert.equal(q("set role service_role;set request.jwt.claims='{\"role\":\"service_role\"}';select public.native_store_sandbox_claim_read_v1(gen_random_uuid()) is null;"),'t');cases++;
+ assert.equal(validateNativePrivateState(JSON.parse(q(nativePrivateStateReadSQL,'supabase_read_only_user'))).defaultOffAndEmptyObserved,true);cases++;
+ if(flags.includes('--private-state-proof')){assert.ok(!triggerParity);(await import('./private-state.native-cases.mjs')).runNativePrivateStateCases({q,run,args,attempt});}
  console.log(JSON.stringify({protocol:'native-store-managed-install-proof-v1',cases,passed:cases,sourceDigest:profile.sourceDigest,addedCatalogSha256:sourceDelta.addedCatalogSha256,modules:profile.files.length,eventTriggerParity:triggerParity,oidPadding,hostedQualified:false,dispatchAllowed:false}));
  }
 }finally{if(started)invoke('pg_ctl',['-D',data,'-m','immediate','-w','stop']);fs.rmSync(directory,{recursive:true,force:true});}
