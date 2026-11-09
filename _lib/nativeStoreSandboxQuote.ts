@@ -350,7 +350,7 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
       if (!keys(value, ["protocol", "command", "requestId", "actor", "status", "data", "dispatchAllowed", "correlation"])
         || value.protocol !== NATIVE_STORE_SANDBOX_PROTOCOL || value.command !== command || value.requestId !== requestId || canonical(value.actor) !== canonical(actor)
         || value.correlation !== "unsupported" || !validNativeDispatchData(value.data, { command, requestId, selectionId: selection.id, reservationId: undefined,
-          sessionGeneration: actor.sessionGeneration, status: value.status, dispatchAllowed: value.dispatchAllowed })) return fail("invalid_response");
+          buyerId: actor.userId, sessionGeneration: actor.sessionGeneration, status: value.status, dispatchAllowed: value.dispatchAllowed })) return fail("invalid_response");
       const data = value.data as { qualification: NativeDispatchQualification | null; reason: string | null };
       const q = data.qualification, c = selection.quote.catalog;
       if (q && (q.quoteDigest !== selection.quote.quoteDigest || q.catalogBindingId !== c.bindingId || q.catalogRevision !== c.revision || q.projectId !== c.projectId
@@ -370,7 +370,7 @@ export async function captureNativeSandboxQuoteClient(authority: AccountSessionA
       if (!keys(value, ["protocol", "command", "requestId", "actor", "status", "data", "dispatchAllowed", "correlation"])
         || value.protocol !== NATIVE_STORE_SANDBOX_PROTOCOL || value.command !== command || value.requestId !== requestId || canonical(value.actor) !== canonical(actor)
         || value.correlation !== "unsupported" || !validNativeDispatchData(value.data, { command, requestId, selectionId: selection.id, reservationId: reservation.id,
-          sessionGeneration: actor.sessionGeneration, status: value.status, dispatchAllowed: value.dispatchAllowed })) return fail("invalid_response");
+          buyerId: actor.userId, sessionGeneration: actor.sessionGeneration, status: value.status, dispatchAllowed: value.dispatchAllowed })) return fail("invalid_response");
       const data = value.data as { attempt: NativeSandboxConsumedAttemptEvidence | null; qualification: NativeDispatchQualification | null; newlyConsumed: boolean; reason: string | null };
       const q = data.qualification, c = selection.quote.catalog;
       if (q && (q.quoteDigest !== selection.quote.quoteDigest || q.catalogBindingId !== c.bindingId || q.catalogRevision !== c.revision || q.projectId !== c.projectId

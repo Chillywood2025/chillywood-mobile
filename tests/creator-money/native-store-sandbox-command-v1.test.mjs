@@ -77,7 +77,7 @@ test('dispatch contract rejects caller qualification and missing server qualific
  const response=await handler(req(request));assert.equal(response.status,200);assert.equal((await response.json()).dispatchAllowed,false);
  assert.equal(api.validateNativeStoreSandboxResultV1({...value,dispatchAllowed:true},actor,request),false);
 });
-test('synthetic wire validation permits only exact first iOS consume, never replay or Android admission',()=>{
+test('synthetic legacy wire validation permits only exact first iOS consume, never replay or quote-wide Android admission',()=>{
  const request={...input,command:'dispatch-consume',payload:{selectionId:'nssv1_selection_'+id(40),reservationId:'nssv1_reservation_'+id(41)}};
  const qualification={id:'nssv1_qualification_'+id(44),revision:1,projectId:'synthetic-project',appId:'synthetic-app',store:'APP_STORE',environment:'SANDBOX',wireProductId:'synthetic-product',catalogBindingId:'nssv1_catalog_'+id(45),catalogRevision:1,quoteDigest:'a'.repeat(64),connectionId:id(46),connectionRevision:1,protocolEvidenceSha256:'b'.repeat(64),platform:'ios',nativeBuild:'synthetic-build',nativeVersion:'synthetic-version',signedAppVersion:'synthetic-signed-version',sdkVersion:'synthetic-sdk',noChargeAccountScope:'testflight_distribution',accountEvidenceSha256:'c'.repeat(64)};
  const attempt={id:'nssv1_attempt_'+id(42),reservationId:request.payload.reservationId,selectionId:request.payload.selectionId,originalRequestId:request.requestId,originalSessionGeneration:actor.sessionGeneration,quoteDigest:'a'.repeat(64),createdAt:'2026-11-09T00:00:00Z',state:'consumed',dispatchAllowed:false,providerQualified:false};
@@ -89,6 +89,16 @@ test('synthetic wire validation permits only exact first iOS consume, never repl
  const recovered={...value,command:'dispatch-recover',dispatchAllowed:false,data:{...value.data,newlyConsumed:false}};
  assert.equal(api.validateNativeStoreSandboxResultV1(recovered,actor,{...request,command:'dispatch-recover'}),true);
  assert.equal(api.validateNativeStoreSandboxResultV1({...recovered,dispatchAllowed:true},actor,{...request,command:'dispatch-recover'}),false);
+});
+test('Play handoff wire binds ordinary buyer and original session without claiming a signed version or automatic no-charge proof',()=>{
+ const request={...input,command:'dispatch-consume',payload:{selectionId:'nssv1_selection_'+id(40),reservationId:'nssv1_reservation_'+id(41)}};
+ const qualification={id:'nssv1_play_qualification_'+id(44),revision:1,projectId:'synthetic-project',appId:'synthetic-app',store:'PLAY_STORE',environment:'SANDBOX',wireProductId:'synthetic-product',catalogBindingId:'nssv1_catalog_'+id(45),catalogRevision:1,quoteDigest:'a'.repeat(64),connectionId:id(46),connectionRevision:1,protocolEvidenceSha256:'b'.repeat(64),platform:'android',nativeBuild:'43',nativeVersion:'1.0',sdkVersion:'10.15.1',noChargeAccountScope:'play_test_sheet_handoff',accountEvidenceSha256:'c'.repeat(64),handoffMode:'play_test_sheet_handoff_v1',automaticNoChargeProof:false,userStoreConfirmationRequired:true,buyerId:actor.userId,sessionGeneration:actor.sessionGeneration,enrollmentExpiresAt:'2099-01-01T00:00:00Z'};
+ const attempt={id:'nssv1_attempt_'+id(42),reservationId:request.payload.reservationId,selectionId:request.payload.selectionId,originalRequestId:request.requestId,originalSessionGeneration:actor.sessionGeneration,quoteDigest:'a'.repeat(64),createdAt:'2026-11-09T00:00:00Z',state:'consumed',dispatchAllowed:false,providerQualified:false};
+ const value={...held(request),status:'ok',data:{attempt,qualification,newlyConsumed:true,reason:null},dispatchAllowed:true};assert.equal(api.validateNativeStoreSandboxResultV1(value,actor,request),true);
+ for(const patch of [{buyerId:id(99)},{sessionGeneration:id(99)},{automaticNoChargeProof:true},{userStoreConfirmationRequired:false},{signedAppVersion:'forged'},{enrollmentExpiresAt:'2000-01-01T00:00:00Z'},{store:'APP_STORE'},{handoffMode:'automatic'},{sdkVersion:'unknown'}])assert.equal(api.validateNativeStoreSandboxResultV1({...value,data:{...value.data,qualification:{...qualification,...patch}}},actor,request),false);
+ const nextActor={...actor,sessionGeneration:id(98)},recovered={...value,actor:nextActor,command:'dispatch-recover',dispatchAllowed:false,data:{...value.data,newlyConsumed:false,qualification:{...qualification,enrollmentExpiresAt:'2000-01-01T00:00:00Z'}}};
+ assert.equal(api.validateNativeStoreSandboxResultV1(recovered,nextActor,{...request,command:'dispatch-recover'}),true);
+ assert.equal(api.validateNativeStoreSandboxResultV1({...recovered,dispatchAllowed:true},nextActor,{...request,command:'dispatch-recover'}),false);
 });
 test('qualification discovery accepts only selection and never returns dispatch permission or attempt',()=>{
  const request={...input,command:'dispatch-qualification',payload:{selectionId:'nssv1_selection_'+id(40)}};

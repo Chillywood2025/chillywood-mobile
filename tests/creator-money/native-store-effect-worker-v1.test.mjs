@@ -14,9 +14,9 @@ function load(name) {
 }
 const { processNativeStoreEffectV1: processEffect } = load('native-store-effect-worker-v1.ts');
 const id = n => `d0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-async function fixture(negative = false) {
+async function fixture(negative = false, store = 'APP_STORE') {
   const config = { bridgeProtocol: 'native-store-sandbox-v1', connectionId: id(12), connectionRevision: 1,
-    projectId: 'synthetic-project', appId: 'synthetic-app', store: 'APP_STORE', environment: 'SANDBOX',
+    projectId: 'synthetic-project', appId: 'synthetic-app', store, environment: 'SANDBOX',
     authentication: { method: 'shared_secret', keyVersion: 'synthetic-v1', secret: 'synthetic-not-a-real-secret-'.repeat(2) },
     encryption: { keyId: 'synthetic-key', key: new Uint8Array(32).fill(17) } };
   const event = { id: 'synthetic-event', type: negative ? 'CANCELLATION' : 'NON_RENEWING_PURCHASE', app_id: config.appId,
@@ -44,7 +44,8 @@ async function fixture(negative = false) {
     settlementProtocol: { id: work.protocolId, revision: 1, policy: 'exact_native_usd_consumable_v1', projectId: config.projectId,
       appId: config.appId, store: config.store, productId: event.product_id, connectionId: config.connectionId, connectionRevision: 1,
       scopeKey: JSON.stringify(['native-store-sandbox-v1', 'revenuecat', config.projectId, config.appId, config.store, 'SANDBOX']),
-      platform: 'ios', nativeBuild: '43', nativeVersion: '1.0', signedAppVersion: '42.7', sdkVersion: '10.15.1' } };
+      platform: store === 'APP_STORE' ? 'ios' : 'android', nativeBuild: '43', nativeVersion: '1.0', sdkVersion: '10.15.1',
+      ...(store === 'APP_STORE' ? { signedAppVersion: '42.7' } : { handoffMode: 'play_test_sheet_handoff_v1', automaticNoChargeProof: false, userStoreConfirmationRequired: true }) } };
   const journal = { protocol: 'native-store-sandbox-journal-read-v1', revoked: false,
     receipt: { id: work.rawReceiptId, project_id: config.projectId, connection_id: config.connectionId, connection_revision: 1,
       raw_sha256: envelope.rawSha256, raw_byte_length: envelope.rawByteLength, envelope },
@@ -147,4 +148,21 @@ test('blocking candidate discovery exhausts the shared deadline before any worke
       status: 'candidate', work: f.work, acknowledgementAllowed: false };
   } }, { deadlineMs: 70 });
   assert.equal(result.status, 'held'); assert.equal(f.calls.length, 0);
+});
+test('authenticated Play purchase and refund use explicit handoff mapping without fabricated signed app proof', async () => {
+  for (const negative of [false,true]) {
+    const f=await fixture(negative,'PLAY_STORE'),result=await processEffect(f.work,f.deps);
+    assert.equal(result.status,'processed');assert.equal(result.grantsAccess,false);assert.equal(result.financialAuthority,false);assert.equal(result.payable,false);
+    assert.equal(f.calls.filter(c=>c.projection).length,1);assert.equal(Object.hasOwn(f.context.settlementProtocol,'signedAppVersion'),false);
+  }
+});
+test('Play mapping rejects old automatic-proof shape, forged handoff claims and production before applying effects', async () => {
+  for (const patch of [{signedAppVersion:'forged'},{automaticNoChargeProof:true},{userStoreConfirmationRequired:false},{handoffMode:'automatic'},{sdkVersion:'unknown'},{platform:'ios'}]) {
+    const f=await fixture(false,'PLAY_STORE');Object.assign(f.context.settlementProtocol,patch);
+    assert.equal((await processEffect(f.work,f.deps)).status,'held');assert.equal(f.calls.length,0);
+  }
+  const old=await fixture(false,'PLAY_STORE');for(const key of ['handoffMode','automaticNoChargeProof','userStoreConfirmationRequired'])delete old.context.settlementProtocol[key];old.context.settlementProtocol.signedAppVersion='fake';
+  assert.equal((await processEffect(old.work,old.deps)).status,'held');assert.equal(old.calls.length,0);
+  const production=await fixture(false,'PLAY_STORE');production.context.raw.environment='PRODUCTION';
+  assert.equal((await processEffect(production.work,production.deps)).status,'held');assert.equal(production.calls.length,0);
 });

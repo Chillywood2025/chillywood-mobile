@@ -48,6 +48,9 @@ function QuoteSession({ offerId, store, authority, focused }: { offerId: string;
   const [playbackSelection, setPlaybackSelection] = useState<NativeStorePaidVideoPlaybackSelection | null>(null);
   const [terminalReady, setTerminalReady] = useState(false), [terminalMessage, setTerminalMessage] = useState<string | null>(null);
   const [checkoutAttempted, setCheckoutAttempted] = useState(false);
+  const [playInstructionsAccepted, setPlayInstructionsAccepted] = useState(false);
+  const focus = useRef(focused), focusGeneration = useRef(0);
+  if (focus.current !== focused) { focus.current = focused; focusGeneration.current += 1; }
   const [qualificationReady, setQualificationReady] = useState(false), [qualificationMessage, setQualificationMessage] = useState("Test checkout qualification has not been checked.");
   const [reservationMessage, setReservationMessage] = useState<string | null>(null), [reservationReadable, setReservationReadable] = useState(false);
   const describeAttempt = (status: string) => status === "dispatch_reserved"
@@ -57,7 +60,7 @@ function QuoteSession({ offerId, store, authority, focused }: { offerId: string;
   const owner = useRef<{ client: NativeSandboxQuoteClient; active: boolean; pending: boolean } | null>(null);
   useEffect(() => {
     let active = true; let local: typeof owner.current = null;
-    owner.current = null; setPlaybackSelection(null); setTerminalReady(false); setTerminalMessage(null); setBusy(true); setQuote(null); setSelection(null); setSaved(false); setReservationMessage(null); setReservationReadable(false); setQualificationReady(false); setCheckoutAttempted(false); setQualificationMessage("Test checkout qualification has not been checked.");
+    owner.current = null; setPlaybackSelection(null); setTerminalReady(false); setTerminalMessage(null); setBusy(true); setQuote(null); setSelection(null); setSaved(false); setReservationMessage(null); setReservationReadable(false); setQualificationReady(false); setPlayInstructionsAccepted(false); setCheckoutAttempted(false); setQualificationMessage("Test checkout qualification has not been checked.");
     void captureNativeSandboxQuoteClient(expected, offerId, store).then(async client => {
       if (!active) { client.dispose(); return; }
       local = { client, active: true, pending: true }; owner.current = local;
@@ -103,23 +106,27 @@ function QuoteSession({ offerId, store, authority, focused }: { offerId: string;
   };
   const checkQualification = () => {
     const local = owner.current; if (!local?.active || local.pending || !selection) return;
-    local.pending = true; setBusy(true); setQualificationReady(false);
+    local.pending = true; setBusy(true); setQualificationReady(false); setPlayInstructionsAccepted(false);
     void local.client.readDispatchQualification().then(result => {
       if (!local.active) return;
       const buildEnabled = getRuntimeConfig().revenueCat.appStorePurchasesEnabled === true;
-      const ready = result.status === "ok" && !!result.data.qualification && store === "APP_STORE" && buildEnabled;
+      const q = result.data.qualification;
+      const ready = result.status === "ok" && !!q && buildEnabled && (store === "APP_STORE" || "handoffMode" in q);
       setQualificationReady(ready); setQualificationMessage(ready
-        ? "Server test-checkout evidence is available. Starting checkout still checks this app and consumes one exact attempt; this read is not purchase permission."
+        ? store === "PLAY_STORE" ? "Your app account has a recorded Play test setup. The app cannot inspect or guarantee the payment method in Google's screen. Confirm only a test purchase there; cancel if the test notice or test instrument is missing."
+          : "Server test-checkout evidence is available. Starting checkout still checks this app and consumes one exact attempt; this read is not purchase permission."
         : store === "APP_STORE" && !buildEnabled ? "This installed build has store purchasing disabled. Checkout remains unavailable."
-        : store === "PLAY_STORE" ? "Google Play test-account qualification is not available yet. An internal-track build alone does not prove a no-charge purchase."
+        : store === "PLAY_STORE" ? "Google Play test checkout is unavailable for this selection. Current buyer-specific setup and server admission are required; matching a product alone does not enable checkout."
         : "Test checkout is unavailable: the server has not qualified this selection. No purchase or reservation was started.");
     }).catch(() => { if (local.active) setQualificationMessage("Qualification could not be read. Checkout remains unavailable; no purchase was started."); })
       .finally(() => { local.pending = false; if (local.active) setBusy(false); });
   };
   const checkout = (recoverOnly = false) => {
-    const local = owner.current; if (!local?.active || local.pending || !selection || !recoverOnly && !qualificationReady) return;
-    local.pending = true; setBusy(true); setQualificationReady(false); if (!recoverOnly) setCheckoutAttempted(true);
-    void dispatchPreparedNativeSandboxPurchase(expected, offerId, store, selection.id, { recoverOnly }).then(async result => {
+    const local = owner.current; if (!local?.active || local.pending || !selection || !recoverOnly && (!qualificationReady || !focus.current || store === "PLAY_STORE" && !playInstructionsAccepted)) return;
+    const handoffFocusGeneration = focusGeneration.current;
+    local.pending = true; setBusy(true); setQualificationReady(false); setPlayInstructionsAccepted(false); if (!recoverOnly) setCheckoutAttempted(true);
+    void dispatchPreparedNativeSandboxPurchase(expected, offerId, store, selection.id, { recoverOnly,
+      ...(store === "PLAY_STORE" && !recoverOnly ? { playTestSheetAcknowledged: true, isPlayHandoffVisible: () => local.active && owner.current === local && focus.current && focusGeneration.current === handoffFocusGeneration } : {}) }).then(async result => {
       if (!local.active) return;
       setQualificationMessage(recoverOnly ? "The saved checkout state was read. Recovery never starts a purchase; receipt reconciliation is still required."
         : result.status === "callback_retained" ? "The store callback was retained for reconciliation. Playback and payable earnings are not confirmed."
@@ -160,6 +167,12 @@ function QuoteSession({ offerId, store, authority, focused }: { offerId: string;
   };
   return <View style={styles.card}>
     {busy && <ActivityIndicator testID="native-sandbox-loading" />}
+    {store === "PLAY_STORE" && <View testID="native-sandbox-play-requirements">
+      <Text style={styles.heading}>Google Play test purchase requirements</Text>
+      <Text style={styles.body}>This preparation is available to every active app account, not only admins. Each tester also needs their actual Google Play purchasing account enrolled for license testing.</Text>
+      <Text style={styles.body}>A test-track install can still charge real money. Google&apos;s purchase sheet must show a test-purchase notice and a test payment method. Cancel if either is missing. Play Billing Lab real-payment testing must be off.</Text>
+      <Text style={styles.body}>The app cannot verify the account or payment method inside Google&apos;s screen. These instructions alone do not enable checkout. Current buyer-specific server admission is also required.</Text>
+    </View>}
     <Text accessibilityLiveRegion="polite" style={styles.body}>{message}</Text>
     {quote && <><Text testID="native-sandbox-price" style={styles.heading}>{(quote.amountMinor / 100).toFixed(2)} USD</Text>
       <Text style={styles.body}>{quote.catalog.store === "APP_STORE" ? "Apple App Store" : "Google Play"} sandbox · {quote.catalog.wireProductId}</Text>
@@ -172,7 +185,8 @@ function QuoteSession({ offerId, store, authority, focused }: { offerId: string;
     <Button id="native-sandbox-check-product" disabled={busy || !quote || !owner.current} action={checkDeviceProduct}>Check device store availability</Button>
     <Text testID="native-sandbox-qualification-status" accessibilityLiveRegion="polite" style={styles.body}>{qualificationMessage}</Text>
     <Button id="native-sandbox-check-qualification" disabled={busy || terminalReady || !selection || !owner.current} action={checkQualification}>Check test checkout qualification</Button>
-    <Button id="native-sandbox-checkout" disabled={busy || terminalReady || !selection || !qualificationReady || store !== "APP_STORE" || !owner.current} action={() => checkout()}>Start qualified test purchase</Button>
+    {store === "PLAY_STORE" && <Button id="native-sandbox-play-ack" disabled={busy || !focused || terminalReady || !qualificationReady || playInstructionsAccepted} action={() => { if (focus.current && qualificationReady) setPlayInstructionsAccepted(true); }}>I will confirm only a Google test purchase</Button>}
+    <Button id="native-sandbox-checkout" disabled={busy || !focused || terminalReady || !selection || !qualificationReady || store === "PLAY_STORE" && !playInstructionsAccepted || !owner.current} action={() => checkout()}>{store === "PLAY_STORE" ? "Open Google Play test checkout" : "Start qualified test purchase"}</Button>
     {(reservationReadable || checkoutAttempted) && <Button id="native-sandbox-checkout-recover" disabled={busy || !selection || !owner.current} action={() => checkout(true)}>Read saved checkout status</Button>}
     {playbackSelection && <NativeStorePaidVideoPlayer authority={expected} selection={playbackSelection} focused={focused} blocked={busy} />}
     {terminalMessage && <Text testID="native-sandbox-terminal-status" accessibilityLiveRegion="polite" style={styles.body}>{terminalMessage}</Text>}

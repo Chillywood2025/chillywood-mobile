@@ -39,6 +39,10 @@ async function harness({store = 'APP_STORE', negative = false, mode = 'success',
   f.context.raw.store = store; f.context.raw.appId = f.config.appId;
   f.context.settlementProtocol.store = store; f.context.settlementProtocol.appId = f.config.appId;
   f.context.settlementProtocol.platform = store === 'PLAY_STORE' ? 'android' : 'ios';
+  if (store === 'PLAY_STORE') {
+    delete f.context.settlementProtocol.signedAppVersion;
+    Object.assign(f.context.settlementProtocol, {handoffMode:'play_test_sheet_handoff_v1',automaticNoChargeProof:false,userStoreConfirmationRequired:true});
+  }
   f.context.settlementProtocol.scopeKey = JSON.stringify(['native-store-sandbox-v1','revenuecat',f.config.projectId,f.config.appId,store,'SANDBOX']);
   if (f.context.claim) {f.context.claim.quote.catalog.store = store; f.context.claim.quote.catalog.appId = f.config.appId;}
   f.journal.registry.store = store; f.journal.registry.app_id = f.config.appId;

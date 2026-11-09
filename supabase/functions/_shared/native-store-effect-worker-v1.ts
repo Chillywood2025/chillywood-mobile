@@ -78,13 +78,20 @@ export async function processNativeStoreEffectV1(input: NativeStoreEffectWorkV1,
     if (!keys(context, ["protocol", "raw", "claim", "settlementProtocol"]) || context.protocol !== "native-store-effect-context-v1"
       || !row(context.raw) || !row(context.settlementProtocol)) throw unavailable();
     const raw = context.raw, protocol = context.settlementProtocol;
+    // Android uses explicit provider-owned human confirmation, not a fabricated
+    // signed app version or automatic test-account/payment-method assertion.
+    const playHandoff = protocol.store === "PLAY_STORE" && protocol.handoffMode === "play_test_sheet_handoff_v1"
+      && protocol.automaticNoChargeProof === false && protocol.userStoreConfirmationRequired === true
+      && !Object.hasOwn(protocol, "signedAppVersion") && protocol.sdkVersion === "10.15.1";
+    const appStoreEvidence = protocol.store === "APP_STORE" && text(protocol.signedAppVersion)
+      && !["handoffMode", "automaticNoChargeProof", "userStoreConfirmationRequired"].some(k => Object.hasOwn(protocol, k));
     if (raw.rawReceiptId !== work.rawReceiptId || !digest(raw.rawSha256) || !positive(raw.rawByteLength)
       || typeof raw.conflicted !== "boolean" || typeof raw.intakeEnabled !== "boolean" || typeof raw.originalRevisionRevoked !== "boolean"
       || raw.conflicted || protocol.id !== work.protocolId || protocol.revision !== work.protocolRevision
       || protocol.policy !== "exact_native_usd_consumable_v1" || !text(protocol.productId)
       || !["APP_STORE", "PLAY_STORE"].includes(protocol.store as string)
       || protocol.platform !== (protocol.store === "APP_STORE" ? "ios" : "android")
-      || !text(protocol.signedAppVersion) || !text(protocol.nativeBuild) || !text(protocol.nativeVersion) || !text(protocol.sdkVersion)
+      || !(playHandoff || appStoreEvidence) || !text(protocol.nativeBuild) || !text(protocol.nativeVersion) || !text(protocol.sdkVersion)
       || protocol.projectId !== raw.projectId || protocol.appId !== raw.appId || protocol.store !== raw.store
       || protocol.connectionId !== raw.connectionId || protocol.connectionRevision !== raw.connectionRevision || raw.environment !== "SANDBOX"
       || !matchesScope(protocol.scopeKey, ["native-store-sandbox-v1", "revenuecat", raw.projectId, raw.appId, raw.store, "SANDBOX"])) throw unavailable();
