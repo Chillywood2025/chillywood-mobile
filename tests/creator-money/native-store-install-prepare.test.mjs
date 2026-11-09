@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {spawnSync,execFileSync} from 'node:child_process';import process from 'node:process';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {fileURLToPath,pathToFileURL} from 'node:url';
 import {nativeStoreInstallProfile} from '../../isolated-runtime/native-store-sandbox-v1/install-profile.mjs';
-import {dependencyRelations,prepareSnapshot,readbackSQL,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
+import {canonicalItemArrayTextSQL,dependencyRelations,prepareSnapshot,readbackSQL,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
 const context={currentPostgres:false,currentReadOnly:true,sessionPostgres:false,sessionReadOnly:true,sessionAdmin:false,transactionReadOnly:true};
 const snapshot=()=>({context,serverVersionNum:'170006',historyCount:588,historyMaximum:'20261107191000',historySha256:'a'.repeat(64),catalogSha256:'b'.repeat(64),moneyControlsSha256:'c'.repeat(64),moneyHeld:true,
  dependencies:{protocol:'native-store-install-dependencies-v1',serverVersionNum:'170006',transactionReadOnly:'on',currentUser:'supabase_read_only_user',sessionUser:'supabase_read_only_user',freshNamespaces:true,freshRoles:true,
@@ -49,4 +49,11 @@ test('source binding accepts a clean exact committed closure, rejects wrong head
   fs.appendFileSync(path.join(dir,prefix+'claim.sql'),'\n-- mutation during hypothetical transport');
   assert.throws(()=>sourceBinding(head),/TRACKED_SOURCE_DIRTY/u);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('three digest aggregations retain NULL elements, canonical ordering and empty-array spelling',()=>{
+ const sql=readbackSQL();assert.equal(sql.split(canonicalItemArrayTextSQL).length-1,3);
+ assert.match(canonicalItemArrayTextSQL,/coalesce\(item::text,'null'\)/u);
+ assert.match(canonicalItemArrayTextSQL,/order by item::text collate "C"/u);
+ assert.equal(sql.includes('jsonb_agg(item order by item::text'),false);
 });
