@@ -178,15 +178,9 @@ const aad = (c: RouterConnection, rawSha256: string, rawByteLength: number) => e
   c.authentication.method, c.authentication.keyVersion, c.encryption.keyId,
 ]));
 export async function authenticateRevenueCatEnvelope(req: Request, connection: RouterConnection, now = Date.now()): Promise<RouterEnvelope> {
-  checkConnection(connection);
-  if (req.method !== "POST") throw new RouterBoundaryError("method_not_allowed", 405);
   if (!Number.isSafeInteger(now)) throw new RouterBoundaryError("clock_unavailable", 503);
+  const raw = await readAuthenticatedRevenueCatBytes(req, connection);
   const auth = connection.authentication;
-  // One exact configured Authorization value; no alternate header/JWT fallback.
-  const authorization = req.headers.get("authorization") ?? "";
-  if (authorization.length > 4096 || !equalBytes(encoder.encode(authorization), encoder.encode(auth.secret)))
-    throw new RouterBoundaryError("provider_authentication_failed", 401);
-  const raw = await readBytes(req);
   const rawSha256 = await hash(raw), nonce = crypto.getRandomValues(new Uint8Array(12));
   const key = await crypto.subtle.importKey("raw", new Uint8Array(connection.encryption.key), "AES-GCM", false, ["encrypt"]);
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce,
@@ -194,6 +188,19 @@ export async function authenticateRevenueCatEnvelope(req: Request, connection: R
   return { protocol: ROUTER_PROTOCOL, rawSha256, rawByteLength: raw.length,
     encryption: { algorithm: "AES-256-GCM", keyId: connection.encryption.keyId, nonce: base64(nonce), ciphertext: base64(ciphertext) },
     authentication: { method: auth.method, keyVersion: auth.keyVersion }, observation: observeRevenueCatBytes(raw) };
+}
+
+/** Authenticate and bound the original transport before shared-consumer routing.
+ * Bytes are private to the handler; this does not persist or acknowledge them. */
+export async function readAuthenticatedRevenueCatBytes(req: Request, connection: RouterConnection): Promise<Uint8Array> {
+  checkConnection(connection);
+  if (req.method !== "POST") throw new RouterBoundaryError("method_not_allowed", 405);
+  const auth = connection.authentication;
+  // One exact configured Authorization value; no alternate header/JWT fallback.
+  const authorization = req.headers.get("authorization") ?? "";
+  if (authorization.length > 4096 || !equalBytes(encoder.encode(authorization), encoder.encode(auth.secret)))
+    throw new RouterBoundaryError("provider_authentication_failed", 401);
+  return await readBytes(req);
 }
 
 /** Worker-only replay check. Never expose decrypted bytes in a response/log. */
