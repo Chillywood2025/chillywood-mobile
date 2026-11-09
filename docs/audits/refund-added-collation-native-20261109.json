@@ -1,0 +1,32 @@
+{
+  "sourceOnly": true,
+  "targetExecuted": false,
+  "syntheticBaseline": true,
+  "icuLocale": "en-US",
+  "managedDefaultAcls": true,
+  "managedEventTriggerParity": false,
+  "managedExactTriggerBodies": 6,
+  "brandOidGuardsNotCloned": true,
+  "oldWriterPostcheckFailed": true,
+  "oldRollbackExact": true,
+  "newWriterRollbackExact": true,
+  "negativePostguardRollbackExact": true,
+  "newWriterApplied": true,
+  "historyCountBefore": 612,
+  "historyCountAfter": 613,
+  "addedSha256": "10bffb46a67a595be1e04869b5a73b438a1b33b158d1c59ad8e5a5774e9a7054",
+  "nativeMetadata": {
+    "ctype": "C.UTF-8",
+    "collate": "C.UTF-8",
+    "version": "170006",
+    "provider": "i",
+    "icuLocale": "en-US"
+  },
+  "postgresBinarySha256": "0699e40eb07685cce3477bdb12e92573f14c19fe776df7bbd9a6828d617a5ce7",
+  "runnerSha256": "616c91e5febc892bb772a4981051d44e1e43c1922ccc65620aeb0f48e9824309",
+  "sourceRowsFileSha256": "2955185b4c74ef5438ca55a6aae68010a9e96a3b17c0fddb35c2409033ea236c",
+  "literalProofPacketSha256": "46cd1cf6d41403ebc30e3ca2fa581feab14c43f540435fc445d8e8cbf9d941a5",
+  "qualifiedBaselinePacketSha256": "559f444c2d03fed61b494b94ed2f2c19333faf620ec9f04c5ae4c61892c4edaa",
+  "qualificationCaveat": "Disposable source fixture, not target deployment. Exact six managed trigger bodies exercised with local postgres ownership. Two target-OID Brand guards analyzed, not cloned. No full managed owner/ACL parity claim.",
+  "managedDefaultAclRowsExactMatch": true
+}
