@@ -5,12 +5,14 @@ import assert from 'node:assert/strict';import fs from 'node:fs';import os from 
 import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_process';
 import {gzipSync} from 'node:zlib';
 import {nativeStoreAtomicInstallSQL} from './install-atomic.mjs';
+import {prepareEnvelopeNativeProof} from './install-envelope.native-cases.mjs';
 import {nativeStoreInstallProfile} from './install-profile.mjs';
 import {installEventTriggerParity} from './event-trigger-parity.fixture.mjs';
-import {readbackSQL,validateSnapshot} from '../../scripts/native-store-install-prepare.mjs';
+import {readbackSQL,validateSnapshot,canonicalItemArrayTextSQL} from '../../scripts/native-store-install-prepare.mjs';
 import {deltaSnapshotSQL,describeNativeInstallDelta,verifyNativeInstallDelta,normalizeAdded} from './install-delta.mjs';
 assert.ok(process.argv.length>=4&&process.argv.length<=7);assert.equal(process.argv[2],'--local-bin');const bin=process.argv[3];assert.ok(path.isAbsolute(bin));
-const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding','--generate-local-pins'].includes(f)));
+const flags=process.argv.slice(4);assert.equal(new Set(flags).size,flags.length);assert.ok(flags.every(f=>['--event-trigger-parity','--oid-padding','--generate-local-pins','--envelope-proof'].includes(f)));
+if(flags.includes('--envelope-proof'))assert.ok(flags.includes('--event-trigger-parity')&&!flags.includes('--generate-local-pins'));
 const triggerParity=flags.includes('--event-trigger-parity'),oidPadding=flags.includes('--oid-padding');
 const here=path.dirname(fileURLToPath(import.meta.url)),base=path.resolve(here,'../sandbox-commerce-v1'),profile=nativeStoreInstallProfile();
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'native-managed-')),data=path.join(directory,'data'),port='55491';
@@ -31,6 +33,16 @@ try{
  invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(directory,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c autovacuum=off`,'start']);started=true;
  invoke('psql',args('fixture_admin','postgres'),'create role postgres login createrole bypassrls nosuperuser nocreatedb noinherit;create database permission_fixture owner postgres;');
  q('create role anon nologin;create role authenticated nologin;create role service_role nologin;');
+ // Real PostgreSQL serializer regression: SQL NULL is not omitted; all scalar,
+ // array/object, Unicode and numeric canonical spellings retain exact bytes.
+ const serializerValues=[null,'null','true','false','0','-0','1.00','1e20','9007199254740993','"é 中文 😀"','[]','{}','{"z":1,"aa":2,"b":3}','{"duplicate":1,"duplicate":2}','[null,{"a":[1.00,"\\t"]}]'];
+ const literal=v=>v===null?'null::jsonb':"'"+v.replaceAll("'","''")+"'::jsonb";
+ const rows=serializerValues.map(v=>'('+literal(v)+')').join(',');
+ for(const where of ['true','false','item is null',"item='null'::jsonb","jsonb_typeof(item)='number'"]){
+  assert.equal(q(`with samples(item) as(values ${rows}) select coalesce(jsonb_agg(item order by item::text collate "C")::text,'[]')=${canonicalItemArrayTextSQL} from samples where ${where};`),'t');cases++;
+ }
+ assert.equal(q(`with samples(item) as(values(null::jsonb),('null'::jsonb)) select jsonb_agg(item)::text is distinct from '['||string_agg(item::text,', ')||']' from samples;`),'t');cases++;
+
  // Only synthetic relation projections, outside install closure. No fixture
  // user, entitlement, route, catalog, receipt or account decision is seeded.
  const fixture=name=>fs.readFileSync(path.join(base,'tests',name),'utf8');
@@ -67,6 +79,9 @@ try{
    insert into public.platform_money_kill_switches select k,case when k in('live_money_enabled','payouts_enabled','cashout_enabled') then 'off' else 'sandbox_only' end from unnest(array['live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled','tips_enabled','creator_monetization_enabled','provider_webhooks_enabled','revenuecat_app_store_enabled','revenuecat_google_play_enabled']) k;
    grant usage on schema auth,public,supabase_migrations to supabase_read_only_user;grant select on all tables in schema auth,public,supabase_migrations to supabase_read_only_user;
    grant usage on schema supabase_migrations to postgres;grant select on supabase_migrations.schema_migrations to postgres;`);
+  const legacyReadback=readbackSQL().replaceAll(canonicalItemArrayTextSQL,`coalesce(jsonb_agg(item order by item::text collate "C")::text,'[]')`);
+  const equivalent=invoke('psql',args('supabase_read_only_user'),'begin isolation level repeatable read read only;set local jit=off;set local work_mem=\'4MB\';set local max_parallel_workers_per_gather=0;'+legacyReadback+readbackSQL()+'rollback;').split('\n');
+  assert.equal(equivalent.length,2);assert.equal(equivalent[0],equivalent[1]);cases++;
   const snapshot=JSON.parse(invoke('psql',args('supabase_read_only_user'),'begin read only;'+readbackSQL()+'rollback;'));
   assert.equal(validateSnapshot(snapshot).status,'snapshot_observed_unqualified');assert.equal(validateSnapshot(snapshot).deploymentAllowed,false);cases++;
   const wrongIdentity=JSON.parse(q('begin read only;'+readbackSQL()+'rollback;','postgres'));
@@ -95,7 +110,8 @@ try{
   fs.writeFileSync(path.join(here,'install-atomic-rows.json.gz'),gzipSync(JSON.stringify({sourceDigest:profile.sourceDigest,addedCatalogSha256:delta.addedCatalogSha256,rows})+'\n',{level:9}));
   console.log(JSON.stringify({protocol:'native-store-local-pin-generation-v1',sourceDigest:profile.sourceDigest,addedCatalogSha256:delta.addedCatalogSha256,atomicVerified:false,deploymentAllowed:false}));
  }else{
- const atomic=nativeStoreAtomicInstallSQL();
+ const envelopeProof=flags.includes('--envelope-proof')?await prepareEnvelopeNativeProof({q,run,args,bin,env,attempt,absent}):null;
+ const atomic=envelopeProof?.sql??nativeStoreAtomicInstallSQL();
  for(const [mutation,reason] of [
   ['create function public.atomic_unexpected() returns integer language sql as $$select 1$$;','native_atomic_existing_catalog_changed'],
   ['grant create on schema public to native_store_sandbox_v1_owner;','native_store_install_finalization_required'],
@@ -106,6 +122,7 @@ try{
  const result=attempt(atomic);assert.equal(result.status,0,result.stderr);cases++;
  const afterInstall=JSON.parse(q(deltaSnapshotSQL));
  const sourceDelta=verifyNativeInstallDelta(beforeInstall,afterInstall);cases++;
+ if(envelopeProof)envelopeProof.verifyCommitted();
  if(process.env.NATIVE_ATOMIC_PIN_GENERATE==='local-fixture-only'){
  const old=new Set(beforeInstall.rows.map(r=>JSON.stringify(r)));
  const rows=afterInstall.rows.filter(r=>!old.has(JSON.stringify(r))&&!(r[0]==='schema'&&r[1]==='public')).map(r=>normalizeAdded(r,afterInstall.acls,afterInstall.bootstrapSuperuser));

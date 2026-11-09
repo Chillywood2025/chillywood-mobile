@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -51,4 +52,27 @@ test('Git replacement objects cannot disguise unapproved staged bytes',t=>{
   const r=repository(t);r.write(fixtures[0],'unapproved staged bytes');r.stage(fixtures[0]);
   const bad=r.git('rev-parse',':'+fixtures[0]).toString().trim();r.write(fixtures[0]);
   const good=r.git('hash-object','-w','--',fixtures[0]).toString().trim();r.git('replace',bad,good);rejects(r);
+});
+
+const nativeLock='supabase/functions/native-store-sandbox-command-v1/deno.lock';
+const nativeBytes=fs.readFileSync(path.join(root,nativeLock));
+test('exact native endpoint public lock passes tracked and staged checks',t=>{
+ const r=repository(t);r.write(nativeLock,nativeBytes);r.stage(nativeLock);const result=r.check();assert.equal(result.status,0,result.stderr);
+});
+test('native endpoint working bytes cannot substitute for its exact public lock',t=>{
+ const r=repository(t);r.write(nativeLock,nativeBytes);r.stage(nativeLock);r.write(nativeLock,Buffer.concat([nativeBytes,Buffer.from('\n')]));rejects(r);
+});
+test('native endpoint safe working bytes cannot conceal substituted staged bytes',t=>{
+ const r=repository(t);r.write(nativeLock,'unapproved staged native lock');r.stage(nativeLock);r.write(nativeLock,nativeBytes);rejects(r);
+});
+for(const file of ['deno.lock','supabase/functions/unlisted/deno.lock'])test(`native lock bytes do not authorize unlisted path: ${file}`,t=>{
+ const r=repository(t);r.write(file,nativeBytes);r.stage(file);rejects(r);
+});
+test('approved locks cannot exchange their distinct path-specific digests',t=>{
+ const r=repository(t);r.write(nativeLock,approved);r.stage(nativeLock);rejects(r);
+ r.write(nativeLock,nativeBytes);r.stage(nativeLock);r.write(fixtures[0],nativeBytes);r.stage(fixtures[0]);rejects(r);
+});
+test('native endpoint lock still rejects executable index mode and symlink worktree',t=>{
+ const r=repository(t);r.write(nativeLock,nativeBytes);r.stage(nativeLock);r.git('update-index','--chmod=+x','--',nativeLock);rejects(r);
+ r.git('update-index','--chmod=-x','--',nativeLock);r.write('native-copy',nativeBytes);fs.unlinkSync(path.join(r.dir,nativeLock));fs.symlinkSync(path.join(r.dir,'native-copy'),path.join(r.dir,nativeLock));rejects(r);
 });
