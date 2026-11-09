@@ -216,3 +216,25 @@ READ ONLY REPEATABLE READ and <=5s statement/transaction limits. No table reads
 are granted to it; no private row values are returned. See `PRIVATE-STATE.md`.
 The pinned generator, exact generated SQL and preparation source binding agree;
 this additional observation never grants deployment, activation or retry authority.
+
+### Offline combined source packet
+
+`node isolated-runtime/native-store-sandbox-v1/deployment-packet.mjs EXACT_40_CHARACTER_APP_COMMIT`
+emits a review manifest only. It binds the existing atomic SQL assembler,
+ordered SQL source and added-catalog pins independently from the four exact Edge
+source/lock profiles and their configured JWT boundaries. All included source
+and pin bytes must equal that immutable Git commit; dirty substitutions, missing
+files and JWT drift fail closed. It does not carry credentials, target URLs,
+transport operations or deployment authority. Its digest covers this combined
+manifest, not observed hosted state or an installed application build.
+
+Runtime, hosted parity, provider/no-charge evidence, app-build qualification and
+the capacity window remain unqualified in every packet. Passing local source
+validation cannot remove those holds. Existing exact runtime tests and SQL
+qualification remain separate evidence. The current source profile is fresh and
+default-off only; this packet does not authorize applying it to a populated target.
+
+The packet checks the exact committed HEAD/tree and clean tracked source through
+the existing SQL sourceBinding contract, then binds its own generator and the
+transitive SQL preparation scripts in provenance. This is source identity only,
+not evidence of an installed application build or hosted runtime parity.
