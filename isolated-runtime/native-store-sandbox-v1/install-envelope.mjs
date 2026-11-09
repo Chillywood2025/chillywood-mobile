@@ -45,13 +45,24 @@ export function buildNativeInstallEnvelope(review=NATIVE_INSTALL_REVIEW){
  insert into native_envelope_history ${historyItemsSQL};
  `;
  const append=`
- insert into supabase_migrations.schema_migrations(version,name,statements) values(${literal(m.version)},${literal(m.name)},array[${literal(body)}]::text[]);
+ -- Independent expected receipt, constructed before the history write. Never
+ -- derive expected bytes from INSERT RETURNING or the observed history row.
+ create temporary table native_envelope_expected_receipt(version text,name text,statements text[]) on commit drop;
+ insert into native_envelope_expected_receipt values(${literal(m.version)},${literal(m.name)},array[${literal(body)}]::text[]);
+ insert into supabase_migrations.schema_migrations(version,name,statements) select version,name,statements from native_envelope_expected_receipt;
  do $native_envelope_after$ begin
+ -- A history trigger can mutate caller-owned temp state. Bind the independently
+ -- expected row to immutable source scalars before using it in either multiset.
+ if (select count(*) from native_envelope_expected_receipt)<>1 or not exists(
+ select 1 from native_envelope_expected_receipt where version=${literal(m.version)} and name=${literal(m.name)}
+ and array_ndims(statements)=1 and array_lower(statements,1)=1 and cardinality(statements)=1
+ and statements[1] is not null and encode(sha256(convert_to(statements[1],'UTF8')),'hex')=${literal(sha(body))}
+ ) then raise exception 'native_envelope_history_changed';end if;
  if exists(
- (select rows from native_envelope_history union all select ${literal(JSON.stringify(receipt))}::jsonb
+ (select rows from native_envelope_history union all select jsonb_build_array(version,name,statements) from native_envelope_expected_receipt
  except all ${historyItemsSQL})
  union all
- (${historyItemsSQL} except all (select rows from native_envelope_history union all select ${literal(JSON.stringify(receipt))}::jsonb))
+ (${historyItemsSQL} except all (select rows from native_envelope_history union all select jsonb_build_array(version,name,statements) from native_envelope_expected_receipt))
  ) then raise exception 'native_envelope_history_changed';end if;
  if ${moneyDigestSQL}<>${literal(b.moneyControlsSha256)} then raise exception 'native_envelope_money_changed';end if;
  end $native_envelope_after$;
