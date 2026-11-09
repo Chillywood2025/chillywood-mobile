@@ -77,7 +77,9 @@ export function catalogHashSQL(added=false){
     `select jsonb_build_array('membership',roleid::regrole::text,member::regrole::text,admin_option,inherit_option,set_option) from pg_auth_members`,
     `select jsonb_build_array('event_trigger',evtname,evtevent,evtowner::regrole::text,evtfoid::regprocedure::text,evtenabled,evttags) from pg_event_trigger`,
     `select jsonb_build_array('default_acl',d.defaclrole::regrole::text,n.nspname,d.defaclobjtype,d.defaclacl::text) from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace where d.defaclnamespace=0 or ${scope}`);
-  return `(select ${hashSQL(canonicalArrayTextSQL('item','item::text'))} from (${rows.join('\nunion all\n')}) catalog_items)`;
+  // Added-object expectation is source-derived in C; never inherit target ICU ordering.
+  // Existing baseline hashes retain their independently qualified original ordering.
+  return `(select ${hashSQL(canonicalArrayTextSQL('item',added?'item::text collate "C"':'item::text'))} from (${rows.join('\nunion all\n')}) catalog_items)`;
 }
 export const invariantsHashSQL=catalogHashSQL();
 export const addedCatalogHashSQL=catalogHashSQL(true);
