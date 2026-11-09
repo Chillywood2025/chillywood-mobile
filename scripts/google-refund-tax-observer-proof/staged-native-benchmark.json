@@ -1,0 +1,65 @@
+{
+  "nativeVersion": "17.6",
+  "role": "supabase_read_only_user",
+  "targetWrites": false,
+  "stages": [
+    {
+      "stage": "inverse",
+      "nodes": 102,
+      "totalCost": 36189.76,
+      "wallSeconds": 0.711629183992045,
+      "maximumChildRSSSoFarKB": 200500
+    },
+    {
+      "stage": "types",
+      "nodes": 22,
+      "totalCost": 2843.14,
+      "wallSeconds": 0.03268364600080531,
+      "maximumChildRSSSoFarKB": 200500
+    },
+    {
+      "stage": "catalog",
+      "nodes": 62,
+      "totalCost": 68608.92,
+      "wallSeconds": 0.4677134209923679,
+      "maximumChildRSSSoFarKB": 200500
+    },
+    {
+      "stage": "data",
+      "nodes": 123,
+      "totalCost": 6226.26,
+      "wallSeconds": 0.029156393007724546,
+      "maximumChildRSSSoFarKB": 200500
+    },
+    {
+      "stage": "history",
+      "nodes": 78,
+      "totalCost": 62383.13,
+      "wallSeconds": 0.2932583919900935,
+      "maximumChildRSSSoFarKB": 200500
+    }
+  ],
+  "wholeWallSeconds": 1.3608864619891392,
+  "wholePeakRSSKB": 203912,
+  "final": {
+    "holds": false,
+    "protocol": "refund589-staged-database-baseline-offline-v1",
+    "typeFaults": [],
+    "deltaFaults": [],
+    "historyCount": 612,
+    "dataQualified": false,
+    "edgeQualified": false,
+    "finalEnvelope": "refund589-staged-proof-final-v1",
+    "historyMaximum": "20261107191000",
+    "sourceSeedExact": true,
+    "catalogQualified": false,
+    "historyQualified": false,
+    "expectedDataSha256": null,
+    "deploymentQualified": false,
+    "expectedCatalogSha256": null,
+    "expectedHistorySha256": null,
+    "databaseBaselineQualified": false,
+    "frozenOriginalDataMatches": false,
+    "frozenQualifiedGuardedMatches": false
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "protocol": "refund589-staged-offline-evidence-v1",
+  "targetExecutionAuthorized": false,
+  "targetMemoryHeadroomAccepted": false,
+  "databaseBaselineQualified": false,
+  "tinyTransport": {
+    "artifact": "backend-readiness-20261108/refund-staged-transport-raw.json",
+    "sha256": "33f7e4207a1edcc0e416077602f63178c9b2c7f4cd7d49aa5b5282623ced090a",
+    "scope": "Tiny transport-only probe, not catalog/data proof or headroom acceptance",
+    "readContextVerified": true,
+    "repeatableRead": true,
+    "sameSnapshot": true,
+    "localMarkerVerified": true,
+    "jitDisabled": true,
+    "exactFinalEnvelopeReturned": true
+  },
+  "localBudgets": {
+    "maxStagePlanNodes": 300,
+    "maxStageTotalCost": 100000,
+    "maxStageWallSeconds": 5,
+    "maxWholeWallSeconds": 15,
+    "statementTimeoutSeconds": 15,
+    "idleTimeoutSeconds": 30,
+    "lockTimeoutSeconds": 2,
+    "workMemMB": 4,
+    "parallelWorkers": 0
+  },
+  "memoryCaveat": "Observed isolated native peak203912KB (~199MiB) is not a target capacity guarantee. work_mem is not a total-memory cap. Target headroom remains unknown; heavy target execution is not authorized."
+}
