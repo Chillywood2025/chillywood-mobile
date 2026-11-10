@@ -1,0 +1,180 @@
+{
+  "protocol": "play-forward-source-catalog-v1",
+  "qualification": "local_source_delta_only",
+  "source": "d6d2d5f800a1769684ebbfa9700d82a55755ca69",
+  "tree": "5ba9ab7030a2ea026069b0d44ec8ff70d8035127",
+  "worktreeHead": "d6d2d5f800a1769684ebbfa9700d82a55755ca69",
+  "baseSourceDigest": "e07d2e3266789b1d5e5c9665e03245f6edf1abb43643e16b06d718ef4c77e33d",
+  "baseModules": 48,
+  "extensions": [
+    {
+      "path": "isolated-runtime/native-store-play-handoff-v1/handoff.sql",
+      "sha256": "bb79c3477433439352056d6c4d69abfbc8c8f4c5e334fa57bac7a00290229d30",
+      "bytes": 26490
+    },
+    {
+      "path": "isolated-runtime/native-store-play-handoff-v1/settlement.sql",
+      "sha256": "37e7b062b19a221c35c971572c931d9dbe023e313bb5a6873198f200f0bca6a5",
+      "bytes": 94869
+    },
+    {
+      "path": "isolated-runtime/native-store-play-handoff-v1/private-state.sql",
+      "sha256": "c42d19a33118e5d5ad55be4755eccd6d9c2678f5d09db314b34f5023bc5593bc",
+      "bytes": 4546
+    }
+  ],
+  "extensionDigest": "6b8a7b3d033a84335a3a1f0bda01ed6d85b0eeb215ac6caefaf4e88e3c360ccb",
+  "portableDeltaSha256": "9d777ae571b35829bb6cd006dd16b6e756c70ad3471a96819222c9cded6882c7",
+  "counts": {
+    "before": 5632,
+    "afterHandoff": 5806,
+    "after": 6050,
+    "added": {
+      "column": 77,
+      "columnMetadata": 77,
+      "constraint": 68,
+      "function": 21,
+      "index": 21,
+      "policy": 10,
+      "relation": 10,
+      "trigger": 114,
+      "type": 20
+    },
+    "changed": {
+      "constraint": 1,
+      "function": 8
+    },
+    "removed": 0,
+    "afterSettlement": 6049
+  },
+  "existingObjectsAltered": [
+    {
+      "key": "[\"constraint\",\"sandbox_commerce_v1\",\"sandbox_commerce_v1.native_store_reservation_terminals\",\"native_store_reservation_terminals_check\"]",
+      "beforeSha256": "2aaefc098305600e4f69801eda5f5692650873a1e68db215e6731d701066acc1",
+      "afterSha256": "3257431b1279821e3a123e2d7207d9e8503c640f03ddc2be553562c7903a0287"
+    },
+    {
+      "key": "[\"function\",\"public\",\"native_store_sandbox_dispatch_v1\",\"p_user_id uuid, p_session_id uuid, p_command text, p_request_id uuid, p_payload jsonb\"]",
+      "beforeSha256": "10a8874548d53d50f321eab8a1f4d0530996cc1e17d7596d2fdcb478e2aeae0f",
+      "afterSha256": "6f8e517fbe8c929b55981f3a7183df6c552f99d28d0d397d5c24569404b3da47"
+    },
+    {
+      "key": "[\"function\",\"sandbox_commerce_v1\",\"native_store_apply_effect\",\"p_raw_receipt_id uuid, p_claim_id uuid, p_protocol_id uuid, p_protocol_revision bigint, p_projection jsonb\"]",
+      "beforeSha256": "7d43d06b2979b059c346bf439d6ed86c61426b7ef0f5de4f8fe0adcfd5a7be8e",
+      "afterSha256": "e1bc220e418a87f85f5c6a24dff9fc8483245eb2c23a6c2caf97ac81d2030abd"
+    },
+    {
+      "key": "[\"function\",\"sandbox_commerce_v1\",\"native_store_assert_current_allocation\",\"p_receipt uuid, p_buyer uuid\"]",
+      "beforeSha256": "0c9207a3cbc46ffb77584565ea81f1774998c21615c18250a948673416c6e9f3",
+      "afterSha256": "e7de815e390d23f8dc6ffad2d1d3b6d5dde8f80bdce6ddd5064dd6743344cbe7"
+    },
+    {
+      "key": "[\"function\",\"sandbox_commerce_v1\",\"native_store_effect_candidate\",\"p_raw_receipt_id uuid\"]",
+      "beforeSha256": "5710e92889dfebc190ab4d8c94e798df9ec66e321370a4357977f5fc8d39addd",
+      "afterSha256": "3676fef95aa6f15c604c0347c28cc7f81a465443c848680980d1500f4211d70e"
+    },
+    {
+      "key": "[\"function\",\"sandbox_commerce_v1\",\"native_store_project_pending\",\"p_project text\"]",
+      "beforeSha256": "4a42fe2b29e16387447bf8f65d96e8595ff922f6061bf8d3bfb9b2d514c6049a",
+      "afterSha256": "b53884ed9cd870b8a4784732f2fe543c553da32b99920180e9b7b8432554cb54"
+    },
+    {
+      "key": "[\"function\",\"sandbox_commerce_v1\",\"native_store_resolve_completed_pending\",\"p_raw uuid\"]",
+      "beforeSha256": "74da643f8ca5e02ef5588fd4636b80f5d41a9f9f381a4d2cf4ab21c2888fce5c",
+      "afterSha256": "7c3dfc4bb3a601a6588278994aa99442f2c36b801a225a336a7a41965c61e7fa"
+    },
+    {
+      "key": "[\"function\",\"sandbox_commerce_v1\",\"native_store_settlement_protocol\",\"p_id uuid, p_revision bigint\"]",
+      "beforeSha256": "311d4431779754ad791f4f3420ba090ad90230cc5182a0a2bae2a9586d12ef12",
+      "afterSha256": "7a04f80b89557338d5607eabdefac6cb526e586711383c81667cbdef48fb8e74"
+    },
+    {
+      "key": "[\"function\",\"sandbox_commerce_v1\",\"native_store_terminal_json\",\"t sandbox_commerce_v1.native_store_reservation_terminals\"]",
+      "beforeSha256": "63fabc91a57f69f0f0116be70eb5fcb2f8f6a6b22c686f4bd11ab3cc42466ef1",
+      "afterSha256": "037d64b04af47d10a6fa472b6b02ef92b6f093552e8de4619f5bb0395a3aa1cd"
+    }
+  ],
+  "newTables": [
+    "sandbox_commerce_v1.native_store_play_allocations",
+    "sandbox_commerce_v1.native_store_play_enrollment_revocations",
+    "sandbox_commerce_v1.native_store_play_enrollments",
+    "sandbox_commerce_v1.native_store_play_handoff_attempts",
+    "sandbox_commerce_v1.native_store_play_handoff_control",
+    "sandbox_commerce_v1.native_store_play_handoff_setups",
+    "sandbox_commerce_v1.native_store_play_raw_effects",
+    "sandbox_commerce_v1.native_store_play_settlement_protocols",
+    "sandbox_commerce_v1.native_store_play_settlement_revocations",
+    "sandbox_commerce_v1.native_store_play_setup_revocations"
+  ],
+  "defaultOff": true,
+  "emptyNewDataTables": 9,
+  "controlRows": 1,
+  "retainedTables": 174,
+  "retainedRows": 31,
+  "retainedDataSha256": "042f6e9d6c047fb25382a3dfa22f26321e748de93186fa070ca356a9ba0977cb",
+  "existingACLsUnchanged": true,
+  "rolesMembershipsSchemaPrivilegesUnchanged": true,
+  "existingOidsUnchangedExcept": [
+    {
+      "key": "constraint:sandbox_commerce_v1.native_store_reservation_terminals.native_store_reservation_terminals_check",
+      "beforeOid": "20027",
+      "afterOid": "20450"
+    }
+  ],
+  "compatibility": [
+    {
+      "original": "native_store_settlement_protocol",
+      "compatibility": "native_store_settlement_protocol_pre_play_handoff",
+      "originalDefinitionSha256": "9f91510c72bc83ff8a69e8a24c9b430f76ff572a8f5a85947b97e5f0d2b5aff9",
+      "normalizedCompatibilityDefinitionSha256": "9f91510c72bc83ff8a69e8a24c9b430f76ff572a8f5a85947b97e5f0d2b5aff9",
+      "originalOIDRetained": true
+    },
+    {
+      "original": "native_store_assert_current_allocation",
+      "compatibility": "native_store_assert_current_allocation_pre_play_handoff",
+      "originalDefinitionSha256": "975bc67adb4ef8578cf70cc35e69476637d29d815f4243acf24d818bcebf794c",
+      "normalizedCompatibilityDefinitionSha256": "975bc67adb4ef8578cf70cc35e69476637d29d815f4243acf24d818bcebf794c",
+      "originalOIDRetained": true
+    },
+    {
+      "original": "native_store_apply_effect",
+      "compatibility": "native_store_apply_effect_pre_play_handoff",
+      "originalDefinitionSha256": "d84a33627eb255ca2d5f29b05e6daf8b0d40584f5ad8a49f53be9b3120ff90ae",
+      "normalizedCompatibilityDefinitionSha256": "d84a33627eb255ca2d5f29b05e6daf8b0d40584f5ad8a49f53be9b3120ff90ae",
+      "originalOIDRetained": true
+    },
+    {
+      "original": "native_store_effect_candidate",
+      "compatibility": "native_store_effect_candidate_pre_play_handoff",
+      "originalDefinitionSha256": "0163ad92d3842e82c558d723a4e07f45fed8da5cfb0ba3bafb04670315a307f4",
+      "normalizedCompatibilityDefinitionSha256": "0163ad92d3842e82c558d723a4e07f45fed8da5cfb0ba3bafb04670315a307f4",
+      "originalOIDRetained": true
+    }
+  ],
+  "limitations": [
+    "External account/authority dependencies are local synthetic fixtures.",
+    "No target query, baseline, mutation or transport is represented.",
+    "The third private-state reader module is new uncommitted source at derivation; source/tree identify the immutable original two-module reference, not approval of this integration tree."
+  ],
+  "deploymentAllowed": false,
+  "activationAllowed": false,
+  "eventTriggerParity": {
+    "count": 8,
+    "source": "isolated-runtime/native-store-sandbox-v1/event-trigger-parity.fixture.mjs",
+    "passed": true
+  },
+  "addedCount": 418,
+  "privateReader": {
+    "name": "public.native_store_play_private_state_v1()",
+    "definitionSha256": "5f8724c6d94de9fdc1573d3b647a0834d455e09d4602b6dab0dabee0407c0d14",
+    "catalogRowSha256": "9b312c129751a3007410cef4ee2656376fa3a78be972667a5c6d4e0fe231e76f",
+    "owner": "sbx_v1_core_owner",
+    "executeGrantees": [
+      "sbx_v1_core_owner",
+      "supabase_read_only_user"
+    ],
+    "grantOption": false,
+    "genuineReadOnlyRepeatableReadObserved": true,
+    "defaultOffEmptyObserved": true
+  }
+}

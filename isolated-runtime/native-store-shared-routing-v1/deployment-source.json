@@ -1,0 +1,22 @@
+{
+  "protocol": "revenuecat-native-legacy-exclusion-deployment-source-v1",
+  "originCommit": "d6d2d5f800a1769684ebbfa9700d82a55755ca69",
+  "originTree": "5ba9ab7030a2ea026069b0d44ec8ff70d8035127",
+  "sourcePath": "isolated-runtime/native-store-shared-routing-v1/exclusion.sql",
+  "sourceSha256": "ec76ed694c9b8fb09df54585ef904ae3ccbfca669d54d5faa975c700ae20550c",
+  "sourceBodySha256": "ae3f25439557592762cc28d0cb5b59868c5ad30bdafff852fe48346ff70e6d84",
+  "definitionSha256": "54af83d340ea4caf9a5f2cb6f52a52e97852f884f06cad928408b7401cae88ca",
+  "migration": {
+    "version": "20261110021153",
+    "name": "revenuecat_native_legacy_exclusion_v1"
+  },
+  "receiptStatements": "one-element text[] containing exact exclusion.sql bytes",
+  "cli": {
+    "version": "3.1.0",
+    "command": "supabase migration new revenuecat_native_legacy_exclusion_v1",
+    "generatedFilename": "20261110021153_revenuecat_native_legacy_exclusion_v1.sql"
+  },
+  "runtimeRowsChanged": false,
+  "activationAllowed": false,
+  "receiptStatementsSha256": "db5be54c1757ea8a487d446715f344b11a486497b67c5198d511ed240167499b"
+}

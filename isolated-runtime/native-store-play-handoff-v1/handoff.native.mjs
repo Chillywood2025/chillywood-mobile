@@ -103,6 +103,10 @@ try{
     'FUNCTION sandbox_commerce_v1.'+name+'('),original.definition);
   }
  });
+ if(settlementProof){
+  const {runPlayPrivateStateInitialCases}=await import('./reader.native-cases.mjs');
+  runPlayPrivateStateInitialCases({q,run,args,db,rejected});
+ }
  q(`select authority_fixture.reset();update sandbox_commerce_v1.lifecycle set state='active';
   insert into auth.users(id,email_confirmed_at,raw_app_meta_data) values('${buyer}',clock_timestamp(),'{}'),('${other}',clock_timestamp(),'{}');
   insert into auth.sessions values('${session}','${buyer}',clock_timestamp()+interval '1 hour'),('${newSession}','${buyer}',clock_timestamp()+interval '1 hour'),('${otherSession}','${other}',clock_timestamp()+interval '1 hour');
@@ -320,6 +324,8 @@ try{
   await runPlaySettlementCases({q,call,rpc,run,args,bin,env,children,db,literal,json,actor,buyer,session,seller,other,otherSession,otherActor,newSession,
    fresh,setup,enroll,dispatch,dispatchSQL,payload,revoke,resource,asset,offer,catalog,route,incarnation,objectKey,connection,appleConnection,here,
    root:path.resolve(here,'../..'),counts,rejected,service});
+  const {runPlayPrivateStateOccupiedCase}=await import('./reader.native-cases.mjs');
+  runPlayPrivateStateOccupiedCase({q,run,args,db});
  }
  console.log(JSON.stringify({protocol:'native-store-play-handoff-local-proof-v1',cases:cases.length,passed:cases.length,names:cases,postgres:'17.6',managedInstall:true,baseSourceDigest:profile.sourceDigest,
   syntheticFactsOnly:true,providerObserved:false,sdkInvoked:false,automaticNoChargeProof:false,productionInstalled:false,productionEnabled:false}));
@@ -329,4 +335,15 @@ try{
  if(status.status===0){const stopped=run('pg_ctl',['-D',data,'-m','immediate','-w','stop']);if(stopped.status===0)uncertain=false;else{uncertain=true;console.error('play_handoff_cleanup_failed: '+(stopped.stderr||stopped.error?.message));process.exitCode=1;}}
  if(uncertain||status.error||![0,3,4].includes(status.status)||fs.existsSync(path.join(data,'postmaster.pid'))){console.error('play_handoff_cluster_retained: '+work);process.exitCode=1;}
  else fs.rmSync(work,{recursive:true,force:true});
+}
+if(settlementProof){
+ // Deployment proofs use their own isolated clusters. Run them only after this
+ // cluster has stopped, and propagate every failure through the mandatory job.
+ assert.ok(!process.exitCode,'handoff cleanup must succeed before deployment proofs');
+ for(const [proof,timeout] of [['./deployment.native-cases.mjs',120000],['./deployment-scale.native-cases.mjs',240000],['../native-store-shared-routing-v1/deployment.native.mjs',120000]]){
+  const deployment=spawnSync(process.execPath,[path.resolve(here,proof),'--local-bin',bin],
+   {encoding:'utf8',env,timeout,maxBuffer:8*1024*1024});
+  if(deployment.stdout)process.stdout.write(deployment.stdout);
+  assert.equal(deployment.status,0,`${proof}: ${deployment.stderr||deployment.error?.message}`);
+ }
 }

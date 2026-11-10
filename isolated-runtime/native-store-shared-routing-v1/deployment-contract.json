@@ -1,0 +1,50 @@
+{
+  "acl": [
+    {
+      "grantee": "postgres",
+      "grantor": "postgres",
+      "grantable": false,
+      "privilege": "EXECUTE"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "postgres",
+      "grantable": false,
+      "privilege": "EXECUTE"
+    }
+  ],
+  "cost": 100,
+  "kind": "f",
+  "name": "revenuecat_native_legacy_exclusion_v1",
+  "rows": 0,
+  "owner": "postgres",
+  "config": [
+    "search_path=\"\"",
+    "lock_timeout=500ms"
+  ],
+  "schema": "public",
+  "strict": false,
+  "comment": "Read-only exact native-sandbox versus legacy consumer exclusion proof. Preserves pending reconciliation obligations and all authority guards; never activates purchases or acknowledges transport by itself.",
+  "support": "-",
+  "language": "plpgsql",
+  "parallel": "u",
+  "leakproof": false,
+  "bodySha256": "ae3f25439557592762cc28d0cb5b59868c5ad30bdafff852fe48346ff70e6d84",
+  "returnType": "jsonb",
+  "returnsSet": false,
+  "volatility": "v",
+  "anonExecute": false,
+  "argumentModes": null,
+  "argumentNames": [
+    "p_provider_event_row_id",
+    "p_provider_event_id",
+    "p_raw_sha256"
+  ],
+  "argumentTypes": "2950 25 25",
+  "serviceExecute": true,
+  "securityDefiner": true,
+  "allArgumentTypes": null,
+  "argumentDefaults": 0,
+  "definitionSha256": "54af83d340ea4caf9a5f2cb6f52a52e97852f884f06cad928408b7401cae88ca",
+  "authenticatedExecute": false
+}

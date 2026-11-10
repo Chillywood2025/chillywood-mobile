@@ -1,6 +1,7 @@
 import hashlib, importlib.util, io, json, subprocess, tempfile, unittest
 from types import SimpleNamespace
 from pathlib import Path
+from unittest.mock import call, patch
 
 spec = importlib.util.spec_from_file_location("provision", Path(__file__).with_name("provision.py"))
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
@@ -70,7 +71,63 @@ class PrerequisiteBoundaries(unittest.TestCase):
         for name in ['clamav','signature','talosKey','deno']:
             self.assertRegex(pins[name]['sha256'],r'^[a-f0-9]{64}$'); module.validate_download_url(pins[name]['url'])
         self.assertNotIn('database.clamav.net',json.dumps(pins))
+        self.assertEqual(pins['ffmpegPackageVersion'],'7:6.1.1-3ubuntu5')
         self.assertEqual(pins['clamavVersion'],'1.5.4'); self.assertEqual(pins['denoVersion'],'2.7.14')
+
+class StopBeforeDownload(Exception):
+    pass
+
+class SignedUbuntuFfmpeg(unittest.TestCase):
+    update = ["sudo", "apt-get", "update"]
+    install = ["sudo", "apt-get", "install", "--no-install-recommends", "-y", "ca-certificates", "gnupg", "ffmpeg=7:6.1.1-3ubuntu5"]
+    query = ["dpkg-query", "-W", "-f=${Version}", "ffmpeg"]
+
+    def setUp(self):
+        directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.repo = directory / "repo"; self.repo.mkdir()
+        self.output = directory / "prerequisites"
+        # Exercise provision() and its real run() wrapper, but never execute a
+        # host command or download on the machine running these source tests.
+        self.enterContext(patch.object(module, "assert_host"))
+        self.enterContext(patch.object(module, "require_git_baselines"))
+        self.runner = self.enterContext(patch.object(module.subprocess, "run"))
+        self.download = self.enterContext(patch.object(module, "download", side_effect=StopBeforeDownload))
+
+    def result(self, stdout="", returncode=0, stderr=""):
+        return SimpleNamespace(stdout=stdout, returncode=returncode, stderr=stderr)
+
+    def expected_calls(self):
+        return [call(args, capture_output=True, text=True, env=None, timeout=timeout)
+            for args, timeout in [(self.update, 240), (self.install, 1200), (self.query, 120)]]
+
+    def test_install_has_twenty_minutes_without_changing_signed_command_or_other_budgets(self):
+        self.runner.side_effect = [self.result(), self.result(), self.result("7:6.1.1-3ubuntu5\n")]
+        with self.assertRaises(StopBeforeDownload): module.provision(self.repo, self.output)
+        self.assertEqual(self.runner.call_args_list, self.expected_calls())
+        self.download.assert_called_once()
+        proof = json.loads((self.output / "prerequisite-proof.json").read_text())
+        self.assertEqual(proof["steps"], [{"step": "signed-ubuntu-ffmpeg", "version": "7:6.1.1-3ubuntu5"}])
+        self.assertEqual(proof["status"], "incomplete")
+
+    def test_installed_version_mismatch_still_stops_provisioning(self):
+        self.runner.side_effect = [self.result(), self.result(), self.result("unreviewed-version\n")]
+        with self.assertRaisesRegex(ValueError, "FFmpeg package version mismatch"):
+            module.provision(self.repo, self.output)
+        self.assertEqual(self.runner.call_args_list, self.expected_calls())
+        self.download.assert_not_called()
+        self.assertFalse((self.output / "prerequisite-proof.json").exists())
+
+    def test_install_timeout_and_authentication_failure_have_no_retry_or_fallback(self):
+        outcomes = [(subprocess.TimeoutExpired(self.install, 1200), subprocess.TimeoutExpired),
+            (self.result(returncode=100, stderr="Packages cannot be authenticated"), RuntimeError)]
+        for index, (outcome, error) in enumerate(outcomes):
+            with self.subTest(error=error):
+                self.runner.reset_mock(); self.runner.side_effect = [self.result(), outcome]
+                output = self.output.with_name("failed-prerequisites-" + str(index))
+                with self.assertRaises(error): module.provision(self.repo, output)
+                self.assertEqual(self.runner.call_args_list, self.expected_calls()[:2])
+                self.download.assert_not_called()
+                self.assertFalse((output / "prerequisite-proof.json").exists())
 
 class PinnedImageRetries(unittest.TestCase):
     image = "public.ecr.aws/supabase/kong@sha256:" + "1" * 64

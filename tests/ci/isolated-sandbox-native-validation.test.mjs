@@ -145,6 +145,15 @@ function assertNativeGate(candidate) {
   assert.ok(builds[0].run.includes('tar --extract --bzip2 --file "$pg_build/postgresql-17.6.tar.bz2"'));
   assert.doesNotMatch(builds[0].run, /postgresql-17\.6\.tar\.gz|--gzip/u);
   assert.match(builds[0].run, /sha256sum\s+(?:-c|--check)\b/u);
+  assert.ok(builds[0].run.includes('--with-ssl=openssl'), 'pgcrypto must link the official OpenSSL implementation');
+  for (const extension of ['pgcrypto','pg_trgm']) {
+    const compile=`make --directory=contrib/${extension} --jobs=2`;
+    const install=`make --directory=contrib/${extension} install`;
+    assert.ok(builds[0].run.includes(compile), `compile actual ${extension} from the verified source tree`);
+    assert.ok(builds[0].run.includes(install), `install actual ${extension} into the same private PostgreSQL prefix`);
+    assert.ok(builds[0].run.indexOf(compile)>builds[0].run.indexOf('make install'));
+    assert.ok(builds[0].run.indexOf(install)>builds[0].run.indexOf(compile));
+  }
   assert.ok(job.steps.indexOf(builds[0]) < job.steps.indexOf(runners[0]));
   const upload = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@')&&step.with?.path==='isolated-sandbox-native-evidence');
   assert.equal(upload.length, 1);
@@ -266,6 +275,9 @@ test('isolated native wiring rejects removed, skipped, weakened and credential-b
     'duplicate runner': (candidate, runner) => { candidate.jobs[jobId].steps.push(structuredClone(runner)); },
     'swallow runner failure': (candidate, runner) => { runner.run += ' || true'; },
     'skip archive verification': candidate => { candidate.jobs[jobId].steps.find(step => step.run?.includes(postgresSha256)).if = 'false'; },
+    'omit OpenSSL support for pgcrypto': candidate => { const build=candidate.jobs[jobId].steps.find(step=>step.run?.includes(postgresSha256));build.run=build.run.replace(' --with-ssl=openssl',''); },
+    'omit actual pgcrypto installation': candidate => { const build=candidate.jobs[jobId].steps.find(step=>step.run?.includes(postgresSha256));build.run=build.run.replace('make --directory=contrib/pgcrypto install',''); },
+    'omit actual pg_trgm compilation': candidate => { const build=candidate.jobs[jobId].steps.find(step=>step.run?.includes(postgresSha256));build.run=build.run.replace('make --directory=contrib/pg_trgm --jobs=2',''); },
     'mismatched archive compression': candidate => {
       const build = candidate.jobs[jobId].steps.find(step => step.run?.includes(postgresSha256));
       build.run = build.run.replaceAll('.tar.bz2', '.tar.gz').replace('--bzip2', '--gzip');
