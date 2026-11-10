@@ -126,7 +126,7 @@ def provision(repo, output):
         (output / "prerequisite-proof.json").write_text(json.dumps(report, indent=2) + "\n")
     # Apt retains its signed archive metadata verification. No --allow-unauthenticated.
     run(["sudo", "apt-get", "update"], timeout=240)
-    run(["sudo", "apt-get", "install", "--no-install-recommends", "-y", "ca-certificates", "gnupg", "ffmpeg=" + PINS["ffmpegPackageVersion"]], timeout=240)
+    run(["sudo", "apt-get", "install", "--no-install-recommends", "-y", "ca-certificates", "gnupg", "ffmpeg=" + PINS["ffmpegPackageVersion"]], timeout=1200)
     actual = run(["dpkg-query", "-W", "-f=${Version}", "ffmpeg"]).strip()
     if actual != PINS["ffmpegPackageVersion"]:
         raise ValueError("FFmpeg package version mismatch")

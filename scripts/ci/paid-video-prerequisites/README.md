@@ -28,6 +28,9 @@ so its private configuration is created before that version check. FFmpeg is pin
 binary versions/hashes are recorded. A removed package/version is a failure,
 not permission to choose an unreviewed replacement. Missing `/usr/local/bin`
 FFmpeg links may be created; existing different tools are never overwritten.
+The signed FFmpeg package installation has a 20-minute (1200-second) timeout,
+without retries. Apt metadata refresh keeps its separate 240-second timeout;
+download, image-pull, FreshClam and other command budgets remain independent.
 
 FreshClam is the sole signature downloader. It uses one invocation with one
 attempt, a private mode-0700 directory, official mirror, full CVD downloads and
