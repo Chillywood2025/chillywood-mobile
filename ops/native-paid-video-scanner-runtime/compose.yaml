@@ -1,0 +1,116 @@
+# Requires an explicitly approved final image digest and host paths.
+# Not a replacement for infra/hetzner/docker-compose.malware-scanner.yml.
+name: chillywood-native-paid-video-scanner
+services:
+  scanner:
+    profiles: [native-scanner]
+    image: ${NATIVE_SCANNER_IMAGE:?Set the qualified FINAL repository@sha256 image}
+    platform: linux/amd64
+    user: "65532:65532"
+    init: false # the pinned image uses tini with process-group forwarding
+    restart: "no" # an uncertain result MUST stop, not auto-replay
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1.0
+    mem_limit: 4g
+    memswap_limit: 4g
+    pids_limit: 128
+    stop_signal: SIGTERM
+    stop_grace_period: 150s
+    environment:
+      NATIVE_SCANNER_IMAGE: ${NATIVE_SCANNER_IMAGE:?Set the qualified final image}
+      PAID_VIDEO_R2_SCANNER_RPC_TOKEN_FILE: /run/secrets/scanner_rpc_token
+      PAID_VIDEO_R2_SCANNER_KEY_FILE: /run/secrets/scanner_key_hex
+    # The R2 CLI owns lease/poll/backoff/drain and durable uncertainty semantics.
+    command: ["--config", "/run/native-scanner/config.json", "--supervise", "--result", "/state/pending.json"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=65532,gid=65532
+      - /work:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=65532,gid=65532
+    volumes:
+      - type: bind
+        source: ${NATIVE_SCANNER_CONFIG:?Set non-secret reviewed config path}
+        target: /run/native-scanner/config.json
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_APPROVAL:?Set operator-owned runtime approval path}
+        target: /run/native-scanner/runtime-approval.json
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_LINUX_PROOF:?Set exact-image Linux qualification JSON}
+        target: /run/native-scanner/linux-qualification.json
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_LINUX_R2_PROOF:?Set exact-image typed R2 Linux qualification JSON}
+        target: /run/native-scanner/linux-r2-qualification.json
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_DEFINITION_STORE:?Set private authenticated definition store}
+        target: /definitions
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_STATE:?Set private durable state directory}
+        target: /state
+    secrets:
+      - scanner_rpc_token
+      - scanner_key_hex
+    healthcheck:
+      # A definition probe is not end-to-end queue/receipt health. It never
+      # claims a job or downloads an object. The CLI fails closed per job too.
+      test: ["CMD", "/usr/local/bin/node", "/app/ops/native-paid-video-scanner-runtime/gate.mjs", "--health"]
+      interval: 10m
+      timeout: 90s
+      retries: 1
+      start_period: 90s
+    logging:
+      driver: json-file
+      options: {max-size: "2m", max-file: "3"}
+  definition-updater:
+    profiles: [definition-refresh]
+    image: ${NATIVE_SCANNER_IMAGE:?Set the qualified FINAL repository@sha256 image}
+    platform: linux/amd64
+    user: "65532:65532"
+    entrypoint: ["/sbin/tini", "-g", "--", "/usr/local/bin/node", "/app/ops/native-paid-video-scanner-runtime/refresh-definitions.mjs"]
+    command: ["--supervise"]
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1.0
+    mem_limit: 4g
+    memswap_limit: 4g
+    pids_limit: 128
+    stop_signal: SIGTERM
+    stop_grace_period: 330s
+    environment:
+      NATIVE_SCANNER_IMAGE: ${NATIVE_SCANNER_IMAGE:?Set the qualified final image}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=65532,gid=65532
+      - /work:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=65532,gid=65532
+      - /state:rw,noexec,nosuid,nodev,size=1m,mode=0700,uid=65532,gid=65532
+    volumes:
+      - type: bind
+        source: ${NATIVE_SCANNER_APPROVAL:?Set operator-owned runtime approval path}
+        target: /run/native-scanner/runtime-approval.json
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_LINUX_PROOF:?Set exact-image Linux qualification JSON}
+        target: /run/native-scanner/linux-qualification.json
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_LINUX_R2_PROOF:?Set exact-image typed R2 Linux qualification JSON}
+        target: /run/native-scanner/linux-r2-qualification.json
+        read_only: true
+      - type: bind
+        source: ${NATIVE_SCANNER_DEFINITION_STORE:?Set private authenticated definition store}
+        target: /definition-store
+    healthcheck:
+      disable: true
+    logging:
+      driver: json-file
+      options: {max-size: "2m", max-file: "3"}
+secrets:
+  scanner_rpc_token:
+    file: ${NATIVE_SCANNER_RPC_TOKEN_FILE:?Set approved narrow RPC credential file}
+  scanner_key_hex:
+    file: ${NATIVE_SCANNER_KEY_FILE:?Set approved scanner signing key file}

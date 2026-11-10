@@ -1,0 +1,11 @@
+{
+  "protocol": "native-r2-cli-migration-identity-v1",
+  "version": "20261110120025",
+  "name": "native_paid_video_r2_bounded_v1",
+  "filename": "20261110120025_native_paid_video_r2_bounded_v1.sql",
+  "cliVersion": "3.1.0",
+  "command": "supabase migration new native_paid_video_r2_bounded_v1",
+  "execution": "isolated local temporary directory; no target or credentials",
+  "binarySha256": "b71abab4ab7575d64aa23e119e946884db1a650661eacbdc8c300fab16f43442",
+  "packageIntegrity": "sha512-kv/vLnwcxxhkd+CvRjJhp5gP6juwzUUT0a6+JungfQyw9AcM2YSQTDDZwEVHdV85tFc7K975WGkzemw5He26/g=="
+}

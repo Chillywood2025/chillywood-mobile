@@ -1,0 +1,79 @@
+{
+  "checkedAt": "2026-11-10",
+  "status": "local_snapshot_qualified_not_final_tree_or_deployment_approval",
+  "hostingStatus": "parked_with_future_new_server_work",
+  "scannerDependentDeployedFlows": "disabled_and_unverified",
+  "localLinuxQualification": {
+    "completedAt": "2026-11-10T12:18:46.661Z",
+    "sourceArchiveSha256": "b8e2cef9acbae9a175cdab54ce3826f08ae0fe0a70fb8650d5f548f061e26082",
+    "imageId": "sha256:cd6c7c31da88956fe79a5c420180b3a004b18de5be4eb54ca6696ecf0da0fabf",
+    "evidenceArchiveSha256": "8fd322e10775ebb8a2728fc3fc1b01ea6654f7c4f6deabbd8b857d2c17d60e71",
+    "engineCasesPassed": 7,
+    "typedSyntheticTransportGroupsPassed": 4,
+    "cgroupMemoryPeakBytes": 1458184192,
+    "memoryLimitBytes": 4294967296,
+    "cpuLimit": 1,
+    "pidsLimit": 128,
+    "network": "none",
+    "containerExitCode": 0,
+    "containerRemoved": true,
+    "finalTreeApproval": false,
+    "providerOrServiceProof": false
+  },
+  "officialImage": {
+    "source": "docker.io/clamav/clamav:1.5.4_base",
+    "tagDigest": "sha256:64ca916618842ba469ef38a501e6c2f42a68281c064c03749b0126c0fb085ce5",
+    "linuxAmd64Digest": "sha256:b2c2f5c9a557dc1c1249e09448a84c59c3e414bb3bbbac0a9d065236c779842c",
+    "created": "2026-11-09T01:44:58.577154308Z",
+    "base": "Alpine 3.24.4",
+    "sourceRepository": "https://github.com/Cisco-Talos/clamav"
+  },
+  "securityRelease": "https://blog.clamav.net/2026/08/",
+  "packageIndexes": {
+    "main": {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz",
+      "indexSha256": "1c393e745f0c3af8b94d6a6125373d00cc88b401ad468d28a5d0dc7f7ee7c829",
+      "packages": {
+        "ca-certificates": {
+          "P": "ca-certificates",
+          "V": "20261020-r0",
+          "A": "x86_64",
+          "L": "MPL-2.0 AND MIT",
+          "o": "ca-certificates",
+          "D": "/bin/sh so:libc.musl-x86_64.so.1 so:libcrypto.so.3"
+        },
+        "nodejs": {
+          "P": "nodejs",
+          "V": "24.22.1-r1",
+          "A": "x86_64",
+          "L": "MIT",
+          "o": "nodejs",
+          "D": "ca-certificates /bin/sh so:libada.so.4 so:libbrotlidec.so.1 so:libbrotlienc.so.1 so:libc.musl-x86_64.so.1 so:libcares.so.2 so:libcrypto.so.3 so:libgcc_s.so.1 so:libicui18n.so.78 so:libicuuc.so.78 so:libnghttp2.so.14 so:libsimdjson.so.29 so:libsimdutf.so.34 so:libsqlite3.so.0 so:libssl.so.3 so:libstdc++.so.6 so:libz.so.1 so:libzstd.so.1"
+        }
+      }
+    },
+    "community": {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/APKINDEX.tar.gz",
+      "indexSha256": "2f7e6294f27beb60fc4731c62f31ca4d49c334cb20ca7dba3f0987bb0e7e92a8",
+      "packages": {
+        "ffmpeg": {
+          "P": "ffmpeg",
+          "V": "8.1.3-r0",
+          "A": "x86_64",
+          "L": "GPL-2.0-or-later AND LGPL-2.1-or-later",
+          "o": "ffmpeg",
+          "D": "so:libavcodec.so.62 so:libavdevice.so.62 so:libavfilter.so.11 so:libavformat.so.62 so:libavutil.so.60 so:libc.musl-x86_64.so.1 so:libgcc_s.so.1 so:libswresample.so.6 so:libswscale.so.9 so:libz.so.1"
+        },
+        "tini": {
+          "P": "tini",
+          "V": "0.19.0-r3",
+          "A": "x86_64",
+          "L": "MIT",
+          "o": "tini",
+          "D": "so:libc.musl-x86_64.so.1"
+        }
+      }
+    }
+  },
+  "closureRequirement": "Record final built package closure and deploy only its qualified final image digest; exact direct package pins do not freeze future repository dependency resolution."
+}

@@ -1,10 +1,23 @@
 import { handler } from './index.ts';
 import { createNativeStorePaidVideoRangeHandlerV1 } from '../_shared/native-store-paid-video-range-v1.ts';
+import { nativeStorePaidVideoRuntimeV1 } from '../_shared/native-store-paid-video-runtime-v1.ts';
 const check=(ok:unknown,message:string)=>{if(!ok)throw Error(message);};
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const user=id(1),session=id(2),resource='scv1_resource_'+id(3),grant='scv1_grant_'+id(4),asset='scv1_asset_'+id(5),incarnation=id(6);
 const req=()=>new Request(`https://fixture.invalid/native-store-paid-video-range-v1/${resource}/${grant}`,{headers:{'X-Chillywood-Auth-Session':session,Range:'bytes=0-0'}});
 Deno.test('exact pinned native endpoint defaults off',async()=>{check((await handler(req())).status===503,'endpoint must default off');});
+Deno.test('native range keeps S3 default while invalid or incomplete R2 configuration never falls back',async()=>{
+ const values:Record<string,string>={NATIVE_STORE_PAID_VIDEO_RANGE_V1_ENABLED:'true',PAID_VIDEO_GATEWAY_V2_ENABLED:'true',
+  SUPABASE_URL:'http://127.0.0.1:1',SUPABASE_ANON_KEY:'synthetic-anon',SUPABASE_SERVICE_ROLE_KEY:'synthetic-service',
+  PAID_VIDEO_S3_ROUTE_ID:id(11),PAID_VIDEO_S3_BUCKET:'synthetic-private-media',PAID_VIDEO_S3_REGION:'us-east-1',
+  PAID_VIDEO_S3_ACCESS_KEY_ID:'A'.repeat(20),PAID_VIDEO_S3_SECRET_ACCESS_KEY:'synthetic-not-a-key-'.repeat(3)};
+ const s3=nativeStorePaidVideoRuntimeV1(key=>values[key]);check((await s3(req())).status===401,'S3 runtime reaches authenticated boundary, never origin');
+ for(const extra of [
+  {PAID_VIDEO_STORAGE_MODE:'unrecognized'},
+  {PAID_VIDEO_STORAGE_MODE:'r2-native-v1',PAID_VIDEO_R2_GATEWAY_V1_ENABLED:'false'},
+  {PAID_VIDEO_STORAGE_MODE:'r2-native-v1',PAID_VIDEO_R2_GATEWAY_V1_ENABLED:'true'},
+ ]as Record<string,string>[]){const configuration:Record<string,string>={...values,...extra},runtime=nativeStorePaidVideoRuntimeV1(key=>configuration[key]);check((await runtime(req())).status===503,'incomplete R2 must hold despite configured S3');}
+});
 for(const mode of ['allow','wrong-actor','post-origin-hold','legacy-protocol'])Deno.test(`pinned native range source ${mode}`,async()=>{
  let calls=0,reads=0;
  const access=createNativeStorePaidVideoRangeHandlerV1({authenticate:async()=>({actor:{userId:user,sessionId:session,expiresAtMs:Date.now()+60000},authorization:'Bearer synthetic'}),rpc:async(name,parameters)=>{

@@ -1,0 +1,131 @@
+{
+  "protocol": "native-r2-forward-source-catalog-v1",
+  "qualification": "local_source_delta_only",
+  "source": "39378202a8e677dd3c01eb71a96ab9ceb5525de3",
+  "tree": "f39edb815fa4ffeb53eff32ba85f67415fb074db",
+  "baseSourceDigest": "e07d2e3266789b1d5e5c9665e03245f6edf1abb43643e16b06d718ef4c77e33d",
+  "baseModules": 48,
+  "r2SourceSha256": "832712fcc47d9ecfcff8b3012b6bdd045d7461357ae4b3e50af1aded1e3a25e7",
+  "predecessorFunctions": [
+    {
+      "name": "paid_video_gateway_ready",
+      "signature": "text,uuid",
+      "previousSha256": "b5580c7c47a11a89ca5d8440c36decec0083db34ef54a9d28a3dfacaf1c8bc84"
+    },
+    {
+      "name": "paid_video_native_command",
+      "signature": "text,jsonb,uuid,uuid",
+      "previousSha256": "d021df5ade1099e190bc70bad2e1a6de40bb8c8128287d73df8f9d7ad79135fb"
+    },
+    {
+      "name": "paid_video_command_v2",
+      "signature": "text,jsonb,uuid,uuid,text",
+      "previousSha256": "9b89ea4978563b1042ad4823fec4984c192a363b819d1ea6167457b439e568f3"
+    },
+    {
+      "name": "clean_resource_asset",
+      "signature": "uuid,uuid,bigint,uuid,text",
+      "previousSha256": "a170b9599a336fc4026274361d22586134f81ccc7ab0a85a0f22efbb1651a448"
+    },
+    {
+      "name": "native_store_quote_command_armed",
+      "signature": "uuid,uuid,text,uuid,jsonb",
+      "previousSha256": "d9fc3c605cbb0034f892014cf6b277501a687aae3906ca169ac567b8ef3f0006"
+    },
+    {
+      "name": "native_store_apply_effect_pre_play_handoff",
+      "signature": "uuid,uuid,uuid,bigint,jsonb",
+      "previousSha256": "c8a02d7e8038b488ef1d7c9e86f109adb16838f0c6edebbfa4ce8147a9f74e39"
+    },
+    {
+      "name": "native_store_play_apply_effect",
+      "signature": "uuid,uuid,uuid,bigint,jsonb",
+      "previousSha256": "f0c1787021d744bb1aa088c133efdaf3671c268774a85d810dc5182d20ab495b"
+    },
+    {
+      "name": "native_store_paid_video_access",
+      "signature": "uuid,uuid,uuid,uuid",
+      "previousSha256": "90d62544e634ced0a777611f9bd05ae56a9b4f5df10ae71ecc508b109b814f8e"
+    },
+    {
+      "name": "paid_video_review_snapshot",
+      "signature": "uuid",
+      "previousSha256": "dd5437954e87fb3a510dec602c004443bf3f887a5bddeea5dc4c103f4d4ff330"
+    },
+    {
+      "name": "paid_video_review",
+      "signature": "text,text",
+      "previousSha256": "9ff49cde24ed835bc0801e771ad89993ee9e2738c940921eb72bbca47535606c"
+    }
+  ],
+  "retainedFunctions": [
+    {
+      "name": "native_store_apply_effect",
+      "signature": "uuid,uuid,uuid,bigint,jsonb",
+      "previousSha256": "555264ae01c5e07a56d772b0f41b04cfd4c8327ce5a1ad3e55e125aa54feab88"
+    },
+    {
+      "name": "native_store_assert_current_allocation",
+      "signature": "uuid,uuid",
+      "previousSha256": "2c370f63c15c503f3f7a5fe9c94e1f1f4e7a0e7b1470e2827518e0c201a3a823"
+    },
+    {
+      "name": "native_store_settlement_protocol",
+      "signature": "uuid,bigint",
+      "previousSha256": "44fdfd7860638e6e2ca861708277eb39a289ff339fa025bfcb4fab6bdfd890d3"
+    }
+  ],
+  "predecessorSources": {
+    "isolated-runtime/native-paid-video-authoring-v1/authoring.sql": "86eefa28bf38ca0ad8730786706dd7f1a03baa3a3ed88ceb61cee599d92a426e",
+    "isolated-runtime/sandbox-commerce-v1/paid-video-media.sql": "ec98da0d9bbc3400d00a750bdea5aaf65b8a799ed08e2e85abe168d6e76404cf",
+    "isolated-runtime/sandbox-commerce-v1/delivery-authority.sql": "49a92c9f810218dea66ea896e98f10a22ff34ef15af2f722f573ec3a85242545",
+    "isolated-runtime/sandbox-commerce-v1/test-store-paid-video-core.sql": "b35ff1b171e78a20aee5e11eabb7dd6160db4d4cff2268aca20e00c5a47552ed",
+    "isolated-runtime/native-store-sandbox-v1/native-access.sql": "88f33c4a051498359ca14e0dfcf83e17a8ff3320cc9b4420704f14b676a8dc24",
+    "isolated-runtime/native-store-sandbox-v1/quote.sql": "0fa036a446433f8eb52d608bc21f478a476eb9b6c2daf4cc1893321aa7167410",
+    "isolated-runtime/native-store-sandbox-v1/settlement-effects.sql": "3b56554f199e07cc0e0b346de08af3a5d15258f46b10ec1eafac4a63af0883a4",
+    "ops/isolated-paid-video-operations-v2/operations.sql": "32f965cb5e8bb815b17c0958ddc8dc933f149918b89ce9e1a708de42f7973355",
+    "ops/isolated-paid-video-operations-v2/monotonic-removal.sql": "3398dcc95cbce6e45a0bed9934f48ee859cece5ec96979ada8dd15ca95b4b5ee",
+    "isolated-runtime/native-store-play-handoff-v1/settlement.sql": "37e7b062b19a221c35c971572c931d9dbe023e313bb5a6873198f200f0bca6a5"
+  },
+  "extensions": [
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-grant.sql",
+      "sha256": "f3baacb85a768be8a4b3f578a3a9282cab4301ce4cf0c8ff9df18387fe8024f3",
+      "bytes": 910
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/source.sql",
+      "sha256": "832712fcc47d9ecfcff8b3012b6bdd045d7461357ae4b3e50af1aded1e3a25e7",
+      "bytes": 148571
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-revoke.sql",
+      "sha256": "dd22564156d1fa27d6fdc021407b9cf052575bcc2377191c6623baee39deb505",
+      "bytes": 1350
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/private-state.sql",
+      "sha256": "dbb7f30313156a637fdf439c31b44700c8f47f75cf8404acbe283471c3c0bd7a",
+      "bytes": 7867
+    }
+  ],
+  "extensionDigest": "55ed69aab2b2e3991fbf37542e82985141e85bdbc15028487054fc325847c4de",
+  "addedCount": 252,
+  "changedCount": 13,
+  "portableDeltaSha256": "93271aca93233fb8c694a6f75059693e7e503ea94c4f55e54576483e1f200521",
+  "newTables": [
+    "sandbox_commerce_v1.r2_profiles",
+    "sandbox_commerce_v1.r2_bindings",
+    "sandbox_commerce_v1.r2_dispatches",
+    "sandbox_commerce_v1.r2_commits",
+    "sandbox_commerce_v1.r2_receipts",
+    "sandbox_commerce_v1.r2_tickets"
+  ],
+  "qualificationCounts": {
+    "before": 47446,
+    "after": 47698
+  },
+  "deploymentAllowed": false,
+  "activationAllowed": false,
+  "retryAllowed": false
+}

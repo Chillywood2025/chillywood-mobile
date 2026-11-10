@@ -1,7 +1,7 @@
 import { checkPaidVideoDeadline, PaidVideoBoundaryError, readPaidVideoJson } from "./isolated-paid-video-boundary.ts";
 
 export type PaidVideoRpc = (name: string, parameters: Record<string, unknown>, authorization: string | null, deadline: number) => Promise<unknown>;
-const names = new Set(["native_store_paid_video_access_v1"]);
+const names = new Set(["native_store_paid_video_access_v1", "native_paid_video_r2_admit_v1"]);
 // The URL, API keys and RPC names are server configuration. No client URL,
 // redirect, retry, table query or schema enumeration is supported.
 export function createNativeStorePaidVideoRpcV1(configuration: { url: string; anonKey: string; serviceKey: string }, request: typeof fetch = fetch, now = Date.now): PaidVideoRpc {

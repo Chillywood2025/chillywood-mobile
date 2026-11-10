@@ -3,9 +3,9 @@
 Source-only repair of normal `com.chillywood.mobile` authoring. No provider,
 deployment, migration, product activation, credential or control change is made.
 The original 48-module native installation remains byte-for-byte unchanged.
-`authoring.sql` is a forward extension, not a fresh-install substitute or a
-replayable deployment packet. Its exact predecessor definitions and privilege
-envelope require a separately reviewed forward installation.
+`authoring.sql` is a forward extension, not a fresh-install substitute. The
+bounded installation files below assemble it over the already installed native,
+shared-SKU and Play predecessors. Source preparation does not authorize execution.
 
 ## Product surface and authority
 
@@ -64,12 +64,13 @@ verifier/scanner, moderation and current pre/post-I/O access contracts are
 unchanged. R2 and other S3-compatible providers are not qualified by this repair.
 No object receipt, scan, moderation decision or test media is seeded.
 
-A real deployment still needs the reviewed forward source installation, current
-V2 Edge handlers and gateway configuration, a genuinely qualified storage route,
-independent verifier/scanner credentials and genuine media evidence. Existing
-`ops/isolated-paid-video-operations-v2` provides the narrowly bound worker and
-authenticated reviewer source; its installation and operator/reviewer authority
-must be explicitly reviewed rather than granting broad private function access.
+A real deployment still needs a fresh bound observation and reviewed forward
+installation, exact V2 Edge deployment/readback and gateway configuration, a
+genuinely qualified storage route, independent verifier/scanner credentials and
+genuine media evidence. The forward assembly includes both unchanged SQL modules
+from `ops/isolated-paid-video-operations-v2`. They supply the narrowly bound worker
+and independently authenticated reviewer, and revoke the old generic worker and
+operator moderation paths. Operator/reviewer provisioning remains separate.
 No arbitrary hash, local MP4 probe or service token establishes moderation.
 
 Effective EAS environment values and installed binary identity must be checked
@@ -79,6 +80,31 @@ Other products, legacy consumers, payment providers and live money stay outside
 this change. Roll back UI selection through a normal source change and disable
 new authoring controls; retain immutable requests, transfers and offers for
 recovery rather than deleting historical evidence.
+
+## Bounded installation and endpoint preparation
+
+`deployment-observe.sql` obtains a new bounded read-only catalog/history
+observation. `buildDeploymentEnvelope({baseline, source})` in
+`deployment-envelope.mjs` binds that observation to the exact clean Git commit,
+fixed source artifact and predecessor receipts. It refuses existing extension
+objects, occupied native state, enabled controls, changed baseline, unexpected
+catalog/ACL/OID changes or migration history drift. It preserves the installed
+48 modules and all existing receipts, including long statement arrays and
+metadata. The narrowly scoped temporary owner interval is restored before final
+checks. DDL and its one new receipt commit together; an uncertain result is read
+back, never blindly retried. These files contain no target executor.
+
+The new private reader is available only to the actual read-only login within a
+bounded read-only transaction. It exposes fixed state metadata rather than raw
+private tables, credentials or operational authority. Installation proof is not
+later runtime qualification; controls and bindings must be freshly checked again.
+
+`edge-packet.mjs EXACT_SOURCE_COMMIT` generates offline bundles for the existing
+V2 authoring/upload entrypoints with exact source provenance, JWT verification,
+Deno 2.9.6 and the frozen Supabase SDK 2.110.6 lock. Both remain default-off. The
+bundle includes only the explicitly reviewed private transport/contract files
+outside the Edge directory. Preparing the packet does not deploy it or claim
+hosted environment, scanner, storage, provider or device readiness.
 
 ## Verification
 
@@ -96,3 +122,11 @@ Play handoff and player suites remain required. Shared backgrounds, 48-point
 buttons, accessibility labels and explicit source-sheet cancellation are retained.
 Physical native purchase, restore, first-frame, lifecycle and installed visual
 golden cases remain platform-specific validation after authorized rollout.
+
+`deployment.test.mjs` covers source/observation rejection. The managed native
+deployment suite proves final ACLs, retained OIDs/history, read-only and occupied
+private state, rollback and no replay. Its `--combined-runtime` mode exercises
+the real new worker/reviewer RPCs through publication and permanent removal;
+`--full` repeats the bounded installation against the full legacy catalog.
+`edge-runtime.mjs --deno /absolute/deno` executes both prepared bundles and real
+pinned SDK against loopback Auth/RPC fixtures, without provider/origin access.
