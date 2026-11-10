@@ -1,0 +1,10 @@
+begin read only;
+set local statement_timeout='4s';
+set local transaction_timeout='5s';
+set local lock_timeout='500ms';
+set local jit=off;
+set local work_mem='1MB';
+set local max_parallel_workers_per_gather=0;
+set local search_path='';
+select p.oid,n.nspname,p.proname,pg_catalog.pg_get_function_identity_arguments(p.oid) identity_arguments,pg_catalog.pg_get_function_result(p.oid) returns,p.proowner::regrole::text owner,p.proacl::text acl,p.proconfig,p.prosecdef,l.lanname,pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p.prosrc,'UTF8')),'hex') body_sha256 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace join pg_catalog.pg_language l on l.oid=p.prolang where n.nspname='public' and p.proname='revenuecat_native_legacy_exclusion_v1';
+rollback;
