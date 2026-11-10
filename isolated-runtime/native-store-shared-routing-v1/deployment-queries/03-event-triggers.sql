@@ -6,5 +6,5 @@ set local jit=off;
 set local work_mem='1MB';
 set local max_parallel_workers_per_gather=0;
 set local search_path='';
-select e.oid,e.evtname,e.evtevent,e.evtenabled,e.evttags,e.evtowner::regrole::text owner,e.evtfoid::regprocedure::text function,p.proowner::regrole::text function_owner,p.proacl::text acl,p.proconfig,p.prosecdef,pg_catalog.pg_get_functiondef(p.oid) definition from pg_catalog.pg_event_trigger e join pg_catalog.pg_proc p on p.oid=e.evtfoid order by e.evtname;
+select e.oid::text as oid,e.evtname,e.evtevent,e.evtenabled,e.evttags,e.evtowner::regrole::text owner,e.evtfoid::regprocedure::text function,p.proowner::regrole::text function_owner,p.proacl::text acl,p.proconfig,p.prosecdef,pg_catalog.pg_get_functiondef(p.oid) definition from pg_catalog.pg_event_trigger e join pg_catalog.pg_proc p on p.oid=e.evtfoid order by e.evtname;
 rollback;
