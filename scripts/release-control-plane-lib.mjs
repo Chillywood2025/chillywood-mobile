@@ -4,7 +4,16 @@ import fs from "node:fs";
 const SHA40 = /^[0-9a-f]{40}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const PLATFORMS = new Set(["android", "ios"]);
-const ACTIVE_SUBMISSIONS = new Set(["QUEUED", "WORKER_ASSIGNED", "UPLOADING"]);
+// EAS CLI v21.0.0 SubmissionStatus plus the retained snapshot vocabulary.
+// Awaiting a build is already a submission, not permission to create another.
+const ACTIVE_SUBMISSION_STATES = new Map([
+  ["AWAITING_BUILD", "SUBMISSION_CREATED"],
+  ["IN_QUEUE", "EAS_SUBMIT_QUEUED"],
+  ["IN_PROGRESS", "SUBMISSION_WORKER_ASSIGNED"],
+  ["QUEUED", "EAS_SUBMIT_QUEUED"],
+  ["WORKER_ASSIGNED", "SUBMISSION_WORKER_ASSIGNED"],
+  ["UPLOADING", "SUBMISSION_WORKER_ASSIGNED"],
+]);
 const SECRET_KEYS = /token|secret|credential|password|signedurl|deviceid|udid|private/i;
 const INTERNAL_NATIVE_GENERATION = JSON.parse(fs.readFileSync(
   new URL("../config/release/internal-native-generation.json", import.meta.url),
@@ -168,8 +177,8 @@ export function reconcileExactArtifactDeliveryState(snapshot) {
   if (apple?.state === "VALID") return { ok: true, state: "APPLE_UPLOAD_ACCEPTED", decision: "APPLE_ALREADY_RECEIVED", findings: [] };
   if (apple?.state === "RECEIVED") return { ok: true, state: "APPLE_UPLOAD_ACCEPTED", decision: "APPLE_ALREADY_RECEIVED", findings: [] };
   if (apple?.state === "REJECTED") return { ok: true, state: "DELIVERY_BLOCKED", decision: "ARTIFACT_INVALID_REBUILD_REQUIRED", findings: ["APPLE_REJECTED_ARTIFACT"] };
-  if (submission && ACTIVE_SUBMISSIONS.has(submission.state)) {
-    return { ok: true, state: submission.state === "QUEUED" ? "EAS_SUBMIT_QUEUED" : "SUBMISSION_WORKER_ASSIGNED", decision: "EXISTING_SUBMISSION_ACTIVE", findings: [] };
+  if (submission && ACTIVE_SUBMISSION_STATES.has(submission.state)) {
+    return { ok: true, state: ACTIVE_SUBMISSION_STATES.get(submission.state), decision: "EXISTING_SUBMISSION_ACTIVE", findings: [] };
   }
   if (submission?.state === "FINISHED") {
     return { ok: false, state: "DELIVERY_BLOCKED", decision: "AMBIGUOUS_FAIL_CLOSED", findings: ["EAS_FINISHED_APPLE_RECEIPT_UNVERIFIED"] };
