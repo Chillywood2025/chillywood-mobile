@@ -38,7 +38,13 @@ extension's CLI identity precedes the separately generated Play extension, so
 apply it first if both are independently qualified. Refresh metadata before
 each deployment; never reuse the original baseline after another migration.
 
-The standalone transaction has one non-renewed 5-second transaction deadline.
+The standalone writer transaction has one non-renewed 20-second total deadline,
+while each statement retains its 4-second deadline and each lock wait remains
+bounded to 500 milliseconds. The total covers the repeated catalog/history
+scans, checks and atomic receipt, rather than allowing any one statement more
+time. The seven reader packets and independent readback retain their 4-second
+statement and 5-second transaction deadlines. A read-cost measurement is not a
+guarantee that the complete writer transaction will fit its deadline.
 It requires the real `postgres` session/current identity, pinned database start
 and PostgreSQL 17.6, an advisory fence, NOWAIT ACCESS SHARE locks on its ten
 dependencies, and a NOWAIT SHARE ROW EXCLUSIVE migration-history lock. Runtime
@@ -103,7 +109,9 @@ cluster. It replays actual legacy migrations but not old48, models the eight
 observed event triggers, then uses a non-superuser installer and a genuine
 read-only session. It proves rollback on altered source/defaults/grants/history,
 same-definition old-function recreation with changed OID, extra objects,
-contention and deadlines; exact commit/readback; and refusal to repeat a commit.
+contention and deadlines, including cumulative transaction timeout after the
+receipt with individually sub-4-second statements; exact commit/readback; and
+refusal to repeat a commit.
 The existing shared routing test independently exercises the real handler and
 legacy migrated SQL with purchase/replay/refund/collision/obligation coverage.
 Neither test is hosted execution or activation proof.

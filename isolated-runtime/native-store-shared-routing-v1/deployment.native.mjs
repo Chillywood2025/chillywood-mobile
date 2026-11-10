@@ -82,6 +82,9 @@ try{
  const sorted=values=>values.map(value=>JSON.stringify(value)).sort();
  assert.deepEqual(sorted(baseline),sorted(rows(baselineSQL)));pass('separate genuine-reader packets match server JSON without OID or definition coercion');
  const sql=buildLocalFixturePacket({baseline,contract,context});
+ assert.equal((sql.match(/set local transaction_timeout='20s';/gu)||[]).length,1);
+ assert.equal((sql.match(/set local statement_timeout='4s';/gu)||[]).length,1);
+ assert.equal((sql.match(/set local lock_timeout='500ms';/gu)||[]).length,1);
  const numericOids=structuredClone(baseline);for(const row of numericOids)if(row.kind==='eventTrigger')row.metadata.oid=Number(row.metadata.oid);
  reject('numeric connector OIDs fail the initial baseline guard without function or receipt',buildLocalFixturePacket({baseline:numericOids,contract,context}),/ERROR:\s+exclusion_baseline_changed\n/u);
  const badRoles=structuredClone(baseline);badRoles.find(r=>r.kind==='role'&&r.metadata.rolname==='postgres').metadata.rolsuper=true;
@@ -105,7 +108,20 @@ try{
  reject('old receipt mutation rolls back',mutate("update supabase_migrations.schema_migrations set name='mutated' where version='20261109151349';"),/exclusion_baseline_changed_after_create/u);
  reject('post-receipt new function tamper rolls back',sql.replace('set constraints all immediate;',()=> 'grant execute on function public.revenuecat_native_legacy_exclusion_v1(uuid,text,text) to authenticated;set constraints all immediate;'),/exclusion_function_changed_after_receipt/u);
  await withLock('lock table public.provider_events in access exclusive mode',()=>reject('busy dependency NOWAIT leaves no residue',sql,/could not obtain lock/u));
- reject('deadline rolls back late work',mutate('select pg_sleep(6);'),/statement timeout|transaction timeout/u);
+ reject('statement deadline rolls back late work',mutate('select pg_sleep(6);'),/statement timeout/u);
+ // Each sleep is below the unchanged statement budget. The real total
+ // deadline must terminate the connection after the receipt was inserted.
+ const afterReceipt=`select 'CUMULATIVE_DEADLINE_AFTER_RECEIPT' where
+  to_regprocedure('public.revenuecat_native_legacy_exclusion_v1(uuid,text,text)') is not null
+  and exists(select 1 from supabase_migrations.schema_migrations where version=${literal(identity.version)}
+   and name=${literal(identity.name)} and statements=array[${literal(source)}]::text[]);
+  ${Array.from({length:8},()=> 'select pg_sleep(3);').join('\n')}`;
+ const cumulativeStart=performance.now();
+ const cumulative=attempt(sql.replace('set constraints all immediate;',()=> 'set constraints all immediate;\n'+afterReceipt));
+ assert.notEqual(cumulative.status,0);assert.match(cumulative.stdout,/CUMULATIVE_DEADLINE_AFTER_RECEIPT/u);
+ assert.match(cumulative.stderr,/terminating connection due to transaction timeout/u);
+ assert.doesNotMatch(cumulative.stderr,/statement timeout/u);absent();
+ pass(`non-renewed total deadline rolls back function and receipt across sub-4-second statements (${Math.round(performance.now()-cumulativeStart)} ms)`);
  const tick=performance.now();q(sql);pass(`exact atomic commit (${Math.round(performance.now()-tick)} ms)`);
  const evidence=JSON.parse(q(readbackSQL(contract,baseline),'supabase_read_only_user'));
  assert.equal(evidence.currentUser,'supabase_read_only_user');assert.equal(evidence.sessionUser,'supabase_read_only_user');assert.equal(evidence.readOnly,'on');assert.equal(evidence.retainedRelevantMetadataMatches,true);assert.deepEqual(evidence.functions,[contract]);assert.equal(evidence.migration.length,1);assert.equal(evidence.migration[0].exactSource,true);pass('independent committed readback with genuine read-only session');
