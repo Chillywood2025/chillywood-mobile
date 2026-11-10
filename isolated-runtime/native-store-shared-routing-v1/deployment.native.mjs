@@ -14,6 +14,24 @@ const invoke=(tool,a,input)=>{const r=run(tool,a,input);assert.equal(r.status,0,
 const q=(sql,user='postgres')=>invoke('psql',args(user),sql);
 const attempt=sql=>run('psql',args(),sql);
 const rows=sql=>q("set search_path='';select to_jsonb(x) from ("+sql+') x;').split('\n').filter(Boolean).map(x=>JSON.parse(x));
+// Exercise separately returned packets, rather than collecting baselineSQL
+// through server JSON alone. Raw connector OIDs decode as numbers, whereas
+// PostgreSQL to_jsonb(oid) produces strings. Model that observed decoder using
+// the actual result type; no normalization of function definitions is allowed.
+const packetRows=name=>{
+ const text=fs.readFileSync(path.join(here,'deployment-queries',name),'utf8');
+ const end=text.indexOf("set local search_path='';\n")+"set local search_path='';\n".length;
+ const query=text.slice(end).replace(/;\s*rollback;\s*$/u,'');
+ const event=name==='03-event-triggers.sql';
+ const projection=event?"jsonb_build_object('row',to_jsonb(x),'oidType',pg_typeof(x.oid)::text)":'to_jsonb(x)';
+ return q(text.slice(0,end)+`select ${projection} from (${query}) x;rollback;`,'supabase_read_only_user')
+  .split('\n').filter(Boolean).map(line=>{
+   const value=JSON.parse(line);if(!event)return value;
+   assert.ok(['oid','text'].includes(value.oidType));
+   if(value.oidType==='oid')value.row.oid=Number(value.row.oid);
+   return value.row;
+  });
+};
 let started=false,startupAttempted=false,cases=0;
 const pass=name=>{cases++;process.stdout.write('PASS '+name+'\n');};
 const absent=()=>{assert.equal(q("select to_regprocedure('public.revenuecat_native_legacy_exclusion_v1(uuid,text,text)') is null;"),'t');assert.equal(q(`select count(*) from supabase_migrations.schema_migrations where version=${literal(identity.version)};`),'0');};
@@ -51,10 +69,21 @@ try{
  assert.equal(q('select count(*) from pg_event_trigger;'),'8');
  q('alter role postgres nosuperuser nocreatedb noreplication createrole bypassrls noinherit;','fixture_admin');
  assert.equal(q("select rolsuper from pg_roles where rolname=current_user;"),'f');
- const context=rows("select current_database() database,current_setting('server_version_num')::int as \"serverVersionNum\",pg_postmaster_start_time()::text as \"databaseStart\"")[0];
+ const actor=packetRows('00-actor-health.sql').find(row=>row.kind==='context').metadata;
+ assert.equal(actor.current_user,'supabase_read_only_user');assert.equal(actor.session_user,'supabase_read_only_user');assert.equal(actor.transaction_read_only,'on');
+ assert.deepEqual(packetRows('01-function-absence.sql'),[]);
+ const context={database:actor.current_database,serverVersionNum:Number(actor.server_version_num),databaseStart:actor.database_start};
  const contract=verifyContract(JSON.parse(q("begin;set local search_path='';"+source+functionContractSQL+';rollback;')));
  assert.deepEqual(contract,JSON.parse(fs.readFileSync(path.join(here,'deployment-contract.json'))));pass('exact pinned function body/config/owner/ACL on native PostgreSQL');
- const baseline=rows(baselineSQL),sql=buildLocalFixturePacket({baseline,contract,context});
+ const events=packetRows('03-event-triggers.sql');assert.equal(events.length,8);
+ assert.ok(events.every(row=>typeof row.oid==='string'),'Separate event-trigger packet must preserve text OIDs');
+ const baseline=[...packetRows('02-defaults-roles.sql'),...events.map(metadata=>({kind:'eventTrigger',metadata})),
+  ...packetRows('04-dependencies.sql'),...packetRows('05-history.sql'),...packetRows('06-history-write-boundary.sql')];
+ const sorted=values=>values.map(value=>JSON.stringify(value)).sort();
+ assert.deepEqual(sorted(baseline),sorted(rows(baselineSQL)));pass('separate genuine-reader packets match server JSON without OID or definition coercion');
+ const sql=buildLocalFixturePacket({baseline,contract,context});
+ const numericOids=structuredClone(baseline);for(const row of numericOids)if(row.kind==='eventTrigger')row.metadata.oid=Number(row.metadata.oid);
+ reject('numeric connector OIDs fail the initial baseline guard without function or receipt',buildLocalFixturePacket({baseline:numericOids,contract,context}),/ERROR:\s+exclusion_baseline_changed\n/u);
  const badRoles=structuredClone(baseline);badRoles.find(r=>r.kind==='role'&&r.metadata.rolname==='postgres').metadata.rolsuper=true;
  assert.throws(()=>buildLocalFixturePacket({baseline:badRoles,contract,context}),/Installer must not be a superuser/u);pass('superuser baseline cannot emit a packet');
  const badReader=structuredClone(baseline);badReader.find(r=>r.kind==='role'&&r.metadata.rolname==='supabase_read_only_user').metadata.rolconfig=null;
