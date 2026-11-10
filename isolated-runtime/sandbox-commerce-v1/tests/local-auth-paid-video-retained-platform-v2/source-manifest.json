@@ -6,7 +6,7 @@
     "capture-seed.mjs": "23c965ac68573b427df578b4f7669c2d362f471b0e42c63c2ff12d86ebbebc4d",
     "deno.lock": "73abd3656e02a27b64a1049c6ae68c017ffdbe459a287fc95e4f353e98a9605b",
     "harness/image_chain.py": "cb62c903271aad2f8c19abc19ffad0d15dc50f00cb6e2f695748d6a07c210813",
-    "harness/run.py": "290fb9564d7cf3de8884caf89a5fd439bd614b72463242e483dcbcb493dba9d5",
+    "harness/run.py": "da9fc70fd4379cc219f68cb8aba69b9030764b149e6905d57b8abc8e86629dbe",
     "harness/runtime.py": "5e0080381609c79efefffe8df34e343ccb547f02854135991ecd795c07bb3726",
     "harness/stack.py": "ee1967c2dbbab6c1d957b8835858ea8585070bc130875ea0eeab15ff4e7377b2",
     "harness/v2-source.json": "e0f619d455d1111a5c38ec6c51db0dfd2e44178b4233504b920d7ef2d09610f8",

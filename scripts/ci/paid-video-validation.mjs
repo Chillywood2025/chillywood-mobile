@@ -166,6 +166,32 @@ export function readPaidVideoHttpSummary({stdout,evidenceDirectory,runId}){
  assert.equal(summary.status,'passed');assert.equal(summary.cleanupVerified,true);assert.equal(summary.error,null);
  return summary;
 }
+// Failure observations are not proof. Never publish the private error text,
+// payloads, logs, source lines or evidence paths, even when parsing fails.
+export function httpFailureDiagnostics({stdout,evidenceDirectory,runId}){
+ try{
+  assert.match(runId,/^[a-f0-9]{32}$/u);assert.ok(path.isAbsolute(evidenceDirectory));
+  assert.equal(fs.realpathSync(evidenceDirectory),evidenceDirectory);
+  assert.ok(fs.lstatSync(evidenceDirectory).isDirectory()&&!fs.lstatSync(evidenceDirectory).isSymbolicLink());
+  const descriptor=fs.openSync(path.join(evidenceDirectory,'summary.json'),fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+  let summary;
+  try{const stat=fs.fstatSync(descriptor);assert.ok(stat.isFile()&&stat.size>0&&stat.size<=65536);
+   summary=JSON.parse(fs.readFileSync(descriptor,'utf8'));
+  }finally{fs.closeSync(descriptor);}
+  const last=String(stdout).trimEnd().split('\n').at(-1);assert.ok(last.length<=65536);
+  assert.deepEqual(JSON.parse(last),summary);
+  assert.equal(summary.evidenceDirectory,evidenceDirectory);assert.equal(summary.runId,runId);
+  assert.equal(summary.status,'failed');assert.equal(typeof summary.cleanupVerified,'boolean');
+  const diagnostic=summary.failureDiagnostic;
+  assert.deepEqual(Object.keys(diagnostic??{}).sort(),['exceptionType','httpCasesRecorded','lastHttpStatus','phase','protocol']);
+  assert.equal(diagnostic.protocol,'scpv-retained-http-failure-v1');
+  assert.ok(['prepare','database','services','install','accounts','qualify','cleanup'].includes(diagnostic.phase));
+  assert.ok(['AssertionError','RuntimeError','TimeoutError','OSError','ValueError','Other'].includes(diagnostic.exceptionType));
+  assert.ok(Number.isInteger(diagnostic.httpCasesRecorded)&&diagnostic.httpCasesRecorded>=0&&diagnostic.httpCasesRecorded<=103);
+  assert.ok(diagnostic.lastHttpStatus===null||(Number.isInteger(diagnostic.lastHttpStatus)&&diagnostic.lastHttpStatus>=100&&diagnostic.lastHttpStatus<=599));
+  return {available:true,cleanupVerified:summary.cleanupVerified,...diagnostic};
+ }catch{return {available:false};}
+}
 function main(args){
  if(args.length===1&&args[0]==='--plan'){console.log(JSON.stringify(paidVideoValidationPlan(),null,2));return;}
  assert.equal(args.length,10,'Use --local-bin ABS --output-dir NEW_ABS --database ABS --certificates ABS --deno ABS');
@@ -181,12 +207,16 @@ function main(args){
  const report={protocol:'paid-video-canonical-validation-v1',status:'running',startedAt:new Date(startedAt).toISOString(),
   plan:paidVideoValidationPlan(),sourceHashes:sources,stages:[],providerOrProductionActions:false};
  const save=()=>fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
- const execute=(name,command,commandArgs)=>{
+ const execute=(name,command,commandArgs,httpAttempt=null)=>{
   const result=spawnSync(command,commandArgs,{cwd:root,env,encoding:'utf8',maxBuffer:32*1024*1024});
   fs.writeFileSync(path.join(output,name+'.stdout'),result.stdout??'',{mode:0o600});fs.writeFileSync(path.join(output,name+'.stderr'),result.stderr??'',{mode:0o600});
   if(result.status!==0&&name.startsWith('node-')){
    report.failedNodeStage={name,exitCode:result.status,...nodeFailureDiagnostics(result.stdout,root,result.signal)};save();
    process.stderr.write(JSON.stringify(report.failedNodeStage)+'\n');
+  }
+  if(result.status!==0&&name==='http-run'){
+   report.failedHttpStage={name,...(httpAttempt?httpFailureDiagnostics({stdout:result.stdout,...httpAttempt}):{available:false})};save();
+   process.stderr.write(JSON.stringify(report.failedHttpStage)+'\n');
   }
   assert.equal(result.status,0,`${name} failed; inspect private saved diagnostics`);
   assert.deepEqual(collectPaidVideoSourceManifest(),sources,'Source changed during qualification');return result.stdout;
@@ -220,7 +250,8 @@ function main(args){
   const expectedEvidenceDirectory=path.join(fs.realpathSync(output),`chillywood-local-auth-${expectedRunId}`);
   assert.ok(!fs.existsSync(expectedEvidenceDirectory),'A new caller-owned HTTP attempt is required');
   const attemptStartedAtMs=Date.now();
-  const stdout=execute('http-run','python3',[path.join(httpDirectory,'harness/run.py'),'--evidence-root',expectedEvidenceDirectory,'--run-id',expectedRunId]);
+  const stdout=execute('http-run','python3',[path.join(httpDirectory,'harness/run.py'),'--evidence-root',expectedEvidenceDirectory,'--run-id',expectedRunId],
+   {evidenceDirectory:expectedEvidenceDirectory,runId:expectedRunId});
   const summary=readPaidVideoHttpSummary({stdout,evidenceDirectory:expectedEvidenceDirectory,runId:expectedRunId});
   const aggregate=aggregatePaidVideoRetainedHttpProof({summary,evidenceDirectory:expectedEvidenceDirectory,expectedEvidenceDirectory,expectedRunId,executionInputs,
    templateManifestSha256:sources[`${template}/source-manifest.json`],attemptStartedAtMs});

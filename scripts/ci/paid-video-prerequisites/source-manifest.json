@@ -3,11 +3,11 @@
   "files": {
     "pins.json": "8a18bdaa555337fe30bf67b8dfcb8d306eb3d51b1b3e392ca8f2e45f754d4295",
     "provision.py": "75059e1402b6120b6745e837472fdc225380eb2a42cfeaa8e16f47dc9a7aceec",
-    "provision_test.py": "3555d3057a9e7ece867b9519e64075cd56645c2761b213098e530bb2345d4705",
-    "README.md": "8c944d77b4b09246e06496372fee1beaa57740e446c781b2c1c4f5620a95a210"
+    "provision_test.py": "588392a01fc8d726a53ecb11eaf62239d39111a67c8b1c77768272ad9a238618",
+    "README.md": "a2cbc8c378e8ac1564eceb18279dc40e100accd15c5bf5b8e5e94215a6795111"
   },
   "hostedProvisioningExecuted": false,
-  "offlineUnitGroups": 24,
+  "offlineUnitGroups": 28,
   "downloadedOfficialClamavPackageSha256": "28d6efc5b4423e7830c3559339552eb53870a9eac51ac4efb37d60530d329886",
   "downloadedOfficialSignatureSha256": "1fa7a94df398345b89aeaf8eb4098834946296560266ff17b4cd05f9d8679a15",
   "publicKeyFingerprint": "5BADCA2665EF59DCF8A23D8B707F0DB480836771",

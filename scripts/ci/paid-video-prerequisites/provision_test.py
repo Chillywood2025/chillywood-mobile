@@ -1,4 +1,5 @@
-import copy, hashlib, importlib.util, io, json, shutil, subprocess, sys, tempfile, unittest
+import argparse, ast, copy, hashlib, importlib.util, io, json, os, shutil, subprocess, sys, tempfile, traceback, unittest
+from contextlib import redirect_stdout
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import call, patch
@@ -273,5 +274,116 @@ class SourcePreparation(unittest.TestCase):
                 (fixture/'manifest.json').write_bytes((FIXTURE/'manifest.json').read_bytes())
                 (fixture/'listener.ts').write_text('changed template')
                 with self.assertRaisesRegex(AssertionError,'Template hash mismatch: listener.ts'):prepare.validate(REPO)
+
+class RetainedEdgeRuntime(unittest.TestCase):
+    tree=ast.parse((FIXTURE/'harness/run.py').read_text())
+
+    def test_exact_fixture_environment_boots_current_runtime_as_s3(self):
+        start=next(node for node in self.tree.body if isinstance(node,ast.FunctionDef) and node.name=='start')
+        assignments=[node for node in start.body if isinstance(node,ast.Assign)
+            and any(isinstance(target,ast.Name) and target.id in ('env','args') for target in node.targets)]
+        values={'os':os,'HERE':FIXTURE,'LOCAL':{'denoBinary':'unused-deno'},'FLAGS':['--no-prompt'],
+            'f':SimpleNamespace(API='http://127.0.0.1:59431',CREDENTIALS={'anonKey':'synthetic-anon','serviceRoleKey':'synthetic-service'}),
+            'config':dict(routeId='synthetic-route',accessKeyId='synthetic-access',originSecret='synthetic-secret',verifierId='synthetic-verifier',verifierKey='7'*64)}
+        with patch.dict(os.environ,{'PAID_VIDEO_STORAGE_MODE':'r2-native-v1','PAID_VIDEO_R2_GATEWAY_V1_ENABLED':'true'}):
+            exec(compile(ast.Module(body=assignments,type_ignores=[]),'run.py','exec'),values)
+        environment=values['env'];permission=next(arg for arg in values['args'] if arg.startswith('--allow-env='))
+        allowed=permission.removeprefix('--allow-env=').split(',')
+        self.assertEqual(environment['PAID_VIDEO_STORAGE_MODE'],'s3')
+        self.assertEqual(set(allowed),{key for key in environment if key.startswith(('SUPABASE_','PAID_VIDEO_'))})
+        self.assertFalse(any(key.startswith('PAID_VIDEO_R2_') for key in environment))
+        self.assertNotIn('--allow-env',values['args']);self.assertNotIn('--allow-all',values['args'])
+        # Execute the actual runtime initializer with strict Deno-style env
+        # permissions. Only downstream constructors are synthetic; no service
+        # or external module is imported, contacted or qualified by this test.
+        script=r'''
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+const {environment,allowed}=JSON.parse(fs.readFileSync(0,'utf8'));
+const compiled=ts.transpileModule(fs.readFileSync('supabase/functions/_shared/isolated-paid-video-runtime.ts','utf8'),
+ {reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
+assert.deepEqual(compiled.diagnostics,[]);
+const handler=()=>async()=>new Response(null,{status:204}),unexpected=()=>{throw Error('R2 constructor must remain unused');};
+const imports={
+ '../../../ops/isolated-paid-video-worker/private-object.mjs':{createPrivateS3Transport:()=>({})},
+ './isolated-paid-video-auth.ts':{authenticatePaidVideoRequest:()=>null},
+ './isolated-paid-video-rpc.ts':{createPaidVideoRpc:()=>({})},
+ './isolated-paid-video-authoring.ts':{createPaidVideoAuthoringHandler:handler},
+ './isolated-paid-video-upload.ts':{createPaidVideoUploadHandler:handler},
+ './isolated-paid-video-range.ts':{createPaidVideoRangeHandler:handler},
+ './isolated-paid-video-r2-upload.ts':{createPaidVideoR2UploadHandler:unexpected,createPaidVideoR2UploadRouter:unexpected},
+ './isolated-paid-video-boundary.ts':{paidVideoJson:(status,body)=>new Response(JSON.stringify(body),{status})},
+};
+(async()=>{
+ for(const missing of [false,true]){
+  const grants=new Set(allowed.filter(key=>!missing||key!=='PAID_VIDEO_STORAGE_MODE')),reads=[],exports={};
+  new Function('exports','require','Deno',compiled.outputText)(exports,name=>{assert.ok(Object.hasOwn(imports,name));return imports[name];},
+   {env:{get:key=>{reads.push(key);if(!grants.has(key))throw Error('NotCapable');return environment[key];}}});
+  for(const kind of ['authoring','upload','range'])assert.equal((await exports.paidVideoRuntime(kind)(new Request('https://synthetic.invalid'))).status,missing?503:204);
+  assert.ok(reads.includes('PAID_VIDEO_STORAGE_MODE'));assert.ok(!reads.some(key=>key.startsWith('PAID_VIDEO_R2_')));
+ }
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        result=subprocess.run(['node','-e',script],cwd=REPO,input=json.dumps({'environment':environment,'allowed':allowed}),capture_output=True,text=True,timeout=30)
+        self.assertEqual(result.returncode,0,result.stderr)
+
+    def diagnostic_namespace(self):
+        function=next(node for node in self.tree.body if isinstance(node,ast.FunctionDef) and node.name=='failure_diagnostic')
+        namespace={'HTTP_CASES_RECORDED':0,'LAST_HTTP_STATUS':None}
+        exec(compile(ast.Module(body=[function],type_ignores=[]),'run.py','exec'),namespace)
+        return namespace
+
+    def test_failure_diagnostics_never_include_exception_text_or_unbounded_values(self):
+        namespace=self.diagnostic_namespace();diagnostic=namespace['failure_diagnostic']
+        class PrivateError(Exception):pass
+        for error in [AssertionError('private-token'),RuntimeError('private-token'),TimeoutError('private-token'),OSError('private-token'),ValueError('private-token'),PrivateError('private-token')]:
+            value=diagnostic('qualify',error)
+            self.assertEqual(set(value),{'protocol','phase','exceptionType','httpCasesRecorded','lastHttpStatus'})
+            self.assertNotIn('private-token',json.dumps(value))
+            self.assertIn(value['exceptionType'],['AssertionError','RuntimeError','TimeoutError','OSError','ValueError','Other'])
+        for count,status in [(-1,99),(104,600),(True,False),('private-token','private-token')]:
+            namespace.update(HTTP_CASES_RECORDED=count,LAST_HTTP_STATUS=status)
+            value=diagnostic('qualify',RuntimeError('private-token'))
+            self.assertEqual(value['httpCasesRecorded'],0);self.assertIsNone(value['lastHttpStatus'])
+        with self.assertRaises(AssertionError):diagnostic('private-token',RuntimeError())
+
+    def test_recorded_case_counter_includes_failed_response_without_claiming_pass(self):
+        qualify=next(node for node in self.tree.body if isinstance(node,ast.FunctionDef) and node.name=='qualify')
+        record=next(node for node in qualify.body if isinstance(node,ast.FunctionDef) and node.name=='record')
+        namespace=self.diagnostic_namespace();captures=[]
+        namespace.update(cases=[],f=SimpleNamespace(MANIFEST={'source':'synthetic'},STACK=SimpleNamespace(write_public=lambda *args:captures.append(args))))
+        exec(compile(ast.Module(body=[record],type_ignores=[]),'run.py','exec'),namespace)
+        namespace['record']('synthetic successful case',(200,{},0))
+        with self.assertRaises(AssertionError):namespace['record']('synthetic rejected case',(503,{'private':'payload'},0))
+        value=namespace['failure_diagnostic']('qualify',AssertionError('private-token'))
+        self.assertEqual(value['httpCasesRecorded'],2);self.assertEqual(value['lastHttpStatus'],503)
+        self.assertNotIn('payload',json.dumps(value));self.assertEqual(len(captures),2)
+
+    def test_main_phases_bind_first_failure_and_success_summary_is_unchanged(self):
+        main=next(node for node in self.tree.body if isinstance(node,ast.FunctionDef) and node.name=='main')
+        cases=[('prepare','prepare'),('configure','prepare'),('start_database','database'),('configure_services','database'),
+            ('start_services','services'),('verify','services'),('install','install'),('accounts','accounts'),
+            ('qualify','qualify'),('stop','cleanup'),('close_sessions','cleanup'),('assert_harness_source','cleanup'),('cleanup','cleanup')]
+        for failing,phase in cases+[('install+cleanup','install'),(None,None)]:
+            with self.subTest(failing=failing):
+                namespace=self.diagnostic_namespace();artifacts={};failures=set((failing or '').split('+'))
+                def operation(name):
+                    def call(*args):
+                        if name in failures:raise RuntimeError('private-token')
+                        return True
+                    return call
+                stack=SimpleNamespace(root=Path('/synthetic-owned-evidence'),run_id='a'*32,redact=lambda value:'private',
+                    write_public=lambda name,value:artifacts.update({name:value}),
+                    **{name:operation(name) for name in ['prepare','start_database','start_services','assert_harness_source','cleanup','capture_failure_logs']})
+                namespace.update(argparse=argparse,Path=Path,Stack=lambda **kwargs:stack,traceback=traceback,json=json,
+                    f=SimpleNamespace(**{name:operation(name) for name in ['configure','configure_services','verify','install','accounts','close_sessions']}),
+                    qualify=operation('qualify'),stop=operation('stop'))
+                exec(compile(ast.Module(body=[main],type_ignores=[]),'run.py','exec'),namespace)
+                with patch.object(sys,'argv',['run.py','--evidence-root',str(stack.root),'--run-id',stack.run_id]),redirect_stdout(io.StringIO()):
+                    code=namespace['main']()
+                summary=artifacts['summary.json'];self.assertEqual(code,1 if failing else 0)
+                if failing:
+                    self.assertEqual(summary['failureDiagnostic']['phase'],phase)
+                    self.assertNotIn('private',json.dumps(summary['failureDiagnostic']))
+                else:self.assertEqual(set(summary),{'status','evidenceDirectory','runId','cleanupVerified','error'})
 
 if __name__ == '__main__': unittest.main()
