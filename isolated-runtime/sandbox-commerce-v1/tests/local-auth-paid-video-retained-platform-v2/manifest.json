@@ -1,6 +1,6 @@
 {
   "profile": "retained-capture-real-local-Auth-PostgREST-four-Edge-with-synthetic-provider-and-scanner",
-  "source": "22c7dcfd9a2569b9b902db79f8468df90c1058b53fe663cdefe01a63bcd663b2",
+  "source": "fe5e8295d8e0dae69d8fa60a5a4b23040a781bcd29fd046c205402a788470ca4",
   "files": {
     "isolated-runtime/sandbox-commerce-v1/candidates/paid-video-capture-composed/capture-dependency.sql": {
       "sha256": "48f600455a8805d6b649924965306c0173f5c70f55c7298f203b698000a5dd99",
@@ -275,8 +275,8 @@
       "bytes": 171
     },
     "supabase/functions/_shared/isolated-paid-video-runtime.ts": {
-      "sha256": "651904284540b0d23ce8f059fe066bf5676f5087c324537790d957b66198eaae",
-      "bytes": 2410
+      "sha256": "1b584f7d50480665337ae607fae683467d55bd11fee62f379540ae7d9df8163b",
+      "bytes": 4240
     },
     "supabase/functions/_shared/isolated-paid-video-boundary.ts": {
       "sha256": "def8ddbc71b4bca02db7cba1257929d1c675a6f0b8eaadd22ae9fc81840e7659",
@@ -287,8 +287,8 @@
       "bytes": 6074
     },
     "supabase/functions/_shared/isolated-paid-video-rpc.ts": {
-      "sha256": "47976601f0694393d26614f57a6ab5915542cb3ad39171dab0b5a24ecc903f2e",
-      "bytes": 2005
+      "sha256": "1b12b3a3a59b5f5e3661f9e4113e19737fbed2746513babfb5c4a180b5eeb084",
+      "bytes": 2110
     },
     "supabase/functions/_shared/isolated-paid-video-upload.ts": {
       "sha256": "c8f2f2eed933462da8b8ebc905936f62b27eccb7f502cb7a72b542607157faf7",
@@ -303,8 +303,8 @@
       "bytes": 3973
     },
     "supabase/functions/_shared/isolated-paid-video-contract.ts": {
-      "sha256": "c5bd58b23512d32457efddc4e272afa67a5654370c09f2380ef6243984687ffe",
-      "bytes": 5525
+      "sha256": "9b0aa2df99d3189f7277baee97c114451e1f10dc6775e68ef2c3444b8e6635cb",
+      "bytes": 5967
     },
     "isolated-runtime/sandbox-commerce-v1/paid-video-contract-v1.json": {
       "sha256": "f1636308bc78dd5f674b1d14bc5d8dabda7643d3c282b916bcfabfddfa6e4896",
@@ -329,6 +329,22 @@
     "supabase/functions/isolated-test-store-capture-v1/index.ts": {
       "sha256": "ff68ed032a5e8df73d6fbaf46e9ce33a599e5958eb5648f637de937bd8fd813d",
       "bytes": 3197
+    },
+    "supabase/functions/_shared/isolated-paid-video-r2-upload.ts": {
+      "sha256": "c1326b7a6394c5e3d6c35597b4429c53b300f06e29702081f07e5e9181bacdb8",
+      "bytes": 9620
+    },
+    "ops/isolated-paid-video-worker/r2-http.mjs": {
+      "sha256": "00c51719f3c6fb3c003fed8d1cb77e4dfe11aedbef879f10a928b8340ff64fef",
+      "bytes": 4975
+    },
+    "ops/isolated-paid-video-worker/r2-protocol.mjs": {
+      "sha256": "435f3c504a448c97a48b0c960c757801afeb7019d12101bdd4c39e57db2cbcce",
+      "bytes": 6309
+    },
+    "ops/isolated-paid-video-worker/r2-native.mjs": {
+      "sha256": "fe3ea8617b08135bbb50d5c41d4c0744f772ea653b5e2bc38a9b770c967df705",
+      "bytes": 10976
     }
   },
   "entries": [
@@ -416,5 +432,37 @@
   "installationSourceSha256": "0740568bed37dbc21cb462efcfd577078c9325f3449b1e50bfac6fe57e8e559a",
   "operationsSourceSha256": "9cbbab7014161d9d830a6b9d66084cede0c7dfcb2c294a4afe52ee07b7a81a31",
   "retainedProfileSha256": "39f259c62d0683c750be6b4fa01d254aa91a8dc3cefb9d74219398c70eb36a37",
-  "historicalLocalEquivalentCommit": "12335a768fb683267ac281b1a180f9650479a98d"
+  "historicalLocalEquivalentCommit": "12335a768fb683267ac281b1a180f9650479a98d",
+  "sourceIdentityAlgorithm": "sha256-canonical-manifest-without-source-v1",
+  "entryDependencyClosure": [
+    "isolated-runtime/sandbox-commerce-v1/paid-video-contract-v1.json",
+    "ops/isolated-paid-video-worker/private-object.mjs",
+    "ops/isolated-paid-video-worker/r2-http.mjs",
+    "ops/isolated-paid-video-worker/r2-native.mjs",
+    "ops/isolated-paid-video-worker/r2-protocol.mjs",
+    "ops/isolated-paid-video-worker/upload-broker.mjs",
+    "supabase/functions/_shared/exact-subject-authority.ts",
+    "supabase/functions/_shared/isolated-paid-video-auth.ts",
+    "supabase/functions/_shared/isolated-paid-video-authoring.ts",
+    "supabase/functions/_shared/isolated-paid-video-boundary.ts",
+    "supabase/functions/_shared/isolated-paid-video-checkout-v3.ts",
+    "supabase/functions/_shared/isolated-paid-video-contract.ts",
+    "supabase/functions/_shared/isolated-paid-video-r2-upload.ts",
+    "supabase/functions/_shared/isolated-paid-video-range.ts",
+    "supabase/functions/_shared/isolated-paid-video-rpc.ts",
+    "supabase/functions/_shared/isolated-paid-video-runtime.ts",
+    "supabase/functions/_shared/isolated-paid-video-upload.ts",
+    "supabase/functions/_shared/livekit-session-generation.ts",
+    "supabase/functions/_shared/stripe-connect.ts",
+    "supabase/functions/isolated-paid-video-authoring-v2/index.ts",
+    "supabase/functions/isolated-paid-video-checkout-v3/index.ts",
+    "supabase/functions/isolated-paid-video-range-v1/index.ts",
+    "supabase/functions/isolated-paid-video-upload-v2/index.ts"
+  ],
+  "entryExternalImports": [
+    "node:assert/strict",
+    "node:buffer",
+    "node:crypto",
+    "npm:@supabase/supabase-js@2"
+  ]
 }

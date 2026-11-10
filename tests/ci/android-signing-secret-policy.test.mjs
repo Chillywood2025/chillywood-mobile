@@ -93,3 +93,41 @@ for(const name of ['native-store-ingress-v1','native-store-reconcile-v1']) {
  test(`${name} working tamper rejected`,t=>{const r=repository(t);r.write(file,bytes);r.stage(file);r.write(file,Buffer.concat([bytes,Buffer.from('\n')]));rejects(r);});
  test(`${name} staged tamper rejected`,t=>{const r=repository(t);r.write(file,'substituted');r.stage(file);r.write(file,bytes);rejects(r);});
 }
+
+for(const name of ['isolated-paid-video-authoring-v2','isolated-paid-video-upload-v2']) {
+ const file=`supabase/functions/${name}/deno.lock`,bytes=fs.readFileSync(path.join(root,file));
+ test(`${name} exact public lock passes tracked and staged checks`,t=>{
+  assert.deepEqual(bytes,nativeBytes);
+  const r=repository(t);r.write(file,bytes);r.stage(file);const result=r.check();assert.equal(result.status,0,result.stderr);
+ });
+ test(`${name} changed working bytes remain rejected`,t=>{
+  const r=repository(t);r.write(file,bytes);r.stage(file);r.write(file,Buffer.concat([bytes,Buffer.from('\n')]));rejects(r);
+ });
+ test(`${name} approved working bytes cannot conceal substituted staged bytes`,t=>{
+  const r=repository(t);r.write(file,'unapproved staged Studio lock');r.stage(file);r.write(file,bytes);rejects(r);
+ });
+ test(`${name} executable working mode remains rejected`,t=>{
+  const r=repository(t);r.write(file,bytes);r.stage(file);fs.chmodSync(path.join(r.dir,file),0o755);rejects(r);
+ });
+ test(`${name} executable index mode remains rejected`,t=>{
+  const r=repository(t);r.write(file,bytes);r.stage(file);r.git('update-index','--chmod=+x','--',file);rejects(r);
+ });
+ test(`${name} worktree symlink to approved bytes remains rejected`,t=>{
+  const r=repository(t);r.write(file,bytes);r.stage(file);r.write('studio-copy',bytes);
+  fs.unlinkSync(path.join(r.dir,file));fs.symlinkSync(path.join(r.dir,'studio-copy'),path.join(r.dir,file));rejects(r);
+ });
+ test(`${name} staged symlink cannot be hidden by regular approved working bytes`,t=>{
+  const r=repository(t);r.write(file,bytes);r.write('studio-copy',bytes);fs.unlinkSync(path.join(r.dir,file));
+  fs.symlinkSync(path.join(r.dir,'studio-copy'),path.join(r.dir,file));r.stage(file);fs.unlinkSync(path.join(r.dir,file));r.write(file,bytes);rejects(r);
+ });
+ test(`${name} Git replacement cannot disguise unapproved staged bytes`,t=>{
+  const r=repository(t);r.write(file,'unapproved staged Studio lock');r.stage(file);
+  const bad=r.git('rev-parse',':'+file).toString().trim();r.write(file,bytes);
+  const good=r.git('hash-object','-w','--',file).toString().trim();r.git('replace',bad,good);rejects(r);
+ });
+ for(const unlisted of [`supabase/functions/${name}-unlisted/deno.lock`,`supabase/functions/${name}/nested/deno.lock`]) {
+  test(`${name} public bytes do not authorize unlisted path: ${unlisted}`,t=>{
+   const r=repository(t);r.write(unlisted,bytes);r.stage(unlisted);rejects(r);
+  });
+ }
+}

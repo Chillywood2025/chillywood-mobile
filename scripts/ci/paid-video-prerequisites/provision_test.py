@@ -1,4 +1,4 @@
-import hashlib, importlib.util, io, json, subprocess, tempfile, unittest
+import copy, hashlib, importlib.util, io, json, shutil, subprocess, sys, tempfile, unittest
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import call, patch
@@ -181,5 +181,97 @@ class PinnedImageRetries(unittest.TestCase):
             options, calls, sleeps = self.fixture([])
             with self.assertRaises(ValueError): module.pull_pinned_image(self.docker, image, **options)
             self.assertEqual(calls, []); self.assertEqual(sleeps, [])
+
+REPO=Path(__file__).resolve().parents[3]
+FIXTURE=REPO/'isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2'
+prepare_spec=importlib.util.spec_from_file_location('prepare',FIXTURE/'prepare.py')
+prepare=importlib.util.module_from_spec(prepare_spec);prepare_spec.loader.exec_module(prepare)
+
+class SourcePreparation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest,cls.package,cls.sources,cls.closure=prepare.validate(REPO)
+
+    def test_current_source_preflight_has_complete_listener_closure_and_frozen_baseline(self):
+        self.assertEqual(len(self.sources),86)
+        self.assertEqual(self.closure['entryDependencyCount'],23)
+        predecessor=json.loads((FIXTURE.parent/'local-auth-paid-video-retained-platform-v1/manifest.json').read_text())
+        self.assertEqual(self.manifest['baselineGitBlobs'],predecessor['baselineGitBlobs'])
+        for name in self.manifest['baselineGitBlobs']:
+            self.assertEqual(self.manifest['files'][name],predecessor['files'][name])
+        self.assertEqual(self.manifest['source'],prepare.source_identity(self.manifest))
+        self.assertNotEqual(self.manifest['source'],'22c7dcfd9a2569b9b902db79f8468df90c1058b53fe663cdefe01a63bcd663b2')
+        result=subprocess.run([sys.executable,str(FIXTURE/'prepare.py'),'--repo',str(REPO),'--check'],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertFalse(json.loads(result.stdout)['servicesStarted'])
+
+    def private_repo(self,directory):
+        repo=Path(directory)/'repo';repo.mkdir()
+        (repo/'.git').symlink_to(REPO/'.git',target_is_directory=True)
+        (repo/'node_modules').symlink_to(REPO/'node_modules',target_is_directory=True)
+        for name,raw in self.sources.items():
+            target=repo/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
+        return repo
+
+    def test_any_current_source_byte_drift_is_rejected_before_materialization(self):
+        names=['supabase/functions/_shared/isolated-paid-video-'+name+'.ts' for name in ['runtime','rpc','contract','r2-upload']]
+        names+=['ops/isolated-paid-video-worker/r2-'+name+'.mjs' for name in ['http','protocol','native']]
+        with tempfile.TemporaryDirectory() as directory:
+            repo=self.private_repo(directory)
+            for name in names:
+                with self.subTest(name=name):
+                    target=repo/name;target.write_bytes(self.sources[name]+b'\n')
+                    with self.assertRaisesRegex(AssertionError,'Source hash mismatch: '+name):prepare.validate(repo)
+                    target.write_bytes(self.sources[name])
+
+    def test_baseline_reads_never_adopt_current_working_tree_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo=self.private_repo(directory)
+            for name in self.manifest['baselineGitBlobs']:(repo/name).write_text('unrelated current working tree\n')
+            _,_,sources,_=prepare.validate(repo)
+            for name in self.manifest['baselineGitBlobs']:self.assertEqual(sources[name],self.sources[name])
+
+    def test_each_new_transitive_dependency_must_be_pinned(self):
+        names=['supabase/functions/_shared/isolated-paid-video-r2-upload.ts']
+        names+=['ops/isolated-paid-video-worker/r2-'+name+'.mjs' for name in ['http','protocol','native']]
+        for name in names:
+            sources=dict(self.sources);del sources[name]
+            with self.subTest(name=name),self.assertRaisesRegex(AssertionError,'Unpinned local dependency'):
+                prepare.validate_source_closure(REPO,self.manifest,sources,(FIXTURE/'listener.ts').read_text())
+
+    def test_unreviewed_static_dynamic_type_and_export_imports_fail_closed(self):
+        name='supabase/functions/_shared/isolated-paid-video-runtime.ts'
+        for appended,reason in [
+            ('import "./unreviewed.ts";','Unpinned local dependency'),
+            ('export * from "./unreviewed.ts";','Unpinned local dependency'),
+            ('type Unreviewed = import("./unreviewed.ts").Value;','Unpinned local dependency'),
+            ('await import("./unreviewed.ts");','Unpinned local dependency'),
+            ('await import(runtimeSelectedPath);','Nonliteral dependency'),
+            ('import "https://unreviewed.invalid/runtime.ts";','Unpinned external dependency'),
+            ('import "../../../../outside.ts";','Dependency escapes snapshot'),
+        ]:
+            sources=dict(self.sources);sources[name]+=('\n'+appended+'\n').encode()
+            with self.subTest(appended=appended),self.assertRaisesRegex(AssertionError,reason):
+                prepare.validate_source_closure(REPO,self.manifest,sources,(FIXTURE/'listener.ts').read_text())
+
+    def test_extra_entry_and_rehashed_missing_closure_member_are_rejected(self):
+        manifest=copy.deepcopy(self.manifest);manifest['entryDependencyClosure'].pop()
+        manifest['source']=prepare.source_identity(manifest)
+        with self.assertRaisesRegex(AssertionError,'Entry dependency closure changed'):
+            prepare.validate_source_closure(REPO,manifest,self.sources,(FIXTURE/'listener.ts').read_text())
+        listener=(FIXTURE/'listener.ts').read_text()+"\nimport './snapshot/ops/isolated-paid-video-worker/r2-native.mjs';\n"
+        with self.assertRaisesRegex(AssertionError,'Listener entry set changed'):
+            prepare.validate_source_closure(REPO,self.manifest,self.sources,listener)
+
+    def test_source_identity_and_template_hash_checks_cannot_be_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture=Path(directory)/'fixture';shutil.copytree(FIXTURE,fixture)
+            with patch.object(prepare,'HERE',fixture):
+                manifest=copy.deepcopy(self.manifest);manifest['files'][manifest['entries'][0]]['bytes']+=1
+                (fixture/'manifest.json').write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(AssertionError,'Manifest source identity mismatch'):prepare.validate(REPO)
+                (fixture/'manifest.json').write_bytes((FIXTURE/'manifest.json').read_bytes())
+                (fixture/'listener.ts').write_text('changed template')
+                with self.assertRaisesRegex(AssertionError,'Template hash mismatch: listener.ts'):prepare.validate(REPO)
 
 if __name__ == '__main__': unittest.main()

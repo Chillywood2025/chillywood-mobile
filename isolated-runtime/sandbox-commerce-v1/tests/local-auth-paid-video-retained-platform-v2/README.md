@@ -72,5 +72,22 @@ This successor binds the EOF-normalized SQL profile and the reviewed clean
 provisioning-budget-yield fixture. Local SQL/HTTP qualification is pending.
 The platform-v1 template and its proof identities remain historical at
 `245400c9d3fb3e82920793ea35a986db56e555c8`; prior successes do not qualify
-these new bytes. All four image chains, caller-owned nonce/root, 100 execution
+these new bytes. All four image chains, caller-owned nonce/root, 104 execution
 inputs (including the raw-PUT regression harness) and 103 HTTP outcome assertions remain required.
+
+## Current runtime dependency preflight
+
+This source-only revision pins the current shared runtime, RPC and contract,
+including the R2 upload module and its three transitive local imports. The
+retained scenario still selects the S3 fixture, with no R2/provider operation.
+The published baseline blobs, SQL installation identity, Deno 2.7.14 lock and
+103 HTTP outcome assertions remain unchanged. Earlier proofs do not qualify
+this source identity; fresh execution and cleanup are still required.
+
+Before provisioning, run `python3 isolated-runtime/sandbox-commerce-v1/tests/local-auth-paid-video-retained-platform-v2/prepare.py --repo /absolute/checkout --check`.
+This reads all exact source/template hashes and parses the complete listener
+dependency graph with the repository's pinned TypeScript parser. It needs no
+Deno binary, output directory, services or network. A missing local import,
+nonliteral dynamic import, unpinned external import or changed entry set fails
+before materialization. The source identity is SHA256 of the entire manifest
+without `source`, serialized with recursively sorted keys and compact JSON.
