@@ -65,6 +65,18 @@ fails closed. A failed transfer becomes retryable only when its exact failure
 boundary is newly proved. Processing delay never invalidates an otherwise
 valid signed artifact and never requires a rebuild.
 
+Copy the EAS submission status into the sanitized `submission.state` field;
+do not pass raw provider payloads. The [EAS CLI v21.0.0 schema](https://github.com/expo/eas-cli/blob/v21.0.0/packages/eas-cli/src/graphql/generated.ts)
+defines active statuses `AWAITING_BUILD`, `IN_QUEUE`, and `IN_PROGRESS`.
+These map to `SUBMISSION_CREATED`, `EAS_SUBMIT_QUEUED`, and
+`SUBMISSION_WORKER_ASSIGNED`, respectively, all with decision
+`EXISTING_SUBMISSION_ACTIVE`. In particular, awaiting a build never permits a
+second submission. Legacy snapshot states `QUEUED`, `WORKER_ASSIGNED`, and
+`UPLOADING` remain supported. `CANCELED`, `ERRORED`, and unknown values remain
+fail-closed; a terminal EAS status alone is not proof that Apple never received
+the artifact. Do not rewrite those statuses as retryable `FAILED` without
+separately establishing the exact failure boundary.
+
 ## Physical automation reconstruction
 
 Store only a redacted health snapshot outside Git and run:

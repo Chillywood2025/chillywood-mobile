@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import {
   IOS_DELIVERY_STATES,
   RELEASE_DEFECT_DISPOSITIONS,
@@ -108,6 +109,54 @@ test("active or Apple-received delivery prevents duplicates", () => {
   assert.equal(reconcileExactArtifactDeliveryState(delivery({ apple: ref("RECEIVED", { buildId: "b1" }) })).decision, "APPLE_ALREADY_RECEIVED");
   assert.equal(reconcileExactArtifactDeliveryState(delivery({ apple: ref("PROCESSING", { buildId: "b1" }) })).decision, "APPLE_PROCESSING");
   assert.equal(reconcileExactArtifactDeliveryState(delivery({ testflight: ref("INTERNAL_AVAILABLE") })).decision, "TESTFLIGHT_AVAILABLE");
+});
+
+// Complete SubmissionStatus enum from expo/eas-cli v21.0.0 graphql/generated.ts.
+for (const [status, state] of [
+  ["AWAITING_BUILD", "SUBMISSION_CREATED"],
+  ["IN_QUEUE", "EAS_SUBMIT_QUEUED"],
+  ["IN_PROGRESS", "SUBMISSION_WORKER_ASSIGNED"],
+  ["QUEUED", "EAS_SUBMIT_QUEUED"],
+  ["WORKER_ASSIGNED", "SUBMISSION_WORKER_ASSIGNED"],
+  ["UPLOADING", "SUBMISSION_WORKER_ASSIGNED"],
+]) test(`active submission ${status} reuses exact artifact without retry authority`, () => {
+  const snapshot = delivery({ submission: ref(status, { submissionId: "s1" }), failureBoundary: { proved: true } });
+  assert.deepEqual(reconcileExactArtifactDeliveryState(snapshot), {
+    ok: true, state, decision: "EXISTING_SUBMISSION_ACTIVE", findings: [],
+  });
+  assert.equal(createResumableDeliveryReceipt(snapshot).decision, "EXISTING_SUBMISSION_ACTIVE");
+  assert.equal(reconcileExactArtifactDeliveryState({ ...snapshot, submission: { ...snapshot.submission, artifactId: "other" } }).decision, "AMBIGUOUS_FAIL_CLOSED");
+  assert.equal(reconcileExactArtifactDeliveryState({ ...snapshot, apple: ref("RECEIVED") }).decision, "APPLE_ALREADY_RECEIVED");
+});
+
+for (const status of ["CANCELED", "ERRORED", "FINISHED", "UNKNOWN", "in_queue", " IN_QUEUE", "CANCELLED", "toString", null, undefined]) {
+  test(`terminal or unrecognized EAS status ${String(status)} never authorizes duplicate submission`, () => {
+    for (const proved of [false, true]) {
+      const result = reconcileExactArtifactDeliveryState(delivery({ submission: ref(status), failureBoundary: { proved } }));
+      assert.equal(result.ok, false);
+      assert.equal(result.decision, "AMBIGUOUS_FAIL_CLOSED");
+      assert.equal(result.state, "DELIVERY_BLOCKED");
+    }
+  });
+}
+
+test("delivery CLI classifies sanitized EAS state and persists a non-retryable receipt", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "submission-status-"));
+  try {
+    const snapshot = path.join(dir, "snapshot.json");
+    const receipt = path.join(dir, "receipt.json");
+    for (const state of ["AWAITING_BUILD", "IN_QUEUE", "IN_PROGRESS", "CANCELED", "ERRORED", "FINISHED", "UNKNOWN"]) {
+      fs.writeFileSync(snapshot, JSON.stringify(delivery({ submission: ref(state) })));
+      const child = spawnSync(process.execPath, [new URL("../scripts/ios-delivery-control.mjs", import.meta.url).pathname, "--snapshot", snapshot, "--receipt", receipt], { encoding: "utf8" });
+      const active = ["AWAITING_BUILD", "IN_QUEUE", "IN_PROGRESS"].includes(state);
+      assert.equal(child.status, active ? 0 : 1, child.stderr);
+      const result = JSON.parse(child.stdout);
+      assert.equal(result.decision, active ? "EXISTING_SUBMISSION_ACTIVE" : "AMBIGUOUS_FAIL_CLOSED");
+      assert.deepEqual(JSON.parse(fs.readFileSync(receipt, "utf8")), result.receipt);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("ambiguous, stale, and mismatched provider observations fail closed", () => {
