@@ -60,10 +60,17 @@ core state, so late failure rolls everything back.
 
 ## Bounded observations and recovery
 
-Catalog and OID observations read at most 25,001 rows and reject the boundary;
-history reads at most 2,501 rows and rejects the boundary. A history array must
-contain 1–256 non-null statements, each at most 8 MiB and at most 16 MiB together,
-in a one-dimensional, one-based array before serialization. Nullable rollback arrays have the same element/byte caps
+Catalog observations accept at most 60,000 complete rows and OID observations
+at most 35,000; their respective extra sentinel rows (60,001 and 35,001) reject
+qualification. Full and retained digests use the same respective ceilings.
+History reads at most 2,501 rows and rejects that boundary. A history array must
+contain 1–1,024 non-null statements, each at most 8 MiB and at most 16 MiB together,
+in a one-dimensional, one-based array before serialization. The total is limited
+to 20,000 statements across history. That bound filters aggregate input before
+returned hash arrays are constructed, rather than rejecting after oversized
+output is built. Existing 12- and 14-digit historical versions remain verbatim;
+the new identity stays exactly 14 digits with one exact source statement.
+Nullable rollback arrays retain their 256-element limit and the same byte caps,
 and nonempty rollback arrays must be one-dimensional;
 null and empty arrays and their bounds are preserved distinctly. All six history
 columns are retained, including created_by, idempotency_key and rollback. The
@@ -97,3 +104,12 @@ late atomic rollback, original OID retention, exact receipt recovery, permission
 restoration and the new reader. The ordinary deployment unit tests independently
 cover artifact and API contracts. Fixture state is never used as a target
 baseline or included in a deployment body.
+
+The same mandatory path also runs `deployment-scale.native-cases.mjs` in a
+separate sequential cluster. It replays the actual legacy migrations and their
+multipart receipt arrays with original versions, then installs immutable48 and
+proves complete forward success, forced late rollback, independent readback,
+and real catalog counts below, at and above both ceilings. At-ceiling applies
+that cannot fit the forward additions must roll back. These multiple local test
+transactions have an aggregate process deadline; each individual transaction
+retains the original 20-second statement and 25-second transaction budgets.

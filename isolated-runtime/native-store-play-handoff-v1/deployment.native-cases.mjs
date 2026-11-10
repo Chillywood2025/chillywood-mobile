@@ -58,6 +58,22 @@ export async function runPlayDeploymentNativeCases({bin}){
   q(`update supabase_migrations.schema_migrations set statements=array_fill(${quote(base)}::text,array[1],array[0]);`);
   const shifted=observe();assert.equal(shifted.withinBounds,false);assert.equal(shifted.baseReceiptExact,false);
   q(`update supabase_migrations.schema_migrations set statements=array[${quote(base)}]::text[];`);cases.push('statement arrays must be 1D and original48 exact receipt cannot shift its lower bound');
+  q("insert into supabase_migrations.schema_migrations(version,name,statements) values('202604190004','fixture_exact_legacy_version',array_fill('select 1;'::text,array[1023]));");
+  for(const statementCount of [1023,1024,1025]){
+   q(`update supabase_migrations.schema_migrations set statements=array_fill('select 1;'::text,array[${statementCount}]) where version='202604190004';`);
+   const observed=observe();assert.equal(observed.withinBounds,statementCount<=1024);
+   if(statementCount<=1024){validateObservation(observed,{before:true});assert.equal(observed.historyReceipts.find(row=>row.version==='202604190004').statementsCount,statementCount);}
+   else assert.throws(()=>validateObservation(observed,{before:true}),/observation_controls_invalid/u);
+  }
+  q("delete from supabase_migrations.schema_migrations where version='202604190004';");cases.push('exact 12-digit legacy receipt and 1024-statement ceiling preserve strings and reject overflow');
+  q("insert into supabase_migrations.schema_migrations(version,name,statements) select '202605'||lpad(i::text,6,'0'),'fixture_total_'||i,array_fill('select 1;'::text,array[case when i<=19 then 1024 else 542 end]) from generate_series(1,20)i;");
+  for(const total of [19999,20000,20001]){
+   q(`update supabase_migrations.schema_migrations set statements=array_fill('select 1;'::text,array[${total-19457}]) where version='202605000020';`);
+   const observed=observe();assert.equal(observed.withinBounds,total<=20000);
+   if(total<=20000){validateObservation(observed,{before:true});assert.equal(observed.historyReceipts.reduce((sum,row)=>sum+row.statementsCount,0),total);}
+   else{assert.deepEqual(observed.historyReceipts,[]);assert.throws(()=>validateObservation(observed,{before:true}),/observation_controls_invalid/u);}
+  }
+  q("delete from supabase_migrations.schema_migrations where name like 'fixture_total_%';");cases.push('aggregate history output is complete below/at 20000 and filtered before hash-array construction above it');
   q("insert into supabase_migrations.schema_migrations(version,name,statements) values('20261111000000','fixture_later',array['fixture only']);");
   assert.throws(()=>buildDeploymentEnvelope({baseline:observe()}),/play_history_order_invalid/u);
   q("delete from supabase_migrations.schema_migrations where version='20261111000000';");

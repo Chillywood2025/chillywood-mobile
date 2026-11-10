@@ -382,9 +382,15 @@ jobs:
           echo "e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0  $pg_build/postgresql-17.6.tar.bz2" | sha256sum --check --strict
           tar --extract --bzip2 --file "$pg_build/postgresql-17.6.tar.bz2" --directory "$pg_build"
           cd "$pg_build/postgresql-17.6"
-          ./configure --prefix="$pg_build/install" --without-icu --without-readline --without-zlib
+          ./configure --prefix="$pg_build/install" --without-icu --without-readline --without-zlib --with-ssl=openssl
           make --jobs=2
           make install
+          # The actual legacy migration replay requires both official contrib
+          # extensions. Core make/install does not install contrib modules.
+          make --directory=contrib/pgcrypto --jobs=2
+          make --directory=contrib/pgcrypto install
+          make --directory=contrib/pg_trgm --jobs=2
+          make --directory=contrib/pg_trgm install
       - name: Run all isolated native suites and their actual-response client bridge
         run: node scripts/ci/isolated-sandbox-native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --output-dir "$GITHUB_WORKSPACE/isolated-sandbox-native-evidence"
       - name: Verify native store sandbox durable receipt journal

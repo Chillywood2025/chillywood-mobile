@@ -29,6 +29,14 @@ try{
  invoke('initdb',['-D',data,'-U','fixture_admin','--encoding=UTF8','--no-locale','--auth=trust']);
  startupAttempted=true;invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(work,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c shared_buffers=32MB -c autovacuum=off`,'start']);started=true;
  invoke('psql',args('fixture_admin','postgres'),'create role postgres login superuser;create database shared_exclusion_fixture owner postgres;');
+ // No extension doubles: prove that the same native installation can load
+ // both contrib libraries before replaying the complete legacy source chain.
+ assert.equal(q(`begin;create schema extension_prerequisite;
+  create extension pgcrypto with schema extension_prerequisite;
+  create extension pg_trgm with schema extension_prerequisite;
+  select encode(extension_prerequisite.digest('abc','sha256'),'hex')='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+   and extension_prerequisite.similarity('legacy replay','legacy replay')=1;
+  rollback;`),'t');pass('actual pgcrypto digest and pg_trgm prerequisite libraries load');
  const replay=[];
  const {replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,databaseFactory:async()=>({async exec(sql){replay.push(sql);},async close(){}})});
  q(replay.join('\n'));pass(`actual legacy migrations replayed: ${replayReport.files.length} files`);

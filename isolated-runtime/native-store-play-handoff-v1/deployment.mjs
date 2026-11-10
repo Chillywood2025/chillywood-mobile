@@ -19,11 +19,18 @@ export const roleSafetySQL=`(select count(*)=1 and bool_and(not rolsuper) from p
  and (select count(*)=1 and bool_and(not rolsuper and not rolcreaterole and not rolcreatedb and not rolreplication) from pg_roles where rolname='supabase_read_only_user')`;
 const json=x=>quote(JSON.stringify(x))+'::jsonb';
 const hash=sql=>`encode(sha256(convert_to(${sql},'UTF8')),'hex')`;
-// Hash individual rows before aggregation. Each outer digest contains at most
-// 25,001 fixed-width SHA values (1.7 MB), not full function/history bodies.
-// The source SELECT's sort may spill; a count at the cap fails qualification.
+// Complete-inventory ceilings measured against the actual hosted catalog and
+// the full legacy+native fixture. The extra row is a rejection sentinel, never
+// an accepted truncated inventory. History row and money bounds are unchanged.
+export const catalogCapacity=Object.freeze({rawRows:60000,oidRows:35000});
+// Existing migration history includes 395- and 619-statement receipts. Preserve
+// those exact arrays, with finite per-receipt and aggregate output bounds.
+export const historyCapacity=Object.freeze({statementsPerReceipt:1024,totalStatements:20000});
+// Hash individual rows before aggregation. The largest outer digest contains
+// at most 60,001 fixed-width SHA values (3.84 MB), not full definitions. Sorts
+// retain the existing 4 MB work memory and may spill; deadlines are unchanged.
 const aggregate=`coalesce(string_agg(${hash('item::text')},'' order by item::text collate "C"),'')`;
-const digest=sql=>`(select ${hash(aggregate)} from (${sql} limit 25001) h(item))`;
+const digest=(sql,ceiling=25000)=>`(select ${hash(aggregate)} from (${sql} limit ${ceiling+1}) h(item))`;
 const {catalogItemsSQL:baseCatalogItemsSQL}=await import(pathToFileURL(path.join(ROOT,'scripts/native-store-install-prepare.mjs')));
 const catalogItemsSQL=baseCatalogItemsSQL.replaceAll("('public','private','auth','extensions','sandbox_commerce_v1','native_store_sandbox_v1')",scope);
 const {aclItemsSQL}=await import(pathToFileURL(path.join(ROOT,'isolated-runtime/native-store-sandbox-v1/install-delta.mjs')));
@@ -44,7 +51,7 @@ export const allowCTE=`allowed_added as materialized(select value->0 k,value->>1
 // Mirrors catalog-snapshot.normalizeRow, including ACL fallback for out-of-scope
 // raw rows. Exact allowlist keys are JSONB arrays, never name-prefix selectors.
 export const normalizedCTE=`${allowCTE},
- raw as materialized(${catalogItemsSQL} union all ${extraCatalogSQL.trim()} limit 25001),
+ raw as materialized(${catalogItemsSQL} union all ${extraCatalogSQL.trim()} limit ${catalogCapacity.rawRows+1}),
  acls as materialized(select distinct k,v from (${aclItemsSQL} union all ${extraACLItemsSQL}) a),
  acl_keyed as materialized(select item r,case item->>0
  when 'function' then 'function:'||(item->>1)||'.'||(item->>2)||'('||(item->>3)||')'
@@ -82,10 +89,13 @@ const oidSQL=`select jsonb_build_array('function',n.nspname,p.proname,pg_get_fun
  union all select jsonb_build_array('eventTrigger',evtname),oid::text from pg_event_trigger
  union all select jsonb_build_array('defaultAcl',defaclrole::regrole::text,coalesce(n.nspname,''),defaclobjtype),d.oid::text from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace
  union all select jsonb_build_array('column',a.attrelid::regclass::text,a.attname),d.oid::text from pg_attrdef d join pg_attribute a on a.attrelid=d.adrelid and a.attnum=d.adnum join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ${scope}`;
-const statementSafe=`case when cardinality(statements) between 1 and 256 and array_ndims(statements)=1 and array_lower(statements,1)=1 then (select coalesce(bool_and(s is not null and octet_length(s)<=8388608),false) and coalesce(sum(octet_length(s)),0)<=16777216 from unnest(statements) s) else false end`;
+const statementSafe=`case when cardinality(statements) between 1 and ${historyCapacity.statementsPerReceipt} and array_ndims(statements)=1 and array_lower(statements,1)=1 then (select coalesce(bool_and(s is not null and octet_length(s)<=8388608),false) and coalesce(sum(octet_length(s)),0)<=16777216 from unnest(statements) s) else false end`;
 const rollbackSafe=`case when rollback is null then true when cardinality(rollback) between 0 and 256 and (cardinality(rollback)=0 or array_ndims(rollback)=1) then (select coalesce(bool_and(s is not null and octet_length(s)<=8388608),true) and coalesce(sum(octet_length(s)),0)<=16777216 from unnest(rollback) s) else false end`;
 const metadataSafe=`octet_length(version)<=64 and (name is null or octet_length(name)<=4096) and(created_by is null or octet_length(created_by)<=4096) and(idempotency_key is null or octet_length(idempotency_key)<=4096)`;
 export const historyCTE=`history as materialized(select version,name,created_by,idempotency_key,statements,rollback,${statementSafe} statement_safe,${rollbackSafe} rollback_safe,${metadataSafe} metadata_safe from (select version,name,created_by,idempotency_key,statements,rollback from supabase_migrations.schema_migrations order by version collate "C" limit 2501) bounded_history)`;
+// Gate input rows BEFORE jsonb_agg evaluates per-statement output hashes. A CASE
+// around the aggregate alone would not bound PostgreSQL's aggregate allocation.
+const historyOutputWithinBounds=`(select count(*)<2501 and coalesce(sum(cardinality(statements)),0)<=${historyCapacity.totalStatements} from history)`;
 const extraHistoryMetadata=`jsonb_build_array(created_by,idempotency_key,array_ndims(rollback),array_lower(rollback,1),cardinality(rollback),case when rollback_safe and rollback is not null then ${hash('array_to_json(rollback)::text')} else null end)`;
 export const historyItems=`select case when metadata_safe then jsonb_build_array(version,name,${extraHistoryMetadata},array_ndims(statements),array_lower(statements,1),cardinality(statements),case when statement_safe then ${hash('array_to_json(statements)::text')} else null end) else null end from history`;
 export const priorHistoryDigestSQL=version=>digest(historyItems+` where version<>${quote(version)}`);
@@ -100,19 +110,19 @@ const baseVersion='20261109151349',baseName='native_store_sandbox_source_bound_4
 const baseArraySha='d5a54d9ea772952f72d3ccc53449a788d4a0dec51aafc116b4a1af0c71f01ff9';
 const excludedOidKey=JSON.parse(allowlist.changed.find(x=>!x.oidMustBeRetained).key);
 const historyRow=`case when metadata_safe then jsonb_build_object('version',version,'name',name,'metadataSha256',case when rollback_safe then ${hash(extraHistoryMetadata+'::text')} else null end,'extraMetadataNull',created_by is null and idempotency_key is null and rollback is null,'statementsCount',cardinality(statements),'arrayDimensions',array_ndims(statements),'arrayLower',array_lower(statements,1),'statementArraySha256',case when statement_safe then ${hash('array_to_json(statements)::text')} else null end,'statementHashes',case when statement_safe then (select coalesce(jsonb_agg(${hash('s')} order by ord),'[]'::jsonb) from unnest(statements) with ordinality u(s,ord)) else null end) else null end`;
-export function snapshotSelectSQL(){return `with ${normalizedCTE},oids as materialized(${oidSQL} limit 25001),${historyCTE}
+export function snapshotSelectSQL(){return `with ${normalizedCTE},oids as materialized(${oidSQL} limit ${catalogCapacity.oidRows+1}),${historyCTE}
  select jsonb_build_object(
  'protocol','play-forward-observation-v1','source',${quote(SOURCE)},'tree',${quote(TREE)},'extensionDigest',${quote(manifest.extensionDigest)},
  'context',jsonb_build_object('currentUser',current_user,'sessionUser',session_user,'readOnly',current_setting('transaction_read_only'),'isolation',current_setting('transaction_isolation'),'serverVersionNum',current_setting('server_version_num')),
  'capturedAt',clock_timestamp(),'snapshot',pg_current_snapshot()::text,'database',current_database(),'serverStartedAt',pg_postmaster_start_time(),
  'roleSafety',${roleSafetySQL},
  'historyBoundarySafe',${historyBoundarySQL},
- 'withinBounds',(select count(*)<25001 from raw) and (select count(*)<25001 from oids) and (select count(*)<2501 and coalesce(bool_and(statement_safe and rollback_safe and metadata_safe),false) from history) and (select count(*)<25001 from(select 1 from public.platform_money_kill_switches limit 25001) bounded_money),
- 'catalogCount',(select count(*) from measured),'catalogSha256',${digest('select r from measured')},
+ 'withinBounds',(select count(*)<=${catalogCapacity.rawRows} from raw) and (select count(*)<=${catalogCapacity.oidRows} from oids) and (select count(*)<2501 and coalesce(bool_and(statement_safe and rollback_safe and metadata_safe),false) from history) and ${historyOutputWithinBounds} and (select count(*)<25001 from(select 1 from public.platform_money_kill_switches limit 25001) bounded_money),
+ 'catalogCount',(select count(*) from measured),'catalogSha256',${digest('select r from measured',catalogCapacity.rawRows)},
  'retainedCount',(select count(*) from measured m where not exists(select 1 from allowed_added a where a.k=m.k) and not exists(select 1 from allowed_changed c where c.k=m.k)),
- 'retainedSha256',${digest('select r from measured m where not exists(select 1 from allowed_added a where a.k=m.k) and not exists(select 1 from allowed_changed c where c.k=m.k)')},
- 'retainedOidSha256',${digest(`select jsonb_build_array(o.k,o.v) from oids o where o.k<>${json(excludedOidKey)} and not exists(select 1 from allowed_added a where a.k=o.k)`)},
- 'allOidSha256',${digest('select jsonb_build_array(k,v) from oids')},
+ 'retainedSha256',${digest('select r from measured m where not exists(select 1 from allowed_added a where a.k=m.k) and not exists(select 1 from allowed_changed c where c.k=m.k)',catalogCapacity.rawRows)},
+ 'retainedOidSha256',${digest(`select jsonb_build_array(o.k,o.v) from oids o where o.k<>${json(excludedOidKey)} and not exists(select 1 from allowed_added a where a.k=o.k)`,catalogCapacity.oidRows)},
+ 'allOidSha256',${digest('select jsonb_build_array(k,v) from oids',catalogCapacity.oidRows)},
  'duplicateKeys',(select count(*) from(select k from measured group by k having count(*)<>1) d),
  'ambiguousACLs',(select count(*) from(select k from acls group by k having count(*)<>1) a),
  'addedPresent',(select count(*) from measured m join allowed_added a using(k)),
@@ -122,7 +132,7 @@ export function snapshotSelectSQL(){return `with ${normalizedCTE},oids as materi
  'historyCount',(select count(*) from supabase_migrations.schema_migrations),'historyMaximum',(select max(version) from supabase_migrations.schema_migrations),
  'historySha256',${digest(historyItems)},
  'baseReceiptExact',(select count(*)=1 and bool_and(name=${quote(baseName)} and array_ndims(statements)=1 and array_lower(statements,1)=1 and cardinality(statements)=1 and case when statement_safe then ${hash('array_to_json(statements)::text')}=${quote(baseArraySha)} else false end) from history where version=${quote(baseVersion)}),
- 'historyReceipts',(select coalesce(jsonb_agg(${historyRow} order by version collate "C"),'[]'::jsonb) from history),
+ 'historyReceipts',(select coalesce(jsonb_agg(${historyRow} order by version collate "C"),'[]'::jsonb) from history where ${historyOutputWithinBounds}),
  'moneyControlsSha256',${digest(moneyItems)},
  'moneyHeld',(select count(*)=9 and bool_and(state=case when key in('live_money_enabled','payouts_enabled','cashout_enabled') then 'off' else 'sandbox_only' end) from public.platform_money_kill_switches where key in('live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled','tips_enabled','creator_monetization_enabled','provider_webhooks_enabled','revenuecat_app_store_enabled','revenuecat_google_play_enabled')),
  'ownerPrivilegesRestored',not has_schema_privilege('sbx_v1_core_owner','public','CREATE') and not has_schema_privilege('native_store_sandbox_v1_owner','public','CREATE') and not exists(select 1 from pg_auth_members m where m.member='postgres'::regrole and m.roleid in('sbx_v1_core_owner'::regrole,'native_store_sandbox_v1_owner'::regrole) and(m.set_option or m.inherit_option)),
@@ -145,11 +155,11 @@ export function validateObservation(v,{before=false}={}){
  requireThat(v.historyBoundarySafe===true&&v.roleSafety===true&&v.withinBounds===true&&v.duplicateKeys===0&&v.ambiguousACLs===0&&v.baseReceiptExact===true&&v.moneyHeld===true&&v.ownerPrivilegesRestored===true,'observation_controls_invalid');
  for(const name of ['catalogSha256','retainedSha256','retainedOidSha256','allOidSha256','historySha256','moneyControlsSha256'])requireThat(/^[a-f0-9]{64}$/u.test(v[name]??''),'observation_hash_invalid');
  requireThat(Number.isSafeInteger(v.historyCount)&&v.historyCount>0&&Array.isArray(v.historyReceipts)&&v.historyReceipts.length===v.historyCount,'observation_history_invalid');
- requireThat(v.historyCount<=2500&&new Set(v.historyReceipts.map(r=>r?.version)).size===v.historyCount&&v.historyReceipts.every(r=>/^\d{14}$/u.test(r?.version??'')&&Number.isSafeInteger(r.statementsCount)&&r.statementsCount>=1&&r.statementsCount<=256&&r.arrayDimensions===1&&r.arrayLower===1&&/^[a-f0-9]{64}$/u.test(r.statementArraySha256??'')&&/^[a-f0-9]{64}$/u.test(r.metadataSha256??'')&&typeof r.extraMetadataNull==='boolean'&&Array.isArray(r.statementHashes)&&r.statementHashes.length===r.statementsCount&&r.statementHashes.every(h=>/^[a-f0-9]{64}$/u.test(h))),'observation_receipt_invalid');
+ requireThat(v.historyCount<=2500&&new Set(v.historyReceipts.map(r=>r?.version)).size===v.historyCount&&v.historyReceipts.every(r=>/^\d{12}(?:\d{2})?$/u.test(r?.version??'')&&Number.isSafeInteger(r.statementsCount)&&r.statementsCount>=1&&r.statementsCount<=historyCapacity.statementsPerReceipt&&r.arrayDimensions===1&&r.arrayLower===1&&/^[a-f0-9]{64}$/u.test(r.statementArraySha256??'')&&/^[a-f0-9]{64}$/u.test(r.metadataSha256??'')&&typeof r.extraMetadataNull==='boolean'&&Array.isArray(r.statementHashes)&&r.statementHashes.length===r.statementsCount&&r.statementHashes.every(h=>/^[a-f0-9]{64}$/u.test(h)))&&v.historyReceipts.reduce((total,r)=>total+r.statementsCount,0)<=historyCapacity.totalStatements,'observation_receipt_invalid');
  requireThat(v.historyMaximum===[...v.historyReceipts.map(r=>r.version)].sort().at(-1),'observation_history_maximum_invalid');
  const base=v.historyReceipts.filter(r=>r.version===baseVersion);
  requireThat(base.length===1&&base[0].name===baseName&&base[0].statementArraySha256===baseArraySha,'observation_base_receipt_invalid');
- requireThat(/^\d{14}$/u.test(v.historyMaximum??'')&&Number.isSafeInteger(v.catalogCount)&&Number.isSafeInteger(v.retainedCount)&&typeof v.snapshot==='string'&&Number.isFinite(Date.parse(v.capturedAt)),'observation_shape_invalid');
+ requireThat(/^\d{14}$/u.test(v.historyMaximum??'')&&Number.isSafeInteger(v.catalogCount)&&v.catalogCount>=0&&v.catalogCount<=catalogCapacity.rawRows&&Number.isSafeInteger(v.retainedCount)&&v.retainedCount>=0&&v.retainedCount<=v.catalogCount&&typeof v.snapshot==='string'&&Number.isFinite(Date.parse(v.capturedAt)),'observation_shape_invalid');
  if(before)requireThat(v.beforeChangedExact===true&&v.addedPresent===0&&v.addedExact===false,'before_catalog_not_exact');
  return v;
 }

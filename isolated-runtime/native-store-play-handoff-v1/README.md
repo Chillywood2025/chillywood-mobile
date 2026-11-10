@@ -115,6 +115,24 @@ The mandatory `handoff.native.mjs --settlement-proof` path runs the new contract
 and genuine-reader permission/context/current-state cases, as well as the
 existing handoff, receipt, refund and Apple compatibility proof.
 
+The mandatory path also runs `deployment-scale.native-cases.mjs`. That proof
+replays the actual legacy migrations, installs the immutable 48-module source,
+and exercises the complete forward transaction and a forced late rollback on
+the resulting full catalog. Real catalog padding tests counts just below, at
+and above each ceiling, including rollback when forward additions would cross
+a ceiling. The test process has a separate aggregate deadline for its multiple
+transactions; each observer and installation retains its original 20-second
+statement and 25-second transaction budgets.
+
+Complete observations allow at most 60,000 catalog rows and 35,000 OID rows;
+the extra sentinel row always rejects qualification. Full and retained digests
+use the same respective bounds. Existing 12- and 14-digit migration versions
+and multipart statement arrays are preserved verbatim. The per-receipt limit is
+1,024 statements, with a 20,000-statement aggregate bound applied before output
+hash arrays are built. The 2,500-history-row, 8 MiB per-statement, 16 MiB per-receipt,
+rollback-array and money-control bounds remain unchanged. The new migration
+still requires its exact 14-digit identity and one exact source statement.
+
 ## Forward deployment preparation
 
 The fixed migration artifact and offline envelope builder are outside the

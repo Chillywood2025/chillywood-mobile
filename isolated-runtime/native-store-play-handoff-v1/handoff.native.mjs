@@ -340,9 +340,9 @@ if(settlementProof){
  // Deployment proofs use their own isolated clusters. Run them only after this
  // cluster has stopped, and propagate every failure through the mandatory job.
  assert.ok(!process.exitCode,'handoff cleanup must succeed before deployment proofs');
- for(const proof of ['./deployment.native-cases.mjs','../native-store-shared-routing-v1/deployment.native.mjs']){
+ for(const [proof,timeout] of [['./deployment.native-cases.mjs',120000],['./deployment-scale.native-cases.mjs',240000],['../native-store-shared-routing-v1/deployment.native.mjs',120000]]){
   const deployment=spawnSync(process.execPath,[path.resolve(here,proof),'--local-bin',bin],
-   {encoding:'utf8',env,timeout:120000,maxBuffer:8*1024*1024});
+   {encoding:'utf8',env,timeout,maxBuffer:8*1024*1024});
   if(deployment.stdout)process.stdout.write(deployment.stdout);
   assert.equal(deployment.status,0,`${proof}: ${deployment.stderr||deployment.error?.message}`);
  }
