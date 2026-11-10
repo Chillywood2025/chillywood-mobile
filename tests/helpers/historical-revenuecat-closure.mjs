@@ -10,13 +10,20 @@ const proof='scripts/google-refund-tax-observer-proof/';
 const lock=JSON.parse(fs.readFileSync(path.join(root,proof,'source-lock.json'),'utf8'));
 const supplemental=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/historical-revenuecat-closure.json'),'utf8')).files;
 export const HISTORICAL_ENTRYPOINT='supabase/functions/revenuecat-webhook/index.ts';
-const digest='b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935';
+export const HISTORICAL_CONFIG='supabase/config.toml';
+const archives={
+ [HISTORICAL_ENTRYPOINT]:{file:'tests/fixtures/historical-revenuecat-webhook-index.ts.txt',sha256:'b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935'},
+ [HISTORICAL_CONFIG]:{file:'tests/fixtures/historical-supabase-config.toml.txt',sha256:'ebcc4972b4fc1497241222cdb846f7561ecdb7690146728d6e71170829c64115'},
+ 'supabase/functions/_shared/isolated-paid-video-contract.ts':{file:'tests/fixtures/historical-isolated-paid-video-contract.ts.txt',sha256:'c5bd58b23512d32457efddc4e272afa67a5654370c09f2380ef6243984687ffe'},
+ 'supabase/functions/_shared/isolated-paid-video-rpc.ts':{file:'tests/fixtures/historical-isolated-paid-video-rpc.ts.txt',sha256:'47976601f0694393d26614f57a6ab5915542cb3ad39171dab0b5a24ecc903f2e'},
+ 'supabase/functions/_shared/isolated-paid-video-runtime.ts':{file:'tests/fixtures/historical-isolated-paid-video-runtime.ts.txt',sha256:'651904284540b0d23ce8f059fe066bf5676f5087c324537790d957b66198eaae'},
+};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 export function readPinnedHistoricalSource(name){
+ for(const [source,archive] of Object.entries(archives))if(lock.files[source]!==archive.sha256)throw Error('HISTORICAL_LOCK_DRIFT');
  const expected=Object.hasOwn(lock.files,name)?lock.files[name]:supplemental[name];
  if(!expected)throw Error(`HISTORICAL_SOURCE_UNKNOWN:${name}`);
- if(lock.files[HISTORICAL_ENTRYPOINT]!==digest)throw Error('HISTORICAL_LOCK_DRIFT');
- const file=name===HISTORICAL_ENTRYPOINT?'tests/fixtures/historical-revenuecat-webhook-index.ts.txt':name;
+ const file=archives[name]?.file??name;
  const bytes=fs.readFileSync(path.join(root,file));
  if(sha(bytes)!==expected)throw Error(`HISTORICAL_SOURCE_DRIFT:${name}`);
  return bytes;
@@ -33,7 +40,7 @@ export function materializeHistoricalBundle(directory,tool){
   // Some .mjs dependencies are pinned by the source-locked manifest, rather
   // than duplicated in source-lock.json. Both paths require the original hash.
   const edge=edgeFiles.find(f=>f.path===file);
-  const bytes=edge&&file!==HISTORICAL_ENTRYPOINT?fs.readFileSync(path.join(root,file)):readPinnedHistoricalSource(file);
+  const bytes=edge&&!Object.hasOwn(archives,file)?fs.readFileSync(path.join(root,file)):readPinnedHistoricalSource(file);
   if(edge&&sha(bytes)!==edge.sha256)throw Error(`HISTORICAL_SOURCE_DRIFT:${file}`);
   put(directory,file,bytes);
  }

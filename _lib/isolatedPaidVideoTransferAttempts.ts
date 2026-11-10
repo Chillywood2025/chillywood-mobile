@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { paidVideoId, paidVideoUuid, parsePaidVideoV2Response } from "./isolatedPaidVideoV2";
-import { IsolatedPaidVideoTransferError, isPaidVideoS3ObjectVersion as version, parsePaidVideoV2TransferResponse, parsePaidVideoV2ObjectReceipt, parsePaidVideoV2ProbeResponse } from "./isolatedPaidVideoTransfer";
+import { IsolatedPaidVideoTransferError, isPaidVideoS3ObjectVersion as version, parsePaidVideoV2TransferResponse, parsePaidVideoV2ObjectReceipt, parsePaidVideoV2ProbeResponse, samePaidVideoReceiptIdentity, paidVideoNativeTransferConfiguration } from "./isolatedPaidVideoTransfer";
 
 type Row = Record<string, unknown>;
 export type PaidVideoTransferStorage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<unknown> };
@@ -8,7 +8,7 @@ export type PaidVideoTransferUpload = Readonly<{ id: string; incarnation: string
 export type PaidVideoTransferBinding = Readonly<{ sessionGeneration: string; configurationDigest: string; now?: number }>;
 export type PaidVideoTransferAttemptInput = Readonly<{ requestId: string; sessionGeneration: string; configurationDigest: string; upload: PaidVideoTransferUpload }>;
 export type PaidVideoTransferAttempt = PaidVideoTransferAttemptInput & Readonly<{ userId: string;
-  state: "prepared" | "unknown" | "recorded" | "not_applied";
+  state: "prepared" | "unknown" | "retired_unknown" | "recorded" | "not_applied";
   putState: "unknown" | "acknowledged" | "exists_unverified" | null;
   observation: Readonly<{ transferId: string; objectVersion: string; checkedAtMs: number; expiresAtMs: number; sessionGeneration: string; configurationDigest: string }> | null;
   receipt: ReturnType<typeof parsePaidVideoV2ObjectReceipt> | null;
@@ -60,9 +60,10 @@ function stored(raw: string, userId: string): PaidVideoTransferAttempt[] {
     return data.attempts.map((v: unknown) => {
       if (!keys(v, ["requestId", "sessionGeneration", "configurationDigest", "upload", "userId", "state", "putState", "observation", "receipt", "notAppliedReason"])
         || !paidVideoUuid(v.requestId) || requests.has(v.requestId) || !paidVideoUuid(v.sessionGeneration) || !digest(v.configurationDigest)
-        || !validUpload(v.upload) || v.userId !== userId || !member(v.state, ["prepared", "unknown", "recorded", "not_applied"])
+        || !validUpload(v.upload) || v.userId !== userId || !member(v.state, ["prepared", "unknown", "retired_unknown", "recorded", "not_applied"])
         || !(v.putState === null || member(v.putState, ["unknown", "acknowledged", "exists_unverified"]))) return fail("storage_corrupt");
       const attempt = v as unknown as PaidVideoTransferAttempt; requests.add(attempt.requestId);
+      if (attempt.state === "retired_unknown" && attempt.configurationDigest !== paidVideoNativeTransferConfiguration) return fail("storage_corrupt");
       if (attempt.state !== "not_applied") { if (uploads.has(attempt.upload.id)) return fail("storage_corrupt"); uploads.add(attempt.upload.id); }
       if (attempt.observation !== null) {
         const observation = attempt.observation;
@@ -150,6 +151,8 @@ export function createIsolatedPaidVideoTransferJournal({ userId, storage = Async
           return Object.freeze({ attempt: copy(prior), mayPut: false, stopBeforePut: null }); }
         if (items.some(a => unresolved(a))) return fail("unresolved_attempt");
         if (items.some(a => a.upload.id === attempt.upload.id && a.state !== "not_applied")) return fail("request_conflict");
+        if (attempt.configurationDigest === paidVideoNativeTransferConfiguration && items.some(a => a.configurationDigest === paidVideoNativeTransferConfiguration
+          && a.state !== "not_applied" && a.upload.incarnation === attempt.upload.incarnation)) return fail("request_conflict");
         await write([...items, attempt]); const id = ticketKey(key, attempt.requestId), token = Symbol(); fresh.set(id, { owner, token });
         const stopBeforePut = async (error: unknown) => {
           if (!(error instanceof IsolatedPaidVideoTransferError) || error.requestId !== attempt.requestId || error.outcome !== "not_sent"
@@ -164,6 +167,16 @@ export function createIsolatedPaidVideoTransferJournal({ userId, storage = Async
       });
     },
     list: async () => exclusive(key, async () => copy(await read())),
+    async retireUnknown(requestId: string, currentBinding: PaidVideoTransferBinding) {
+      const binding = validateBinding(currentBinding); revoke(requestId);
+      return update(requestId, prior => {
+        if (binding.configurationDigest !== paidVideoNativeTransferConfiguration || prior.configurationDigest !== paidVideoNativeTransferConfiguration
+          || !["prepared", "unknown", "retired_unknown"].includes(prior.state)) return fail("invalid_request");
+        // Local retirement is not cancellation or proof of absence. Keep every
+        // identity and observation, and never recreate the first-PUT closure.
+        return prior.state === "retired_unknown" ? prior : { ...prior, state: "retired_unknown" };
+      });
+    },
     async markUnknown(requestId: string) { revoke(requestId); return update(requestId, prior => prior.state === "prepared" ? { ...prior, state: "unknown" } : prior); },
     async recordPut(requestId: string, value: unknown) {
       revoke(requestId); let response: unknown; try { response = copy(value); } catch { return fail("invalid_response"); }
@@ -171,7 +184,7 @@ export function createIsolatedPaidVideoTransferJournal({ userId, storage = Async
         let parsed: ReturnType<typeof parsePaidVideoV2TransferResponse>; try { parsed = parsePaidVideoV2TransferResponse(response, context(prior)); } catch { return fail("invalid_response"); }
         if (prior.state === "not_applied") return fail("invalid_response");
         if (prior.state === "recorded") return prior;
-        return { ...prior, state: "unknown", putState: parsed.state };
+        return { ...prior, state: prior.state === "retired_unknown" ? "retired_unknown" : "unknown", putState: parsed.state };
       });
     },
     async recordProbe(requestId: string, value: unknown, currentBinding: PaidVideoTransferBinding) {
@@ -184,14 +197,14 @@ export function createIsolatedPaidVideoTransferJournal({ userId, storage = Async
         if (prior.receipt && (prior.receipt.transferId !== observation.transferId || prior.receipt.objectVersion !== observation.objectVersion)) return fail("invalid_response");
         if (prior.observation && (prior.observation.transferId !== observation.transferId || prior.observation.objectVersion !== observation.objectVersion)) return fail("invalid_response");
         if (prior.state === "recorded" || prior.observation && prior.observation.checkedAtMs >= observation.checkedAtMs) return prior;
-        return { ...prior, state: "unknown", observation };
+        return { ...prior, state: prior.state === "retired_unknown" ? "retired_unknown" : "unknown", observation };
       });
     },
     async recordReceipt(requestId: string, value: unknown, currentBinding: PaidVideoTransferBinding) {
       revoke(requestId); const binding = validateBinding(currentBinding); let response: unknown; try { response = copy(value); } catch { return fail("invalid_response"); }
       return update(requestId, prior => {
         let receipt: ReturnType<typeof parsePaidVideoV2ObjectReceipt>; try { receipt = parsePaidVideoV2ObjectReceipt(response, context(prior, binding)); } catch { return fail("invalid_response"); }
-        if (prior.state === "not_applied" || prior.receipt && (prior.receipt.transferId !== receipt.transferId || prior.receipt.objectVersion !== receipt.objectVersion)
+        if (prior.state === "not_applied" || prior.receipt && !samePaidVideoReceiptIdentity(prior.receipt, receipt)
           || prior.observation && (prior.observation.transferId !== receipt.transferId || prior.observation.objectVersion !== receipt.objectVersion)) return fail("invalid_response");
         if (prior.state === "recorded") return prior;
         return { ...prior, state: "recorded", receipt };

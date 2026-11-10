@@ -55,7 +55,12 @@ async function readBody(body, length, deadline, now) {
     }
     if (used !== length || now() >= deadline) fail('paid_video_r2_body_invalid');
     return output;
-  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  } finally {
+    // Cancellation itself has no deadline/abort contract. It must not extend a
+    // denied range indefinitely when the underlying source never settles it.
+    void reader.cancel().catch(() => {});
+    try { reader.releaseLock(); } catch { /* Best effort after a pending read. */ }
+  }
 }
 function metadata(value, object, range) {
   if (!value || value.key !== object.objectKey || value.size !== object.expectedByteLength

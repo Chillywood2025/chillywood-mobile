@@ -61,7 +61,7 @@ if (capturePath || proofPath || expectedRunId || expectedEvidenceDirectory) {
     const base = {
       "react-native-get-random-values": {}, "react-native": { Platform: { OS: "ios" } },
       "./supabase": { SUPABASE_URL: "https://response-compatibility.invalid", SUPABASE_ANON_KEY: "unused" },
-      "./isolatedTestStoreV3Build": { readIsolatedTestStoreV3Build: unavailable },
+      "./paidVideoAuthoringProfile": { readPaidVideoAuthoringProfile: unavailable },
       "./accountBoundSupabaseMutation": { captureAccountBoundSupabaseMutationSubject: unavailable },
       "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: unavailable, sameAccountSessionAuthority: unavailable, subscribeToAccountSessionAuthority: unavailable },
     };

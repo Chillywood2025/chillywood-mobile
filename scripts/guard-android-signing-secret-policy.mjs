@@ -27,6 +27,8 @@ const publicLockFixtures = new Map([
   ["supabase/functions/native-store-paid-video-range-v1/deno.lock", "f54ff0bb8cb3384b4a8e1d30e392abb737eb6e86f8e1d6afbe9b213d7142ada9"],
   ["supabase/functions/native-store-ingress-v1/deno.lock", "f54ff0bb8cb3384b4a8e1d30e392abb737eb6e86f8e1d6afbe9b213d7142ada9"],
   ["supabase/functions/native-store-reconcile-v1/deno.lock", "f54ff0bb8cb3384b4a8e1d30e392abb737eb6e86f8e1d6afbe9b213d7142ada9"],
+  ["supabase/functions/isolated-paid-video-authoring-v2/deno.lock", "f54ff0bb8cb3384b4a8e1d30e392abb737eb6e86f8e1d6afbe9b213d7142ada9"],
+  ["supabase/functions/isolated-paid-video-upload-v2/deno.lock", "f54ff0bb8cb3384b4a8e1d30e392abb737eb6e86f8e1d6afbe9b213d7142ada9"],
 ]);
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 function approvedPublicLock(file) {

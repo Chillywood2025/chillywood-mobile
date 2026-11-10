@@ -1,0 +1,36 @@
+{
+  "protocol": "native-paid-video-r2-fixed-deployment-v1",
+  "version": "20261110120025",
+  "name": "native_paid_video_r2_bounded_v1",
+  "bodySha256": "83b3e5d13f2b19c261e440350e2cea7907c3925cc88a6ca3cf6b39bb1389c8bd",
+  "bodyBytes": 342919,
+  "extensionDigest": "55ed69aab2b2e3991fbf37542e82985141e85bdbc15028487054fc325847c4de",
+  "addedCount": 252,
+  "changedCount": 13,
+  "sourceSlices": [
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-grant.sql",
+      "sha256": "f3baacb85a768be8a4b3f578a3a9282cab4301ce4cf0c8ff9df18387fe8024f3",
+      "bytes": 910
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/source.sql",
+      "sha256": "832712fcc47d9ecfcff8b3012b6bdd045d7461357ae4b3e50af1aded1e3a25e7",
+      "bytes": 148571
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-revoke.sql",
+      "sha256": "dd22564156d1fa27d6fdc021407b9cf052575bcc2377191c6623baee39deb505",
+      "bytes": 1350
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/private-state.sql",
+      "sha256": "dbb7f30313156a637fdf439c31b44700c8f47f75cf8404acbe283471c3c0bd7a",
+      "bytes": 7867
+    }
+  ],
+  "allowlistSha256": "df783835696c8d438cfb966b92a4c28bc56304f2f51ac7ce134e4e63bd23d975",
+  "deploymentAllowed": false,
+  "activationAllowed": false,
+  "retryAllowed": false
+}

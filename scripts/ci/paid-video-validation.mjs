@@ -32,6 +32,9 @@ export const PAID_VIDEO_PORTABLE_STAGES=Object.freeze([
  {name:'proof-validation',tests:10,files:['tests/ci/paid-video-proof-validation.test.mjs']},
  {name:'platform-http-app',tests:7,files:['tests/isolated-paid-video-platform-http-bridge.test.mjs']},
 ]);
+// The six native R2 transfer/retirement groups extend the prior 273-case
+// captured-response app suite. Keep one exact count for planning and execution.
+export const PAID_VIDEO_APP_TEST_COUNT=279;
 export function paidVideoAppFiles(repositoryRoot=root){
  // The historical HTTP48 bridge retains its original fixture contract. The
  // successor explicitly exercises the actual retained HTTP103 bridge separately.
@@ -40,7 +43,7 @@ export function paidVideoAppFiles(repositoryRoot=root){
   .sort().map(name=>`tests/${name}`);
 }
 export function paidVideoValidationPlan(){return {nativeStages:PAID_VIDEO_NATIVE_STAGES,nativeCases:84,
- http:{cases:103,actualGatewayEntries:4},app:{tests:273,files:paidVideoAppFiles(),libraryTestsInExistingCanonicalLane:19,
+ http:{cases:103,actualGatewayEntries:4},app:{tests:PAID_VIDEO_APP_TEST_COUNT,files:paidVideoAppFiles(),libraryTestsInExistingCanonicalLane:19,
   historicalBridgeExcluded:'tests/isolated-paid-video-http-bridge.test.mjs'},portableStages:PAID_VIDEO_PORTABLE_STAGES,
  execution:'sequential/local-disposable-only',providerOrProductionActions:false};}
 
@@ -91,6 +94,8 @@ export function collectPaidVideoSourceManifest(){
  }
  paths.add('scripts/ci/fixtures/paid-video-v2-baseline.json');
  paths.add('tests/helpers/isolated-test-store-v3-fixtures.mjs');
+ paths.add('_lib/paidVideoAuthoringProfile.ts');
+ paths.add('tests/native-paid-video-authoring-profile.test.mjs');
  for(const name of ['hooks/useMediaPicker.tsx', 'hooks/useOwnedPickedMediaState.ts', 'components/ui/MediaSourceSheet.tsx', 'components/ui/tokens.ts', 'components/ui/icon-symbol.tsx', 'components/ui/icon-symbol.ios.tsx', 'components/ui/chillywood-visual-system.tsx', '_lib/deviceAttachmentPicker.ts', '_lib/deviceGalleryPicker.ts', '_lib/mediaPickerCoordinator.ts', '_lib/mediaPickerResources.ts', '_lib/userFacingErrors.ts', '_lib/imageUploadPolicy.ts', 'tests/helpers/media-picker-host.mjs'])paths.add(name);
  visit('modules/chillywood-gallery-picker');
  paths.add('scripts/ci/fixtures/paid-video-native-profiles.json');
@@ -161,6 +166,32 @@ export function readPaidVideoHttpSummary({stdout,evidenceDirectory,runId}){
  assert.equal(summary.status,'passed');assert.equal(summary.cleanupVerified,true);assert.equal(summary.error,null);
  return summary;
 }
+// Failure observations are not proof. Never publish the private error text,
+// payloads, logs, source lines or evidence paths, even when parsing fails.
+export function httpFailureDiagnostics({stdout,evidenceDirectory,runId}){
+ try{
+  assert.match(runId,/^[a-f0-9]{32}$/u);assert.ok(path.isAbsolute(evidenceDirectory));
+  assert.equal(fs.realpathSync(evidenceDirectory),evidenceDirectory);
+  assert.ok(fs.lstatSync(evidenceDirectory).isDirectory()&&!fs.lstatSync(evidenceDirectory).isSymbolicLink());
+  const descriptor=fs.openSync(path.join(evidenceDirectory,'summary.json'),fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+  let summary;
+  try{const stat=fs.fstatSync(descriptor);assert.ok(stat.isFile()&&stat.size>0&&stat.size<=65536);
+   summary=JSON.parse(fs.readFileSync(descriptor,'utf8'));
+  }finally{fs.closeSync(descriptor);}
+  const last=String(stdout).trimEnd().split('\n').at(-1);assert.ok(last.length<=65536);
+  assert.deepEqual(JSON.parse(last),summary);
+  assert.equal(summary.evidenceDirectory,evidenceDirectory);assert.equal(summary.runId,runId);
+  assert.equal(summary.status,'failed');assert.equal(typeof summary.cleanupVerified,'boolean');
+  const diagnostic=summary.failureDiagnostic;
+  assert.deepEqual(Object.keys(diagnostic??{}).sort(),['exceptionType','httpCasesRecorded','lastHttpStatus','phase','protocol']);
+  assert.equal(diagnostic.protocol,'scpv-retained-http-failure-v1');
+  assert.ok(['prepare','database','services','install','accounts','qualify','cleanup'].includes(diagnostic.phase));
+  assert.ok(['AssertionError','RuntimeError','TimeoutError','OSError','ValueError','Other'].includes(diagnostic.exceptionType));
+  assert.ok(Number.isInteger(diagnostic.httpCasesRecorded)&&diagnostic.httpCasesRecorded>=0&&diagnostic.httpCasesRecorded<=103);
+  assert.ok(diagnostic.lastHttpStatus===null||(Number.isInteger(diagnostic.lastHttpStatus)&&diagnostic.lastHttpStatus>=100&&diagnostic.lastHttpStatus<=599));
+  return {available:true,cleanupVerified:summary.cleanupVerified,...diagnostic};
+ }catch{return {available:false};}
+}
 function main(args){
  if(args.length===1&&args[0]==='--plan'){console.log(JSON.stringify(paidVideoValidationPlan(),null,2));return;}
  assert.equal(args.length,10,'Use --local-bin ABS --output-dir NEW_ABS --database ABS --certificates ABS --deno ABS');
@@ -176,12 +207,16 @@ function main(args){
  const report={protocol:'paid-video-canonical-validation-v1',status:'running',startedAt:new Date(startedAt).toISOString(),
   plan:paidVideoValidationPlan(),sourceHashes:sources,stages:[],providerOrProductionActions:false};
  const save=()=>fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
- const execute=(name,command,commandArgs)=>{
+ const execute=(name,command,commandArgs,httpAttempt=null)=>{
   const result=spawnSync(command,commandArgs,{cwd:root,env,encoding:'utf8',maxBuffer:32*1024*1024});
   fs.writeFileSync(path.join(output,name+'.stdout'),result.stdout??'',{mode:0o600});fs.writeFileSync(path.join(output,name+'.stderr'),result.stderr??'',{mode:0o600});
   if(result.status!==0&&name.startsWith('node-')){
    report.failedNodeStage={name,exitCode:result.status,...nodeFailureDiagnostics(result.stdout,root,result.signal)};save();
    process.stderr.write(JSON.stringify(report.failedNodeStage)+'\n');
+  }
+  if(result.status!==0&&name==='http-run'){
+   report.failedHttpStage={name,...(httpAttempt?httpFailureDiagnostics({stdout:result.stdout,...httpAttempt}):{available:false})};save();
+   process.stderr.write(JSON.stringify(report.failedHttpStage)+'\n');
   }
   assert.equal(result.status,0,`${name} failed; inspect private saved diagnostics`);
   assert.deepEqual(collectPaidVideoSourceManifest(),sources,'Source changed during qualification');return result.stdout;
@@ -215,7 +250,8 @@ function main(args){
   const expectedEvidenceDirectory=path.join(fs.realpathSync(output),`chillywood-local-auth-${expectedRunId}`);
   assert.ok(!fs.existsSync(expectedEvidenceDirectory),'A new caller-owned HTTP attempt is required');
   const attemptStartedAtMs=Date.now();
-  const stdout=execute('http-run','python3',[path.join(httpDirectory,'harness/run.py'),'--evidence-root',expectedEvidenceDirectory,'--run-id',expectedRunId]);
+  const stdout=execute('http-run','python3',[path.join(httpDirectory,'harness/run.py'),'--evidence-root',expectedEvidenceDirectory,'--run-id',expectedRunId],
+   {evidenceDirectory:expectedEvidenceDirectory,runId:expectedRunId});
   const summary=readPaidVideoHttpSummary({stdout,evidenceDirectory:expectedEvidenceDirectory,runId:expectedRunId});
   const aggregate=aggregatePaidVideoRetainedHttpProof({summary,evidenceDirectory:expectedEvidenceDirectory,expectedEvidenceDirectory,expectedRunId,executionInputs,
    templateManifestSha256:sources[`${template}/source-manifest.json`],attemptStartedAtMs});
@@ -228,7 +264,7 @@ function main(args){
    ISOLATED_PAID_VIDEO_PLATFORM_HTTP_RUN_ID:expectedRunId,ISOLATED_PAID_VIDEO_PLATFORM_HTTP_EVIDENCE_DIRECTORY:expectedEvidenceDirectory});
   report.http={cases:103,actualGatewayEntries:4,proofSha256:sha(aggregateBytes),cleanupVerified:true};save();
   const fixtureHashes=Object.fromEntries([...Object.values(fixtures),proofFile,captureFile].map(file=>[file,sha(fs.readFileSync(file))]));
-  const stages=[{name:'app-successor',tests:273,files:paidVideoAppFiles()},...PAID_VIDEO_PORTABLE_STAGES];report.nodeStages=[];
+  const stages=[{name:'app-successor',tests:PAID_VIDEO_APP_TEST_COUNT,files:paidVideoAppFiles()},...PAID_VIDEO_PORTABLE_STAGES];report.nodeStages=[];
   for(const stage of stages){
    const tap=execute('node-'+stage.name,process.execPath,['--test','--test-reporter=tap',...stage.files]);
    const result=validateNodeTap(tap,stage.tests);report.nodeStages.push({name:stage.name,...result});

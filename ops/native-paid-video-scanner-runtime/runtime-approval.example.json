@@ -1,0 +1,11 @@
+{
+  "protocol": "scpv-r2-runtime-approval-v1",
+  "approved": false,
+  "linuxQualified": false,
+  "image": "",
+  "runtimeManifestSha256": "",
+  "linuxProofSha256": "",
+  "linuxR2ProofSha256": "",
+  "memoryLimitBytes": 4294967296,
+  "concurrency": 1
+}

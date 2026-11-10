@@ -1,0 +1,1093 @@
+{
+  "added": [
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.delivery_asset_scans\", \"r2_identity\"]",
+      "rowSha256": "48c2138af4e979bfd57b12a16ba4dbb7fb12f3f6859c4c98717e054886114d20"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.delivery_assets\", \"r2_identity\"]",
+      "rowSha256": "f76cf1f900e725687b20916d890442f517dd5855fe7003647c0ca4093a016534"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.paid_video_uploads\", \"r2_identity\"]",
+      "rowSha256": "e9a4123c39e64555ce4238693850788080c62405a8e2300672b9db671ee55d71"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"expires_at\"]",
+      "rowSha256": "1d66f9a1bf98cad5a5b3db13b2225e7d55c150135febe366de9c8538c4bd31e9"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"grant_id\"]",
+      "rowSha256": "c0706291a16dc68569633a0ec9cbf359096791c574746a111647e938e224016b"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"id\"]",
+      "rowSha256": "ba3c1df9e2a1cea6dd0ac3c210ce3314037238b9597a11b7c21043d26270d85b"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"issued_at\"]",
+      "rowSha256": "509c9d4013e8fd597b40d8ad198b7a2310b911230151e5bcade35028e5258cb3"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"operation\"]",
+      "rowSha256": "3df603a3b8631e5835d0dbc211e2cc375de9947adf04b7fe679f14586b7ab1eb"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"profile_id\"]",
+      "rowSha256": "e840498ec6a3e814594c2c197506f0467408fd987e0a4c147a01c957a20c9639"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"request_id\"]",
+      "rowSha256": "75d1ea5014ef4907e1896b10d33a43348ec5cbf57ddd6e841e4a090db09d890b"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"session_id\"]",
+      "rowSha256": "7e9c40b42ee73a45abc56583e93816ac7d3c14a0341f51a6c2f0719475a2f6ec"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"token\"]",
+      "rowSha256": "bd4d70d1b93a11dcbe0a587447419dfbd4cc93ea0e4fb2d013c4cb4de2c5d7a5"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"upload_id\"]",
+      "rowSha256": "e011e0123f51ea4529f73e8b3154bb748c89d7f1a07e50932f6eb74758990bf8"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_bindings\", \"user_id\"]",
+      "rowSha256": "11e29b2bc74337be1e1b76fd2820c64ad29ee5bcf6356eb00f68d34d55d00411"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_commits\", \"committed_at\"]",
+      "rowSha256": "fa26f16eae69706b0d123f67886f836874b98ef3fe62d4603b967baee8c9f349"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_commits\", \"identity\"]",
+      "rowSha256": "40260e563ebd22667945fb1d6afd6fee41974498c55314935c26568f150c6d82"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_commits\", \"state\"]",
+      "rowSha256": "157a7c7e176de351196c2232c8dad2b66b0c73b0ffa1c285ca5c94e4f9ef5a16"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_commits\", \"upload_id\"]",
+      "rowSha256": "cb4ee616627b8a80d367f1e9e5c5af89cafb589ab8a94d40ce286515e6548c5f"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_dispatches\", \"binding_id\"]",
+      "rowSha256": "cd2c6295d614d665e8000bc9b4489ed8d63c0c6c68f5f7659351d96f58521a13"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_dispatches\", \"started_at\"]",
+      "rowSha256": "ab16d356dd6e4114e80f2e22db9cf30712b4c006be03bc805e9086114c8d3dcb"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_dispatches\", \"upload_id\"]",
+      "rowSha256": "e1a24a1ff7bd6ad0d67be7c864c804aa3b93ca3b51521f8868e121236f39acfc"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"capacity_evidence_sha256\"]",
+      "rowSha256": "61f9de912929d16c08be9a3f79e9aa485f875a3d9c0cecd8f29160e176385197"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"configuration_digest\"]",
+      "rowSha256": "18d014371e7547e39f510a8e0625c705a280b4f8751e346196930d7e885af2ab"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"enabled\"]",
+      "rowSha256": "72941b3aa9e3d9008c6be667073ffeedb35c8789381f4502477afe6df2cd5774"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"gateway_key\"]",
+      "rowSha256": "16141dbf686b50120010646a875dc830877719ab7b4a607ed72cfe279d9c4243"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"id\"]",
+      "rowSha256": "1636ad77c186d08e26f6891162e39dcba1b441e23877633d995e4e18a4fa9bd7"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"key_id\"]",
+      "rowSha256": "4d5a35e6134d8c20dac6500ec9019952b0b46c029113ca322a3ba5a80024b9c7"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"qualification_sha256\"]",
+      "rowSha256": "1d9f1381bc8737c22bd704588335117b1d573bdbbaf021ad8589d6d25506ce3d"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"qualified_max_bytes\"]",
+      "rowSha256": "d36d19864b10c7c197c31206eb786e73bc5658fd39641bd8ecbe10976f9c0174"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"route_id\"]",
+      "rowSha256": "dae58488fdbe86470586673f23fde4551a83ca16c5add2888f3f5038270b36b5"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"verifier_id\"]",
+      "rowSha256": "4451d66ccedd147676e83c1325e537015444f9dabeb4ba3d6316ea3bd40a2ae4"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_profiles\", \"worker_id\"]",
+      "rowSha256": "767ffedfb579d999d07cc30e58be8f0dd7aa47d29ebe10ffe93c4473d04f0409"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_receipts\", \"binding_id\"]",
+      "rowSha256": "692796c57efd491724701c36c50ce5a5b3e5ed8d636ffb02b580480be291f4a3"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_receipts\", \"identity\"]",
+      "rowSha256": "f58d458d28e0df981b2ace6d68a5a7656701b3d638f948b44df821499716a775"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_receipts\", \"raw_body\"]",
+      "rowSha256": "cb838c87aa0fc5b582a0a93b01cc4c145042a84198670386656d12e394e091a4"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_receipts\", \"recorded_at\"]",
+      "rowSha256": "b61c9b80c837fcdc157c00e4bd0bfb85d26969386a070a966cfc70bdac40ee48"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_receipts\", \"signature\"]",
+      "rowSha256": "b12071adddbfe5d52b18f89e8cf0f011ef9f7c99ad883af449d5611f1cd432d9"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_receipts\", \"upload_id\"]",
+      "rowSha256": "6413caa0c47675667e2b5810937724be9fcd92ac4a897698e09488b61c6022a5"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_receipts\", \"verifier_id\"]",
+      "rowSha256": "73dad7890f5d873488566042d0f733cc47efa8327dc9e4910bc2b1f2fe50887c"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_tickets\", \"object\"]",
+      "rowSha256": "a0c4348caa29a852dad649cfbeb9691c31fbcec6805ff052fdae5b0692d9a074"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_tickets\", \"profile_id\"]",
+      "rowSha256": "377e75a78cd618802774a1a7c4a8a2a4464f98c9250bdb8142816698ceec1a85"
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.r2_tickets\", \"ticket_id\"]",
+      "rowSha256": "13b70cd79dc5eac7a221e9db8480916133fe1de7e6cac09e2a4de92371e1f5fd"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.delivery_asset_scans\", \"r2_identity\"]",
+      "rowSha256": "1aa24096be93e94fd145b8a408eed170b43a5c756e3198a9e4faf41cf37c793f"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.delivery_assets\", \"r2_identity\"]",
+      "rowSha256": "6d2e2e8b5cd2ac7efdbeda4bfc70e31e7d658f43f5acbf9a149fa50f65a607c9"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.paid_video_uploads\", \"r2_identity\"]",
+      "rowSha256": "54089e7afb117a495e5e63c3659783949cbd0619ce3118dafa0f2ec274400b4b"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"expires_at\"]",
+      "rowSha256": "6c1256afe0327c1f6f7f076141564e3d02e5c0ee31b37e56277960e5b2e9624c"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"grant_id\"]",
+      "rowSha256": "466f3e156b21b88f3d9b9065f3a3095be2886d7b48958311d74be8f45db1c44f"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"id\"]",
+      "rowSha256": "8faf6dc41bbf97d24736fb2a15f9d0242f81eaa6beafda321259fb329f81e165"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"issued_at\"]",
+      "rowSha256": "516eb871866af012434885562f800758e9fe53ff8853f2a6a1db32dd279114d7"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"operation\"]",
+      "rowSha256": "7f3aec117ccb9e07bd892dbfb10059e608176b36e964166d00e65f9d59418aa0"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"profile_id\"]",
+      "rowSha256": "e36bb698cff86ef4734214b855c47208f154e9c321cf808d22b05d74546b4b31"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"request_id\"]",
+      "rowSha256": "a7126663fd5fa5e2b08141c27838b33b2d55c30c6789cccb0fa9ccaaa4e32703"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"session_id\"]",
+      "rowSha256": "1fda9b335f12cd62942f5f036c79777210611449a493b127657c34a8f5e3392f"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"token\"]",
+      "rowSha256": "dfae774c919addf0e35cd4c0955da93f0bee843cd42faed40a41e58b3dce50e3"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"upload_id\"]",
+      "rowSha256": "9b39ad614b954bce6b7f99269c31e30f5d32ef912150c39235b81030bcd8a74a"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_bindings\", \"user_id\"]",
+      "rowSha256": "2fd76673f0e0b34dbfbd91469da876755cdf309f84910a8716dc5213e50435a7"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_commits\", \"committed_at\"]",
+      "rowSha256": "3f1cd89d220f1466f49e64b637f253b283c268410c71f1d7eee354531eba222c"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_commits\", \"identity\"]",
+      "rowSha256": "69844a83c3cda9311d7b576ec35965bd23e25e6040b4986957d581ae2f1397bf"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_commits\", \"state\"]",
+      "rowSha256": "fe9722a709698bbb4a7093238b97b10d12d8a929de978503468912c35086ed46"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_commits\", \"upload_id\"]",
+      "rowSha256": "cc0ba86bf2394dadd1647939db0ccc97d5872919f96b60c9ecfecad2ea7ce472"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_dispatches\", \"binding_id\"]",
+      "rowSha256": "0e855d4a3dfce6a533d9cc7f93658481847e210593d665ec59566dd34a676451"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_dispatches\", \"started_at\"]",
+      "rowSha256": "c7463ffe2abec18a51448630e38078417e2c5ac91222072dbdeda7e09e1c9340"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_dispatches\", \"upload_id\"]",
+      "rowSha256": "7bab9f794433f851a88e2ca83cb906b50ad159ee4b9a97c048838b8776997c39"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"capacity_evidence_sha256\"]",
+      "rowSha256": "df61e3eb2f3512ad9a1305b1b468b150621ebbb92c7ce4740d62d3a9b509a474"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"configuration_digest\"]",
+      "rowSha256": "553daed23351c9d11f9421d329500b99a5955e20a972f1b0ed7a483ec7163490"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"enabled\"]",
+      "rowSha256": "cd71fae61584172bb98a68b23efa286326fbe4a12167ccde5d29b3a8cab0112a"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"gateway_key\"]",
+      "rowSha256": "60e809505c32965ccc1d45f7b3e2474aa395ec80c47f940ee17af930899aaf7d"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"id\"]",
+      "rowSha256": "2c941fd31ab15d74d396b014c26e5eb4b17118a0d4be55245b9551cc8807c7ad"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"key_id\"]",
+      "rowSha256": "2fc3bf96b5ead07f7dc36b276f513333a0fb03dcd72e067890188a0b57de0f67"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"qualification_sha256\"]",
+      "rowSha256": "4ed715714609ad975c85be82ac810a776ac5b9a8f8d71c8c95c405f222a61900"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"qualified_max_bytes\"]",
+      "rowSha256": "309316cd01f9fb395101148be8dc86f12fe70d2544efc2afd3f102a071e88d58"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"route_id\"]",
+      "rowSha256": "4a283f60d1f7dd45d1030c8b949a0759d4bc598d4c9d4f30a3bf494d484cd256"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"verifier_id\"]",
+      "rowSha256": "494c6a6c13a2b07f008ab8041599fb2ac4376170f9b2f1cce8c0d243b2b1fcb6"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_profiles\", \"worker_id\"]",
+      "rowSha256": "6a25c9b382340b7cd41b59ce88a1903494cdb4bad90dc329dc8960ce080da589"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_receipts\", \"binding_id\"]",
+      "rowSha256": "579b4fd5005c947dcdda72222de553d139b03d1a0aedc1e8ef9a6e00267bbd6f"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_receipts\", \"identity\"]",
+      "rowSha256": "b529218f51b3913fe09bb39459e71a6e388c9b82a3cccc4be4731bff30793960"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_receipts\", \"raw_body\"]",
+      "rowSha256": "baef5eb10674ad8d68ccffd7279b09b68359deaf2bd8cc13b280a3a3e4f86f30"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_receipts\", \"recorded_at\"]",
+      "rowSha256": "60dcb01424cbe013116d6748217703f30d0a60b070b806af09e97bc9a53b64ec"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_receipts\", \"signature\"]",
+      "rowSha256": "efcc33983f7a68324680cae0dc85769622b46f445fe73848076ea4346669f6c1"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_receipts\", \"upload_id\"]",
+      "rowSha256": "cbdff71588b61b699925cd3cd2de931de855d490502f51b1e907cbecdf17c770"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_receipts\", \"verifier_id\"]",
+      "rowSha256": "d5db61dc3971b66a1163905a36841e5f0aebb37bf3824be5e93786c2fff8278f"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_tickets\", \"object\"]",
+      "rowSha256": "5a1caaab07608a0af2f561ffbbf9372dddfa91959254e79a2e348ce08ae15658"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_tickets\", \"profile_id\"]",
+      "rowSha256": "43410927edaf411588d5905522ab71b26c003605d6498c8cc43ceb43d14ec0a3"
+    },
+    {
+      "key": "[\"columnMetadata\", \"sandbox_commerce_v1.r2_tickets\", \"ticket_id\"]",
+      "rowSha256": "368c4faa1a070ce4b1bade10eab518c84ce889bd4293b0b07afbab50d199b108"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.delivery_asset_scans\", \"typed_object_identity\"]",
+      "rowSha256": "667e1184de1674762920a810e997f88d01f9a5a10b56750e12c367a0cdbbc826"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.delivery_assets\", \"typed_object_identity\"]",
+      "rowSha256": "5cd73bf9110cc6454aaf389d257a19ddaf9dfc14b996c1de19fd80c511485ce4"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.paid_video_uploads\", \"paid_video_uploads_check1\"]",
+      "rowSha256": "c5d98a7aa4a174f72881599aaa89784fecb3857cdf523aef9bd47726fb1438a5"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_check\"]",
+      "rowSha256": "9da2a0a174d58f36c1dfabf6dcd2d512f94f267812638fb06f4d978ac17ec55b"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_operation_check\"]",
+      "rowSha256": "685a6e8c470a48f23f3f0ae4347c96dc9e98c8ffa31cefd4394794df163e00ea"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_pkey\"]",
+      "rowSha256": "6bf36c60f4fff04e179ddd8552783b5a7da47be3371c1b4556450476037baab2"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_profile_id_fkey\"]",
+      "rowSha256": "1b9b00c53f568cc37ca0b251ea93a109d4197d59310a3334ea5eefd15f76aabe"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_upload_id_fkey\"]",
+      "rowSha256": "f8456c51e749a45dd2baa28c49ff3510c8c11e1b8e497a166218694ae53f57ee"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_check\"]",
+      "rowSha256": "eaa54a928bc5a8dcfbdae56a2a4d79bd2afbd3196f8f5284157630fa46517f9a"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_pkey\"]",
+      "rowSha256": "0ee0428afb9cf6d96976e0a3a3a14c5c5b12c7446c32670ef079fa833b6850f7"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_state_check\"]",
+      "rowSha256": "41201a6f205d3f7727fc4aadfea3ca99251b0c0276b8361cdece4f150d1c2d61"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_upload_id_fkey\"]",
+      "rowSha256": "49464a8ab0666ea1117fb71c4e53fcdd659af6fb8df43603dbdc4be0ef704aa5"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_binding_id_fkey\"]",
+      "rowSha256": "dbdc97663e6c43be24a2d4fb335e83f638def6d4d5053a1f6b124e984a8802ae"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_binding_id_key\"]",
+      "rowSha256": "812b4e6dfbf8a90514989195984384bc569aea19c1f0e4ba432634217115908e"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_pkey\"]",
+      "rowSha256": "4217a4d45123e5b7d730a88e316dbe0b13fa8da50eb2f561efa99f1365d5ce4f"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_upload_id_fkey\"]",
+      "rowSha256": "4585d2640b20c0fcea4ce6b1a501945d01bdcad2dafde5d9113319bf7dce9d41"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_capacity_evidence_sha256_check\"]",
+      "rowSha256": "63b70d3d64fbd3fffff279d87c6918788292c55d27fd060a454625de553dd4de"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_configuration_digest_check\"]",
+      "rowSha256": "146ee65c5cb5700071ad7bd487764080cf9aa27283201cb293da3f51c646dda3"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_configuration_digest_key\"]",
+      "rowSha256": "0eae50f00e5d96321c16bd0e839b0eba13dacf11394b0622e1f1c3c7f7f2c12d"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_gateway_key_check\"]",
+      "rowSha256": "82599107427bc764da2833b4d1a2f7d50c2fb7bfe4f09ee37faa4757a241e43f"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_key_id_key\"]",
+      "rowSha256": "2e18343fafbaf408e852cde3a7aa828a9f9b13bc5820151aa28df43dc1cefdd5"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_pkey\"]",
+      "rowSha256": "cc541d67c302934f7182ef5923aeb950592fe1cc8e71bcf20acd40fab835f0fd"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_qualification_sha256_check\"]",
+      "rowSha256": "d82dbba11c63e4fa7857ce852ba4e7098bbcf9c8efd6f3d96cbefbeb06bd642a"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_qualified_max_bytes_check\"]",
+      "rowSha256": "63ff07de1ac4c178f26d895eff7c825075c5d88b6c19d3df89866fed9f87196e"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_route_id_fkey\"]",
+      "rowSha256": "fb9fdc76c55e4845d15a8fe958f4bd0b0989283e8765d9c1901424cd50641a26"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_route_id_key\"]",
+      "rowSha256": "5a51dbaf6ef15abdce19cb9ec4602e3500cb0df60c447b53d229ad02a2eb5b76"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_verifier_id_fkey\"]",
+      "rowSha256": "c6988a6aacad5accd3b95365db9bc00098bb3abeee8b9b4783c6eb66165a444e"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_worker_id_fkey\"]",
+      "rowSha256": "74c989c4790d936a62cb298374f8a1f314e9881b44664d3abb40dba64933c445"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_binding_id_fkey\"]",
+      "rowSha256": "ea4b708a82ad1a1b6f2bd6b1b9e73bd4ff245411680b419f396d965571605b80"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_identity_check\"]",
+      "rowSha256": "a3318b5a89da69d0065c9e4d39d7b4400e2fa46867ac15ad877aec6daf8ae92f"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_pkey\"]",
+      "rowSha256": "b367d083a2864aba9b76a46acad9edc9d35d08348b111299cf8953f969494a83"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_raw_body_check\"]",
+      "rowSha256": "fac26c070fffcaec4364fc8597267715ae67ea9df276ddfbc55ee8c1aa57ceaa"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_upload_id_fkey\"]",
+      "rowSha256": "7bb09a2ccdb39603b94c89cb573f571ac964efa5fd6e6910076f390ba012d1b3"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_verifier_id_fkey\"]",
+      "rowSha256": "7cba9ea82f7a62843f43798f914a951a1fedf492e78697784d7b9124c12aaa20"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_pkey\"]",
+      "rowSha256": "118f14035846dd8533103cd63b401f1a2009192c0029984ef3722878e6df1f21"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_profile_id_fkey\"]",
+      "rowSha256": "d68672dddb77240173f30ebecdae6d4ed0f05d0ce9108e24ae90d8ea4b05a7ed"
+    },
+    {
+      "key": "[\"constraint\", \"sandbox_commerce_v1\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_ticket_id_fkey\"]",
+      "rowSha256": "ddf7078fbe530f10bb1f3eb655fe0d3809f93fff18344360eb01cf24c4789f81"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_admit_v1\", \"p_action text, p_user_id uuid, p_session_id uuid, p_upload_id uuid, p_request_id uuid, p_configuration_digest text, p_range jsonb, p_grant_id uuid\"]",
+      "rowSha256": "139caf19e831e67222b00349fd855dbbea694c2ec5c89b6c2c8c02ad1d5bb46e"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_gateway_v1\", \"p_token jsonb, p_phase text, p_outcome jsonb\"]",
+      "rowSha256": "1dcfc6bf1d1cf49e443ccbc2ddd7dd156e5ecff17235c55a0c9430e6ed17b332"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_next_v1\", \"p_worker_id uuid\"]",
+      "rowSha256": "f5ef71bea048aa53f3f6e1623b17f519ebd50c4348f29b2ce689eb194d008c15"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_private_state_v1\", \"\"]",
+      "rowSha256": "59f8d0b907a85dbc3e1bc5579f295c6cf9737cfa20331a41ef484dec421824a1"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_reconcile_v1\", \"p_raw_body text, p_signature text, p_user_id uuid, p_session_id uuid\"]",
+      "rowSha256": "d21337b0da2008b0bee4ed908cc217fa4188ba2b1ba14815a4debc1aa69ea321"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_route_v1\", \"p_user_id uuid, p_session_id uuid, p_upload_id uuid, p_configuration_digest text\"]",
+      "rowSha256": "25d7ed96b511dee7dabc04601a9351267fd7c84e162aef0bd83ea1a84d5d9f95"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_scan_admit_v1\", \"p_upload_id uuid, p_ticket_id uuid\"]",
+      "rowSha256": "49a2ac0d5bb173ef6e5545241dbec19b752052213c7f7cf8d67d34f5c41ab4b6"
+    },
+    {
+      "key": "[\"function\", \"public\", \"native_paid_video_r2_worker_v1\", \"p_action text, p_upload_id uuid, p_worker_id uuid, p_raw_body text, p_signature text\"]",
+      "rowSha256": "5b8f7a76a0e066936ceac3df543677d4b1580accdbf098b2fc78d7fea9f540f4"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"native_r2_assert_media\", \"i sandbox_commerce_v1.intents\"]",
+      "rowSha256": "03123be6b89cd1af9add6cffb7fed3836a0bea2398e7f665e8c2314551cd9bd8"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"native_store_paid_video_r2_access\", \"p_user uuid, p_session uuid, p_resource uuid, p_grant uuid\"]",
+      "rowSha256": "0dd9a275579373b3b70f7c1dda09ff404009e0fc3fdf5ba98b3772e329b5655a"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"native_typed_assert_media\", \"i sandbox_commerce_v1.intents\"]",
+      "rowSha256": "82b8136ba3f7b361d0eeeb0190243d3dd85d95961ed7848c7e888bdea3be75a9"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_admit\", \"p_action text, p_user uuid, p_session uuid, p_upload uuid, p_request uuid, p_configuration text, p_range jsonb, p_grant uuid\"]",
+      "rowSha256": "9c54947bd27d6838b9f52b08a30f3d2b4c3b10800a08f3900e46d988823b0aa9"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_assert_scanner\", \"p_profile uuid, p_worker uuid\"]",
+      "rowSha256": "75c6384a919846d4d7d3dd30e8e59598019a1e1bae64a6f164e40837ca0a6c87"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_current\", \"p_token jsonb\"]",
+      "rowSha256": "8058e76efa27e65069254e1457fb12f272015b541eb031c07275822339c5c932"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_gateway\", \"p_token jsonb, p_phase text, p_outcome jsonb\"]",
+      "rowSha256": "273b4d7dc0d31275f894d1802562507fc04e95a8af28059b90276ed64bcc8fcc"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_identity_valid\", \"v jsonb\"]",
+      "rowSha256": "4fff1af8ba7736db59905c3d5d25c998dc79779c4c3cda7ba68f4deb4fad94b4"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_lease\", \"p_upload uuid, p_worker uuid\"]",
+      "rowSha256": "380f19cfc16dc55d23a9f2cbef2c4bd7705ceb200f3297087ccd21f6f4b11274"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_object\", \"p_upload uuid, p_identity boolean\"]",
+      "rowSha256": "e97926640e7d79b8ddd604f781975f740dfe775bd88e6f2b7344553666e99654"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_ready\", \"p_configuration text, p_route uuid\"]",
+      "rowSha256": "4d4f368a4f7ba32a53de75081490786364c1aad34b95eaa47e3f4b44acffab47"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_receipt_json\", \"p_upload uuid\"]",
+      "rowSha256": "c10433417853d6d2cb3af701d1d47655215ccb4efe77236fe0d5d909ec1af3e0"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_reconcile\", \"p_raw text, p_signature text, p_user uuid, p_session uuid\"]",
+      "rowSha256": "c3c4bf3391b90cdd616fb6e37d63894baf554ebfc5d68a3dbf5ddff71a15fad7"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_review_object\", \"p_upload uuid\"]",
+      "rowSha256": "de75d448be7191f7e6f24b0487b61c7ddf534e2b14a4e8aed9757f8f734adf93"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_scan_ingest\", \"p_raw_body text, p_signature text\"]",
+      "rowSha256": "ea5ea638d4e669ef146e310086100a6db09a0b443586291d9e0cc357028af3b7"
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"r2_upload_identity_guard\", \"\"]",
+      "rowSha256": "bfb03a62ef8904dec21bf80fef43a33d22a45c020f8985cb44dc32b82ad2fe97"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.delivery_assets\", \"delivery_assets_r2_identity\"]",
+      "rowSha256": "1e7789abc95194a43787402cee45d148344fb2c9a1e1f8d9d41aa138e9a86c58"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_pkey\"]",
+      "rowSha256": "935d66b243c2c1cb30b893d3e6ead00dd8f1804b33da49f16236bd5d432b1e7f"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_bindings\", \"r2_one_upload_binding\"]",
+      "rowSha256": "46b7c61841ddc69e85d1d3054195e3b188787575d7cb4ac3fda995dab3aabc3c"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_pkey\"]",
+      "rowSha256": "a4ad00c5e35090f9ddf3011d2f180a46628e4f8522859d270c1479f97ff738c7"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_binding_id_key\"]",
+      "rowSha256": "bc457db9a0e94da43fdce6d8578692eec52370ad0f920b71c4f8c628efc1ca3f"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_pkey\"]",
+      "rowSha256": "24a6ab70acb35beaa572e3c73f222043a26721ab2beb48ab47f2301c575ac5b2"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_configuration_digest_key\"]",
+      "rowSha256": "a79c38e572e293eb007835abf0393ede23fbb7ba02159c6c10650475cd10bdd1"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_key_id_key\"]",
+      "rowSha256": "3685d453b2c8facef5b7a5aeb6f839a4cfd9c26087655ccff8b2ff3addfb8122"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_pkey\"]",
+      "rowSha256": "61f866446a566e4a4efbfc901983f5bf09ac2b012cc4856584937a5860b596c2"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_route_id_key\"]",
+      "rowSha256": "918309362c4dd119d1aa47a6a5a3df0a4318614b688a3777320d57eb127c5efb"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_pkey\"]",
+      "rowSha256": "deaa7023ede6b11baebc2aa11dbf3ebfa08cb67f5912cefc6db2c7e3115e1ba3"
+    },
+    {
+      "key": "[\"index\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_pkey\"]",
+      "rowSha256": "1334a637de213541152a481297928b8e5baf04d16062f480ef69e7803dc263ae"
+    },
+    {
+      "key": "[\"membership\", \"sbx_v1_r2_gateway\", \"postgres\", \"fixture_admin\"]",
+      "rowSha256": "687e446e6a6244333a66618e728b128c759826c5ff0c8bc37d1b9585b5412120"
+    },
+    {
+      "key": "[\"membership\", \"sbx_v1_r2_scanner\", \"postgres\", \"fixture_admin\"]",
+      "rowSha256": "afefe8be06648bbdd184736e22f1656b888508e752eb2421e722cadea2b138bd"
+    },
+    {
+      "key": "[\"policy\", \"sandbox_commerce_v1.r2_bindings\", \"core_owner\"]",
+      "rowSha256": "ccb73c6b76a635d709769f2e18f7ad4e0bfd318a1374cb91d30d93a5dbf4d9b6"
+    },
+    {
+      "key": "[\"policy\", \"sandbox_commerce_v1.r2_commits\", \"core_owner\"]",
+      "rowSha256": "74dd480c8af5f7291a2182299567c9c7d5e46905e31cc467b579babcbf4993e7"
+    },
+    {
+      "key": "[\"policy\", \"sandbox_commerce_v1.r2_dispatches\", \"core_owner\"]",
+      "rowSha256": "5e253e93062a532364135399dbaa6f11869281db6859c512b960440911665466"
+    },
+    {
+      "key": "[\"policy\", \"sandbox_commerce_v1.r2_profiles\", \"core_owner\"]",
+      "rowSha256": "78a025c1d3ff4fba67509e8507b4619da9922a85d4bf549a0a1855de41fdb4e8"
+    },
+    {
+      "key": "[\"policy\", \"sandbox_commerce_v1.r2_receipts\", \"core_owner\"]",
+      "rowSha256": "424b90ef91108e02553198a312a19bada1185ed57fd94dc5d03f67d27c00185b"
+    },
+    {
+      "key": "[\"policy\", \"sandbox_commerce_v1.r2_tickets\", \"core_owner\"]",
+      "rowSha256": "b7c230f2d8670203c8e22c0ac0ad2b511665c5d89c6c5b7b00768e1335603e74"
+    },
+    {
+      "key": "[\"relation\", \"sandbox_commerce_v1\", \"r2_bindings\"]",
+      "rowSha256": "0df72a0a7701a5838678c387ecef9ffe1dc4cd10c4139bd3e397ccd5631cce8b"
+    },
+    {
+      "key": "[\"relation\", \"sandbox_commerce_v1\", \"r2_commits\"]",
+      "rowSha256": "90b2b9d7ee347de470bad3f19aaf3939090f0e72f9319fff6580b531d8b43e8f"
+    },
+    {
+      "key": "[\"relation\", \"sandbox_commerce_v1\", \"r2_dispatches\"]",
+      "rowSha256": "2bf386a93c277580aa6df09af0ac1baa84e504ca16e3ff4e102db95169d0d1d1"
+    },
+    {
+      "key": "[\"relation\", \"sandbox_commerce_v1\", \"r2_profiles\"]",
+      "rowSha256": "b5cdeb53ede00dd5cd4ab0375eb0f3721b94be30bc116cd140962c23569ad963"
+    },
+    {
+      "key": "[\"relation\", \"sandbox_commerce_v1\", \"r2_receipts\"]",
+      "rowSha256": "8d9dc77c4b6b84cab04104a8edd635ae4d31b0c8da60967ad2947ad338fec30f"
+    },
+    {
+      "key": "[\"relation\", \"sandbox_commerce_v1\", \"r2_tickets\"]",
+      "rowSha256": "3c2b10b73b5e907de1cab256b5b73849a28c0eab984bb15a58dbbd6cbc43da50"
+    },
+    {
+      "key": "[\"role\", \"sbx_v1_r2_gateway\"]",
+      "rowSha256": "e12133b26f185b0537311875e5e5deb3f62551721aa99cfd89fd3923fd15bd89"
+    },
+    {
+      "key": "[\"role\", \"sbx_v1_r2_scanner\"]",
+      "rowSha256": "d3a44831c72a4d90e5186003a80813b5acc7891ec14c73999c68af356ab416fb"
+    },
+    {
+      "key": "[\"schemaPrivilege\", \"public\", \"sbx_v1_r2_gateway\", \"USAGE\"]",
+      "rowSha256": "4bd916e127b05b44b658d00e5f1f44fa133cdb96892b790af99c49adc7abe896"
+    },
+    {
+      "key": "[\"schemaPrivilege\", \"public\", \"sbx_v1_r2_scanner\", \"USAGE\"]",
+      "rowSha256": "0a6fc61420c1f52f8a0c9bd1c43af7c9beac9bae6e3c050f866b089357c65c7e"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_routes\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_route_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "e20d191a7be4d85093d3179b39d1bff42dd5c931cda434631f6ce68044325ec7"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_routes\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_route_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "ce3ca4fd50c11ee604a5dd53529444e155a5b3f08212b239e1574b440ee5335d"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_tickets\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_ticket_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "1c4670713905cea2ad6bda6ef78a2e0d3af31d3717041770d36470b33ddcfd9d"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_tickets\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_ticket_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "031018547ca59c868a5cc7e88060b88594cd9bd0bc2d9a9ad34eaa074232fddc"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_uploads\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_upload_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "510197f3773fb9bdb1208566dc7a2766edc5e9b81f64a4cd557f58565081b88a"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_uploads\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_upload_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "c5fc7efdcae5392b9402a9031bb1a40a6396475125d76f45d2071478822301f9"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_uploads\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_upload_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "18d3668e38c9514ab448fa09d341a355db7b8b5c7a53fb99b6ea4145e2909ba8"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_uploads\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_upload_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "f0195bb0de10a74d1871ffbff08c780a58386649c38427446773a93f9d2bad2e"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_uploads\", \"typed_identity\"]",
+      "rowSha256": "c2b2872038fd22b6173ce7907be956e17ec3af3e25fa965bb51dede38c12851a"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_verifiers\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_verifier_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "95d5e85d4e90d602bcc1d4babf1b3f5552aff8c57b0ec27b3d0a91eb0237f0bc"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_verifiers\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_verifier_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "8e2533ae16f2d95bb0cde1ff9d0cb5d3ebf709397e51c00e397da86a83f96d5d"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_verifiers\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_verifier_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "e4f21d8e3c4294d5f6fbc56b337df7acb2e31ae701226fb80614025abcb03d22"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_verifiers\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_verifier_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "b2ae9e9d9c49740e755c11bde24f8eccaa126a479bdc1efa43ab35a60de1261c"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_workers\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_worker_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "93e7e33fe1fc7b9d650ceb14f5c316d945349a79f1f6e4dd11b2250528762ccb"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_workers\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_worker_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "7b444f65f2b09249494b4cbb4c00ff02fcaf52ec908d1961b16da904a753f304"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_profile_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "0c6af1ebb70770806cd4c003935342283afe9a7e0ca659b7ff6f37e6a41c3ee6"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_profile_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "8680d2d8c74658ff65187f732cfcf6f0ae3026977418c423faa75d29a2acfc3d"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_upload_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "2f65bc2cd8da9c9a5787dcaefe30735253157e068211af9b80ec852c6ecd0088"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_upload_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "2b7e430c779cc2d4bb60bfe2d8c93d9ccb0b1944a3dce48ced2d89236455e294"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_binding_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "0969cc4a59892ee1cb7a4d6e3e4da3dc6a941c30b8c5aeecece6a2df83b54649"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_binding_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "dedc3fea7e215160409e05f5be1fba32718fd5e4d3cb63fa601bae302f196d06"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_binding_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "75976b3615e9f7e2a227e7af541dba09506ac4902b9450028c357fe9a2967d73"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_binding_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "3f98b921d86bd5a75e29e7be80c80ddd55795255050188c104cacc2207987abc"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"immutable\"]",
+      "rowSha256": "e3a78169b34cb42ada072516037442f57a696755b7d39415d3e7e9f7e8e48e49"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_bindings\", \"immutable_truncate\"]",
+      "rowSha256": "b20b547ed8bfa4b3bd10cfc388fae6f30beb8050a66112be0858e2c1f5634247"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_commits\", \"<internal>\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_upload_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "71dca46a020963f11a15cba2faa46613f5aea2f80db73eb91b30440a5268e5b5"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_commits\", \"<internal>\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_upload_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "4a4b3f5b1c96ce491216671fecc7857bc1ac4cad48e30bf9785bab63cd46f9b5"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_commits\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_upload_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "acfb5a91d1b7c73852142471c7b09d2fa4df1ebee56ffbccb65ff1b32e4cdd69"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_commits\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_upload_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "f6f2fc31c2cf216f87cd9f7dd7c3697755d2a510a2c2f57b95011566219b9826"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_commits\", \"immutable\"]",
+      "rowSha256": "8f8a34afc50a71989218db9ab82effb55f418f62d030e8a2c74b1f65e9047b40"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_commits\", \"immutable_truncate\"]",
+      "rowSha256": "fbea81dee8a801e87b4cea52ebaa99cccdc56808dfc64887413509538063e71a"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"<internal>\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_upload_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "6164c1060e03daf11f190abd52347872e12bbb0ef91d279e8cbb1fa98ae682c7"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"<internal>\", \"sandbox_commerce_v1.r2_commits\", \"r2_commits_upload_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "de0432789ee7371ba95fad994f7a6de0d4262aefd62a412d479ed819e303f81d"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_binding_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "758f2a730765e2f5549031c29bf34125c0bc1a843d9ba94c3b87471c141ea702"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_binding_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "1473824a49096e7d9871422676a86af8ab9eb6f363e701c4f0b5def0167af3b9"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_upload_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "f9ee0e83d955c342ec1184b9556dc6f53e5a69324f6cb85332cf55ed371df93c"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"<internal>\", \"sandbox_commerce_v1.r2_dispatches\", \"r2_dispatches_upload_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "43e203e5d52dc1a2cbc23374e6ecc7ecc93c96de0dfc1cb94479a8911985974d"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"immutable\"]",
+      "rowSha256": "9c243e8a14c31d6d116653e8fc36df4ecceaabc35b4a91ca07cd3f1de4b49e5f"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_dispatches\", \"immutable_truncate\"]",
+      "rowSha256": "0201e3e2cf27e23f4d16279c7fc6a1ffff132559f8d26f547c553fb1ab512ca5"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_profile_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "1d35859c0bbe2bfb5e1deddea72900f20d484873041ca34c3dac0a820f8a7013"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_bindings\", \"r2_bindings_profile_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "e083a59459b8511dbad275ee79e38b01eadb253eefdc8be79f3baf2da7933747"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_route_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "80d4941a6026de9719b008d0d1cf91e28859d0d07d87fd90f8e35111d7403cec"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_route_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "5f515ce997304ddf0883bf1e72955fa389e7fa6aa21d6aa84ac496f03dd48436"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_verifier_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "f23a262d3d3df3a51dc60bda1b86e788baddeb01bf57eac01ed5770f83a8af5b"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_verifier_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "f27bef445d93fddc3c979993a842c3fe900f8901fbe953a8838df9b45048f606"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_worker_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "5cc38c417b8294bc12e82b0c8985d15117309e09caaf6d0584df4410af53283d"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_profiles\", \"r2_profiles_worker_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "01667647c55c7144ca47e6245cfb2295a124d2b4bf50d895413c5200993c597a"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_profile_id_fkey\", \"\\\"RI_FKey_noaction_del\\\"()\", 9]",
+      "rowSha256": "1d65ed7293b411ef8acf16654288b8c29c55b536332e480e4b08291fdc89b272"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_profile_id_fkey\", \"\\\"RI_FKey_noaction_upd\\\"()\", 17]",
+      "rowSha256": "80df1023374824abce3a900b1b4f5e9f4d8d33f6cc057075fe99ad36e10cad28"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"immutable\"]",
+      "rowSha256": "712fa70e809f00f1bc10378900c107160f8eea998095d3922a35b0082c18d133"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_profiles\", \"immutable_truncate\"]",
+      "rowSha256": "9c43f27b5db575d8b34fa1f28e13c60fc6ef83ce8ce0d7fb9f8cd7c42de4df64"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_binding_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "2e28dc6ceb69ab0253629a988900f30fd1aabcb35a7632231ad44dbfc8563cdc"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_binding_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "18ec7005215362868f6cd6d3dee83aa006523654194e120ae5f40b84da360d3b"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_upload_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "139870e7e1c4c9d644a456282eccbeebee51754851a835bdea5e1d868e4e8008"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_upload_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "30f17688ee24f30de1722869e7be0b0cee56bc6d3c077d4d1d9f31ab51bf5ec5"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_verifier_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "fc97270c4c3c00e63c6c4520490502c95881a3b446bb7959500950536e673ee9"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"<internal>\", \"sandbox_commerce_v1.r2_receipts\", \"r2_receipts_verifier_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "24cf43303f9832edb3036a54df81bd7166552d4e6b2a87f1465294fca524f984"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"immutable\"]",
+      "rowSha256": "ed3e293e64b3cb60729742f295c99fd3208af00c22f29de31570b7e4cca5af2e"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_receipts\", \"immutable_truncate\"]",
+      "rowSha256": "9d0a62f98e9d35a0084887eb383fffdbf0fb56dfbb1beb843ea30cab89f4ffbb"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_tickets\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_profile_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "3b87e3bc229822a34cf891af8c41af5eaf6cb0554a476f3b15e4b9822d72f2c0"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_tickets\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_profile_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "6d3d62c4e9bdc4d4d7e1d100f4c97c4bc99530de304cdd1ce75c4724eab88ea2"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_tickets\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_ticket_id_fkey\", \"\\\"RI_FKey_check_ins\\\"()\", 5]",
+      "rowSha256": "3c3ca45ed3aed45898913bb2afcc1de0e1b2007cbeed7dd1737aea35dc18b44b"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_tickets\", \"<internal>\", \"sandbox_commerce_v1.r2_tickets\", \"r2_tickets_ticket_id_fkey\", \"\\\"RI_FKey_check_upd\\\"()\", 17]",
+      "rowSha256": "f454c2182f3eb019d3805ce93a90f4a70c6d69410642e8f89d3f651e27fe1502"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_tickets\", \"immutable\"]",
+      "rowSha256": "7ec048f1df74d9db749ec5bd710f60816d4fd05900d58b322019e1d772e486b4"
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.r2_tickets\", \"immutable_truncate\"]",
+      "rowSha256": "c767e77a51c591f8a0e66a65c4a89910ac999e9ee967f8d1dab279561a47c60e"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"_r2_bindings\"]",
+      "rowSha256": "417132d5525ce078775dab899e08be49c72ec10246138e7f204d963ca77c7d71"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"_r2_commits\"]",
+      "rowSha256": "6aa2d9617a5a9d2672c589f6a28622490bb20668aa0fe093abdbc250e9283b3b"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"_r2_dispatches\"]",
+      "rowSha256": "0f2b4fe3298ccea0ab2d4fa189bfbaee7323df7156637daa45a7d232125c9499"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"_r2_profiles\"]",
+      "rowSha256": "c502f6008d80983b4ca507f238475e693147b265ba9f00ee9082b1419859ac66"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"_r2_receipts\"]",
+      "rowSha256": "369b6eb6d8309f22980a75fef7edf11b146614ba5123fb719cd83ebae53cfa99"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"_r2_tickets\"]",
+      "rowSha256": "b64d6bde45622dc86fed367f67b6f338f8d792766d9937d74e77c49257acfd9e"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"r2_bindings\"]",
+      "rowSha256": "fab585c25c39e1bdadd1b26c1b0a02ae4b1ef7a31e5fe764be7081734d4c1acd"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"r2_commits\"]",
+      "rowSha256": "386efbd94ed1689a49462f9cdae1e2b35eb821e084bcc2700a11e48891058797"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"r2_dispatches\"]",
+      "rowSha256": "2ed4f8013ac483398d815e1da2b19b50d39005e5b6f54a0ca7d3868296f06bdb"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"r2_profiles\"]",
+      "rowSha256": "983c21831303a9c784335d1f9c6c2f0b96e75f7cf909747ed569fbae2ddd305e"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"r2_receipts\"]",
+      "rowSha256": "8c4c6fbc48c8e08f0e26683b9cda0a10d57e54966bfafac330c6b546d5d455f3"
+    },
+    {
+      "key": "[\"type\", \"sandbox_commerce_v1\", \"r2_tickets\"]",
+      "rowSha256": "f7b5fc221d8c1e15ee150f57b0f2c310241580d50c75cb2d543b407db984f7d3"
+    }
+  ],
+  "changed": [
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.delivery_asset_scans\", \"object_version\"]",
+      "beforeSha256": "4bd946529341db0cd54c5db42d4ca9d0d0f5afb61491ad55a1bcef8bdb63cf0c",
+      "afterSha256": "a391d9543aa8fc378cb74189fd5a4a6de0ce9c90d93226d9f77e5d1b99b8fe6c",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"column\", \"sandbox_commerce_v1.delivery_assets\", \"object_version\"]",
+      "beforeSha256": "3ecf1eb20dce4a9fe5489ff591cd05367276ed20e5d6229ad0dd8b9f1f57f099",
+      "afterSha256": "b77a6aa106e2c88956ffabf76220aa7089656150277bec4d1ad7b437e8e70669",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"clean_resource_asset\", \"p_id uuid, p_resource uuid, p_revision bigint, p_owner uuid, p_purpose text\"]",
+      "beforeSha256": "ca4b1cee1b53cd4743f3bb8e168ad53cfd776c9c0b10159df314528233e5ff92",
+      "afterSha256": "97c7de17a26160b92c310e280088a85eba230d396b4ae32551851f123bb4a0ac",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"native_store_apply_effect_pre_play_handoff\", \"p_raw_receipt_id uuid, p_claim_id uuid, p_protocol_id uuid, p_protocol_revision bigint, p_projection jsonb\"]",
+      "beforeSha256": "1ab63ed2668ed5b7fac836cf588b0c0fad5f3e23230cffd718cb97b55d84b554",
+      "afterSha256": "cd8b3c2b1c60eb33197248ecae5a80a52864c58c38a250112c9bdac5a6564126",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"native_store_paid_video_access\", \"p_user uuid, p_session uuid, p_resource uuid, p_grant uuid\"]",
+      "beforeSha256": "8b8d609805b6f558fdc3c3c2af208f83f4881e7b8d384d586ee374cb178cd07a",
+      "afterSha256": "90fb6efc22fcc4ac9a6c4e86f85eb2f4e6d03be5b7a0fe9461452dc13b6b1c7a",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"native_store_play_apply_effect\", \"p_raw_receipt_id uuid, p_claim_id uuid, p_protocol_id uuid, p_protocol_revision bigint, p_projection jsonb\"]",
+      "beforeSha256": "749371b325a200b1c28bf9d70ecdd8b6194d010c7d55d3b7f213af47f1d199ce",
+      "afterSha256": "d8d9990b16b6d9f0037d665c396525ee98fbe7b595019d296cb5a0c8ddf79127",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"native_store_quote_command_armed\", \"p_user uuid, p_session uuid, p_command text, p_request uuid, p_payload jsonb\"]",
+      "beforeSha256": "3a000029343ae665e0a384c229e2bb05851f30b93fddfd585887f48b8c20394e",
+      "afterSha256": "b856353df69508ea4064ff5a5ccf71ffd382b5a5843d3b3547c0a94e002e263e",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"paid_video_command_v2\", \"p_command text, p_payload jsonb, p_user uuid, p_session uuid, p_configuration text\"]",
+      "beforeSha256": "de8a90636bf6e18c5f5ff5bc45dcebe2a9b852f4bf5166f43e8821ea32317cf7",
+      "afterSha256": "9ec8ef7a8a57ab399f9bb779abc3e943b14caa84087a637f16dd5d5e1f3052a2",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"paid_video_gateway_ready\", \"p_configuration text, p_route uuid\"]",
+      "beforeSha256": "e1479d9a3eb4e926977a5e0a9909b2747d57f0c8112b6ccdfd200e8cf1d20157",
+      "afterSha256": "21e78f8b1a0bf2f117bb693dd4be78ee0383aceaf1f234f33f2a625cba8b8672",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"paid_video_native_command\", \"p_command text, p_payload jsonb, p_expected_account_id uuid, p_expected_session_generation uuid\"]",
+      "beforeSha256": "be7a41f5a969f65bf9d145d46e23f14f67d15c55124d07ba5ae239c2f07515cc",
+      "afterSha256": "a74ac3ffa2ea96dfcaabc90caad6d0919e9e240a9783f5df181b1f73da0e96ae",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"paid_video_review\", \"p_action text, p_raw text\"]",
+      "beforeSha256": "61ea43b0deb56290a335cca41210d58e27d3244fd24cee069c69a24e593fe340",
+      "afterSha256": "406152808a07a63fb26e86381c4dcb68d5c5cc3f46ac91a384dff5bb0cf1cef7",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"function\", \"sandbox_commerce_v1\", \"paid_video_review_snapshot\", \"p_upload uuid\"]",
+      "beforeSha256": "ad8a07c054adee1b40336415a0cfaf37fab931d98d3b4559f985eeb5be267ada",
+      "afterSha256": "532e9f069041514e66d9825fe5123771ea721702dc729740e2835eed8fb9078e",
+      "oidMustBeRetained": true
+    },
+    {
+      "key": "[\"trigger\", \"sandbox_commerce_v1.paid_video_uploads\", \"identity_immutable\"]",
+      "beforeSha256": "f2a58a9fb1605530204dd7cd2453aea477db226304dc45c234483b3f20fd8a3d",
+      "afterSha256": "d44de0c5815890a6fb720d1882a42eeeac55c49e9d5dd02ab3380c0b978c6c90",
+      "oidMustBeRetained": false
+    }
+  ],
+  "removed": []
+}

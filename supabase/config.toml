@@ -372,3 +372,11 @@ verify_jwt = true
 # Provider shared-secret authentication is performed by dormant ingress.
 [functions.native-store-ingress-v1]
 verify_jwt = false
+
+# Normal native Studio reuses the authenticated V2 authoring/upload boundaries.
+# Server media controls remain default off; JWT admission is not media authority.
+[functions.isolated-paid-video-authoring-v2]
+verify_jwt = true
+
+[functions.isolated-paid-video-upload-v2]
+verify_jwt = true

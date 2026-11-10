@@ -8,8 +8,12 @@ export type PaidVideoV2TransferContext = Readonly<{ userId: string; sessionGener
   upload: PaidVideoV2TransferUpload; originalSessionId: string; originalConfigurationDigest: string; now?: number }>;
 export type PaidVideoV2TransferResponse = Readonly<{ protocol: "scpv-transfer-v2"; state: "unknown" | "acknowledged" | "exists_unverified";
   uploadId: string; requestId: string; verificationRequired: true }>;
-export type PaidVideoV2ObjectReceipt = Readonly<{ protocol: "scpv-object-receipt-v2"; state: "recorded"; uploadId: string; userId: string;
-  originalSessionId: string; originalConfigurationDigest: string; requestId: string; transferId: string; incarnation: string; sha256: string; byteLength: number; objectVersion: string }>;
+type PaidVideoReceiptBinding = Readonly<{ state: "recorded"; uploadId: string; userId: string;
+  originalSessionId: string; originalConfigurationDigest: string; requestId: string; transferId: string; incarnation: string; sha256: string; byteLength: number }>;
+export type PaidVideoR2Identity = Readonly<{ kind: "r2-native-upload-v1"; nativeVersion: string; etag: string }>;
+export type PaidVideoV2ObjectReceipt = PaidVideoReceiptBinding & (
+  Readonly<{ protocol: "scpv-object-receipt-v2"; objectVersion: string; identity?: never; profileId?: never; qualificationSha256?: never }>
+  | Readonly<{ protocol: "scpv-object-receipt-r2-v1"; identity: PaidVideoR2Identity; profileId: string; qualificationSha256: string; objectVersion?: never }>);
 export type PaidVideoV2ObjectObservation = Readonly<{ protocol: "scpv-object-observation-v2"; userId: string; sessionId: string; uploadId: string;
   requestId: string; transferId: string; originalSessionId: string; originalConfigurationDigest: string; configurationDigest: string; verifierId: string; incarnation: string;
   sha256: string; byteLength: number; objectVersion: string; checkedAtMs: number; expiresAtMs: number }>;
@@ -37,6 +41,19 @@ export function isPaidVideoS3ObjectVersion(value: unknown): value is string {
   return true;
 }
 const version = isPaidVideoS3ObjectVersion;
+export const paidVideoNativeTransferConfiguration = "8e5c534276f2e9cc279cd5dbd629964c49124b6551d7829c3a29dbb6635f0dc0";
+const nativeConfiguration = paidVideoNativeTransferConfiguration;
+export function isPaidVideoR2Identity(value: unknown): value is PaidVideoR2Identity {
+  return keys(value, ["kind", "nativeVersion", "etag"]) && value.kind === "r2-native-upload-v1"
+    && typeof value.nativeVersion === "string" && /^[\x21-\x7e]{1,1024}$/u.test(value.nativeVersion)
+    && typeof value.etag === "string" && /^[a-f0-9]{32}(?:-[1-9][0-9]*)?$/u.test(value.etag);
+}
+export function samePaidVideoReceiptIdentity(a: PaidVideoV2ObjectReceipt, b: PaidVideoV2ObjectReceipt): boolean {
+  if (a.protocol !== b.protocol || a.transferId !== b.transferId) return false;
+  return a.protocol === "scpv-object-receipt-v2" ? a.objectVersion === b.objectVersion
+    : b.protocol === "scpv-object-receipt-r2-v1" && a.profileId === b.profileId && a.qualificationSha256 === b.qualificationSha256
+      && a.identity.kind === b.identity.kind && a.identity.nativeVersion === b.identity.nativeVersion && a.identity.etag === b.identity.etag;
+}
 const sameUpload = (a: PaidVideoV2TransferUpload, b: PaidVideoV2TransferUpload) => a.id === b.id && a.incarnation === b.incarnation && a.expectedSha256 === b.expectedSha256 && a.expectedByteLength === b.expectedByteLength;
 export function validPaidVideoV2TransferUpload(value: unknown): value is PaidVideoV2TransferUpload {
   return keys(value, ["id", "incarnation", "expectedSha256", "expectedByteLength"]) && paidVideoId(value.id, "upload") && paidVideoUuid(value.incarnation)
@@ -59,6 +76,16 @@ export function parsePaidVideoV2TransferResponse(value: unknown, context: PaidVi
   return snapshot(value as unknown as PaidVideoV2TransferResponse);
 }
 export function parsePaidVideoV2ObjectReceipt(value: unknown, context: PaidVideoV2TransferContext): PaidVideoV2ObjectReceipt {
+  if (row(value) && value.protocol === "scpv-object-receipt-r2-v1") {
+    expect(validPaidVideoV2TransferContext(context) && context.configurationDigest === nativeConfiguration && context.originalConfigurationDigest === nativeConfiguration
+      && keys(value, ["protocol", "state", "uploadId", "userId", "originalSessionId", "originalConfigurationDigest", "requestId", "transferId", "incarnation", "sha256", "byteLength", "identity", "profileId", "qualificationSha256"])
+      && value.state === "recorded" && value.uploadId === context.upload.id && value.userId === context.userId
+      && value.originalSessionId === context.originalSessionId && value.originalConfigurationDigest === context.originalConfigurationDigest
+      && value.requestId === context.requestId && paidVideoUuid(value.transferId) && paidVideoUuid(value.profileId) && hash(value.qualificationSha256)
+      && value.incarnation === context.upload.incarnation && value.sha256 === context.upload.expectedSha256
+      && value.byteLength === context.upload.expectedByteLength && isPaidVideoR2Identity(value.identity), context);
+    return snapshot(value as unknown as PaidVideoV2ObjectReceipt);
+  }
   expect(validPaidVideoV2TransferContext(context) && keys(value, ["protocol", "state", "uploadId", "userId", "originalSessionId", "originalConfigurationDigest", "requestId", "transferId", "incarnation", "sha256", "byteLength", "objectVersion"])
     && value.protocol === "scpv-object-receipt-v2" && value.state === "recorded" && value.uploadId === context.upload.id && value.userId === context.userId
     && value.originalSessionId === context.originalSessionId && value.originalConfigurationDigest === context.originalConfigurationDigest && value.requestId === context.requestId && paidVideoUuid(value.transferId)
@@ -143,7 +170,8 @@ export async function capturePaidVideoV2TransferClient(authority: AccountSession
     },
     async probe(value: PaidVideoV2TransferContext): Promise<PaidVideoV2ProbeResponse | PaidVideoV2ObjectReceipt> {
       const c = context(value), response = await send(c, "GET");
-      return row(response) && response.protocol === "scpv-object-receipt-v2" ? parsePaidVideoV2ObjectReceipt(response, c) : parsePaidVideoV2ProbeResponse(response, c);
+      return row(response) && ["scpv-object-receipt-v2", "scpv-object-receipt-r2-v1"].includes(String(response.protocol))
+        ? parsePaidVideoV2ObjectReceipt(response, c) : parsePaidVideoV2ProbeResponse(response, c);
     },
     async reconcile(value: PaidVideoV2TransferContext, probe: PaidVideoV2ProbeResponse): Promise<PaidVideoV2ObjectReceipt> {
       const c = context(value), parsed = parsePaidVideoV2ProbeResponse(probe, c), key = `${c.requestId}:${parsed.signature}`;

@@ -161,7 +161,7 @@ export async function capturePaidVideoV2Actions(authority: AccountSessionAuthori
     const context = { userId: expected.userId, ...binding, requestId, originalSessionId: attempt.sessionGeneration, originalConfigurationDigest: attempt.configurationDigest, upload: attempt.upload };
     try {
       const observed = await transferClient.probe(context); if (!current()) return;
-      if (observed.protocol === "scpv-object-receipt-v2") await transferJournal.recordReceipt(requestId, observed, binding);
+      if (observed.protocol === "scpv-object-receipt-v2" || observed.protocol === "scpv-object-receipt-r2-v1") await transferJournal.recordReceipt(requestId, observed, binding);
       else {
         // Save the pending reconciliation before its POST. Restart always begins
         // with a new read, never a replay of the old PUT or an old signed proof.
@@ -179,11 +179,18 @@ export async function capturePaidVideoV2Actions(authority: AccountSessionAuthori
     refresh: () => exclusive(load),
     transfer: () => exclusive(transfer),
     verifyTransfer: (requestId: string) => exclusive(() => verifyTransfer(requestId)),
+    retireUnknownTransfer: (requestId: string) => exclusive(async () => {
+      if (!current() || client?.mode !== "native" || !state.transferReady) throw new Error("transfer_retirement_unavailable");
+      await transferJournal.retireUnknown(requestId, { sessionGeneration: expected.sessionGeneration, configurationDigest: client.configurationDigest });
+      await local(); if (!current()) return;
+      file?.dispose(); file = null;
+      publish({ file: null, notice: "The original transfer remains unconfirmed and will never be resent. Its bytes may still arrive. You can return to Studio and explicitly reserve a new upload with a new identity; the original remains available for verification." });
+    }),
     openOfferCode: (value: string, open: (offerId: string) => void) => exclusive(async () => {
       const offerId = parsePaidVideoOfferCode(value);
       if (!offerId) { publish({ notice: "Enter the complete sandbox offer code shared by its creator." }); return; }
       const data = await read("offer.read", { offerId }); if (!current()) return;
-      if (data.offer.status !== "published" || !data.offer.checkoutAvailable) {
+      if (data.offer.status !== "published" || (client?.mode !== "native" && !data.offer.checkoutAvailable)) {
         publish({ notice: "This offer is not currently available for sandbox checkout. No purchase was started." }); return;
       }
       // This is navigation to a new authenticated price/asset review. The

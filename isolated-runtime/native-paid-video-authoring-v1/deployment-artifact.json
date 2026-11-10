@@ -1,0 +1,46 @@
+{
+  "protocol": "native-paid-video-authoring-fixed-deployment-v1",
+  "version": "20261110060000",
+  "name": "native_paid_video_authoring_operations_v1",
+  "bodySha256": "25564c732d934a9e7184b605ee838fc109f6f4482eb6c506dbf5a43673e19b19",
+  "bodyBytes": 256992,
+  "extensionDigest": "119b97cee5439dc72d6aa009f768ee53aa3ca0291d90a20bb88bc75ce1ef1737",
+  "addedCount": 248,
+  "changedCount": 5,
+  "sourceSlices": [
+    {
+      "path": "isolated-runtime/native-paid-video-authoring-v1/deployment-grant.sql",
+      "sha256": "3994e38be8b4049a5040e163081930f036b90b93345f74d2f975b214f9a1f515",
+      "bytes": 927
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/operations.sql",
+      "sha256": "32f965cb5e8bb815b17c0958ddc8dc933f149918b89ce9e1a708de42f7973355",
+      "bytes": 20620
+    },
+    {
+      "path": "ops/isolated-paid-video-operations-v2/monotonic-removal.sql",
+      "sha256": "3398dcc95cbce6e45a0bed9934f48ee859cece5ec96979ada8dd15ca95b4b5ee",
+      "bytes": 5710
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-authoring-v1/authoring.sql",
+      "sha256": "86eefa28bf38ca0ad8730786706dd7f1a03baa3a3ed88ceb61cee599d92a426e",
+      "bytes": 39356
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-authoring-v1/deployment-revoke.sql",
+      "sha256": "b0336bde9635b70ce25f1aa978d0f3c2c1f1216479d4c9e97dd34440d61cef58",
+      "bytes": 1194
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-authoring-v1/private-state.sql",
+      "sha256": "3fee0207bc9e4d753c7246d3e7cc74de7bfab082f623a3cc8e7ba96491daa68c",
+      "bytes": 8416
+    }
+  ],
+  "allowlistSha256": "85f92f6da28021c674ef9a8e0fac88292793868e3dbe570cbd60516bc3a930e6",
+  "deploymentAllowed": false,
+  "activationAllowed": false,
+  "retryAllowed": false
+}

@@ -13,7 +13,7 @@ import { validatePaidVideoPostgresProof, aggregatePaidVideoRetainedHttpProof,
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const fakeHash = hash("validator-only input");
 const clone = (value) => structuredClone(value);
-const source = "22c7dcfd9a2569b9b902db79f8468df90c1058b53fe663cdefe01a63bcd663b2";
+const source = "fe5e8295d8e0dae69d8fa60a5a4b23040a781bcd29fd046c205402a788470ca4";
 const installation = { fresh: "09c284aa0b56536f6975ef3debb86d1b29f157f04c3b1a1593fec8e7b8d5e563",
   retained: "0740568bed37dbc21cb462efcfd577078c9325f3449b1e50bfac6fe57e8e559a" };
 const map = (count) => Object.fromEntries(Array.from({ length: count }, (_, i) => [`fixture-${i}`, hash(`fixture-${i}`)]));
@@ -95,7 +95,7 @@ function http(t) {
   const pinsRaw=fs.readFileSync(new URL('image-chains.json',template)),pins=JSON.parse(pinsRaw);
   const imageChains=Object.fromEntries(Object.entries(pins.images).map(([role,pin])=>[role,{reference:pin.reference,indexDigest:pin.index.digest,
     manifestDigest:pin.platformManifest.digest,configDigest:pin.config.digest,os:'linux',architecture:'amd64'}]));
-  const executionInputs = {...map(99),'image-chains.json':hash(pinsRaw)};
+  const executionInputs = {...map(103),'image-chains.json':hash(pinsRaw)};
   const artifacts = Object.fromEntries(["edge-listener-proof.json", "edge-process-log.json", "gateway-health-proof.json",
     "install-proof.json", "loopback-bindings.json", "settlement-boundary-proof.json", "synthetic-scanner-boundary.json"].map((name) => [name, { validatorOnly: true }]));
   Object.assign(artifacts, {
@@ -135,6 +135,7 @@ test("HTTP aggregator binds same-attempt raw evidence and wrapper preserves all 
   const fixture = http(t), aggregate = aggregatePaidVideoRetainedHttpProof(fixture);
   assert.equal(aggregate.protocol, "scpv-retained-platform-auth-http-proof-v1");
   assert.equal(aggregate.caseCount, 103); assert.equal(aggregate.actualGatewayEntries, 4);
+  assert.equal(Object.keys(aggregate.executionInputs).length, 104);
   for (const [name, digest] of Object.entries(aggregate.evidenceSha256)) assert.equal(digest, hash(fixture.read(name)));
   const aggregateBytes = Buffer.from(JSON.stringify(aggregate, null, 2) + "\n");
   const httpCaptureBytes = fixture.read("http-qualification-proof.json");
@@ -170,6 +171,11 @@ test('HTTP identity rejects old artifacts recopied with fresh timestamps and for
     assert.throws(()=>validatePaidVideoPlatformHttpAggregate(old,{...old.expectedAttempt,...change}),/PAID_VIDEO_PROOF/u);
   const historical={...old,protocol:'scpv-retained-auth-http-proof-v1'};
   assert.throws(()=>validatePaidVideoPlatformHttpAggregate(historical,old.expectedAttempt),/HTTP_PROTOCOL/u);
+  const predecessorSource={...old,source:'22c7dcfd9a2569b9b902db79f8468df90c1058b53fe663cdefe01a63bcd663b2'};
+  assert.throws(()=>validatePaidVideoPlatformHttpAggregate(predecessorSource,old.expectedAttempt),/HTTP_SOURCE/u);
+  const incomplete=clone(old);
+  for(let i=0;i<4;i++)delete incomplete.executionInputs['fixture-'+i];
+  assert.throws(()=>validatePaidVideoPlatformHttpAggregate(incomplete,old.expectedAttempt),/HASH_MAP_COUNT/u);
 });
 
 test('all four image identities must match the immutable raw index-platform-config chains',t=>{

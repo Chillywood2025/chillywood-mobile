@@ -16,6 +16,24 @@ const probe = c => ({ protocol: "scpv-upload-probe-v2", state: "observed", signa
   protocol: "scpv-object-observation-v2", userId: c.userId, sessionId: c.sessionGeneration, uploadId: c.upload.id, requestId: c.requestId, transferId: uuid(14),
   originalSessionId: c.originalSessionId, originalConfigurationDigest: c.originalConfigurationDigest, configurationDigest: c.configurationDigest, verifierId: uuid(15), incarnation: c.upload.incarnation,
   sha256: c.upload.expectedSha256, byteLength: c.upload.expectedByteLength, objectVersion: "version_1", checkedAtMs: c.now ?? Date.now(), expiresAtMs: (c.now ?? Date.now()) + 25000 }) });
+
+test("native R2 receipts preserve typed identity and reject S3/mixed/foreign profile shapes", () => {
+  const { api } = fixture(), digest = "8e5c534276f2e9cc279cd5dbd629964c49124b6551d7829c3a29dbb6635f0dc0";
+  const c = { ...binding, configurationDigest: digest, originalConfigurationDigest: digest };
+  const value = { ...receipt(c), protocol: "scpv-object-receipt-r2-v1", identity: { kind: "r2-native-upload-v1", nativeVersion: "actual-upload-id", etag: "a".repeat(32) },
+    profileId: uuid(80), qualificationSha256: "b".repeat(64) }; delete value.objectVersion;
+  const parsed = api.parsePaidVideoV2ObjectReceipt(value, c);
+  assert.equal(parsed.identity.nativeVersion, "actual-upload-id"); assert.equal(Object.isFrozen(parsed.identity), true); assert.equal("objectVersion" in parsed, false);
+  assert.throws(() => api.parsePaidVideoV2ObjectReceipt(value, binding));
+  for (const change of [v => { v.objectVersion = "fake-s3-version"; }, v => { v.identity.kind = "s3"; }, v => { v.identity.nativeVersion = ""; },
+    v => { v.identity.etag = "quoted-etag"; }, v => { v.identity.extra = true; }, v => { v.userId = uuid(99); },
+    v => { v.incarnation = uuid(99); }, v => { v.profileId = "unqualified"; }, v => { v.qualificationSha256 = "not-proof"; }]) {
+    const malformed = copy(value); change(malformed); assert.throws(() => api.parsePaidVideoV2ObjectReceipt(malformed, c));
+  }
+  assert.equal(api.samePaidVideoReceiptIdentity(parsed, { ...parsed, identity: { ...parsed.identity, nativeVersion: "same-byte-replacement" } }), false);
+  assert.equal(api.samePaidVideoReceiptIdentity(parsed, { ...parsed, profileId: uuid(81) }), false);
+  assert.equal(api.samePaidVideoReceiptIdentity(parsed, receipt(c)), false);
+});
 function fixture() {
   let current = A, readWait = null, responseWait = null, available = true, stale = false, mismatch = false, failure = false;
   const calls = [], listeners = new Set(); let reply = () => ({ protocol: "scpv-transfer-v2", state: "acknowledged", uploadId: upload.id, requestId: binding.requestId, verificationRequired: true });

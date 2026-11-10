@@ -30,6 +30,61 @@ const put = (request, state = "acknowledged") => ({ protocol: "scpv-transfer-v2"
 const receipt = (request, changes = {}) => ({ protocol: "scpv-object-receipt-v2", state: "recorded", uploadId: request.upload.id, userId,
   originalSessionId: request.sessionGeneration, originalConfigurationDigest: request.configurationDigest, requestId: request.requestId, transferId: id(20), incarnation: request.upload.incarnation,
   sha256: request.upload.expectedSha256, byteLength: request.upload.expectedByteLength, objectVersion: "private-version-1", ...changes });
+
+test("explicit native retirement retains uncertain identity across restart and permits only a fresh reservation", async () => {
+  const digest = "8e5c534276f2e9cc279cd5dbd629964c49124b6551d7829c3a29dbb6635f0dc0";
+  for (const preparedOnly of [false, true]) {
+    const f = load(), request = input(id(920), { configurationDigest: digest }), current = binding({ configurationDigest: digest });
+    const first = await f.journal.prepare(request);
+    if (!preparedOnly) await f.journal.recordPut(request.requestId, put(request, "unknown"));
+    await assert.rejects(f.journal.retireUnknown(request.requestId, binding()), expected("invalid_request"));
+    const retired = await f.journal.retireUnknown(request.requestId, current);
+    assert.equal(retired.state, "retired_unknown"); assert.equal(retired.notAppliedReason, null); assert.equal(retired.receipt, null);
+    await assert.rejects(first.stopBeforePut(new f.Error("authority_retired", request.requestId, "not_sent")), expected("invalid_response"));
+    const restarted = load(f.storage);
+    assert.equal((await restarted.journal.retireUnknown(request.requestId, current)).state, "retired_unknown");
+    const foreign = restarted.createIsolatedPaidVideoTransferJournal({ userId: otherUser });
+    await assert.rejects(foreign.retireUnknown(request.requestId, current), expected("attempt_missing"));
+    assert.equal((await foreign.list()).length, 0);
+    assert.equal((await restarted.journal.prepare(request)).mayPut, false);
+    await assert.rejects(restarted.journal.prepare(input(id(921), { configurationDigest: digest })), expected("request_conflict"));
+    await assert.rejects(restarted.journal.prepare(input(id(921), { configurationDigest: digest, upload: { ...upload, id: `scpv_upload_${id(922)}` } })), expected("request_conflict"));
+    await restarted.journal.recordPut(request.requestId, put(request));
+    await restarted.journal.markUnknown(request.requestId);
+    assert.equal((await restarted.journal.list())[0].state, "retired_unknown");
+    assert.equal((await restarted.journal.prepare(input(id(921), { configurationDigest: digest,
+      upload: { ...upload, id: `scpv_upload_${id(922)}`, incarnation: id(923) } }))).mayPut, true);
+    const value = { ...receipt(request), protocol: "scpv-object-receipt-r2-v1", identity: { kind: "r2-native-upload-v1", nativeVersion: "late-accepted-upload", etag: "a".repeat(32) }, profileId: id(924), qualificationSha256: "b".repeat(64) };
+    delete value.objectVersion;
+    assert.equal((await restarted.journal.recordReceipt(request.requestId, value, current)).state, "recorded");
+    assert.equal((await restarted.journal.prepare(request)).mayPut, false);
+    await assert.rejects(restarted.journal.retireUnknown(request.requestId, current), expected("invalid_request"));
+  }
+  const other = load(), request = input(); await other.journal.prepare(request);
+  await assert.rejects(other.journal.retireUnknown(request.requestId, binding({ configurationDigest: digest })), expected("invalid_request"));
+  assert.equal((await other.journal.list())[0].state, "prepared");
+});
+
+test("native R2 receipt survives restart and cannot change provider, identity, profile or account", async () => {
+  const digest = "8e5c534276f2e9cc279cd5dbd629964c49124b6551d7829c3a29dbb6635f0dc0";
+  const f = load(), request = input(id(908), { configurationDigest: digest }); await f.journal.prepare(request);
+  await f.journal.markUnknown(request.requestId);
+  const current = binding({ configurationDigest: digest }), value = { ...receipt(request), protocol: "scpv-object-receipt-r2-v1",
+    identity: { kind: "r2-native-upload-v1", nativeVersion: "accepted-upload", etag: "a".repeat(32) }, profileId: id(909), qualificationSha256: "b".repeat(64) };
+  delete value.objectVersion;
+  await f.journal.recordReceipt(request.requestId, value, current);
+  const restarted = load(f.storage), saved = (await restarted.journal.list())[0];
+  assert.equal(saved.receipt.protocol, "scpv-object-receipt-r2-v1"); assert.equal(saved.receipt.identity.nativeVersion, "accepted-upload");
+  assert.equal(saved.observation, null); assert.equal(saved.state, "recorded");
+  for (const changed of [receipt(request), { ...value, identity: { ...value.identity, nativeVersion: "replacement" } },
+    { ...value, profileId: id(910) }, { ...value, qualificationSha256: "c".repeat(64) }, { ...value, userId: otherUser }]) {
+    await assert.rejects(restarted.journal.recordReceipt(request.requestId, changed, current), expected("invalid_response"));
+  }
+  await assert.rejects(restarted.journal.recordProbe(request.requestId, probe(request, current), current), expected("invalid_response"));
+  const raw = f.storage.values.get(keyFor(userId)); assert.equal(raw.includes("objectVersion"), false); assert.equal(raw.includes("signature"), false);
+  const corrupt = JSON.parse(raw); corrupt.attempts[0].receipt.identity.objectVersion = "invented";
+  f.storage.values.set(keyFor(userId), JSON.stringify(corrupt)); await assert.rejects(load(f.storage).journal.list(), expected("storage_corrupt"));
+});
 function probe(request, current = binding(), changes = {}) {
   const now = current.now ?? Date.now(); const observation = { protocol: "scpv-object-observation-v2", userId, sessionId: current.sessionGeneration,
     uploadId: request.upload.id, requestId: request.requestId, transferId: id(20), originalSessionId: request.sessionGeneration,

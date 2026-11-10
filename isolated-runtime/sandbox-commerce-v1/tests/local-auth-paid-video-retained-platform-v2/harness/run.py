@@ -7,7 +7,17 @@ from stack import Stack
 HERE=Path(__file__).resolve().parent.parent
 LOCAL=json.loads((HERE/'local-runtime.json').read_text())
 PROCESS=LOG=None
+HTTP_CASES_RECORDED=0
+LAST_HTTP_STATUS=None
 FLAGS=['--cached-only','--no-remote','--deny-import','--no-config','--lock='+str(HERE/'deno.lock'),'--frozen','--node-modules-dir=none','--no-prompt']
+def failure_diagnostic(phase,error):
+    """Only closed labels and bounded counters may leave private diagnostics."""
+    assert phase in {'prepare','database','services','install','accounts','qualify','cleanup'}
+    known={AssertionError,RuntimeError,TimeoutError,OSError,ValueError}
+    return {'protocol':'scpv-retained-http-failure-v1','phase':phase,
+      'exceptionType':type(error).__name__ if type(error) in known else 'Other',
+      'httpCasesRecorded':HTTP_CASES_RECORDED if type(HTTP_CASES_RECORDED) is int and 0<=HTTP_CASES_RECORDED<=103 else 0,
+      'lastHttpStatus':LAST_HTTP_STATUS if type(LAST_HTTP_STATUS) is int and 100<=LAST_HTTP_STATUS<=599 else None}
 @contextmanager
 def held_sql(statement,commit=True):
     """Actual owned-db transaction; exact stdout readiness, bounded cleanup."""
@@ -98,7 +108,7 @@ def start(config):
     global PROCESS,LOG
     env={'PATH':os.environ['PATH'],'HOME':os.environ['HOME'],'DENO_NO_PACKAGE_JSON':'1',
       'SUPABASE_URL':f.API,'SUPABASE_ANON_KEY':f.CREDENTIALS['anonKey'],'SUPABASE_SERVICE_ROLE_KEY':f.CREDENTIALS['serviceRoleKey'],
-      'PAID_VIDEO_GATEWAY_V2_ENABLED':'true','PAID_VIDEO_S3_ROUTE_ID':config['routeId'],'PAID_VIDEO_S3_BUCKET':'synthetic-local-video',
+      'PAID_VIDEO_GATEWAY_V2_ENABLED':'true','PAID_VIDEO_STORAGE_MODE':'s3','PAID_VIDEO_S3_ROUTE_ID':config['routeId'],'PAID_VIDEO_S3_BUCKET':'synthetic-local-video',
       'PAID_VIDEO_S3_REGION':'us-east-1','PAID_VIDEO_S3_ACCESS_KEY_ID':config['accessKeyId'],'PAID_VIDEO_S3_SECRET_ACCESS_KEY':config['originSecret'],
       'PAID_VIDEO_UPLOAD_VERIFIER_ID':config['verifierId'],'PAID_VIDEO_UPLOAD_VERIFIER_KEY_HEX':config['verifierKey']}
     LOG=open(f.ROOT/'edge-process.private.log','w+');os.chmod(LOG.name,0o600)
@@ -125,7 +135,9 @@ def qualify():
     accounts=json.loads((f.ROOT/'accounts.private.json').read_text());creator,buyer=accounts['creator'],accounts['buyer']
     q=f.quote;cases=[]
     def record(name,response,statuses=(200,)):
+        global HTTP_CASES_RECORDED,LAST_HTTP_STATUS
         status,body,elapsed=response;cases.append({'name':name,'httpStatus':status,'elapsedSeconds':elapsed,'response':body})
+        HTTP_CASES_RECORDED=len(cases);LAST_HTTP_STATUS=status
         f.STACK.write_public('http-qualification-proof.json',{'source':f.MANIFEST['source'],'cases':cases,'limitations':['Synthetic public/provider/native/route facts.','No provider or malware scanner qualification.']})
         assert status in statuses,(name,status,body);return body
     config={'routeId':str(uuid.uuid4()),'workerId':str(uuid.uuid4()),'verifierId':str(uuid.uuid4()),'workerKey':secrets.token_hex(32),'verifierKey':secrets.token_hex(32),
@@ -438,18 +450,30 @@ def main():
         stack=Stack(evidence_root=args.evidence_root,run_id=args.run_id)
     print('Local gateway evidence directory: '+str(stack.root),flush=True)
     if args.cleanup:stack.cleanup();return 0
-    failure=None;clean=False
+    failure=None;clean=False;diagnostic=None;phase='prepare'
     try:
-        stack.prepare();f.configure(stack);stack.start_database();f.configure_services();stack.start_services();f.verify();f.install();f.accounts();qualify();stop();f.close_sessions();stack.assert_harness_source()
+        stack.prepare();f.configure(stack)
+        phase='database';stack.start_database();f.configure_services()
+        phase='services';stack.start_services();f.verify()
+        phase='install';f.install()
+        phase='accounts';f.accounts()
+        phase='qualify';qualify()
+        phase='cleanup';stop();f.close_sessions();stack.assert_harness_source()
     except Exception as error:
+        diagnostic=failure_diagnostic(phase,error)
         failure=stack.redact(str(error) or type(error).__name__);stack.write_public('failure.json',{'error':failure,'type':type(error).__name__,'traceback':stack.redact(traceback.format_exc())})
         try:stack.capture_failure_logs()
         except Exception:pass
     finally:
         try:stop()
-        except Exception as error:failure=failure or stack.redact(str(error))
+        except Exception as error:
+            diagnostic=diagnostic or failure_diagnostic('cleanup',error)
+            failure=failure or stack.redact(str(error))
         try:clean=stack.cleanup()
-        except Exception as error:failure=failure or stack.redact(str(error))
+        except Exception as error:
+            diagnostic=diagnostic or failure_diagnostic('cleanup',error)
+            failure=failure or stack.redact(str(error))
     result={'status':'passed'if failure is None and clean else'failed','evidenceDirectory':str(stack.root),'runId':stack.run_id,'cleanupVerified':clean,'error':failure}
+    if result['status']=='failed':result['failureDiagnostic']=diagnostic or failure_diagnostic('cleanup',RuntimeError())
     stack.write_public('summary.json',result);print(json.dumps(result),flush=True);return 0 if result['status']=='passed'else 1
 if __name__=='__main__':sys.exit(main())

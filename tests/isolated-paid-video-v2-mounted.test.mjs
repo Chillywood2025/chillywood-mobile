@@ -20,27 +20,28 @@ const resource = { id: upload.resourceId, creatorId: A.userId, kind: "paid_conte
 const offer = { id: `scv1_offer_${uuid(14)}`, resourceId: resource.id, kind: "paid_content", revision: 1, status: "published", amountMinor: 199, currency: "usd", resourceRevision: 1,
   asset: { id: upload.assetId, incarnation: upload.incarnation, sha256: hash, byteLength: bytes.length, resourceRevision: 1, profile: upload.profile }, checkoutAvailable: false };
 const clone = value => JSON.parse(JSON.stringify(value));
+const nativeConfiguration = "8e5c534276f2e9cc279cd5dbd629964c49124b6551d7829c3a29dbb6635f0dc0";
 function load(file, bindings, extra = {}) {
   const scope = { exports: {}, Error, Uint8Array, crypto: webcrypto, setTimeout, clearTimeout, ...extra, require(name) { if (name.endsWith(".png")) return 1; assert.ok(name in bindings, `Unmodeled dependency ${file}: ${name}`); return bindings[name]; } };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), "utf8"), { fileName: file,
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, scope, { filename: file }); return scope.exports;
 }
-function fixture({ initial = A, platform = "ios", memory = new Map(), strict = false, nativeConfig = "b".repeat(64), clockNow = null, remote = { upload: clone(upload), resource: clone(resource), offer: null, transfer: null, recorded: false } } = {}) {
+function fixture({ initial = A, platform = "ios", memory = new Map(), strict = false, nativeConfig = "b".repeat(64), mode = "test_store_v3", clockNow = null, remote = { upload: clone(upload), resource: clone(resource), offer: null, transfer: null, recorded: false } } = {}) {
   // Keep the synthetic upload and every participating boundary on one clock.
   // Real captured envelopes supply their own explicit observation time below.
   const now = () => clockNow ?? Date.parse("2026-11-07T12:00:00Z");
   class Clock extends Date { static now() { return now(); } }
   let losePut = false, losePost = false; let current = initial, nodes = [], params = {}, beforeStore = async () => {}, failStorage = false, picked = 0, requestIds = [];
-  let beforeDigest = async () => {}, waitingFor = null;
+  let beforeDigest = async () => {}, waitingFor = null, nextReservation = upload;
   const listeners = new Set(), calls = [], navigations = [], shares = [], checkoutEntries = [];
   const authority = { getCurrentAccountSessionAuthoritySnapshot: () => current,
     sameAccountSessionAuthority: (a, b) => !!a && !!b && ["userId", "accountId", "sessionGeneration", "restoreOnly"].every(k => a[k] === b[k]),
     subscribeToAccountSessionAuthority(fn) { listeners.add(fn); return () => listeners.delete(fn); } };
   const storage = { async getItem(key) { return memory.get(key) ?? null; }, async setItem(key, value) { if (failStorage) throw Error("disk"); await beforeStore(); memory.set(key, value); } };
   const primitive = name => function NativePrimitive(props) { nodes.push({ name, props }); return ["Text", "TextInput", "ActivityIndicator"].includes(name) ? null : React.createElement(React.Fragment, null, props.children); };
-  const native = { Share: { async share(value) { shares.push(clone(value)); return { action: "sharedAction" }; } }, Platform: { OS: platform }, StyleSheet: { create: v => v, absoluteFillObject: {} }, ...Object.fromEntries(["ActivityIndicator", "ImageBackground", "Pressable", "ScrollView", "Text", "TextInput", "View"].map(n => [n, primitive(n)])) };
+  const native = { Share: { async share(value) { shares.push(clone(value)); return { action: "sharedAction" }; } }, Platform: { OS: platform }, StyleSheet: { create: v => v, absoluteFillObject: {} }, ...Object.fromEntries(["ActivityIndicator", "ImageBackground", "Modal", "Pressable", "ScrollView", "Text", "TextInput", "View"].map(n => [n, primitive(n)])) };
   const offerCodes = load("../_lib/isolatedPaidVideoOfferCode.ts", {});
-  const api = load("../_lib/isolatedPaidVideoV2.ts", { "react-native": native, "react-native-get-random-values": {}, "./accountSessionAuthority": authority, "./isolatedTestStoreV3Build": { readIsolatedTestStoreV3Build: () => ({configId:nativeConfig}) },
+  const api = load("../_lib/isolatedPaidVideoV2.ts", { "react-native": native, "react-native-get-random-values": {}, "./accountSessionAuthority": authority, "./paidVideoAuthoringProfile": { readPaidVideoAuthoringProfile: () => ({configId:nativeConfig,mode}) },
     "./supabase": { SUPABASE_URL: "https://isolated.invalid", SUPABASE_ANON_KEY: "public-fixture" },
     "./accountBoundSupabaseMutation": { async captureAccountBoundSupabaseMutationSubject() { return { authority: current, accessToken: "captured-fixture-token" }; } } },
   { Date: Clock, fetch: async (url, options) => { const body = JSON.parse(options.body); calls.push({ url, options, body }); return { ok: true, json: async () => respond(body) }; } });
@@ -60,10 +61,13 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
     {Date:Clock,fetch:async(url,options)=>{calls.push({url,options,method:options.method});return {ok:true,json:async()=>transferRespond(options)};}});
   const transferJournal=load("../_lib/isolatedPaidVideoTransferAttempts.ts",{"@react-native-async-storage/async-storage":storage,"./isolatedPaidVideoV2":api,"./isolatedPaidVideoTransfer":transfer});
   const actions = load("../_lib/isolatedPaidVideoV2Actions.ts", { "react-native": native, "./isolatedPaidVideoOfferCode": offerCodes, "./accountSessionAuthority": authority, "./isolatedPaidVideoV2": api, "./isolatedPaidVideoV2Attempts": journal, "./isolatedPaidVideoFiles": files, "./isolatedPaidVideoTransfer":transfer,"./isolatedPaidVideoTransferAttempts":transferJournal }, {Date:Clock});
-  const envelope = (body, data, status = "ok") => ({ protocol: "isolated-paid-video-v2", command: body.command, requestId: body.requestId, status, configurationDigest:"b".repeat(64), capabilityExpiresAtMs:now()+4000,
+  const envelope = (body, data, status = "ok") => ({ protocol: "isolated-paid-video-v2", command: body.command, requestId: body.requestId, status, configurationDigest:nativeConfig, capabilityExpiresAtMs:now()+4000,
     actor: { userId: current.userId, accountId: current.accountId, sessionGeneration: current.sessionGeneration }, data });
   let respond = async body => {
-    if(body.command==="upload.reserve")remote.upload={...clone(upload),title:body.payload.title,transferAvailable:true};
+    if(body.command==="upload.reserve"){
+      if(remote.upload.id!==nextReservation.id){remote.transfer=null;remote.recorded=false;remote.resource={...clone(resource),id:nextReservation.resourceId,title:body.payload.title};}
+      remote.upload={...clone(nextReservation),title:body.payload.title,transferAvailable:true};
+    }
     if(body.command==="upload.finalize")remote.upload={...remote.upload,state:"scan_pending"};
     if(body.command==="offer.publish"){remote.offer={...clone(offer),amountMinor:body.payload.amountMinor,checkoutAvailable:true};remote.resource={...remote.resource,status:"published"};}
     const data={"capability.read":{creatorEligible:current.userId===A.userId,uploadRouteAvailable:true,transferAvailable:true,checkoutAvailable:false,profile:clone(api.PAID_VIDEO_PROFILE)},
@@ -97,6 +101,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
     "../../_lib/session": { useSession: () => ({ user: current ? { id: current.userId } : null, authority: current && { ...current }, isLoading: false }) },
     "../../_lib/isolatedPaidVideoV2Actions": actions, "../navigation/app-back-button": { AppBackButton: primitive("AppBackButton") },
     "../../_lib/isolatedPaidVideoOfferCode": offerCodes,
+    "../../_lib/paidVideoAuthoringProfile": { readPaidVideoAuthoringProfile: () => ({ mode, configId: nativeConfig }) },
     "./isolated-test-store-v3-checkout": { IsolatedTestStoreV3Checkout: props => { checkoutEntries.push(props); return null; } },
      });
   const root = createRoot(container()); const visible = () => nodes.slice(Math.max(0, nodes.findLastIndex(n => n.name === "ImageBackground")));
@@ -132,6 +137,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
     async flush() { await React.act(settle); }, async dispose() { await React.act(async () => { root.unmount(); await settle(); }); },
     node: id => visible().filter(n => n.props.testID === id).at(-1), text: () => visible().filter(n => n.name === "Text").flatMap(n => n.props.children).join("\n"),
     respond(fn) { respond = fn; }, get responder() { return respond; }, ids(ids) { requestIds = [...ids]; }, picked: () => picked,
+    reserveNext(value) { nextReservation = clone(value); },
     failStorage() { failStorage = true; }, beforeStore(fn) { beforeStore = fn; },
   }; return f;
 }
@@ -139,19 +145,29 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
 async function reserve(f) { await f.render("studio"); await f.input("paid-video-title", upload.title); await f.press("paid-video-select"); await f.press("paid-video-reserve"); }
 async function openUpload(f) { await f.render("upload", { uploadId: upload.id }); await f.press("paid-video-select-transfer"); }
 test("creator shares only a current published sandbox identity and a free buyer opens its authenticated checkout entry", async t => {
-  const creator = fixture({ remote: { upload: clone(upload), resource: { ...resource, status: "published" }, offer: { ...clone(offer), checkoutAvailable: true }, transfer: null, recorded: false } });
+  for (const mode of ["test_store_v3", "native"]) {
+  const creator = fixture({ mode, remote: { upload: clone(upload), resource: { ...resource, status: "published" }, offer: { ...clone(offer), checkoutAvailable: mode !== "native" }, transfer: null, recorded: false } });
   t.after(() => creator.dispose()); await creator.render("offer", { offerId: offer.id });
+  if (mode === "native") { assert.equal(creator.node("paid-video-native-store-quote"), undefined); assert.match(creator.text(), /Your own account cannot buy this video/u); }
   await creator.press("paid-video-share-offer"); assert.equal(creator.shares.length, 1);
   const shared = creator.shares[0]; assert.equal(shared.message, `chillywood-sandbox-video-v3:${offer.id}`);
   assert.deepEqual(Object.keys(shared).sort(), ["message", "title"]); assert.doesNotMatch(JSON.stringify(shared), /https:|Bearer|sha256|incarnation|grant|price|bucket/u);
-  const buyer = fixture({ initial: B, remote: creator.remote }); t.after(() => buyer.dispose()); await buyer.render("home");
+  const buyer = fixture({ mode, initial: B, remote: creator.remote }); t.after(() => buyer.dispose()); await buyer.render("home");
   assert.match(buyer.text(), /Buyers do not need Premium/u); await buyer.input("paid-video-offer-code", shared.message);
   assert.equal(buyer.node("paid-video-open-offer-code").props.accessibilityRole, "button"); await buyer.press("paid-video-open-offer-code");
   assert.deepEqual(buyer.navigations, [`/sandbox-videos/offer/${offer.id}`]);
   assert.equal(buyer.calls.some(c => c.body?.command === "offer.read" && c.body.payload.offerId === offer.id), true);
-  await buyer.render("offer", { offerId: offer.id }); assert.equal(buyer.checkoutEntries.at(-1).offerId, offer.id);
-  assert.equal(buyer.checkoutEntries.at(-1).authority.userId, B.userId); assert.equal(buyer.node("paid-video-share-offer"), undefined);
+  await buyer.render("offer", { offerId: offer.id });
+  if (mode === "native") {
+    assert.equal(buyer.checkoutEntries.length, 0);
+    await buyer.press("paid-video-native-store-quote");
+    assert.equal(buyer.navigations.at(-1), `/sandbox-videos/native-offer/${offer.id}`);
+  } else {
+    assert.equal(buyer.checkoutEntries.at(-1).offerId, offer.id);
+    assert.equal(buyer.checkoutEntries.at(-1).authority.userId, B.userId);
+  } assert.equal(buyer.node("paid-video-share-offer"), undefined);
   assert.equal(buyer.calls.some(c => /purchase|prepare|allocate|claim|restore/u.test(c.body?.command ?? "")), false);
+  }
 });
 test("malformed or noncanonical sandbox offer codes never navigate or query; current unavailable offers do not start checkout", async t => {
   const f = fixture({ initial: B }); t.after(() => f.dispose()); await f.render("home"); const before = f.calls.length;
@@ -172,7 +188,8 @@ test("a stale published screen cannot share a retired offer or cross an account 
   assert.equal(f.shares.length, 0); assert.match(f.text(), /session changed/u);
 });
 test("mounted V3 authoring performs one durable upload, exact reconciliation, scan request and publication without client grants", async t => {
-  const f = fixture({ strict: true }); t.after(() => f.dispose()); await reserve(f); assert.equal((await f.journal().list()).at(-1).state, "completed");
+  for (const [mode,platform] of [["test_store_v3","ios"],["native","android"],["native","ios"]]) {
+  const f = fixture({ strict: true, mode, platform }); t.after(() => f.dispose()); await reserve(f); assert.equal((await f.journal().list()).at(-1).state, "completed");
   await openUpload(f); assert.equal(f.node("paid-video-transfer").props.accessibilityRole, "button");
   await f.press("paid-video-transfer"); const transfer = (await f.transfers().list()).at(-1); assert.equal(transfer.state, "unknown");
   assert.equal(f.node("paid-video-transfer").props.disabled, true); assert.equal(f.node("paid-video-finalize").props.disabled, true);
@@ -182,6 +199,7 @@ test("mounted V3 authoring performs one durable upload, exact reconciliation, sc
   assert.equal(f.remote.offer.amountMinor, 199); assert.match(f.text(), /Test offer.*published/us);
   assert.equal(f.node("paid-video-checkout"), undefined); assert.deepEqual(f.calls.filter(c => c.method).map(c => c.method), ["PUT", "GET", "POST"]);
   assert.equal(f.calls.some(c => /checkout|purchase|restore/u.test(c.body?.command ?? "")), false);
+  }
 });
 test("shared sandbox source cancellation and account replacement cannot select bytes or reserve a draft",async t=>{
   for(const platform of ["ios","android"]){
@@ -196,13 +214,108 @@ test("shared sandbox source cancellation and account replacement cannot select b
   }
 });
 test("lost PUT survives restart and new session recovery never repeats it", async t => {
-  const f = fixture(); await reserve(f); await openUpload(f); f.losePut(); await f.press("paid-video-transfer");
+  for (const mode of ["test_store_v3","native"]) {
+  const f = fixture({ mode }); await reserve(f); await openUpload(f); f.losePut(); await f.press("paid-video-transfer");
   const attempt = (await f.transfers().list()).at(-1); assert.equal(attempt.state, "unknown"); await f.dispose();
-  const fresh = fixture({ memory: f.memory, remote: f.remote, initial: { ...A, sessionGeneration: uuid(60) } }); t.after(() => fresh.dispose());
+  const fresh = fixture({ mode, memory: f.memory, remote: f.remote, initial: { ...A, sessionGeneration: uuid(60) } }); t.after(() => fresh.dispose());
   await fresh.render("upload", { uploadId: upload.id }); assert.equal(fresh.node("paid-video-transfer").props.disabled, true);
   await fresh.press(`paid-video-verify-${attempt.requestId}`); const result = (await fresh.transfers().list()).at(-1);
   assert.equal(result.state, "recorded"); assert.equal(result.sessionGeneration, A.sessionGeneration); assert.equal(result.receipt.originalSessionId, A.sessionGeneration);
   assert.deepEqual(fresh.calls.filter(c => c.method).map(c => c.method), ["GET", "POST"]);
+  }
+});
+test("native unknown transfer retirement requires deliberate confirmation and preserves original history across restart", async t => {
+  for (const platform of ["ios", "android"]) {
+    const f = fixture({ mode: "native", nativeConfig: nativeConfiguration, platform, strict: true });
+    await reserve(f); await openUpload(f); f.losePut(); await f.press("paid-video-transfer");
+    const original = (await f.transfers().list()).at(-1), serverBefore = clone(f.remote), callsBefore = f.calls.length;
+    const review = `paid-video-retire-transfer-${original.requestId}`;
+    let previousConfirm;
+    for (const dismiss of ["cancel", "hardware-back", "screen-back"]) {
+      await f.press(review); const staleConfirm = f.node("paid-video-retirement-confirm").props.onPress;
+      if (previousConfirm) await React.act(async () => { previousConfirm(); });
+      assert.equal((await f.transfers().list()).at(-1).state, "unknown", "dismissed confirmation cannot approve a newly opened review");
+      assert.match(f.text(), /may still finish/u); assert.match(f.text(), /Nothing is reserved, uploaded or retried now/u);
+      if (dismiss === "cancel") await f.press("paid-video-retirement-cancel");
+      else await React.act(async () => { f.node(dismiss === "hardware-back" ? "paid-video-retirement-review" : "paid-video-back").props[dismiss === "hardware-back" ? "onRequestClose" : "onPress"](); });
+      await React.act(async () => { staleConfirm(); await f.flush(); });
+      assert.equal(f.node("paid-video-retirement-confirm"), undefined);
+      assert.equal((await f.transfers().list()).at(-1).state, "unknown");
+      assert.equal(f.calls.length, callsBefore); assert.deepEqual(f.navigations, []);
+      previousConfirm = staleConfirm;
+    }
+    await f.press(review); const confirm = f.node("paid-video-retirement-confirm").props.onPress;
+    await React.act(async () => { confirm(); confirm(); }); await f.flush();
+    const retired = (await f.transfers().list()).at(-1);
+    assert.deepEqual(clone(retired), { ...clone(original), state: "retired_unknown" });
+    assert.deepEqual(f.remote, serverBefore); assert.equal(f.calls.length, callsBefore); assert.deepEqual(f.navigations, []);
+    assert.equal(f.node(review), undefined); assert.equal(f.node("paid-video-transfer").props.disabled, true);
+    assert.equal(f.node(`paid-video-verify-${original.requestId}`).props.disabled, false);
+    assert.match(f.text(), /was not cancelled and will never be resent/u); await f.dispose();
+
+    const fresh = fixture({ mode: "native", nativeConfig: nativeConfiguration, platform, memory: f.memory, remote: f.remote,
+      initial: { ...A, sessionGeneration: uuid(62) } }); t.after(() => fresh.dispose());
+    await fresh.render("upload", { uploadId: upload.id });
+    assert.equal((await fresh.transfers().list()).at(-1).state, "retired_unknown");
+    assert.equal(fresh.node("paid-video-retirement-confirm"), undefined); assert.equal(fresh.node(review), undefined);
+    // Even a stale server projection cannot turn the original identity into a new PUT.
+    fresh.remote.upload.transferAvailable = true; await fresh.press("paid-video-refresh"); await fresh.press("paid-video-select-transfer");
+    assert.equal(fresh.node("paid-video-transfer").props.disabled, true); assert.equal(fresh.calls.some(c => c.method === "PUT"), false);
+    await fresh.render("history"); assert.match(fresh.text(), /Original transfer still unconfirmed/u);
+    assert.equal(fresh.node(`paid-video-verify-${original.requestId}`).props.disabled, false);
+
+    const next = { ...upload, id: `scpv_upload_${uuid(70)}`, resourceId: `scv1_resource_${uuid(71)}`, assetId: `scv1_asset_${uuid(72)}`, incarnation: uuid(73) };
+    fresh.reserveNext(next); await fresh.render("studio");
+    assert.equal(fresh.calls.some(c => c.body?.command === "upload.reserve"), false);
+    assert.equal(fresh.node("paid-video-reserve").props.disabled, true);
+    await fresh.input("paid-video-title", "New explicit draft"); await fresh.press("paid-video-select"); await fresh.press("paid-video-reserve");
+    assert.equal(fresh.calls.filter(c => c.body?.command === "upload.reserve").length, 1);
+    assert.equal(fresh.calls.some(c => c.method === "PUT"), false, "reserving never uploads automatically");
+    await fresh.render("upload", { uploadId: next.id }); await fresh.press("paid-video-select-transfer");
+    assert.equal(fresh.node("paid-video-transfer").props.disabled, false, fresh.text()); await fresh.press("paid-video-transfer");
+    const saved = await fresh.transfers().list(); assert.equal(saved.length, 2);
+    assert.equal(saved.find(a => a.requestId === original.requestId).state, "retired_unknown");
+    const newTransfer = saved.find(a => a.requestId !== original.requestId);
+    assert.equal(newTransfer.upload.id, next.id); assert.equal(newTransfer.upload.incarnation, next.incarnation);
+    assert.equal(fresh.calls.filter(c => c.method === "PUT").length, 1);
+  }
+});
+test("native prepared transfer retirement retains uncertainty even without an observed PUT", async t => {
+  const f = fixture({ mode: "native", nativeConfig: nativeConfiguration }); t.after(() => f.dispose()); await reserve(f); await openUpload(f);
+  const requestId = uuid(88);
+  await f.transfers().prepare({ requestId, sessionGeneration: A.sessionGeneration, configurationDigest: nativeConfiguration,
+    upload: { id: upload.id, incarnation: upload.incarnation, expectedSha256: upload.expectedSha256, expectedByteLength: upload.expectedByteLength } });
+  await f.press("paid-video-refresh"); await f.press(`paid-video-retire-transfer-${requestId}`); await f.press("paid-video-retirement-confirm");
+  assert.equal((await f.transfers().list()).at(-1).state, "retired_unknown");
+  assert.equal(f.calls.some(c => c.method === "PUT"), false); assert.equal(f.node("paid-video-transfer").props.disabled, true);
+  await f.press(`paid-video-verify-${requestId}`);
+  assert.equal((await f.transfers().list()).at(-1).state, "retired_unknown", "missing remote evidence is never cancellation proof");
+  assert.match(f.text(), /Original transfer still unconfirmed/u);
+});
+test("native retirement review cannot survive restart, navigation or an account gap and never appears for Test Store", async t => {
+  for (const interruption of ["restart", "navigation", "account-gap"]) {
+    const f = fixture({ mode: "native", nativeConfig: nativeConfiguration });
+    await reserve(f); await openUpload(f); await f.press("paid-video-transfer");
+    const original = (await f.transfers().list()).at(-1); await f.press(`paid-video-retire-transfer-${original.requestId}`);
+    const staleConfirm = f.node("paid-video-retirement-confirm").props.onPress, before = f.calls.length;
+    if (interruption === "account-gap") { await f.change(B); await f.render("history"); assert.equal(f.node(`paid-video-verify-${original.requestId}`), undefined); await f.change(A); }
+    else if (interruption === "navigation") await f.render("history");
+    else await f.dispose();
+    await React.act(async () => { staleConfirm(); }); await f.flush();
+    assert.equal((await f.transfers().list()).at(-1).state, "unknown");
+    assert.equal(f.calls.slice(before).some(c => c.method || c.body?.command === "upload.reserve"), false);
+    if (interruption !== "restart") await f.dispose();
+    const fresh = fixture({ mode: "native", nativeConfig: nativeConfiguration, memory: f.memory, remote: f.remote }); t.after(() => fresh.dispose());
+    await fresh.render("upload", { uploadId: upload.id });
+    assert.equal(fresh.node("paid-video-retirement-confirm"), undefined); assert.equal(fresh.node("paid-video-transfer").props.disabled, true);
+    await fresh.press(`paid-video-retire-transfer-${original.requestId}`); await fresh.press("paid-video-retirement-confirm");
+    await fresh.press(`paid-video-verify-${original.requestId}`);
+    assert.equal((await fresh.transfers().list()).at(-1).state, "recorded", "late exact receipt remains recoverable after retirement");
+    assert.equal(fresh.node(`paid-video-retire-transfer-${original.requestId}`), undefined);
+    assert.deepEqual(fresh.calls.filter(c => c.method).map(c => c.method), ["GET", "POST"]);
+  }
+  const v3 = fixture(); t.after(() => v3.dispose()); await reserve(v3); await openUpload(v3); await v3.press("paid-video-transfer");
+  const attempt = (await v3.transfers().list()).at(-1); assert.equal(v3.node(`paid-video-retire-transfer-${attempt.requestId}`), undefined);
 });
 test("new device adopts only the authoritative retained descriptor and cannot gain a fresh PUT opportunity", async t => {
   const first = fixture(); await reserve(first); await openUpload(first); first.losePut(); await first.press("paid-video-transfer");

@@ -3,20 +3,42 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import * as ingress from '../scripts/native-ingress-exact-deploy.mjs';
 import * as social from '../scripts/google-refund-tax-social-exact-deploy.mjs';
 import * as observer from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
 import {verifyInputs} from '../scripts/google-refund-tax-observer-proof/verify-inputs.mjs';
 import {collectSourceBundle} from '../ops/creator-backend-rollout/prepare-edge.mjs';
-import {HISTORICAL_ENTRYPOINT,materializeHistoricalBundle,materializeHistoricalProofPackage,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
+import {HISTORICAL_CONFIG,HISTORICAL_ENTRYPOINT,materializeHistoricalBundle,materializeHistoricalProofPackage,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
+const archives=[
+ {name:HISTORICAL_ENTRYPOINT,file:'tests/fixtures/historical-revenuecat-webhook-index.ts.txt'},
+ {name:HISTORICAL_CONFIG,file:'tests/fixtures/historical-supabase-config.toml.txt'},
+ ...['contract','rpc','runtime'].map(name=>({name:`supabase/functions/_shared/isolated-paid-video-${name}.ts`,file:`tests/fixtures/historical-isolated-paid-video-${name}.ts.txt`})),
+];
 
 test('current exact-deployment loaders and offline proof remain fail-closed on changed source',()=>{
  for(const tool of [ingress,social,observer])assert.throws(()=>tool.loadBundle(),/EDGE_HASH_MISMATCH|PREDECESSOR_EDGE_SOURCE_CHANGED/);
- assert.throws(()=>verifyInputs(),/PROOF_SOURCE_DRIFT:supabase\/functions\/revenuecat-webhook\/index.ts/);
+ assert.throws(()=>verifyInputs(),{message:`PROOF_SOURCE_DRIFT:${HISTORICAL_CONFIG}`});
  const command=new URL('../scripts/google-refund-tax-observer-proof/generate.mjs',import.meta.url).pathname;
  const result=spawnSync(process.execPath,[command,'--offline'],{encoding:'utf8'});
  assert.notEqual(result.status,0);assert.equal(result.stdout,'');assert.match(result.stderr,/PROOF_SOURCE_DRIFT/);
+});
+
+test('unchanged proof verifier and offline CLI independently reject each archived source successor',async()=>{
+ const proof=materializeHistoricalProofPackage(),root=new URL('../../',proof);
+ const {verifyInputs:verifyHistoricalInputs}=await import(new URL('verify-inputs.mjs',proof));
+ assert.doesNotThrow(()=>verifyHistoricalInputs());
+ for(const {name} of archives){
+  const target=new URL(name,root);
+  fs.copyFileSync(new URL('../'+name,import.meta.url),target);
+  assert.throws(()=>verifyHistoricalInputs(),{message:`PROOF_SOURCE_DRIFT:${name}`});
+  const result=spawnSync(process.execPath,[new URL('generate.mjs',proof).pathname,'--offline'],{encoding:'utf8'});
+  assert.notEqual(result.status,0);assert.equal(result.stdout,'');
+  assert.ok(result.stderr.includes(`PROOF_SOURCE_DRIFT:${name}`));
+  fs.writeFileSync(target,readPinnedHistoricalSource(name));
+  assert.doesNotThrow(()=>verifyHistoricalInputs());
+ }
 });
 
 test('historical manifests reject mutated snapshots and complete current webhook source closure',t=>{
@@ -26,6 +48,15 @@ test('historical manifests reject mutated snapshots and complete current webhook
   t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
   materializeHistoricalBundle(directory,tool);
   assert.doesNotThrow(()=>tool.loadBundle(directory));
+  if(tool.CLOSURE.includes(HISTORICAL_CONFIG)){
+   const config=readPinnedHistoricalSource(HISTORICAL_CONFIG).toString();
+   const changed=config.replace('[functions.revenuecat-webhook]\nverify_jwt = false','[functions.revenuecat-webhook]\nverify_jwt = true');
+   assert.notEqual(changed,config);
+   fs.writeFileSync(path.join(directory,HISTORICAL_CONFIG),changed);
+   assert.throws(()=>tool.loadBundle(directory),/EDGE_JWT_MISMATCH/);
+   fs.writeFileSync(path.join(directory,HISTORICAL_CONFIG),config);
+   assert.doesNotThrow(()=>tool.loadBundle(directory));
+  }
   fs.appendFileSync(path.join(directory,HISTORICAL_ENTRYPOINT),'\n// changed snapshot');
   assert.throws(()=>tool.loadBundle(directory),/EDGE_HASH_MISMATCH|PREDECESSOR_EDGE_SOURCE_CHANGED/);
   for(const file of current.files){fs.mkdirSync(path.dirname(path.join(directory,file.name)),{recursive:true});fs.writeFileSync(path.join(directory,file.name),file.content);}
@@ -35,18 +66,35 @@ test('historical manifests reject mutated snapshots and complete current webhook
 
 test('snapshot archive, absence and original lock tampering are rejected without current-source fallback',async()=>{
  const proof=materializeHistoricalProofPackage(),root=new URL('../../',proof);
- for(const file of ['tests/helpers/historical-revenuecat-closure.mjs','tests/fixtures/historical-revenuecat-closure.json','tests/fixtures/historical-revenuecat-webhook-index.ts.txt']){
+ for(const file of ['tests/helpers/historical-revenuecat-closure.mjs','tests/fixtures/historical-revenuecat-closure.json',...archives.map(archive=>archive.file)]){
   const target=new URL(file,root);fs.mkdirSync(path.dirname(target.pathname),{recursive:true});fs.copyFileSync(new URL('../'+file,import.meta.url),target);
  }
  const helperURL=new URL('tests/helpers/historical-revenuecat-closure.mjs',root);
  const helper=await import(helperURL);
- assert.deepEqual(helper.readPinnedHistoricalSource(HISTORICAL_ENTRYPOINT),readPinnedHistoricalSource(HISTORICAL_ENTRYPOINT));
- const snapshot=new URL('tests/fixtures/historical-revenuecat-webhook-index.ts.txt',root);
- fs.appendFileSync(snapshot,'\n// archive corruption');
- assert.throws(()=>helper.readPinnedHistoricalSource(HISTORICAL_ENTRYPOINT),/HISTORICAL_SOURCE_DRIFT/);
- fs.unlinkSync(snapshot);assert.throws(()=>helper.readPinnedHistoricalSource(HISTORICAL_ENTRYPOINT),/ENOENT/);
+ for(const {name,file} of archives){
+  const pinned=readPinnedHistoricalSource(name),snapshot=new URL(file,root);
+  assert.deepEqual(helper.readPinnedHistoricalSource(name),pinned);
+  assert.deepEqual(fs.readFileSync(new URL(name,root)),pinned);
+  fs.appendFileSync(snapshot,'\n# archive corruption');
+  assert.throws(()=>helper.readPinnedHistoricalSource(name),{message:`HISTORICAL_SOURCE_DRIFT:${name}`});
+  fs.unlinkSync(snapshot);assert.throws(()=>helper.readPinnedHistoricalSource(name),/ENOENT/);
+  fs.copyFileSync(new URL('../'+name,import.meta.url),snapshot);
+  assert.throws(()=>helper.readPinnedHistoricalSource(name),{message:`HISTORICAL_SOURCE_DRIFT:${name}`});
+  fs.writeFileSync(snapshot,pinned);
+  assert.deepEqual(helper.readPinnedHistoricalSource(name),pinned);
+ }
+ assert.throws(()=>helper.readPinnedHistoricalSource('unlocked-source.txt'),/HISTORICAL_SOURCE_UNKNOWN/);
  const sourceLock=new URL('source-lock.json',proof),lock=JSON.parse(fs.readFileSync(sourceLock));
- lock.files[HISTORICAL_ENTRYPOINT]='0'.repeat(64);fs.writeFileSync(sourceLock,JSON.stringify(lock));
- const changed=await import(new URL(helperURL.href+'?changed-lock'));
- assert.throws(()=>changed.readPinnedHistoricalSource(HISTORICAL_ENTRYPOINT),/HISTORICAL_LOCK_DRIFT/);
+ for(const {name,file} of archives)for(const mutation of ['changed','missing','repinned']){
+  const changedLock=structuredClone(lock);
+  if(mutation==='missing')delete changedLock.files[name];
+  else if(mutation==='repinned'){
+   const current=fs.readFileSync(new URL('../'+name,import.meta.url));
+   fs.writeFileSync(new URL(file,root),current);
+   changedLock.files[name]=createHash('sha256').update(current).digest('hex');
+  }else changedLock.files[name]='0'.repeat(64);
+  fs.writeFileSync(sourceLock,JSON.stringify(changedLock));
+  const changed=await import(new URL(helperURL.href+'?changed-lock='+encodeURIComponent(name)+'&mutation='+mutation));
+  assert.throws(()=>changed.readPinnedHistoricalSource(name),/HISTORICAL_LOCK_DRIFT/);
+ }
 });

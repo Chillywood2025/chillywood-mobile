@@ -30,7 +30,7 @@ const capturePaths = ["supabase/functions/_shared/revenuecat-router-envelope.ts"
 const cleanupKeys = ["sessionsClosed", "clusterStopped", "clusterNotRunningVerified", "directoryRemoved"];
 const retainedTables = ["project_reservations", "test_store_qualification_connections", "test_store_qualification_controls",
   "test_store_qualification_entries", "test_store_qualification_deliveries", "test_store_qualification_exclusions", "test_store_qualification_conflicts"];
-const httpSource = "22c7dcfd9a2569b9b902db79f8468df90c1058b53fe663cdefe01a63bcd663b2";
+const httpSource = "fe5e8295d8e0dae69d8fa60a5a4b23040a781bcd29fd046c205402a788470ca4";
 const secretFiles = ["edge.private.json", "credentials.private.json", "accounts.private.json",
   "purchase.private.json", "compose.private.json", "gateway.private.json"];
 const evidenceNames = ["auth-issuance-proof.json", "cleanup-proof.json", "edge-cleanup-proof.json", "edge-listener-proof.json",
@@ -164,7 +164,7 @@ export function validatePaidVideoPlatformHttpAggregate(proof,expectedAttempt){
   same(proof.source, httpSource, "HTTP_SOURCE");
   same(proof.retainedInstallationSourceSha256, profiles.retained.installation, "HTTP_INSTALLATION");
   same(proof.templateManifestSha256,sha256(fs.readFileSync(new URL('source-manifest.json',platformTemplate))),'HTTP_TEMPLATE');
-  hashMap(proof.executionInputs, 100); hashMap(proof.evidenceSha256, 21);
+  hashMap(proof.executionInputs, 104); hashMap(proof.evidenceSha256, 21);
   same(proof.executionInputs['image-chains.json'],'1e223c1d89821bb5d7a9c18fd56aae1eb560943dc3c07596cb4abc96b83b460e','HTTP_IMAGE_PINS');
   same(proof.imageChains,expectedImageChains(),'HTTP_IMAGE_CHAINS');
   same(Object.keys(proof.evidenceSha256).sort(), [...evidenceNames].sort(), "HTTP_EVIDENCE_SET");
@@ -204,7 +204,7 @@ export function aggregatePaidVideoRetainedHttpProof({ summary, evidenceDirectory
   check(path.isAbsolute(evidenceDirectory) && fs.realpathSync(evidenceDirectory) === evidenceDirectory, "HTTP_EVIDENCE_DIRECTORY");
   same(summary.evidenceDirectory, evidenceDirectory, "HTTP_SUMMARY_DIRECTORY");
   check(Number.isFinite(attemptStartedAtMs) && attemptStartedAtMs > 0 && attemptStartedAtMs <= Date.now(), "HTTP_ATTEMPT_START");
-  hashMap(executionInputs, 100); digest(templateManifestSha256);
+  hashMap(executionInputs, 104); digest(templateManifestSha256);
   const evidence = {}, evidenceSha256 = {};
   for (const name of evidenceNames) {
     const file = path.join(evidenceDirectory, name), stat = fs.lstatSync(file);

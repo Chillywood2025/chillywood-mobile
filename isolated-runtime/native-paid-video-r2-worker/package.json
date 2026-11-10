@@ -1,0 +1,12 @@
+{
+  "name": "chillywood-native-r2-local-proof",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node ../../ops/isolated-paid-video-worker/r2-native.test.mjs --runtime \"$PWD\" && node ../../ops/isolated-paid-video-worker/r2-gateway.native.mjs --runtime \"$PWD\"",
+    "verify:maximum": "node ../../ops/isolated-paid-video-worker/r2-gateway.native.mjs --runtime \"$PWD\" --maximum"
+  },
+  "devDependencies": {
+    "miniflare": "4.20260730.0"
+  }
+}

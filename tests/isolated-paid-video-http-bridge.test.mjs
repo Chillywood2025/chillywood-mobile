@@ -24,7 +24,7 @@ if (capturePath) test("actual local Auth/HTTP responses retain read-only recover
   const unavailable = () => { throw Error("This compatibility bridge cannot perform Auth, native or network actions"); };
   const base = {
     "react-native": { Platform: { OS: "ios" } }, "react-native-get-random-values": {},
-    "./isolatedTestStoreV3Build": { readIsolatedTestStoreV3Build: unavailable },
+    "./paidVideoAuthoringProfile": { readPaidVideoAuthoringProfile: unavailable },
     "./accountBoundSupabaseMutation": { captureAccountBoundSupabaseMutationSubject: unavailable },
     "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: unavailable, sameAccountSessionAuthority: unavailable, subscribeToAccountSessionAuthority: unavailable },
     "./supabase": { SUPABASE_URL: "https://response-compatibility.invalid", SUPABASE_ANON_KEY: "unused" },

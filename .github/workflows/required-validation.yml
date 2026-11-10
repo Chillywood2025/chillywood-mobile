@@ -181,12 +181,27 @@ jobs:
           native_deno="$GITHUB_WORKSPACE/isolated-runtime/native-store-edge-tool/node_modules/@deno/linux-x64-glibc/deno"
           "$native_deno" cache --config supabase/functions/native-store-sandbox-command-v1/deno.json --frozen supabase/functions/native-store-sandbox-command-v1/index.ts
           node isolated-runtime/native-store-sandbox-v1/edge-runtime.mjs --deno "$native_deno"
+      - name: Qualify pinned normal Studio authoring and upload endpoints on loopback only
+        env:
+          DENO_DIR: ${{ runner.temp }}/native-store-edge-deno-cache
+        run: |
+          native_deno="$GITHUB_WORKSPACE/isolated-runtime/native-store-edge-tool/node_modules/@deno/linux-x64-glibc/deno"
+          "$native_deno" cache --config supabase/functions/isolated-paid-video-authoring-v2/deno.json --frozen supabase/functions/isolated-paid-video-authoring-v2/index.ts
+          "$native_deno" cache --config supabase/functions/isolated-paid-video-upload-v2/deno.json --frozen supabase/functions/isolated-paid-video-upload-v2/index.ts
+          node isolated-runtime/native-paid-video-authoring-v1/edge-runtime.mjs --deno "$native_deno"
+          "$native_deno" test --config supabase/functions/isolated-paid-video-authoring-v2/deno.json --cached-only supabase/functions/_shared/isolated-paid-video-r2_test.ts
       - name: Verify pinned native private-range endpoint and playback boundary
         run: |
           native_deno="$GITHUB_WORKSPACE/isolated-runtime/native-store-edge-tool/node_modules/@deno/linux-x64-glibc/deno"
           "$native_deno" cache --config supabase/functions/native-store-paid-video-range-v1/deno.json --frozen supabase/functions/native-store-paid-video-range-v1/index.ts
           node isolated-runtime/native-store-sandbox-v1/range-edge-runtime.mjs --deno "$native_deno"
           node --test ops/isolated-paid-video-worker/native-range.test.mjs tests/creator-money/native-store-private-range.test.mjs tests/creator-money/native-store-range-profile.test.mjs tests/native-store-paid-video-playback.test.mjs
+      - name: Verify typed R2 runtime and actual local workerd limits without provider access
+        run: |
+          node --test ops/isolated-paid-video-worker/r2-runtime.test.mjs ops/native-paid-video-scanner-runtime/runtime.test.mjs ops/native-paid-video-scanner-runtime/definition-snapshots.test.mjs ops/native-paid-video-scanner-runtime/state-lock.test.mjs
+          npm ci --ignore-scripts --no-audit --no-fund --prefix isolated-runtime/native-paid-video-r2-worker
+          npm run verify --prefix isolated-runtime/native-paid-video-r2-worker
+          npm run verify:maximum --prefix isolated-runtime/native-paid-video-r2-worker
       - name: Qualify default-off native ingress and reconciliation runtimes on loopback only
         env:
           DENO_DIR: ${{ runner.temp }}/native-store-edge-deno-cache
@@ -397,6 +412,22 @@ jobs:
         run: node isolated-runtime/native-store-sandbox-v1/journal.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
       - name: Verify normal native store quote preparation and recovery
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
+      - name: Verify normal paid video authoring, immutable publication and recovery
+        run: node isolated-runtime/native-paid-video-authoring-v1/authoring.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
+      - name: Verify bounded Studio installation, private readback and actual operations path
+        run: |
+          node --test isolated-runtime/native-paid-video-authoring-v1/deployment.test.mjs
+          node isolated-runtime/native-paid-video-authoring-v1/deployment.native-cases.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --combined-runtime
+      - name: Verify Studio forward installation against the complete legacy catalog
+        run: node isolated-runtime/native-paid-video-authoring-v1/deployment.native-cases.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --full
+      - name: Verify typed R2 upload, native settlement and existing S3 Test Store authority
+        run: node isolated-runtime/native-paid-video-r2-v1/r2.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
+      - name: Verify bounded R2 installation and private readback
+        run: |
+          node --test isolated-runtime/native-paid-video-r2-v1/deployment.test.mjs
+          node isolated-runtime/native-paid-video-r2-v1/deployment.native-cases.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
+      - name: Verify R2 forward installation against the complete legacy catalog
+        run: node isolated-runtime/native-paid-video-r2-v1/deployment.native-cases.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin" --full
       - name: Verify bounded native quote startup diagnostics and isolated cleanup
         run: node isolated-runtime/native-store-sandbox-v1/quote-startup.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
       - name: Verify native store default-off managed installation closure

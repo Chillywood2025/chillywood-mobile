@@ -6,8 +6,11 @@ export function nativeStoreRangeSourceProfile(readSource) {
   const name = 'native-store-paid-video-range-v1';
   const entrypoint = `supabase/functions/${name}/index.ts`;
   // Explicit private-media exception, not a relaxation of the shared Edge
-  // collector. These two reviewed files contain the version-pinned transport.
-  const permittedOps=new Set(['ops/isolated-paid-video-worker/private-object.mjs','ops/isolated-paid-video-worker/native-private-object.mjs']);
+  // collector. S3 and typed R2 remain distinct. The gateway/scanner executable
+  // and its credentials never enter either prepared Edge bundle.
+  const permittedOps=new Set(['ops/isolated-paid-video-worker/private-object.mjs','ops/isolated-paid-video-worker/native-private-object.mjs',
+    'ops/isolated-paid-video-worker/r2-native.mjs','ops/isolated-paid-video-worker/r2-protocol.mjs',
+    'ops/isolated-paid-video-worker/r2-http.mjs','ops/isolated-paid-video-worker/r2-native-range.mjs']);
   const sources=new Map();
   const visit=file=>{
     if(sources.has(file))return;

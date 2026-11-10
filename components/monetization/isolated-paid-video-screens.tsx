@@ -12,6 +12,7 @@ import { isIsolatedTestStoreV3Flavor } from "../../_lib/isolatedTestStoreV3Build
 import { isIsolatedTestStoreFlavor } from "../../_lib/isolatedTestStoreBuild";
 import { isIsolatedTestStoreV2Flavor } from "../../_lib/isolatedTestStoreV2Build";
 import { IsolatedPaidVideoV2Screen } from "./isolated-paid-video-v2-screens";
+import { readPaidVideoAuthoringProfile } from "../../_lib/paidVideoAuthoringProfile";
 
 const path = (kind: "upload" | "offer" | "status", id: string) => `/sandbox-videos/${kind}/${encodeURIComponent(id)}` as Href;
 const scalar = (value: string | string[] | undefined) => typeof value === "string" ? value : "";
@@ -37,7 +38,8 @@ function UploadSummary({ upload }: { upload: PaidVideoUpload }) {
   </View>;
 }
 export function IsolatedPaidVideoScreen({ page }: { page: PaidVideoView["page"] }) {
-  return isIsolatedTestStoreV3Flavor() ? <IsolatedPaidVideoV2Screen page={page} /> : <IsolatedPaidVideoV1Screen page={page} />;
+  return isIsolatedTestStoreV3Flavor() || readPaidVideoAuthoringProfile()?.mode === "native"
+    ? <IsolatedPaidVideoV2Screen page={page} /> : <IsolatedPaidVideoV1Screen page={page} />;
 }
 function IsolatedPaidVideoV1Screen({ page }: { page: PaidVideoView["page"] }) {
   const { user, authority, isLoading } = useSession(); const router = useRouter();

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {spawnSync} from 'node:child_process';
-import {PAID_VIDEO_NATIVE_STAGES,PAID_VIDEO_PORTABLE_STAGES,paidVideoAppFiles,paidVideoValidationPlan,extractPaidVideoFixtures,validateLegacyProof,readPaidVideoHttpSummary,collectPaidVideoSourceManifest,nodeFailureDiagnostics}
+import {PAID_VIDEO_NATIVE_STAGES,PAID_VIDEO_PORTABLE_STAGES,PAID_VIDEO_APP_TEST_COUNT,paidVideoAppFiles,paidVideoValidationPlan,extractPaidVideoFixtures,validateLegacyProof,readPaidVideoHttpSummary,httpFailureDiagnostics,collectPaidVideoSourceManifest,nodeFailureDiagnostics}
  from '../../scripts/ci/paid-video-validation.mjs';
 
 test('failed Node stage diagnostics retain only bounded source locations and machine metadata',()=>{
@@ -27,18 +27,18 @@ test('PaidVideo plan requires five actual native profiles and the distinct retai
  assert.deepEqual(plan.http,{cases:103,actualGatewayEntries:4});assert.equal(plan.providerOrProductionActions,false);
  assert.equal(plan.execution,'sequential/local-disposable-only');
  assert.equal(PAID_VIDEO_NATIVE_STAGES.filter(s=>s.scanner).length,2);assert.equal(PAID_VIDEO_NATIVE_STAGES.filter(s=>s.reference).length,3);
- for(const name of ['tests/helpers/isolated-test-store-v3-fixtures.mjs','tests/helpers/media-picker-host.mjs','tests/isolated-paid-video-object-version-corpus.mjs','hooks/useMediaPicker.tsx','components/ui/MediaSourceSheet.tsx','_lib/deviceAttachmentPicker.ts','modules/chillywood-gallery-picker/index.js'])assert.match(collectPaidVideoSourceManifest()[name],/^[a-f0-9]{64}$/u);
+ for(const name of ['tests/helpers/isolated-test-store-v3-fixtures.mjs','tests/helpers/media-picker-host.mjs','tests/isolated-paid-video-object-version-corpus.mjs','hooks/useMediaPicker.tsx','components/ui/MediaSourceSheet.tsx','_lib/deviceAttachmentPicker.ts','modules/chillywood-gallery-picker/index.js','_lib/paidVideoAuthoringProfile.ts','tests/native-paid-video-authoring-profile.test.mjs'])assert.match(collectPaidVideoSourceManifest()[name],/^[a-f0-9]{64}$/u);
 });
 test('successor app coverage explicitly replaces only historical HTTP48 with the real HTTP103 bridge',()=>{
  const plan=paidVideoValidationPlan(),files=paidVideoAppFiles();
  assert.ok(files.includes('tests/isolated-paid-video-checkout-v3.test.mjs'));assert.ok(files.includes('tests/isolated-test-store-v3-native.test.mjs'));
  assert.ok(!files.includes('tests/isolated-paid-video-http-bridge.test.mjs'));assert.ok(!files.includes('tests/isolated-paid-video-retained-http-bridge.test.mjs'));
  assert.ok(!files.includes('tests/isolated-paid-video-platform-http-bridge.test.mjs'));
- assert.equal(plan.app.tests,273);assert.equal(plan.app.libraryTestsInExistingCanonicalLane,19);
+ assert.equal(PAID_VIDEO_APP_TEST_COUNT,279);assert.equal(plan.app.tests,PAID_VIDEO_APP_TEST_COUNT);assert.equal(plan.app.libraryTestsInExistingCanonicalLane,19);
  assert.equal(PAID_VIDEO_PORTABLE_STAGES.find(s=>s.name==='platform-http-app').tests,7);
- assert.equal(273+19+7,299);assert.equal(plan.app.historicalBridgeExcluded,'tests/isolated-paid-video-http-bridge.test.mjs');
+ assert.equal(PAID_VIDEO_APP_TEST_COUNT+19+7,305);assert.equal(plan.app.historicalBridgeExcluded,'tests/isolated-paid-video-http-bridge.test.mjs');
  const all=PAID_VIDEO_PORTABLE_STAGES.flatMap(s=>s.files);assert.equal(new Set(all).size,all.length);
- assert.equal(PAID_VIDEO_PORTABLE_STAGES.reduce((n,s)=>n+s.tests,0)+273,397);
+ assert.equal(PAID_VIDEO_PORTABLE_STAGES.reduce((n,s)=>n+s.tests,0)+PAID_VIDEO_APP_TEST_COUNT,403);
 });
 const fixtures=()=>({authoring:{contractCaptures:[]},gateway:{captures:[]},'capture-composed':{combinedCaptures:
  [['checkout',42],['provider-command',31],['prepared-closure',8],['playback',15]].flatMap(([kind,count])=>Array.from({length:count},(_,index)=>({kind,
@@ -101,4 +101,55 @@ test('actual HTTP progress is accepted only with the exact caller-owned final su
  fs.writeFileSync(path.join(dir,'summary.json'),JSON.stringify(summary));
  for(const bad of ['',stdout+'later progress\n',JSON.stringify({...summary,runId:'cd'.repeat(16)})])
   assert.throws(()=>readPaidVideoHttpSummary({stdout:bad,evidenceDirectory:dir,runId}));
+});
+
+function failedHttpAttempt(t){
+ const evidenceDirectory=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'paid-video-failure-')));
+ t.after(()=>fs.rmSync(evidenceDirectory,{recursive:true,force:true}));
+ const runId='ab'.repeat(16),privateValue='private-token-payload-must-not-be-emitted';
+ const diagnostic={protocol:'scpv-retained-http-failure-v1',phase:'qualify',exceptionType:'AssertionError',httpCasesRecorded:2,lastHttpStatus:503};
+ const summary={status:'failed',evidenceDirectory,runId,cleanupVerified:true,error:privateValue,failureDiagnostic:diagnostic};
+ const file=path.join(evidenceDirectory,'summary.json');
+ const write=(value=summary)=>{fs.writeFileSync(file,JSON.stringify(value));return {stdout:privateValue+'\n'+JSON.stringify(value)+'\n',evidenceDirectory,runId};};
+ return {evidenceDirectory,runId,privateValue,diagnostic,summary,file,write};
+}
+test('failed HTTP attempt emits only closed diagnostic fields and preserves failed cleanup',t=>{
+ const f=failedHttpAttempt(t),result=httpFailureDiagnostics(f.write());
+ assert.deepEqual(result,{available:true,cleanupVerified:true,...f.diagnostic});
+ assert.ok(!JSON.stringify(result).includes(f.privateValue));assert.ok(!JSON.stringify(result).includes(f.evidenceDirectory));
+ const cleanup={...f.summary,cleanupVerified:false,failureDiagnostic:{...f.diagnostic,phase:'cleanup',exceptionType:'RuntimeError',httpCasesRecorded:103,lastHttpStatus:null}};
+ assert.deepEqual(httpFailureDiagnostics(f.write(cleanup)),{available:true,cleanupVerified:false,...cleanup.failureDiagnostic});
+ assert.throws(()=>readPaidVideoHttpSummary(f.write()),'Failure diagnostics must not qualify a passing attempt');
+});
+test('failed HTTP diagnostic rejects wrong attempt identity, stale stdout and a successful summary',t=>{
+ const f=failedHttpAttempt(t);
+ for(const change of [{runId:'cd'.repeat(16)},{evidenceDirectory:path.dirname(f.evidenceDirectory)},{status:'passed'},{cleanupVerified:'true'}]){
+  assert.deepEqual(httpFailureDiagnostics(f.write({...f.summary,...change})),{available:false});
+ }
+ const args=f.write();
+ for(const stdout of ['',args.stdout+'later progress',JSON.stringify({...f.summary,error:'different'})])
+  assert.deepEqual(httpFailureDiagnostics({...args,stdout}),{available:false});
+ assert.deepEqual(httpFailureDiagnostics({...args,runId:'not-an-attempt'}),{available:false});
+});
+test('failed HTTP diagnostic rejects untrusted fields, enum strings and out-of-range counters',t=>{
+ const f=failedHttpAttempt(t);
+ for(const change of [{protocol:'unknown'},{phase:f.privateValue},{exceptionType:f.privateValue},{httpCasesRecorded:-1},{httpCasesRecorded:104},
+  {httpCasesRecorded:1.5},{httpCasesRecorded:'2'},{lastHttpStatus:99},{lastHttpStatus:600},{lastHttpStatus:200.5},{lastHttpStatus:'503'},{error:f.privateValue}]){
+  assert.deepEqual(httpFailureDiagnostics(f.write({...f.summary,failureDiagnostic:{...f.diagnostic,...change}})),{available:false});
+ }
+ for(const key of Object.keys(f.diagnostic)){const diagnostic={...f.diagnostic};delete diagnostic[key];
+  assert.deepEqual(httpFailureDiagnostics(f.write({...f.summary,failureDiagnostic:diagnostic})),{available:false});
+ }
+ assert.deepEqual(httpFailureDiagnostics(f.write({...f.summary,failureDiagnostic:null})),{available:false});
+});
+test('failed HTTP diagnostic refuses absent, malformed, oversized and symlink evidence',t=>{
+ const f=failedHttpAttempt(t),args=f.write();
+ fs.unlinkSync(f.file);assert.deepEqual(httpFailureDiagnostics(args),{available:false});
+ fs.writeFileSync(f.file,'not json '+f.privateValue);assert.deepEqual(httpFailureDiagnostics(args),{available:false});
+ const large={...f.summary,error:f.privateValue.repeat(3000)};assert.deepEqual(httpFailureDiagnostics(f.write(large)),{available:false});
+ const target=path.join(f.evidenceDirectory,'private.json');fs.writeFileSync(target,JSON.stringify(f.summary));
+ fs.unlinkSync(f.file);fs.symlinkSync(target,f.file);assert.deepEqual(httpFailureDiagnostics(args),{available:false});
+ fs.unlinkSync(f.file);f.write();
+ const link=f.evidenceDirectory+'-link';fs.symlinkSync(f.evidenceDirectory,link);t.after(()=>fs.unlinkSync(link));
+ assert.deepEqual(httpFailureDiagnostics({...args,evidenceDirectory:link}),{available:false});
 });

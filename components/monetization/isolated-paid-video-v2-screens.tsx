@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useSession } from "../../_lib/session";
@@ -10,6 +10,7 @@ import { AppBackButton } from "../navigation/app-back-button";
 import { IsolatedTestStoreV3Checkout } from "./isolated-test-store-v3-checkout";
 import { formatPaidVideoOfferCode, parsePaidVideoOfferCode } from "../../_lib/isolatedPaidVideoOfferCode";
 import { useMediaPicker } from "../../hooks/useMediaPicker";
+import { readPaidVideoAuthoringProfile } from "../../_lib/paidVideoAuthoringProfile";
 
 const path = (kind: "upload" | "offer" | "status", id: string) => `/sandbox-videos/${kind}/${encodeURIComponent(id)}` as Href;
 const scalar = (value: string | string[] | undefined) => typeof value === "string" ? value : "";
@@ -17,13 +18,13 @@ const titles = { home: "Sandbox videos", studio: "Sandbox video studio", upload:
 function Action({ children, testID, onPress, disabled = false }: { children: React.ReactNode; testID: string; onPress(): void; disabled?: boolean }) {
   return <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[styles.action, disabled && styles.disabled]}><Text style={styles.actionText}>{children}</Text></Pressable>;
 }
-function Frame({ title, children }: { title: string; children: React.ReactNode }) {
+function Frame({ title, children, onBack }: { title: string; children: React.ReactNode; onBack?: () => void }) {
   const router = useRouter();
   return <ImageBackground source={require("../../assets/images/chillywood-branded-background.png")} style={styles.screen} resizeMode="cover"><View pointerEvents="none" style={styles.overlay} />
     <SafeAreaView style={styles.screen}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-      <AppBackButton accessibilityLabel="Back from sandbox videos" testID="paid-video-back" onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/my-list"); }} />
+      <AppBackButton accessibilityLabel="Back from sandbox videos" testID="paid-video-back" onPress={() => { if (onBack) onBack(); else if (router.canGoBack()) router.back(); else router.replace("/(tabs)/my-list"); }} />
       <Text accessibilityRole="header" style={styles.heading}>{title}</Text>
-      <Text style={styles.body}>Test content only. No payable earnings, payouts or cashout. Buyers remain free.</Text>{children}
+      <Text style={styles.body}>Sandbox content only. No payable earnings, payouts or cashout. Buyers do not need Premium. Confirm the store’s test-payment details before approving a purchase.</Text>{children}
     </ScrollView></SafeAreaView></ImageBackground>;
 }
 function UploadSummary({ upload }: { upload: PaidVideoV2Upload }) {
@@ -45,12 +46,21 @@ export function IsolatedPaidVideoV2Screen({ page }: { page: PaidVideoV2View["pag
   return <VideoSession key={`${page}:${id}:${authority.userId}:${authority.sessionGeneration}`} authority={authority} page={page} id={id} />;
 }
 function VideoSession({ authority, page, id }: { authority: AccountSessionAuthorityBinding; page: PaidVideoV2View["page"]; id: string }) {
+  const authoringMode = readPaidVideoAuthoringProfile()?.mode;
+  const nativeStore = authoringMode === "native";
   const { pickMedia, mediaPickerSheet } = useMediaPicker(`sandbox-video-v2:${page}:${id}`);
   const [capturedAuthority] = useState(() => Object.freeze({ ...authority }));
   const router = useRouter(); const [actions, setActions] = useState<PaidVideoV2Actions | null>(null);
   const [state, setState] = useState<PaidVideoV2Presentation | null>(null); const [connectionError, setConnectionError] = useState(false);
   const [connectionRevision, setConnectionRevision] = useState(0); const [title, setTitle] = useState(""); const [amount, setAmount] = useState("");
   const [offerCode, setOfferCode] = useState("");
+  const [retirementReview, setRetirementReview] = useState<{ requestId: string; actions: PaidVideoV2Actions } | null>(null);
+  const retirementOwner = useRef<typeof retirementReview>(null);
+  const dismissRetirement = () => { retirementOwner.current = null; setRetirementReview(null); };
+  useEffect(() => {
+    retirementOwner.current = null; setRetirementReview(null);
+    return () => { retirementOwner.current = null; };
+  }, [actions, state?.retired]);
   useEffect(() => {
     // A new effect incarnation owns new closures. Cleanup never revives an old
     // owner after StrictMode replay or an observed account/session gap.
@@ -68,8 +78,22 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
     pick: (source, operation) => choose(source, operation),
   })));
   const amountMinor = /^\d+(?:\.\d{1,2})?$/u.test(amount) ? Math.round(Number(amount) * 100) : 0;
-  return <Frame title={titles[page]}>
+  return <Frame title={titles[page]} onBack={retirementReview ? dismissRetirement : undefined}>
     {mediaPickerSheet}
+    {nativeStore && retirementReview && !unavailable && <Modal testID="paid-video-retirement-review" visible transparent animationType="fade" onRequestClose={dismissRetirement}>
+      <SafeAreaView style={styles.confirmationBackdrop}><ScrollView contentContainerStyle={styles.confirmationContent}><View style={styles.card} accessibilityViewIsModal>
+        <Text accessibilityRole="header" style={styles.subheading}>Keep the original transfer unconfirmed?</Text>
+        <Text style={styles.body}>The original transfer may still finish. This does not cancel it or change its server state. Its saved history and original-file verification remain available.</Text>
+        <Text style={styles.body}>This only allows you to return to Studio and explicitly reserve a different upload with a new identity. Nothing is reserved, uploaded or retried now.</Text>
+        <Action testID="paid-video-retirement-confirm" onPress={() => {
+          const review = retirementOwner.current;
+          if (!review || review !== retirementReview || review.actions !== actions) return;
+          dismissRetirement();
+          void review.actions.retireUnknownTransfer(review.requestId);
+        }}>Keep unconfirmed; allow a new upload</Action>
+        <Action testID="paid-video-retirement-cancel" onPress={dismissRetirement}>Cancel</Action>
+      </View></ScrollView></SafeAreaView>
+    </Modal>}
     <Action testID="paid-video-studio-link" onPress={() => router.push("/sandbox-videos/studio" as Href)}>Creator studio</Action>
     <Action testID="paid-video-history-link" onPress={() => router.push("/sandbox-videos/history" as Href)}>My drafts and saved actions</Action>
     <Text style={styles.body}>Upload availability is checked for your account and this build. Stored bytes still require scanning and moderation before publication.</Text>
@@ -126,6 +150,9 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
       <Text style={styles.body}>{(state.offer.amountMinor / 100).toFixed(2)} {state.offer.currency.toUpperCase()}</Text>
       <Text style={styles.body}>A published offer does not establish a completed purchase or playback access.</Text>
       <Action testID="paid-video-offer-link" disabled={unavailable} onPress={() => router.push(path("offer", state.offer!.id))}>Review offer</Action>
+      {nativeStore && !state.upload && <Action testID="paid-video-native-store-quote" disabled={unavailable || state.offer.status !== "published"}
+        onPress={() => router.push(`/sandbox-videos/native-offer/${encodeURIComponent(state.offer!.id)}` as Href)}>Review native store sandbox quote</Action>}
+      {nativeStore && !!state.upload && <Text style={styles.body}>Share the offer code with a different signed-in buyer. Your own account cannot buy this video.</Text>}
       <Action testID="paid-video-retire" disabled={noMutation || !state.upload || state.offer.status !== "published"} onPress={() => safeRun(a => a.retireOffer())}>Retire test offer</Action>
       {!!state.upload && state.offer.status === "published" && <>
         <Text style={styles.body}>Share this sandbox code with another signed-in test buyer. They can open it from Sandbox videos.</Text>
@@ -137,11 +164,18 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
       <Text accessibilityRole="header" style={styles.subheading}>Saved file transfers</Text>
       <Text style={styles.body}>An upload response is not stored-byte proof. Verification reads the original transfer; it never sends the file again.</Text>
       {state?.transfers.filter(t => page === "history" || t.upload.id === state.upload?.id).map(transfer => <View key={transfer.requestId} style={styles.card}>
-        <Text style={styles.body}>{transfer.state === "recorded" ? "Exact object receipt recorded; scan and moderation still required" : transfer.state === "not_applied" ? "Transfer not sent" : "Stored bytes unconfirmed"}</Text>
+        <Text style={styles.body}>{transfer.state === "recorded" ? "Exact object receipt recorded; scan and moderation still required" : transfer.state === "not_applied" ? "Transfer not sent"
+          : transfer.state === "retired_unknown" ? "Original transfer still unconfirmed. It may still finish; it was not cancelled and will never be resent. Saved history and verification remain available." : "Stored bytes unconfirmed"}</Text>
         <Action testID={`paid-video-verify-${transfer.requestId}`} disabled={unavailable || transfer.state === "not_applied"} onPress={() => safeRun(a => a.verifyTransfer(transfer.requestId))}>Verify original stored file</Action>
+        {nativeStore && (transfer.state === "prepared" || transfer.state === "unknown") && <Action testID={`paid-video-retire-transfer-${transfer.requestId}`}
+          disabled={unavailable || !state.transferReady} onPress={() => {
+            if (unavailable || !actions || !state.transferReady) return;
+            const review = { requestId: transfer.requestId, actions };
+            retirementOwner.current = review; setRetirementReview(review);
+          }}>Review allowing a new upload</Action>}
       </View>)}
     </View>}
-    {(page === "offer" || page === "history") && <IsolatedTestStoreV3Checkout authority={capturedAuthority} offerId={page === "offer" ? id : null} />}
+    {authoringMode === "test_store_v3" && (page === "offer" || page === "history") && <IsolatedTestStoreV3Checkout authority={capturedAuthority} offerId={page === "offer" ? id : null} />}
     {(page === "history" || page === "status") && <View>
       <Text accessibilityRole="header" style={styles.subheading}>Actions saved on this device</Text>
       <Text style={styles.body}>Recorded actions are acknowledgments, not proof of the current scan, moderation or offer state. Account drafts above come from the server.</Text>
@@ -154,6 +188,8 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
 }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#08111d" }, overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(3,10,18,0.87)" },
+  confirmationBackdrop: { flex: 1, padding: 20, backgroundColor: "rgba(3,10,18,0.87)" },
+  confirmationContent: { flexGrow: 1, justifyContent: "center", maxWidth: 760, width: "100%", alignSelf: "center" },
   content: { padding: 20, paddingBottom: 48, gap: 14, maxWidth: 760, width: "100%", alignSelf: "center" },
   heading: { color: "#fff", fontSize: 28, fontWeight: "800" }, subheading: { color: "#fff", fontSize: 19, fontWeight: "700" },
   body: { color: "#dce6f2", fontSize: 16, lineHeight: 24 }, notice: { color: "#ffe0a1", fontSize: 16, lineHeight: 24 },

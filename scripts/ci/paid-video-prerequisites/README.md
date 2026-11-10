@@ -79,6 +79,13 @@ Official references reviewed for this design:
 `python3 scripts/ci/paid-video-prerequisites/provision_test.py` tests the source
 boundaries with local byte fixtures. It does not claim a Linux package install,
 hosted network access or actual hosted readiness.
+The 28 offline groups include the retained HTTP source preflight: the pinned
+repository dependencies and published baseline Git tree must already be local.
+They reject changed source/template bytes and incomplete listener imports before
+the provisioning step downloads packages or starts any local services.
+They also exercise the exact fixture's explicit S3 environment under restricted
+read permissions and bound failure phase/type/counters without exposing private
+error text, captures, credentials or logs.
 
 Public ECR image pulls retry only the exact `toomanyrequests: Rate exceeded`
 response (with or without Docker's daemon prefix). The identical immutable

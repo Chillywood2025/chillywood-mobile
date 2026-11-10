@@ -1,0 +1,271 @@
+{
+  "protocol": "native-paid-video-r2-source-proof-v1",
+  "qualification": "disposable_local_only",
+  "recordedAt": "2026-11-10T12:29:53.176Z",
+  "sourceCheckpointType": "content_addressed_file_manifest_not_target_baseline",
+  "fileManifestSha256": "4bd6f9238422cc1d07f36c7f37f5542e6ad231ca8b381df717cfb21b0906ff0e",
+  "files": [
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-allowlist.json",
+      "sha256": "df783835696c8d438cfb966b92a4c28bc56304f2f51ac7ce134e4e63bd23d975",
+      "bytes": 59281
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-artifact.json",
+      "sha256": "2e59a99358eeb8408c90c2be132cfe9ee09ac8c814a9c5cad4ea28d2ce17c91f",
+      "bytes": 1347
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-envelope.mjs",
+      "sha256": "d68c4211982a69dc7cfa7cf3d21e2e3f9b298c1ff2a230030f0ef91d81b23eb2",
+      "bytes": 17061
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-fixture.mjs",
+      "sha256": "38124c7f78b53ccfc6ca732f4c7adf9fc4392849c5040c23813ebd2e68e63475",
+      "bytes": 799
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-grant.sql",
+      "sha256": "f3baacb85a768be8a4b3f578a3a9282cab4301ce4cf0c8ff9df18387fe8024f3",
+      "bytes": 910
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-identity.json",
+      "sha256": "dfa7aee1ca28ed48e52cdda94260ae9bc2c9f04389bbedaa38d58983ace3cc61",
+      "bytes": 582
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-observe.sql",
+      "sha256": "2cdaa8e6a94e041f7abf81506393731594acbb7e5a65e76ee0300f26b197f0c3",
+      "bytes": 71404
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-qualify.mjs",
+      "sha256": "f97a8e1501c1185f1e67a972f90a38204be2d2eb977bc845f6669a8726843ba2",
+      "bytes": 4975
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-revoke.sql",
+      "sha256": "dd22564156d1fa27d6fdc021407b9cf052575bcc2377191c6623baee39deb505",
+      "bytes": 1350
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment-source.json",
+      "sha256": "a08d887a0cb4b29c2acc2a27dc82ba4091e409c379fe9651b4523ce855ee0f02",
+      "bytes": 5765
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/DEPLOYMENT.md",
+      "sha256": "2e21c1434ce72ee388817be0626e7a874adfbe53608756cd4b8f58b38010b335",
+      "bytes": 8001
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment.mjs",
+      "sha256": "e270845e290fef450727b7e49c1d1245dce69e28a45a7c6969a97f201df06791",
+      "bytes": 27156
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment.native-cases.mjs",
+      "sha256": "89ef95494940849f8d3e263420a88183a24b9c86f105e60654eca81a853c6c55",
+      "bytes": 13585
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment.sql",
+      "sha256": "83b3e5d13f2b19c261e440350e2cea7907c3925cc88a6ca3cf6b39bb1389c8bd",
+      "bytes": 342919
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/deployment.test.mjs",
+      "sha256": "39e48651cdc9942781ad510cd32ff727e266828e36125bfe628fa3845d154b47",
+      "bytes": 3662
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/private-state-readback.mjs",
+      "sha256": "3c43f8925be13b42ff7aacb1a9f1c02b2627548c62e14dbb59da62c0ba585c4b",
+      "bytes": 9193
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/private-state.sql",
+      "sha256": "dbb7f30313156a637fdf439c31b44700c8f47f75cf8404acbe283471c3c0bd7a",
+      "bytes": 7867
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/source.sql",
+      "sha256": "832712fcc47d9ecfcff8b3012b6bdd045d7461357ae4b3e50af1aded1e3a25e7",
+      "bytes": 148571
+    }
+  ],
+  "coreInputs": [
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/identity.sql",
+      "sha256": "01812f53e1f4e5fd834dab50cc319f84c7729ef092bbf2e257c0de5f2b2c1150",
+      "bytes": 10288
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/gateway.sql",
+      "sha256": "fdbcd43789dba4a73b11bad08b25b8306ed1b84475994e75539ee21e8495bd28",
+      "bytes": 20288
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/scanner.sql",
+      "sha256": "2c13762ec59c302210801e96f4aaea7f417aa3eacb0fb3ad4a640eeb1dc38c84",
+      "bytes": 10631
+    },
+    {
+      "path": "isolated-runtime/native-paid-video-r2-v1/source.mjs",
+      "sha256": "c0e94b11ce5afe9b338b7620f9ce8a7e111502036b3733496842d11bfba09e2c",
+      "bytes": 16883
+    }
+  ],
+  "r2SourceSha256": "832712fcc47d9ecfcff8b3012b6bdd045d7461357ae4b3e50af1aded1e3a25e7",
+  "r2SourceBytes": 148571,
+  "fixedDeploymentArtifact": {
+    "protocol": "native-paid-video-r2-fixed-deployment-v1",
+    "version": "20261110120025",
+    "name": "native_paid_video_r2_bounded_v1",
+    "bodySha256": "83b3e5d13f2b19c261e440350e2cea7907c3925cc88a6ca3cf6b39bb1389c8bd",
+    "bodyBytes": 342919,
+    "extensionDigest": "55ed69aab2b2e3991fbf37542e82985141e85bdbc15028487054fc325847c4de",
+    "addedCount": 252,
+    "changedCount": 13,
+    "sourceSlices": [
+      {
+        "path": "isolated-runtime/native-paid-video-r2-v1/deployment-grant.sql",
+        "sha256": "f3baacb85a768be8a4b3f578a3a9282cab4301ce4cf0c8ff9df18387fe8024f3",
+        "bytes": 910
+      },
+      {
+        "path": "isolated-runtime/native-paid-video-r2-v1/source.sql",
+        "sha256": "832712fcc47d9ecfcff8b3012b6bdd045d7461357ae4b3e50af1aded1e3a25e7",
+        "bytes": 148571
+      },
+      {
+        "path": "isolated-runtime/native-paid-video-r2-v1/deployment-revoke.sql",
+        "sha256": "dd22564156d1fa27d6fdc021407b9cf052575bcc2377191c6623baee39deb505",
+        "bytes": 1350
+      },
+      {
+        "path": "isolated-runtime/native-paid-video-r2-v1/private-state.sql",
+        "sha256": "dbb7f30313156a637fdf439c31b44700c8f47f75cf8404acbe283471c3c0bd7a",
+        "bytes": 7867
+      }
+    ],
+    "allowlistSha256": "df783835696c8d438cfb966b92a4c28bc56304f2f51ac7ce134e4e63bd23d975",
+    "deploymentAllowed": false,
+    "activationAllowed": false,
+    "retryAllowed": false
+  },
+  "tests": {
+    "static": {
+      "command": "node --test isolated-runtime/native-paid-video-r2-v1/deployment.test.mjs",
+      "passed": 3,
+      "failed": 0
+    },
+    "qualification": {
+      "added": 252,
+      "changed": 13,
+      "removed": 0,
+      "catalogBefore": 47446,
+      "catalogAfter": 47698,
+      "sourceSha256": "832712fcc47d9ecfcff8b3012b6bdd045d7461357ae4b3e50af1aded1e3a25e7"
+    },
+    "small": {
+      "protocol": "native-r2-forward-local-proof-v1",
+      "full": false,
+      "realPostgres": true,
+      "hostedQualified": false,
+      "catalogBefore": 6339,
+      "catalogAfter": 6591,
+      "historyBefore": 4,
+      "wallMs": 2693,
+      "cases": [
+        "Exact original48/shared/Play/Studio predecessors; genuine reader and bounded complete catalog; local token cannot confer target authority.",
+        "Two exact owner-issued non-grantable USAGE facts are added while every prior shared-schema ACL and owner remains retained.",
+        "All existing history columns are bound before DDL and revalidated after exact receipt insertion.",
+        "Additional CREATE, grant option and wrong-grantor schema grants remain visible, abort atomically and cannot hide in the two fixed USAGE facts.",
+        "Stale catalog/OID/money baselines and active generation controls abort before forward source.",
+        "Forced late failure rolls back every new table, function, trigger, privilege and migration receipt.",
+        "Exact forward source commits once within original 20s/25s guards; all retained OIDs and complete 12/14-digit history survive.",
+        "Fixed reader is genuine-session read-only only; six R2 tables remain private; legacy worker/operator grants stay closed.",
+        "Occupied qualified profile/route/worker/verifier hashes match independent canonical calculations without keys or IDs; disable and key-separation mismatch are observed.",
+        "Profile metadata inventory overflow rejects before aggregation with null hashes, never truncated qualification evidence."
+      ],
+      "cleanupVerified": true
+    },
+    "full": {
+      "protocol": "native-r2-forward-local-proof-v1",
+      "full": true,
+      "realPostgres": true,
+      "hostedQualified": false,
+      "catalogBefore": 47446,
+      "catalogAfter": 47698,
+      "historyBefore": 634,
+      "wallMs": 15680,
+      "cases": [
+        "Exact original48/shared/Play/Studio predecessors; genuine reader and bounded complete catalog; local token cannot confer target authority.",
+        "Two exact owner-issued non-grantable USAGE facts are added while every prior shared-schema ACL and owner remains retained.",
+        "All existing history columns are bound before DDL and revalidated after exact receipt insertion.",
+        "Additional CREATE, grant option and wrong-grantor schema grants remain visible, abort atomically and cannot hide in the two fixed USAGE facts.",
+        "Stale catalog/OID/money baselines and active generation controls abort before forward source.",
+        "Forced late failure rolls back every new table, function, trigger, privilege and migration receipt.",
+        "Exact forward source commits once within original 20s/25s guards; all retained OIDs and complete 12/14-digit history survive.",
+        "Fixed reader is genuine-session read-only only; six R2 tables remain private; legacy worker/operator grants stay closed.",
+        "Occupied qualified profile/route/worker/verifier hashes match independent canonical calculations without keys or IDs; disable and key-separation mismatch are observed.",
+        "Profile metadata inventory overflow rejects before aggregation with null hashes, never truncated qualification evidence."
+      ],
+      "cleanupVerified": true
+    },
+    "fullFixture": {
+      "phase": "full-fixture-ready",
+      "legacyMigrations": 630,
+      "replayUnits": 14810,
+      "managedReplaySubstitutions": [
+        {
+          "file": "20260718114500_enable_chat_call_transition_retry_scheduler.sql",
+          "index": 0,
+          "reason": "Managed scheduling/network extension replaced by local doubles"
+        },
+        {
+          "file": "20260718114500_enable_chat_call_transition_retry_scheduler.sql",
+          "index": 1,
+          "reason": "Managed scheduling/network extension replaced by local doubles"
+        },
+        {
+          "file": "20260718211432_harden_media_scan_retry_recovery.sql",
+          "index": 6,
+          "reason": "Data-only recovery call, irrelevant to empty isolated schema"
+        },
+        {
+          "file": "20260718214102_decouple_media_scan_audit_completion.sql",
+          "index": 10,
+          "reason": "Data-only recovery call, irrelevant to empty isolated schema"
+        }
+      ],
+      "nativeModules": 48,
+      "nativeSourceDigest": "e07d2e3266789b1d5e5c9665e03245f6edf1abb43643e16b06d718ef4c77e33d",
+      "eventTriggers": 8,
+      "historyRows": 631,
+      "exactLegacyHistoryObserved": true,
+      "historyVersionsFromSourceFilenames": true,
+      "legacy12DigitVersions": 141,
+      "legacyHistoryStatements": 14992,
+      "maximumLegacyStatements": 619,
+      "replayWallMs": 14383,
+      "installWallMs": 1696
+    },
+    "sharedExternalLockRequired": true
+  },
+  "limitations": [
+    "Studio is not yet installed on target; original48/shared/Play installers are never replayed.",
+    "Strict staged forward sequence: Studio, independent receipt/private readback, fresh-bound R2, independent receipt/private readback.",
+    "Prior original-journal private reader evidence and administrative DDL/activation quiescence remain separate required prerequisites.",
+    "Final clean committed source closure and fresh actual target observation are still required for any separately authorized preparation.",
+    "Local fixture uses managed-extension doubles and synthetic external authority; it does not qualify hosted providers, credentials, object transport, malware scanning, devices, live release, activation or money."
+  ],
+  "targetAccessPerformed": false,
+  "providerCallsPerformed": false,
+  "deploymentAllowed": false,
+  "activationAllowed": false,
+  "retryAllowed": false
+}
