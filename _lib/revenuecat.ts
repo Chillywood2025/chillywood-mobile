@@ -499,6 +499,9 @@ const validRetainedPurchaseText = (value: unknown): value is string => typeof va
   && value.length <= 512 && value.trim() === value && !/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(value)
   && [...value].reduce((bytes, char) => { const point = char.codePointAt(0)!; return bytes + (point < 128 ? 1 : point < 2048 ? 2 : point <= 0xffff ? 3 : 4); }, 0) <= 512;
 export type RevenueCatMutationOptions = { authority?: AccountSessionAuthorityBinding | null;
+  // Optional synchronous purchase restriction, checked after queue/authority
+  // waits immediately before the SDK operation. Never permission or receipt proof.
+  assertPurchaseLaunchAllowed?: () => void;
   // Dormant local-only evidence sink. Never purchase permission or receipt proof.
   retainPurchaseEvidence?: (evidence: RevenueCatPurchaseEvidence, originalAuthority: Readonly<AccountSessionAuthorityBinding>) => Promise<void> };
 const requireRevenueCatMutationAuthority = async (options?: RevenueCatMutationOptions) => {
@@ -518,6 +521,7 @@ const runRevenueCatMutation = <T>(
   valid: (value: unknown) => value is T,
 ) => {
   const suppliedAuthority = options?.authority;
+  const assertPurchaseLaunchAllowed = mutationKey.startsWith("purchase:") ? options?.assertPurchaseLaunchAllowed : undefined;
   const retainEvidence = mutationKey.startsWith("purchase:") ? options?.retainPurchaseEvidence : undefined;
   const authorityHint = suppliedAuthority ?? getCurrentAccountSessionAuthoritySnapshot();
   const expectedSnapshot = retainEvidence && authorityHint ? Object.freeze({ ...authorityHint }) : authorityHint;
@@ -544,6 +548,11 @@ const runRevenueCatMutation = <T>(
     }
     return serializeRevenueCatIdentityOperation(async () => {
       const authority = await requireRevenueCatMutationAuthority({ authority: expectedAuthority });
+      // Do not await between this restriction and the synchronous SDK invocation
+      // inside operation. Async restrictions are unsupported and fail closed.
+      if (assertPurchaseLaunchAllowed && assertPurchaseLaunchAllowed() !== undefined) {
+        throw new Error("RevenueCat purchase launch restriction must be synchronous.");
+      }
       const result = await operation();
       if (retainEvidence) {
         // Capture the exact transaction whitelist before current-account checks

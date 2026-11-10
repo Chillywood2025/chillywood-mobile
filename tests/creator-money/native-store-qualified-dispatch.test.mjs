@@ -5,11 +5,13 @@ const offerId='scv1_offer_'+id(3),selectionId='nssv1_selection_'+id(4),reservati
 const quote=()=>({offerId,offerRevision:1,resourceId:'scv1_resource_'+id(6),resourceRevision:1,creatorId:id(7),kind:'paid_content',amountMinor:199,currency:'usd',asset:{id:'scv1_asset_'+id(8),incarnation:id(9),sha256:'a'.repeat(64),byteLength:10,resourceRevision:1,profile:'scpv-mp4-h264-aac-v1'},catalog:{bindingId:'nssv1_catalog_'+id(10),revision:1,projectId:'synthetic-project',appId:'synthetic-app',store:'APP_STORE',environment:'SANDBOX',wireProductId:'synthetic-product'},quoteDigest:'b'.repeat(64)});
 const load=(path,bindings,extra={})=>{const scope={exports:{},crypto:webcrypto,AbortController,setTimeout,clearTimeout,...extra,require:name=>{assert.ok(Object.hasOwn(bindings,name),'unmodeled import '+name);return bindings[name];}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../../'+path,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,scope);return scope.exports;};
 const gate=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
-async function fixture({reserve=true}={}){
- let current=A,selection,reservation,consumed=null,qualified=true,failStage=null,loseResponse=false,beforeServer=false,sdkGate=null,callback=()=>{},appEnvironment='SANDBOX',signedVersion='42.7',qualPatch={},buildEnabled=true,holdStage=null,storageGate=null;const listeners=new Set(),memory=new Map(),events=[],requests=[];let purchases=0;
+async function fixture({reserve=true,store='APP_STORE',handoff=false}={}){
+ let current=A,selection,reservation,consumed=null,qualified=true,failStage=null,loseResponse=false,beforeServer=false,sdkGate=null,callback=()=>{},appEnvironment='SANDBOX',signedVersion='42.7',qualPatch={},buildEnabled=true,holdStage=null,storageGate=null,ownerReadHook=()=>{},now=Date.now();const listeners=new Set(),memory=new Map(),events=[],requests=[];let purchases=0;
  const authority={getCurrentAccountSessionAuthoritySnapshot:()=>current,sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&['userId','accountId','sessionGeneration','state','restoreOnly'].every(k=>a[k]===b[k]),subscribeToAccountSessionAuthority:f=>{listeners.add(f);return()=>listeners.delete(f);}};
  const storage={getItem:async k=>memory.get(k)??null,setItem:async(k,v)=>{const row=JSON.parse(v);if(row.state===failStage)throw Error('disk');if(row.state===holdStage){events.push('writing:'+row.state);await storageGate.promise;}memory.set(k,v);events.push(row.state??'saved');}};
- const q=quote(),qualification=()=>({id:'nssv1_qualification_'+id(20),revision:1,projectId:q.catalog.projectId,appId:q.catalog.appId,store:'APP_STORE',environment:'SANDBOX',wireProductId:q.catalog.wireProductId,catalogBindingId:q.catalog.bindingId,catalogRevision:1,quoteDigest:q.quoteDigest,connectionId:id(21),connectionRevision:1,protocolEvidenceSha256:'c'.repeat(64),platform:'ios',nativeBuild:'43',nativeVersion:'1.0',signedAppVersion:'42.7',sdkVersion:'10.15.1',noChargeAccountScope:'testflight_distribution',accountEvidenceSha256:'d'.repeat(64),...qualPatch});
+ const q=quote();q.catalog.store=store;
+ const qualification=()=>({id:(handoff?'nssv1_play_qualification_':'nssv1_qualification_')+id(20),revision:1,projectId:q.catalog.projectId,appId:q.catalog.appId,store,environment:'SANDBOX',wireProductId:q.catalog.wireProductId,catalogBindingId:q.catalog.bindingId,catalogRevision:1,quoteDigest:q.quoteDigest,connectionId:id(21),connectionRevision:1,protocolEvidenceSha256:'c'.repeat(64),platform:store==='PLAY_STORE'?'android':'ios',nativeBuild:'43',nativeVersion:'1.0',sdkVersion:'10.15.1',noChargeAccountScope:handoff?'play_test_sheet_handoff':store==='PLAY_STORE'?'play_license_account':'testflight_distribution',accountEvidenceSha256:'d'.repeat(64),
+ ...(handoff?{handoffMode:'play_test_sheet_handoff_v1',automaticNoChargeProof:false,userStoreConfirmationRequired:true,buyerId:A.userId,sessionGeneration:consumed?.originalSessionGeneration??current.sessionGeneration,enrollmentExpiresAt:'2099-01-01T00:00:00Z'}:{signedAppVersion:'42.7'}),...qualPatch});
  const transport=async(_url,options)=>{const b=JSON.parse(options.body);requests.push(b);const actor={userId:current.userId,accountId:current.accountId,sessionGeneration:current.sessionGeneration};let data,status='ok',dispatchAllowed=false;
   if(b.command==='prepare'){selection={id:selectionId,originalRequestId:b.requestId,originalSessionGeneration:current.sessionGeneration,createdAt:'2026-11-09T00:00:00Z',quote:q};data={selection,reason:null};}
   else if(b.command==='recover')data={selection,reason:null};
@@ -28,13 +30,17 @@ async function fixture({reserve=true}={}){
  const contract=load('supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1.ts',{});
  const clientBindings={'../supabase/functions/_shared/native-store-sandbox-terminal-contract-v1':load('supabase/functions/_shared/native-store-sandbox-terminal-contract-v1.ts',{}),'../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1':contract,'@react-native-async-storage/async-storage':storage,'react-native-get-random-values':{},'./accountSessionAuthority':authority,'./accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async()=>({authority:current,accessToken:'synthetic'})},'./supabase':{SUPABASE_URL:'https://local.invalid',SUPABASE_ANON_KEY:'synthetic-public'}};
  const clientApi=()=>load('_lib/nativeStoreSandboxQuote.ts',clientBindings,{fetch:transport});
- const initial=await clientApi().captureNativeSandboxQuoteClient(current,offerId,'APP_STORE',{storage});await initial.prepare(q);if(reserve)await initial.retainPurchaseAttempt(selectionId);initial.dispose();
- const owner=syntheticNativePurchaseOwner({readAuthority:()=>current,purchase:async()=>{purchases++;events.push('sdk');callback();if(sdkGate)await sdkGate.promise;return{productIdentifier:q.catalog.wireProductId,transaction:{productIdentifier:q.catalog.wireProductId,transactionIdentifier:'synthetic-txn',purchaseDate:'2026-11-09T00:00:00Z',purchaseToken:'never-retain'},customerInfo:{entitlements:{active:{},all:{}},activeSubscriptions:[],originalAppUserId:A.userId}};}});
+ const initial=await clientApi().captureNativeSandboxQuoteClient(current,offerId,store,{storage});await initial.prepare(q);if(reserve)await initial.retainPurchaseAttempt(selectionId);initial.dispose();
+ const owner=syntheticNativePurchaseOwner({readAuthority:()=>{ownerReadHook();return current;},purchase:async()=>{purchases++;events.push('sdk');callback();if(sdkGate)await sdkGate.promise;return{productIdentifier:q.catalog.wireProductId,transaction:{productIdentifier:q.catalog.wireProductId,transactionIdentifier:'synthetic-txn',purchaseDate:'2026-11-09T00:00:00Z',purchaseToken:'never-retain'},customerInfo:{entitlements:{active:{},all:{}},activeSubscriptions:[],originalAppUserId:A.userId}};}});
  const product={identifier:q.catalog.wireProductId,price:1.99,currencyCode:'USD',priceString:'$1.99',title:'Synthetic',description:'Synthetic'};
  const sdk={...owner,getRevenueCatAppUserId:async()=>current.userId,canMakeRevenueCatPurchases:async()=>true,readRevenueCatNonSubscriptionProducts:async()=>[product]};
- const module=()=>load('_lib/nativeStoreSandboxDispatch.ts',{'@react-native-async-storage/async-storage':storage,'./runtimeConfig':{getRuntimeConfig:()=>({revenueCat:{appStorePurchasesEnabled:buildEnabled}})},'./nativeStoreSandboxQuote':clientApi(),'./accountSessionAuthority':authority,'./nativeStoreSandboxProduct':{readNativeSandboxAppEvidence:async()=>({status:'observed',evidence:{environment:appEnvironment,signedAppVersion:signedVersion,unsignedNativeBuild:'43',unsignedNativeVersion:'1.0'}})},'./revenuecat':sdk,'./creatorMoneyStoreQuote':load('_lib/creatorMoneyStoreQuote.ts',{})});
+ let playVisible=true,playRetired=false;
+ const module=()=>load('_lib/nativeStoreSandboxDispatch.ts',{'./nativeStorePlayTestHandoff':{captureNativePlayTestSheetContext:()=>({nativeBuild:'43',nativeVersion:'1.0',assertCurrent(){if(playRetired)throw Error('background');},dispose(){}})},'@react-native-async-storage/async-storage':storage,'./runtimeConfig':{getRuntimeConfig:()=>({revenueCat:{appStorePurchasesEnabled:buildEnabled}})},'./nativeStoreSandboxQuote':clientApi(),'./accountSessionAuthority':authority,'./nativeStoreSandboxProduct':{readNativeSandboxAppEvidence:async()=>({status:'observed',evidence:{environment:appEnvironment,signedAppVersion:signedVersion,unsignedNativeBuild:'43',unsignedNativeVersion:'1.0'}})},'./revenuecat':sdk,'./creatorMoneyStoreQuote':load('_lib/creatorMoneyStoreQuote.ts',{})},{Date:class extends Date{static now(){return now;}}});
  let dispatcher=module();
- return{memory,events,requests,run:(recoverOnly=false)=>dispatcher.dispatchPreparedNativeSandboxPurchase(current,offerId,'APP_STORE',selectionId,{storage,deadlineMs:30,recoverOnly}),restart(){dispatcher=module();},counts:()=>purchases,change(){current={...A,sessionGeneration:id(99)};listeners.forEach(f=>f(current));},switchAccount(){current={...A,userId:id(98),accountId:id(98)};listeners.forEach(f=>f(current));},holdStorage(stage){holdStage=stage;storageGate=gate();return storageGate;},setBuildEnabled(v){buildEnabled=v;},setQualified(v){qualified=v;},setFailure(v){failStage=v;},setLoss(v){loseResponse=v;},setBefore(v){beforeServer=v;},setEnvironment(v){appEnvironment=v;},setSignedVersion(v){signedVersion=v;},setQualification(v){qualPatch=v;},onSdk(fn){callback=fn;},holdSdk(){sdkGate=gate();return sdkGate;}};
+ return{memory,events,requests,onOwnerRead(fn){ownerReadHook=fn;},setNow(v){now=v;},run:(recoverOnly=false,playTestSheetAcknowledged=false)=>dispatcher.dispatchPreparedNativeSandboxPurchase(current,offerId,store,selectionId,{storage,deadlineMs:30,recoverOnly,playTestSheetAcknowledged,isPlayHandoffVisible:()=>playVisible}),restart(){dispatcher=module();},hide(){playVisible=false;},background(){playRetired=true;},counts:()=>purchases,change(){current={...A,sessionGeneration:id(99)};listeners.forEach(f=>f(current));},switchAccount(){current={...A,userId:id(98),accountId:id(98)};listeners.forEach(f=>f(current));},holdStorage(stage){holdStage=stage;storageGate=gate();return storageGate;},setBuildEnabled(v){buildEnabled=v;},setQualified(v){qualified=v;},setFailure(v){failStage=v;},setLoss(v){loseResponse=v;},setBefore(v){beforeServer=v;},setEnvironment(v){appEnvironment=v;},setSignedVersion(v){signedVersion=v;},setQualification(v){qualPatch=v;},onSdk(fn){callback=fn;},holdSdk(){sdkGate=gate();return sdkGate;},
+  seedRecovery(){const requestId=id(81);consumed={id:'nssv1_attempt_'+id(22),reservationId,selectionId,originalRequestId:requestId,originalSessionGeneration:current.sessionGeneration,quoteDigest:q.quoteDigest,createdAt:'2026-11-09T00:00:00Z',state:'consumed',dispatchAllowed:false,providerQualified:false};
+   memory.set(`@chillywood/native-store-dispatch:v2:${current.userId}:${store}:${offerId}:${selectionId}`,JSON.stringify({version:1,userId:current.userId,selectionId,reservationId,quoteDigest:q.quoteDigest,requestId,state:'sdk_started'}));}
+ };
 }
 test('actual client and SDK owner invoke synthetic purchase only after committed consume and durable markers',async()=>{
  const f=await fixture();assert.equal((await f.run()).status,'callback_retained');assert.equal(f.counts(),1);assert.ok(f.events.indexOf('consumed')<f.events.indexOf('sdk_started'));assert.ok(f.events.indexOf('sdk_started')<f.events.indexOf('sdk'));
@@ -78,5 +84,65 @@ test('signed AppTransaction version is matched independently from unsigned build
  for(const signedAppVersion of [undefined,'','1.0','43','42.70']){
   const bad=await fixture();bad.setQualification({signedAppVersion});await assert.rejects(bad.run());assert.equal(bad.counts(),0);
   assert.equal(bad.requests.some(r=>r.command==='dispatch-consume'),false);
+ }
+});
+
+test('Android fresh checkout reports a known no-dispatch result without reading, reserving, consuming, or purchasing',async()=>{
+ const f=await fixture({reserve:false,store:'PLAY_STORE'}),before=[...f.memory],requests=f.requests.length,events=f.events.length;
+ const result=await f.run();assert.equal(result.status,'blocked');assert.equal(result.reason,'play_test_sheet_confirmation_required');assert.equal(result.dispatchAllowed,false);
+ assert.equal(f.requests.length,requests);assert.equal(f.events.length,events);assert.deepEqual([...f.memory],before);assert.equal(f.counts(),0);
+ f.restart();assert.equal((await f.run()).reason,result.reason);assert.equal(f.counts(),0);
+});
+test('Android recovery reads only the exact retained attempt even with build purchasing disabled',async()=>{
+ const f=await fixture({store:'PLAY_STORE'});f.seedRecovery();f.setBuildEnabled(false);f.change();f.restart();
+ const before=[...f.memory],requests=f.requests.length,result=await f.run(true);
+ assert.equal(result.status,'ok');assert.equal(result.dispatchAllowed,false);assert.equal(result.data.newlyConsumed,false);
+ assert.deepEqual(f.requests.slice(requests).map(r=>r.command),['recover','reserve-recover','dispatch-recover']);assert.deepEqual([...f.memory],before);assert.equal(f.counts(),0);
+ assert.equal((await f.run()).reason,'play_test_sheet_confirmation_required');assert.equal(f.counts(),0);
+});
+test('buyer-scoped Play handoff invokes the existing owner once only after explicit acknowledgment and committed consume',async()=>{
+ const f=await fixture({reserve:false,store:'PLAY_STORE',handoff:true});assert.equal((await f.run(false,true)).status,'callback_retained');assert.equal(f.counts(),1);
+ assert.ok(f.events.indexOf('consumed')<f.events.indexOf('sdk_started'));assert.ok(f.events.indexOf('sdk_started')<f.events.indexOf('sdk'));
+ f.restart();await assert.rejects(f.run(false,true));assert.equal(f.counts(),1);f.change();assert.equal((await f.run(true)).dispatchAllowed,false);assert.equal(f.counts(),1);
+});
+test('old quote-wide Play rows, forged buyer/mode/no-charge claims, expired setup, or missing acknowledgment never open the sheet',async()=>{
+ const legacy=await fixture({reserve:false,store:'PLAY_STORE'});assert.equal((await legacy.run(false,true)).reason,'platform_no_charge_proof_unsupported');assert.equal(legacy.counts(),0);assert.equal(legacy.requests.some(r=>r.command==='reserve'),false);
+ for(const patch of [{buyerId:id(99)},{sessionGeneration:id(99)},{automaticNoChargeProof:true},{userStoreConfirmationRequired:false},{enrollmentExpiresAt:'2000-01-01T00:00:00Z'},{handoffMode:'automatic'},{nativeBuild:'other'},{signedAppVersion:'forged'}]){
+  const f=await fixture({reserve:false,store:'PLAY_STORE',handoff:true});f.setQualification(patch);await assert.rejects(f.run(false,true));assert.equal(f.counts(),0);assert.equal(f.requests.some(r=>r.command==='reserve'),false);
+ }
+});
+test('Play route blur or background during durable writes prevents sheet launch and leaves consumed evidence intact',async()=>{
+ for(const action of ['hide','background']){const f=await fixture({store:'PLAY_STORE',handoff:true}),wait=f.holdStorage('consumed');const pending=f.run(false,true);const rejected=assert.rejects(pending);
+  while(!f.events.includes('writing:consumed'))await new Promise(r=>setTimeout(r,1));f[action]();wait.resolve();await rejected;assert.equal(f.counts(),0);
+  assert.ok([...f.memory.values()].some(v=>v.includes('"state":"consumed"')));f.restart();if(action==='hide')assert.equal((await f.run(false,true)).status,'blocked');else await assert.rejects(f.run(false,true));assert.equal(f.counts(),0);
+ }
+});
+test('Play launch guard survives the actual purchase owner authority waits and rechecks enrollment expiry',async()=>{
+ for(const action of ['hide','background','change','expire']){
+  const f=await fixture({store:'PLAY_STORE',handoff:true});f.onOwnerRead(()=>action==='expire'?f.setNow(Date.parse('2100-01-01T00:00:00Z')):f[action]());
+  await assert.rejects(f.run(false,true));assert.equal(f.counts(),0,action);
+  assert.ok([...f.memory.values()].some(v=>v.includes('"state":"sdk_started"')));f.onOwnerRead(()=>{});f.restart();if(action==='hide')assert.equal((await f.run(false,true)).status,'blocked');else await assert.rejects(f.run(false,true));assert.equal(f.counts(),0);
+ }
+});
+test('Play enrollment expiry during durable writes prevents the eventual SDK invocation',async()=>{
+ const f=await fixture({store:'PLAY_STORE',handoff:true}),wait=f.holdStorage('sdk_started');const pending=f.run(false,true),rejected=assert.rejects(pending);
+ while(!f.events.includes('writing:sdk_started'))await new Promise(r=>setTimeout(r,1));f.setNow(Date.parse('2100-01-01T00:00:00Z'));wait.resolve();await rejected;assert.equal(f.counts(),0);
+});
+test('Play sheet lifecycle changes after SDK invocation do not discard its original callback',async()=>{
+ const f=await fixture({store:'PLAY_STORE',handoff:true});f.onSdk(()=>{f.hide();f.background();});assert.equal((await f.run(false,true)).status,'callback_retained');assert.equal(f.counts(),1);
+ assert.ok([...f.memory.values()].some(v=>v.includes('synthetic-txn')));
+ const retired=await fixture({store:'PLAY_STORE',handoff:true});retired.onSdk(()=>retired.switchAccount());await assert.rejects(retired.run(false,true));assert.equal(retired.counts(),1);
+ const claim=[...retired.memory.values()].map(v=>JSON.parse(v)).find(v=>v.transactionIdentifier==='synthetic-txn');assert.equal(claim.userId,A.userId);
+});
+test('shared purchase owner rejects async launch restrictions before invoking the SDK',async()=>{
+ let purchases=0;const owner=syntheticNativePurchaseOwner({readAuthority:()=>A,purchase:async()=>{purchases++;}});
+ const product={identifier:'synthetic-product',price:1.99,currencyCode:'USD',priceString:'$1.99',title:'Synthetic',description:'Synthetic'};
+ await assert.rejects(owner.purchaseRevenueCatStoreProduct(product,{authority:A,assertPurchaseLaunchAllowed:async()=>{}}),/must be synchronous/u);assert.equal(purchases,0);
+});
+test('Android recovery without a matching retained marker or under a different app account never consumes or purchases',async()=>{
+ for(const mode of ['missing','other-account','corrupt']){const f=await fixture({store:'PLAY_STORE'});
+  if(mode!=='missing')f.seedRecovery();if(mode==='other-account')f.switchAccount();
+  if(mode==='corrupt'){const key=[...f.memory.keys()].find(k=>k.startsWith('@chillywood/native-store-dispatch:'));f.memory.set(key,'{}');}
+  const requests=f.requests.length;await assert.rejects(f.run(true));assert.equal(f.requests.slice(requests).some(r=>r.command==='dispatch-consume'),false);assert.equal(f.counts(),0);
  }
 });

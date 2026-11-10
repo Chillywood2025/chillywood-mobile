@@ -1,10 +1,12 @@
+import * as historicalTool from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
+import {loadHistoricalBundle} from './helpers/historical-revenuecat-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {Buffer} from 'node:buffer';
 import {createHash} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
-import {addedCatalogHashSQL,invariantsHashSQL,dataHashSQL,loadBundle} from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
+import {addedCatalogHashSQL,invariantsHashSQL,dataHashSQL} from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
 import {canonicalArrayTextSQL} from '../scripts/google-refund-canonical-array.mjs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const source=fs.readFileSync(new URL('./fixtures/google-refund-added-catalog-source.json',import.meta.url),'utf8').trimEnd();
@@ -12,7 +14,7 @@ const expected='10bffb46a67a595be1e04869b5a73b438a1b33b158d1c59ad8e5a5774e9a7054
 
 test('only source-derived added catalog uses explicit C; proven baseline/data SQL remain byte-identical',()=>{
  assert.equal(hash(source),expected);
- assert.equal(loadBundle().manifest.addedCatalogSha256,expected);
+ assert.equal(loadHistoricalBundle(historicalTool).manifest.addedCatalogSha256,expected);
  assert.match(addedCatalogHashSQL,/order by item::text collate "C"/);
  assert.equal(hash(invariantsHashSQL),'e3c97668434652f8412f0b239f26aa952b2025e77f5c5264eec0079303ae3a4a');
  assert.equal(hash(dataHashSQL),'63a51270083f4b719ada780cfa137898c243fd445c6bf8f303882e4b4ee3ec57');

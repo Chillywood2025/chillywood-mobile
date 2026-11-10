@@ -19,7 +19,7 @@ function load(file,bindings,extra={}) {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(file,import.meta.url),'utf8'),{fileName:file,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,scope);
   return scope.exports;
 }
-function fixture({deadlineMs=1000,memory=new Map()}={}) {
+function fixture({deadlineMs=1000,memory=new Map(),store='APP_STORE'}={}) {
   let current=A,transport,captureWait=null,storeWait=null,storageFailed=false,readFailed=false;const calls=[],listeners=new Set();
   const authority={getCurrentAccountSessionAuthoritySnapshot:()=>current,sameAccountSessionAuthority:(a,b)=>!!a&&!!b&&['userId','accountId','sessionGeneration','state','restoreOnly'].every(k=>a[k]===b[k]),subscribeToAccountSessionAuthority(fn){listeners.add(fn);return()=>listeners.delete(fn);}};
   const storage={async getItem(key){if(readFailed)throw Error('read');return memory.get(key)??null;},async setItem(key,value){if(storageFailed)throw Error('disk');if(storeWait)await storeWait.promise;memory.set(key,value);}};
@@ -34,8 +34,9 @@ function fixture({deadlineMs=1000,memory=new Map()}={}) {
       const reservation={id:`nssv1_reservation_${uuid(90)}`,selectionId:attempt.selectionId,originalRequestId:attempt.attemptId,originalSessionGeneration:attempt.originalSessionGeneration,createdAt:'2026-11-08T00:00:00Z',quoteDigest:attempt.quote.quoteDigest,state:'dispatch_reserved',dispatchAllowed:false,providerQualified:false};
       return{ok:true,text:async()=>JSON.stringify(result(body,{reservation,reason:null}))};
     }if(body.command==='prepare')selection={id:`nssv1_selection_${body.requestId}`,originalRequestId:body.requestId,originalSessionGeneration:current.sessionGeneration,createdAt:'2026-11-08T01:00:00Z',quote:body.payload.expectedQuote};
-    const value=result(body,body.command==='offer'?{quote:quote(),reason:null}:{selection,reason:selection?null:'selection_unknown'},body.command==='recover'&&!selection?'unknown':'ok');return{ok:true,text:async()=>JSON.stringify(value)};};
-  return{api,calls,storage,memory,authority,result,actor,connect:(selectedOffer=offerId)=>api.captureNativeSandboxQuoteClient(current,selectedOffer,'APP_STORE',{storage,deadlineMs}),
+    const offerQuote=quote();offerQuote.catalog.store=store;
+    const value=result(body,body.command==='offer'?{quote:offerQuote,reason:null}:{selection,reason:selection?null:'selection_unknown'},body.command==='recover'&&!selection?'unknown':'ok');return{ok:true,text:async()=>JSON.stringify(value)};};
+  return{api,calls,storage,memory,authority,result,actor,connect:(selectedOffer=offerId)=>api.captureNativeSandboxQuoteClient(current,selectedOffer,store,{storage,deadlineMs}),
     change(v){current=v;listeners.forEach(fn=>fn(v));},current:()=>current,setTransport(fn){transport=fn;},delayCapture(){captureWait=deferred();return captureWait;},delayStore(){storeWait=deferred();return storeWait;},failStorage(){storageFailed=true;},failRead(v){readFailed=v;}};
 }
 test('actual client reads exact quote, persists before prepare, and recovers without a second store or prepare call',async()=>{
@@ -219,21 +220,22 @@ test('late or failed callback persistence never dispatches or permits a concurre
 });
 const container=()=>({addEventListener:noop,removeEventListener:noop,namespaceURI:'http://www.w3.org/1999/xhtml',nodeName:'DIV',nodeType:1,ownerDocument:doc,parentNode:null,tagName:'DIV'});
 doc.documentElement=container();globalThis.document=doc;globalThis.window=globalThis;globalThis.HTMLIFrameElement=class{};globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-function mountFixture(f, flavor=0, sessionOverride=null, canGoBack=true, readProduct=null, dispatch=null) {
+function mountFixture(f, flavor=0, sessionOverride=null, canGoBack=true, readProduct=null, dispatch=null, platform='ios') {
+  let focused=true;
   const navigation=[];
   const productReads=[];
-  const products=productReader(f,async ids=>{productReads.push([...ids]);return readProduct?readProduct():[{identifier:'one_time',price:1.99,currencyCode:'USD'}];});
+  const products=productReader(f,async ids=>{productReads.push([...ids]);return readProduct?readProduct():[{identifier:'one_time',price:1.99,currencyCode:'USD'}];},platform);
   let nodes=[];const primitive=name=>function NativePrimitive(props){nodes.push({name,props});return ['Text','ActivityIndicator'].includes(name)?null:React.createElement(React.Fragment,null,props.children);};
-  const native={Platform:{OS:'ios'},StyleSheet:{create:v=>v,absoluteFillObject:{position:'absolute',top:0,right:0,bottom:0,left:0}},...Object.fromEntries(['ActivityIndicator','ImageBackground','Pressable','ScrollView','Text','View'].map(n=>[n,primitive(n)]))};
+  const native={Platform:{OS:platform},StyleSheet:{create:v=>v,absoluteFillObject:{position:'absolute',top:0,right:0,bottom:0,left:0}},...Object.fromEntries(['ActivityIndicator','ImageBackground','Pressable','ScrollView','Text','View'].map(n=>[n,primitive(n)]))};
   const visual=load('../../components/ui/chillywood-visual-system.tsx',{'react':React,'react-native':native,'react-native-svg':{}});
   const background={asset:'assets/images/chillywood-branded-background.png'};
-  const component=load('../../components/monetization/native-store-sandbox-quote-screen.tsx',{'@react-navigation/native':{useIsFocused:()=>true},'./native-store-paid-video-player':{NativeStorePaidVideoPlayer:primitive('NativeStorePaidVideoPlayer')},'react':React,'react-native':native,'react-native-safe-area-context':{SafeAreaView:primitive('SafeAreaView')},'expo-router':{useLocalSearchParams:()=>({offerId}),useRouter:()=>({canGoBack:()=>canGoBack,back(){navigation.push('back');},replace(path){navigation.push(path);}})},
+  const component=load('../../components/monetization/native-store-sandbox-quote-screen.tsx',{'@react-navigation/native':{useIsFocused:()=>focused},'./native-store-paid-video-player':{NativeStorePaidVideoPlayer:primitive('NativeStorePaidVideoPlayer')},'react':React,'react-native':native,'react-native-safe-area-context':{SafeAreaView:primitive('SafeAreaView')},'expo-router':{useLocalSearchParams:()=>({offerId}),useRouter:()=>({canGoBack:()=>canGoBack,back(){navigation.push('back');},replace(path){navigation.push(path);}})},
     '../../assets/images/chillywood-branded-background.png':background,'../ui/chillywood-visual-system':visual,
     '../../_lib/runtimeConfig':{getRuntimeConfig:()=>({revenueCat:{appStorePurchasesEnabled:true}})},'../../_lib/nativeStoreSandboxProduct':products,'../../_lib/nativeStoreSandboxDispatch':{dispatchPreparedNativeSandboxPurchase:dispatch??(()=>assert.fail('No test checkout should run implicitly'))},
     '../../_lib/session':{useSession:()=>sessionOverride??({user:{id:f.current().userId},authority:f.current(),isLoading:false})},'../../_lib/isolatedTestStoreBuild':{isIsolatedTestStoreFlavor:()=>flavor===1},'../../_lib/isolatedTestStoreV2Build':{isIsolatedTestStoreV2Flavor:()=>flavor===2},'../../_lib/isolatedTestStoreV3Build':{isIsolatedTestStoreV3Flavor:()=>flavor===3},'../../_lib/nativeStoreSandboxQuote':f.api,'../navigation/app-back-button':{AppBackButton:primitive('AppBackButton')}});
   const root=createRoot(container());const flush=()=>React.act(async()=>{await new Promise(r=>setTimeout(r,0));});
   const button=id=>nodes.filter(n=>n.props.testID===id).at(-1).props;
-  return {button,flush,background,productReads,visual:visual.CHILLYWOOD_VISUAL,navigation,nodes:()=>nodes,clear(){nodes=[];},render:()=>React.act(async()=>root.render(React.createElement(component.NativeStoreSandboxQuoteScreen))),unmount:()=>React.act(async()=>root.unmount())};
+  return {button,flush,background,productReads,visual:visual.CHILLYWOOD_VISUAL,navigation,nodes:()=>nodes,setFocused(value){focused=value;},clear(){nodes=[];},render:()=>React.act(async()=>root.render(React.createElement(component.NativeStoreSandboxQuoteScreen))),unmount:()=>React.act(async()=>root.unmount())};
 }
 test('mounted store availability action uses read-only shared owner and says neither test-account proof nor purchase permission',async()=>{
   const f=fixture(),m=mountFixture(f);await m.render();await m.flush();assert.equal(m.productReads.length,0);
@@ -268,6 +270,38 @@ test('mounted normal screen prepares and recovers for ordinary active user witho
   assert.equal(m.button('native-sandbox-prepare').disabled,true);await React.act(async()=>m.button('native-sandbox-recover').onPress());await m.flush();
   assert.deepEqual(f.calls.map(c=>c.body.command),['offer','prepare','recover']);assert.ok(m.nodes().some(n=>n.name==='Text'&&String(n.props.children).includes('not enabled')));
   await m.unmount();
+});
+test('normal Android preparation works for an ordinary account and displays requirements without pretending to enable checkout',async()=>{
+  const f=fixture({store:'PLAY_STORE'}),m=mountFixture(f,0,null,true,null,null,'android');await m.render();await m.flush();
+  assert.ok(m.nodes().some(n=>n.props.testID==='native-sandbox-play-requirements'));
+  const text=m.nodes().filter(n=>n.name==='Text').map(n=>String(n.props.children)).join(' ');
+  for(const expected of ['every active app account, not only admins','license testing','test-purchase notice','test payment method','real-payment testing must be off','instructions alone do not enable checkout'])assert.ok(text.includes(expected),expected);
+  assert.equal(m.nodes().find(n=>n.name==='ImageBackground').props.source,m.background);
+  assert.equal(m.button('native-sandbox-prepare').disabled,false);assert.equal(m.button('native-sandbox-checkout').disabled,true);
+  await React.act(async()=>m.button('native-sandbox-check-product').onPress());await m.flush();assert.deepEqual(m.productReads,[['one_time']]);
+  await React.act(async()=>m.button('native-sandbox-prepare').onPress());await m.flush();
+  await React.act(async()=>m.button('native-sandbox-recover').onPress());await m.flush();
+  assert.deepEqual(f.calls.map(c=>c.body.command),['offer','prepare','recover']);assert.equal(f.calls[1].body.payload.expectedQuote.catalog.store,'PLAY_STORE');
+  f.setTransport(async b=>{const qualification={...qualifiedMetadata(),store:'PLAY_STORE',platform:'android',noChargeAccountScope:'play_license_account'};
+    return{ok:true,text:async()=>JSON.stringify(f.result(b,{qualification,reason:null}))};});
+  await React.act(async()=>m.button('native-sandbox-check-qualification').onPress());await m.flush();
+  assert.equal(m.button('native-sandbox-checkout').disabled,true);
+  assert.ok(m.nodes().some(n=>n.name==='Text'&&String(n.props.children).includes('Current buyer-specific setup and server admission are required')));
+  assert.equal(f.calls.some(c=>['reserve','dispatch-consume'].includes(c.body.command)),false);await m.unmount();
+});
+test('ordinary Android buyer must explicitly acknowledge instructions before opening the provider-owned test sheet',async()=>{
+  const f=fixture({store:'PLAY_STORE'}),calls=[],m=mountFixture(f,0,null,true,null,async(...args)=>{calls.push(args);return{status:'callback_retained',dispatchAllowed:false};},'android');
+  await m.render();await m.flush();await React.act(async()=>m.button('native-sandbox-prepare').onPress());await m.flush();
+  f.setTransport(async b=>{const {signedAppVersion:_unused,...base}=qualifiedMetadata();void _unused;
+    const qualification={...base,id:`nssv1_play_qualification_${uuid(71)}`,store:'PLAY_STORE',platform:'android',noChargeAccountScope:'play_test_sheet_handoff',handoffMode:'play_test_sheet_handoff_v1',automaticNoChargeProof:false,userStoreConfirmationRequired:true,buyerId:A.userId,sessionGeneration:A.sessionGeneration,enrollmentExpiresAt:'2099-01-01T00:00:00Z'};
+    return{ok:true,text:async()=>JSON.stringify(f.result(b,{qualification,reason:null}))};});
+  await React.act(async()=>m.button('native-sandbox-check-qualification').onPress());await m.flush();
+  assert.equal(m.button('native-sandbox-checkout').disabled,true);assert.equal(m.button('native-sandbox-play-ack').disabled,false);assert.equal(calls.length,0);
+  await React.act(async()=>m.button('native-sandbox-play-ack').onPress());await m.flush();assert.equal(m.button('native-sandbox-checkout').disabled,false);
+  await React.act(async()=>m.button('native-sandbox-checkout').onPress());await m.flush();assert.equal(calls.length,1);assert.equal(calls[0][2],'PLAY_STORE');assert.equal(calls[0][4].playTestSheetAcknowledged,true);
+  assert.equal(m.button('native-sandbox-checkout').disabled,true);assert.equal(m.button('native-sandbox-play-ack').disabled,true);assert.equal(calls[0][4].isPlayHandoffVisible(),true);
+  m.setFocused(false);await m.render();assert.equal(calls[0][4].isPlayHandoffVisible(),false);m.setFocused(true);await m.render();assert.equal(calls[0][4].isPlayHandoffVisible(),false);assert.equal(calls.length,1);
+  await m.unmount();assert.equal(calls[0][4].isPlayHandoffVisible(),false);
 });
 test('mounted account replacement cannot receive a delayed previous-account selection',async()=>{
   const f=fixture(),m=mountFixture(f),wait=deferred();await m.render();await m.flush();

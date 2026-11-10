@@ -1,7 +1,9 @@
+import {materializeHistoricalProofPackage} from './helpers/historical-revenuecat-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
-import * as p from '../scripts/google-refund-tax-observer-proof/staged.mjs';
+const historicalProof=materializeHistoricalProofPackage();
+const p=await import(new URL('staged.mjs',historicalProof));
 const names=['inverse','types','catalog','data','history'];
 const fresh=()=>Object.fromEntries(names.map(n=>[n,{proofProtocol:'refund589-staged-offline-v1',proofStage:n,...({inverse:{bothFrozenAnchorsProven:true,faults:[]},types:{qualified:true,faults:[]},catalog:{hash:'a'.repeat(64)},data:{qualified:true,hash:'b'.repeat(64)},history:{qualified:true,hash:'c'.repeat(64)}}[n])}]));
 test('final aggregation requires complete same-batch sentinels, tags, hashes, booleans and context',async()=>{
@@ -34,9 +36,9 @@ test('transaction-local trusted DO setters execute under non-superuser read-only
 });
 
 test('staged proof preserves canonical catalog/data/history coverage and snapshot/resource guards',async()=>{
- const {sql:inverse}=await import('../scripts/google-refund-tax-observer-proof/inverse.mjs');
+ const {sql:inverse}=await import(new URL('inverse.mjs',historicalProof));
  const {invariantsHashSQL}=await import('../scripts/google-refund-tax-observer-exact-deploy.mjs');
- const predicates=await import('../scripts/google-refund-tax-observer-proof/predicates.mjs');
+ const predicates=await import(new URL('predicates.mjs',historicalProof));
  assert.equal(p.stages.inverse,inverse.slice(inverse.indexOf('with observed'),inverse.lastIndexOf('; rollback;')));
  assert.ok(p.stages.catalog.includes(invariantsHashSQL));
  for(const expression of [predicates.dataEvidenceExpression,predicates.dataPredicate])assert.ok(p.stages.data.includes(expression));

@@ -1,4 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { configuredRevenueCatSharedHandlerV1 } from "../_shared/revenuecat-shared-configured-v1.ts";
+import type { RevenueCatLegacyObserverV1 } from "../_shared/revenuecat-shared-routing-v1.ts";
 
 import {
   RevenueCatAdapter,
@@ -83,6 +85,7 @@ type PremiumTransferWriteResult = {
 };
 type RevenueCatTerminalDomain = "premium" | "creator_money" | "missing" | "ambiguous";
 type RevenueCatTerminalWriteResult = {
+  nativeExclusion?: boolean;
   status: "processed" | "ignored" | "duplicate_ignored";
   reason: string;
   domain: RevenueCatTerminalDomain;
@@ -118,6 +121,7 @@ type MoneyAccessMirrorResult = {
   duplicateLedgerEvent: boolean;
 };
 type DynamicMoneyAccessResult = {
+  nativeExclusion?: boolean;
   status: "processed" | "ignored" | "duplicate_ignored";
   productKey: string | null;
   providerEventId: string | null;
@@ -152,6 +156,27 @@ const ignoredDynamicMoneyAccess = (
   duplicateAccessGrant: false,
   duplicateLedgerEvent: false,
 });
+
+// This is an internal observation of an actual atomic RPC result, never a
+// provider/client body flag or a permissively normalized HTTP response.
+const nativeLegacyProductExcluded = (value: Record<string, unknown>) =>
+  value.status === "ignored" && ["product_mapping_missing", "provider_source_lock_unresolved"].includes(String(value.reason))
+  && typeof value.providerEventId === "string" && PROVIDER_UUID_PATTERN.test(value.providerEventId)
+  && value.productKey === null && value.purchaseIntentId === null && value.accessGrantId === null && value.ledgerEventId === null
+  && value.environment === "sandbox" && value.payableState === "not_payable" && value.grantStatus === "blocked"
+  && typeof value.duplicateProviderEvent === "boolean" && value.duplicateAccessGrant === false && value.duplicateLedgerEvent === false;
+
+const proveNativeLegacyExclusion = async (admin: SupabaseClientLike, providerEventRowId: string, event: RevenueCatEvent, rawBody: string) => {
+  const eventId = await resolveEventId(event, rawBody), rawSha256 = await hashText(rawBody);
+  const { data, error } = await admin.rpc("revenuecat_native_legacy_exclusion_v1", {
+    p_provider_event_row_id: providerEventRowId, p_provider_event_id: eventId, p_raw_sha256: rawSha256,
+  });
+  if (error) throw new Error("Native shared consumer exclusion proof unavailable.");
+  const result = safeObject(data);
+  return result.protocol === "revenuecat-native-legacy-exclusion-v1" && result.providerEventId === eventId
+    && result.rawSha256 === rawSha256 && result.status === "excluded" && result.financialAuthority === false
+    && result.obligationResolved === false && Object.keys(result).length === 6 ? rawSha256 : null;
+};
 type MoneyNotificationType =
   | "paid_video_unlocked"
   | "watch_party_ticket_ready"
@@ -1461,6 +1486,7 @@ const writeIosConsumableFromRevenueCatEvent = async (
     payableState: toText(result.payableState) as DynamicMoneyAccessResult["payableState"],
     grantStatus: toText(result.grantStatus) as DynamicMoneyAccessResult["grantStatus"],
     reason: toText(result.reason) || "atomic_consumable_transaction_complete",
+    nativeExclusion: nativeLegacyProductExcluded(result),
     duplicateProviderEvent: result.duplicateProviderEvent === true,
     duplicateAccessGrant: result.duplicateAccessGrant === true,
     duplicateLedgerEvent: result.duplicateLedgerEvent === true,
@@ -1678,6 +1704,7 @@ const writeGooglePlayCreatorMoneyFromRevenueCatEvent = async (
     payableState: toText(result.payableState) as DynamicMoneyAccessResult["payableState"],
     grantStatus: toText(result.grantStatus) as DynamicMoneyAccessResult["grantStatus"],
     reason: toText(result.reason) || "atomic_google_play_creator_money_transaction_complete",
+    nativeExclusion: nativeLegacyProductExcluded(result),
     duplicateProviderEvent: result.duplicateProviderEvent === true,
     duplicateAccessGrant: result.duplicateAccessGrant === true,
     duplicateLedgerEvent: result.duplicateLedgerEvent === true,
@@ -1753,6 +1780,10 @@ const writeRevenueCatTerminalEventFromRevenueCatEvent = async (
   return {
     status,
     reason: toText(result.reason) || "terminal_dispatch_complete",
+    nativeExclusion: result.status === "ignored" && result.domain === "missing" && result.reason === "terminal_dispatch_binding_missing"
+      && typeof result.providerEventId === "string" && PROVIDER_UUID_PATTERN.test(result.providerEventId)
+      && result.originalTransactionId === originalTransactionId && result.authorityGranted === false && typeof result.duplicateEvent === "boolean"
+      && ["productKey", "ledgerEventId", "grantStatus", "purchaseIntentId", "accessGrantId"].every(k => result[k] == null),
     domain,
     providerEventId: toText(result.providerEventId) || null,
     originalTransactionId,
@@ -2193,7 +2224,7 @@ const writePremiumTransferFromRevenueCatEvent = async (
   };
 };
 
-Deno.serve(async (req) => {
+const legacyHandler = async (req: Request, nativeObserver?: RevenueCatLegacyObserverV1): Promise<Response> => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "method_not_allowed", message: "Use POST for RevenueCat webhook requests." });
@@ -2587,6 +2618,17 @@ Deno.serve(async (req) => {
           },
         });
 
+        // Only an exact durable missing-binding result excludes this consumer.
+        // Ambiguous/cross-provider/subject mismatches remain shared holds.
+        if (nativeObserver && terminalWrite.nativeExclusion === true && terminalWrite.status === "ignored" && terminalWrite.domain === "missing"
+          && terminalWrite.reason === "terminal_dispatch_binding_missing"
+          && PROVIDER_UUID_PATTERN.test(terminalWrite.providerEventId ?? "")
+          && !terminalWrite.authorityGranted && !terminalWrite.entitlementActive
+          && terminalWrite.grantStatus === null && terminalWrite.ledgerEventId === null && terminalWrite.productKey === null)
+        {
+          const proof = await proveNativeLegacyExclusion(adminConfig.client, terminalWrite.providerEventId!, event, rawBody);
+          if (proof) nativeObserver.nativeExcluded(proof);
+        }
         return jsonResponse(200, {
           status: terminalWrite.status,
           provider: storePolicy.provider,
@@ -2661,6 +2703,21 @@ Deno.serve(async (req) => {
         },
       });
 
+      // No generic ignored/error/HTTP200 can authorize shared acknowledgement.
+      // The atomic provider event must exist, and no legacy product, intent,
+      // access or ledger can have been matched. Current source-lock wrappers
+      // report provider_source_lock_unresolved before a missing product mapper.
+      // Its original pending reconciliation obligation remains independent;
+      // the native worker supplies only native-consumer completion.
+      if (nativeObserver && dynamicWrite.nativeExclusion === true && dynamicWrite.status === "ignored"
+        && dynamicWrite.environment === "sandbox" && PROVIDER_UUID_PATTERN.test(dynamicWrite.providerEventId ?? "")
+        && dynamicWrite.productKey === null && dynamicWrite.purchaseIntentId === null
+        && dynamicWrite.accessGrantId === null && dynamicWrite.ledgerEventId === null
+        && dynamicWrite.grantStatus === "blocked" && dynamicWrite.payableState === "not_payable")
+      {
+        const proof = await proveNativeLegacyExclusion(adminConfig.client, dynamicWrite.providerEventId!, event, rawBody);
+        if (proof) nativeObserver.nativeExcluded(proof);
+      }
       return jsonResponse(200, {
         status: dynamicWrite.status,
         provider: storePolicy.provider,
@@ -2769,4 +2826,8 @@ Deno.serve(async (req) => {
       message: safeMessage,
     });
   }
-});
+};
+// Keep the established endpoint and all legacy consumers. The new composition
+// remains absent unless explicitly configured; no webhook repoint is required.
+Deno.serve(Deno.env.get("NATIVE_STORE_SHARED_ROUTING_ENABLED") === "true"
+  ? configuredRevenueCatSharedHandlerV1(legacyHandler) : legacyHandler);

@@ -45,7 +45,7 @@ export function validateNativeStoreSandboxResultV1(v:unknown,actor:NativeStoreSa
  ||v.protocol!==request.protocol||v.command!==request.command||v.requestId!==request.requestId||canonical(v.actor)!==canonical(actor)
  ||(!request.command.startsWith("dispatch-")&&v.dispatchAllowed!==false)||v.correlation!=="unsupported"||!row(v.data)||!["ok","held","unknown"].includes(v.status as string))return false;
  if(request.command==="cancel-preparation"||request.command==="terminal-recover")return validNativeTerminalData(v.data,{command:request.command,requestId:request.requestId,selectionId:request.payload.selectionId,status:v.status,dispatchAllowed:v.dispatchAllowed});
- if(request.command.startsWith("dispatch-"))return validNativeDispatchData(v.data,{command:request.command,requestId:request.requestId,selectionId:request.payload.selectionId,reservationId:request.payload.reservationId,sessionGeneration:actor.sessionGeneration,status:v.status,dispatchAllowed:v.dispatchAllowed});
+ if(request.command.startsWith("dispatch-"))return validNativeDispatchData(v.data,{command:request.command,requestId:request.requestId,selectionId:request.payload.selectionId,reservationId:request.payload.reservationId,buyerId:actor.userId,sessionGeneration:actor.sessionGeneration,status:v.status,dispatchAllowed:v.dispatchAllowed});
  if(request.command==="reserve"||request.command==="reserve-recover"){
   const d=v.data,r=d.reservation;
   if(!keys(d,["reservation","reason"]))return false;

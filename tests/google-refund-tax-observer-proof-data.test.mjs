@@ -1,9 +1,11 @@
+import {materializeHistoricalProofPackage,loadHistoricalBundle} from './helpers/historical-revenuecat-closure.mjs';
+import * as historicalTool from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
-import {loadBundle} from '../scripts/google-refund-tax-observer-exact-deploy.mjs';
-import {DATA_ANCHORS,EXPECTED_RECEIPTS,dataPredicate,historyPredicate,classifySyntheticProof} from '../scripts/google-refund-tax-observer-proof/predicates.mjs';
-const bundle=loadBundle(new URL('../',import.meta.url).pathname);
+const historicalProof=materializeHistoricalProofPackage();
+const {DATA_ANCHORS,EXPECTED_RECEIPTS,dataPredicate,historyPredicate,classifySyntheticProof}=await import(new URL('predicates.mjs',historicalProof));
+const bundle=loadHistoricalBundle(historicalTool);
 const valid=()=>({catalog:true,data:{guardedHash:DATA_ANCHORS.guarded,inverseHash:DATA_ANCHORS.inverse,seedExact:true,holds:true,fullHash:'a'.repeat(64)},history:{database:'postgres',originalHistorySha256:bundle.manifest.originalHistory.sha256,historyCount:589,historyMaximum:'20261107191000',targets:structuredClone(EXPECTED_RECEIPTS),addedAbsent:true,socialCatalogSha256:bundle.manifest.socialCatalogSha256}});
 test('compiled SQL predicates agree with strict synthetic classifier and reject data/history drift',async()=>{
  const db=new PGlite();try{

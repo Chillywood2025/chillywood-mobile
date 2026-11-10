@@ -5,6 +5,8 @@ import { readNativeSandboxAppEvidence } from "./nativeStoreSandboxProduct";
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
 import { canMakeRevenueCatPurchases, getRevenueCatAppUserId, readRevenueCatNonSubscriptionProducts, purchaseRevenueCatStoreProduct } from "./revenuecat";
 import { isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
+import { captureNativePlayTestSheetContext } from "./nativeStorePlayTestHandoff";
+import type { NativeDispatchQualification } from "../supabase/functions/_shared/native-store-sandbox-dispatch-contract-v1";
 
 // The explicit normal-screen action requires a first committed authenticated
 // consume response before it can reach the existing purchase owner. Missing
@@ -16,14 +18,21 @@ const uuid = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{8}
 const newId = () => { const b = new Uint8Array(16); crypto.getRandomValues(b); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128; const h = [...b].map(v => v.toString(16).padStart(2, "0")).join(""); return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`; };
 const failure = () => new NativeSandboxQuoteError("outcome_unknown");
 export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSessionAuthorityBinding, offerId: string, store: NativeSandboxStore,
-  selectionId: string, options: { storage?: Storage; deadlineMs?: number; recoverOnly?: boolean } = {}) {
+  selectionId: string, options: { storage?: Storage; deadlineMs?: number; recoverOnly?: boolean; playTestSheetAcknowledged?: boolean; isPlayHandoffVisible?: () => boolean } = {}) {
   const expected = Object.freeze({ ...authority }), storage = options.storage ?? AsyncStorage, timeout = options.deadlineMs ?? 15000;
-  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 15000 || store !== "APP_STORE" || (options.recoverOnly !== undefined && typeof options.recoverOnly !== "boolean")) throw failure();
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 15000 || !["APP_STORE", "PLAY_STORE"].includes(store) || (options.recoverOnly !== undefined && typeof options.recoverOnly !== "boolean")
+    || (options.playTestSheetAcknowledged !== undefined && typeof options.playTestSheetAcknowledged !== "boolean")
+    || (options.isPlayHandoffVisible !== undefined && typeof options.isPlayHandoffVisible !== "function")) throw failure();
   const recoverOnly = options.recoverOnly === true;
+  // This acknowledgment is awareness, NEVER proof of a Google account or test
+  // instrument. Only new buyer-scoped server handoff admission can open Play.
+  if (store === "PLAY_STORE" && !recoverOnly && (options.playTestSheetAcknowledged !== true || !options.isPlayHandoffVisible?.())) return Object.freeze({ status: "blocked" as const,
+    reason: "play_test_sheet_confirmation_required", dispatchAllowed: false as const });
   const key = `@chillywood/native-store-dispatch:v2:${expected.userId}:${store}:${offerId}:${selectionId}`;
   if (!recoverOnly && flights.has(key)) throw failure(); if (!recoverOnly) flights.add(key);
   let retired = false;
-  const current = () => { if (retired || !sameAccountSessionAuthority(expected, getCurrentAccountSessionAuthoritySnapshot())) throw failure(); };
+  let play: ReturnType<typeof captureNativePlayTestSheetContext> | null = null;
+  const current = () => { if (retired || !sameAccountSessionAuthority(expected, getCurrentAccountSessionAuthoritySnapshot()) || play && !options.isPlayHandoffVisible?.()) throw failure(); play?.assertCurrent(); };
   const unsubscribe = subscribeToAccountSessionAuthority(v => { if (!sameAccountSessionAuthority(expected, v)) retired = true; });
   const bounded = async <T,>(promise: Promise<T>): Promise<T> => { let timer: ReturnType<typeof setTimeout>;
     try { return await Promise.race([promise, new Promise<never>((_r, reject) => { timer = setTimeout(() => reject(failure()), timeout); })]); }
@@ -32,6 +41,7 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
   let client: Awaited<ReturnType<typeof captureNativeSandboxQuoteClient>> | null = null;
   let retainFlight = false;
   try {
+    if (store === "PLAY_STORE" && !recoverOnly) play = captureNativePlayTestSheetContext(expected);
     current(); client = await captureNativeSandboxQuoteClient(expected, offerId, store, { storage, deadlineMs: timeout }); current();
     const selected = (await client.recover()).data.selection; current();
     if (!selected || selected.id !== selectionId) throw failure();
@@ -60,17 +70,25 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
     const discovered = await client.readDispatchQualification(); current();
     if (discovered.status !== "ok" || !discovered.data.qualification) return Object.freeze({ status: "blocked" as const, reason: discovered.data.reason ?? "qualification_unavailable", dispatchAllowed: false as const });
     const metadata = discovered.data.qualification;
+    if (store === "PLAY_STORE" && !("handoffMode" in metadata)) return Object.freeze({ status: "blocked" as const,
+      reason: "platform_no_charge_proof_unsupported", dispatchAllowed: false as const });
     // Local OS evidence is read here, never provided by a caller. It is app
     // evidence only, not a remotely attested build or IAP/account verification.
-    const app = await readNativeSandboxAppEvidence(expected); current();
-    if (app.status !== "observed" || app.evidence.environment !== "SANDBOX" || !app.evidence.unsignedNativeBuild || !app.evidence.unsignedNativeVersion) throw failure();
+    const app = store === "APP_STORE" ? await readNativeSandboxAppEvidence(expected) : null; current();
+    const matchesQualification = (q: NativeDispatchQualification) => q.sdkVersion === "10.15.1" && (store === "APP_STORE"
+      ? q.store === "APP_STORE" && q.noChargeAccountScope === "testflight_distribution" && app?.status === "observed"
+        && app.evidence.environment === "SANDBOX" && !!app.evidence.unsignedNativeBuild && !!app.evidence.unsignedNativeVersion
+        && q.nativeBuild === app.evidence.unsignedNativeBuild && q.nativeVersion === app.evidence.unsignedNativeVersion && q.signedAppVersion === app.evidence.signedAppVersion
+      : q.store === "PLAY_STORE" && "handoffMode" in q && !!play && q.handoffMode === "play_test_sheet_handoff_v1"
+        && q.automaticNoChargeProof === false && q.userStoreConfirmationRequired === true && q.buyerId === expected.userId
+        && q.sessionGeneration === expected.sessionGeneration && Date.parse(q.enrollmentExpiresAt) > Date.now()
+        && q.nativeBuild === play.nativeBuild && q.nativeVersion === play.nativeVersion);
+    if (!matchesQualification(metadata)) throw failure();
     if (await bounded(getRevenueCatAppUserId()) !== expected.userId) throw failure(); current();
     if (await bounded(canMakeRevenueCatPurchases()) !== true) throw failure(); current();
     const products = await bounded(readRevenueCatNonSubscriptionProducts([selected.quote.catalog.wireProductId])); current();
     if (!products || products.length !== 1 || !isCreatorMoneyStoreQuoteMatch(products[0], { productId: selected.quote.catalog.wireProductId, amountMinor: selected.quote.amountMinor, currency: selected.quote.currency })) throw failure();
     const product = JSON.parse(JSON.stringify(products[0])) as typeof products[0];
-    if (metadata.platform !== "ios" || metadata.noChargeAccountScope !== "testflight_distribution" || metadata.nativeBuild !== app.evidence.unsignedNativeBuild
-      || metadata.nativeVersion !== app.evidence.unsignedNativeVersion || metadata.signedAppVersion !== app.evidence.signedAppVersion || metadata.sdkVersion !== "10.15.1") throw failure();
     const retained = await client.readPurchaseAttempt(); current();
     if (retained.status === "none" || retained.status === "terminal_slot_available") await client.retainPurchaseAttempt(selectionId);
     else if (retained.status !== "dispatch_reserved") throw failure();
@@ -90,13 +108,21 @@ export async function dispatchPreparedNativeSandboxPurchase(authority: AccountSe
       return Object.freeze({ status: "blocked" as const, reason: response.data.reason ?? "already_consumed", dispatchAllowed: false as const });
     }
     const q = response.data.qualification;
-    if (q.platform !== "ios" || q.noChargeAccountScope !== "testflight_distribution" || q.nativeBuild !== app.evidence.unsignedNativeBuild
-      || q.nativeVersion !== app.evidence.unsignedNativeVersion || q.signedAppVersion !== app.evidence.signedAppVersion || q.sdkVersion !== "10.15.1") throw failure();
+    if (!matchesQualification(q) || q.id !== metadata.id || q.revision !== metadata.revision) throw failure();
     await bounded(storage.setItem(key, JSON.stringify({ ...saved, state: "consumed" }))); current();
     const retain = await client.createCallbackRetainer(selectionId, response.data.attempt); current();
     await bounded(storage.setItem(key, JSON.stringify({ ...saved, state: "sdk_started" }))); current();
-    await purchaseRevenueCatStoreProduct(product, { authority: expected, retainPurchaseEvidence: retain });
+    await purchaseRevenueCatStoreProduct(product, { authority: expected, retainPurchaseEvidence: retain,
+      // The purchase owner can wait in its identity queue and authority reads.
+      // Keep the observer alive through those waits; then recheck synchronously
+      // at the actual SDK boundary, including enrollment expiry. Google's UI
+      // may background the app only AFTER this point. The original owner keeps
+      // post-launch callback retention independent from screen/lifecycle state.
+      assertPurchaseLaunchAllowed: () => {
+        current(); if (!matchesQualification(q)) throw failure();
+        play?.dispose(); play = null;
+      } });
     current(); return Object.freeze({ status: "callback_retained" as const, dispatchAllowed: false as const, settlementAllowed: false as const });
   } catch { throw failure(); }
-  finally { client?.dispose(); unsubscribe(); if (!recoverOnly && !retainFlight) flights.delete(key); }
+  finally { play?.dispose(); client?.dispose(); unsubscribe(); if (!recoverOnly && !retainFlight) flights.delete(key); }
 }

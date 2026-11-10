@@ -1,9 +1,11 @@
+import * as historicalTool from '../scripts/google-refund-tax-social-exact-deploy.mjs';
+import {loadHistoricalBundle} from './helpers/historical-revenuecat-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {databaseFactory} from './helpers/native-deployment-database.mjs';
-import {loadBundle,addedCatalogHashSQL} from '../scripts/google-refund-tax-social-exact-deploy.mjs';
+import {addedCatalogHashSQL} from '../scripts/google-refund-tax-social-exact-deploy.mjs';
 import {addedCatalogHashSQL as historicalCatalogHashSQL} from '../scripts/google-refund-tax-exact-deploy.mjs';
 
 // Immutable target DDL over the minimum synthetic CREATE dependencies. No
@@ -24,7 +26,7 @@ const controls=[
  ['default',"alter table private.google_refund_tax_history alter column account_id set default 'acct_changed'"],
 ];
 test('immutable refund catalog normalizes only redundant PG18 NOT NULL rows', {timeout:120000},async t=>{
- const bundle=loadBundle(),results=[];
+ const bundle=loadHistoricalBundle(historicalTool),results=[];
  const engines=[['pglite18',()=>new PGlite({extensions:{pgcrypto}})],
    ...(process.env.NATIVE_DEPLOYMENT_PG_BIN?[['native17',databaseFactory]]:[])];
  for(const [name,create] of engines){

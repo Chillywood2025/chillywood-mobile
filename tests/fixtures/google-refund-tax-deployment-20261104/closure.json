@@ -123,7 +123,8 @@
     },
     {
       "path": "supabase/functions/revenuecat-webhook/index.ts",
-      "sha256": "b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935"
+      "sha256": "b6d07180aa97d203bda4385f8946c8bcb90bedce5f1be549914e0940d1287935",
+      "snapshot": "tests/fixtures/historical-revenuecat-webhook-index.ts.txt"
     },
     {
       "path": "supabase/functions/revenuecat-webhook/store-policy.mjs",

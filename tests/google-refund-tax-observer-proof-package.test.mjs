@@ -1,10 +1,12 @@
+import {materializeHistoricalProofPackage} from './helpers/historical-revenuecat-closure.mjs';
 import {Buffer} from 'node:buffer';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
-import {sql} from '../scripts/google-refund-tax-observer-proof/qualifier.mjs';
-import {assertPinned,verifyInputs} from '../scripts/google-refund-tax-observer-proof/verify-inputs.mjs';
+const historicalProof=materializeHistoricalProofPackage();
+const {sql}=await import(new URL('qualifier.mjs',historicalProof));
+const {assertPinned,verifyInputs}=await import(new URL('verify-inputs.mjs',historicalProof));
 const sha=s=>createHash('sha256').update(s).digest('hex');
 test('portable package pins reviewed statement; materialization is the sole query change',()=>{
  const lock=verifyInputs();assert.equal(sha(sql),lock.qualifierSha256);
@@ -25,7 +27,7 @@ test('arbitrary delta, type mapping, source bytes and unknown inputs fail locked
 
 test('executable emitter is offline-only, emits staged packet and never retired combined packet',async()=>{
  const {spawnSync}=await import('node:child_process');
- const command=new URL('../scripts/google-refund-tax-observer-proof/generate.mjs',import.meta.url).pathname;
+ const command=new URL('generate.mjs',historicalProof).pathname;
  const denied=spawnSync(process.execPath,[command],{encoding:'utf8'});
  assert.notEqual(denied.status,0);assert.equal(denied.stdout,'');assert.match(denied.stderr,/OFFLINE_FLAG_REQUIRED/);
  const allowed=spawnSync(process.execPath,[command,'--offline'],{encoding:'utf8'});
