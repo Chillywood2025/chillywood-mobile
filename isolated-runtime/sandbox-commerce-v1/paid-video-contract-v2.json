@@ -636,7 +636,7 @@
           "type": "object",
           "properties": {
             "reason": {
-              "const": "protocol3_catalog_unavailable"
+              "enum": ["protocol3_catalog_unavailable", "native_catalog_unavailable"]
             }
           },
           "required": [

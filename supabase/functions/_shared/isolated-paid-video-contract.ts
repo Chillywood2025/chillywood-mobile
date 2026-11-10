@@ -45,6 +45,12 @@ export function validPaidVideoV2Result(value: unknown): value is PaidVideoRow {
     || !Number.isSafeInteger(value.capabilityExpiresAtMs) || !row(value.data)) return false;
   const copy = structuredClone(value); delete copy.configurationDigest; delete copy.capabilityExpiresAtMs; copy.protocol = "isolated-paid-video-v1";
   const data = copy.data as PaidVideoRow;
+  // Native authoring extends only this held publication reason. The frozen v1
+  // schema still validates the complete actor/request/result envelope.
+  if (copy.command === "offer.publish" && copy.status === "held" && data.reason === "native_catalog_unavailable") {
+    if (value.configurationDigest !== "8e5c534276f2e9cc279cd5dbd629964c49124b6551d7829c3a29dbb6635f0dc0") return false;
+    data.reason = "protocol3_catalog_unavailable";
+  }
   for (const target of [data, data.upload, data.offer, ...(Array.isArray(data.uploads) ? data.uploads : [])]) {
     if (!row(target)) continue;
     for (const key of ["transferAvailable", "checkoutAvailable"]) if (Object.hasOwn(target, key)) {

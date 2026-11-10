@@ -25,7 +25,7 @@ function load(file, bindings, extra = {}) {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), "utf8"), { fileName: file,
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, scope, { filename: file }); return scope.exports;
 }
-function fixture({ initial = A, platform = "ios", memory = new Map(), strict = false, nativeConfig = "b".repeat(64), clockNow = null, remote = { upload: clone(upload), resource: clone(resource), offer: null, transfer: null, recorded: false } } = {}) {
+function fixture({ initial = A, platform = "ios", memory = new Map(), strict = false, nativeConfig = "b".repeat(64), mode = "test_store_v3", clockNow = null, remote = { upload: clone(upload), resource: clone(resource), offer: null, transfer: null, recorded: false } } = {}) {
   // Keep the synthetic upload and every participating boundary on one clock.
   // Real captured envelopes supply their own explicit observation time below.
   const now = () => clockNow ?? Date.parse("2026-11-07T12:00:00Z");
@@ -40,7 +40,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
   const primitive = name => function NativePrimitive(props) { nodes.push({ name, props }); return ["Text", "TextInput", "ActivityIndicator"].includes(name) ? null : React.createElement(React.Fragment, null, props.children); };
   const native = { Share: { async share(value) { shares.push(clone(value)); return { action: "sharedAction" }; } }, Platform: { OS: platform }, StyleSheet: { create: v => v, absoluteFillObject: {} }, ...Object.fromEntries(["ActivityIndicator", "ImageBackground", "Pressable", "ScrollView", "Text", "TextInput", "View"].map(n => [n, primitive(n)])) };
   const offerCodes = load("../_lib/isolatedPaidVideoOfferCode.ts", {});
-  const api = load("../_lib/isolatedPaidVideoV2.ts", { "react-native": native, "react-native-get-random-values": {}, "./accountSessionAuthority": authority, "./isolatedTestStoreV3Build": { readIsolatedTestStoreV3Build: () => ({configId:nativeConfig}) },
+  const api = load("../_lib/isolatedPaidVideoV2.ts", { "react-native": native, "react-native-get-random-values": {}, "./accountSessionAuthority": authority, "./paidVideoAuthoringProfile": { readPaidVideoAuthoringProfile: () => ({configId:nativeConfig,mode}) },
     "./supabase": { SUPABASE_URL: "https://isolated.invalid", SUPABASE_ANON_KEY: "public-fixture" },
     "./accountBoundSupabaseMutation": { async captureAccountBoundSupabaseMutationSubject() { return { authority: current, accessToken: "captured-fixture-token" }; } } },
   { Date: Clock, fetch: async (url, options) => { const body = JSON.parse(options.body); calls.push({ url, options, body }); return { ok: true, json: async () => respond(body) }; } });
@@ -97,6 +97,7 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
     "../../_lib/session": { useSession: () => ({ user: current ? { id: current.userId } : null, authority: current && { ...current }, isLoading: false }) },
     "../../_lib/isolatedPaidVideoV2Actions": actions, "../navigation/app-back-button": { AppBackButton: primitive("AppBackButton") },
     "../../_lib/isolatedPaidVideoOfferCode": offerCodes,
+    "../../_lib/paidVideoAuthoringProfile": { readPaidVideoAuthoringProfile: () => ({ mode, configId: nativeConfig }) },
     "./isolated-test-store-v3-checkout": { IsolatedTestStoreV3Checkout: props => { checkoutEntries.push(props); return null; } },
      });
   const root = createRoot(container()); const visible = () => nodes.slice(Math.max(0, nodes.findLastIndex(n => n.name === "ImageBackground")));
@@ -139,19 +140,29 @@ function fixture({ initial = A, platform = "ios", memory = new Map(), strict = f
 async function reserve(f) { await f.render("studio"); await f.input("paid-video-title", upload.title); await f.press("paid-video-select"); await f.press("paid-video-reserve"); }
 async function openUpload(f) { await f.render("upload", { uploadId: upload.id }); await f.press("paid-video-select-transfer"); }
 test("creator shares only a current published sandbox identity and a free buyer opens its authenticated checkout entry", async t => {
-  const creator = fixture({ remote: { upload: clone(upload), resource: { ...resource, status: "published" }, offer: { ...clone(offer), checkoutAvailable: true }, transfer: null, recorded: false } });
+  for (const mode of ["test_store_v3", "native"]) {
+  const creator = fixture({ mode, remote: { upload: clone(upload), resource: { ...resource, status: "published" }, offer: { ...clone(offer), checkoutAvailable: mode !== "native" }, transfer: null, recorded: false } });
   t.after(() => creator.dispose()); await creator.render("offer", { offerId: offer.id });
+  if (mode === "native") { assert.equal(creator.node("paid-video-native-store-quote"), undefined); assert.match(creator.text(), /Your own account cannot buy this video/u); }
   await creator.press("paid-video-share-offer"); assert.equal(creator.shares.length, 1);
   const shared = creator.shares[0]; assert.equal(shared.message, `chillywood-sandbox-video-v3:${offer.id}`);
   assert.deepEqual(Object.keys(shared).sort(), ["message", "title"]); assert.doesNotMatch(JSON.stringify(shared), /https:|Bearer|sha256|incarnation|grant|price|bucket/u);
-  const buyer = fixture({ initial: B, remote: creator.remote }); t.after(() => buyer.dispose()); await buyer.render("home");
+  const buyer = fixture({ mode, initial: B, remote: creator.remote }); t.after(() => buyer.dispose()); await buyer.render("home");
   assert.match(buyer.text(), /Buyers do not need Premium/u); await buyer.input("paid-video-offer-code", shared.message);
   assert.equal(buyer.node("paid-video-open-offer-code").props.accessibilityRole, "button"); await buyer.press("paid-video-open-offer-code");
   assert.deepEqual(buyer.navigations, [`/sandbox-videos/offer/${offer.id}`]);
   assert.equal(buyer.calls.some(c => c.body?.command === "offer.read" && c.body.payload.offerId === offer.id), true);
-  await buyer.render("offer", { offerId: offer.id }); assert.equal(buyer.checkoutEntries.at(-1).offerId, offer.id);
-  assert.equal(buyer.checkoutEntries.at(-1).authority.userId, B.userId); assert.equal(buyer.node("paid-video-share-offer"), undefined);
+  await buyer.render("offer", { offerId: offer.id });
+  if (mode === "native") {
+    assert.equal(buyer.checkoutEntries.length, 0);
+    await buyer.press("paid-video-native-store-quote");
+    assert.equal(buyer.navigations.at(-1), `/sandbox-videos/native-offer/${offer.id}`);
+  } else {
+    assert.equal(buyer.checkoutEntries.at(-1).offerId, offer.id);
+    assert.equal(buyer.checkoutEntries.at(-1).authority.userId, B.userId);
+  } assert.equal(buyer.node("paid-video-share-offer"), undefined);
   assert.equal(buyer.calls.some(c => /purchase|prepare|allocate|claim|restore/u.test(c.body?.command ?? "")), false);
+  }
 });
 test("malformed or noncanonical sandbox offer codes never navigate or query; current unavailable offers do not start checkout", async t => {
   const f = fixture({ initial: B }); t.after(() => f.dispose()); await f.render("home"); const before = f.calls.length;
@@ -172,7 +183,8 @@ test("a stale published screen cannot share a retired offer or cross an account 
   assert.equal(f.shares.length, 0); assert.match(f.text(), /session changed/u);
 });
 test("mounted V3 authoring performs one durable upload, exact reconciliation, scan request and publication without client grants", async t => {
-  const f = fixture({ strict: true }); t.after(() => f.dispose()); await reserve(f); assert.equal((await f.journal().list()).at(-1).state, "completed");
+  for (const [mode,platform] of [["test_store_v3","ios"],["native","android"],["native","ios"]]) {
+  const f = fixture({ strict: true, mode, platform }); t.after(() => f.dispose()); await reserve(f); assert.equal((await f.journal().list()).at(-1).state, "completed");
   await openUpload(f); assert.equal(f.node("paid-video-transfer").props.accessibilityRole, "button");
   await f.press("paid-video-transfer"); const transfer = (await f.transfers().list()).at(-1); assert.equal(transfer.state, "unknown");
   assert.equal(f.node("paid-video-transfer").props.disabled, true); assert.equal(f.node("paid-video-finalize").props.disabled, true);
@@ -182,6 +194,7 @@ test("mounted V3 authoring performs one durable upload, exact reconciliation, sc
   assert.equal(f.remote.offer.amountMinor, 199); assert.match(f.text(), /Test offer.*published/us);
   assert.equal(f.node("paid-video-checkout"), undefined); assert.deepEqual(f.calls.filter(c => c.method).map(c => c.method), ["PUT", "GET", "POST"]);
   assert.equal(f.calls.some(c => /checkout|purchase|restore/u.test(c.body?.command ?? "")), false);
+  }
 });
 test("shared sandbox source cancellation and account replacement cannot select bytes or reserve a draft",async t=>{
   for(const platform of ["ios","android"]){
@@ -196,13 +209,15 @@ test("shared sandbox source cancellation and account replacement cannot select b
   }
 });
 test("lost PUT survives restart and new session recovery never repeats it", async t => {
-  const f = fixture(); await reserve(f); await openUpload(f); f.losePut(); await f.press("paid-video-transfer");
+  for (const mode of ["test_store_v3","native"]) {
+  const f = fixture({ mode }); await reserve(f); await openUpload(f); f.losePut(); await f.press("paid-video-transfer");
   const attempt = (await f.transfers().list()).at(-1); assert.equal(attempt.state, "unknown"); await f.dispose();
-  const fresh = fixture({ memory: f.memory, remote: f.remote, initial: { ...A, sessionGeneration: uuid(60) } }); t.after(() => fresh.dispose());
+  const fresh = fixture({ mode, memory: f.memory, remote: f.remote, initial: { ...A, sessionGeneration: uuid(60) } }); t.after(() => fresh.dispose());
   await fresh.render("upload", { uploadId: upload.id }); assert.equal(fresh.node("paid-video-transfer").props.disabled, true);
   await fresh.press(`paid-video-verify-${attempt.requestId}`); const result = (await fresh.transfers().list()).at(-1);
   assert.equal(result.state, "recorded"); assert.equal(result.sessionGeneration, A.sessionGeneration); assert.equal(result.receipt.originalSessionId, A.sessionGeneration);
   assert.deepEqual(fresh.calls.filter(c => c.method).map(c => c.method), ["GET", "POST"]);
+  }
 });
 test("new device adopts only the authoritative retained descriptor and cannot gain a fresh PUT opportunity", async t => {
   const first = fixture(); await reserve(first); await openUpload(first); first.losePut(); await first.press("paid-video-transfer");

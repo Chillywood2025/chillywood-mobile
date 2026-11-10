@@ -10,6 +10,7 @@ import { AppBackButton } from "../navigation/app-back-button";
 import { IsolatedTestStoreV3Checkout } from "./isolated-test-store-v3-checkout";
 import { formatPaidVideoOfferCode, parsePaidVideoOfferCode } from "../../_lib/isolatedPaidVideoOfferCode";
 import { useMediaPicker } from "../../hooks/useMediaPicker";
+import { readPaidVideoAuthoringProfile } from "../../_lib/paidVideoAuthoringProfile";
 
 const path = (kind: "upload" | "offer" | "status", id: string) => `/sandbox-videos/${kind}/${encodeURIComponent(id)}` as Href;
 const scalar = (value: string | string[] | undefined) => typeof value === "string" ? value : "";
@@ -23,7 +24,7 @@ function Frame({ title, children }: { title: string; children: React.ReactNode }
     <SafeAreaView style={styles.screen}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       <AppBackButton accessibilityLabel="Back from sandbox videos" testID="paid-video-back" onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/my-list"); }} />
       <Text accessibilityRole="header" style={styles.heading}>{title}</Text>
-      <Text style={styles.body}>Test content only. No payable earnings, payouts or cashout. Buyers remain free.</Text>{children}
+      <Text style={styles.body}>Sandbox content only. No payable earnings, payouts or cashout. Buyers do not need Premium. Confirm the store’s test-payment details before approving a purchase.</Text>{children}
     </ScrollView></SafeAreaView></ImageBackground>;
 }
 function UploadSummary({ upload }: { upload: PaidVideoV2Upload }) {
@@ -45,6 +46,8 @@ export function IsolatedPaidVideoV2Screen({ page }: { page: PaidVideoV2View["pag
   return <VideoSession key={`${page}:${id}:${authority.userId}:${authority.sessionGeneration}`} authority={authority} page={page} id={id} />;
 }
 function VideoSession({ authority, page, id }: { authority: AccountSessionAuthorityBinding; page: PaidVideoV2View["page"]; id: string }) {
+  const authoringMode = readPaidVideoAuthoringProfile()?.mode;
+  const nativeStore = authoringMode === "native";
   const { pickMedia, mediaPickerSheet } = useMediaPicker(`sandbox-video-v2:${page}:${id}`);
   const [capturedAuthority] = useState(() => Object.freeze({ ...authority }));
   const router = useRouter(); const [actions, setActions] = useState<PaidVideoV2Actions | null>(null);
@@ -126,6 +129,9 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
       <Text style={styles.body}>{(state.offer.amountMinor / 100).toFixed(2)} {state.offer.currency.toUpperCase()}</Text>
       <Text style={styles.body}>A published offer does not establish a completed purchase or playback access.</Text>
       <Action testID="paid-video-offer-link" disabled={unavailable} onPress={() => router.push(path("offer", state.offer!.id))}>Review offer</Action>
+      {nativeStore && !state.upload && <Action testID="paid-video-native-store-quote" disabled={unavailable || state.offer.status !== "published"}
+        onPress={() => router.push(`/sandbox-videos/native-offer/${encodeURIComponent(state.offer!.id)}` as Href)}>Review native store sandbox quote</Action>}
+      {nativeStore && !!state.upload && <Text style={styles.body}>Share the offer code with a different signed-in buyer. Your own account cannot buy this video.</Text>}
       <Action testID="paid-video-retire" disabled={noMutation || !state.upload || state.offer.status !== "published"} onPress={() => safeRun(a => a.retireOffer())}>Retire test offer</Action>
       {!!state.upload && state.offer.status === "published" && <>
         <Text style={styles.body}>Share this sandbox code with another signed-in test buyer. They can open it from Sandbox videos.</Text>
@@ -141,7 +147,7 @@ function VideoSession({ authority, page, id }: { authority: AccountSessionAuthor
         <Action testID={`paid-video-verify-${transfer.requestId}`} disabled={unavailable || transfer.state === "not_applied"} onPress={() => safeRun(a => a.verifyTransfer(transfer.requestId))}>Verify original stored file</Action>
       </View>)}
     </View>}
-    {(page === "offer" || page === "history") && <IsolatedTestStoreV3Checkout authority={capturedAuthority} offerId={page === "offer" ? id : null} />}
+    {authoringMode === "test_store_v3" && (page === "offer" || page === "history") && <IsolatedTestStoreV3Checkout authority={capturedAuthority} offerId={page === "offer" ? id : null} />}
     {(page === "history" || page === "status") && <View>
       <Text accessibilityRole="header" style={styles.subheading}>Actions saved on this device</Text>
       <Text style={styles.body}>Recorded actions are acknowledgments, not proof of the current scan, moderation or offer state. Account drafts above come from the server.</Text>

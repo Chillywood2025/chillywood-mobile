@@ -11,7 +11,7 @@ const deferred = () => { let resolve; const promise = new Promise(done => { reso
 function fixture() {
   let nativeAvailable = true; let current = A, transport = null, captureWait = null; const listeners = new Set(), calls = [];
   const same = (a, b) => !!a && !!b && ["userId", "accountId", "sessionGeneration", "restoreOnly"].every(k => a[k] === b[k]);
-  const bindings = { "./isolatedTestStoreV3Build": { readIsolatedTestStoreV3Build: () => nativeAvailable ? {configId:"a".repeat(64)} : null }, "react-native-get-random-values": {}, "react-native": { Platform: { OS: "ios" } }, "./supabase": { SUPABASE_URL: "https://isolated.invalid", SUPABASE_ANON_KEY: "public-source-fixture" },
+  const bindings = { "./paidVideoAuthoringProfile": { readPaidVideoAuthoringProfile: () => nativeAvailable ? {configId:"a".repeat(64)} : null }, "react-native-get-random-values": {}, "react-native": { Platform: { OS: "ios" } }, "./supabase": { SUPABASE_URL: "https://isolated.invalid", SUPABASE_ANON_KEY: "public-source-fixture" },
     "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => current, sameAccountSessionAuthority: same,
       subscribeToAccountSessionAuthority(fn) { listeners.add(fn); return () => listeners.delete(fn); } },
     "./accountBoundSupabaseMutation": { async captureAccountBoundSupabaseMutationSubject() { if (captureWait) await captureWait.promise; return { authority: current, accessToken: "captured-fixture-token" }; } } };

@@ -397,6 +397,8 @@ jobs:
         run: node isolated-runtime/native-store-sandbox-v1/journal.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
       - name: Verify normal native store quote preparation and recovery
         run: node isolated-runtime/native-store-sandbox-v1/quote.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
+      - name: Verify normal paid video authoring, immutable publication and recovery
+        run: node isolated-runtime/native-paid-video-authoring-v1/authoring.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
       - name: Verify bounded native quote startup diagnostics and isolated cleanup
         run: node isolated-runtime/native-store-sandbox-v1/quote-startup.native.mjs --local-bin "$RUNNER_TEMP/isolated-sandbox-pg17/install/bin"
       - name: Verify native store default-off managed installation closure

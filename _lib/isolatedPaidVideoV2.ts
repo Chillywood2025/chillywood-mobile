@@ -1,4 +1,4 @@
-import { readIsolatedTestStoreV3Build } from "./isolatedTestStoreV3Build";
+import { readPaidVideoAuthoringProfile } from "./paidVideoAuthoringProfile";
 import { Platform } from "react-native";
 import "react-native-get-random-values";
 import { captureAccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
@@ -53,7 +53,7 @@ export type PaidVideoV2Data = {
 };
 type Envelope<C extends PaidVideoV2Command> = Readonly<{ protocol: typeof PAID_VIDEO_V2_PROTOCOL; command: C; requestId: string; actor: PaidVideoV2Actor; configurationDigest: string; capabilityExpiresAtMs: number }>;
 export type PaidVideoV2Response<C extends PaidVideoV2Command = PaidVideoV2Command> = Envelope<C> & (
-  { status: "ok"; data: PaidVideoV2Data[C] } | { status: "held"; data: { reason: "immutable_upload_route_unavailable" | "protocol3_catalog_unavailable" } }
+  { status: "ok"; data: PaidVideoV2Data[C] } | { status: "held"; data: { reason: "immutable_upload_route_unavailable" | "protocol3_catalog_unavailable" | "native_catalog_unavailable" } }
   | { status: "unknown"; data: { recovery: { state: "unknown"; originalRequestId: string } } });
 type Row = Record<string, unknown>;
 const row = (value: unknown): value is Row => !!value && typeof value === "object" && !Array.isArray(value);
@@ -130,7 +130,9 @@ export function parsePaidVideoV2Response<C extends PaidVideoV2Command>(value: un
     && value.actor.userId === actor.userId && value.actor.accountId === actor.accountId && value.actor.sessionGeneration === actor.sessionGeneration);
   const d = value.data, p = payload as Row;
   if (value.status === "held") {
-    expect(keys(d, ["reason"]) && ((command === "upload.reserve" && d.reason === "immutable_upload_route_unavailable") || (command === "offer.publish" && d.reason === "protocol3_catalog_unavailable")));
+    expect(keys(d, ["reason"]) && ((command === "upload.reserve" && d.reason === "immutable_upload_route_unavailable")
+      || (command === "offer.publish" && (d.reason === "protocol3_catalog_unavailable"
+        || d.reason === "native_catalog_unavailable" && configurationDigest === "8e5c534276f2e9cc279cd5dbd629964c49124b6551d7829c3a29dbb6635f0dc0"))));
   } else if (value.status === "unknown") {
     expect(command === "upload.recover" && keys(d, ["recovery"]) && keys(d.recovery, ["state", "originalRequestId"])
       && d.recovery.state === "unknown" && d.recovery.originalRequestId === p.originalRequestId);
@@ -179,9 +181,9 @@ export function parsePaidVideoV2Response<C extends PaidVideoV2Command>(value: un
  * only a new current capture can read retained server history. Mutations are
  * one-use in this runtime and must also be durably journaled by their caller. */
 export async function captureIsolatedPaidVideoV2Client(authority: AccountSessionAuthorityBinding) {
-  const nativeBuild = readIsolatedTestStoreV3Build();
-  if (!nativeBuild) throw new IsolatedPaidVideoV2Error("invalid_request", null, "not_sent");
-  const configurationDigest = nativeBuild.configId;
+  const profile = readPaidVideoAuthoringProfile();
+  if (!profile) throw new IsolatedPaidVideoV2Error("invalid_request", null, "not_sent");
+  const configurationDigest = profile.configId;
   if (!authority || authority.restoreOnly || authority.userId !== authority.accountId || !paidVideoUuid(authority.userId) || !paidVideoUuid(authority.sessionGeneration)
     || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) throw new IsolatedPaidVideoV2Error("authority_retired", null, "not_sent");
   const expected = Object.freeze({ ...authority }); let retired = false;
@@ -195,7 +197,7 @@ export async function captureIsolatedPaidVideoV2Client(authority: AccountSession
   } catch { unsubscribe(); throw new IsolatedPaidVideoV2Error("authority_retired", null, "not_sent"); }
   const actor: PaidVideoV2Actor = Object.freeze({ userId: expected.userId, accountId: expected.accountId, sessionGeneration: expected.sessionGeneration });
   const used = new Set<string>();
-  return Object.freeze({ actor, configurationDigest, assertCurrent, dispose() { retired = true; unsubscribe(); },
+  return Object.freeze({ actor, configurationDigest, mode: profile.mode, assertCurrent, dispose() { retired = true; unsubscribe(); },
     async request<C extends PaidVideoV2Command>(command: C, requestId: string, payload: PaidVideoV2Payloads[C]): Promise<PaidVideoV2Response<C>> {
       if (!paidVideoUuid(requestId) || !validPaidVideoV2Payload(command, payload) || (isPaidVideoV2Mutation(command) && used.has(requestId)))
         throw new IsolatedPaidVideoV2Error("invalid_request", paidVideoUuid(requestId) ? requestId : null, "not_sent");

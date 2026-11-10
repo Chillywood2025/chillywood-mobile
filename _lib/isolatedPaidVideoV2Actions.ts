@@ -183,7 +183,7 @@ export async function capturePaidVideoV2Actions(authority: AccountSessionAuthori
       const offerId = parsePaidVideoOfferCode(value);
       if (!offerId) { publish({ notice: "Enter the complete sandbox offer code shared by its creator." }); return; }
       const data = await read("offer.read", { offerId }); if (!current()) return;
-      if (data.offer.status !== "published" || !data.offer.checkoutAvailable) {
+      if (data.offer.status !== "published" || (client?.mode !== "native" && !data.offer.checkoutAvailable)) {
         publish({ notice: "This offer is not currently available for sandbox checkout. No purchase was started." }); return;
       }
       // This is navigation to a new authenticated price/asset review. The
