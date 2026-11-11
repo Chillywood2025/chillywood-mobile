@@ -6,7 +6,11 @@ group = 'expo.modules.chillywoodproductionpaidvideo'
 version = '1.0.0'
 android {
   namespace 'expo.modules.chillywoodproductionpaidvideo'
-  defaultConfig { minSdkVersion 24 }
+  defaultConfig {
+    minSdkVersion 24
+    versionCode 1
+    versionName '1.0.0'
+  }
 }
 dependencies {
   implementation('com.revenuecat.purchases:purchases:10.28.1') { version { strictly '10.28.1' } }
