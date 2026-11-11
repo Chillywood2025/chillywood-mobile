@@ -2,8 +2,8 @@
   "protocol": "native-paid-video-r2-fixed-deployment-v1",
   "version": "20261110120025",
   "name": "native_paid_video_r2_bounded_v1",
-  "bodySha256": "83b3e5d13f2b19c261e440350e2cea7907c3925cc88a6ca3cf6b39bb1389c8bd",
-  "bodyBytes": 342919,
+  "bodySha256": "5e1764a4545bdcdcf12548c7f293f201faccc20cbad8960ff487c4d1739bb442",
+  "bodyBytes": 344575,
   "extensionDigest": "55ed69aab2b2e3991fbf37542e82985141e85bdbc15028487054fc325847c4de",
   "addedCount": 252,
   "changedCount": 13,
@@ -29,7 +29,7 @@
       "bytes": 7867
     }
   ],
-  "allowlistSha256": "df783835696c8d438cfb966b92a4c28bc56304f2f51ac7ce134e4e63bd23d975",
+  "allowlistSha256": "8beaaba85c5de587c5d55c7827897b5e4eccf86639061ef134e415de733ec414",
   "deploymentAllowed": false,
   "activationAllowed": false,
   "retryAllowed": false

@@ -33,7 +33,19 @@ export const historyCapacity=Object.freeze({statementsPerReceipt:1024,totalState
 const aggregate=`coalesce(string_agg(${hash('item::text')},'' order by item::text collate "C"),'')`;
 const digest=(sql,ceiling=25000)=>`(select ${hash(aggregate)} from (${sql} limit ${ceiling+1}) h(item))`;
 const {catalogItemsSQL:baseCatalogItemsSQL}=await import(pathToFileURL(path.join(ROOT,'scripts/native-store-install-prepare.mjs')));
-const catalogItemsSQL=baseCatalogItemsSQL.replaceAll("('public','private','auth','extensions','sandbox_commerce_v1','native_store_sandbox_v1')",scope);
+// PostgreSQL grants a nonsuper CREATEROLE creator ADMIN without SET/INHERIT,
+// recording the bootstrap superuser as grantor. Its name is installation-local.
+// Normalize ONLY the two exact R2 creator memberships. A different grantor OID,
+// nonsuper grantor, member, role or option remains visible and fails the delta.
+export const r2CreatorGrantorSQL=`case when m.roleid in(select oid from pg_roles where rolname in('sbx_v1_r2_gateway','sbx_v1_r2_scanner'))
+ and m.member=(select oid from pg_roles where rolname='postgres') and m.grantor=10
+ and exists(select 1 from pg_roles where oid=10 and rolsuper)
+ and m.admin_option and not m.inherit_option and not m.set_option
+ then jsonb_build_object('bootstrapSuperuserOid',10) else to_jsonb(m.grantor::regrole::text) end`;
+const rawMembershipSQL="select jsonb_build_array('membership',roleid::regrole::text,member::regrole::text,grantor::regrole::text,admin_option,inherit_option,set_option) from pg_auth_members";
+assert.equal(baseCatalogItemsSQL.split(rawMembershipSQL).length,2,'Exact catalog membership projection required');
+const catalogItemsSQL=baseCatalogItemsSQL.replace(rawMembershipSQL,`select jsonb_build_array('membership',m.roleid::regrole::text,m.member::regrole::text,${r2CreatorGrantorSQL},m.admin_option,m.inherit_option,m.set_option) from pg_auth_members m`)
+ .replaceAll("('public','private','auth','extensions','sandbox_commerce_v1','native_store_sandbox_v1')",scope);
 const {aclItemsSQL}=await import(pathToFileURL(path.join(ROOT,'isolated-runtime/native-store-sandbox-v1/install-delta.mjs')));
 const {nativePrivateStateTables}=await import(pathToFileURL(path.join(ROOT,'isolated-runtime/native-store-sandbox-v1/private-state-readback.mjs')));
 export function verifySource(){
@@ -110,7 +122,7 @@ const oidSQL=`select jsonb_build_array('function',n.nspname,p.proname,pg_get_fun
  union all select jsonb_build_array('policy',p.polrelid::regclass::text,p.polname),p.oid::text from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ${scope}
  union all select jsonb_build_array('schema',n.nspname),n.oid::text from pg_namespace n where n.nspname in ${scope}
  union all select jsonb_build_array('role',r.rolname),r.oid::text from pg_roles r
- union all select jsonb_build_array('membership',roleid::regrole::text,member::regrole::text,grantor::regrole::text),oid::text from pg_auth_members
+ union all select jsonb_build_array('membership',m.roleid::regrole::text,m.member::regrole::text,${r2CreatorGrantorSQL}),m.oid::text from pg_auth_members m
  union all select jsonb_build_array('eventTrigger',evtname),oid::text from pg_event_trigger
  union all select jsonb_build_array('defaultAcl',defaclrole::regrole::text,coalesce(n.nspname,''),defaclobjtype),d.oid::text from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace
  union all select jsonb_build_array('column',a.attrelid::regclass::text,a.attname),d.oid::text from pg_attrdef d join pg_attribute a on a.attrelid=d.adrelid and a.attnum=d.adnum join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ${scope}`;

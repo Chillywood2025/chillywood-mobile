@@ -119,4 +119,6 @@ export async function runR2DeploymentNativeCases({bin,full=false,onProgress=()=>
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  assert.deepEqual(process.argv.slice(2,3),['--local-bin']);assert.ok(process.argv.slice(4).every(x=>['--full'].includes(x)));
  console.log(JSON.stringify(await runR2DeploymentNativeCases({bin:process.argv[3],full:process.argv.includes('--full'),onProgress:x=>console.log(JSON.stringify(x))})));
+ if(process.argv.includes('--full')){const {runR2BootstrapMembershipCases}=await import('./bootstrap-membership.native-cases.mjs');
+  console.log(JSON.stringify(await runR2BootstrapMembershipCases({bin:process.argv[3],full:true,onProgress:x=>console.log(JSON.stringify(x))})));}
 }

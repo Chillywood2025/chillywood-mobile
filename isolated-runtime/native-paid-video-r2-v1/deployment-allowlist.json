@@ -629,12 +629,12 @@
       "rowSha256": "1334a637de213541152a481297928b8e5baf04d16062f480ef69e7803dc263ae"
     },
     {
-      "key": "[\"membership\", \"sbx_v1_r2_gateway\", \"postgres\", \"fixture_admin\"]",
-      "rowSha256": "687e446e6a6244333a66618e728b128c759826c5ff0c8bc37d1b9585b5412120"
+      "key": "[\"membership\", \"sbx_v1_r2_gateway\", \"postgres\", {\"bootstrapSuperuserOid\": 10}]",
+      "rowSha256": "e6d04ae7da9a2b3218c782421b494b3984fe4d92887f4dd6ed096c1a2edc83a7"
     },
     {
-      "key": "[\"membership\", \"sbx_v1_r2_scanner\", \"postgres\", \"fixture_admin\"]",
-      "rowSha256": "afefe8be06648bbdd184736e22f1656b888508e752eb2421e722cadea2b138bd"
+      "key": "[\"membership\", \"sbx_v1_r2_scanner\", \"postgres\", {\"bootstrapSuperuserOid\": 10}]",
+      "rowSha256": "ff5d16bc44d039a021a44c565552cc162dbacc573b58f68a9ddbb0028a159fc7"
     },
     {
       "key": "[\"policy\", \"sandbox_commerce_v1.r2_bindings\", \"core_owner\"]",

@@ -52,6 +52,23 @@ every final check. New gateway/scanner roles are NOLOGIN/NOINHERIT/NOBYPASSRLS;
 no runtime credential or authenticator membership is installed. PostgreSQL's
 creator admin memberships, if present, must have no SET/INHERIT authority and
 are exact catalog additions. No existing membership is weakened or expanded.
+Only the two exact R2-to-postgres creator memberships with ADMIN true and
+SET/INHERIT false normalize the grantor's installation-local name to
+`{"bootstrapSuperuserOid":10}`. This typed JSON token cannot collide with an
+actual role-name string. The grantor must actually be OID 10 and a superuser.
+Row hashes, allowlist keys and OID keys use the same predicate; every different
+role, member, grantor or option retains its actual identity and is rejected.
+This fixes a local fixture-name leak without granting or changing membership.
+The separate local-fixture SQL guard still requires loopback, its marker token
+and OID 10 named `fixture_admin`; portable catalog normalization does not relax it.
+
+Run the renamed-bootstrap regression locally with:
+`node isolated-runtime/native-paid-video-r2-v1/bootstrap-membership.native-cases.mjs --local-bin /absolute/path/to/postgresql-17.6/bin`.
+It uses a disposable full legacy+Studio fixture, not a hosted target. The source
+correction changes R2 catalog/artifact/receipt hashes and requires new reviewed
+source closure bindings before any separately authorized deployment. It does
+not reinterpret or reinstall the existing Studio receipt, reset consumed
+attempt records, or authorize another R2 attempt.
 Only two owner-issued non-grantable public-schema USAGE entries are added for
 the new roles. A contextual catalog split retains the actual schema owner and
 every prior ACL entry unchanged, representing those two privileges as separate
