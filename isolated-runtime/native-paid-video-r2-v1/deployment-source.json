@@ -112,7 +112,7 @@
   "extensionDigest": "55ed69aab2b2e3991fbf37542e82985141e85bdbc15028487054fc325847c4de",
   "addedCount": 252,
   "changedCount": 13,
-  "portableDeltaSha256": "93271aca93233fb8c694a6f75059693e7e503ea94c4f55e54576483e1f200521",
+  "portableDeltaSha256": "b764b48d939503a4506bbe713ed78c93a516b1b451e28b6c343959806072acea",
   "newTables": [
     "sandbox_commerce_v1.r2_profiles",
     "sandbox_commerce_v1.r2_bindings",

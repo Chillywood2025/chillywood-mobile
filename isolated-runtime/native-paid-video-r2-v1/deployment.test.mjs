@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {verifySource,allowlist,catalogCapacity,historyCapacity,snapshotReadSQL,sha,IDENTITY} from './deployment.mjs';
+import {verifySource,allowlist,catalogCapacity,historyCapacity,snapshotReadSQL,sha,IDENTITY,r2CreatorGrantorSQL} from './deployment.mjs';
 import {verifyFixedArtifact,buildDeploymentEnvelope} from './deployment-envelope.mjs';
 import {r2PrivateStateModuleSQL,r2PrivateStateReadSQL,r2PrivateStateTables,validateR2PrivateState} from './private-state-readback.mjs';
 test('fixed source and CLI identity preserve installed Play and exact catalog changes',()=>{
@@ -21,6 +21,23 @@ test('observation preserves complete actual-scale bounds and no runtime executio
  assert.match(sql,/p\.oid::text/u);assert.match(sql,/created_by,idempotency_key,statements,rollback/u);
  assert.match(sql,/limit 60001/u);assert.match(sql,/limit 35001/u);
  assert.throws(()=>buildDeploymentEnvelope({baseline:{capturedAt:'2000-01-01T00:00:00Z'},source:'0'.repeat(40)}),/fresh_observation/u);
+});
+test('only exact R2 creator memberships normalize the bootstrap grantor in rows and OID keys',()=>{
+ const memberships=allowlist.added.filter(x=>JSON.parse(x.key)[0]==='membership');
+ assert.equal(memberships.length,2);
+ for(const entry of memberships){
+  const k=JSON.parse(entry.key);assert.ok(['sbx_v1_r2_gateway','sbx_v1_r2_scanner'].includes(k[1]));
+  assert.deepEqual(k.slice(2),['postgres',{bootstrapSuperuserOid:10}]);
+  // PostgreSQL JSONB array text uses comma-space separators.
+  assert.equal(entry.rowSha256,sha(JSON.stringify([...k,true,false,false]).replaceAll(',',', ').replaceAll(':',': ')));
+ }
+ const sql=snapshotReadSQL();assert.equal(sql.split(r2CreatorGrantorSQL).length,3);
+ assert.match(r2CreatorGrantorSQL,/m\.grantor=10/u);assert.match(r2CreatorGrantorSQL,/oid=10 and rolsuper/u);
+ assert.match(r2CreatorGrantorSQL,/m\.admin_option and not m\.inherit_option and not m\.set_option/u);
+ assert.match(r2CreatorGrantorSQL,/else to_jsonb\(m\.grantor::regrole::text\)/u);
+ const builder=fs.readFileSync(new URL('./deployment-envelope.mjs',import.meta.url),'utf8');
+ assert.match(builder,/oid=10 and rolname='fixture_admin' and rolsuper and rolcanlogin/u);
+ assert.match(builder,/inet_server_addr\(\) is distinct from '127\.0\.0\.1'::inet/u);
 });
 test('fixed reader rejects malformed and overflowing metadata; occupied state is not activation',()=>{
  const empty={protocol:'native-paid-video-r2-private-state-v1',reader:'supabase_read_only_user',transactionReadOnly:true,profileEnabled:false,lifecycleActive:false,rolesSafe:true,
