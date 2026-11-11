@@ -9,16 +9,26 @@ end where key in ( 'revenuecat_google_play_enabled','revenuecat_app_store_enable
 create function pg_temp.apply_google_premium_lifecycle( p_event_id text, p_event_type text, p_user_id uuid, p_original_transaction_id text, p_entitlement_status text,
   p_starts_at timestamptz, p_expires_at timestamptz, p_occurred_at timestamptz, p_hash text )
 returns jsonb
-language sql
+language plpgsql
 volatile
--- Synthetic provider invocation keeps the real terminal service-role guard.
-set "request.jwt.claim.role" = 'service_role'
+-- Synthetic provider context is saved/restored without function proconfig.
 as $$
-  select public.process_revenuecat_premium_event_atomic( 'revenuecat_google_play',p_event_id,p_event_type,p_user_id, product.provider_product_id,product.provider_base_plan_id,
+declare
+  v_prior_role text := current_setting('request.jwt.claim.role',true);
+  v_result jsonb;
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  v_result := (select public.process_revenuecat_premium_event_atomic( 'revenuecat_google_play',p_event_id,p_event_type,p_user_id, product.provider_product_id,product.provider_base_plan_id,
     'sandbox',p_entitlement_status,p_starts_at,p_expires_at,p_occurred_at, 999,'usd',p_hash,'NORMAL','google_play','android',null,product.id, p_original_transaction_id )
   from public.monetization_products product
   where product.provider='revenuecat_google_play' and product.environment='sandbox' and product.product_type='premium_subscription' and product.status='sandbox'
-  order by product.created_at,product.id limit 1;
+  order by product.created_at,product.id limit 1);
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
+  return v_result;
+exception when others then
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
+  raise;
+end;
 $$;
 select lives_ok(
   $$insert into public.revenuecat_terminal_authority_quarantines( provider_scope,environment_scope,user_id,reported_provider_event_id, event_type,raw_payload_hash,reason,created_at

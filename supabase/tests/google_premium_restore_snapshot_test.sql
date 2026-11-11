@@ -32,17 +32,27 @@ returns jsonb language sql volatile as $$
     and product.provider_product_id='premium_subscription'
     and product.provider_base_plan_id='monthly' and product.environment='sandbox'
 $$;
-create function pg_temp.google_terminal(n integer,kind text) returns jsonb language sql volatile
--- Synthetic provider invocation keeps the real terminal service-role guard.
-set "request.jwt.claim.role" = 'service_role'
+create function pg_temp.google_terminal(n integer,kind text) returns jsonb language plpgsql volatile
+-- Synthetic provider context is saved/restored without function proconfig.
 as $$
-  select public.process_revenuecat_terminal_event_atomic(
+declare
+  v_prior_role text := current_setting('request.jwt.claim.role',true);
+  v_result jsonb;
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  v_result := (select public.process_revenuecat_terminal_event_atomic(
     'revenuecat_google_play','google-restore-terminal-'||n,kind,pg_temp.restore_user(n),
     'premium_subscription','monthly','sandbox',
     case when kind='EXPIRATION' then 'expired' else 'revoked' end,
     now()-interval '3 hours',now()-interval '1 hour',now()-interval '1 hour',
     md5('terminal-'||n)||md5('terminal-'||n),'NORMAL','google_play','android',
-    'google-restore-original-'||n)
+    'google-restore-original-'||n));
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
+  return v_result;
+exception when others then
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
+  raise;
+end;
 $$;
 -- This wrapper supplies inputs to the actual production function; it does not
 -- reproduce its validator, authority lookup, ordering, or mutation logic.

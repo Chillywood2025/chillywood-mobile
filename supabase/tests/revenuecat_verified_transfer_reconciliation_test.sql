@@ -202,12 +202,16 @@ create function pg_temp.apply_premium_event(
   p_payload_hash text default repeat('c', 64)
 )
 returns jsonb
-language sql
+language plpgsql
 volatile
--- Synthetic provider invocation keeps the real terminal service-role guard.
-set "request.jwt.claim.role" = 'service_role'
+-- Synthetic provider context is saved/restored without function proconfig.
 as $$
-  select public.process_revenuecat_premium_event_atomic(
+declare
+  v_prior_role text := current_setting('request.jwt.claim.role',true);
+  v_result jsonb;
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  v_result := (select public.process_revenuecat_premium_event_atomic(
     'revenuecat_app_store',
     p_event_id,
     p_event_type,
@@ -244,7 +248,13 @@ as $$
   where mapping.provider = 'revenuecat_app_store'
     and mapping.provider_product_id = 'com.chillywood.premium.monthly'
     and mapping.environment = 'sandbox'
-  limit 1;
+  limit 1);
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
+  return v_result;
+exception when others then
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
+  raise;
+end;
 $$;
 select lives_ok(
   $$select pg_temp.seed_transfer_source('transfer-source-1', 'c0000000-0000-4000-8000-000000000001')$$,

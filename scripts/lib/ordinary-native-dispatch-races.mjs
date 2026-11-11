@@ -62,11 +62,19 @@ export async function runOrdinaryNativeDispatchRaces({query,race,lit,session,unt
    clock_timestamp()+interval ${lit(expiry)},clock_timestamp(),999,'usd',repeat('a',64),'NORMAL','google_play','android',null,p.id,
    ${lit('live-authority-original-'+creator.id)}) from public.monetization_products p where p.provider='revenuecat_google_play'
    and p.environment='sandbox' and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1;`;
-   // Each owned test connection gets an invoker-only temporary provider wrapper.
-   // Function-local JWT context restores automatically on return/error, even
-   // when this statement runs inside an existing native race transaction.
-   return `create or replace function pg_temp.native_dispatch_fixture_premium() returns jsonb language sql
-    set "request.jwt.claim.role"='service_role' as ${lit(statement)};
+   // Preserve caller context without function SET, which managed non-superusers cannot create.
+   const body=`declare prior_role text:=current_setting('request.jwt.claim.role',true); result jsonb;
+    begin
+     perform set_config('request.jwt.claim.role','service_role',true);
+     result:=(${statement.replace(/;$/u,'')});
+     perform set_config('request.jwt.claim.role',coalesce(prior_role,''),true);
+     return result;
+    exception when others then
+     perform set_config('request.jwt.claim.role',coalesce(prior_role,''),true);
+     raise;
+    end;`;
+   return `create or replace function pg_temp.native_dispatch_fixture_premium() returns jsonb language plpgsql
+    as ${lit(body)};
     select pg_temp.native_dispatch_fixture_premium();`;
   };
   return {kind,creator,buyer,intent,source,attempt,dispatch,marker,sourceLock,premium,eventSale};
