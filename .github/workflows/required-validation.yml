@@ -88,6 +88,10 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: npm ci --prefix tests/integration/real-peer-browser --ignore-scripts
+      - name: Prefer existing official Ubuntu HTTPS mirror
+        run: |
+          node scripts/ci/prefer-official-ubuntu-mirror.mjs /etc/apt/apt-mirrors.txt > "$RUNNER_TEMP/ubuntu-mirrors.txt"
+          sudo install -m 0644 "$RUNNER_TEMP/ubuntu-mirrors.txt" /etc/apt/apt-mirrors.txt
       - name: Install pinned browser for real paired call negotiation
         run: node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
       - name: Install actual media renderer test prerequisites
