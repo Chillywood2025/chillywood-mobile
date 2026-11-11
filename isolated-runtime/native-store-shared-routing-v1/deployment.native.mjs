@@ -131,8 +131,14 @@ try{
  const modeled={...evidence,installed48:[installed48]};
  assert.equal(classifyReadback(modeled,{context,contract}).status,'exact_function_receipt_and_dependencies_observed_runtime_unqualified');
  for(const changed of [{sessionUser:'postgres'},{retainedRelevantMetadataMatches:false},{functions:[]},{migration:[]}])assert.equal(classifyReadback({...modeled,...changed},{context,contract}).status,'unknown_or_conflicting');
- const changedMicrosecond=modeled.databaseStart.replace(/(\.\d{5})(\d)/u,(_,prefix,digit)=>prefix+((Number(digit)+1)%10));assert.notEqual(changedMicrosecond,modeled.databaseStart);
- assert.equal(classifyReadback({...modeled,databaseStart:changedMicrosecond},{context,contract}).status,'unknown_or_conflicting');
+ // PostgreSQL omits trailing fractional zeros; mutate microseconds at every rendered precision.
+ const mutateMicrosecond=value=>value.replace(/(?:\.(\d{1,6}))?(Z|[+-]\d{2}(?::?\d{2})?)$/u,(_,fraction='',zone)=>{const digits=fraction.padEnd(6,'0'),last=Number(digits[5]);return '.'+digits.slice(0,5)+(last===9?8:last+1)+zone;});
+ for(const databaseStart of [modeled.databaseStart,...['','.1','.12','.123','.1234','.44684','.123456','.999999'].map(fraction=>'2026-11-11T03:37:48'+fraction+'+00:00')]){
+  const changedMicrosecond=mutateMicrosecond(databaseStart);assert.notEqual(changedMicrosecond,databaseStart);
+  const precisionContext={...context,databaseStart},precisionEvidence={...modeled,databaseStart};
+  assert.equal(classifyReadback(precisionEvidence,{context:precisionContext,contract}).status,'exact_function_receipt_and_dependencies_observed_runtime_unqualified');
+  assert.equal(classifyReadback({...precisionEvidence,databaseStart:changedMicrosecond},{context:precisionContext,contract}).status,'unknown_or_conflicting');
+ }
  assert.equal(classifyReadback(modeled,{context,contract}).retryAllowed,false);pass('uncertain/lost-reply classification never authorizes a retry');
  const again=attempt(sql);assert.notEqual(again.status,0);assert.match(again.stderr,/exclusion_function_already_present/u);pass('committed rerun refused');
  const invalid=JSON.parse(q('select public.revenuecat_native_legacy_exclusion_v1(null,null,null);'));assert.equal(invalid.status,'held');assert.equal(invalid.financialAuthority,false);pass('invalid input stays held');
