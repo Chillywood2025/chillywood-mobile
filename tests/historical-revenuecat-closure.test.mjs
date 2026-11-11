@@ -12,6 +12,7 @@ import {verifyInputs} from '../scripts/google-refund-tax-observer-proof/verify-i
 import {collectSourceBundle} from '../ops/creator-backend-rollout/prepare-edge.mjs';
 import {HISTORICAL_CONFIG,HISTORICAL_ENTRYPOINT,materializeHistoricalBundle,materializeHistoricalProofPackage,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
 const archives=[
+ {name:'ops/automatic-commerce-cutover/run-native.mjs',file:'tests/fixtures/historical-automatic-commerce-run-native.mjs.txt'},
  {name:'tests/helpers/sandbox-cashout-historical-deployment-fixture.mjs',file:'tests/fixtures/historical-sandbox-cashout-historical-deployment-fixture.mjs.txt'},
  {name:'tests/helpers/native-deployment-database.mjs',file:'tests/fixtures/historical-native-deployment-database.mjs.txt'},
  {name:'supabase/functions/_shared/media-download-authority.ts',file:'tests/fixtures/historical-media-download-authority.ts.txt'},
@@ -22,7 +23,7 @@ const archives=[
 
 test('current exact-deployment loaders and offline proof remain fail-closed on changed source',()=>{
  for(const tool of [ingress,social,observer])assert.throws(()=>tool.loadBundle(),/EDGE_HASH_MISMATCH|PREDECESSOR_EDGE_SOURCE_CHANGED/);
- assert.throws(()=>verifyInputs(),{message:`PROOF_SOURCE_DRIFT:${HISTORICAL_CONFIG}`});
+ assert.throws(()=>verifyInputs(),{message:'PROOF_SOURCE_DRIFT:ops/automatic-commerce-cutover/run-native.mjs'});
  const command=new URL('../scripts/google-refund-tax-observer-proof/generate.mjs',import.meta.url).pathname;
  const result=spawnSync(process.execPath,[command,'--offline'],{encoding:'utf8'});
  assert.notEqual(result.status,0);assert.equal(result.stdout,'');assert.match(result.stderr,/PROOF_SOURCE_DRIFT/);

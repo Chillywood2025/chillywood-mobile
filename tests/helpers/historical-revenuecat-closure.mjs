@@ -12,6 +12,7 @@ const supplemental=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/his
 export const HISTORICAL_ENTRYPOINT='supabase/functions/revenuecat-webhook/index.ts';
 export const HISTORICAL_CONFIG='supabase/config.toml';
 const archives={
+ 'ops/automatic-commerce-cutover/run-native.mjs':{file:'tests/fixtures/historical-automatic-commerce-run-native.mjs.txt',sha256:'b33b9e1709205f0a277a6e94fd3c472da80b7c01fb4ee2fa4d31571dd4a74d63'},
  'tests/helpers/sandbox-cashout-historical-deployment-fixture.mjs':{file:'tests/fixtures/historical-sandbox-cashout-historical-deployment-fixture.mjs.txt',sha256:'d08119fa635aeda412a6e40922904d4bb6446c582e594e9bcc115afe5bd0034a'},
  'tests/helpers/native-deployment-database.mjs':{file:'tests/fixtures/historical-native-deployment-database.mjs.txt',sha256:'edd13e10dcbf52a8ca100770a027298da3f073d8e8771b7e01a79ef409d15c7a'},
  'supabase/functions/_shared/media-download-authority.ts':{file:'tests/fixtures/historical-media-download-authority.ts.txt',sha256:'268ddef29ebcb54a793eecd19e94ab616849455fcf55ed7892ecea1babfcd24e'},
