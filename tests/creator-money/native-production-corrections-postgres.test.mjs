@@ -6,6 +6,7 @@ import {databaseFactory as nativeDatabaseFactory} from '../helpers/native-deploy
 import {seedMatureNativeSale} from '../helpers/native-production-mature-fixture.mjs';
 import {seedQualifiedCommerceMerch} from '../helpers/qualified-commerce-merch-fixture.mjs';
 import {seedCashoutExecutionFixture} from '../helpers/cashout-execution-fixture.mjs';
+import {refreshSyntheticPayoutObservation} from '../helpers/refresh-synthetic-payout-observation.mjs';
 
 const finalizerOnly=process.env.NATIVE_CORRECTION_FINALIZER_ONLY==='1';
 const timezoneOnly=process.env.NATIVE_CORRECTION_TIMEZONE_ONLY==='1';
@@ -154,6 +155,7 @@ test(timezoneOnly?'focused native correction timezone diagnostic (later correctn
    await f.reconcile();await funding(f);await f.reconcile();
    const extra=await one('select credit_earnings_id from private.native_production_correction_checkpoints where canonical_receipt_id=$1 order by id desc limit 1',[f.receipt]);
    assert.equal(Number(await withdraw(extra)),800);
+   await refreshSyntheticPayoutObservation(db,f);
    await f.claims('authenticated');await db.exec('set role authenticated');
    const request=await one("select public.request_qualified_creator_cashout(13000,'instant',$1,$2,260,0,12740)",[f.qualification,randomUUID()]);await db.exec('reset role');
    assert.equal(await one('select count(*)::int from public.creator_payout_allocations where payout_request_id=$1',[request.requestId]),2,'normal cashout reserves both original and correction credit');
@@ -460,6 +462,7 @@ test(timezoneOnly?'focused native correction timezone diagnostic (later correctn
    assert.equal(await one('select private.native_production_corrected_funding_current($1,$2)',[other.receipt,otherPoint]),null,'another receipt cannot reuse coverage that omits the relabeled original');
   });
   await tx(async()=>{
+   await refreshSyntheticPayoutObservation(db,f);
    await f.claims('authenticated');await db.exec('set role authenticated');
    const reserved=await one("select public.request_qualified_creator_cashout(10000,'instant',$1,$2,200,0,9800)",[f.qualification,randomUUID()]);await db.exec('reset role');
    const before=await capture();
@@ -633,6 +636,7 @@ test(timezoneOnly?'focused native correction timezone diagnostic (later correctn
    await f.reconcile();assert.equal(Number(await one('select delta_minor from private.native_production_correction_checkpoints where canonical_receipt_id=$1 order by id desc limit 1',[f.receipt])),1000,'less-negative target is a positive correction, not zero');
   });
   // Actual qualification INSERT, revocation and report locks fence final dispatch.
+  await refreshSyntheticPayoutObservation(db,f);
   await f.claims('authenticated');await db.exec('set role authenticated');
   const request=await one("select public.request_qualified_creator_cashout(10000,'instant',$1,$2,200,0,9800)",[f.qualification,randomUUID()]);await db.exec('reset role');
   const claim=()=>f.rpc("select public.claim_creator_cashout_dispatch($1,'funding')",[request.requestId]);
