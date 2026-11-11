@@ -18,7 +18,7 @@ const load = (file, imports, source = fs.readFileSync(file, "utf8")) => {
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, context);
   return context.exports;
 };
-const wallet = load("_lib/creatorPurchases.ts", { "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {}, "./creatorMoneyPurchaseAuthority": {}, "./revenuecat": {} });
+const wallet = load("_lib/creatorPurchases.ts", { "./accountBoundSupabaseMutation": {}, "./accountSessionAuthority": {}, "./creatorMoneyPurchaseAuthority": {}, "./revenuecat": {}, "./nativeProductionPaidVideo": {} });
 const purchase = (id = "one", status = "upcoming", changes = {}) => ({ id, purchaseIntentId: id, sourceType: "event", sourceId: "exact-event", creatorId: "creator", productType: "event_pass", productKey: "event", title: "Sunday show", status,
   amountMinor: 299, currency: "usd", createdAt: "2026-10-26T16:30:00Z", purchasedAt: "2026-10-26T16:30:00Z", startsAt: "2026-11-01T20:00:00Z", expiresAt: null, provider: "revenuecat_google_play", environment: "sandbox",
   destination: { kind: "creator_event", id: "exact-event" }, receipt: null, terms: { timeZone: "America/New_York", replayPolicy: "none" }, termsAvailable: true, grantsAccess: false, ...changes });

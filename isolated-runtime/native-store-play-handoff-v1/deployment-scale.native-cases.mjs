@@ -1,5 +1,6 @@
 // Actual-scale, local-only forward-deployment proof. No target connection API.
 import assert from 'node:assert/strict';
+import {assertNativeFixtureHistory} from '../../tests/helpers/native-fixture-history-inventory.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -38,7 +39,7 @@ async function fullAtomicProof({bin,output,onProgress}){
  const f=await localFullCatalogFixture({bin,output,onProgress});
  try{
   const {observe,count,build}=readers(f),before=observe(),beforeCounts=count();
-  validateObservation(before,{before:true});assert.equal(before.historyCount,631);
+  validateObservation(before,{before:true});assertNativeFixtureHistory(before,'original');
   assert.equal(beforeCounts.rawRows,before.catalogCount);
   assert.ok(beforeCounts.rawRows>45000&&beforeCounts.oidRows>26000,'Must exercise the actual full legacy/native catalog');
   assert.equal(before.addedPresent,0);assert.equal(before.beforeChangedExact,true);assert.equal(allowlist.added.length,418);

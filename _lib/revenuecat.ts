@@ -23,6 +23,7 @@ import { isRevenueCatPurchaseResultForProduct as validatesPurchaseResultForProdu
 import { isIsolatedTestStoreFlavor } from "./isolatedTestStoreBuild";
 import { isIsolatedTestStoreV2Flavor } from "./isolatedTestStoreV2Build";
 import { isIsolatedTestStoreV3Flavor } from "./isolatedTestStoreV3Build";
+import type { NativeProductionWitness } from './nativeProductionPaidVideoBridge';
 
 export type { PurchasesPackage } from "react-native-purchases";
 
@@ -633,6 +634,37 @@ export function restoreRevenueCatPurchases(options?: RevenueCatMutationOptions):
   const state = configureRevenueCatOnce();
   if (!state.shouldConfigure) return Promise.reject(new Error(state.reason ?? "RevenueCat is not configured."));
   return runRevenueCatMutation("restore", options, () => Purchases.restorePurchases(), isCustomerInfo);
+}
+
+/** Normal production paid video shares the SAME identity queue and SKU owner.
+ * The prepared native product invokes the configured singleton once; it never
+ * reconfigures RC or changes completion mode/appUserID. */
+export function purchaseRevenueCatProductionPaidVideo(productId: string, handle: string,
+  options: RevenueCatMutationOptions): Promise<NativeProductionWitness> {
+  const state = configureRevenueCatOnce();
+  if (!state.shouldConfigure || !appStorePurchasesEnabled() || !productId || productId !== productId.trim()
+    || !handle || !options.authority || !options.assertPurchaseLaunchAllowed || options.retainPurchaseEvidence)
+    return Promise.reject(new Error('Production Paid Video launch authority is unavailable.'));
+  return runRevenueCatMutation(`purchase:${productId}`, options, async () => {
+    const bridge = await import('./nativeProductionPaidVideoBridge');
+    // Retry only authorization of this same in-memory, never-invoked native
+    // handle. Native epoch/state fencing rejects delayed or duplicate responses.
+    // This does not retry a Store call or reopen a server checkout claim.
+    for (let attempt = 0; ; attempt++) {
+      try { await bridge.authorizePreparedNativeProductionVideo(handle); break; }
+      catch (error) {
+        await requireRevenueCatMutationAuthority(options);
+        if (options.assertPurchaseLaunchAllowed!() !== undefined || attempt >= 1) throw error;
+      }
+    }
+    await requireRevenueCatMutationAuthority(options);
+    // Direct native claim verification introduced an await. Recheck the same
+    // shared owner after it, immediately before the one-shot native SDK entry.
+    if (options.assertPurchaseLaunchAllowed!() !== undefined) throw new Error('Production launch restriction must be synchronous.');
+    return bridge.purchasePreparedNativeProductionVideo(handle);
+  },
+    (value): value is NativeProductionWitness => record(value) && ['witness','unknown','cancelled'].includes(String(value.status))
+      && typeof value.dispatchId === 'string');
 }
 
 export async function openRevenueCatManageSubscriptions() {

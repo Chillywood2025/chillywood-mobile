@@ -1,0 +1,22 @@
+begin;
+select plan(17);
+select has_table('private','native_production_video_versions','Prospective source revisions exist separately from byte proof');
+select has_table('private','native_production_source_proofs','Exact origin-generation proof boundary exists');
+select has_table('private','native_production_scope_qualifications','Actual report/account semantics have an independent boundary');
+select has_table('private','native_production_video_admissions','Production preparation is independent of sandbox intents');
+select has_table('private','native_production_purchase_correlations','Exact transaction correlation is not a webhook price match');
+select has_table('private','native_production_report_observations','Typed actual observations persist');
+select has_table('private','native_production_economic_snapshots','Held diagnostic snapshots persist');
+select is((select count(*)::integer from private.native_production_source_proofs),0,'Migration seeds no byte proof');
+select is((select count(*)::integer from private.native_production_scope_qualifications),0,'Migration seeds no actual provider qualification');
+select is((select count(*)::integer from private.native_production_earning_sources),0,'Migration creates no native earnings');
+select ok(not has_function_privilege('service_role','private.append_native_production_report(uuid,jsonb)','EXECUTE'),'Service JSON cannot manufacture authenticated actual-report facts');
+select ok(not has_function_privilege('authenticated','private.prepare_native_production_video_admission(uuid,text,text,text,integer)','EXECUTE'),'Internal preparation cannot bypass ordinary precharge authority');
+select ok(has_function_privilege('authenticated','public.prepare_native_production_paid_video(uuid,text,text,text,integer)','EXECUTE'),'Held-only authenticated normal preparation has a return path');
+select ok(not has_function_privilege('anon','public.prepare_native_production_paid_video(uuid,text,text,text,integer)','EXECUTE'),'Anonymous preparation denied');
+select ok(not has_table_privilege('service_role','private.native_production_source_proofs','INSERT,UPDATE,DELETE,TRUNCATE'),'No API source-proof issuer');
+select ok(not has_table_privilege('service_role','private.native_production_scope_qualifications','INSERT,UPDATE,DELETE,TRUNCATE'),'No API provider-scope issuer');
+select ok((select bool_and(relrowsecurity and relforcerowsecurity) from pg_class
+ where relnamespace='private'::regnamespace and relname like 'native_production_%' and relkind='r'),'Every native production table enforces RLS');
+select * from finish();
+rollback;

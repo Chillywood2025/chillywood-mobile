@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
+import {databaseFactory as nativeDatabaseFactory} from '../helpers/native-deployment-database.mjs';
 
 test('full-schema native provenance is immutable evidence only, and dispatch rechecks global live mode', {timeout:240000},async()=>{
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
+  databaseFactory:process.env.NATIVE_DEPLOYMENT_PG_BIN?()=>nativeDatabaseFactory({transport:process.env.NATIVE_PRODUCTION_PG_LOOPBACK==='1'?'loopback':'unix'}):null});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  const service=async()=>{await db.exec(`reset role;select set_config('request.jwt.claims','{"role":"service_role"}',false),set_config('request.jwt.claim.role','service_role',false);set role service_role`);};
  const owner=async()=>{await db.exec('reset role');};
@@ -78,8 +80,13 @@ test('full-schema native provenance is immutable evidence only, and dispatch rec
   }
   for(const mode of [null,'setup','live'])await assert.rejects(()=>db.query('select private.assert_creator_native_dispatch_environment($1)',[mode]),/creator_money_checkout_rail_unavailable/);
   const body=await one(`select pg_get_functiondef('public.begin_creator_money_checkout(uuid,uuid)'::regprocedure)`);
-  assert.ok(body.indexOf('assert_creator_native_dispatch_environment(i.environment)')<body.indexOf('update public.money_purchase_intents set checkout_attempt_id='));
+  assert.match(body,/return public\.begin_creator_money_checkout_before_native\(p_purchase_intent_id,p_checkout_attempt_id\)/);
+  const retained=await one(`select pg_get_functiondef('public.begin_creator_money_checkout_before_native(uuid,uuid)'::regprocedure)`);
+  const guard=retained.indexOf('assert_creator_native_dispatch_environment(i.environment)'),claim=retained.indexOf('update public.money_purchase_intents set checkout_attempt_id=');
+  assert.ok(guard>=0&&claim>guard,'retained shared owner checks current rail before one-shot claim');
+  for(const role of ['anon','authenticated','service_role'])assert.equal(await one("select has_function_privilege($1,'public.begin_creator_money_checkout_before_native(uuid,uuid)','EXECUTE')",[role]),false);
   const constraint=await one(`select pg_get_constraintdef(oid) from pg_constraint where conname='money_purchase_intents_sandbox_only_check'`);
-  assert.match(constraint,/stripe_event_auction/);assert.doesNotMatch(constraint,/revenuecat/);
+  assert.match(constraint,/stripe_event_auction/);
+  assert.equal(await one('select not checkout_enabled and not access_enabled from private.native_production_checkout_controls'),true);
  } finally {await db.close();}
 });

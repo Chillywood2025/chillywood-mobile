@@ -1,0 +1,12 @@
+begin;
+select plan(8);
+select has_column('private','native_production_source_proofs','renewal_root_proof_id','Source renewal retains explicit immutable lineage');
+select has_column('private','native_production_scope_qualifications','renewal_root_scope_id','Semantic renewal retains explicit immutable lineage');
+select has_function('private','native_production_scope_equivalent',array['uuid','uuid'],'Full material scope equivalence is explicit');
+select has_function('private','native_production_report_qualification_valid',array['uuid','jsonb','timestamp with time zone'],'Each report retains its own issuer and observation time');
+select ok(not has_function_privilege('service_role','private.native_production_scope_equivalent(uuid,uuid)','EXECUTE'),'Qualification authority stays private');
+select ok(not has_table_privilege('service_role','private.native_production_scope_qualifications','INSERT,UPDATE,DELETE,TRUNCATE'),'Renewals cannot be issued by arbitrary service JSON');
+select is((select materialize_held from private.native_production_earning_controls where singleton),false,'Renewal migration does not activate accounting');
+select is((select release_earnings from private.native_production_earning_controls where singleton),false,'Renewal migration does not activate release');
+select * from finish();
+rollback;

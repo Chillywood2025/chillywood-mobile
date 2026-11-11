@@ -2,6 +2,7 @@ import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseM
 import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "./accountSessionAuthority";
 import { captureCreatorMoneyPurchaseAuthority, prepareCreatorMoneyPurchaseSubject, revalidateCreatorMoneyPurchaseSubject } from "./creatorMoneyPurchaseAuthority";
 import { restoreRevenueCatPurchases } from "./revenuecat";
+import { reconcileNativeProductionPaidVideoPurchases } from "./nativeProductionPaidVideo";
 import type { CreatorPriceSourceType } from "./creatorSupportedPrices";
 
 export type CreatorPurchaseStatus = "pending" | "paid_unfulfilled" | "reconciliation_required" | "active" | "upcoming" | "expired" | "refunded" | "revoked" | "failed" | "canceled" | "disputed" | "completed";
@@ -134,6 +135,11 @@ export async function readMyCreatorPurchases(cursor: CreatorPurchaseCursor | nul
   if (!authority || authority.restoreOnly || (cursor && (!UUID.test(cursor.id) || !timestamp(cursor.createdAt)))
     || (filter && (!Object.hasOwn(sourceDestination, filter.sourceType) || !UUID.test(filter.sourceId)))) return unavailable;
   try {
+    if (!cursor) {
+      const recoverySubject = await prepareCreatorMoneyPurchaseSubject();
+      if (recoverySubject && sameAccountSessionAuthority(authority,recoverySubject.authority))
+        await reconcileNativeProductionPaidVideoPurchases(recoverySubject);
+    }
     const subject = await captureAccountBoundSupabaseMutationSubject(authority.userId);
     if (!sameAccountSessionAuthority(authority, subject.authority)) return unavailable;
     const response = await invokeAccountBoundSupabaseMutationRpc<unknown>(subject, "read_my_creator_purchases", {
@@ -211,6 +217,8 @@ export async function restoreCreatorPurchaseLibrary(): Promise<{ ok: boolean; me
     if (!subject) return { ok: false, message: "Sign in again before restoring purchases." };
     await restoreRevenueCatPurchases({ authority: subject.authority });
     if (!await revalidateCreatorMoneyPurchaseSubject(subject)) return { ok: false, message: "The account changed during restore. Check purchases on the current account." };
+    await reconcileNativeProductionPaidVideoPurchases(subject);
+    if (!await revalidateCreatorMoneyPurchaseSubject(subject)) return { ok: false, message: "The account changed during recovery. Refresh purchases on the current account." };
     return { ok: true, message: "Store restore finished. Only verified purchases are shown below; some updates may still be processing." };
   } catch {
     return { ok: false, message: "Restore could not be confirmed. Your existing purchases remain in your history; refresh before trying again." };

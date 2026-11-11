@@ -1,0 +1,24 @@
+begin;
+select plan(19);
+select has_table('private','native_production_earning_controls','Independent native accounting controls exist');
+select is((select materialize_held from private.native_production_earning_controls where singleton),false,'Held materialization defaults OFF');
+select is((select release_earnings from private.native_production_earning_controls where singleton),false,'Available earning release defaults OFF');
+select has_table('private','native_production_funding_proofs','Available proceeds and delivery need exact independent evidence');
+select has_table('private','native_production_funding_revocations','Current funding revocations are explicit');
+select has_table('private','native_production_earning_releases','Release retains immutable funding identity');
+select has_table('private','native_production_accounting_jobs','Normal economic snapshots enqueue accounting');
+select has_table('private','native_production_accounting_attempts','Bounded worker retains explicit attempts');
+select is((select count(*)::integer from private.native_production_funding_proofs),0,'No real or synthetic funding proof seeded by migration');
+select is((select count(*)::integer from private.native_production_earning_releases),0,'No earnings released by migration');
+select ok(not has_table_privilege('service_role','private.native_production_earning_controls','INSERT,UPDATE,DELETE,TRUNCATE'),'Service cannot enable money controls');
+select ok(not has_table_privilege('service_role','private.native_production_funding_proofs','INSERT,UPDATE,DELETE,TRUNCATE'),'Service JSON cannot manufacture funding/delivery verification');
+select ok(not has_function_privilege('authenticated','public.reconcile_native_production_earning(uuid)','EXECUTE'),'App callers cannot materialize earnings');
+select ok(not has_function_privilege('anon','public.process_native_production_accounting_jobs(integer)','EXECUTE'),'Anonymous callers cannot consume accounting jobs');
+select ok(has_function_privilege('service_role','public.reconcile_native_production_earning(uuid)','EXECUTE'),'Controlled service materializer is callable');
+select ok(has_function_privilege('service_role','public.process_native_production_accounting_jobs(integer)','EXECUTE'),'Controlled service queue worker is callable');
+select ok(not has_function_privilege('service_role','private.native_production_funding_current(uuid,uuid)','EXECUTE'),'Private funding authority remains internal');
+select ok((select bool_and(relrowsecurity and relforcerowsecurity) from pg_class
+ where relnamespace='private'::regnamespace and relname like 'native_production_%' and relkind='r'),'Every native private table forces RLS');
+select ok((select pg_get_functiondef('private.lock_native_production_accounting_facts(uuid)'::regprocedure) like '%exclusive mode nowait%'),'Positive native paths use nonblocking final input fences');
+select * from finish();
+rollback;
