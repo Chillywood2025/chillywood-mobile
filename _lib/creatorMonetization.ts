@@ -78,6 +78,7 @@ export type CreatorMonetizationFoundationSummary = {
 };
 
 export type CreatorContentAccessResolution = {
+  nativeProductionDeliveryOnly?: boolean;
   allowed: boolean;
   reason: string;
   requiresPurchase: boolean;
@@ -233,6 +234,7 @@ export const normalizeCreatorContentAccessResolution = (
     }
     return {
       allowed: true,
+      ...(body.nativeProductionDeliveryOnly === true ? { nativeProductionDeliveryOnly: true } : {}),
       reason,
       requiresPurchase: false,
       priceCents: null,

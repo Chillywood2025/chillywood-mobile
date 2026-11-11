@@ -1,0 +1,22 @@
+begin;
+select plan(17);
+select has_table('private','native_production_paid_video_observations','private typed native observations exist');
+select has_table('private','native_production_paid_video_ledger_holds','private native held accounting exists');
+select ok((select bool_and(relrowsecurity and relforcerowsecurity) from pg_class where oid in
+ ('private.native_production_paid_video_observations'::regclass,'private.native_production_paid_video_ledger_holds'::regclass)),'both tables FORCE RLS');
+select ok(not has_table_privilege('anon','private.native_production_paid_video_observations','SELECT'),'anon cannot read observations');
+select ok(not has_table_privilege('authenticated','private.native_production_paid_video_ledger_holds','SELECT'),'buyers cannot read held accounts');
+select ok(not has_table_privilege('service_role','private.native_production_paid_video_observations','INSERT'),'service cannot forge observations directly');
+select ok(not has_table_privilege('service_role','private.native_production_paid_video_ledger_holds','INSERT'),'service cannot forge held accounting directly');
+select ok(not has_table_privilege('service_role','private.native_production_paid_video_observations','TRUNCATE'),'service cannot truncate observations');
+select ok(not has_table_privilege('service_role','private.native_production_paid_video_ledger_holds','TRUNCATE'),'service cannot truncate accounting');
+select ok(not has_function_privilege('anon','public.record_native_production_ingress_observation(jsonb)','EXECUTE'),'anon cannot observe');
+select ok(not has_function_privilege('authenticated','public.get_native_production_paid_video_hold(uuid)','EXECUTE'),'buyers cannot read service context');
+select ok(has_function_privilege('service_role','public.record_native_production_ingress_observation(jsonb)','EXECUTE'),'normal service ingress remains reachable');
+select ok(has_function_privilege('service_role','public.get_native_production_paid_video_hold(uuid)','EXECUTE'),'service can review an exact held receipt');
+select ok(not has_function_privilege('service_role','public.record_native_production_ingress_observation_channel_internal(jsonb)','EXECUTE'),'renamed implementation is private');
+select is((select count(*)::integer from private.native_production_paid_video_observations),0,'no production observation seeded');
+select is((select count(*)::integer from private.native_production_paid_video_ledger_holds),0,'no production held earning seeded');
+select ok((select not materialize_held and not release_earnings from private.native_production_earning_controls where singleton),'Native observations leave earnings materialization and release default OFF');
+select * from finish();
+rollback;

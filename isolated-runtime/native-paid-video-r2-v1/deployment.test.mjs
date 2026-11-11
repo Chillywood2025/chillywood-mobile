@@ -22,6 +22,15 @@ test('observation preserves complete actual-scale bounds and no runtime executio
  assert.match(sql,/limit 60001/u);assert.match(sql,/limit 35001/u);
  assert.throws(()=>buildDeploymentEnvelope({baseline:{capturedAt:'2000-01-01T00:00:00Z'},source:'0'.repeat(40)}),/fresh_observation/u);
 });
+test('preparation baseline accepts at most ten minutes without bypassing committed-source verification',()=>{
+ const originalNow=Date.now,now=Date.parse('2026-11-11T00:10:00.000Z');
+ Date.now=()=>now;
+ try {
+  for(const age of [0,300001,599999,600000])assert.throws(()=>buildDeploymentEnvelope({baseline:{capturedAt:new Date(now-age).toISOString()},source:'0'.repeat(40)}),/r2_source_head_mismatch/u);
+  for(const age of [-1,600001])assert.throws(()=>buildDeploymentEnvelope({baseline:{capturedAt:new Date(now-age).toISOString()},source:'0'.repeat(40)}),/r2_fresh_observation_required/u);
+  assert.throws(()=>buildDeploymentEnvelope({baseline:{capturedAt:'invalid'},source:'0'.repeat(40)}),/r2_fresh_observation_required/u);
+ } finally {Date.now=originalNow;}
+});
 test('only exact R2 creator memberships normalize the bootstrap grantor in rows and OID keys',()=>{
  const memberships=allowlist.added.filter(x=>JSON.parse(x.key)[0]==='membership');
  assert.equal(memberships.length,2);

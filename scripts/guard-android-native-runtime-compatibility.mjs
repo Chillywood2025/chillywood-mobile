@@ -56,18 +56,18 @@ assert.notEqual(easJson.build?.["ios-qa"]?.channel, productionOtaGeneration.chan
 assert.notEqual(productionOtaGeneration.iosRuntimeVersion, appJson.runtimeVersion);
 assert.notEqual(productionOtaGeneration.androidRuntimeVersion, manifest.runtimeVersion);
 assert.equal(internalNativeGeneration.schemaVersion, 1);
-assert.equal(internalNativeGeneration.generation, "internal-native-v22");
+assert.equal(internalNativeGeneration.generation, "internal-native-v23");
 assert.equal(internalNativeGeneration.channels?.android, "android-internal-v2");
 assert.equal(internalNativeGeneration.channels?.ios, "ios-internal-v2");
-assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v22");
-assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v22");
-assert.equal(internalNativeGeneration.supersedes?.generation, "internal-native-v21");
-assert.equal(internalNativeGeneration.supersedes?.androidRuntimeVersion, "1.0.0-android-production-v21");
-assert.equal(internalNativeGeneration.supersedes?.iosRuntimeVersion, "1.0.0-ios-production-v21");
+assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v23");
+assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v23");
+assert.equal(internalNativeGeneration.supersedes?.generation, "internal-native-v22");
+assert.equal(internalNativeGeneration.supersedes?.androidRuntimeVersion, "1.0.0-android-production-v22");
+assert.equal(internalNativeGeneration.supersedes?.iosRuntimeVersion, "1.0.0-ios-production-v22");
 assert.equal(internalNativeGeneration.supersedes?.androidCompatibilityDigest,
-  "a0d0bdf51a6029e52186ae056c2e931f33b63cb2f9d76acdb1e706aa9c9c4dc5");
+  "6b8900bcf2c05520edf001ab661bfab0e9b9037534b179af7bcd79bbb3f0c9a4");
 assert.equal(internalNativeGeneration.supersedes?.iosCompatibilityDigest,
-  "d71f53ce412fc4fb36c1b0985ec9db20e36dcdb192089eefbd250c06c1c26114");
+  "90a2fc454799dce3e2cfcb5d9c8c04babc4115c88424500e891d0b1b3cc0d30a");
 assert.equal(internalNativeGeneration.policy?.internalOnly, true);
 assert.equal(internalNativeGeneration.policy?.publicReleaseAuthorized, false);
 assert.equal(internalNativeGeneration.policy?.storeSubmissionOutsideInternalTestersAuthorized, false);

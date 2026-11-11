@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {createDatabase} from '../../tests/helpers/database-runtime-authority-fixture.mjs';
+import {createAutomaticCommerceHistoricalDatabase} from '../../tests/helpers/automatic-commerce-historical-fixture.mjs';
 import {contract} from './prepare.mjs';
 import {literal,sha256} from './bridge.mjs';
 
@@ -50,7 +50,9 @@ try {
  const sql=[];
  // The adapter only accumulates source SQL. No PGlite instance is constructed;
  // every statement below is executed by the real PostgreSQL server.
- const {replayReport}=await createDatabase({excludeMigrations:[...contract.migrations.map(m=>path.basename(m.path)),...held],databaseFactory:async()=>({async exec(statement){sql.push(statement);},async close(){}})});
+ // Later production wrappers must not replace this historical baseline's
+ // frozen definitions. The helper verifies the complete explicit successor list.
+ const {replayReport}=await createAutomaticCommerceHistoricalDatabase({excludeMigrations:[...contract.migrations.map(m=>path.basename(m.path)),...held],databaseFactory:async()=>({async exec(statement){sql.push(statement);},async close(){}})});
  query(sql.join('\n'),database);
  const expected=contract.functions.map(f=>({signature:f.signature,expected:f.originalSha256}));
  const capture=query(`set search_path=pg_catalog,public;select jsonb_agg(jsonb_build_object('signature',f.signature,'definition',pg_get_functiondef(p.oid),
@@ -66,7 +68,7 @@ try {
   assert.equal(r.status,0,`${file}: ${r.error?.message??r.stderr}`);reports.push(JSON.parse(r.stdout));
  }
  console.log(JSON.stringify({schema:1,status:'passed',native:true,elapsedMs:Date.now()-start,sourceFiles:replayReport.files.length,
-  statements:replayReport.statements,heldMigrations:held,sourceReplaySha256:sha256(sql.join('\n')),managedServices:'repository fixture doubles; no provider network',reports},null,2));
+  statements:replayReport.statements,heldMigrations:held,excludedMigrations:replayReport.excludedMigrations,sourceReplaySha256:sha256(sql.join('\n')),managedServices:'repository fixture doubles; no provider network',reports},null,2));
 } finally {
  if(server)admin('pg_ctl',['-D',data,'-m','fast','stop']);
  if(cleanup)cleanup();fs.rmSync(directory,{recursive:true,force:true});

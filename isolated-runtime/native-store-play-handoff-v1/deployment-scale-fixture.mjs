@@ -3,6 +3,7 @@
 // Managed auth/storage/cron infrastructure uses the existing replay fixture.
 // No target URL, credentials, provider calls or deploy transport are accepted.
 import assert from 'node:assert/strict';
+import {chronologicalMigrationInventory,expectedNativeFixtureVersions} from '../../tests/helpers/native-fixture-history-inventory.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -44,11 +45,11 @@ export async function localFullCatalogFixture({bin,output,onProgress=()=>{}}){
   startAttempted=true;
   invoke('pg_ctl',['-D',data,'-w','-t','15','-l',path.join(work,'server.log'),'-o',`-c listen_addresses=127.0.0.1 -c unix_socket_directories='' -p ${port} -c shared_buffers=32MB -c autovacuum=off`,'start']);started=true;
   q('create role postgres login superuser;alter database postgres owner to postgres;');
-  const replay=[];
-  const {replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,
+  const replay=[],inventory=chronologicalMigrationInventory();
+  const {replayReport}=await createDatabase({includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:inventory.after,
    databaseFactory:async()=>({async exec(sql){replay.push(sql);},async close(){}})});
-  assert.equal(replayReport.files.length,630,'Update the actual-scale proof when the complete legacy chain changes');
-  assert.deepEqual(replayReport.excludedMigrations,[]);assert.deepEqual(replayReport.overlayFiles,[]);
+  assert.deepEqual(replayReport.files,inventory.before,'Historical replay must cover its exact source cutoff');
+  assert.deepEqual(replayReport.excludedMigrations,inventory.after);assert.deepEqual(replayReport.overlayFiles,[]);
   const replayStart=performance.now();
   invoke('psql',args('postgres'),replay.join('\n'),120000);
   const replayWallMs=Math.round(performance.now()-replayStart);
@@ -107,14 +108,36 @@ export async function localFullCatalogFixture({bin,output,onProgress=()=>{}}){
   // history bytes; this is not a target hold or authority to change one.
   q(`update public.platform_money_kill_switches set state=case when key in('live_money_enabled','payouts_enabled','cashout_enabled') then 'off' else 'sandbox_only' end
    where key in('live_money_enabled','payouts_enabled','cashout_enabled','stripe_connect_enabled','tips_enabled','creator_monetization_enabled','provider_webhooks_enabled','revenuecat_app_store_enabled','revenuecat_google_play_enabled');`);
-  assert.equal(q('select count(*) from supabase_migrations.schema_migrations;'),'631');
+  assert.equal(q('select count(*) from supabase_migrations.schema_migrations;'),String(expectedNativeFixtureVersions('original').length));
   const setup={legacyMigrations:replayReport.files.length,replayUnits:replay.length,managedReplaySubstitutions:replayReport.skipped,
-   nativeModules:profile.files.length,nativeSourceDigest:profile.sourceDigest,eventTriggers:8,historyRows:631,
+   nativeModules:profile.files.length,nativeSourceDigest:profile.sourceDigest,eventTriggers:8,historyRows:expectedNativeFixtureVersions('original').length,
    exactLegacyHistoryObserved:true,historyVersionsFromSourceFilenames:true,
    legacy12DigitVersions:receipts.filter(receipt=>receipt.version.length===12).length,
    legacyHistoryStatements:receipts.reduce((total,receipt)=>total+receipt.statements.length,0),
    maximumLegacyStatements:Math.max(...receipts.map(receipt=>receipt.statements.length)),replayWallMs,installWallMs};
   onProgress({phase:'full-fixture-ready',...setup});
-  return {q,run,args,profile,fixtureToken,setup,stop};
+  let deferredApplied=false;
+  const applyDeferredMigrations=()=>{
+   assert.equal(deferredApplied,false,'Later source may replay only once');
+   assert.equal(q("select count(*) from supabase_migrations.schema_migrations where version='20261110120025';"),'1','R2 must be installed before later source');
+   const retained=JSON.parse(q('select jsonb_agg(to_jsonb(m) order by version collate "C") from supabase_migrations.schema_migrations m;'));
+   for(const file of inventory.after){
+    const match=file.match(/^(\d{12}|\d{14})_(.+)\.sql$/u);assert.ok(match);
+    const source=fs.readFileSync(path.join(ROOT,'supabase/migrations',file),'utf8'),statements=splitSQL(source);
+    assert.equal(statements.join('').trimEnd(),source.trimEnd());
+    invoke('psql',args('postgres'),source,120000);
+    q(`insert into supabase_migrations.schema_migrations(version,name,statements) values(${quote(match[1])},${quote(match[2])},array[${statements.map(quote).join(',')}]);`,'postgres');
+    const receipt=JSON.parse(q(`select jsonb_build_object('name',name,'statements',statements,'extraMetadataNull',created_by is null and idempotency_key is null and rollback is null) from supabase_migrations.schema_migrations where version=${quote(match[1])};`));
+    assert.deepEqual(receipt,{name:match[2],statements,extraMetadataNull:true});
+   }
+   const history=JSON.parse(q('select jsonb_agg(to_jsonb(m) order by version collate "C") from supabase_migrations.schema_migrations m;'));
+   assert.deepEqual(history.filter(row=>retained.some(old=>old.version===row.version)),retained);
+   assert.deepEqual(history.map(row=>row.version),expectedNativeFixtureVersions('current'));
+   assert.equal(q('select not checkout_enabled and not access_enabled from private.native_production_checkout_controls;'),'t');
+   assert.equal(q('select not materialize_held and not release_earnings from private.native_production_earning_controls;'),'t');
+   deferredApplied=true;
+   return {historicalSourceFiles:inventory.before.length,laterSourceFiles:inventory.after.length,totalSourceFiles:inventory.all.length,historyRows:history.length,exactRetainedHistory:true,defaultOff:true};
+  };
+  return {q,run,args,profile,fixtureToken,setup,stop,applyDeferredMigrations};
  }catch(error){stop();throw error;}
 }

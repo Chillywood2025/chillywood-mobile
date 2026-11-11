@@ -492,22 +492,27 @@ select ok(
 
 select ok(
   pg_get_functiondef(
-    'public.creator_video_paid_precharge_authority_internal(uuid,text,text,text,integer,text,text)'::regprocedure
+    'public.creator_video_paid_precharge_before_production_admission(uuid,text,text,text,integer,text,text)'::regprocedure
   ) ilike '%creator-money-source-intent:%paid_content:%'
   and strpos(
     pg_get_functiondef(
-      'public.creator_video_paid_precharge_authority_internal(uuid,text,text,text,integer,text,text)'::regprocedure
+      'public.creator_video_paid_precharge_before_production_admission(uuid,text,text,text,integer,text,text)'::regprocedure
     ),
     'creator-money-source-intent:'
   ) < strpos(
     pg_get_functiondef(
-      'public.creator_video_paid_precharge_authority_internal(uuid,text,text,text,integer,text,text)'::regprocedure
+      'public.creator_video_paid_precharge_before_production_admission(uuid,text,text,text,integer,text,text)'::regprocedure
     ),
     'creator-video-commerce:'
   )
   and pg_get_functiondef(
+    'public.creator_video_paid_precharge_before_production_admission(uuid,text,text,text,integer,text,text)'::regprocedure
+  ) ilike '%pending."source_type"=''paid_content''%pending."source_id"=p_video_id%source_purchase_intent_already_pending%'
+  and pg_get_functiondef(
     'public.creator_video_paid_precharge_authority_internal(uuid,text,text,text,integer,text,text)'::regprocedure
-  ) ilike '%pending."source_type"=''paid_content''%pending."source_id"=p_video_id%source_purchase_intent_already_pending%',
+  ) ilike '%creator_video_paid_precharge_before_production_admission%'
+  and not has_function_privilege('authenticated',
+    'public.creator_video_paid_precharge_before_production_admission(uuid,text,text,text,integer,text,text)','EXECUTE'),
   '39. Android and iOS Paid Video share one buyer/source lock and reject a cross-store pending intent'
 );
 

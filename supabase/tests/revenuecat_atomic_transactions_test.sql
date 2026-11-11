@@ -185,10 +185,13 @@ create function pg_temp.apply_consumable(
 returns jsonb
 language plpgsql
 volatile
+-- Synthetic provider context is saved/restored without function proconfig.
 as $$
 declare
+  v_prior_role text := current_setting('request.jwt.claim.role',true);
   v_result jsonb;
 begin
+  perform set_config('request.jwt.claim.role','service_role',true);
   if p_failpoint is null then
     select public.process_revenuecat_consumable_event_atomic(
       p_event_id, p_event_type, p_user_id, mapping.provider_product_id,
@@ -215,7 +218,11 @@ begin
       and mapping.provider_product_id = p_provider_product_id
     limit 1;
   end if;
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
   return v_result;
+exception when others then
+  perform set_config('request.jwt.claim.role',coalesce(v_prior_role,''),true);
+  raise;
 end;
 $$;
 

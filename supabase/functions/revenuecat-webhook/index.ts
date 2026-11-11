@@ -2016,7 +2016,7 @@ const reserveRevenueCatWebhookIngress = async (
 
 // Post-processing observation, not a gate in front of terminal cleanup. Missing
 // or expired qualification records unqualified facts without suppressing a
-// refund/revocation. Native production-intent admission remains prohibited.
+// refund/revocation. Production checkout remains independently default OFF.
 const recordNativeProductionIngress = async (
   adminClient: SupabaseClientLike, event: RevenueCatEvent, rawBody: string, canonicalReceiptId: string | null,
 ) => {
@@ -2034,6 +2034,18 @@ const recordNativeProductionIngress = async (
     // Canonical lifecycle effects remain committed. Retry observation through
     // the existing idempotent lifecycle; do not log private normalized facts.
     throw new Error("Native production ingress observation unavailable.");
+  }
+  // Only an independently authenticated private receipt proof can bind a
+  // production dispatch. This does not infer correlation from webhook price
+  // or IDs and does not turn receipt/access authority into payable economics.
+  if (data?.status !== "out_of_scope") {
+    const access = await adminClient.rpc("reconcile_native_production_paid_video_access", {
+      p_canonical_receipt_id: canonicalReceiptId,
+    });
+    if (access.error || !["HELD", "ACCESS_VERIFIED"].includes(toText(access.data?.status))
+      || access.data?.financialAuthority !== false || access.data?.payable !== false) {
+      throw new Error("Native production access reconciliation unavailable.");
+    }
   }
 };
 

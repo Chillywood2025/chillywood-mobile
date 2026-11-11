@@ -272,8 +272,10 @@ select ok(position('ticket."used_at" is not null' in
   and position('ticket."buyer_id"=money."user_id"' in
   pg_get_functiondef('public.enforce_exact_watch_party_ticket_completion_internal()'::regprocedure))>0,
   '48. ordinary completion receipt requires exact buyer meaningful use');
-select ok(position('reported_product_mismatch' in
-  pg_get_functiondef('public.process_revenuecat_terminal_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text,text,text,text,text)'::regprocedure))>0,
+select ok(position('process_revenuecat_terminal_before_native_checkout' in
+  pg_get_functiondef('public.process_revenuecat_terminal_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text,text,text,text,text)'::regprocedure))>0
+  and position('reported_product_mismatch' in
+  pg_get_functiondef('public.process_revenuecat_terminal_before_native_checkout(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text,text,text,text,text)'::regprocedure))>0,
   '49. terminal evidence preserves the provider-reported product comparison');
 select ok(position('is_account_access_restricted' in (select qual from pg_policies
   where schemaname='public' and tablename='paid_live_watch_party_passes'

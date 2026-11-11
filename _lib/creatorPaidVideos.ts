@@ -31,6 +31,7 @@ import { supabase } from "./supabase";
 import { readCreatorVideosByIds } from "./creatorVideos";
 import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
+import { purchaseNativeProductionPaidVideo } from './nativeProductionPaidVideo';
 
 export const PAID_VIDEO_SANDBOX_PRODUCT_KEY = "paid_content_access_sandbox_099";
 export const PAID_VIDEO_SANDBOX_PROVIDER_PRODUCT_ID = "cw_paid_content_access_sandbox_099";
@@ -623,6 +624,24 @@ export async function purchasePaidVideoAccess(input: {
     || !resolveIosFiniteAppStoreTier("paid_video", access.priceCents)
   )) {
     return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+  }
+
+  if (access.offerStatus === 'active') {
+    const subject = await prepareCreatorMoneyPurchaseSubject(initiatingAuthority);
+    if (!subject) return {ok:false,message:'Sign in again before Paid Video checkout. Nothing was charged.',access};
+    try {
+      const result = await purchaseNativeProductionPaidVideo(subject, {
+        userId:subject.userId,sourceType:'paid_content',sourceId:input.videoId,creatorId:access.creatorId,
+        provider:access.provider,providerProductId:access.providerProductId,environment:'production',
+        amountMinor:access.priceCents,currency:access.currency,
+      },access.providerProductKey ?? '');
+      const verified = await waitForPaidVideoAccess(input.videoId,subject,access);
+      return {ok:verified.allowed,message:verified.allowed?'Video unlocked.':
+        'Your purchase is awaiting verification. Do not repeat the purchase.',access:verified,
+        intentId:result.intentId,productId:result.productId};
+    } catch {
+      return {ok:false,message:'Production Paid Video checkout is unavailable or awaiting verification. Refresh Purchases & My Tickets before another attempt.',access};
+    }
   }
 
   if (Platform.OS === "ios") {

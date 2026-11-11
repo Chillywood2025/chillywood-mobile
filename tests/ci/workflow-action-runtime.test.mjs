@@ -81,14 +81,25 @@ const rendererPrerequisite = {
   name: "Install actual media renderer test prerequisites",
   run: "sudo apt-get update\nsudo apt-get install --no-install-recommends -y ffmpeg\nffmpeg -version\nffprobe -version\n",
 };
+const mirrorPrerequisite = {
+  name: "Prefer existing official Ubuntu HTTPS mirror",
+  run: 'node scripts/ci/prefer-official-ubuntu-mirror.mjs /etc/apt/apt-mirrors.txt > "$RUNNER_TEMP/ubuntu-mirrors.txt"\n'
+    + 'sudo install -m 0644 "$RUNNER_TEMP/ubuntu-mirrors.txt" /etc/apt/apt-mirrors.txt\n',
+};
 function assertProjectRuntimeContract(workflows) {
   let sdkTails = 0, configuredVersions = 0;
   for (const { name, source } of workflows) {
     assert.doesNotMatch(source, /ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION|FORCE_JAVASCRIPT_ACTIONS_TO_NODE24/u);
     const workflow = parse(source);
-    for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
+    for (const [jobName, sourceJob] of Object.entries(workflow.jobs ?? {})) {
+      const job = structuredClone(sourceJob);
       const isolated = name === "required-validation.yml" && jobName === "product";
       if (isolated) {
+        assert.equal(job.steps.length, 11, "Only the exact reviewed mirror prerequisite may extend the ten-step Product contract");
+        assert.deepEqual(job.steps[4], mirrorPrerequisite, "Mirror preference must precede installation and cannot skip, suppress or change commands");
+        // Validate the one added prerequisite first, then preserve the complete
+        // original ten-step/hash/runtime contract without changing its digest.
+        job.steps.splice(4, 1);
         sdkTails++;
         assert.equal(job.if, "needs.plan.outputs.product == 'true'", "Product selection must remain unchanged");
         assert.equal(job.needs, "plan");
@@ -152,8 +163,27 @@ for (const [label, mutate] of runtimeMutations) {
     const workflows = readWorkflows();
     const entry = workflows.find(item => item.name === "required-validation.yml");
     const parsed = parse(entry.source);
+    const [mirror] = parsed.jobs.product.steps.splice(4, 1);
     mutate(parsed.jobs.product);
+    parsed.jobs.product.steps.splice(4, 0, mirror);
     // JSON is valid YAML; exercise the same parser and contract on real workflow mutations.
+    entry.source = JSON.stringify(parsed);
+    assert.throws(() => assertProjectRuntimeContract(workflows), { code: "ERR_ASSERTION" });
+  });
+}
+for (const [label, mutate] of [
+  ["missing", job => { job.steps.splice(4, 1); }],
+  ["skipped", job => { job.steps[4].if = "false"; }],
+  ["failure suppressed", job => { job.steps[4]["continue-on-error"] = true; }],
+  ["command suppressed", job => { job.steps[4].run += " || true"; }],
+  ["unreviewed mirror writer", job => { job.steps[4].run = "echo bypass"; }],
+  ["moved after browser install", job => { [job.steps[4],job.steps[5]] = [job.steps[5],job.steps[4]]; }],
+]) {
+  test(`runtime contract rejects mirror prerequisite ${label}`, () => {
+    const workflows = readWorkflows();
+    const entry = workflows.find(item => item.name === "required-validation.yml");
+    const parsed = parse(entry.source);
+    mutate(parsed.jobs.product);
     entry.source = JSON.stringify(parsed);
     assert.throws(() => assertProjectRuntimeContract(workflows), { code: "ERR_ASSERTION" });
   });

@@ -1,5 +1,6 @@
 // Disposable loopback PG only. No target URL, transport or operational budget.
 import assert from 'node:assert/strict';
+import {assertNativeFixtureHistory} from '../../tests/helpers/native-fixture-history-inventory.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,7 +21,7 @@ export async function runR2BootstrapMembershipCases({bin,full=true,onProgress=()
   f.q('drop role local_bootstrap_renamer;create role fixture_admin login superuser;','alternate_fixture_bootstrap');
   assert.equal(f.q("select rolname from pg_roles where oid=10 and rolsuper;"),'alternate_fixture_bootstrap');
   const before=JSON.parse(f.q(snapshotReadSQL(),'supabase_read_only_user'));validateObservation(before,{before:true});
-  if(full){assert.ok(before.catalogCount>47000);assert.equal(before.historyCount,634);}
+  if(full){assert.ok(before.catalogCount>47000);assertNativeFixtureHistory(before,'r2');}
   const local=buildLocalFixtureDeploymentEnvelope({baseline:before,fixtureToken:f.fixtureToken});
   const denied=f.run('psql',f.args('postgres'),local.sql);
   assert.notEqual(denied.status,0);assert.match(denied.stderr,/r2_local_fixture_required/u);
@@ -61,7 +62,13 @@ export async function runR2BootstrapMembershipCases({bin,full=true,onProgress=()
   assert.equal(classifyLocalFixtureDeploymentOutcome({before:baseline,after:installed,packet}).status,'exact_source_receipt_observed_committed_install_state_only');
   assert.equal(validateR2PrivateState(JSON.parse(f.q(r2PrivateStateReadSQL,'supabase_read_only_user'))).defaultOffAndEmptyObserved,true);
   cases.push('Unchanged local-fixture guard permits full exact receipt commit/classification; R2 private controls remain off and all tables empty.');
-  return {localOnly:true,fullLegacyStudioFixture:full,beforeCatalogCount:before.catalogCount,beforeHistoryCount:before.historyCount,cases};
+  const successor=full?f.applyDeferredMigrations():null;
+  if(full){
+   assertNativeFixtureHistory(JSON.parse(f.q(snapshotReadSQL(),'supabase_read_only_user')),'current');
+   assert.equal(validateR2PrivateState(JSON.parse(f.q(r2PrivateStateReadSQL,'supabase_read_only_user'))).defaultOffAndEmptyObserved,true);
+   cases.push('All later production source migrations replay only after the exact R2 receipt; full source inventory and every retained receipt are verified with production controls OFF.');
+  }
+  return {localOnly:true,fullLegacyStudioFixture:full,beforeCatalogCount:before.catalogCount,beforeHistoryCount:before.historyCount,successor,cases};
  }finally{f.stop();fs.rmSync(output,{recursive:true,force:true});}
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

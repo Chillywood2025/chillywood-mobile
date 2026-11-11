@@ -1,6 +1,7 @@
 // Local-only complete legacy + original48 + shared + Play predecessor fixture.
 // Never a target baseline or deployment transport.
 import assert from 'node:assert/strict';
+import {expectedNativeFixtureVersions} from '../../tests/helpers/native-fixture-history-inventory.mjs';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
@@ -44,7 +45,7 @@ export async function authoringDeploymentFixture(options){
    insert into supabase_migrations.schema_migrations(version,name,statements) values
    ('20261110021153','revenuecat_native_legacy_exclusion_v1',array[${quote(shared)}]),
    ('20261110021650','native_store_play_handoff_settlement_v1',array[${quote(play)}]);commit;`,'postgres');
-  assert.equal(f.q('select count(*) from supabase_migrations.schema_migrations;'),full?'633':'3');
+  assert.equal(f.q('select count(*) from supabase_migrations.schema_migrations;'),full?String(expectedNativeFixtureVersions('authoring').length):'3');
   return f;
  }catch(error){f.stop();throw error;}
 }

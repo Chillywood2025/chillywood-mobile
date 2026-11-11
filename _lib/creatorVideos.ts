@@ -792,6 +792,12 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
   const viewerUserId = toText(authData.user?.id);
   if (parsedWithAccess.visibility === "draft" && (!viewerUserId || viewerUserId !== parsedWithAccess.ownerId)) return createLockedCreatorVideo(normalizedVideoId, { allowed: false, visibility: "draft", reason: "draft_owner_only", isOwner: false, isBlocked: false, isCircleMember: false, hasPlayableSource: false, viewerUserId: viewerUserId || null, ownerUserId: parsedWithAccess.ownerId });
+  if (paidContentAccess?.nativeProductionDeliveryOnly === true) {
+    // The ordinary player resolves the exact session-bound immutable range
+    // source. Never obtain an unconditioned legacy origin/rendition URL here.
+    return { ...parsedWithAccess, paidContentAccess, playbackUrl: '', playbackResolution: null,
+      playbackQualityLabel: null, playbackDelivery: null };
+  }
   const playbackResolution = await resolveSignedVideoPlaybackSource({ videoId: parsedWithAccess.id, storageProvider: parsedWithAccess.storageProvider, fallbackBucket: parsedWithAccess.storageBucket });
   const legacyPlaybackUrl = !playbackResolution.defaultPlaybackUrl && (playbackResolution.legacyPlaybackAllowed || playbackResolution.legacyQualityEnforcement === "resolver_unavailable") ? await createCreatorVideoPlaybackUrl({ id: parsedWithAccess.id, storageProvider: parsedWithAccess.storageProvider, storageBucket: parsedWithAccess.storageBucket, storageObjectKey: parsedWithAccess.storageObjectKey, storagePath: parsedWithAccess.storagePath, playbackUrl: toText(row.playback_url) }) : "";
   return { ...parsedWithAccess, vipAccess: vipAccess.vipRequired ? vipAccess : null, playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl, playbackResolution, playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null), playbackDelivery: playbackResolution.deliveryMetadata, paidContentAccess, renditionStatuses: playbackResolution.renditionStatuses.length ? playbackResolution.renditionStatuses : parsed.renditionStatuses };

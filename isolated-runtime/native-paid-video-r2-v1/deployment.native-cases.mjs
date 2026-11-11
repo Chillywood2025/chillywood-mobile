@@ -1,5 +1,6 @@
 // Real local SQL only. Managed identities and full catalog scale are disposable.
 import assert from 'node:assert/strict';
+import {assertNativeFixtureHistory} from '../../tests/helpers/native-fixture-history-inventory.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,7 +24,7 @@ export async function runR2DeploymentNativeCases({bin,full=false,onProgress=()=>
   validateNativePrivateState(JSON.parse(q(nativePrivateStateReadSQL,'supabase_read_only_user')));
   assert.equal(validatePlayPrivateState(JSON.parse(q(playPrivateStateReadSQL,'supabase_read_only_user'))).defaultOffAndEmptyObserved,true);
   const before=observe();validateObservation(before,{before:true});
-  if(full){assert.ok(before.catalogCount>47000);assert.equal(before.historyCount,634);assert.equal(before.historyReceipts.find(r=>r.version==='20260824034109').statementsCount,619);}
+  if(full){assert.ok(before.catalogCount>47000);assertNativeFixtureHistory(before,'r2');assert.equal(before.historyReceipts.find(r=>r.version==='20260824034109').statementsCount,619);}
   const packet=buildLocalFixtureDeploymentEnvelope({baseline:before,fixtureToken:f.fixtureToken});
   assert.equal(packet.sql.match(/set local transaction_timeout='25s'/gu).length,1);
   assert.equal(packet.sql.match(/set local statement_timeout='20s'/gu).length,1);

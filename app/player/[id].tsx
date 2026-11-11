@@ -68,6 +68,8 @@ import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization"
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { formatOneTimePrice } from "../../_lib/customerExperiencePresentation";
 import { isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
+import { isNativeProductionPaidVideoBuildAvailable } from '../../_lib/nativeProductionPaidVideoBridge';
+import { useNativeProductionPaidVideoPlayback } from '../../_lib/useNativeProductionPaidVideoPlayback';
 import { purchasePaidVideoAccess } from "../../_lib/creatorPaidVideos";
 import { readCreatorTipPublicStatus, type CreatorTipPublicStatus } from "../../_lib/creatorTips";
 import {
@@ -7447,7 +7449,7 @@ export default function PlayerScreen() {
     ? formatOneTimePrice(creatorVideoPaidContentPriceLabel)
     : "";
   const paidVideoCheckoutAvailable = useMemo(() => {
-    return isCreatorDigitalCheckoutShellAvailable();
+    return isCreatorDigitalCheckoutShellAvailable() || isNativeProductionPaidVideoBuildAvailable();
   }, []);
   const handlePaidVideoUnlock = useCallback(async () => {
     debugLog("paid-video", "paid_video_unlock_pressed", {
@@ -7520,11 +7522,14 @@ export default function PlayerScreen() {
       setPaidVideoUnlockBusy(false);
     }
   }, [creatorVideo, creatorVideoPaidContentPriceLabel, isSignedIn, paidVideoCheckoutAvailable, paidVideoUnlockBusy]);
+  const nativeProductionDeliveryOnly = creatorVideo?.paidContentAccess?.nativeProductionDeliveryOnly === true;
+  const nativeProductionSource = useNativeProductionPaidVideoPlayback(nativeProductionDeliveryOnly ? creatorVideo?.id ?? null : null);
   const source = useMemo(() => {
+    if (nativeProductionDeliveryOnly) return nativeProductionSource;
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
-  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, isCreatorVideoPlayback]);
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, isCreatorVideoPlayback, nativeProductionDeliveryOnly, nativeProductionSource]);
   const reportNotificationViewProgress = useNotificationViewTracking(
     isCreatorVideoPlayback ? "video" : "spectator",
     isCreatorVideoPlayback ? creatorVideo?.id ?? null
@@ -7542,6 +7547,7 @@ export default function PlayerScreen() {
     setThumbnailVideoAspectRatio(null);
   }, [cleanId, displayItem?.id, displayItem?.video_url, expectsCreatorVideo, expectsSpectatorPlayback]);
   const sharedPartyResolvedSource = useMemo(() => {
+    if (nativeProductionDeliveryOnly) return nativeProductionSource;
     if (!inWatchParty) return source;
     if (displayItem?.video_url && displayItem.video_url.trim()) {
       return { uri: displayItem.video_url.trim() };
@@ -7549,7 +7555,7 @@ export default function PlayerScreen() {
     if (titleLoading) return null;
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
-  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, isCreatorVideoPlayback, source, titleLoading]);
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, isCreatorVideoPlayback, source, titleLoading, nativeProductionDeliveryOnly, nativeProductionSource]);
   const watchPartyLiveMediaSourceDebugMetadata = useMemo(() => {
     const sourceId = String(displayItem?.id ?? cleanId ?? "").trim();
     const displayName = String(displayItem?.title ?? creatorVideo?.title ?? "").trim();
@@ -7589,6 +7595,8 @@ export default function PlayerScreen() {
   const [playbackSource, setPlaybackSource] = useState<any>(() =>
     typeof sharedPartyResolvedSource === "number" ? null : sharedPartyResolvedSource,
   );
+  // Native access retirement must not wait for the legacy source-copy effect.
+  const renderedPlaybackSource = nativeProductionDeliveryOnly ? nativeProductionSource : playbackSource;
   useEffect(() => {
     watchPartyLiveMediaSourceDebugMetadataRef.current = watchPartyLiveMediaSourceDebugMetadata;
   }, [watchPartyLiveMediaSourceDebugMetadata]);
@@ -10444,7 +10452,7 @@ export default function PlayerScreen() {
               </View>
             ) : (
             <Animated.View
-              testID={isCreatorVideoPlayback && playbackSource ? "paid-video-player-ready" : undefined}
+              testID={isCreatorVideoPlayback && renderedPlaybackSource ? "paid-video-player-ready" : undefined}
               pointerEvents="none"
               style={[
                 styles.videoAnimatedWrap,
@@ -10457,12 +10465,12 @@ export default function PlayerScreen() {
                 },
               ]}
             >
-              {playbackSource && !standalonePlaybackSourceFailed ? (
+              {renderedPlaybackSource && !standalonePlaybackSourceFailed ? (
                 shouldUseSharedAndroidVideoSurface ? (
                   <SharedAndroidVideoSurface
                     key={`shared-android-video-${sharedAndroidVideoSourceKey}-${sharedAndroidVideoRemountIndex}`}
                     ref={videoRef}
-                    source={playbackSource}
+                    source={renderedPlaybackSource}
                     style={styles.video}
                     contentFit={shouldCoverPlayerVideo ? "cover" : "contain"}
                     shouldPlay={isLiveMode ? true : isPlaying}
@@ -10476,7 +10484,7 @@ export default function PlayerScreen() {
                     ref={(node) => {
                       videoRef.current = node as unknown as PlayerController | null;
                     }}
-                    source={playbackSource}
+                    source={renderedPlaybackSource}
                     style={styles.video}
                     pointerEvents="none"
                     resizeMode={shouldCoverPlayerVideo ? ResizeMode.COVER : ResizeMode.CONTAIN}

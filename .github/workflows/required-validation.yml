@@ -88,6 +88,10 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: npm ci --prefix tests/integration/real-peer-browser --ignore-scripts
+      - name: Prefer existing official Ubuntu HTTPS mirror
+        run: |
+          node scripts/ci/prefer-official-ubuntu-mirror.mjs /etc/apt/apt-mirrors.txt > "$RUNNER_TEMP/ubuntu-mirrors.txt"
+          sudo install -m 0644 "$RUNNER_TEMP/ubuntu-mirrors.txt" /etc/apt/apt-mirrors.txt
       - name: Install pinned browser for real paired call negotiation
         run: node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
       - name: Install actual media renderer test prerequisites
@@ -132,7 +136,7 @@ jobs:
     # Hosted run 41334686390 used 29m38s through the main Node matrix alone
     # (28m58s in that matrix), before six SQL files and retained Deno gates.
     # Budget the complete job; no individual test or provider deadline changes.
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }

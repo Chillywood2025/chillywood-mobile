@@ -45,7 +45,14 @@ function openSession(applicationName, sql, database = transientDatabase) {
   child.stderr.on("data", (chunk) => { stderr += chunk; });
   const done = new Promise((resolve) => child.on("close", (code) => resolve({ code, stdout, stderr })));
   child.stdin.write(`set application_name=${literal(applicationName)};\n${sql}\n`);
-  return { child, done, output: () => stdout };
+  return { child, done, output: () => stdout, errorOutput: () => stderr };
+}
+
+function assertSessionRunning(session, label) {
+  if (session.child.exitCode !== null || session.child.signalCode !== null) {
+    const diagnostic = session.errorOutput().replaceAll(/[A-Za-z0-9_-]{40,}/gu, "<redacted>").slice(-2048);
+    throw new Error(`${label}: child exited before expected lock/ready state (code=${session.child.exitCode}, signal=${session.child.signalCode}): ${diagnostic}`);
+  }
 }
 
 // These fixtures live only in the existing isolated database clone. Initial
@@ -99,11 +106,17 @@ async function googleSerializedRace(label, firstSql, secondSql, { expireAt = nul
   let second;
   try {
     first = openSession(firstName, `begin; set local statement_timeout='15s';\n${firstSql}\nselect 'GOOGLE_HOLDER_READY';`);
-    await waitUntil(() => first.output().includes("GOOGLE_HOLDER_READY"), `${label} first operation`);
+    await waitUntil(() => {
+      assertSessionRunning(first, `${label} first operation`);
+      return first.output().includes("GOOGLE_HOLDER_READY");
+    }, `${label} first operation`);
     second = openSession(secondName, `begin; set local statement_timeout='15s';\n${secondSql}\ncommit;\n\\q\n`);
     second.child.stdin.end();
-    await waitUntil(() => Number(query(`select count(*) from pg_stat_activity
-where application_name=${literal(secondName)} and wait_event_type='Lock';`)) === 1, `${label} actual lock wait`);
+    await waitUntil(() => {
+      assertSessionRunning(second, `${label} actual lock wait`);
+      return Number(query(`select count(*) from pg_stat_activity
+where application_name=${literal(secondName)} and wait_event_type='Lock';`)) === 1;
+    }, `${label} actual lock wait`);
     if (expireAt) await waitUntil(() => query(`select (clock_timestamp()>=${literal(expireAt)}::timestamptz)::text;`) === "true", `${label} actual provider expiry`);
     first.child.stdin.end("commit;\n\\q\n");
     const [a, b] = await Promise.all([first.done, second.done]);
@@ -160,7 +173,9 @@ async function proveGoogleRestoreConcurrency() {
 
   for (const terminalFirst of [false, true]) {
     const record = seedGoogleRestore(terminalFirst ? "terminal-first" : "restore-first");
-    const terminal = `select public.process_revenuecat_terminal_event_atomic(
+    // Synthetic provider call only; LOCAL context expires with this race transaction.
+    const terminal = `set local request.jwt.claim.role='service_role';
+select public.process_revenuecat_terminal_event_atomic(
 'revenuecat_google_play',${literal(`refund-${record.original}`)},'REFUND',${literal(record.user)}::uuid,
 'premium_subscription','monthly','sandbox','revoked',${literal(record.iso(-7200000))}::timestamptz,
 ${literal(record.iso(3600000))}::timestamptz,${literal(record.iso(-300000))}::timestamptz,

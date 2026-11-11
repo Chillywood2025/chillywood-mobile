@@ -33,12 +33,14 @@ const CREATOR_CONTENT_ALLOW_REASONS = new Set([
   "active_grant",
   "sandbox_grant",
   "vip_active",
+  "active_creator_subscription",
 ]);
 
 export const creatorContentResolutionAllowed = (value: unknown) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const resolution = value as Record<string, unknown>;
   return resolution.allowed === true
+    && resolution.nativeProductionDeliveryOnly !== true
     && resolution.requiresPurchase === false
     && CREATOR_CONTENT_ALLOW_REASONS.has(String(resolution.reason ?? "").trim());
 };

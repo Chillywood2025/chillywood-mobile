@@ -170,7 +170,7 @@ select is(
     'create_money_purchase_intent_pre_protected_video_closeout',
     'create_money_purchase_intent_pre_source_lock',
     'create_vip_pass_intent_pre_source_lock',
-    'creator_video_paid_precharge_authority_internal',
+    'creator_video_paid_precharge_before_production_admission',
     'platform_exact_current_session_authority_internal',
     'resolve_watch_party_room_entry',
     'restore_scheduled_account_deletion',

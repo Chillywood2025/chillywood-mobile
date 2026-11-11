@@ -5,6 +5,12 @@ native financial settlement readiness**. The existing production purchase-intent
 constraint still excludes native creator purchases. No products, credentials,
 qualification records, settings, deployments or activation are supplied.
 
+The paid-video successor is documented in
+[`NATIVE_PRODUCTION_ECONOMIC_CONTRACT.md`](NATIVE_PRODUCTION_ECONOMIC_CONTRACT.md).
+It reuses this normal post-canonical RPC and adds private immutable economic
+observations/HELD accounting; the channel contract below is preserved. Prospective
+production source admission and actual report/earnings integration remain open.
+
 ## Source behavior
 
 - After canonical RevenueCat processing, SQL resolves channel-subscription scope

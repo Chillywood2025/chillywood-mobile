@@ -100,12 +100,12 @@ test('actual private attendance delivery withdraws through exact recipient hints
   assert.equal((await handler(new Request('https://fixture.invalid/activity',{method:'POST',headers:{'x-chillywood-activity-token':'private-attendance-worker'}}))).status,200);
   assert.equal((await one('select count(*)::int n from private.room_attendance_hint_receipts where party_id=$1',[premiumRoom])).n,2);
   await db.exec('delete from realtime.fixture_outbox; delete from realtime.messages; delete from private.discovery_invalidation_outbox');
-  const expired=await one(`select public.process_revenuecat_premium_event_atomic('revenuecat_google_play','fixture-premium-expired','EXPIRATION',$1::uuid,
+  const expired=await as(actors.host,()=>one(`select public.process_revenuecat_premium_event_atomic('revenuecat_google_play','fixture-premium-expired','EXPIRATION',$1::uuid,
     p.provider_product_id,p.provider_base_plan_id,'sandbox','expired',now()-interval '1 day',now()-interval '1 second',now(),999,'usd',repeat('a',64),
     'NORMAL','google_play','android',null,p.id,$2) result
     from public.monetization_products p where p.provider='revenuecat_google_play' and p.environment='sandbox'
       and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1`,
-    [actors.friend.id,`live-authority-original-${actors.friend.id}`]);
+    [actors.friend.id,`live-authority-original-${actors.friend.id}`]),'service_role');
   assert.equal(expired.result.status,'processed',JSON.stringify(expired.result));
   assert.equal((await one('select public.premium_subject_has_finite_authority_internal($1) allowed',[actors.friend.id])).allowed,false);
   await assertPrivateHints(actors.friend);assert.equal((await ownCount(actors.friend)).n,0);

@@ -1,6 +1,7 @@
 // Full chronological schema, real SQL and single-backend advisory ownership.
 // This is NOT independent-backend contention, wait ordering or deadlock proof.
 import assert from 'node:assert/strict';
+import {nativeProductionMigrationFiles} from './helpers/native-production-migration-inventory.mjs';
 import test from 'node:test';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
@@ -76,8 +77,8 @@ test('exact profile metadata exception preserves authority, late guards and real
     return fn();
   });
   try {
-    assert.equal(replayReport.files.length,628+socialSuccessors.length,'all 624 predecessors, profile/tip gates, social successors, independent capture and ticket capacity execute');
-    assert.deepEqual(replayReport.files.slice(-6),[migration,tipSuccessor,...socialSuccessors,captureSuccessor,capacitySuccessor],'the current chain preserves the exact final migration order');
+    assert.equal(replayReport.files.length,628+socialSuccessors.length+nativeProductionMigrationFiles.length,'all 624 predecessors, profile/tip gates, social successors, independent capture and ticket capacity and explicit production successors execute');
+    assert.deepEqual(replayReport.files.slice(-6-nativeProductionMigrationFiles.length),[migration,tipSuccessor,...socialSuccessors,captureSuccessor,capacitySuccessor,...nativeProductionMigrationFiles],'the current chain preserves the exact final migration order');
     assert.deepEqual(replayReport.excludedMigrations,[]);
     assert.deepEqual(replayReport.overlayFiles,[]);
     const columns = (await db.query("select attname from pg_attribute where attrelid='public.user_profiles'::regclass and attnum>0 and not attisdropped order by attnum")).rows.map(row=>row.attname);
