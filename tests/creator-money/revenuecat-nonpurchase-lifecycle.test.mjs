@@ -40,8 +40,11 @@ test('exact signed extension advances only a bound finite Premium period, not ea
   assert.equal(reversal.status,'pending');assert.equal(reversal.accessStateChanged,false);
   assert.deepEqual(await one(`select jsonb_build_object('entitlement',(select to_jsonb(e) from public.user_entitlements e where user_id=$1),
    'binding',(select to_jsonb(b) from public.revenuecat_premium_transaction_authority b where user_id=$1::uuid))`,[user]),graph);
+  // This call models the authenticated provider ingress, not a viewer.
+  await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
   await one(`select public.process_revenuecat_terminal_event_atomic('revenuecat_google_play','extension-refund','REFUND',$1::uuid,
    'premium_subscription','monthly','sandbox','revoked',null,null,now(),repeat('d',64),'NORMAL','google_play','android','extension-original')`,[user]);
+  await db.exec("select set_config('request.jwt.claim.role','',false)");
   const afterTerminal=await call('extension-after-refund',{occurred:new Date().toISOString()});
   assert.equal(afterTerminal.status,'pending');
   assert.equal(await one('select public.premium_subject_has_finite_authority_internal($1)',[user]),false);

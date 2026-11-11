@@ -731,7 +731,7 @@ select ok(
     (select creator_id from pg_temp.creator_money_closeout_fixture)
   )->>'reason') = 'creator_authority_not_current'
   and pg_get_functiondef(
-    'public.creator_video_paid_precharge_authority_internal(uuid,text,text,text,integer,text,text)'::regprocedure
+    'public.creator_video_paid_precharge_before_production_admission(uuid,text,text,text,integer,text,text)'::regprocedure
   )
     ilike '%ordinary_creator_subject_for_mode%',
   'creator restriction closes new channel-subscription and Paid Video precharge authority'
@@ -772,6 +772,8 @@ create function pg_temp.apply_closeout_premium(
 returns jsonb
 language sql
 volatile
+-- Synthetic provider invocation keeps the real terminal service-role guard.
+set "request.jwt.claim.role" = 'service_role'
 as $$
   select public.process_revenuecat_premium_event_atomic(
     'revenuecat_app_store', p_event_id, p_event_type, p_user_id,
@@ -981,6 +983,9 @@ select throws_ok(
   'creator-money provider evidence rejects a malformed raw payload hash'
 );
 
+-- Provider-only cross-domain terminal delivery uses scoped service claims.
+savepoint cross_domain_terminal_service;
+select set_config('request.jwt.claim.role','service_role',true);
 create temporary table cross_domain_premium_terminal_results as
 with initial_delivery as materialized (
   select pg_temp.apply_closeout_premium(
@@ -1004,6 +1009,8 @@ with initial_delivery as materialized (
 select initial_delivery.result as initial_result,
        terminal_delivery.result as terminal_result
 from initial_delivery cross join terminal_delivery;
+select set_config('request.jwt.claim.role','',true);
+release savepoint cross_domain_terminal_service;
 
 select ok(
   coalesce((select initial_result->>'status' = 'processed'
@@ -1516,6 +1523,7 @@ select ok(
 );
 
 -- Unbound and duplicate deliveries remain durable fail-closed evidence.
+select set_config('request.jwt.claim.role','service_role',true);
 select is(
   (public.process_revenuecat_app_store_event_atomic(
     'closeout-unbound-terminal', 'REFUND',
@@ -1607,6 +1615,8 @@ select throws_ok(
   'P0001', 'revenuecat_terminal_dispatch_event_identity_mismatch',
   'provider event ID cannot be rebound to another lifecycle event'
 );
+
+select set_config('request.jwt.claim.role','',true);
 
 -- A recurring channel subscription outlives the one client session that
 -- initiated it, but each renewal still requires complete current account
@@ -1730,6 +1740,7 @@ select ok(
   'subscription-derived video reads create no purchase, ledger, or provider event'
 ) from pg_temp.creator_access_doctrine_economics_before before;
 
+select set_config('request.jwt.claim.role','service_role',true);
 select public.process_revenuecat_app_store_event_atomic(
   'closeout-channel-cancel-prepaid','CANCELLATION',
   'a1000000-0000-4000-8000-000000000005',
@@ -1737,6 +1748,7 @@ select public.process_revenuecat_app_store_event_atomic(
   now()+interval '30 days',null,null,repeat('6',64),
   'closeout-channel-renewal-original',null
 );
+select set_config('request.jwt.claim.role','',true);
 create temporary table creator_access_doctrine_subscription_snapshot as
 select
   subscription.id subscription_id,

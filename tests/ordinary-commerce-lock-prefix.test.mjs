@@ -1,6 +1,7 @@
 // Sequential catalog/transition proof only. Native split-prefix schedules are
 // required separately for independent backends, real waits and deadlock proof.
 import assert from 'node:assert/strict';
+import {nativeProductionMigrationFiles} from './helpers/native-production-migration-inventory.mjs';
 import test from 'node:test';
 import fs from 'node:fs';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
@@ -10,7 +11,7 @@ const migration='20261106073240_ordinary_commerce_canonical_lock_prefix.sql';
 const successors=['20261106170725_tip_commerce_gate_entry.sql',
  '20261107173220_creator_video_social_engagement.sql','20261107191000_comment_likes.sql',
  '20261107233954_isolated_test_store_capture_v1.sql',
- '20261108095500_paid_party_ticket_capacity_accounting.sql'];
+ '20261108095500_paid_party_ticket_capacity_accounting.sql',...nativeProductionMigrationFiles];
 const sql=fs.readFileSync(new URL('../supabase/migrations/'+migration,import.meta.url),'utf8');
 const roots=[...sql.slice(sql.indexOf('do $roots$'),sql.indexOf('end $roots$')).matchAll(/^\s+'(public\.[^']+|private\.[^']+)'/gmu)].map(match=>match[1]);
 const tables=['auth.users','auth.sessions','public.account_deletion_requests','public.wave1_legal_acceptances','public.wave1_legal_document_versions',

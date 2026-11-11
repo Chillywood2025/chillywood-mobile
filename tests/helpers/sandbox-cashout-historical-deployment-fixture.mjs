@@ -1,6 +1,7 @@
 // Test-only historical closure. This commit recorded the existing reviewed
 // dormant schema baseline; it does not qualify today's changed Edge source.
 import assert from 'node:assert/strict';
+import {nativeProductionMigrationFiles} from './native-production-migration-inventory.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,6 +41,7 @@ export const POST_BASELINE_AUTOMATIC_COMMERCE_MIGRATIONS=Object.freeze([
  '20261107191000_comment_likes.sql',
  '20261107233954_isolated_test_store_capture_v1.sql',
  '20261108095500_paid_party_ticket_capacity_accounting.sql',
+ ...nativeProductionMigrationFiles,
 ]);
 
 export function readHistoricalCashoutSource(file){

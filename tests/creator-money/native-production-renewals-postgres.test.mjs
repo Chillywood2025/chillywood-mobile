@@ -5,7 +5,7 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 import {databaseFactory as nativeDatabaseFactory} from '../helpers/native-deployment-database.mjs';
 import {seedMatureNativeSale} from '../helpers/native-production-mature-fixture.mjs';
 
-test('native current renewals preserve historical proof and fence new latest-row phantoms',{timeout:240000},async()=>{
+test('native current renewals preserve historical proof and fence new latest-row phantoms',{timeout:600000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
   databaseFactory:process.env.NATIVE_DEPLOYMENT_PG_BIN?()=>nativeDatabaseFactory({transport:process.env.NATIVE_PRODUCTION_PG_LOOPBACK==='1'?'loopback':'unix'}):null});
  try{

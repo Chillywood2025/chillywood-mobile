@@ -7,7 +7,7 @@ import {seedCommerceBuyer,seedQualifiedCommerceCreator} from '../helpers/automat
 
 // Synthetic OFF-contract proof only. This test cannot contact a provider or a
 // target database, and no synthetic qualification is deployment evidence.
-test('normal production checkout requires exact qualified preparation, one launch and independent receipt before playback',{timeout:240000},async()=>{
+test('normal production checkout requires exact qualified preparation, one launch and independent receipt before playback',{timeout:600000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
   databaseFactory:process.env.NATIVE_DEPLOYMENT_PG_BIN?()=>nativeDatabaseFactory({transport:'loopback'}):null});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];

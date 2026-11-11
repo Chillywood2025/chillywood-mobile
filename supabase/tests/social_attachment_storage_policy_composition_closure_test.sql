@@ -825,6 +825,8 @@ select is((select count(*)::integer from storage.objects
 reset role;
 select set_config('request.jwt.claims','{}',true);
 
+-- Match the authenticated service context of the webhook, not the prior viewer.
+select set_config('request.jwt.claim.role','service_role',true);
 select public.process_revenuecat_terminal_event_atomic(
   'revenuecat_app_store','social-storage-protected-vip-refund','REFUND',
   'da000000-0000-4000-8000-000000000003',
@@ -839,6 +841,8 @@ select public.process_revenuecat_terminal_event_atomic(
   repeat('d',64),'NORMAL','app_store','ios',
   'social-storage-protected-paid-original'
 );
+-- Do not let the service claim override subsequent authenticated viewer claims.
+select set_config('request.jwt.claim.role','',true);
 
 set local role authenticated;
 select set_config(

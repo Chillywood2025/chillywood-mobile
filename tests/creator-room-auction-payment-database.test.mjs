@@ -10,7 +10,7 @@ import ts from 'typescript';
 const purchaseModule = {exports:{}};
 new Function('exports','require',ts.transpileModule(fs.readFileSync('_lib/creatorPurchases.ts','utf8'),
   {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(purchaseModule.exports,
-  name=>{assert.ok(['./accountBoundSupabaseMutation','./accountSessionAuthority','./creatorMoneyPurchaseAuthority','./revenuecat'].includes(name));return {};});
+  name=>{assert.ok(['./accountBoundSupabaseMutation','./accountSessionAuthority','./creatorMoneyPurchaseAuthority','./revenuecat','./nativeProductionPaidVideo'].includes(name));return {};});
 const wallet = purchaseModule.exports;
 
 test('synthetic verified Stripe room auction receipts preserve exact paid access and financial history', {timeout:180000}, async()=>{

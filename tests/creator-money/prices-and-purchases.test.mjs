@@ -26,6 +26,7 @@ function setup({ rpc, platform = "android" } = {}) {
   let authority = { userId: buyer, accountId: buyer, sessionGeneration: "session-1", state: "ACTIVE", restoreOnly: false };
   const calls = [], restores = [];
   const mocks = {
+    "./nativeProductionPaidVideo": { reconcileNativeProductionPaidVideoPurchases: async () => undefined },
     "react-native": { Platform: { OS: platform } },
     "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.sessionGeneration === b.sessionGeneration && a.restoreOnly === b.restoreOnly },
     "./accountBoundSupabaseMutation": {
@@ -201,7 +202,7 @@ test("exact-event history filter is sent to the server and wrong-source results 
 
 test("paid-video initial price binds the dedicated iOS intent to299/499/999 and never a99fallback", async () => {
   const platform = { OS: "ios" }, calls = [];
-  const mocks = { "react-native": { Platform: platform }, "react-native-get-random-values": {}, "./accountSessionAuthority": {}, "./accountBoundSupabaseMutation": {},
+  const mocks = { "./nativeProductionPaidVideo": { purchaseNativeProductionPaidVideo: async () => { throw new Error("Intent-only fixture must not launch production purchase"); } }, "react-native": { Platform: platform }, "react-native-get-random-values": {}, "./accountSessionAuthority": {}, "./accountBoundSupabaseMutation": {},
     "./featureFlags": {}, "./revenuecat": {}, "./runtimeConfig": {}, "./revenuecatPurchaseClosure": {},
     "./analytics": {}, "./supabase": { supabase: {} }, "./creatorVideos": {}, "./entitlementAuthority": {}, "./paymentRailPolicy": {},
     "./creatorMonetization": {}, "./creatorMoneyStoreQuote": load("creatorMoneyStoreQuote", {}), "./iosAppStoreCommerce": load("iosAppStoreCommerce", {}) };

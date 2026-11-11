@@ -10,7 +10,11 @@ import {seedCashoutExecutionFixture} from '../helpers/cashout-execution-fixture.
 const finalizerOnly=process.env.NATIVE_CORRECTION_FINALIZER_ONLY==='1';
 const timezoneOnly=process.env.NATIVE_CORRECTION_TIMEZONE_ONLY==='1';
 const excludeRetainedCapacity=process.env.NATIVE_CORRECTION_EXCLUDE_RETAINED_CAPACITY==='1';
-test(timezoneOnly?'focused native correction timezone diagnostic (later correctness and capacity excluded)':finalizerOnly?'focused native correction multi-allocation finalizer diagnostic (capacity and later groups excluded)':excludeRetainedCapacity?'native correction correctness diagnostic (retained-capacity block excluded)':'signed native corrections account only actual issued liability, retain current authority and fence final dispatch',{timeout:240000},async()=>{
+// Full PGlite retained-history run took 1903s locally; bound that slow-engine
+// mode at one hour. Native/focused work starts at ten minutes; capture guards stay unchanged.
+const fullPglite=!process.env.NATIVE_DEPLOYMENT_PG_BIN&&!finalizerOnly&&!timezoneOnly&&!excludeRetainedCapacity;
+const parentTimeoutMs=fullPglite?3600000:600000;
+test(timezoneOnly?'focused native correction timezone diagnostic (later correctness and capacity excluded)':finalizerOnly?'focused native correction multi-allocation finalizer diagnostic (capacity and later groups excluded)':excludeRetainedCapacity?'native correction correctness diagnostic (retained-capacity block excluded)':'signed native corrections account only actual issued liability, retain current authority and fence final dispatch',{timeout:parentTimeoutMs},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
   databaseFactory:process.env.NATIVE_DEPLOYMENT_PG_BIN?()=>nativeDatabaseFactory({transport:process.env.NATIVE_PRODUCTION_PG_LOOPBACK==='1'?'loopback':'unix'}):null});
  try{
@@ -385,7 +389,8 @@ test(timezoneOnly?'focused native correction timezone diagnostic (later correctn
    await db.exec('update private.native_production_earning_controls set release_correction_credits=false,account_corrections=false');
    await syntheticLiabilities({count:5000,createdAt:new Date(Date.now()-86400000).toISOString()});
    await db.exec('update private.native_production_earning_controls set account_corrections=true,release_correction_credits=true');
-   const growthStart=performance.now(),growth=await capture();assert.ok(growth);
+   const growthStart=performance.now(),growth=await capture();
+   if(!growth)assert.fail(JSON.stringify(await one('select (select to_jsonb(d) from private.native_production_liability_capture_failures d order by id desc limit 1) diagnostic')));
    assert.equal(BigInt(growth.amountMinor),BigInt(snapshot.amountMinor)+5000n);
    process.stdout.write(`compact native liability growth: 27000 retained rows / 10000 current synthetic liabilities, capture ${(performance.now()-growthStart).toFixed(1)}ms\n`);
    await syntheticLiabilities();
@@ -677,9 +682,23 @@ test(timezoneOnly?'focused native correction timezone diagnostic (later correctn
    if(commit){assert.equal((await recover()).offsetMinor,0,'committed new unaccounted report cannot fund a debt offset');}
    else await tx(async()=>assert.ok(Number((await recover()).offsetMinor)>0,'rollback permits fresh valid current-domain recovery'));
   });
+  // Both adapters need a real new report to requeue the deliberately blocked
+  // seed job. The native-only concurrency INSERT above cannot be its prerequisite.
+  await merch.service();await merch.report({reportRunId:'frr_MixedDrain',fileId:'file_MixedDrain',contentSha256:'c'.repeat(64)});await merch.root();
+  const job=(await db.query("select state,next_attempt_at<=clock_timestamp() due from private.commerce_fee_accounting_jobs where source_id=$1",[merch.identity])).rows[0];
+  assert.equal(job.state,'pending');assert.equal(job.due,true);
   const beforeDrain=Number(await one("select private.creator_fee_recovery_amount($1,'usd')",[mixed.creator]));
-  await merch.service();await merch.drain();await merch.root();
+  const offsetAmount=()=>one('select coalesce(sum(amount_minor),0) from private.commerce_creator_fee_offsets where earnings_ledger_id=$1',[commerce.earnings_ledger_id]);
+  const beforeOffset=Number(await offsetAmount());
+  await merch.service();const drained=await merch.drain();await merch.root();
+  assert.equal(drained.providerMutationPerformed,false);assert.equal(drained.payoutCreated,false);
+  assert.equal(drained.outcomes.length,1);assert.equal(drained.outcomes[0].sourceId,merch.identity);
+  assert.equal(drained.outcomes[0].status,'completed');
+  assert.equal(await one('select state from private.commerce_fee_accounting_jobs where source_id=$1',[merch.identity]),'completed');
+  const afterDrain=Number(await one("select private.creator_fee_recovery_amount($1,'usd')",[mixed.creator]));
+  assert.ok(beforeDrain>afterDrain);assert.equal(beforeDrain-afterDrain,Number(await offsetAmount())-beforeOffset);
   const partial=await recover();assert.equal(Number(partial.offsetMinor),0,'queue already consumed the eligible tranche; explicit retry is idempotent');
+  assert.equal(Number((await recover()).offsetMinor),0,'repeated explicit recovery cannot consume the tranche twice');
   assert.ok(Number(partial.remainingMinor)>0&&Number(partial.remainingMinor)<beforeDrain,'future commerce earning only partially covers the original debt');
   const mixedReturn=component('mixed-return','store_fee',-1000,'mixed-fee');
   await append(mixed,await report(mixed,mixedQ,2,[mixedFee,mixedReturn],15600));await mixed.reconcile();await funding(mixed);

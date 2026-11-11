@@ -12,6 +12,9 @@ import {verifyInputs} from '../scripts/google-refund-tax-observer-proof/verify-i
 import {collectSourceBundle} from '../ops/creator-backend-rollout/prepare-edge.mjs';
 import {HISTORICAL_CONFIG,HISTORICAL_ENTRYPOINT,materializeHistoricalBundle,materializeHistoricalProofPackage,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
 const archives=[
+ {name:'tests/helpers/sandbox-cashout-historical-deployment-fixture.mjs',file:'tests/fixtures/historical-sandbox-cashout-historical-deployment-fixture.mjs.txt'},
+ {name:'tests/helpers/native-deployment-database.mjs',file:'tests/fixtures/historical-native-deployment-database.mjs.txt'},
+ {name:'supabase/functions/_shared/media-download-authority.ts',file:'tests/fixtures/historical-media-download-authority.ts.txt'},
  {name:HISTORICAL_ENTRYPOINT,file:'tests/fixtures/historical-revenuecat-webhook-index.ts.txt'},
  {name:HISTORICAL_CONFIG,file:'tests/fixtures/historical-supabase-config.toml.txt'},
  ...['contract','rpc','runtime'].map(name=>({name:`supabase/functions/_shared/isolated-paid-video-${name}.ts`,file:`tests/fixtures/historical-isolated-paid-video-${name}.ts.txt`})),
@@ -97,4 +100,19 @@ test('snapshot archive, absence and original lock tampering are rejected without
   const changed=await import(new URL(helperURL.href+'?changed-lock='+encodeURIComponent(name)+'&mutation='+mutation));
   assert.throws(()=>changed.readPinnedHistoricalSource(name),/HISTORICAL_LOCK_DRIFT/);
  }
+});
+
+test('historical proof materializes every locked source and only its locked migration inventory', () => {
+ const proof=materializeHistoricalProofPackage(),root=new URL('../../',proof);
+ const lock=JSON.parse(fs.readFileSync(new URL('source-lock.json',proof)));
+ for(const [name,digest] of Object.entries(lock.files))
+  assert.equal(createHash('sha256').update(fs.readFileSync(new URL(name,root))).digest('hex'),digest,name);
+ const expected=Object.keys(lock.files).filter(name=>name.startsWith('supabase/migrations/')&&name.endsWith('.sql'))
+  .map(name=>name.slice('supabase/migrations/'.length)).sort();
+ assert.ok(expected.length>0);
+ assert.deepEqual(fs.readdirSync(new URL('supabase/migrations/',root)).filter(name=>name.endsWith('.sql')).sort(),expected,
+  'historical helpers enumerate a separate complete locked tree, never current successors');
+ const current=fs.readdirSync(new URL('../supabase/migrations/',import.meta.url)).filter(name=>name.endsWith('.sql'));
+ for(const successor of current.filter(name=>!expected.includes(name)))
+  assert.equal(fs.existsSync(new URL('supabase/migrations/'+successor,root)),false,successor);
 });

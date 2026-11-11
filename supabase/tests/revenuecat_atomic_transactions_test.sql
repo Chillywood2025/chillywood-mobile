@@ -185,6 +185,8 @@ create function pg_temp.apply_consumable(
 returns jsonb
 language plpgsql
 volatile
+-- Synthetic provider invocation keeps the real terminal service-role guard.
+set "request.jwt.claim.role" = 'service_role'
 as $$
 declare
   v_result jsonb;

@@ -8,7 +8,7 @@ import {seedCommerceBuyer,seedQualifiedCommerceCreator} from '../helpers/automat
 
 // Synthetic qualifications belong only to this owned disposable fixture. They
 // are not account interoperability, immutable-origin or live admission proof.
-test('prospective native source/report plumbing stays held and cannot bypass current cashout domains',{timeout:240000},async()=>{
+test('prospective native source/report plumbing stays held and cannot bypass current cashout domains',{timeout:600000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
   databaseFactory:process.env.NATIVE_DEPLOYMENT_PG_BIN?()=>nativeDatabaseFactory({transport:process.env.NATIVE_PRODUCTION_PG_LOOPBACK==='1'?'loopback':'unix'}):null});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];

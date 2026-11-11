@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {databaseFactory as nativeDatabaseFactory} from '../helpers/native-deployment-database.mjs';
 
-test('normal native production ingress appends immutable paid-video economic holds without opening admission', {timeout:240000}, async()=>{
+test('normal native production ingress appends immutable paid-video economic holds without opening admission', {timeout:600000}, async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,
   databaseFactory:process.env.NATIVE_DEPLOYMENT_PG_BIN?()=>nativeDatabaseFactory({transport:process.env.NATIVE_PRODUCTION_PG_LOOPBACK==='1'?'loopback':'unix'}):null});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];

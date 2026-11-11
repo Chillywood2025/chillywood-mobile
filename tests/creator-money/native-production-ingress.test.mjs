@@ -52,6 +52,11 @@ function harness({signature=true,domain='creator_money',observationFailure=false
    observations++;
    return observationFailure&&observations===1?{data:null,error:{message:'unavailable'}}:{data:{status:'recorded',financialAuthority:false}};
   }
+  if(name==='reconcile_native_production_paid_video_access') {
+   assert.equal(observations>0,true,'canonical observation precedes no-charge reconciliation');
+   assert.equal(args.p_canonical_receipt_id,receipt);
+   return {data:{status:'HELD',financialAuthority:false,payable:false}};
+  }
   throw Error(`Unexpected RPC ${name}`);
  },from:table=>{
   const product={id:'fixture-product',product_key:'fixture',product_type:'channel_subscription',provider_product_id:'creator_monthly',provider_base_plan_id:'monthly'};
@@ -77,7 +82,7 @@ function harness({signature=true,domain='creator_money',observationFailure=false
 for(const store of ['APP_STORE','PLAY_STORE'])test(`actual ${store} terminal handler preserves cleanup and records production provenance`,async()=>{
  const h=harness();const result=await h.send({...event,store});
  assert.equal(result.status,200,JSON.stringify(result.body));assert.equal(h.terminalApplied,true);
- assert.deepEqual(h.calls.map(c=>c.name),['reserve_revenuecat_webhook_ingress_event','process_revenuecat_terminal_event_atomic','record_native_production_ingress_observation']);
+ assert.deepEqual(h.calls.map(c=>c.name),['reserve_revenuecat_webhook_ingress_event','process_revenuecat_terminal_event_atomic','record_native_production_ingress_observation','reconcile_native_production_paid_video_access']);
  const facts=h.calls[2].args.p_facts;
  assert.equal(facts.reportedAppId,event.app_id);assert.equal(facts.transactionId,event.transaction_id);
  assert.equal(facts.configuredProjectId,'proj_server');assert.equal(result.body.authorityGranted,false);
@@ -86,8 +91,8 @@ for(const store of ['APP_STORE','PLAY_STORE'])test(`actual ${store} terminal han
 for(const store of ['APP_STORE','PLAY_STORE'])test(`actual ${store} nonterminal writer records canonical identity despite no productType in its result`,async()=>{
  const h=harness();const result=await h.send({...event,store,type:'RENEWAL',price:4.99,currency:'USD'});
  assert.equal(result.status,200,JSON.stringify(result.body));
- assert.equal(h.calls.at(-1).name,'record_native_production_ingress_observation');
- assert.equal(h.calls.at(-1).args.p_facts.canonicalReceiptId,receipt);
+ assert.equal(h.calls.at(-2).name,'record_native_production_ingress_observation');
+ assert.equal(h.calls.at(-2).args.p_facts.canonicalReceiptId,receipt);
 });
 test('actual handler leaves Premium and sandbox unchanged and authenticates before observation',async()=>{
  for(const options of [{domain:'premium'},{}]) {
@@ -99,8 +104,8 @@ test('actual handler leaves Premium and sandbox unchanged and authenticates befo
 });
 test('missing configuration is recorded as unknown; observation failure cannot roll back terminal cleanup',async()=>{
  const unknown=harness({project:null});assert.equal((await unknown.send({...event,app_id:undefined})).status,200);
- assert.equal(unknown.calls.at(-1).args.p_facts.configuredProjectId,null);
- assert.equal(unknown.calls.at(-1).args.p_facts.reportedAppId,null);
+ assert.equal(unknown.calls.at(-2).args.p_facts.configuredProjectId,null);
+ assert.equal(unknown.calls.at(-2).args.p_facts.reportedAppId,null);
  const failed=harness({observationFailure:true});const result=await failed.send(event);
  assert.equal(result.status,500);assert.equal(failed.terminalApplied,true);
  assert.equal(result.body.webhookProcessed,false);

@@ -57,11 +57,18 @@ export async function runOrdinaryNativeDispatchRaces({query,race,lit,session,unt
    marker=`select count(*) from private.merch_checkout_dispatch where order_id=${lit(intent.id)} and state='dispatched'`;
    sourceLock=`select id from public.merch_products where id=${lit(source)} for update;`;
   }
-  const premium=(event,expiry)=>`select public.process_revenuecat_premium_event_atomic('revenuecat_google_play',${lit('native-premium-'+randomUUID())},${lit(event)},${lit(creator.id)}::uuid,
+  const premium=(event,expiry)=>{const statement=`select public.process_revenuecat_premium_event_atomic('revenuecat_google_play',${lit('native-premium-'+randomUUID())},${lit(event)},${lit(creator.id)}::uuid,
    p.provider_product_id,p.provider_base_plan_id,'sandbox',${lit(event==='EXPIRATION'?'expired':'active')},clock_timestamp()-interval '1 day',
    clock_timestamp()+interval ${lit(expiry)},clock_timestamp(),999,'usd',repeat('a',64),'NORMAL','google_play','android',null,p.id,
    ${lit('live-authority-original-'+creator.id)}) from public.monetization_products p where p.provider='revenuecat_google_play'
    and p.environment='sandbox' and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1;`;
+   // Each owned test connection gets an invoker-only temporary provider wrapper.
+   // Function-local JWT context restores automatically on return/error, even
+   // when this statement runs inside an existing native race transaction.
+   return `create or replace function pg_temp.native_dispatch_fixture_premium() returns jsonb language sql
+    set "request.jwt.claim.role"='service_role' as ${lit(statement)};
+    select pg_temp.native_dispatch_fixture_premium();`;
+  };
   return {kind,creator,buyer,intent,source,attempt,dispatch,marker,sourceLock,premium,eventSale};
  };
  const mutations=[

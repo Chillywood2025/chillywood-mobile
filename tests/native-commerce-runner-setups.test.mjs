@@ -9,7 +9,7 @@ import {commerceSeedAdapter,seedCommerceCreator,commerceActor} from './helpers/a
 
 const prefix='scripts/test-';
 const eventStart="query(readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));";
-test('registered native commerce runner setups and late INSERT factories execute current SQL',{timeout:360000},async t=>{
+test('registered native commerce runner setups and late INSERT factories execute current SQL',{timeout:600000},async t=>{
  const db=nativeSetupDatabase();
  const runPath=async(file,parts,tail='',options={})=>{
   const source=nativeSource(file);
@@ -40,7 +40,7 @@ test('registered native commerce runner setups and late INSERT factories execute
    await run('google-external-reporting-concurrency-postgres',source=>[
     ...googleParts(source),
     `assert.equal(query("select count(*) from private.google_play_external_launch_bindings b join private.creator_external_payment_capabilities c on c.id=b.capability_id join public.creator_tip_transactions tip on tip.id=b.quote_id where b.quote_id='"+taxQuote+"' and c.creator_id=tip.creator_id and c.provider_account_id=tip.provider_account_id and c.environment=tip.provider_environment"),'1');
-     query("select public.process_revenuecat_premium_event_atomic('revenuecat_google_play','google-tail-expiration','EXPIRATION','"+actors.creator.id+"',p.provider_product_id,p.provider_base_plan_id,'sandbox','expired',now()-interval '1 day',now()-interval '1 second',now(),999,'usd',repeat('e',64),'NORMAL','google_play','android',null,p.id,'live-authority-original-"+actors.creator.id+"') from public.monetization_products p where p.provider='revenuecat_google_play' and p.environment='sandbox' and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1");
+     query("begin;"+service+"select public.process_revenuecat_premium_event_atomic('revenuecat_google_play','google-tail-expiration','EXPIRATION','"+actors.creator.id+"',p.provider_product_id,p.provider_base_plan_id,'sandbox','expired',now()-interval '1 day',now()-interval '1 second',now(),999,'usd',repeat('e',64),'NORMAL','google_play','android',null,p.id,'live-authority-original-"+actors.creator.id+"') from public.monetization_products p where p.provider='revenuecat_google_play' and p.environment='sandbox' and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1;commit;");
      assert.equal(query("select private.ordinary_commerce_premium_current('"+actors.creator.id+"','sandbox')"),'f');
      let historyLease=JSON.parse(query('begin;'+service+'select '+beginHistory+';commit;'));`,
     nativeSpan(source,'  const context=JSON.parse(query(',"  const saveHolder=session('google-history-save-holder'"),

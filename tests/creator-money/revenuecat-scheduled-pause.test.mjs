@@ -145,6 +145,8 @@ test('all current database entry-point overloads ignore a scheduled pause withou
         (select count(*)::int from public.provider_events) providers,
         (select count(*)::int from public.access_grants) grants,
         (select count(*)::int from public.money_access_ledger_events) ledger`)).rows[0];
+      // Provider entry-point calls carry the service JWT role; ACL negatives remain explicit.
+      await db.exec("select set_config('request.jwt.claim.role','service_role',false)");
       let serial=0;
       for(const fn of functions) {
        for(const eventType of ['SUBSCRIPTION_PAUSED','PRODUCT_CHANGE','SUBSCRIPTION_EXTENDED','REFUND_REVERSED']) {
@@ -175,6 +177,7 @@ test('all current database entry-point overloads ignore a scheduled pause withou
         }
        }
       }
+      await db.exec("select set_config('request.jwt.claim.role','',false)");
       const after=(await db.query(`select
         (select count(*)::int from public.provider_events) providers,
         (select count(*)::int from public.access_grants) grants,

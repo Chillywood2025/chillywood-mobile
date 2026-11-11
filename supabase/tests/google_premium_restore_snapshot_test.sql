@@ -32,7 +32,10 @@ returns jsonb language sql volatile as $$
     and product.provider_product_id='premium_subscription'
     and product.provider_base_plan_id='monthly' and product.environment='sandbox'
 $$;
-create function pg_temp.google_terminal(n integer,kind text) returns jsonb language sql volatile as $$
+create function pg_temp.google_terminal(n integer,kind text) returns jsonb language sql volatile
+-- Synthetic provider invocation keeps the real terminal service-role guard.
+set "request.jwt.claim.role" = 'service_role'
+as $$
   select public.process_revenuecat_terminal_event_atomic(
     'revenuecat_google_play','google-restore-terminal-'||n,kind,pg_temp.restore_user(n),
     'premium_subscription','monthly','sandbox',
@@ -392,11 +395,13 @@ select results_eq(
   $$select 'grant'::text kind,id from public.access_grants union all select 'binding',id from public.revenuecat_premium_transaction_authority order by kind,id$$,
   $$select kind,id from original_ids order by kind,id$$,
   'all success, terminal and rejected cases preserve original grant/binding cardinality');
+select set_config('request.jwt.claim.role','service_role',true);
 select is(public.process_revenuecat_terminal_event_atomic('revenuecat_google_play',
   'google-restore-refund-after-snapshot','REFUND',pg_temp.restore_user(8),
   'premium_subscription','monthly','sandbox','revoked',now()-interval '30 minutes',
   now()+interval '1 hour',now(),repeat('e',64),'NORMAL','google_play','android',
   'google-restore-original-8')->>'status','refunded','a real later refund terminates the restored original');
+select set_config('request.jwt.claim.role','',true);
 update stable_graph set graph=pg_temp.restore_graph();
 select throws_ok($$select pg_temp.google_snapshot(8,'google-restore-after-write-failure')$$,
   'premium_reconciliation_terminal_authority_not_superseded','even an exact historical snapshot replay cannot supersede a later refund');

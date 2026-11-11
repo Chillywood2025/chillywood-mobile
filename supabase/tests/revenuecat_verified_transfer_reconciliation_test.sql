@@ -204,6 +204,8 @@ create function pg_temp.apply_premium_event(
 returns jsonb
 language sql
 volatile
+-- Synthetic provider invocation keeps the real terminal service-role guard.
+set "request.jwt.claim.role" = 'service_role'
 as $$
   select public.process_revenuecat_premium_event_atomic(
     'revenuecat_app_store',

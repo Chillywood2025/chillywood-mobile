@@ -17,7 +17,12 @@ test('ordinary native dispatch final catalog and all race SQL replay; sequential
   assert.doesNotMatch(helper,/lock table/u,'covered membership uses the canonical writer fence, never inverse relation SHARE');
   assert.doesNotMatch(helper,/from auth\.(users|sessions)|from public\.wave1_legal/u,'never row-lock auth/legal after their writer fences');
   for(const kind of ['money','event']) {
-   const body=await definition(`public.begin_creator_${kind}_checkout(uuid,uuid)`);
+   const entry=`public.begin_creator_${kind}_checkout(uuid,uuid)`;
+   const body=await definition(kind==='money'?'public.begin_creator_money_checkout_before_native(uuid,uuid)':entry);
+   if(kind==='money') {
+    assert.match(await definition(entry),/return public\.begin_creator_money_checkout_before_native\(p_purchase_intent_id,p_checkout_attempt_id\)/u);
+    for(const role of ['anon','authenticated','service_role'])assert.equal((await db.query("select has_function_privilege($1,'public.begin_creator_money_checkout_before_native(uuid,uuid)','execute') allowed",[role])).rows[0].allowed,false);
+   }
    before(body,'perform private.lock_ordinary_commerce_dispatch_subjects','perform pg_catalog.pg_advisory_xact_lock');
    before(body,'perform private.assert_ordinary_native_dispatch_current(i);',kind==='money'
     ?'update public.money_purchase_intents set checkout_attempt_id':'update public.event_ticket_reservations set checkout_attempt_id');

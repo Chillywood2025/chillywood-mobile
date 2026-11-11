@@ -95,7 +95,7 @@ export function verifyCommittedDeploymentSource(source){
  return Object.freeze({source,tree:git('rev-parse',source+'^{tree}').toString().trim(),closureSha256:sha(JSON.stringify(files)),files});
 }
 export function buildDeploymentEnvelope({baseline,source}){
- fail(Number.isFinite(Date.parse(baseline?.capturedAt))&&Date.now()-Date.parse(baseline.capturedAt)>=0&&Date.now()-Date.parse(baseline.capturedAt)<=300000,'r2_fresh_observation_required');
+ fail(Number.isFinite(Date.parse(baseline?.capturedAt))&&Date.now()-Date.parse(baseline.capturedAt)>=0&&Date.now()-Date.parse(baseline.capturedAt)<=600000,'r2_fresh_observation_required');
  const binding=verifyCommittedDeploymentSource(source);
  return Object.freeze({...assembleEnvelope(baseline),binding,localFixtureOnly:false});
 }

@@ -116,11 +116,11 @@ test('actual listing pause withdraws invitations without broadening Circle admis
    if(loss==='membership')await as(actors.friend,()=>db.query("select public.heartbeat_watch_party_room_session($1,'left',false,false)",[party]));
    else if(loss==='circle')await db.query("update public.user_friendships set status='removed' where user_low_id=$1 and user_high_id=$2",[actors.host.id,actors.friend.id]);
    else{
-    const expired=await one(`select public.process_revenuecat_premium_event_atomic('revenuecat_google_play','pause-premium-expired','EXPIRATION',$1::uuid,
+    const expired=await as(actors.host,()=>one(`select public.process_revenuecat_premium_event_atomic('revenuecat_google_play','pause-premium-expired','EXPIRATION',$1::uuid,
      p.provider_product_id,p.provider_base_plan_id,'sandbox','expired',now()-interval '1 day',now()-interval '1 second',now(),999,'usd',repeat('a',64),
      'NORMAL','google_play','android',null,p.id,$2) value from public.monetization_products p
      where p.provider='revenuecat_google_play' and p.environment='sandbox' and p.product_type='premium_subscription' and p.status='sandbox'
-     order by p.created_at,p.id limit 1`,[actors.friend.id,`live-authority-original-${actors.friend.id}`]);
+     order by p.created_at,p.id limit 1`,[actors.friend.id,`live-authority-original-${actors.friend.id}`]),'service_role');
     assert.equal(expired.value.status,'processed');
     assert.equal((await one('select public.premium_subject_has_finite_authority_internal($1) value',[actors.friend.id])).value,false);
    }

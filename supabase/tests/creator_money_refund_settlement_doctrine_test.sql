@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(39);
+select plan(42);
 
 select has_table('public','creator_money_settlement_policies','server-owned settlement policy exists');
 select has_table('public','creator_money_obligation_completion_receipts','obligation completion receipts exist');
@@ -74,8 +74,25 @@ insert into public.creator_earnings_ledger(
   ledger_status,settlement_started_at,normal_eligible_at,reserve_amount_cents,reserve_release_at,
   settlement_policy_version,metadata
 ) values (
+  '10000000-0000-4000-8000-000000000009','20000000-0000-4000-8000-000000000001',
+  'paid_content','30000000-0000-4000-8000-000000000009',100,100,'usd','available',
+  timezone('utc'::text,now())-interval '8 days',timezone('utc'::text,now())-interval '1 day',
+  10,timezone('utc'::text,now())+interval '29 days','2026-08-31-v1','{}'
+);
+-- Bare Paid Video has no verified provenance and cannot become payout authority.
+select ok(private.commerce_current_earning_domain_ready('10000000-0000-4000-8000-000000000009') is not true,
+  'unqualified Paid Video does not acquire current earning authority');
+select is(public.creator_earnings_withdrawable_cents_internal(
+  '10000000-0000-4000-8000-000000000009',timezone('utc'::text,now())),0,
+  'missing Paid Video provenance stays held despite elapsed policy timestamps');
+-- Generic tip uses the same seven-day hold and ten-percent thirty-day reserve.
+insert into public.creator_earnings_ledger(
+  id,creator_id,source_type,source_id,gross_amount_cents,net_creator_amount_cents,currency,
+  ledger_status,settlement_started_at,normal_eligible_at,reserve_amount_cents,reserve_release_at,
+  settlement_policy_version,metadata
+) values (
   '10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',
-  'paid_content','30000000-0000-4000-8000-000000000001',100,100,'usd','available',
+  'tip','30000000-0000-4000-8000-000000000001',100,100,'usd','available',
   timezone('utc'::text,now())-interval '8 days',timezone('utc'::text,now())-interval '1 day',
   10,timezone('utc'::text,now())+interval '29 days','2026-08-31-v1','{}'
 );
@@ -113,6 +130,12 @@ insert into public.creator_payout_allocations(
   '40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001',90,'reserved'
 );
 select pass('allocation of only the non-reserved ninety percent succeeds');
+select throws_ok(
+  $$insert into public.creator_payout_allocations(payout_request_id,earnings_ledger_id,amount_cents,state)
+    values('40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000009',1,'reserved')$$,
+  'P0001','payout_allocation_exceeds_available_after_reserve',
+  'missing-provenance Paid Video cannot allocate even one cent');
+
 select throws_ok(
   $$insert into public.creator_payout_allocations(
     payout_request_id,earnings_ledger_id,amount_cents,state

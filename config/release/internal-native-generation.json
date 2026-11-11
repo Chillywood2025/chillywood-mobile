@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v22",
+  "generation": "internal-native-v23",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v22",
-    "ios": "1.0.0-ios-production-v22"
+    "android": "1.0.0-android-production-v23",
+    "ios": "1.0.0-ios-production-v23"
   },
   "supersedes": {
-    "generation": "internal-native-v21",
-    "androidRuntimeVersion": "1.0.0-android-production-v21",
-    "iosRuntimeVersion": "1.0.0-ios-production-v21",
-    "androidCompatibilityDigest": "a0d0bdf51a6029e52186ae056c2e931f33b63cb2f9d76acdb1e706aa9c9c4dc5",
-    "iosCompatibilityDigest": "d71f53ce412fc4fb36c1b0985ec9db20e36dcdb192089eefbd250c06c1c26114"
+    "generation": "internal-native-v22",
+    "androidRuntimeVersion": "1.0.0-android-production-v22",
+    "iosRuntimeVersion": "1.0.0-ios-production-v22",
+    "androidCompatibilityDigest": "6b8900bcf2c05520edf001ab661bfab0e9b9037534b179af7bcd79bbb3f0c9a4",
+    "iosCompatibilityDigest": "90a2fc454799dce3e2cfcb5d9c8c04babc4115c88424500e891d0b1b3cc0d30a"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "6b8900bcf2c05520edf001ab661bfab0e9b9037534b179af7bcd79bbb3f0c9a4",
-    "iosDigest": "90a2fc454799dce3e2cfcb5d9c8c04babc4115c88424500e891d0b1b3cc0d30a"
+    "androidDigest": "f01772c0836daa241d0cafb28d203e7aad4710112c555e1c9d0d6c83dfa53df1",
+    "iosDigest": "b665655d95ce5665511d025efad30acb83d67ddf7b59783e403ea985988f537c"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V22 is a prospective source cohort for the dormant read-only StoreKit AppTransaction evidence adapter and native module inputs. V21 and earlier runtimes, signed artifacts and canonical compatibility digests remain immutable. Existing internal channels, tester audiences, app-owned activation, production generation and held Android106 restrictions are unchanged. Fresh matching signed binaries and platform-specific native and physical qualification are required; this metadata grants no build, deployment, submission, OTA, public release or payment activation authority. AppTransaction evidence alone is not purchase, account, exact-build or provider qualification."
+    "reason": "V23 is a prospective source cohort for the default-OFF normal Production Paid Video native module. V22 and earlier runtimes, signed artifacts and canonical compatibility digests remain immutable. Existing internal channels, tester audiences, app-owned activation, production generation and held Android106 restrictions are unchanged. Fresh matching signed binaries and platform-specific native and physical qualification are required; this metadata grants no build, deployment, submission, OTA, public release or payment activation authority. Source identity is not Store, device, account or financial qualification."
   }
 }

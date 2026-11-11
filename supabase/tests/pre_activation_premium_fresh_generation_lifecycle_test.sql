@@ -11,6 +11,8 @@ create function pg_temp.apply_google_premium_lifecycle( p_event_id text, p_event
 returns jsonb
 language sql
 volatile
+-- Synthetic provider invocation keeps the real terminal service-role guard.
+set "request.jwt.claim.role" = 'service_role'
 as $$
   select public.process_revenuecat_premium_event_atomic( 'revenuecat_google_play',p_event_id,p_event_type,p_user_id, product.provider_product_id,product.provider_base_plan_id,
     'sandbox',p_entitlement_status,p_starts_at,p_expires_at,p_occurred_at, 999,'usd',p_hash,'NORMAL','google_play','android',null,product.id, p_original_transaction_id )
@@ -301,12 +303,14 @@ select is((select current_provider_product_id||':'||latest_event_hash from publi
 select ok( public.premium_subject_has_finite_authority_internal( 'af200000-0000-4000-8000-000000000005' ), 'the repeated exact Restore snapshot retains authoritative Premium' );
 select is( (select metadata->>'premium_post_quarantine_generation_lifecycle' from public.provider_events where provider_event_id='restore-generation-second'), 'true',
   'the repeated Restore records the bounded generation-lifecycle decision' );
+select set_config('request.jwt.claim.role','service_role',true);
 create temporary table restore_revocation_result on commit drop as
 select public.process_revenuecat_premium_event_atomic( 'revenuecat_app_store','restore-generation-revocation','REVOCATION',
     'af200000-0000-4000-8000-000000000005',mapping.provider_product_id,null, 'sandbox','revoked',clock_timestamp()-interval '1 day',
     clock_timestamp()+interval '29 days',clock_timestamp(),0,'usd',repeat('2',64), 'NORMAL','app_store','ios',mapping.id,mapping.product_id,'restore-generation-original'
   ) result from public.monetization_product_store_mappings mapping where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium'
     and mapping.provider_product_id='com.chillywood.premium.yearly';
+select set_config('request.jwt.claim.role','',true);
 select is((select result->>'status' from restore_revocation_result),'reversed','a provider-signed revocation terminates the restored generation');
 select ok(not public.premium_subject_has_finite_authority_internal( 'af200000-0000-4000-8000-000000000005'),
   'revocation removes authoritative Premium for the restored generation');
