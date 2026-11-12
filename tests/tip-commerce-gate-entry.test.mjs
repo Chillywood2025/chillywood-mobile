@@ -4,6 +4,10 @@ import fs from 'node:fs';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
 const migration='20261106170725_tip_commerce_gate_entry.sql';
+// This before/after proof deliberately omits the tip repair. The later
+// convergence migration requires that repair and belongs to current-topology
+// tests, not this historical predecessor fixture.
+const forwardMigration='20261112041003_automatic_eligibility_current_topology.sql';
 const signatures=[
   'public.record_creator_tip_checkout_session(uuid,uuid,uuid,text,text)',
   'public.reserve_creator_tip_checkout_attempt(uuid,uuid,uuid,jsonb)',
@@ -11,7 +15,7 @@ const signatures=[
 
 test('tip entry repair changes only the two exact function lock prefixes', {timeout:240_000}, async()=>{
   const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,
-    includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
+    includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,forwardMigration]});
   const read=async signature=>(await db.query(`select pg_get_functiondef(p.oid) definition,
     p.oid,p.proowner,p.proacl,p.prolang,p.prosecdef,p.provolatile,p.proisstrict,p.proparallel,
     p.proconfig,p.prorettype,p.proretset,p.proargtypes,p.proargnames,p.procost,p.prorows
