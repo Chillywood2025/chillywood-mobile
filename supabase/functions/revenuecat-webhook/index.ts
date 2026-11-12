@@ -2456,6 +2456,36 @@ const legacyHandler = async (req: Request, nativeObserver?: RevenueCatLegacyObse
       }
       throw error;
     }
+    // Only the authenticated shared composition supplies this internal scope.
+    // An exact production event never receives it. SQL independently validates
+    // installed connection/ownership and the already-reserved ingress hash.
+    const handoverScope = nativeObserver?.nativeScope;
+    const handoverProduct = resolveProductId(event);
+    if (nativeObserver && handoverScope && handoverScope.store === "APP_STORE"
+      && ["com.chillywood.paidvideo.tier1", "com.chillywood.paidvideo.tier2",
+        "com.chillywood.paidvideo.tier3", "com.chillywood.paidvideo.tier4"].includes(handoverProduct ?? "")) {
+      const rawSha256 = await hashText(rawBody);
+      if (handoverScope.rawSha256 !== rawSha256) throw new Error("Native handover raw identity mismatch.");
+      const { data, error } = await adminConfig.client.rpc("native_apple_sandbox_handover_v1", {
+        p_scope: handoverScope,
+        p_event: { eventId: await resolveEventId(event, rawBody), eventType: normalizeEventType(event.type),
+          userId: resolveUserId(event), productId: handoverProduct,
+          originalTransactionId: resolveOriginalTransactionId(event), occurredAt: toIsoFromMs(event.event_timestamp_ms) },
+      });
+      if (error) throw new Error("Native handover ownership unavailable.");
+      // Null explicitly delegates unowned products and previously bound legacy
+      // originals to their existing lifecycle handler, including cancellation.
+      if (data !== null) {
+        const proof = safeObject(data);
+        if (Object.keys(proof).length !== 6 || proof.protocol !== "native-apple-sandbox-handover-v1"
+          || proof.rawSha256 !== rawSha256 || !PROVIDER_UUID_PATTERN.test(String(proof.providerEventId ?? ""))
+          || proof.status !== "excluded" || proof.financialAuthority !== false || proof.obligationResolved !== false)
+          throw new Error("Native handover exclusion unavailable.");
+        nativeObserver.nativeExcluded(rawSha256);
+        return jsonResponse(200, { status: "ignored", reason: "native_sandbox_ownership_handover",
+          financialAuthority: false, authorityGranted: false, liveMoneyAction: false });
+      }
+    }
     if (normalizeEventType(event.type) === "TEST") {
       await writeProviderReadinessAudit(adminConfig.client, {
         provider: "revenuecat",

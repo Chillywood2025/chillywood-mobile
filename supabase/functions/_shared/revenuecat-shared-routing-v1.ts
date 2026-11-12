@@ -13,7 +13,18 @@ const text = (v: unknown): v is string => typeof v === "string" && v.length > 0 
 const uuid = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(v);
 const unavailable = () => new RouterBoundaryError("shared_routing_unavailable", 503);
 export type SharedRouteV1 = Readonly<{ connection: NativeStoreSandboxConnectionV1; nativeProducts: readonly string[]; legacyProducts: readonly string[] }>;
-export type RevenueCatLegacyObserverV1 = Readonly<{ nativeExcluded(rawSha256: string): void }>;
+export type RevenueCatNativeScopeV1 = Readonly<{
+  protocol: "revenuecat-native-authenticated-scope-v1";
+  connectionId: string; connectionRevision: number; projectId: string;
+  appId: string; store: "APP_STORE" | "PLAY_STORE"; environment: "SANDBOX";
+  rawSha256: string;
+}>;
+export type RevenueCatLegacyObserverV1 = Readonly<{
+  // Internal authenticated context only. Never populated from request headers
+  // or a provider-supplied authority flag; SQL must still verify its registry.
+  nativeScope: RevenueCatNativeScopeV1;
+  nativeExcluded(rawSha256: string): void;
+}>;
 export type RevenueCatLegacyHandlerV1 = (request: Request, observer?: RevenueCatLegacyObserverV1) => Promise<Response>;
 
 /** Reuse the immutable qualified authentication/encryption boundary rather than
@@ -141,9 +152,16 @@ export function createRevenueCatSharedHandlerV1(deps: {
       // Run BOTH required paths, including legacy revocation/quarantine when
       // native storage is unavailable. A private callback, not response JSON,
       // proves the legacy atomic dispatcher durably found no matching consumer.
-      const observer: RevenueCatLegacyObserverV1 = { nativeExcluded: hash => {
+      const nativeScope: RevenueCatNativeScopeV1 = Object.freeze({
+        protocol: "revenuecat-native-authenticated-scope-v1",
+        connectionId: decision.connection.connectionId,
+        connectionRevision: decision.connection.connectionRevision,
+        projectId: decision.connection.projectId, appId: decision.connection.appId,
+        store: decision.connection.store, environment: "SANDBOX", rawSha256,
+      });
+      const observer: RevenueCatLegacyObserverV1 = Object.freeze({ nativeScope, nativeExcluded: (hash: string) => {
         if (observerActive && hash === rawSha256) excluded = true;
-      } };
+      } });
       const legacy = bounded(() => io.legacy(copy(), decision.kind === "native" ? observer : undefined), 15000)
         .finally(() => { observerActive = false; });
       const intake = bounded(() => persistNativeStoreSandboxIntakeV1(nativeRequest(), decision.connection, value => {

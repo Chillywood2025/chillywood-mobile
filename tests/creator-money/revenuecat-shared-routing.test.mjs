@@ -9,6 +9,33 @@ globalThis.crypto ??= webcrypto;
 const root = path.resolve(import.meta.dirname, '../../supabase/functions');
 const id = n => `d0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
+test('shared native scope comes only from authenticated configured connection and exact bytes',async()=>{
+  const h=await harness(),api=h.l.load('_shared/revenuecat-shared-routing-v1.ts');
+  const routes=api.parseRevenueCatSharedRoutesV1(h.env.NATIVE_STORE_SHARED_ROUTES_JSON,
+    h.l.load('_shared/native-store-runtime-config-v1.ts').parseNativeStoreRuntimeConnectionsV1(h.env.NATIVE_STORE_CONNECTIONS_JSON));
+  let observed,legacyCalls=0;
+  const handler=api.createRevenueCatSharedHandlerV1({routes:()=>routes,
+    legacy:async(_request,observer)=>{legacyCalls++;observed=observer;return new Response('{}');},
+    persist:async()=>{throw Error('synthetic intake unavailable');},reconcile:async()=>{throw Error('must remain held');}});
+  const send=async patch=>{
+    observed=undefined;
+    const raw=JSON.stringify({api_version:'1.0',event:{...h.f.event,...patch}});
+    await handler(new Request('https://synthetic.invalid',{method:'POST',headers:{authorization:h.f.config.authentication.secret,
+      'X-Native-Project':'forged-project'},body:raw}));return raw;
+  };
+  const raw=await send({nativeScope:{projectId:'forged-project'}});
+  assert.ok(Object.isFrozen(observed));assert.ok(Object.isFrozen(observed.nativeScope));
+  assert.deepEqual(observed.nativeScope,{protocol:'revenuecat-native-authenticated-scope-v1',
+    connectionId:h.f.config.connectionId,connectionRevision:h.f.config.connectionRevision,
+    projectId:h.f.config.projectId,appId:h.f.config.appId,store:'APP_STORE',environment:'SANDBOX',
+    rawSha256:Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw))).toString('hex')});
+  assert.equal(legacyCalls,1,'legacy cleanup runs despite native intake failure');
+  for(const patch of [{environment:'PRODUCTION'},{app_id:'unknown-app'},{product_id:'legacy-product'},
+    {entitlement_ids:['premium']},{type:'TRANSFER',transferred_from:[id(1)],transferred_to:[id(2)]}]){
+    await send(patch);assert.equal(observed,undefined,'no native authority for unclassified scope');
+  }
+});
+
 // Execute the actual entrypoint, configuration, authentication, encrypted
 // journal preparation, private worker and legacy dispatcher. Only external
 // SQL/RPC boundaries are modeled here; this is not provider/device proof.
@@ -31,7 +58,7 @@ function loader(env = {}, client = {}, clock = performance) {
   return {load, get handler() {return handler;}};
 }
 
-async function harness({store = 'APP_STORE', negative = false, mode = 'success', legacyPatch = {}, enabled = true, clock = performance, beforeRpc = () => {}, legacyDatabase = null} = {}) {
+async function harness({store = 'APP_STORE', negative = false, mode = 'success', legacyPatch = {}, enabled = true, clock = performance, beforeRpc = () => {}, legacyDatabase = null, handoverResult = null} = {}) {
   const env = {}, calls = [], client = {};
   const l = loader(env, client, clock), f = await l.load('native-store-reconcile-v1/runtime_fixture.ts').fixture(negative);
   f.config.store = store; f.event.store = store;
@@ -77,6 +104,7 @@ async function harness({store = 'APP_STORE', negative = false, mode = 'success',
       try {const data=(await legacyDatabase.query(`select public.${name}(${params.join(',')}) result`,values)).rows[0].result;call.result=data;return {data};}
       catch(error){call.error=error.message;return {error:{message:error.message}};}
     }
+    if (name==='native_apple_sandbox_handover_v1') return typeof handoverResult==='function'?handoverResult(args):{data:handoverResult};
     if (name==='reserve_revenuecat_webhook_ingress_event') return {data:{status:'reserved',providerEventId:args.p_provider_event_id,duplicateEvent:false,authorityGranted:false}};
     if (name==='process_revenuecat_app_store_event_atomic'||name==='process_revenuecat_google_play_event_atomic')
       return mode==='legacy-loss'?{error:{message:'PRIVATE_LEGACY_FAILURE'}}:{data:{...excluded,...legacyPatch}};
@@ -299,3 +327,54 @@ test('actual migrated SQL supplies exclusion receipts and retains ignored-charge
       assert.equal(ambiguous.calls.some(c=>c.name==='native_store_sandbox_effect_candidate_v1'),false);
     } finally {await db.close();}
   });
+
+const handoverProduct='com.chillywood.paidvideo.tier1';
+async function handoverHarness(options={}){
+ const h=await harness({mode:'unqualified',...options});
+ const routes=JSON.parse(h.env.NATIVE_STORE_SHARED_ROUTES_JSON);
+ for(const route of routes.routes)route.nativeProducts=[handoverProduct];
+ h.env.NATIVE_STORE_SHARED_ROUTES_JSON=JSON.stringify(routes);
+ return h;
+}
+const handoverProof=args=>({data:{protocol:'native-apple-sandbox-handover-v1',rawSha256:args.p_scope.rawSha256,
+ providerEventId:id(70),status:'excluded',financialAuthority:false,obligationResolved:false}});
+test('actual webhook records handed-over Apple bytes before any old positive or terminal projector',async()=>{
+ for(const negative of [false,true]){
+  const h=await handoverHarness({negative,handoverResult:handoverProof});
+  const result=await h.send({product_id:handoverProduct,nativeScope:{projectId:'forged'}});
+  assert.equal(result.status,503,'unqualified native effect remains held despite real legacy exclusion branch');
+  const record=h.calls.find(c=>c.name==='native_apple_sandbox_handover_v1');assert.ok(record);
+  assert.deepEqual(Object.keys(record.args).sort(),['p_event','p_scope'],'raw provider bytes are not RPC arguments');
+  assert.deepEqual(Object.keys(record.args.p_event).sort(),['eventId','eventType','occurredAt','originalTransactionId','productId','userId']);
+  assert.ok(h.calls.findIndex(c=>c.name==='reserve_revenuecat_webhook_ingress_event')<h.calls.indexOf(record));
+  assert.equal(record.args.p_scope.projectId,h.f.config.projectId);
+  assert.equal(record.args.p_scope.rawSha256,Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(result.raw))).toString('hex'));
+  assert.equal(record.args.p_event.productId,handoverProduct);
+  assert.equal(h.calls.some(c=>c.name.startsWith('process_revenuecat_')),false);
+  assert.equal(h.calls.some(c=>c.name==='native_store_sandbox_effect_v1'),false);
+ }
+});
+test('actual webhook delegates missing ownership or prior legacy original and preserves production',async()=>{
+ for(const negative of [false,true]){
+  const h=await handoverHarness({negative,handoverResult:null});
+  await h.send({product_id:handoverProduct});
+  assert.ok(h.calls.some(c=>c.name.startsWith('process_revenuecat_')));
+ }
+ for(const options of [{enabled:false},{negative:true}]){
+  const h=await handoverHarness(options);await h.send({product_id:handoverProduct,...(options.negative?{environment:'PRODUCTION'}:{})});
+  assert.equal(h.calls.some(c=>c.name==='native_apple_sandbox_handover_v1'),false);
+  assert.ok(h.calls.some(c=>c.name.startsWith('process_revenuecat_')));
+ }
+});
+test('actual webhook rejects forged or failed handover proof without old positive fallback',async()=>{
+ for(const handoverResult of [()=>({error:{message:'PRIVATE_SCOPE_FAILURE'}}),args=>({data:{...handoverProof(args).data,rawSha256:'f'.repeat(64)}}),
+  args=>({data:{...handoverProof(args).data,financialAuthority:true}}),args=>({data:{...handoverProof(args).data,extra:true}})]){
+  const h=await handoverHarness({handoverResult});const result=await h.send({product_id:handoverProduct});
+  assert.equal(result.status,503);assert.equal(h.calls.some(c=>c.name.startsWith('process_revenuecat_')),false);
+  assert.equal(h.calls.some(c=>c.name==='native_store_sandbox_effect_candidate_v1'),false);
+  assert.equal(JSON.stringify(result.body).includes('PRIVATE_'),false);
+ }
+ const h=await handoverHarness({mode:'journal-loss',handoverResult:handoverProof});
+ assert.equal((await h.send({product_id:handoverProduct})).status,503);
+ assert.ok(h.calls.some(c=>c.name==='native_apple_sandbox_handover_v1'),'legacy evidence path survives native storage loss');
+});
