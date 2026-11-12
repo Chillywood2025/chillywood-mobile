@@ -145,11 +145,11 @@ test('provider network exception cannot yield a partial fee result', async () =>
     return f.transport(url, options);
   }));
 });
-function deadlineObserver() {
+function deadlineObserver(expectedTimeout=15000) {
   const active = new Set();
   const runtime = { exports: {}, AbortSignal, AbortController, TextDecoder, crypto: webcrypto,
     setTimeout: (callback, milliseconds) => {
-      assert.equal(milliseconds, 15000);
+      assert.equal(milliseconds, expectedTimeout);
       const timer = setTimeout(() => { active.delete(timer); callback(); }, 20);
       active.add(timer); return timer;
     },
@@ -160,6 +160,18 @@ function deadlineObserver() {
   }).outputText, runtime);
   return { observe: runtime.exports.observeStripeFeeReport, active };
 }
+test('paid-video fee reads can use 60s while preserving caller cancellation and cleanup',async()=>{
+ const clock=deadlineObserver(60000),f=fixture();
+ await clock.observe(context,'rk_test_fixture',f.transport,{timeoutMs:60000});
+ assert.equal(clock.active.size,0);
+ const controller=new AbortController();let providerSignal;
+ const pending=clock.observe(context,'rk_test_fixture',async(_url,options)=>{providerSignal=options.signal;return new Promise(()=>{});},{timeoutMs:60000,signal:controller.signal});
+ await new Promise(resolve=>setImmediate(resolve));controller.abort();
+ await assert.rejects(pending,/provider_read_deadline/);assert.equal(providerSignal.aborted,true);assert.equal(clock.active.size,0);
+ const canceled=new AbortController();canceled.abort();let calls=0;
+ await assert.rejects(observe(context,'rk_test_fixture',async()=>{calls++;throw Error('not expected');},{timeoutMs:60000,signal:canceled.signal}),/provider_read_deadline/);
+ assert.equal(calls,0);
+});
 test('fee report reads bound stalled headers, JSON and CSV bodies without waiting for cancellation', { timeout: 2000 }, async () => {
   for (const stall of ['headers', 'account', 'report', 'csv']) {
     const clock = deadlineObserver(), f = fixture();

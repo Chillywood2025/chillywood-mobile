@@ -15,7 +15,10 @@ const id = (v: unknown, prefix: string): string => typeof v === "string" && new 
 
 export async function observeStripeRefundTax(
   context: RefundTaxContext, secret: string, transport: typeof fetch = fetch,
+  options: {timeoutMs?:number;signal?:AbortSignal} = {},
 ) {
+  const timeoutMs=options.timeoutMs??15000;
+  check(Number.isSafeInteger(timeoutMs)&&timeoutMs>0&&timeoutMs<=120000);
   id(context.paymentIntentId, "pi");
   check(/^[a-z]{3}$/.test(context.currency) && integer(context.grossMinor) > 0
     && integer(context.taxMinor) >= 0 && context.taxMinor <= context.grossMinor
@@ -30,7 +33,7 @@ export async function observeStripeRefundTax(
   const get = async (path: string, missingAllowed = false): Promise<Json | null> => {
     const response = await transport(`https://api.stripe.com/v1${path}`, {
       method: "GET", redirect: "error", headers: { Authorization: `Bearer ${secret}`, "Stripe-Version": "2026-10-28.endive" },
-      signal: AbortSignal.timeout(15000),
+      signal: options.signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs),options.signal]) : AbortSignal.timeout(timeoutMs),
     });
     // Only an explicit absent association is a normal unknown. Authorization,
     // transport, throttling and malformed responses must retry the observation.

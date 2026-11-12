@@ -256,13 +256,17 @@ const readOrdinaryPaidVideoIds = async (
     .in("content_id", videoIds);
   if (error || !data) {
     if (error) console.error("public creator paid-video classification query failed", error.message);
-    return new Set<string>();
+    throw new Error('paid_video_classification_unavailable');
   }
-  return new Set((data as PublicPaidVideoPriceRow[])
+  const {data: stripeRows,error: stripeError}=await adminClient.rpc('classify_stripe_paid_video_ids',{p_video_ids:videoIds});
+  if(stripeError||!Array.isArray(stripeRows))throw new Error('stripe_video_classification_unavailable');
+  const paid=new Set((data as PublicPaidVideoPriceRow[])
     .filter((price) => price.is_paid === true
       && ownerByVideoId.get(toText(price.content_id)) === toText(price.creator_id))
     .map((price) => toText(price.content_id))
     .filter(Boolean));
+  for(const row of stripeRows)if(ownerByVideoId.get(toText(row.videoId))===toText(row.creatorId))paid.add(toText(row.videoId));
+  return paid;
 };
 
 const readPublishedOfficialRachiOriginalVideoIds = async (

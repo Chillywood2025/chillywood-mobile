@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+import { readStripeSandboxVideoAccess } from "./stripePaidVideoSandbox";
 import { supabase } from "./supabase";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
@@ -79,6 +81,7 @@ export type CreatorMonetizationFoundationSummary = {
 
 export type CreatorContentAccessResolution = {
   nativeProductionDeliveryOnly?: boolean;
+  stripeSandboxDeliveryOnly?: boolean;
   allowed: boolean;
   reason: string;
   requiresPurchase: boolean;
@@ -503,6 +506,16 @@ export async function resolveCreatorContentAccess(options: {
   contentType: string;
   contentId: string;
 }): Promise<CreatorContentAccessResolution> {
+  if (Platform.OS === "web" && options.contentType === "creator_video") {
+    const stripe = await readStripeSandboxVideoAccess(options.contentId);
+    if (stripe?.available) return {
+      ...(stripe.reason !== "owner" ? { stripeSandboxDeliveryOnly: true } : {}),
+      allowed: stripe.canAccess, reason: stripe.canAccess ? (stripe.reason === "owner" ? "owner" : "sandbox_grant") : stripe.checkoutAllowed ? "purchase_required" : "content_unavailable",
+      requiresPurchase: !stripe.canAccess && stripe.checkoutAllowed,
+      priceCents: stripe.amountMinor ?? null, currency: stripe.currency ?? null,
+      creatorId: stripe.creatorId ?? null, resolverStatus: "resolved",
+    };
+  }
   try {
     const response = await withAuthorityReadDeadline(
       monetizationClient.rpc("resolve_creator_content_access", {

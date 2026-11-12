@@ -1,3 +1,6 @@
+import { useStripeSandboxPaidVideoPlaybackState } from "../../_lib/useStripeSandboxPaidVideoPlayback";
+import { refreshStripeSandboxVideoPayment } from "../../_lib/stripePaidVideoSandbox";
+import { captureCreatorMoneyPurchaseAuthority, isCreatorMoneyPurchaseAuthorityCurrent } from "../../_lib/creatorMoneyPurchaseAuthority";
 import { CommentLikeButton } from "../../components/social/comment-like-button";
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
 import { AppBackButton } from "../../components/navigation/app-back-button";
@@ -1255,6 +1258,8 @@ export default function PlayerScreen() {
   const videoRef = useRef<PlayerController | null>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
   const [creatorVideo, setCreatorVideo] = useState<CreatorVideo | null>(null);
+  const stripeRefreshVideoRef = useRef<string | null>(null);
+  stripeRefreshVideoRef.current = creatorVideo?.id ?? null;
   const [spectatorSourceEnded, setSpectatorSourceEnded] = useState(false);
   const [playbackSourceKind, setPlaybackSourceKind] = useState<"title" | "creator-video" | "spectator-playback">("title");
   const [titleLoading, setTitleLoading] = useState(true);
@@ -7449,7 +7454,7 @@ export default function PlayerScreen() {
     ? formatOneTimePrice(creatorVideoPaidContentPriceLabel)
     : "";
   const paidVideoCheckoutAvailable = useMemo(() => {
-    return isCreatorDigitalCheckoutShellAvailable() || isNativeProductionPaidVideoBuildAvailable();
+    return Platform.OS === "web" || isCreatorDigitalCheckoutShellAvailable() || isNativeProductionPaidVideoBuildAvailable();
   }, []);
   const handlePaidVideoUnlock = useCallback(async () => {
     debugLog("paid-video", "paid_video_unlock_pressed", {
@@ -7487,7 +7492,7 @@ export default function PlayerScreen() {
 
     setPaidVideoUnlockBusy(true);
     setPaidVideoUnlockMessage(
-      `Opening ${Platform.OS === "ios" ? "App Store" : "Google Play"} checkout...`
+      `Opening ${Platform.OS === "web" ? "Stripe sandbox" : Platform.OS === "ios" ? "App Store" : "Google Play"} checkout...`
     );
     try {
       debugLog("paid-video", "paid_video_checkout_start", {
@@ -7522,14 +7527,18 @@ export default function PlayerScreen() {
       setPaidVideoUnlockBusy(false);
     }
   }, [creatorVideo, creatorVideoPaidContentPriceLabel, isSignedIn, paidVideoCheckoutAvailable, paidVideoUnlockBusy]);
+  const stripeSandboxDeliveryOnly = creatorVideo?.paidContentAccess?.stripeSandboxDeliveryOnly === true;
+  const stripeSandboxPlayback = useStripeSandboxPaidVideoPlaybackState(stripeSandboxDeliveryOnly ? creatorVideo?.id ?? null : null);
+  const stripeSandboxSource = stripeSandboxPlayback.source;
   const nativeProductionDeliveryOnly = creatorVideo?.paidContentAccess?.nativeProductionDeliveryOnly === true;
   const nativeProductionSource = useNativeProductionPaidVideoPlayback(nativeProductionDeliveryOnly ? creatorVideo?.id ?? null : null);
   const source = useMemo(() => {
+    if (stripeSandboxDeliveryOnly) return stripeSandboxSource;
     if (nativeProductionDeliveryOnly) return nativeProductionSource;
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
-  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, isCreatorVideoPlayback, nativeProductionDeliveryOnly, nativeProductionSource]);
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, isCreatorVideoPlayback, nativeProductionDeliveryOnly, nativeProductionSource, stripeSandboxDeliveryOnly, stripeSandboxSource]);
   const reportNotificationViewProgress = useNotificationViewTracking(
     isCreatorVideoPlayback ? "video" : "spectator",
     isCreatorVideoPlayback ? creatorVideo?.id ?? null
@@ -7547,6 +7556,7 @@ export default function PlayerScreen() {
     setThumbnailVideoAspectRatio(null);
   }, [cleanId, displayItem?.id, displayItem?.video_url, expectsCreatorVideo, expectsSpectatorPlayback]);
   const sharedPartyResolvedSource = useMemo(() => {
+    if (stripeSandboxDeliveryOnly) return stripeSandboxSource;
     if (nativeProductionDeliveryOnly) return nativeProductionSource;
     if (!inWatchParty) return source;
     if (displayItem?.video_url && displayItem.video_url.trim()) {
@@ -7555,7 +7565,7 @@ export default function PlayerScreen() {
     if (titleLoading) return null;
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
-  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, isCreatorVideoPlayback, source, titleLoading, nativeProductionDeliveryOnly, nativeProductionSource]);
+  }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, isCreatorVideoPlayback, source, titleLoading, nativeProductionDeliveryOnly, nativeProductionSource, stripeSandboxDeliveryOnly, stripeSandboxSource]);
   const watchPartyLiveMediaSourceDebugMetadata = useMemo(() => {
     const sourceId = String(displayItem?.id ?? cleanId ?? "").trim();
     const displayName = String(displayItem?.title ?? creatorVideo?.title ?? "").trim();
@@ -7596,7 +7606,7 @@ export default function PlayerScreen() {
     typeof sharedPartyResolvedSource === "number" ? null : sharedPartyResolvedSource,
   );
   // Native access retirement must not wait for the legacy source-copy effect.
-  const renderedPlaybackSource = nativeProductionDeliveryOnly ? nativeProductionSource : playbackSource;
+  const renderedPlaybackSource = stripeSandboxDeliveryOnly ? stripeSandboxSource : nativeProductionDeliveryOnly ? nativeProductionSource : playbackSource;
   useEffect(() => {
     watchPartyLiveMediaSourceDebugMetadataRef.current = watchPartyLiveMediaSourceDebugMetadata;
   }, [watchPartyLiveMediaSourceDebugMetadata]);
@@ -10445,6 +10455,24 @@ export default function PlayerScreen() {
                       Playback remains blocked until paid-content access can be verified.
                     </Text>
                   )}
+                  {Platform.OS === "web" ? (
+                    <TouchableOpacity style={styles.playerAccessPrimaryBtn} disabled={paidVideoUnlockBusy}
+                      accessibilityRole="button" accessibilityLabel="Refresh server-verified video access"
+                      testID="stripe-paid-video-refresh-access" onPress={() => {
+                        if (!creatorVideo || paidVideoUnlockBusy) return;
+                        const authority = captureCreatorMoneyPurchaseAuthority();
+                        const refreshVideoId = creatorVideo.id;
+                        setPaidVideoUnlockBusy(true);
+                        let checkoutRefreshNotice: string | null = null;
+                        void refreshStripeSandboxVideoPayment(creatorVideo.id).then(notice => { checkoutRefreshNotice = notice; return readCreatorVideoForPlayer(creatorVideo.id); }).then(refreshed => {
+                          if (!isCreatorMoneyPurchaseAuthorityCurrent(authority) || stripeRefreshVideoRef.current !== refreshVideoId) return;
+                          if (refreshed) { setCreatorVideo(refreshed); setItem(buildCreatorPlayerTitle(refreshed)); }
+                          setPaidVideoUnlockMessage(checkoutRefreshNotice ?? (refreshed?.paidContentAccess?.allowed ? "Server-verified access received." : "Access is not verified yet. Payment return alone does not unlock playback."));
+                        }).catch(() => { if (isCreatorMoneyPurchaseAuthorityCurrent(authority)) setPaidVideoUnlockMessage("Access could not be checked. Please refresh again."); })
+                          .finally(() => setPaidVideoUnlockBusy(false));
+                      }}><Text style={styles.playerAccessPrimaryText}>Refresh access</Text></TouchableOpacity>
+                  ) : null}
+                  {stripeSandboxPlayback.error ? <Text style={styles.videoLoadingSubtext} testID="stripe-sandbox-playback-error">{"Protected sandbox playback could not be verified. Refresh access to try again."}</Text> : null}
                   {paidVideoUnlockMessage ? (
                     <Text style={styles.videoLoadingSubtext} testID="paid-video-purchase-success-receipt">{paidVideoUnlockMessage}</Text>
                   ) : null}
@@ -10465,6 +10493,7 @@ export default function PlayerScreen() {
                 },
               ]}
             >
+              {stripeSandboxPlayback.error ? <Text style={styles.videoLoadingSubtext} testID="stripe-sandbox-playback-source-error">{"Protected sandbox playback could not be verified. Refresh access to try again."}</Text> : null}
               {renderedPlaybackSource && !standalonePlaybackSourceFailed ? (
                 shouldUseSharedAndroidVideoSurface ? (
                   <SharedAndroidVideoSurface

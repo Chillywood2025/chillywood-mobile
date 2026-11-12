@@ -783,6 +783,26 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   const paidContentAccess = vipAccess.vipRequired ? null : await resolveCreatorContentAccess({ contentType: "creator_video", contentId: normalizedVideoId });
   if (paidContentAccess && (paidContentAccess.resolverStatus !== "resolved" || paidContentAccess.allowed !== true)) return createPaidContentLockedCreatorVideo(normalizedVideoId, paidContentAccess);
 
+  if (paidContentAccess?.stripeSandboxDeliveryOnly === true) {
+    // Buyers cannot SELECT the source-bearing videos row. Read only verified
+    // display metadata; the separate protected hook obtains all media bytes.
+    try {
+      const subject = await captureAccountBoundSupabaseMutationSubject();
+      const result = await invokeAccountBoundSupabaseMutationRpc<Record<string, unknown>>(subject,
+        "read_stripe_sandbox_video_player_metadata", { p_video_id: normalizedVideoId });
+      assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+      const metadata = result.data;
+      if (result.error || !metadata || metadata.videoId !== normalizedVideoId
+        || metadata.creatorId !== paidContentAccess.creatorId || typeof metadata.title !== "string"
+        || typeof metadata.description !== "string" || typeof metadata.createdAt !== "string"
+        || typeof metadata.updatedAt !== "string") return null;
+      return { ...createPaidContentLockedCreatorVideo(normalizedVideoId, paidContentAccess),
+        ownerId: metadata.creatorId as string, title: metadata.title, description: metadata.description,
+        createdAt: metadata.createdAt, updatedAt: metadata.updatedAt, visibilityAccess,
+        paidAccessRequired: false, playbackResolution: null };
+    } catch { return null; }
+  }
+
   const { data, error } = await supabase.from("videos").select(CREATOR_VIDEO_SELECT).eq("id", normalizedVideoId).in("moderation_status", ["clean", "reported"]).returns<CreatorVideoRow>().maybeSingle();
   if (error || !data) return null;
   const row = data as CreatorVideoRow;
@@ -792,7 +812,7 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
   const viewerUserId = toText(authData.user?.id);
   if (parsedWithAccess.visibility === "draft" && (!viewerUserId || viewerUserId !== parsedWithAccess.ownerId)) return createLockedCreatorVideo(normalizedVideoId, { allowed: false, visibility: "draft", reason: "draft_owner_only", isOwner: false, isBlocked: false, isCircleMember: false, hasPlayableSource: false, viewerUserId: viewerUserId || null, ownerUserId: parsedWithAccess.ownerId });
-  if (paidContentAccess?.nativeProductionDeliveryOnly === true) {
+  if (paidContentAccess?.nativeProductionDeliveryOnly === true || paidContentAccess?.stripeSandboxDeliveryOnly === true) {
     // The ordinary player resolves the exact session-bound immutable range
     // source. Never obtain an unconditioned legacy origin/rendition URL here.
     return { ...parsedWithAccess, paidContentAccess, playbackUrl: '', playbackResolution: null,

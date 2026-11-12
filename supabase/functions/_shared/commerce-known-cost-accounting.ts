@@ -76,9 +76,10 @@ export function calculateKnownCommerceCosts(input:KnownCostInput) {
   // Credit-funded fees and invoiced/mixed charges need an explicit net-cost
   // allocation rule. They are not silently charged again to creators.
   if(r.settledVia!=="balance")fail("settlement_method_unqualified");
-  const current=reportBalances.get(r.balanceTransactionId);
+  const balanceId=r.balanceTransactionId!; // Proven present by the validation above.
+  const current=reportBalances.get(balanceId);
   if(current&&current.objectId!==r.incurredBy)fail("balance_cross_object");
-  reportBalances.set(r.balanceTransactionId,{objectId:r.incurredBy,feeMinor:sum(current?.feeMinor??0,sum(r.amountMinor,r.taxMinor))});
+  reportBalances.set(balanceId,{objectId:r.incurredBy,feeMinor:sum(current?.feeMinor??0,sum(r.amountMinor,r.taxMinor))});
  }
  let totalFeeMinor=0;
  for(const [id,b] of balances){

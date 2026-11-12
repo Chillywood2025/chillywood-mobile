@@ -8,12 +8,13 @@ const row = (v: unknown): v is Row => !!v && typeof v === "object" && !Array.isA
 const hex = (v: unknown) => typeof v === "string" && /^[0-9a-f]{64}$/u.test(v);
 const headers = { "Cache-Control": "private, no-store", "Access-Control-Allow-Origin": "*",
  "Access-Control-Allow-Headers": "authorization, apikey, content-type, range, x-chillywood-auth-session",
+ "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, X-Chillywood-Media-Protocol, X-Chillywood-Video-Id, X-Chillywood-Grant-Id, X-Chillywood-Source-Version, X-Chillywood-Asset-Sha256, X-Chillywood-Byte-Length, X-Chillywood-Authorized-Until-Ms",
  "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 const json = (status: number, value: unknown) => new Response(JSON.stringify(value), { status, headers: { ...headers, "Content-Type": "application/json" } });
 const maxRange = 4 * 1024 * 1024;
 
-function context(value: unknown, actor: Actor, now: number, preflight: boolean): Context {
- if (!row(value) || value.protocol !== (preflight ? "native-production-preflight-v1" : "native-production-origin-v1")
+function context(value: unknown, actor: Actor, now: number, preflight: boolean, sandbox: boolean): Context {
+ if (!row(value) || value.protocol !== (preflight ? "native-production-preflight-v1" : sandbox ? "stripe-sandbox-origin-v1" : "native-production-origin-v1")
   || value.buyerId !== actor.buyerId || value.sessionId !== actor.sessionId || !uuid(value.sourceVersionId)
   || !["s3", "cloudflare_r2"].includes(String(value.provider)) || typeof value.bucket !== "string" || !value.bucket
   || typeof value.objectKey !== "string" || !value.objectKey || !hex(value.assetSha256)
@@ -37,8 +38,11 @@ export function createNativeProductionPaidVideoRange(deps: {
  rpc(name: string, args: Row, signal: AbortSignal): Promise<unknown>;
  origin(binding: {provider:string;bucket:string;objectKey:string;originReadExpiresAt:string}, method:"GET"|"HEAD", signal:AbortSignal, headers:Record<string,string>):Promise<Response>;
  now?: () => number;
+ // Server-selected only. The sandbox adapter cannot invoke native preflight.
+ adapter?: "stripe-sandbox";
 }) {
  const now = deps.now ?? Date.now;
+ const sandbox = deps.adapter === "stripe-sandbox";
  return async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (!deps.enabled()) return json(503, { status: "unavailable" });
@@ -47,9 +51,9 @@ export function createNativeProductionPaidVideoRange(deps: {
   const current = () => { if (signal.aborted || now() >= deadline) throw Error("deadline"); };
   try {
    const url = new URL(req.url), parts = url.pathname.split("/").filter(Boolean);
-   const prefix = parts.indexOf("native-production-paid-video-playback");
+   const prefix = parts.indexOf(sandbox ? "stripe-sandbox-paid-video-playback" : "native-production-paid-video-playback");
    const path = prefix >= 0 ? parts.slice(prefix + 1) : [];
-   const preflight = req.method === "POST" && path.length === 2 && path[0] === "preflight";
+   const preflight = !sandbox && req.method === "POST" && path.length === 2 && path[0] === "preflight";
    if (url.search || !(preflight || (req.method === "GET" && path.length === 2)) || !uuid(path[1]) || (!preflight && !uuid(path[0])))
     return json(400, { status: "unavailable" });
    const expectedSession = req.headers.get("X-Chillywood-Auth-Session");
@@ -71,8 +75,8 @@ export function createNativeProductionPaidVideoRange(deps: {
     ? { p_admission_id:path[1],p_buyer_id:actor.buyerId,p_session_id:actor.sessionId,p_configuration_sha256:configuration }
     : { p_video_id:path[0],p_grant_id:path[1],p_buyer_id:actor.buyerId,p_session_id:actor.sessionId };
    const authorize = async () => {
-    current(); const value = await deps.rpc(preflight ? "resolve_native_production_checkout_preflight" : "resolve_native_production_paid_video_origin", args, signal); current();
-    const bound = context(value, actor, now(), preflight);
+    current(); const value = await deps.rpc(preflight ? "resolve_native_production_checkout_preflight" : sandbox ? "resolve_stripe_sandbox_paid_video_origin" : "resolve_native_production_paid_video_origin", args, signal); current();
+    const bound = context(value, actor, now(), preflight, sandbox);
     if (preflight ? bound.admissionId !== path[1] || !uuid(bound.qualificationId) : bound.videoId !== path[0] || bound.grantId !== path[1]) throw Error("binding");
     return bound;
    };
@@ -108,7 +112,7 @@ export function createNativeProductionPaidVideoRange(deps: {
    }
    return new Response(bytes,{status:206,headers:{...headers,"Content-Type":"video/mp4","Content-Length":String(bytes.length),
     "Accept-Ranges":"bytes","Content-Range":`bytes ${requested!.start}-${requested!.end}/${first.byteLength}`,
-    "X-Chillywood-Media-Protocol":"native-production-range-v1","X-Chillywood-Video-Id":path[0],"X-Chillywood-Grant-Id":path[1],
+    "X-Chillywood-Media-Protocol":sandbox?"stripe-sandbox-range-v1":"native-production-range-v1","X-Chillywood-Video-Id":path[0],"X-Chillywood-Grant-Id":path[1],
     "X-Chillywood-Source-Version":first.sourceVersionId,"X-Chillywood-Asset-Sha256":first.assetSha256,
     "X-Chillywood-Byte-Length":String(first.byteLength),"X-Chillywood-Authorized-Until-Ms":String(until),
     Vary:"Authorization, X-Chillywood-Auth-Session, Range"}});

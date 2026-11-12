@@ -46,6 +46,7 @@ test('mounted subscription request preserves desired amount and cannot activate 
 test('mounted video price choice survives rejection, requires exact readback, and never resets to 99', async t => {
   let result = 'reject', saved = false; const writes = [];
   const helper = productionFunctions('_lib/creatorPaidVideos.ts', ['toText', 'savePaidVideoOffer'], {
+    Platform: { OS: 'ios' },
     runCurrentAccountBoundSupabaseMutationRpc: async (name, payload) => {
       writes.push({ name, payload });
       if (result === 'reject') return { data: null, error: Error('synthetic failure') };
@@ -139,4 +140,24 @@ for (const configured of [false, true]) test(`sandbox setup preserves chosen pri
   assert.equal(state, configured ? 'complete' : 'partial');
   assert.match(notices.at(-1), configured ? /offers are ready/ : /Choose an available price/);
   if (configured) assert.equal(existing[0].priceCents, 999);
+});
+
+test('web creator price uses exact custom cents and separate Stripe RPC, preserving readback', async t => {
+  let saved = false; const writes = [];
+  const parser = productionFunctions('_lib/stripePaidVideoPrice.ts', ['parseStripePaidVideoPrice'], {});
+  const helper = productionFunctions('_lib/creatorPaidVideos.ts', ['toText', 'savePaidVideoOffer'], {
+    Platform: { OS: 'web' }, runCurrentAccountBoundSupabaseMutationRpc: async (name, payload) => {
+      writes.push({name,payload}); saved = true; return {data:{status:'saved',id:'stripe-B'},error:null};
+    },
+  });
+  const h = await mount(t,{platform:'web',route:{tab:'monetization',manage:'paid_videos'},overrides:{
+    ...parser, savePaidVideoOffer:helper.savePaidVideoOffer,
+    listMyPaidVideoOffers:async()=>saved?[{id:'stripe-B',videoId:'B',creatorId:'owner',isPaid:true,priceCents:457,currency:'usd',status:'sandbox'}]:[],
+  }});
+  await h.press(h.button('Manage paid unlock for Title B')); await h.press(h.button('Paid'));
+  await h.change(node(h,'stripe-paid-video-price-input'),'4.579'); assert.equal(h.button('Save video access').props.disabled,true);
+  await h.change(node(h,'stripe-paid-video-price-input'),'4.57'); await h.press(h.button('Save video access'));
+  assert.equal(writes.length,1); assert.equal(writes[0].name,'set_my_stripe_sandbox_video_price');
+  assert.equal(writes[0].payload.p_amount_minor,457);assert.equal(writes[0].payload.p_video_id,'B');assert.equal(writes[0].payload.p_is_paid,true);
+  assert.match(h.text(),/setup saved at \$4\.57/);assert.match(h.text(),/provider qualification is still required/);
 });

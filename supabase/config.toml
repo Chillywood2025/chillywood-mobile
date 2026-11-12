@@ -380,3 +380,13 @@ verify_jwt = true
 
 [functions.isolated-paid-video-upload-v2]
 verify_jwt = true
+
+# Source only. Dedicated Stripe signature verification is enforced in handler.
+[functions.stripe-paid-video-webhook]
+verify_jwt = false
+
+[functions.stripe-video-cost-reconcile]
+verify_jwt = true
+
+[functions.stripe-paid-video-checkout]
+verify_jwt = true
