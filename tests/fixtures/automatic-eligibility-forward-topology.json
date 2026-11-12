@@ -1,0 +1,5439 @@
+{
+  "protocol": "source-replayed-automatic-topology-v1",
+  "sources": [
+    {
+      "file": "20261106001341_automatic_premium_commerce_admission.sql",
+      "sha256": "81eb76a61a508e3b7db36bf13eca0ba9fed01bd2948fb0db638688f6f385f908"
+    },
+    {
+      "file": "20261106001353_automatic_creator_eligibility_refresh.sql",
+      "sha256": "cd1b548003e21a48229ce996c91ec9d2bbab52a9640ea2a54f3a7e04da330f67"
+    },
+    {
+      "file": "20261106001355_creator_declaration_retention_accounting.sql",
+      "sha256": "548a83678a625fe35bd2f3cfe7138e28edf92a54385b4966c80dd29deab65d53"
+    },
+    {
+      "file": "20261106001357_creator_provider_observation_queue.sql",
+      "sha256": "ce0cda2ecf61e2fb9aedec8222c528f3ce2c9aadc7c77247499da88119af4cda"
+    },
+    {
+      "file": "20261106002410_automatic_commerce_lock_order.sql",
+      "sha256": "a354f1cc7a9d92575714a6cc631022a9bc1715b3f294d80a0b02e3d814e0c760"
+    },
+    {
+      "file": "20261106005532_isolated_sandbox_creator_capability.sql",
+      "sha256": "3031564096a8dfcf96725810cb9646d485a331c9e761d0c8ff7006c92b53736d"
+    },
+    {
+      "file": "20261106005534_automatic_sandbox_tip_auction_authority.sql",
+      "sha256": "e567edcbc5cb8ea2fe306b3f0255a430256bc6c7778e7bb7f3299016acd9c771"
+    },
+    {
+      "file": "20261106013158_ordinary_native_dispatch_authority.sql",
+      "sha256": "f620bdb7b0f46aecb33601f08b499c6137ac2369c960c053d439f5fe3eee1155"
+    },
+    {
+      "file": "20261106013309_sandbox_paid_access_mode_authority.sql",
+      "sha256": "7b8a2943f02bd3b423286773b42e70c547aece2cacdffe047c459957adb72eba"
+    },
+    {
+      "file": "20261106020217_preserve_purchased_access_delivery.sql",
+      "sha256": "21246ca8f3b7ed447f6bd42b4234afb44fedbca0e19a1eacf2dcc840870946c4"
+    },
+    {
+      "file": "20261106035132_reviewed_merch_publication_mode.sql",
+      "sha256": "b0947542e7f6ee7995fb9936fbe478e1dcea1f34468561e2bd99b92650d73d81"
+    },
+    {
+      "file": "20261106073240_ordinary_commerce_canonical_lock_prefix.sql",
+      "sha256": "f6ab407138b787702ebe18573a9ddd0fb888b2d644b76091ed8467a793b64ad0"
+    },
+    {
+      "file": "20261106170725_tip_commerce_gate_entry.sql",
+      "sha256": "cf5bd9c7014e9812af03b737f3e87b892862bb76b5ac2ec079bdbc08f6468d28"
+    }
+  ],
+  "missing": [
+    {
+      "signature": "private.assert_creator_room_seat_auction_buyer(private.creator_room_seat_auctions, uuid)",
+      "body_sha256": "9fe41df422e6cf3b7b87b18918d865b33bc88f4a00ea5123b82b777434656c27",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_connect_onboarding_subject(uuid, uuid)",
+      "body_sha256": "3eaf29f942e03bfc484578e66cb8e8293a5812ee94695da74af21315eb34e5f5",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_auction_grant_identity(uuid, uuid, uuid)",
+      "body_sha256": "99c9412fb47616affc5df27d7bd46a21df8af9649c414cf014aacae63677c12e",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_auction_source_valid(private.creator_event_auctions)",
+      "body_sha256": "bb75c353aee47d62d9709becc58d8d317fa3dc28d02aefb347bf207e39421f13",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_broadcast_actor_current(uuid, uuid, text, boolean)",
+      "body_sha256": "2c485a841edd870b6011c7937ce1df37440314729a1a3fde18c3a7a639284573",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_paid_seat_claim(text, uuid)",
+      "body_sha256": "756a2db1c73dee28bdeacb94b26257f6e20b0e97b8c0dcf8826e11673e2c05d8",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_seat_auction_source_valid(private.creator_room_seat_auctions)",
+      "body_sha256": "ccc5169e1e1b013ab6bad1efcdbb43915083c739595e09561fba1c10b073ed8b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_sandbox_cashout_creator(uuid)",
+      "body_sha256": "bb72947180f35e18429bacdd16a0bbfa6186dec766de9ee371b992a4234cb674",
+      "security_definer": false,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.merch_live_checkout_ready(text)",
+      "body_sha256": "ac1310552f47b225ed92596dfeb5dd0ca7548bcbf3d3be10ba9ab41c41d02131",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.merch_live_publication_authority(merch_products)",
+      "body_sha256": "d355a19024761702e6eeb968bbda28db5637bf1fabd1e0207f1f709d8080b5ca",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.party_room_host_authority_current(watch_party_rooms)",
+      "body_sha256": "e98e4a48bcd771dd3188dff8eaa9a69cee6d32297d9f99e5d47ea0a4865b61d3",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.read_creator_tip_route_costs_for_subject(uuid, uuid, uuid, integer, text)",
+      "body_sha256": "4c53266065c65086db44ddd861693c3a301990ace222e12a9bf0e0f21afe3d01",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.resolve_creator_external_payment_capability(uuid, uuid, text, uuid, integer, text, text, uuid)",
+      "body_sha256": "b184c4370c35160a25c7728eef85f8d72a1e78622a77ed35baaa51cf67552469",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.room_attendance_source_access_pre_paid_stage(watch_party_rooms, uuid)",
+      "body_sha256": "d4c09699e9cb944cbf115a86ea22ab742383441e0342e23801fb3a0139129ead",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.sandbox_cashout_current_user()",
+      "body_sha256": "44f41e67413f0220de9199c113a655daa5dc3ace6855bc0fff94a1f15ee79ff4",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.sandbox_cashout_subject_current(uuid, uuid)",
+      "body_sha256": "be6aea0dd42585924b9f123a536a2e08c1938a12e9b13b40c2efc0a694d910a9",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_launch_ready(uuid, uuid, uuid, text, uuid, text, bigint, bigint)",
+      "body_sha256": "afa758953755bb06c1a4d5e6c4e35209a65d22763a12963bb285b15b5024262e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_paid_video_receipt(uuid, text, text)",
+      "body_sha256": "4d3657563a104276747df5e74a47e41d27236e52d6463d311cc06f35a0b3d483",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_verified_store_facts(uuid, text, text)",
+      "body_sha256": "0c6848e23bb08b6451953684d339a0d1c04f50bd57b03811cefe27e83ed022e4",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_verified_witness(uuid, uuid, uuid, text, text, text, bigint, bigint, uuid, bigint)",
+      "body_sha256": "1658875d4d18bf3d68d2e6db11365adfecfdc85c20ea76f0db175c8a8e8b8a24",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_witness_enrollment(uuid, uuid, uuid, text, text, text)",
+      "body_sha256": "5836516137e549bc7c89b7e11c26a153b3a658562289b9057713a89f9d351073",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.account_purge_deidentification_counts(text)",
+      "body_sha256": "23e80de3320711447ca4e1d8925418e8c048215d599a320e15fd186af97e29d5",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.admin_force_update_username(text, text, text)",
+      "body_sha256": "84748922c2d584410712a57651d592debea3bc431a5155a333fd701463cca901",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.admin_revoke_money_access_grant_for_proof(uuid, text)",
+      "body_sha256": "5a944920c3099213bb9ca5a9e5936b83570d464e56234eabdd4ffd169e628929",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.admin_run_account_purge_batch(boolean, integer, boolean)",
+      "body_sha256": "4f794d01317a1eaafaaabe1283356bb0e84ac6be1c53b9521a97a7fb15ec435d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public, auth"
+      ]
+    },
+    {
+      "signature": "public.admit_google_play_external_session(text, uuid, integer, uuid, text, integer, uuid)",
+      "body_sha256": "08e8f8e0e4b8d5a3b371d3acfcdcbfb6da8625366f80cdf31a25bf549988458d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.admit_ios_external_session(text, uuid, integer, uuid, text, integer, uuid)",
+      "body_sha256": "45b6228c59f8bbdba4e220516890dde6785e804c83eeaacd6c08efe845da21de",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.apply_admin_report_target_action(bigint, text, text, text, text)",
+      "body_sha256": "b5bcee2fb0da2cc0188574a579e2aef103b306b93ddde132a3d89ca2634a3f16",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.approve_creator_merch_photo(uuid, uuid, timestamp with time zone)",
+      "body_sha256": "42b6d4ae1481740f73d1a9319942e3bd2bb980f8c29168c499f116a5343c8f66",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.assign_merch_product_photo(uuid, uuid, timestamp with time zone)",
+      "body_sha256": "59da91f8d689d61ec562d38381204975fee22d387ddc691efdca565b4b8b1e65",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_event_checkout(uuid, uuid)",
+      "body_sha256": "d69fb83fa6c42ce935f4f3c3cf97c8c706d318f9c28b0275202999c5775db4e1",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_money_checkout_before_native(uuid, uuid)",
+      "body_sha256": "2ddcf62a2a176d57b357011b2fb67d542db1fb5ee669485ce9170242ec38f9cc",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_money_checkout(uuid, uuid)",
+      "body_sha256": "6c2e76b2e124ca801ed2bc21f5f36dfe933bea1c97658343c4cc03b3c95b4772",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.bind_commerce_tax_checkout_policy(text, uuid, text, text, text, text)",
+      "body_sha256": "efe8410fec7ee0c1ec858e97651d08560107b252d3096ebdb7f02ca680eed184",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.cancel_undispatched_sandbox_creator_cashout(uuid)",
+      "body_sha256": "9c2cd23d1f1165b143565b0c56fed63e465914f5e179525926565cc89d71fc75",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_connect_account_creation(uuid, uuid, uuid)",
+      "body_sha256": "226424c382a7be605527d0ce9f5ef85f651485616cb5759e60fff06ec3ff0e87",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_connect_hosted_link(uuid, uuid)",
+      "body_sha256": "8bb1b602da94db105a92a85764e3f7cf23f67c4265f37fb517b28b68d1c33bdf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_native_production_paid_video_checkout(uuid, uuid, text)",
+      "body_sha256": "941c3cc7d5524a8e91bde2f0b92ea2f1f290b0eb2fa2bc1622b24fe7156e2294",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_sandbox_creator_cashout_dispatch(uuid, text)",
+      "body_sha256": "0ab88093736d42af1d54ec59315811c8e1de6f2c01a691e7e321f1e44c0d2bea",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_creator_connect_hosted_link(uuid, uuid, uuid, timestamp with time zone)",
+      "body_sha256": "58072123d4b81881048e52389c6045eade9fc7cc00bf5c66cdd41196d03c8536",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_revenuecat_nonpurchase_snapshot(text, uuid, jsonb, text)",
+      "body_sha256": "35e0d83952bd1a42aba95871b78eca752c5d3af021f13ef8127718e24835cf60",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_creator_merch_variants_before_photo_lock(uuid, text, jsonb, timestamp with time zone)",
+      "body_sha256": "8b674f0ecfb7b0fa4999d3f745ed9f8b052870032e3980c53d44f7bfd9ea10c7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_creator_merch_variants(uuid, text, jsonb, timestamp with time zone)",
+      "body_sha256": "bb42c8bfeb209420562b58231bd978e3f08e7710873fb46a68deea736abf3920",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_paid_creator_event_sale(uuid, text, integer, integer, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone)",
+      "body_sha256": "69e06b46fea33da224234f826ac91079918218e8e2cc0474932c1855a1ac613a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.confirm_creator_connect_live_setup(uuid, uuid, text)",
+      "body_sha256": "d171b8339cbeab474e29f6ec6b8dd4dda07977991034bbf05899de9dfe913b96",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.confirm_creator_merch_live_publication(uuid)",
+      "body_sha256": "3cce27c8946f64897fb896fa30e708da69b206df1cbf090d92e14a999bbbd23d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.copy_creator_merch_live_draft(uuid, timestamp with time zone)",
+      "body_sha256": "dd733ea33024faf24adfe7242b15a5121750d5e550c72f72027a3d07deae4ba2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_account_purge_manual_review_items(text, uuid, jsonb)",
+      "body_sha256": "c909e8a3304750e6cdf9142ba7c468eadd0f98d2384acda373b69755f75d9d58",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.create_creator_channel_subscription_purchase_intent(uuid)",
+      "body_sha256": "88567334d0b3e4ade0fe36e5c069c8a2e4939f23cb3e342ad2ee0a01b1e26415",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_event_auction(uuid, uuid, integer, integer, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "56464efad54d0bd37bbd20c5777a2f2327d6939795b315f3e73bf0021ba47081",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_room_seat_auction(text, text, integer, integer, timestamp with time zone, timestamp with time zone, text, uuid, uuid)",
+      "body_sha256": "2d22c5e499e80763c1ba647304f3cfbcf4ce6cb025e99acc7935135d11777d99",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_vip_pass_purchase_intent(uuid)",
+      "body_sha256": "2ec9818062d7ef1979bd4e4bbeb25a29452e69efdfe0dd7d0467ea41d9761f5f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_app_store_intent_pre_source_lock(text, text, uuid, jsonb)",
+      "body_sha256": "4384a48523707f590b6c81b1929aa65047911eb6b49b8da8c2432fc67b0dbed7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_app_store_purchase_intent(text, text, uuid, jsonb)",
+      "body_sha256": "e67c8ee5ce90c47b2ae534b28948fe7d14a145619535fde2a97c563196e6ec76",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent_pre_protected_video_cl(text, uuid, integer, jsonb)",
+      "body_sha256": "261367c44304c0900a7183fa647b0b19291dbc00d9cd72feddc8db6b53735319",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent_pre_specialized_routin(text, uuid, integer, jsonb)",
+      "body_sha256": "e575ae3cdbd7619bf6c47b6b63b110a8ab2abbd566cbd411b8933194c4e99955",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent(text, uuid, integer, jsonb)",
+      "body_sha256": "0a00c847f5560622060b4ceeab709a7bc091fa9cc55625d78bd902f950a05673",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_live_watch_party_purchase_intent(uuid)",
+      "body_sha256": "326af9d5492502a62e3f3f1beeb0aa378cc68450ab1d2371640f949ecab89cd2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_money_purchase_intent_pre_protected_video_closeout(text, text, uuid, jsonb)",
+      "body_sha256": "05215d2e9e0cd96dddb729ba6f4d319aecf93190e0465a41201fbb8a0dd605e0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_money_purchase_intent(text, text, uuid, jsonb)",
+      "body_sha256": "44f3ad318def6ebebbbd6de882110215ca0aad2dfea9fbf57d26dbc11a08f929",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_native_production_paid_video_intent(uuid, text)",
+      "body_sha256": "3c9640be8bd6f2f584a9e8e7338cc8aa9389b440e34a1231060047afdd42adae",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_paid_creator_event_pass_purchase_intent(uuid)",
+      "body_sha256": "54cd2f876d322d7a5b127a5e901901a4de57041f22b9fe87b1597e672d0498e2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_paid_watch_party_ticket_purchase_intent(uuid)",
+      "body_sha256": "549f613501ba0307ef97eeed278a8e7dc2899898aaa0674a3791d10aba0d4e85",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_reserved_creator_event_purchase_intent(uuid, uuid)",
+      "body_sha256": "7b4a2fc519fa85fc5f2525a7ff8ef2b89874904c89f983b6c5dcc53a98707265",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.creator_event_destination_internal(uuid)",
+      "body_sha256": "525fc135f632ecad321a8f46842c67ca11c76bb186ab80a1ca19ed497d805350",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.creator_video_paid_precharge_before_production_admission(uuid, text, text, text, integer, text, text)",
+      "body_sha256": "518deddb1e10651b937515fabcdca361fe5dca1ebb385af197409c51e460f068",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_connect_onboarding_route(uuid, uuid)",
+      "body_sha256": "a9c38dc3cfa61758dc318a5f5da981dd49dcbfb07d669626f8e3fa185715d2bf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_tip_amount_quote(uuid, integer, uuid)",
+      "body_sha256": "bece977c8f83abdc7137787bdc11bfc67bffa31a17a5a121d5d30a4773fcdcba",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_tip_public_status(uuid)",
+      "body_sha256": "f08c3224c24cecb412f21b8d3d69b7b5c1cd4aa98384a8238669709b3f032ea4",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_merch_fulfillment_address(uuid)",
+      "body_sha256": "a01c4bb88a30931eed879bb27d9e16219dea8ead68f15e89a8c410720cd030cb",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_creator_merch_products(uuid, boolean, uuid, integer)",
+      "body_sha256": "6cc6326314ebefa3db281e2c720145f0456e43361aad94a0baff7e4704147607",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_creator_room_seat_auctions(text)",
+      "body_sha256": "b6074200ceadf89bb7690f3c5187dc08d7f078c5f298d13259c34dd627e341b1",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_order_projection_before_variants(merch_orders)",
+      "body_sha256": "a387679ad4bf60559cf9284a0502b6386deb33decaf01b59c5e63f8bff1f0d6a",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_product_projection_before_variants(merch_products)",
+      "body_sha256": "ca5784194eecfd9230c84d56bf19a01f3b22ecf0d29dc82af2154a80164042e1",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_creator_room_seat_auction_pre_explicit_mode(text)",
+      "body_sha256": "3814d483cf27ca02b4f9c42f9249e6dbbd9068be7830ecbc63ad56aafd9f90b0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_creator_room_seat_auction(text)",
+      "body_sha256": "2cdbd1361569cde13d69a2b5d5e29f0da5ec3730d46a180ce35e63e5dd1e7c0c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_native_production_paid_video(uuid, text, text, text, integer)",
+      "body_sha256": "05017aa7d038413f606e86340f4f2a1fb6aa880bdda07facfdd9011b98d285e8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.preview_sandbox_creator_cashout(integer, text)",
+      "body_sha256": "1334ed2c002d7792669d0c9051b3f5dd0d75e3a7a4436ab8f6d21c64aa36ddcf",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_app_store_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, timestamp with time zone)",
+      "body_sha256": "c8c1adf89da54fac40a75e2b4778a950b238605e060725d061e0ab3bd5630a2d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_app_store_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text)",
+      "body_sha256": "052c89baf4487ac8f377921a6c414a2dee0019fe95a24f2cb8e10367a4cf717c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_google_play_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, timestamp with time zone)",
+      "body_sha256": "367bb3188718ec85d3bf12b0d4ab10aba2e554b1173bca7af7d969924083bd06",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_google_play_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text)",
+      "body_sha256": "0e20ae5070bf5dcf5d48cab53f368a346c72993e39c9f962bfe3248178540c8b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_live_watch_party_event_atomic(text, text, text, uuid, text, text, timestamp with time zone, integer, text, text, text)",
+      "body_sha256": "0542df59bff60a524fcedecc1d19cc854e9e50d2304575c0b00656ae72efe769",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_nonpurchase_lifecycle_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "f360b91e2eeca659e2f50307ec23599a90b78033c425d02cae4a81ed711fed4d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_premium_event_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, text, uuid, uuid, text)",
+      "body_sha256": "db6b168a4835ff980561874a15dc420e1a878fb66eb01b1112631c609ce2729f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_premium_transfer_atomic(text, uuid, uuid, text, timestamp with time zone, text)",
+      "body_sha256": "40161d5224cad2adb1ccc2c3787ab0a7cd0c90e650fdac20b043828170034c5d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_terminal_event_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text, text, text, text, text)",
+      "body_sha256": "626557554d42dd411b98e185303e2f73bd983fb41306d40ca7a2c4a5442f6b90",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_event_auction_receipt(jsonb, text)",
+      "body_sha256": "2cbca365977cebb73891d2cd01c25473159d2cd52fdb4dcf0aedaa15c1c7adbf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_room_auction_receipt(jsonb, text)",
+      "body_sha256": "9c86a8ea90224facfabec34e5621adb3eba243df783b09c9db50cabfac9c6e94",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_tip_webhook_lifecycle(text, uuid, uuid, jsonb, jsonb, jsonb)",
+      "body_sha256": "9e3e14a278a522812d81630c717a0e90d3481575bb7b9bc53574bd6710a8c38e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.quarantine_revenuecat_terminal_authority(text, text, text, uuid, text, text, text)",
+      "body_sha256": "717b1605069e6166143db9f775faf48f3f10c12adde1fbde39face6ae5639528",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_auction_creation_mode(text)",
+      "body_sha256": "be5ce6c89d0e95307018b2de7ace005b324f289c662dc9bede9b58a807ed237d",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_room_seat_auction_bid_eligibility(uuid, integer)",
+      "body_sha256": "f4605279da84574a5f4e4bb1aa6dce3e721c63adfc4265e3b5fd3d5107515fb6",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_room_seat_auction(uuid)",
+      "body_sha256": "86c5708c2108eb5f861c72d0850ee167c8a356df0728201b0e597f68b0eddc63",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_my_creator_event_reservation(uuid)",
+      "body_sha256": "3838f86d2a0e04d26d0211f2d136acc38a39d54ae4db51ef4059cd88c378e45b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_dispatch(uuid, uuid, uuid)",
+      "body_sha256": "0c019e0d66d5569813401a98025000ca91bb20399e8e2889ce7f159567e4538c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_paid_video_access(uuid)",
+      "body_sha256": "a6a7660d0d7dbac598b8410b1bae06bf4bdfda3bdefba0d6709d5743da8700c2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_google_premium_snapshot_atomic(text, uuid, text, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "d57fbe963b036a327c09f5d21b8b04a8d2f3503bb38c78e224d2374484c6208e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(text, uuid, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "94bd7e38c1f1e0b73f41caf72826d4be69e95bfedcbc96ad97b5713510a34b9b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_premium_snapshot_atomic(text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "158686166e55ef38ed9cd303a156173cb42298076e23a4e39794a2594bd410a3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_connect_created_account(uuid, uuid, uuid, text, jsonb)",
+      "body_sha256": "4918265937612627757712ec1cc92fe73899388d89a196952835920d57e1f2c8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_connect_live_observation(jsonb, jsonb)",
+      "body_sha256": "145476b80dafe3db0fc6b0e0d3ed55927274eb4c66ef552f42b876dbcdc61ac7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_tip_checkout_session(uuid, uuid, uuid, text, text)",
+      "body_sha256": "53f65b5423d920511c20c7c11cd8ad1d84ad0926292a0f87c899169827f0e46e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_merch_tax_category_context(uuid, uuid, uuid, text, timestamp with time zone)",
+      "body_sha256": "7d1a543b0a22ce6067f82cc21f74bd0c8b262a685295a67995da2508dfb6f2bb",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_native_production_checkout_preflight(uuid, uuid, uuid, text, text, bigint, text)",
+      "body_sha256": "c3f65f8e046d418bc114a4ad9d2fcd4da058f3184014676a28a283641c8632ba",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_sandbox_creator_cashout_observation(uuid, uuid, jsonb)",
+      "body_sha256": "0d00e1d8f78f7acfea9ae4f4a5f9a0eda07c3a418f4bf9bf9e1cc072eee1ffdf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.request_creator_channel_subscription_price(integer, text)",
+      "body_sha256": "ba4613c34fc0f50a82841b0a8e0c7f5fc57f09ef44a3884f264fa4e66771ed3b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.request_sandbox_creator_cashout(integer, text, uuid, uuid, integer, integer, integer)",
+      "body_sha256": "b0b031b3da5869ddcb07cec9d8149ceba9f88b032f2abe2a708523df734ffb7f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_creator_connect_account_creation(uuid, uuid)",
+      "body_sha256": "b2cb5778aaa16ed6c9c4b7210110dc30a34f9b10313f3feaf89b71685ba4bec7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_creator_tip_checkout_attempt(uuid, uuid, uuid, jsonb)",
+      "body_sha256": "6aaf967eb00149d23981368875f734387e2b6255f17ea6e01aa33d16d317dc72",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_before_net_share(uuid, integer, uuid, uuid)",
+      "body_sha256": "ed071ae96790f3a70e4b3597c561b6e8cddae551599efbdcb54244d8033f8437",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_dispatch(uuid, uuid, uuid, integer, uuid, uuid, text, integer, text)",
+      "body_sha256": "fed0b35502a4f5ebd068d4cc81c173d0785f43ea62cffdc370340f2e61488632",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor_with_tracking(uuid, uuid, uuid, integer, uuid, uuid, text, integer, text)",
+      "body_sha256": "f6e5e1144a23da774850ab7628aba10e003727c69cc95c5410ab52ca932f5948",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor(uuid, uuid, uuid, integer, uuid, uuid)",
+      "body_sha256": "ea330805e18016e1c0344d70d8c60693b462ff6d295843fd8e799e2dcc8b416b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor(uuid, uuid, uuid, integer, uuid)",
+      "body_sha256": "6c7f6a2c3e5a492d57ec13ef9c5424349aa82982773dd5c1b58ddb2861840f3f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_channel_subscription_access_pre_historical_clos(uuid)",
+      "body_sha256": "b38fafc8c4e5d6ee0b6a07a39a0b50eb2f95e0013897ec28bd7a84c65796f58a",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_content_access_pre_subscription_doctrine(text, uuid)",
+      "body_sha256": "3a6612aa91c18499d9d41037fc4c145d0d2bb2e8c14a160aaf2612d8adbfe0d2",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_vip_pass_access_pre_historical_closeout(uuid)",
+      "body_sha256": "50440a212c81c082781a2cc0e1c1cf7a3bcfed04b1c598f3675579a353602835",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_vip_pass_access(uuid)",
+      "body_sha256": "c7ed4208d493bd9181ed720b435aa99a94811676f5c6fac5f37707d420f3547b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_witness_context(uuid, uuid, uuid, boolean)",
+      "body_sha256": "a9b341673fcab55200c2082f766b63df30bde4b795ffc0319f2665dda1bda067",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_paid_creator_event_pass_access_pre_historical_closeout(uuid)",
+      "body_sha256": "689197e915445a74ecd0ee2a11d082e505bd3df6af8d183aff6cf25ceeae7ba8",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_paid_watch_party_ticket_access_pre_historical_closeout(text)",
+      "body_sha256": "875b7de1ea1aa4b451258513e998af0b549e48c01d494d3d124bce469608bdb7",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_sandbox_monetization_tester(text, text)",
+      "body_sha256": "d113538cd02741c706c0aa7bf422f466011e03bfda043762ba74dad4f348a7dc",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_watch_party_livekit_authority_pre_service_fix(text, uuid, uuid)",
+      "body_sha256": "cc7d8126198fcec54a082d75a3c980f74eeab114173fa94276044521400c77b7",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.respond_merch_return_case(uuid, uuid, text, text)",
+      "body_sha256": "df7f502809e69fb17d86e7d913d4aa02652f416da7acaf7e5bb9f66972084349",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.review_creator_merch_live_publication(uuid, timestamp with time zone)",
+      "body_sha256": "c42eb039c1c008dfee2af1ea8cba7c85c752685176ff662e0dbcdc64eba50433",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product_before_variants(uuid, text, text, text, integer, integer, text, timestamp with time zone)",
+      "body_sha256": "cfdbdc1cd0070264e0ee84f6afc1441b32e4779a62e89e2189ef8ea14c98cb7b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product_with_tracking(uuid, text, text, text, integer, integer, text, timestamp with time zone, text)",
+      "body_sha256": "35acb92d35980de64c334af37917f81219384edd483c59638119718aa80d843a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product(uuid, text, text, text, integer, integer, text, timestamp with time zone)",
+      "body_sha256": "bd939f2184e53cd6ab9b580138cac043622d6d2c23a2cb3600010b3c971fe74c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config_pre_adversarial_integr(text, text, uuid, text, jsonb)",
+      "body_sha256": "bdfbfc9456e676a6c87fd41c34dfb05ebb069eac77d7192949681beff3ec724d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config_pre_integrity_closeout(text, text, uuid, text, jsonb)",
+      "body_sha256": "f870447711cc93c3021e7e16d2e7fea5f02b28781060b004fa5f319585e94346",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config(text, text, uuid, text, jsonb)",
+      "body_sha256": "782438bb771195d095177fb30f17ee84fcdf44bcf04eff183bc733a13b5b706f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.select_creator_merch_tax_category(uuid, uuid, timestamp with time zone, text)",
+      "body_sha256": "a460881fe7cdcbc71de82e9265ab6044928a8a08c2c93fae4c602dd963fae5a3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.serialize_stripe_tip_buyer_authority_global_internal()",
+      "body_sha256": "7028e52014d88eb39adf876c556586f326ac1516461ff80776258c6aa3a4a106",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.serialize_stripe_tip_buyer_authority_user_internal()",
+      "body_sha256": "df545909e4c07f38884aa87fcb87d506cdba0b8eb83c7d1bae2f0d86da0cda25",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer_at_price_pre_binding(text, text, text, uuid)",
+      "body_sha256": "eb908bf7196b4ec8147295a590de24dbeca74e4b8d288a76dc19dd39783f8a68",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer_at_price(text, text, text, uuid)",
+      "body_sha256": "b57667bd8513561db699d09185158f4a2909b1e5bfe3b6ea6940e5c3da52ef80",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer(text, text, text)",
+      "body_sha256": "15b226325bc72b63a2a1fa6039da0bddaffa912c52902850cb9cf0aae79a2178",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_content_price_pre_finite_paid_video_tier(text, uuid, boolean, integer, text)",
+      "body_sha256": "d522aed964ce5b9a5eaf9670d6947bc7bfb7fb4aed21a27f6a3ee4669d1fc53d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_content_price(text, uuid, boolean, integer, text)",
+      "body_sha256": "ccbdb5933489b7320e53d6ebbe95684548a42d298827db518f5926c1ecf5696a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_video_vip_access(uuid, boolean)",
+      "body_sha256": "732fa0b0302511a8a292ec72a22461988973d1f59d5d9ace8ca7629a4145a636",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_vip_pass_offer_at_price(text, text, text, uuid)",
+      "body_sha256": "c6ac4f46fa1516f4bb104df94ccf1c414b0748497a5846adb258fe27ec6e11bb",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_vip_pass_offer(text, text, text)",
+      "body_sha256": "6cfd94cbdd79b018d9920ae679e7b45beafbe2b24c380371f8948636b5a3af66",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_my_live_watch_party_offer(text, text, boolean, text)",
+      "body_sha256": "7ebffbbf4204becf35e8b4e7732b2a76e54ac6701f3a7b54a946eda28ce4942d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_paid_creator_event_offer(uuid, text, integer, integer, text)",
+      "body_sha256": "63c107f1ee97394492bdc0558269fae2ecf017abd8dd7651ead82765743de336",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_paid_watch_party_offer(text, text, integer, integer, text)",
+      "body_sha256": "417a3cd6e424958ad0d78a9455857c416e14dc9affb2339f0240ff25808fa205",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_platform_money_kill_switch_state(text, text, text, text, jsonb)",
+      "body_sha256": "5aace5a5308e4c8c1026169af3426b051547e0ccc0a99957a9f00ffb0e2a4057",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.transition_merch_checkout_dispatch(uuid, uuid, uuid, text, jsonb)",
+      "body_sha256": "4f1ec71fb15f7ce9cf90ddde351806c4dbf02bfcb616b29d6fa43f478ab2cdb8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.update_my_username(text)",
+      "body_sha256": "8e2aac5d54e5d7028dd19a3db098b01542ede3042ee8f33d5cb4a26eb9f00607",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.upsert_my_creator_tip_settings(boolean, integer[], integer, integer, integer, text)",
+      "body_sha256": "872824a66a67cc79e5bf088d9ffb1574c9e6098c67700ca65919e980013e7ea0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.watch_party_room_access_pre_live_decouple(text, text)",
+      "body_sha256": "32877b5f27fa7935c5fab7499da499557f4dd34a779b3215fc580cfc67701a6f",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_assert_current_creator_money_authority_internal()",
+      "body_sha256": "233ad2067294b9daa07abfb40c40bfb30bc8d47713fdfdabc2b9bdd8398d057a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_eligibility_readback()",
+      "body_sha256": "64a09b430b294d50dfc2285d9286ca66b0311ee1246f041b92f8a58809d7e6ae",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_money_subject_authorized_internal(uuid)",
+      "body_sha256": "700a4519e129946ae21031230406702ad0db9cc7e7df5ad08064f5417f51dcc6",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_enforce_creator_money_exposure()",
+      "body_sha256": "339109852f131a0301ee1c7c9345164db298ce51bee655b83df60ba5c7384a5d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_evaluate_creator_eligibility(uuid, jsonb, text, text)",
+      "body_sha256": "11087202746d4f33d904bf2d609a541962c0663004b79680cfb7bf794cfe2674",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    }
+  ],
+  "introduced": [
+    "private.assert_current_creator_for_mode(text)",
+    "private.assert_ordinary_commerce_authority_gate()",
+    "private.assert_ordinary_native_dispatch_current(money_purchase_intents)",
+    "private.assert_ordinary_profile_authority_final()",
+    "private.creator_paid_delivery_legal_current(uuid)",
+    "private.creator_paid_delivery_subject_safe(uuid, text)",
+    "private.creator_room_paid_delivery_subject_allowed(text, uuid, text)",
+    "private.creator_room_seat_subject_allowed(text, uuid, text)",
+    "private.creator_tip_native_sandbox_available(uuid, text)",
+    "private.creator_vip_current_catalog_environment(uuid)",
+    "private.guard_creator_eligibility_declaration_history()",
+    "private.guard_creator_observation_authority_write()",
+    "private.lock_ordinary_commerce_authority_gate()",
+    "private.lock_ordinary_commerce_dispatch_subjects(uuid, uuid, uuid, text, text)",
+    "private.lock_ordinary_commerce_premium_subjects(uuid[])",
+    "private.lock_ordinary_creator_subject(uuid, uuid, text)",
+    "private.lock_ordinary_purchase_source_subjects(text, uuid)",
+    "private.ordinary_commerce_authority_gate_held()",
+    "private.ordinary_commerce_buyer_current(uuid, uuid, text)",
+    "private.ordinary_commerce_premium_current(uuid, text)",
+    "private.ordinary_commerce_subject_current(uuid, uuid, text)",
+    "private.ordinary_commerce_writer_gate()",
+    "private.ordinary_creator_hold_insert_fence()",
+    "private.ordinary_creator_provider_ready(uuid, text)",
+    "private.ordinary_creator_subject_for_mode(uuid, text)",
+    "private.ordinary_historical_creator_current(uuid, text)",
+    "private.ordinary_merch_mode_current(text)",
+    "private.ordinary_profile_metadata_only_change(jsonb, jsonb)",
+    "private.ordinary_profile_retention_prefix()",
+    "private.paid_access_catalog_environment(text, text, text, text, text)",
+    "private.refresh_ordinary_creator_eligibility(uuid)",
+    "public.claim_creator_provider_observations()",
+    "public.complete_creator_provider_observation(uuid, uuid)",
+    "public.declare_creator_money_eligibility(boolean, text, text, text)",
+    "public.fail_creator_provider_observation(uuid, uuid)",
+    "public.merch_seller_ready_internal(uuid, text)",
+    "public.wave1_creator_eligibility_readback_pre_automatic()",
+    "public.wave1_creator_eligibility_readback_pre_sandbox_capability()"
+  ],
+  "requiredTriggers": [
+    {
+      "relation": "auth.sessions",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "ffb824511cedfa5514bd9fab7a674da8b4b86f88f8c281dd70b773ff70308cf3",
+      "enabled": "O"
+    },
+    {
+      "relation": "auth.users",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "5c099069d03f19ced5273a95a4f30b8f16700122f97ed2dac9cf616d222632be",
+      "enabled": "O"
+    },
+    {
+      "relation": "private.creator_connect_mode_bindings",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "84dae7e1d7862c2f5780276a4de2258f490c3d229b3104fd289fa2d2e359fe13",
+      "enabled": "O"
+    },
+    {
+      "relation": "private.creator_eligibility_declarations",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "35ddb4461dd424d5333cb132f91d50084100d27cf31875c2aa8dc5c04e6eb114",
+      "enabled": "O"
+    },
+    {
+      "relation": "private.creator_eligibility_declarations",
+      "name": "creator_declaration_history_immutable",
+      "definition_sha256": "00329c1af0105a824a9ddb68e66721fefff25b4eb459e131eaeb9dce68f8fdf7",
+      "enabled": "O"
+    },
+    {
+      "relation": "private.creator_provider_observation_jobs",
+      "name": "guard_creator_observation_authority_write",
+      "definition_sha256": "f3b185dfb9442bb8ee83191c95e92721c16032f391162784c393a639a586dabd",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.access_grants",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "d02625bcee8d9e5487ff56003b7228b2e5bbaf4c06abc11736ea096beed148c0",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.account_deletion_requests",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "13f88983d829e85bcad6ec7a21f8b060070d00b069ed95b24961b3302734318b",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.creator_payout_accounts",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "a05a1b18434950af4e254bd3571fbb994c9638200b0cf50cff4d6f74089f3d6f",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.creator_payout_eligibility_records",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "dfba6b7c05994b22713f18dbda7a302ac602eadceddcd8364e3be16ef89e919f",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.creator_payout_eligibility_records",
+      "name": "ordinary_creator_hold_insert_fence",
+      "definition_sha256": "283aac850a9d7862495455dbc2d0dcf4209f1b7ce3dea94c2fa5ac24cd366e12",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.creator_tip_transactions",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "80d407128d2dabf848bd80c0d705ea513aee79feb685876a6bc245a477582095",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.platform_money_kill_switches",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "98c8940d585f48f00c6e2253036f15c60ac137fabd67705597c6e46993529e5d",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.revenuecat_premium_transaction_authority",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "d05d556a60aebaf943040f354cf1c344dd189d2c5205dc3490487d759ce2964e",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.user_entitlements",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "0fedbe2f1f0799a187b50fb439335e82158a17b2b7fd2eae6b2ba3bc7acf8ba8",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.user_profiles",
+      "name": "aaa_ordinary_profile_authority_final",
+      "definition_sha256": "671f95be28b7c25e8bd016d990e5b640fcf09ebf2f74817f0dddb0b4be996b36",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.user_profiles",
+      "name": "aaa_ordinary_profile_membership_gate",
+      "definition_sha256": "5ec120bddd6b532fcbf1647c5a1699ed85cfd2fc1be577cef2c54585b4222903",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.user_profiles",
+      "name": "aaa_ordinary_profile_protected_update_gate",
+      "definition_sha256": "e94b95493b96a630f0205e2c1b96227dd54b91b88964ba4a3eb558186d614852",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.user_profiles",
+      "name": "aab_ordinary_profile_retention_prefix",
+      "definition_sha256": "d94f6a58dbd13371294ccbd93812db9dfc97ebfaf26820ba764e17c89fb96d20",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.wave1_creator_eligibility",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "21d30d291b9f41d6a41c0d83c194b605f9be968dcd7ec7e79c9dec35f5e61a87",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.wave1_legal_acceptances",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "1172bccd03a3d0e33d8a9a4cf17bbb00c7123abc525d88e19e615f2484167638",
+      "enabled": "O"
+    },
+    {
+      "relation": "public.wave1_legal_document_versions",
+      "name": "aaa_ordinary_commerce_writer_gate",
+      "definition_sha256": "d4be6ab7f025733f97713ab75c328c156eda6f82b5f218e31df4fc2e250e2858",
+      "enabled": "O"
+    }
+  ],
+  "canonical": [
+    {
+      "signature": "private.assert_creator_room_seat_auction_buyer(private.creator_room_seat_auctions, uuid)",
+      "body_sha256": "25a217a03079a37050bff8ee82d8b4848e3d121a0af25f6b55dbce0f2e6eba75",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_current_creator_for_mode(text)",
+      "body_sha256": "b0d3e1f73fc646be0a27d0d8bd26e74037d20cf5ac372331dd5ce23d0fe326fd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_ordinary_commerce_authority_gate()",
+      "body_sha256": "539aba96823852a8b941735bf98e349f57e3100eaa0069dfa606c6151819897e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_ordinary_native_dispatch_current(money_purchase_intents)",
+      "body_sha256": "5845c92fe0078a3eb77c061a29a2829b9c05a2797d5f6e09b3a262053e44f2fb",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_ordinary_profile_authority_final()",
+      "body_sha256": "80055fd51adcdc8b7ddb5095cb013fedda2e7a8d12ede00d1d207b6cd808366f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_connect_onboarding_subject(uuid, uuid)",
+      "body_sha256": "7525be3f113a73cd1801d34fbb0e16eba14c59cb221eeca57d29e17918d1cdfa",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_auction_grant_identity(uuid, uuid, uuid)",
+      "body_sha256": "35dd9c3a15b8b72ef9f157384886049248619a36f330099a38551986ef346d5e",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_auction_source_valid(private.creator_event_auctions)",
+      "body_sha256": "6932aa05b1a8199d43316811b97da5453ae23517f62dfc4cd8dac80db094f93f",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_broadcast_actor_current(uuid, uuid, text, boolean)",
+      "body_sha256": "852fa2c1d3817fb9fa98422113cd5b944eb9b7583458eddcee8797720cb100e3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_paid_delivery_legal_current(uuid)",
+      "body_sha256": "5b26293db66067254957e99c4b25732f28cb5cb2c9c24d75f02197a51fe63629",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_paid_delivery_subject_safe(uuid, text)",
+      "body_sha256": "be1f4dd2cd2117e87748c9d19b460f808f0113f9ea9d6fb19bb5e62e3355414d",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_paid_delivery_subject_allowed(text, uuid, text)",
+      "body_sha256": "f1bcedb58c37c2c2c74a034adbb2ce3fe6bb53d77b1fdc1af41521dbffb7c30e",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_paid_seat_claim(text, uuid)",
+      "body_sha256": "d8b22285bdeaf453c4475054b2c9aebbff71147777bf9944b3c1742a1d27f9d8",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_seat_auction_source_valid(private.creator_room_seat_auctions)",
+      "body_sha256": "63d136c266d9934bb44b04243135737384cce01823726f9bcb7b5b37a94e9323",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_seat_subject_allowed(text, uuid, text)",
+      "body_sha256": "154340ac5529f958b80bbaea5dd84ed6f2a8c6cb2e7b72bbf5335c182ae283ac",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_tip_native_sandbox_available(uuid, text)",
+      "body_sha256": "e391d7981275d092294953c2683b669c4585957b8ea9c0f6f776eeaaa42bf338",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_vip_current_catalog_environment(uuid)",
+      "body_sha256": "16e1045034c91f5254a0fcf7909a8737b50ea5e89597f6f4cc661ff12d15ba33",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.guard_creator_eligibility_declaration_history()",
+      "body_sha256": "c9a9921898d08023c08c14dae9585c32748c223d6004ccd6a1ab9a94c9b36bb5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.guard_creator_observation_authority_write()",
+      "body_sha256": "fa6497de6eaedbb5f8b0ee007a501d033f8532fe8a5b003d6a7fa603983def1e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_commerce_authority_gate()",
+      "body_sha256": "7ddc6135c12c360ad401575b14e14ce479047b195134337b96d25e0a7369a4c7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_commerce_dispatch_subjects(uuid, uuid, uuid, text, text)",
+      "body_sha256": "00fe316d5ad1dd4401bf982b7b5dfef67dc7e93f0aae1773fe340b719752daee",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_commerce_premium_subjects(uuid[])",
+      "body_sha256": "db48c82ff772479200ddf75a026e8e067667a0d56e608d1c8dc9d9b203fe139d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_creator_subject(uuid, uuid, text)",
+      "body_sha256": "9cfc5f7f1994b48d9cf49eddcd9efa699319c93e2f03cde1392f93d167d00e13",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_purchase_source_subjects(text, uuid)",
+      "body_sha256": "863d7cbc6601a9899d7fd64e8b01f469f1c4dd5bafdd6def73384ec4c082678b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_sandbox_cashout_creator(uuid)",
+      "body_sha256": "824e0ce34e892f5ad983f9bf853d0ccad3586de1fb8df12b4db22b7d160452e0",
+      "security_definer": false,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.merch_live_checkout_ready(text)",
+      "body_sha256": "28c8f546bb2392943824258ed314c63a21bfcebc5c7edb1f00012fcf43b734ce",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.merch_live_publication_authority(merch_products)",
+      "body_sha256": "d37adbc374970db331bca1bda9cfb09fc5aebbb32f041c9465e9b0ea45809b80",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_authority_gate_held()",
+      "body_sha256": "a26add9abf86d50cac5b2a61185e34740777d4e334bb0e9d4d7baf2e4cc22c95",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_buyer_current(uuid, uuid, text)",
+      "body_sha256": "264b2de734a57b2294f73ee3d2984f4cd37ce63530753005af7e6846cff3547a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_premium_current(uuid, text)",
+      "body_sha256": "d70554e598116b18c498026c260d81295b6ec9bd3b4fc0da28c99dd1eadc4adb",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_subject_current(uuid, uuid, text)",
+      "body_sha256": "4f8f58f5f4a4a9824b20428f4d49f3664c8ad23e56fe93ca277b387d7b666402",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_writer_gate()",
+      "body_sha256": "ccbb023878518dc7c947144e3f10643d463f1bb565af6cb62369c979b6dd6420",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_creator_hold_insert_fence()",
+      "body_sha256": "4acaf369a171ad149fa21bcf51ac6cf37a59741ed50cbce5b28bcaf04e6f5dc5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_creator_provider_ready(uuid, text)",
+      "body_sha256": "109935d450c07fd6b406a88bb8811fb68b0ea7162ecbcdfd2353bbcdaf63efa4",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_creator_subject_for_mode(uuid, text)",
+      "body_sha256": "2a125c2998da3c1672c0bc028e2a4c8fa9e95e31bcd639e319ebc2e9d9be3f24",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_historical_creator_current(uuid, text)",
+      "body_sha256": "d771860acfb13e69001ad0c4b5fd70e408def073ac932a6d093a1161786a331d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_merch_mode_current(text)",
+      "body_sha256": "5f3d6c4cddd5b44493dcbd9249597d9691b945014490eee1e6d168f03e5074d9",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_profile_metadata_only_change(jsonb, jsonb)",
+      "body_sha256": "06356d8cea4c18697070cc76a217aa411bad871930016f9cb2c3c1aad0407ecd",
+      "security_definer": false,
+      "volatility": "i",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_profile_retention_prefix()",
+      "body_sha256": "937c2a7b94f82f0cc83191f40bef96f3858e56a4cc37e268cc90fb0d10a8a9b3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.paid_access_catalog_environment(text, text, text, text, text)",
+      "body_sha256": "1d5e8d1f212f3d4d6358bd4104edb4fba7205499393bd745bd0a51ea9b2bea0c",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.party_room_host_authority_current(watch_party_rooms)",
+      "body_sha256": "5f71fd2bbf2d37907926266064539289922b4300fbde8147cbf02ffd0a11328a",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.read_creator_tip_route_costs_for_subject(uuid, uuid, uuid, integer, text)",
+      "body_sha256": "4840a3d07abb5456517912423864d9c78ea0bfa8f1e89652ddb70ae2ab4f1573",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.refresh_ordinary_creator_eligibility(uuid)",
+      "body_sha256": "8556e46ee40100df2d8df1168e676c0ab114c6b17ca0e481bde7dadfc8e49d0b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.resolve_creator_external_payment_capability(uuid, uuid, text, uuid, integer, text, text, uuid)",
+      "body_sha256": "6c56a9a50ac7275da1dea30e4837c5456cbbcb94872fbaae0cd841e1e1bf3f8b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.room_attendance_source_access_pre_paid_stage(watch_party_rooms, uuid)",
+      "body_sha256": "38c4d1cfa904de096879ccd4d3acd163e9c8654b6a70719ff25f7441869144fe",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.sandbox_cashout_current_user()",
+      "body_sha256": "2eb24c7ccc7c470af7ac562f0137fcbcca2de21d75c008330954811f6ad27c30",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.sandbox_cashout_subject_current(uuid, uuid)",
+      "body_sha256": "baa180f6c18b668c6ec000544ee8fa24e04e56f2b8aa6741b647c65418bb65ce",
+      "security_definer": false,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_launch_ready(uuid, uuid, uuid, text, uuid, text, bigint, bigint)",
+      "body_sha256": "afa758953755bb06c1a4d5e6c4e35209a65d22763a12963bb285b15b5024262e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_paid_video_receipt(uuid, text, text)",
+      "body_sha256": "4d3657563a104276747df5e74a47e41d27236e52d6463d311cc06f35a0b3d483",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_verified_store_facts(uuid, text, text)",
+      "body_sha256": "0c6848e23bb08b6451953684d339a0d1c04f50bd57b03811cefe27e83ed022e4",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_verified_witness(uuid, uuid, uuid, text, text, text, bigint, bigint, uuid, bigint)",
+      "body_sha256": "1658875d4d18bf3d68d2e6db11365adfecfdc85c20ea76f0db175c8a8e8b8a24",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_witness_enrollment(uuid, uuid, uuid, text, text, text)",
+      "body_sha256": "5836516137e549bc7c89b7e11c26a153b3a658562289b9057713a89f9d351073",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.account_purge_deidentification_counts(text)",
+      "body_sha256": "b0628bd88446c087860a61916d0b5b953a2ef19f1b3f831e81115fd6766600fa",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.admin_force_update_username(text, text, text)",
+      "body_sha256": "738ed2757064d8640ecc8c03a0c317745c9a65a6930276556386e252ef32b8d2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.admin_revoke_money_access_grant_for_proof(uuid, text)",
+      "body_sha256": "b5d973cfa04e6b14e51ffb0732a288ad4e0854cb401a504e59946ca55ebf66b8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.admin_run_account_purge_batch(boolean, integer, boolean)",
+      "body_sha256": "c84ede0792e8a00b0ab07f4aaceaf4d006825d1e505b4919a9a98daf62a39ae9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public, auth"
+      ]
+    },
+    {
+      "signature": "public.admit_google_play_external_session(text, uuid, integer, uuid, text, integer, uuid)",
+      "body_sha256": "80b5f9d3d531427146d9786b5e6bc09c1adf7a1cbf96793552763e6338edbf8d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.admit_ios_external_session(text, uuid, integer, uuid, text, integer, uuid)",
+      "body_sha256": "1640b85ec5bf3036cacc74ac111f4b54a8f6c5c3fead394836e72780fcd2778c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.apply_admin_report_target_action(bigint, text, text, text, text)",
+      "body_sha256": "9188ce5440ed27837eb520eebaf2ec139aad42961e7ad943e4ce12e5c1649a96",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.approve_creator_merch_photo(uuid, uuid, timestamp with time zone)",
+      "body_sha256": "d5ccd959ef07747ebdb9fb8d56dbac292fba90fd0b1ef3a92f71e8a90ff8758a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.assign_merch_product_photo(uuid, uuid, timestamp with time zone)",
+      "body_sha256": "3b11aca47605f0871c231930d55ce25b585f9fee6a14da583a4215aca1f70180",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.authorize_native_production_sdk_entry(uuid, uuid, uuid, uuid)",
+      "body_sha256": "91bdce4537e8b12a546cb69cda3eeb9a14a6c8ad4424b175ce9021ce96960556",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_event_checkout(uuid, uuid)",
+      "body_sha256": "bca393693e0f7fbd7e60592b2d7ce7401721ffa24f8fbea2186b2891fd25fe86",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_money_checkout(uuid, uuid)",
+      "body_sha256": "6c2e76b2e124ca801ed2bc21f5f36dfe933bea1c97658343c4cc03b3c95b4772",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_money_checkout_before_native(uuid, uuid)",
+      "body_sha256": "b55f511b638d4b7264ba0a72db0e473134b3575da7d17c6b5b99775a0c3a7442",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.bind_commerce_tax_checkout_policy(text, uuid, text, text, text, text)",
+      "body_sha256": "43d185bffc737122146ad7a27d80753f5355b9fefcc50c3c7635fbfeb020873e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.cancel_undispatched_sandbox_creator_cashout(uuid)",
+      "body_sha256": "e76d7c0fed8f3bfa7c6bcb0bf3a9ce707248280ae9cb35d159cb48b774ce908b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_connect_account_creation(uuid, uuid, uuid)",
+      "body_sha256": "0c6bd52b120337a2678913e10a2dee425b9d0f0ba286ad699b6d156459828fc8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_connect_hosted_link(uuid, uuid)",
+      "body_sha256": "c90fb01b799d55c48a9711101cf1771bf8e43f075d82979ce8899ac43fef5a4f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_provider_observations()",
+      "body_sha256": "a6f992d0e8616fb79d8d8efbc65e2b072f06bbe19e81db469e24979c9fc984d0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_native_production_paid_video_checkout(uuid, uuid, text)",
+      "body_sha256": "941c3cc7d5524a8e91bde2f0b92ea2f1f290b0eb2fa2bc1622b24fe7156e2294",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_sandbox_creator_cashout_dispatch(uuid, text)",
+      "body_sha256": "a0c28bb7f016f42122c677b36f6c5b199f204ff7e26f9241500dc3de05b6064e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_creator_connect_hosted_link(uuid, uuid, uuid, timestamp with time zone)",
+      "body_sha256": "01e79a55caee120f0f54c9e0c1d16cb94286540bd15abc68f879733b9e4df103",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_creator_provider_observation(uuid, uuid)",
+      "body_sha256": "4d42f7ef978f47311a555de36a28d2613e033ad744b953ff53ab54e33fec159e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_revenuecat_nonpurchase_snapshot(text, uuid, jsonb, text)",
+      "body_sha256": "04644cd7d31b1fa5f8e4d9d7c4b52aa30a2bac5949de977b1a79b6a9871e2bb0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_creator_merch_variants(uuid, text, jsonb, timestamp with time zone)",
+      "body_sha256": "37b007de8e6840db5a650ed602ae88cbdb300abee4c31767e5d539f2da9ef7cf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_creator_merch_variants_before_photo_lock(uuid, text, jsonb, timestamp with time zone)",
+      "body_sha256": "082eceeafc46208286aa131513b652a9c41dd2deceaa9f32727daa7de9402f66",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_paid_creator_event_sale(uuid, text, integer, integer, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone)",
+      "body_sha256": "200a7f4bd9c8f5a8062dd8f45813efbdb03ea58aa21e9f96cbd67f710fb7bcc3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.confirm_creator_connect_live_setup(uuid, uuid, text)",
+      "body_sha256": "43b95d49a594e2e1c2be0c082acb2205165464261fe357027221bc7e0cdbfc34",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.confirm_creator_merch_live_publication(uuid)",
+      "body_sha256": "e62687f4165f78482532e7b03e33e7a36b1e58cfdc379a6f0ed19074625b5a2a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.copy_creator_merch_live_draft(uuid, timestamp with time zone)",
+      "body_sha256": "23ecedbfe90812b1ca28f62898925f3083737581d6d4f766f46d29dee0155895",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_account_purge_manual_review_items(text, uuid, jsonb)",
+      "body_sha256": "bf59482a64f9b3e3370fb5569460119f7252b880132efba8e54dc2bc39732b52",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.create_creator_channel_subscription_purchase_intent(uuid)",
+      "body_sha256": "6222e06abce65adcc439656508bd03f5d519efec0ba30041397e1671c9240fc5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_event_auction(uuid, uuid, integer, integer, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "886b9336873e78d62454ee05e68ae5d19daea5dec08be5fcadd42ba904b2b7fa",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_room_seat_auction(text, text, integer, integer, timestamp with time zone, timestamp with time zone, text, uuid, uuid)",
+      "body_sha256": "42ac4e367b0c3b8ce1b07395b4bae430193ff0b612ffb1d2c62e8f350b478dc0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_vip_pass_purchase_intent(uuid)",
+      "body_sha256": "7dd09b7399dbc8a371bba9efa1c31ec8359890f06c0c36cb3f3f75112f35a1a8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_app_store_intent_pre_source_lock(text, text, uuid, jsonb)",
+      "body_sha256": "57274266bc561464f50b35a8fa0aa3baa3790af9dbd400aad75db8982ab35cad",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_app_store_purchase_intent(text, text, uuid, jsonb)",
+      "body_sha256": "97dbd79a81f89ba1884f1715954590de5e8606d4fd7e5850b10385767d9b7783",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent(text, uuid, integer, jsonb)",
+      "body_sha256": "16d7f7d9467a99692e0cf353b1c73d76d43a586689af8cd3b5553d216ab6f8da",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent_pre_protected_video_cl(text, uuid, integer, jsonb)",
+      "body_sha256": "707ab3c08e3bd0e5c0335e8e93ee53849adb04ddc8db61650b4ffdf285e1d781",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent_pre_specialized_routin(text, uuid, integer, jsonb)",
+      "body_sha256": "0e7a431886ebdf0e09e0748d7ca861fb5a239e6acb003bbfc37ebae9aaffa2f1",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_live_watch_party_purchase_intent(uuid)",
+      "body_sha256": "3981c7629cbf0ec7136d15b994855f1bc3bc50a5cf53a03e92bd27c9813c4e63",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_money_purchase_intent(text, text, uuid, jsonb)",
+      "body_sha256": "b1ba3e83817faf35c02745844bd952241427977c1c2514876d3751ffb0e957df",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_money_purchase_intent_pre_protected_video_closeout(text, text, uuid, jsonb)",
+      "body_sha256": "fd394bf1df718ba3dd94d980ae509f4feaeec89e2a0ee16309cb336687a7b827",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_native_production_paid_video_intent(uuid, text)",
+      "body_sha256": "3c9640be8bd6f2f584a9e8e7338cc8aa9389b440e34a1231060047afdd42adae",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_paid_creator_event_pass_purchase_intent(uuid)",
+      "body_sha256": "91b7456a5d9804a92966952fdba47b419a52b922a0277264b2c5ec60735d8b0c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_paid_watch_party_ticket_purchase_intent(uuid)",
+      "body_sha256": "c005305973781f33eafc61bc721acc8a8a1d91b9f7fe1a8f06e51bcfbea8e04c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_reserved_creator_event_purchase_intent(uuid, uuid)",
+      "body_sha256": "53cb794be850251fd7c49157b8613d2f6bb973463ecf9a076fe051b70aa46f10",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.creator_event_destination_internal(uuid)",
+      "body_sha256": "6036581300c58e3631f2db53af85bb47172bda11998b290c3e013b97b9034e29",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.creator_video_paid_precharge_before_production_admission(uuid, text, text, text, integer, text, text)",
+      "body_sha256": "c0392b232568aa85c4c7e564cedb103cf743677f5dd209f664cfe3dd5ad5f18d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.declare_creator_money_eligibility(boolean, text, text, text)",
+      "body_sha256": "d0086c7af1a5899111d947db620cdee3d71c7d3e6e90e15f38ea91b82983234c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.fail_creator_provider_observation(uuid, uuid)",
+      "body_sha256": "9f6c061da3a05164a754f76b69a5142e0340039b99ac1daca9f06476c8641f60",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_connect_onboarding_route(uuid, uuid)",
+      "body_sha256": "873e4bfbf3d2976932372ee32b40b1129145a1f5c07fcbdb7e9049515aa34475",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_tip_amount_quote(uuid, integer, uuid)",
+      "body_sha256": "70d469d82f2039d78cfa580ef4b1b586b4296bdffad9e56fd9a8c7d8c95b1220",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_tip_public_status(uuid)",
+      "body_sha256": "e4b75e8109a09dc95b13965039515dfc8cdb1ce77e692f5e8fe20b3ead4f32ee",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_merch_fulfillment_address(uuid)",
+      "body_sha256": "2cfd096eff0bb1b04134b554b27ad456806b10867ec969dcef7f2f7ac6ce4d4b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_capability(text, text, text)",
+      "body_sha256": "24ad02e6ab6df3f3128597c27c7498625bab79feb56b6b4a5d6cfb27230c6b1f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_hold(uuid)",
+      "body_sha256": "4eddf08d94f88de18517aa07a4d998cf426831d5f6ed579396d6bb2d964f32df",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_hold_before_reports(uuid)",
+      "body_sha256": "361cc4607a3dd49d166d17c70a75210aaece53f936de4316c85ea9d7b991a508",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_playback(uuid)",
+      "body_sha256": "a6089598ebafe151969d586bac3887a1ca77659dc2737e6bf8408752d9b772ce",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_creator_merch_products(uuid, boolean, uuid, integer)",
+      "body_sha256": "b1af2ab8917a71b198e06f1abe5488c22a3951a3c6543228db8bdb94a812a938",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_creator_room_seat_auctions(text)",
+      "body_sha256": "df3b3a1dc33736666d0f9d26aeb772d079bd1ff14d8ea15312b47bc6fd440bbd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_native_production_purchase_recovery(uuid)",
+      "body_sha256": "ffbe409c08dd0d52b75ad2feed72a0aa6ec3953d1963cf762025a2d2ebcb40d7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_order_projection_before_variants(merch_orders)",
+      "body_sha256": "1b98a1257c8b48867326d8b73da8e02d8c6352e0a7e1626822450d563168e343",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_product_projection_before_variants(merch_products)",
+      "body_sha256": "238188edb47e12ce8be677391960fa577d31d481e971bf96fd7321023604e27f",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_seller_ready_internal(uuid, text)",
+      "body_sha256": "67315099be981ca70485485dc8d1621e643ac01194264df015263688b6adacdd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_creator_room_seat_auction(text)",
+      "body_sha256": "cb4cc9f20fd7cefacbc8adca0b0caf83d250e757e6d22a5076a12e397087884e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_creator_room_seat_auction_pre_explicit_mode(text)",
+      "body_sha256": "d63d7b41d16eb7b6d7991d810e9e8a6dd243d9a9371fab9c2f46cbae14302bf1",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_native_production_paid_video(uuid, text, text, text, integer)",
+      "body_sha256": "05017aa7d038413f606e86340f4f2a1fb6aa880bdda07facfdd9011b98d285e8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_native_production_paid_video_before_checkout(uuid, text, text, text, integer)",
+      "body_sha256": "cc7396530dd6d5cf1224f4de83cf6c562070f184fd2a4668cda937f37cf3dcf7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.preview_sandbox_creator_cashout(integer, text)",
+      "body_sha256": "4f629d9023726dddd38a490563f36289d19b25ffa3888b75fc4ca51f08eaba52",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_native_production_accounting_jobs(integer)",
+      "body_sha256": "efb6d4abce99717f30136028105fc4c2b538b1b82895057e2a7df9723f3dca06",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_app_store_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text)",
+      "body_sha256": "61a7f1ac7cc8a981635824e86c31f91ef037fe741f228c3ca98b7fb64652fded",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_app_store_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, timestamp with time zone)",
+      "body_sha256": "c8c1adf89da54fac40a75e2b4778a950b238605e060725d061e0ab3bd5630a2d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_google_play_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text)",
+      "body_sha256": "ccf0597b5dfbe6bf9c83f4675532abeef6124347c4ae12dabd22e62381b73288",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_google_play_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, timestamp with time zone)",
+      "body_sha256": "367bb3188718ec85d3bf12b0d4ab10aba2e554b1173bca7af7d969924083bd06",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_live_watch_party_event_atomic(text, text, text, uuid, text, text, timestamp with time zone, integer, text, text, text)",
+      "body_sha256": "a5fabc09a4e210e0dc3f14270cfec9db21656a126af592130514b4395088aa58",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_nonpurchase_lifecycle_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "4da0bcbb01e1faf94a63830cd07ed4dd924c258e5b21ec03a8538a69aa7a6a0c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_premium_event_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, text, uuid, uuid, text)",
+      "body_sha256": "d25cfba4cf124924d5f1f82d3beaa5a54b10db356f95935f4b1b1fc041cd8b05",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_premium_transfer_atomic(text, uuid, uuid, text, timestamp with time zone, text)",
+      "body_sha256": "0024799bd12be72e2504d4b23f5f926ebf4c54a9647fc505eb9323890331e7a4",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_terminal_event_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text, text, text, text, text)",
+      "body_sha256": "626557554d42dd411b98e185303e2f73bd983fb41306d40ca7a2c4a5442f6b90",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_event_auction_receipt(jsonb, text)",
+      "body_sha256": "5d6f3c0a43d751f9848b406e4ab1ba82b2a11989c4347aaffe9de8f123469fff",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_room_auction_receipt(jsonb, text)",
+      "body_sha256": "c9d6e66b0ccc1849e47db05dc84bb0e8c402c4c46e4608e48ed235299907fc8a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_tip_webhook_lifecycle(text, uuid, uuid, jsonb, jsonb, jsonb)",
+      "body_sha256": "cc45a0706a7488650f3cf9e0b45f90786a6d4c576c13074a165c574a4eff76e3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.quarantine_revenuecat_terminal_authority(text, text, text, uuid, text, text, text)",
+      "body_sha256": "a1ac4ac9dfabc37180059a8251bec3eb46abb9cc5fe370caf6af43515ee588fe",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_auction_creation_mode(text)",
+      "body_sha256": "d5fa5092567521801d3c79579acf076d7c78843e6ce601e533902bfc6d24ce92",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_room_seat_auction(uuid)",
+      "body_sha256": "e9b58797ab4192ab5440c2a21858e152aa98cf7d871868269c8fc5cc45e633a2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_room_seat_auction_bid_eligibility(uuid, integer)",
+      "body_sha256": "3bfa8594d774e3cdcb088f342f46e649fd37ff44db9db57729300795be3b51a9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_my_creator_event_reservation(uuid)",
+      "body_sha256": "438ead8fbda3c7fc078d80459b8d864f14ad705af957a19d0238ee24f9b5e931",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_dispatch(uuid, uuid, uuid)",
+      "body_sha256": "0c019e0d66d5569813401a98025000ca91bb20399e8e2889ce7f159567e4538c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_earning(uuid)",
+      "body_sha256": "6a0b5958df37e5e0aefb5e94457380ac1897cd942db47a696c3886a1058f2931",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_paid_video_access(uuid)",
+      "body_sha256": "a6a7660d0d7dbac598b8410b1bae06bf4bdfda3bdefba0d6709d5743da8700c2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_paid_video_access_before_durable(uuid)",
+      "body_sha256": "2fc2358bc2c22dadb78c8e747d91f33eeaf2b581cd90de924f864a079ecd4022",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_google_premium_snapshot_atomic(text, uuid, text, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "e223ad6b5c17f165a503d77d2938c7602fa1fb8b3dfc335a68f6282d6ed0b87a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(text, uuid, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "e14c8740c7314490fb7884fb5fd253fd2665053d6565a0c6b4672b16c4931bdd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_premium_snapshot_atomic(text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "30bcdb393011a40bf2ae7d8161327209194626090b37358d950e2c19f1c637e8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_connect_created_account(uuid, uuid, uuid, text, jsonb)",
+      "body_sha256": "8f1b8c9c1d9f46b96a0a299b1f8294312312cbbbfcadca6b5ed0cf92535cac20",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_connect_live_observation(jsonb, jsonb)",
+      "body_sha256": "d654415f9ab702d8d4c9887846ae7b92ae4d80b7f7677a89e46c651483296d92",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_tip_checkout_session(uuid, uuid, uuid, text, text)",
+      "body_sha256": "8c87be4af8bfc84db322f2667e4495603fb1921e30d2a499e9f2cbe4691decb9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_merch_tax_category_context(uuid, uuid, uuid, text, timestamp with time zone)",
+      "body_sha256": "e9a8e57b61f919266e32227e674c4326e183cce502032c062be4223241448fba",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_native_production_checkout_preflight(uuid, uuid, uuid, text, text, bigint, text)",
+      "body_sha256": "c3f65f8e046d418bc114a4ad9d2fcd4da058f3184014676a28a283641c8632ba",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_native_production_ingress_observation(jsonb)",
+      "body_sha256": "d9d8ce5c37dc37fe1dd85dab04ccc0cc2741439ae8728493345ba1e83b5d0cf7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_native_production_ingress_observation_channel_internal(jsonb)",
+      "body_sha256": "689981ac49d3859a6ae4c0eaf191f32f741c2630ac5d18f744a28f230dda3a52",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_sandbox_creator_cashout_observation(uuid, uuid, jsonb)",
+      "body_sha256": "4774adf3b99f489f4c0a47de1dd39a9291329a4d563e816ebf885521ca65949c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.request_creator_channel_subscription_price(integer, text)",
+      "body_sha256": "c1781614e8ad1e7ac8778d48c972a092e9b8ab569776d63e08e646b324f0286c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.request_sandbox_creator_cashout(integer, text, uuid, uuid, integer, integer, integer)",
+      "body_sha256": "86b6ae04bd6afad8266f8209267708597e2c916921f5610f6a48733bc3e6120a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_creator_connect_account_creation(uuid, uuid)",
+      "body_sha256": "158e552713dbad016c901257dc9241527b2b1088ee87d19be68adbb4000b367c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_creator_tip_checkout_attempt(uuid, uuid, uuid, jsonb)",
+      "body_sha256": "26987fde8b113c794185fec9e4baee2bdd63ce1040dc8c37a4f131e623203e55",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_before_net_share(uuid, integer, uuid, uuid)",
+      "body_sha256": "4832cfb86a8ddede8ff1f76a20d30721adc1b30c4828a2d239c6374ef11404d3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_dispatch(uuid, uuid, uuid, integer, uuid, uuid, text, integer, text)",
+      "body_sha256": "2792a811f7cc63f4e7739e86a96001864a73e8671c08b31bd53c8e873661ef8e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor(uuid, uuid, uuid, integer, uuid)",
+      "body_sha256": "865c985ea84a840ce01b1ed4e09cafa260f5f7022d25d5efca627556dbb3f3c9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor(uuid, uuid, uuid, integer, uuid, uuid)",
+      "body_sha256": "6bf6117b69763fdfe2fbc0e5543d9688f8bbad3519de444d086c3b92e2c51ade",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor_with_tracking(uuid, uuid, uuid, integer, uuid, uuid, text, integer, text)",
+      "body_sha256": "fb0b7def0b55ccb20f9fd5764ded8fa5b30cb581bc5b47e4f4cbab71d1a228fc",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_channel_subscription_access_pre_historical_clos(uuid)",
+      "body_sha256": "c95e0a6ffc6d8c4f68af908057ad123d6edd8b3a7ab13fc877231f9ff8ca1269",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_content_access_pre_subscription_doctrine(text, uuid)",
+      "body_sha256": "25a5b10bdb0f9a0b94f4d97583524bb732e1ab24198b73c67ff1001aa771429b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_vip_pass_access(uuid)",
+      "body_sha256": "16bdd752fac1ecf7d92c955da68384f52ef5988e64513d96a5751a8023afd182",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_vip_pass_access_pre_historical_closeout(uuid)",
+      "body_sha256": "228948bd473956b6d1a05c9ee5650b7ffc238f0287a9a99e4c1840224ad05105",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_checkout_preflight(uuid, uuid, uuid, text)",
+      "body_sha256": "a2c9d15f4914a6a37c3dedf8741edce47bf35a3428d947eab84a1ad47354406f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_paid_video_origin(uuid, uuid, uuid, uuid)",
+      "body_sha256": "d1762f9292bfde412a639d79360d633d523f38d0ef2a20a5ec70ae19a194c079",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_witness_context(uuid, uuid, uuid, boolean)",
+      "body_sha256": "a9b341673fcab55200c2082f766b63df30bde4b795ffc0319f2665dda1bda067",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_witness_enrollment(uuid, uuid, uuid)",
+      "body_sha256": "a5053031902b1fccbf85a1568c0b850173d5c9f00a7fd4a78ed71654b9cbacdf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_witness_key(uuid, uuid, uuid, text, boolean)",
+      "body_sha256": "f33dd8826609d118dca1450114ca0b765e32619b19151756f7d7795fdd96970f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_paid_creator_event_pass_access_pre_historical_closeout(uuid)",
+      "body_sha256": "56a9cb43883014848c323803a45006008b6aa7c539dd2a0a65cc85f7d7915257",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_paid_watch_party_ticket_access_pre_historical_closeout(text)",
+      "body_sha256": "5a87bc1a77775df45012622ba523006037230b173518ef24c5d608e85d5ce8aa",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_sandbox_monetization_tester(text, text)",
+      "body_sha256": "fb9cb63134c0d9b0a3b4dd95f8cec8d6fefee778152ea805d8897f972260f2a5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_watch_party_livekit_authority_pre_service_fix(text, uuid, uuid)",
+      "body_sha256": "31b6e797b3030c5eacf4de52c48997e2aaa8d5a5f2f3b99867ab7a5f2cafcc39",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.respond_merch_return_case(uuid, uuid, text, text)",
+      "body_sha256": "99d3b5df334c5df0caeddb3215824e2add265a9a44bc46a2cb46894dd924d54b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.review_creator_merch_live_publication(uuid, timestamp with time zone)",
+      "body_sha256": "f6ed58196cfdf018b543bae0083bb7a254c4e58b7f0e9249042f35e42a72c2c2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product(uuid, text, text, text, integer, integer, text, timestamp with time zone)",
+      "body_sha256": "27a154b8494ecf0e19c51c3615096792abe564f71e0ae3712ad3d91b81539465",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product_before_variants(uuid, text, text, text, integer, integer, text, timestamp with time zone)",
+      "body_sha256": "2bf37bf6bdc3cd64ca521a41c60ff322f3390aa70f30525720fa73ed68c1b560",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product_with_tracking(uuid, text, text, text, integer, integer, text, timestamp with time zone, text)",
+      "body_sha256": "3e684fb922abc4be3678c1276a9f243c78731b4dd711824faaf24d7b400c8813",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config(text, text, uuid, text, jsonb)",
+      "body_sha256": "fcf1820bf646a7e62f2c51b7176fc473e2b2b22a5c7eea0434925c27b5fc5208",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config_pre_adversarial_integr(text, text, uuid, text, jsonb)",
+      "body_sha256": "23bb9317628b03dd4256cc36f60d0f2c0a812bcbaead6a074d91b018952af660",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config_pre_integrity_closeout(text, text, uuid, text, jsonb)",
+      "body_sha256": "f0658ae4ae134c31c613a2c08a24d3f18672c56d33decaeea8d05787cc539f10",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.select_creator_merch_tax_category(uuid, uuid, timestamp with time zone, text)",
+      "body_sha256": "3077c5f74ba8b0d76ed1dabd7c309001db593447d1e3b4bd2b5065556d409827",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.serialize_stripe_tip_buyer_authority_global_internal()",
+      "body_sha256": "c9f187dca0a0d107ff1815945075dfc93085a6cf4d7060f7824f65835222288e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.serialize_stripe_tip_buyer_authority_user_internal()",
+      "body_sha256": "e70fe6317a1cae93ff240f3408cf8454f6eba1b47f0779dda305f5d8359da58c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer(text, text, text)",
+      "body_sha256": "9832d05fe7de8d2f172ff29928218f8d3cc1778dda2e69bac2a7427a71e0a0b0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer_at_price(text, text, text, uuid)",
+      "body_sha256": "adbf889d90f01fdbf7ac8455d20e212692a6b5f7187c8ec15a9ecb3c03060d48",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer_at_price_pre_binding(text, text, text, uuid)",
+      "body_sha256": "8224b9be92f6aa2f33cd682c7a408dddbf0db86f271a71ee7190e8277bf298a9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_content_price(text, uuid, boolean, integer, text)",
+      "body_sha256": "546a80bf5aabdaa21ec7c007f349ac0309f196dccc78cb32f53829fe3a2994b0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_content_price_pre_finite_paid_video_tier(text, uuid, boolean, integer, text)",
+      "body_sha256": "783ac171161c1fac56b9c595a9e61e745d700b61e0525eb7f5d2726775ee9d82",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_video_vip_access(uuid, boolean)",
+      "body_sha256": "660aa6fcf2a98407ff92c1652cf54793a9bcc0e3b98007e953548274eaae2281",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_vip_pass_offer(text, text, text)",
+      "body_sha256": "f7460bf565b2fc05880a57a39d3cdd4ef382f64b2e68202c4d5c9694bbbf872a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_vip_pass_offer_at_price(text, text, text, uuid)",
+      "body_sha256": "b07ab52eab18df91c322b16c54427b7f93208e3b31e7625c12b009e21e34c0bd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_my_live_watch_party_offer(text, text, boolean, text)",
+      "body_sha256": "d4788a7866966bd08b160986365cc46dc0b279c77d7767c7884a7f85c0faab69",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_paid_creator_event_offer(uuid, text, integer, integer, text)",
+      "body_sha256": "b891956accd733618e614f173563aa2e45f996556113842bb9cc7d322969a50f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_paid_watch_party_offer(text, text, integer, integer, text)",
+      "body_sha256": "c3231ea9f71751f6842bc5ea784506ff6d5f9c5f71f1b4891cf7e5fa5537d2d4",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_platform_money_kill_switch_state(text, text, text, text, jsonb)",
+      "body_sha256": "feb9f5f896823da0e06fad858b28b775fb77dd69c960acd1e330705cfb2957e5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.start_native_production_witness_enrollment(uuid, uuid, uuid)",
+      "body_sha256": "aabccc08cd5db57599058b31b7bc900297cc6aa099de1fad28b0fa07c194658b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.transition_merch_checkout_dispatch(uuid, uuid, uuid, text, jsonb)",
+      "body_sha256": "b7a49f2f26316cbc1b87764529b4399ab16c67bcab14b730258b9503c1b56d15",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.update_my_username(text)",
+      "body_sha256": "038918583be8ca5e3baea6013f15c1979c5a8600d0256e99c5bfc86124b20302",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.upsert_my_creator_tip_settings(boolean, integer[], integer, integer, integer, text)",
+      "body_sha256": "5b689f38a44d612c2bd520f3e5958827733933f7864049091670f3f1528c1b7b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.watch_party_room_access_pre_live_decouple(text, text)",
+      "body_sha256": "188e8b93db928312d1b71e2f92a04d47c5b7e123af89d773b97b487072fb4315",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_assert_current_creator_money_authority_internal()",
+      "body_sha256": "a48cd81b7e3327ffcb73393dc3e8921c2321b62f3863c23b0e38b1b7885d82f2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_eligibility_readback()",
+      "body_sha256": "30e466ac8fd4154fcfaa430c7fd8960c5074944c530758e2011c037c234b291e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_eligibility_readback_pre_automatic()",
+      "body_sha256": "59e7b150a49b0151941a90374dde9b58485fda123b275f4047fe0e2a4b49ac3b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_eligibility_readback_pre_sandbox_capability()",
+      "body_sha256": "82623f1e49ec12b94d0fa75b830fc4e0bad55b660737c22815d6ceb7eff24272",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_money_subject_authorized_internal(uuid)",
+      "body_sha256": "06b24e0f29c58de2841b483c529acb628cf67e2a07ea9e315e37184a1abb6e8b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_enforce_creator_money_exposure()",
+      "body_sha256": "9bed59dc0abe83c39cd7241262c0f0cba2f37448a4a4840fa3b69ca4f9c1a16a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_evaluate_creator_eligibility(uuid, jsonb, text, text)",
+      "body_sha256": "e4869949655fe535b89e00a80eefbc1e4877e5ff5a838f1b548fb3549226bca0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    }
+  ],
+  "completed": [
+    {
+      "signature": "private.assert_creator_room_seat_auction_buyer(private.creator_room_seat_auctions, uuid)",
+      "body_sha256": "25a217a03079a37050bff8ee82d8b4848e3d121a0af25f6b55dbce0f2e6eba75",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_current_creator_for_mode(text)",
+      "body_sha256": "b0d3e1f73fc646be0a27d0d8bd26e74037d20cf5ac372331dd5ce23d0fe326fd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_ordinary_commerce_authority_gate()",
+      "body_sha256": "539aba96823852a8b941735bf98e349f57e3100eaa0069dfa606c6151819897e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_ordinary_native_dispatch_current(money_purchase_intents)",
+      "body_sha256": "5845c92fe0078a3eb77c061a29a2829b9c05a2797d5f6e09b3a262053e44f2fb",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.assert_ordinary_profile_authority_final()",
+      "body_sha256": "80055fd51adcdc8b7ddb5095cb013fedda2e7a8d12ede00d1d207b6cd808366f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_connect_onboarding_subject(uuid, uuid)",
+      "body_sha256": "7525be3f113a73cd1801d34fbb0e16eba14c59cb221eeca57d29e17918d1cdfa",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_auction_grant_identity(uuid, uuid, uuid)",
+      "body_sha256": "35dd9c3a15b8b72ef9f157384886049248619a36f330099a38551986ef346d5e",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_auction_source_valid(private.creator_event_auctions)",
+      "body_sha256": "6932aa05b1a8199d43316811b97da5453ae23517f62dfc4cd8dac80db094f93f",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_event_broadcast_actor_current(uuid, uuid, text, boolean)",
+      "body_sha256": "852fa2c1d3817fb9fa98422113cd5b944eb9b7583458eddcee8797720cb100e3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_paid_delivery_legal_current(uuid)",
+      "body_sha256": "5b26293db66067254957e99c4b25732f28cb5cb2c9c24d75f02197a51fe63629",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_paid_delivery_subject_safe(uuid, text)",
+      "body_sha256": "be1f4dd2cd2117e87748c9d19b460f808f0113f9ea9d6fb19bb5e62e3355414d",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_paid_delivery_subject_allowed(text, uuid, text)",
+      "body_sha256": "f1bcedb58c37c2c2c74a034adbb2ce3fe6bb53d77b1fdc1af41521dbffb7c30e",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_paid_seat_claim(text, uuid)",
+      "body_sha256": "d8b22285bdeaf453c4475054b2c9aebbff71147777bf9944b3c1742a1d27f9d8",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_seat_auction_source_valid(private.creator_room_seat_auctions)",
+      "body_sha256": "63d136c266d9934bb44b04243135737384cce01823726f9bcb7b5b37a94e9323",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_room_seat_subject_allowed(text, uuid, text)",
+      "body_sha256": "154340ac5529f958b80bbaea5dd84ed6f2a8c6cb2e7b72bbf5335c182ae283ac",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_tip_native_sandbox_available(uuid, text)",
+      "body_sha256": "e391d7981275d092294953c2683b669c4585957b8ea9c0f6f776eeaaa42bf338",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.creator_vip_current_catalog_environment(uuid)",
+      "body_sha256": "16e1045034c91f5254a0fcf7909a8737b50ea5e89597f6f4cc661ff12d15ba33",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.guard_creator_eligibility_declaration_history()",
+      "body_sha256": "c9a9921898d08023c08c14dae9585c32748c223d6004ccd6a1ab9a94c9b36bb5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.guard_creator_observation_authority_write()",
+      "body_sha256": "fa6497de6eaedbb5f8b0ee007a501d033f8532fe8a5b003d6a7fa603983def1e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_commerce_authority_gate()",
+      "body_sha256": "7ddc6135c12c360ad401575b14e14ce479047b195134337b96d25e0a7369a4c7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_commerce_dispatch_subjects(uuid, uuid, uuid, text, text)",
+      "body_sha256": "00fe316d5ad1dd4401bf982b7b5dfef67dc7e93f0aae1773fe340b719752daee",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_commerce_premium_subjects(uuid[])",
+      "body_sha256": "db48c82ff772479200ddf75a026e8e067667a0d56e608d1c8dc9d9b203fe139d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_creator_subject(uuid, uuid, text)",
+      "body_sha256": "9cfc5f7f1994b48d9cf49eddcd9efa699319c93e2f03cde1392f93d167d00e13",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_ordinary_purchase_source_subjects(text, uuid)",
+      "body_sha256": "863d7cbc6601a9899d7fd64e8b01f469f1c4dd5bafdd6def73384ec4c082678b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.lock_sandbox_cashout_creator(uuid)",
+      "body_sha256": "824e0ce34e892f5ad983f9bf853d0ccad3586de1fb8df12b4db22b7d160452e0",
+      "security_definer": false,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.merch_live_checkout_ready(text)",
+      "body_sha256": "28c8f546bb2392943824258ed314c63a21bfcebc5c7edb1f00012fcf43b734ce",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.merch_live_publication_authority(merch_products)",
+      "body_sha256": "d37adbc374970db331bca1bda9cfb09fc5aebbb32f041c9465e9b0ea45809b80",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_authority_gate_held()",
+      "body_sha256": "a26add9abf86d50cac5b2a61185e34740777d4e334bb0e9d4d7baf2e4cc22c95",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_buyer_current(uuid, uuid, text)",
+      "body_sha256": "264b2de734a57b2294f73ee3d2984f4cd37ce63530753005af7e6846cff3547a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_premium_current(uuid, text)",
+      "body_sha256": "d70554e598116b18c498026c260d81295b6ec9bd3b4fc0da28c99dd1eadc4adb",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_subject_current(uuid, uuid, text)",
+      "body_sha256": "4f8f58f5f4a4a9824b20428f4d49f3664c8ad23e56fe93ca277b387d7b666402",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_commerce_writer_gate()",
+      "body_sha256": "ccbb023878518dc7c947144e3f10643d463f1bb565af6cb62369c979b6dd6420",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_creator_hold_insert_fence()",
+      "body_sha256": "4acaf369a171ad149fa21bcf51ac6cf37a59741ed50cbce5b28bcaf04e6f5dc5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_creator_provider_ready(uuid, text)",
+      "body_sha256": "109935d450c07fd6b406a88bb8811fb68b0ea7162ecbcdfd2353bbcdaf63efa4",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_creator_subject_for_mode(uuid, text)",
+      "body_sha256": "2a125c2998da3c1672c0bc028e2a4c8fa9e95e31bcd639e319ebc2e9d9be3f24",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_historical_creator_current(uuid, text)",
+      "body_sha256": "d771860acfb13e69001ad0c4b5fd70e408def073ac932a6d093a1161786a331d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_merch_mode_current(text)",
+      "body_sha256": "5f3d6c4cddd5b44493dcbd9249597d9691b945014490eee1e6d168f03e5074d9",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_profile_metadata_only_change(jsonb, jsonb)",
+      "body_sha256": "06356d8cea4c18697070cc76a217aa411bad871930016f9cb2c3c1aad0407ecd",
+      "security_definer": false,
+      "volatility": "i",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.ordinary_profile_retention_prefix()",
+      "body_sha256": "937c2a7b94f82f0cc83191f40bef96f3858e56a4cc37e268cc90fb0d10a8a9b3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.paid_access_catalog_environment(text, text, text, text, text)",
+      "body_sha256": "1d5e8d1f212f3d4d6358bd4104edb4fba7205499393bd745bd0a51ea9b2bea0c",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.party_room_host_authority_current(watch_party_rooms)",
+      "body_sha256": "5f71fd2bbf2d37907926266064539289922b4300fbde8147cbf02ffd0a11328a",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.read_creator_tip_route_costs_for_subject(uuid, uuid, uuid, integer, text)",
+      "body_sha256": "4840a3d07abb5456517912423864d9c78ea0bfa8f1e89652ddb70ae2ab4f1573",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.refresh_ordinary_creator_eligibility(uuid)",
+      "body_sha256": "8556e46ee40100df2d8df1168e676c0ab114c6b17ca0e481bde7dadfc8e49d0b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.resolve_creator_external_payment_capability(uuid, uuid, text, uuid, integer, text, text, uuid)",
+      "body_sha256": "6c56a9a50ac7275da1dea30e4837c5456cbbcb94872fbaae0cd841e1e1bf3f8b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.room_attendance_source_access_pre_paid_stage(watch_party_rooms, uuid)",
+      "body_sha256": "38c4d1cfa904de096879ccd4d3acd163e9c8654b6a70719ff25f7441869144fe",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.sandbox_cashout_current_user()",
+      "body_sha256": "2eb24c7ccc7c470af7ac562f0137fcbcca2de21d75c008330954811f6ad27c30",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "private.sandbox_cashout_subject_current(uuid, uuid)",
+      "body_sha256": "baa180f6c18b668c6ec000544ee8fa24e04e56f2b8aa6741b647c65418bb65ce",
+      "security_definer": false,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_launch_ready(uuid, uuid, uuid, text, uuid, text, bigint, bigint)",
+      "body_sha256": "afa758953755bb06c1a4d5e6c4e35209a65d22763a12963bb285b15b5024262e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_paid_video_receipt(uuid, text, text)",
+      "body_sha256": "4d3657563a104276747df5e74a47e41d27236e52d6463d311cc06f35a0b3d483",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_verified_store_facts(uuid, text, text)",
+      "body_sha256": "0c6848e23bb08b6451953684d339a0d1c04f50bd57b03811cefe27e83ed022e4",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_verified_witness(uuid, uuid, uuid, text, text, text, bigint, bigint, uuid, bigint)",
+      "body_sha256": "1658875d4d18bf3d68d2e6db11365adfecfdc85c20ea76f0db175c8a8e8b8a24",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.accept_native_production_witness_enrollment(uuid, uuid, uuid, text, text, text)",
+      "body_sha256": "5836516137e549bc7c89b7e11c26a153b3a658562289b9057713a89f9d351073",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.account_purge_deidentification_counts(text)",
+      "body_sha256": "b0628bd88446c087860a61916d0b5b953a2ef19f1b3f831e81115fd6766600fa",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.admin_force_update_username(text, text, text)",
+      "body_sha256": "738ed2757064d8640ecc8c03a0c317745c9a65a6930276556386e252ef32b8d2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.admin_revoke_money_access_grant_for_proof(uuid, text)",
+      "body_sha256": "b5d973cfa04e6b14e51ffb0732a288ad4e0854cb401a504e59946ca55ebf66b8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.admin_run_account_purge_batch(boolean, integer, boolean)",
+      "body_sha256": "c84ede0792e8a00b0ab07f4aaceaf4d006825d1e505b4919a9a98daf62a39ae9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public, auth"
+      ]
+    },
+    {
+      "signature": "public.admit_google_play_external_session(text, uuid, integer, uuid, text, integer, uuid)",
+      "body_sha256": "80b5f9d3d531427146d9786b5e6bc09c1adf7a1cbf96793552763e6338edbf8d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.admit_ios_external_session(text, uuid, integer, uuid, text, integer, uuid)",
+      "body_sha256": "1640b85ec5bf3036cacc74ac111f4b54a8f6c5c3fead394836e72780fcd2778c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.apply_admin_report_target_action(bigint, text, text, text, text)",
+      "body_sha256": "9188ce5440ed27837eb520eebaf2ec139aad42961e7ad943e4ce12e5c1649a96",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.approve_creator_merch_photo(uuid, uuid, timestamp with time zone)",
+      "body_sha256": "d5ccd959ef07747ebdb9fb8d56dbac292fba90fd0b1ef3a92f71e8a90ff8758a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.assign_merch_product_photo(uuid, uuid, timestamp with time zone)",
+      "body_sha256": "3b11aca47605f0871c231930d55ce25b585f9fee6a14da583a4215aca1f70180",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.authorize_native_production_sdk_entry(uuid, uuid, uuid, uuid)",
+      "body_sha256": "91bdce4537e8b12a546cb69cda3eeb9a14a6c8ad4424b175ce9021ce96960556",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_event_checkout(uuid, uuid)",
+      "body_sha256": "bca393693e0f7fbd7e60592b2d7ce7401721ffa24f8fbea2186b2891fd25fe86",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_money_checkout(uuid, uuid)",
+      "body_sha256": "9c940f8679cecbbed39784e1da65196c0a9372679e0452c881db609f935c6336",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.begin_creator_money_checkout_before_native(uuid, uuid)",
+      "body_sha256": "b0313576a75437716e410df6480a04e8aa5c4ecb69c370f89a4aa86950ae6160",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.bind_commerce_tax_checkout_policy(text, uuid, text, text, text, text)",
+      "body_sha256": "43d185bffc737122146ad7a27d80753f5355b9fefcc50c3c7635fbfeb020873e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.cancel_undispatched_sandbox_creator_cashout(uuid)",
+      "body_sha256": "e76d7c0fed8f3bfa7c6bcb0bf3a9ce707248280ae9cb35d159cb48b774ce908b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_connect_account_creation(uuid, uuid, uuid)",
+      "body_sha256": "0c6bd52b120337a2678913e10a2dee425b9d0f0ba286ad699b6d156459828fc8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_connect_hosted_link(uuid, uuid)",
+      "body_sha256": "c90fb01b799d55c48a9711101cf1771bf8e43f075d82979ce8899ac43fef5a4f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_creator_provider_observations()",
+      "body_sha256": "a6f992d0e8616fb79d8d8efbc65e2b072f06bbe19e81db469e24979c9fc984d0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_native_production_paid_video_checkout(uuid, uuid, text)",
+      "body_sha256": "941c3cc7d5524a8e91bde2f0b92ea2f1f290b0eb2fa2bc1622b24fe7156e2294",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.claim_sandbox_creator_cashout_dispatch(uuid, text)",
+      "body_sha256": "a0c28bb7f016f42122c677b36f6c5b199f204ff7e26f9241500dc3de05b6064e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_creator_connect_hosted_link(uuid, uuid, uuid, timestamp with time zone)",
+      "body_sha256": "01e79a55caee120f0f54c9e0c1d16cb94286540bd15abc68f879733b9e4df103",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_creator_provider_observation(uuid, uuid)",
+      "body_sha256": "4d42f7ef978f47311a555de36a28d2613e033ad744b953ff53ab54e33fec159e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.complete_revenuecat_nonpurchase_snapshot(text, uuid, jsonb, text)",
+      "body_sha256": "04644cd7d31b1fa5f8e4d9d7c4b52aa30a2bac5949de977b1a79b6a9871e2bb0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_creator_merch_variants(uuid, text, jsonb, timestamp with time zone)",
+      "body_sha256": "37b007de8e6840db5a650ed602ae88cbdb300abee4c31767e5d539f2da9ef7cf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_creator_merch_variants_before_photo_lock(uuid, text, jsonb, timestamp with time zone)",
+      "body_sha256": "082eceeafc46208286aa131513b652a9c41dd2deceaa9f32727daa7de9402f66",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.configure_paid_creator_event_sale(uuid, text, integer, integer, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone)",
+      "body_sha256": "200a7f4bd9c8f5a8062dd8f45813efbdb03ea58aa21e9f96cbd67f710fb7bcc3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.confirm_creator_connect_live_setup(uuid, uuid, text)",
+      "body_sha256": "43b95d49a594e2e1c2be0c082acb2205165464261fe357027221bc7e0cdbfc34",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.confirm_creator_merch_live_publication(uuid)",
+      "body_sha256": "e62687f4165f78482532e7b03e33e7a36b1e58cfdc379a6f0ed19074625b5a2a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.copy_creator_merch_live_draft(uuid, timestamp with time zone)",
+      "body_sha256": "23ecedbfe90812b1ca28f62898925f3083737581d6d4f766f46d29dee0155895",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_account_purge_manual_review_items(text, uuid, jsonb)",
+      "body_sha256": "bf59482a64f9b3e3370fb5569460119f7252b880132efba8e54dc2bc39732b52",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.create_creator_channel_subscription_purchase_intent(uuid)",
+      "body_sha256": "6222e06abce65adcc439656508bd03f5d519efec0ba30041397e1671c9240fc5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_event_auction(uuid, uuid, integer, integer, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "886b9336873e78d62454ee05e68ae5d19daea5dec08be5fcadd42ba904b2b7fa",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_room_seat_auction(text, text, integer, integer, timestamp with time zone, timestamp with time zone, text, uuid, uuid)",
+      "body_sha256": "42ac4e367b0c3b8ce1b07395b4bae430193ff0b612ffb1d2c62e8f350b478dc0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_creator_vip_pass_purchase_intent(uuid)",
+      "body_sha256": "7dd09b7399dbc8a371bba9efa1c31ec8359890f06c0c36cb3f3f75112f35a1a8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_app_store_intent_pre_source_lock(text, text, uuid, jsonb)",
+      "body_sha256": "57274266bc561464f50b35a8fa0aa3baa3790af9dbd400aad75db8982ab35cad",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_app_store_purchase_intent(text, text, uuid, jsonb)",
+      "body_sha256": "97dbd79a81f89ba1884f1715954590de5e8606d4fd7e5850b10385767d9b7783",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent(text, uuid, integer, jsonb)",
+      "body_sha256": "16d7f7d9467a99692e0cf353b1c73d76d43a586689af8cd3b5553d216ab6f8da",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent_pre_protected_video_cl(text, uuid, integer, jsonb)",
+      "body_sha256": "707ab3c08e3bd0e5c0335e8e93ee53849adb04ddc8db61650b4ffdf285e1d781",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_ios_creator_money_purchase_intent_pre_specialized_routin(text, uuid, integer, jsonb)",
+      "body_sha256": "0e7a431886ebdf0e09e0748d7ca861fb5a239e6acb003bbfc37ebae9aaffa2f1",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_live_watch_party_purchase_intent(uuid)",
+      "body_sha256": "3981c7629cbf0ec7136d15b994855f1bc3bc50a5cf53a03e92bd27c9813c4e63",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_money_purchase_intent(text, text, uuid, jsonb)",
+      "body_sha256": "b1ba3e83817faf35c02745844bd952241427977c1c2514876d3751ffb0e957df",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_money_purchase_intent_pre_protected_video_closeout(text, text, uuid, jsonb)",
+      "body_sha256": "fd394bf1df718ba3dd94d980ae509f4feaeec89e2a0ee16309cb336687a7b827",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_native_production_paid_video_intent(uuid, text)",
+      "body_sha256": "3c9640be8bd6f2f584a9e8e7338cc8aa9389b440e34a1231060047afdd42adae",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_paid_creator_event_pass_purchase_intent(uuid)",
+      "body_sha256": "91b7456a5d9804a92966952fdba47b419a52b922a0277264b2c5ec60735d8b0c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_paid_watch_party_ticket_purchase_intent(uuid)",
+      "body_sha256": "c005305973781f33eafc61bc721acc8a8a1d91b9f7fe1a8f06e51bcfbea8e04c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.create_reserved_creator_event_purchase_intent(uuid, uuid)",
+      "body_sha256": "53cb794be850251fd7c49157b8613d2f6bb973463ecf9a076fe051b70aa46f10",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.creator_event_destination_internal(uuid)",
+      "body_sha256": "6036581300c58e3631f2db53af85bb47172bda11998b290c3e013b97b9034e29",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.creator_video_paid_precharge_before_production_admission(uuid, text, text, text, integer, text, text)",
+      "body_sha256": "c0392b232568aa85c4c7e564cedb103cf743677f5dd209f664cfe3dd5ad5f18d",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.declare_creator_money_eligibility(boolean, text, text, text)",
+      "body_sha256": "d0086c7af1a5899111d947db620cdee3d71c7d3e6e90e15f38ea91b82983234c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.fail_creator_provider_observation(uuid, uuid)",
+      "body_sha256": "9f6c061da3a05164a754f76b69a5142e0340039b99ac1daca9f06476c8641f60",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_connect_onboarding_route(uuid, uuid)",
+      "body_sha256": "873e4bfbf3d2976932372ee32b40b1129145a1f5c07fcbdb7e9049515aa34475",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_tip_amount_quote(uuid, integer, uuid)",
+      "body_sha256": "70d469d82f2039d78cfa580ef4b1b586b4296bdffad9e56fd9a8c7d8c95b1220",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_creator_tip_public_status(uuid)",
+      "body_sha256": "e4b75e8109a09dc95b13965039515dfc8cdb1ce77e692f5e8fe20b3ead4f32ee",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_merch_fulfillment_address(uuid)",
+      "body_sha256": "2cfd096eff0bb1b04134b554b27ad456806b10867ec969dcef7f2f7ac6ce4d4b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_capability(text, text, text)",
+      "body_sha256": "24ad02e6ab6df3f3128597c27c7498625bab79feb56b6b4a5d6cfb27230c6b1f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_hold(uuid)",
+      "body_sha256": "4eddf08d94f88de18517aa07a4d998cf426831d5f6ed579396d6bb2d964f32df",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_hold_before_reports(uuid)",
+      "body_sha256": "361cc4607a3dd49d166d17c70a75210aaece53f936de4316c85ea9d7b991a508",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.get_native_production_paid_video_playback(uuid)",
+      "body_sha256": "a6089598ebafe151969d586bac3887a1ca77659dc2737e6bf8408752d9b772ce",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_creator_merch_products(uuid, boolean, uuid, integer)",
+      "body_sha256": "b1af2ab8917a71b198e06f1abe5488c22a3951a3c6543228db8bdb94a812a938",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_creator_room_seat_auctions(text)",
+      "body_sha256": "df3b3a1dc33736666d0f9d26aeb772d079bd1ff14d8ea15312b47bc6fd440bbd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.list_native_production_purchase_recovery(uuid)",
+      "body_sha256": "ffbe409c08dd0d52b75ad2feed72a0aa6ec3953d1963cf762025a2d2ebcb40d7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_order_projection_before_variants(merch_orders)",
+      "body_sha256": "1b98a1257c8b48867326d8b73da8e02d8c6352e0a7e1626822450d563168e343",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_product_projection_before_variants(merch_products)",
+      "body_sha256": "238188edb47e12ce8be677391960fa577d31d481e971bf96fd7321023604e27f",
+      "security_definer": false,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.merch_seller_ready_internal(uuid, text)",
+      "body_sha256": "67315099be981ca70485485dc8d1621e643ac01194264df015263688b6adacdd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_creator_room_seat_auction(text)",
+      "body_sha256": "cb4cc9f20fd7cefacbc8adca0b0caf83d250e757e6d22a5076a12e397087884e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_creator_room_seat_auction_pre_explicit_mode(text)",
+      "body_sha256": "d63d7b41d16eb7b6d7991d810e9e8a6dd243d9a9371fab9c2f46cbae14302bf1",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_native_production_paid_video(uuid, text, text, text, integer)",
+      "body_sha256": "05017aa7d038413f606e86340f4f2a1fb6aa880bdda07facfdd9011b98d285e8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.prepare_native_production_paid_video_before_checkout(uuid, text, text, text, integer)",
+      "body_sha256": "cc7396530dd6d5cf1224f4de83cf6c562070f184fd2a4668cda937f37cf3dcf7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.preview_sandbox_creator_cashout(integer, text)",
+      "body_sha256": "4f629d9023726dddd38a490563f36289d19b25ffa3888b75fc4ca51f08eaba52",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_native_production_accounting_jobs(integer)",
+      "body_sha256": "efb6d4abce99717f30136028105fc4c2b538b1b82895057e2a7df9723f3dca06",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_app_store_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text)",
+      "body_sha256": "61a7f1ac7cc8a981635824e86c31f91ef037fe741f228c3ca98b7fb64652fded",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_app_store_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, timestamp with time zone)",
+      "body_sha256": "f0e3c7652bfc690c071d592cad5e51ad031eb637949e7502e691caf0c60fc751",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_google_play_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text)",
+      "body_sha256": "ccf0597b5dfbe6bf9c83f4675532abeef6124347c4ae12dabd22e62381b73288",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_google_play_event_atomic(text, text, uuid, text, text, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, timestamp with time zone)",
+      "body_sha256": "4e99ee52cfaefbaa72615fa6594f02bf40ab731e1c853ddcf6b09861c16e1385",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_live_watch_party_event_atomic(text, text, text, uuid, text, text, timestamp with time zone, integer, text, text, text)",
+      "body_sha256": "a5fabc09a4e210e0dc3f14270cfec9db21656a126af592130514b4395088aa58",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_nonpurchase_lifecycle_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "4da0bcbb01e1faf94a63830cd07ed4dd924c258e5b21ec03a8538a69aa7a6a0c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_premium_event_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, integer, text, text, text, text, text, uuid, uuid, text)",
+      "body_sha256": "d25cfba4cf124924d5f1f82d3beaa5a54b10db356f95935f4b1b1fc041cd8b05",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_premium_transfer_atomic(text, uuid, uuid, text, timestamp with time zone, text)",
+      "body_sha256": "0024799bd12be72e2504d4b23f5f926ebf4c54a9647fc505eb9323890331e7a4",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_revenuecat_terminal_event_atomic(text, text, text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text, text, text, text, text)",
+      "body_sha256": "73b8441c5406558e8c487f0fa3284b6e9655fb56c31ff1d31d87d38f2ba1b442",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_event_auction_receipt(jsonb, text)",
+      "body_sha256": "5d6f3c0a43d751f9848b406e4ab1ba82b2a11989c4347aaffe9de8f123469fff",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_room_auction_receipt(jsonb, text)",
+      "body_sha256": "c9d6e66b0ccc1849e47db05dc84bb0e8c402c4c46e4608e48ed235299907fc8a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.process_stripe_tip_webhook_lifecycle(text, uuid, uuid, jsonb, jsonb, jsonb)",
+      "body_sha256": "cc45a0706a7488650f3cf9e0b45f90786a6d4c576c13074a165c574a4eff76e3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.quarantine_revenuecat_terminal_authority(text, text, text, uuid, text, text, text)",
+      "body_sha256": "a1ac4ac9dfabc37180059a8251bec3eb46abb9cc5fe370caf6af43515ee588fe",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_auction_creation_mode(text)",
+      "body_sha256": "d5fa5092567521801d3c79579acf076d7c78843e6ce601e533902bfc6d24ce92",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_room_seat_auction(uuid)",
+      "body_sha256": "e9b58797ab4192ab5440c2a21858e152aa98cf7d871868269c8fc5cc45e633a2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_creator_room_seat_auction_bid_eligibility(uuid, integer)",
+      "body_sha256": "3bfa8594d774e3cdcb088f342f46e649fd37ff44db9db57729300795be3b51a9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.read_my_creator_event_reservation(uuid)",
+      "body_sha256": "438ead8fbda3c7fc078d80459b8d864f14ad705af957a19d0238ee24f9b5e931",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_dispatch(uuid, uuid, uuid)",
+      "body_sha256": "0c019e0d66d5569813401a98025000ca91bb20399e8e2889ce7f159567e4538c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_earning(uuid)",
+      "body_sha256": "6a0b5958df37e5e0aefb5e94457380ac1897cd942db47a696c3886a1058f2931",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_paid_video_access(uuid)",
+      "body_sha256": "a6a7660d0d7dbac598b8410b1bae06bf4bdfda3bdefba0d6709d5743da8700c2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_native_production_paid_video_access_before_durable(uuid)",
+      "body_sha256": "2fc2358bc2c22dadb78c8e747d91f33eeaf2b581cd90de924f864a079ecd4022",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_google_premium_snapshot_atomic(text, uuid, text, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "e223ad6b5c17f165a503d77d2938c7602fa1fb8b3dfc335a68f6282d6ed0b87a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(text, uuid, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "e14c8740c7314490fb7884fb5fd253fd2665053d6565a0c6b4672b16c4931bdd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reconcile_revenuecat_premium_snapshot_atomic(text, uuid, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, text)",
+      "body_sha256": "30bcdb393011a40bf2ae7d8161327209194626090b37358d950e2c19f1c637e8",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_connect_created_account(uuid, uuid, uuid, text, jsonb)",
+      "body_sha256": "8f1b8c9c1d9f46b96a0a299b1f8294312312cbbbfcadca6b5ed0cf92535cac20",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_connect_live_observation(jsonb, jsonb)",
+      "body_sha256": "d654415f9ab702d8d4c9887846ae7b92ae4d80b7f7677a89e46c651483296d92",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_creator_tip_checkout_session(uuid, uuid, uuid, text, text)",
+      "body_sha256": "8c87be4af8bfc84db322f2667e4495603fb1921e30d2a499e9f2cbe4691decb9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_merch_tax_category_context(uuid, uuid, uuid, text, timestamp with time zone)",
+      "body_sha256": "e9a8e57b61f919266e32227e674c4326e183cce502032c062be4223241448fba",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_native_production_checkout_preflight(uuid, uuid, uuid, text, text, bigint, text)",
+      "body_sha256": "c3f65f8e046d418bc114a4ad9d2fcd4da058f3184014676a28a283641c8632ba",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_native_production_ingress_observation(jsonb)",
+      "body_sha256": "d9d8ce5c37dc37fe1dd85dab04ccc0cc2741439ae8728493345ba1e83b5d0cf7",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_native_production_ingress_observation_channel_internal(jsonb)",
+      "body_sha256": "689981ac49d3859a6ae4c0eaf191f32f741c2630ac5d18f744a28f230dda3a52",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.record_sandbox_creator_cashout_observation(uuid, uuid, jsonb)",
+      "body_sha256": "4774adf3b99f489f4c0a47de1dd39a9291329a4d563e816ebf885521ca65949c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.request_creator_channel_subscription_price(integer, text)",
+      "body_sha256": "c1781614e8ad1e7ac8778d48c972a092e9b8ab569776d63e08e646b324f0286c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.request_sandbox_creator_cashout(integer, text, uuid, uuid, integer, integer, integer)",
+      "body_sha256": "86b6ae04bd6afad8266f8209267708597e2c916921f5610f6a48733bc3e6120a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_creator_connect_account_creation(uuid, uuid)",
+      "body_sha256": "158e552713dbad016c901257dc9241527b2b1088ee87d19be68adbb4000b367c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_creator_tip_checkout_attempt(uuid, uuid, uuid, jsonb)",
+      "body_sha256": "26987fde8b113c794185fec9e4baee2bdd63ce1040dc8c37a4f131e623203e55",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_before_net_share(uuid, integer, uuid, uuid)",
+      "body_sha256": "4832cfb86a8ddede8ff1f76a20d30721adc1b30c4828a2d239c6374ef11404d3",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_dispatch(uuid, uuid, uuid, integer, uuid, uuid, text, integer, text)",
+      "body_sha256": "2792a811f7cc63f4e7739e86a96001864a73e8671c08b31bd53c8e873661ef8e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor(uuid, uuid, uuid, integer, uuid)",
+      "body_sha256": "865c985ea84a840ce01b1ed4e09cafa260f5f7022d25d5efca627556dbb3f3c9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor(uuid, uuid, uuid, integer, uuid, uuid)",
+      "body_sha256": "6bf6117b69763fdfe2fbc0e5543d9688f8bbad3519de444d086c3b92e2c51ade",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.reserve_merch_checkout_for_actor_with_tracking(uuid, uuid, uuid, integer, uuid, uuid, text, integer, text)",
+      "body_sha256": "fb0b7def0b55ccb20f9fd5764ded8fa5b30cb581bc5b47e4f4cbab71d1a228fc",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_channel_subscription_access_pre_historical_clos(uuid)",
+      "body_sha256": "c95e0a6ffc6d8c4f68af908057ad123d6edd8b3a7ab13fc877231f9ff8ca1269",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_content_access_pre_subscription_doctrine(text, uuid)",
+      "body_sha256": "25a5b10bdb0f9a0b94f4d97583524bb732e1ab24198b73c67ff1001aa771429b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_vip_pass_access(uuid)",
+      "body_sha256": "16bdd752fac1ecf7d92c955da68384f52ef5988e64513d96a5751a8023afd182",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_creator_vip_pass_access_pre_historical_closeout(uuid)",
+      "body_sha256": "228948bd473956b6d1a05c9ee5650b7ffc238f0287a9a99e4c1840224ad05105",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_checkout_preflight(uuid, uuid, uuid, text)",
+      "body_sha256": "a2c9d15f4914a6a37c3dedf8741edce47bf35a3428d947eab84a1ad47354406f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_paid_video_origin(uuid, uuid, uuid, uuid)",
+      "body_sha256": "d1762f9292bfde412a639d79360d633d523f38d0ef2a20a5ec70ae19a194c079",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_witness_context(uuid, uuid, uuid, boolean)",
+      "body_sha256": "a9b341673fcab55200c2082f766b63df30bde4b795ffc0319f2665dda1bda067",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_witness_enrollment(uuid, uuid, uuid)",
+      "body_sha256": "a5053031902b1fccbf85a1568c0b850173d5c9f00a7fd4a78ed71654b9cbacdf",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_native_production_witness_key(uuid, uuid, uuid, text, boolean)",
+      "body_sha256": "f33dd8826609d118dca1450114ca0b765e32619b19151756f7d7795fdd96970f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_paid_creator_event_pass_access_pre_historical_closeout(uuid)",
+      "body_sha256": "56a9cb43883014848c323803a45006008b6aa7c539dd2a0a65cc85f7d7915257",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_paid_watch_party_ticket_access_pre_historical_closeout(text)",
+      "body_sha256": "5a87bc1a77775df45012622ba523006037230b173518ef24c5d608e85d5ce8aa",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_sandbox_monetization_tester(text, text)",
+      "body_sha256": "fb9cb63134c0d9b0a3b4dd95f8cec8d6fefee778152ea805d8897f972260f2a5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.resolve_watch_party_livekit_authority_pre_service_fix(text, uuid, uuid)",
+      "body_sha256": "31b6e797b3030c5eacf4de52c48997e2aaa8d5a5f2f3b99867ab7a5f2cafcc39",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.respond_merch_return_case(uuid, uuid, text, text)",
+      "body_sha256": "99d3b5df334c5df0caeddb3215824e2add265a9a44bc46a2cb46894dd924d54b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.review_creator_merch_live_publication(uuid, timestamp with time zone)",
+      "body_sha256": "f6ed58196cfdf018b543bae0083bb7a254c4e58b7f0e9249042f35e42a72c2c2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product(uuid, text, text, text, integer, integer, text, timestamp with time zone)",
+      "body_sha256": "27a154b8494ecf0e19c51c3615096792abe564f71e0ae3712ad3d91b81539465",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product_before_variants(uuid, text, text, text, integer, integer, text, timestamp with time zone)",
+      "body_sha256": "2bf37bf6bdc3cd64ca521a41c60ff322f3390aa70f30525720fa73ed68c1b560",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_merch_product_with_tracking(uuid, text, text, text, integer, integer, text, timestamp with time zone, text)",
+      "body_sha256": "3e684fb922abc4be3678c1276a9f243c78731b4dd711824faaf24d7b400c8813",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config(text, text, uuid, text, jsonb)",
+      "body_sha256": "fcf1820bf646a7e62f2c51b7176fc473e2b2b22a5c7eea0434925c27b5fc5208",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config_pre_adversarial_integr(text, text, uuid, text, jsonb)",
+      "body_sha256": "23bb9317628b03dd4256cc36f60d0f2c0a812bcbaead6a074d91b018952af660",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.save_creator_sandbox_monetization_config_pre_integrity_closeout(text, text, uuid, text, jsonb)",
+      "body_sha256": "f0658ae4ae134c31c613a2c08a24d3f18672c56d33decaeea8d05787cc539f10",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.select_creator_merch_tax_category(uuid, uuid, timestamp with time zone, text)",
+      "body_sha256": "3077c5f74ba8b0d76ed1dabd7c309001db593447d1e3b4bd2b5065556d409827",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.serialize_stripe_tip_buyer_authority_global_internal()",
+      "body_sha256": "c9f187dca0a0d107ff1815945075dfc93085a6cf4d7060f7824f65835222288e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.serialize_stripe_tip_buyer_authority_user_internal()",
+      "body_sha256": "e70fe6317a1cae93ff240f3408cf8454f6eba1b47f0779dda305f5d8359da58c",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer(text, text, text)",
+      "body_sha256": "9832d05fe7de8d2f172ff29928218f8d3cc1778dda2e69bac2a7427a71e0a0b0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer_at_price(text, text, text, uuid)",
+      "body_sha256": "adbf889d90f01fdbf7ac8455d20e212692a6b5f7187c8ec15a9ecb3c03060d48",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_channel_subscription_offer_at_price_pre_binding(text, text, text, uuid)",
+      "body_sha256": "8224b9be92f6aa2f33cd682c7a408dddbf0db86f271a71ee7190e8277bf298a9",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_content_price(text, uuid, boolean, integer, text)",
+      "body_sha256": "546a80bf5aabdaa21ec7c007f349ac0309f196dccc78cb32f53829fe3a2994b0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_content_price_pre_finite_paid_video_tier(text, uuid, boolean, integer, text)",
+      "body_sha256": "783ac171161c1fac56b9c595a9e61e745d700b61e0525eb7f5d2726775ee9d82",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_video_vip_access(uuid, boolean)",
+      "body_sha256": "660aa6fcf2a98407ff92c1652cf54793a9bcc0e3b98007e953548274eaae2281",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_vip_pass_offer(text, text, text)",
+      "body_sha256": "f7460bf565b2fc05880a57a39d3cdd4ef382f64b2e68202c4d5c9694bbbf872a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_creator_vip_pass_offer_at_price(text, text, text, uuid)",
+      "body_sha256": "b07ab52eab18df91c322b16c54427b7f93208e3b31e7625c12b009e21e34c0bd",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_my_live_watch_party_offer(text, text, boolean, text)",
+      "body_sha256": "d4788a7866966bd08b160986365cc46dc0b279c77d7767c7884a7f85c0faab69",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_paid_creator_event_offer(uuid, text, integer, integer, text)",
+      "body_sha256": "b891956accd733618e614f173563aa2e45f996556113842bb9cc7d322969a50f",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_paid_watch_party_offer(text, text, integer, integer, text)",
+      "body_sha256": "c3231ea9f71751f6842bc5ea784506ff6d5f9c5f71f1b4891cf7e5fa5537d2d4",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.set_platform_money_kill_switch_state(text, text, text, text, jsonb)",
+      "body_sha256": "feb9f5f896823da0e06fad858b28b775fb77dd69c960acd1e330705cfb2957e5",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.start_native_production_witness_enrollment(uuid, uuid, uuid)",
+      "body_sha256": "aabccc08cd5db57599058b31b7bc900297cc6aa099de1fad28b0fa07c194658b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.transition_merch_checkout_dispatch(uuid, uuid, uuid, text, jsonb)",
+      "body_sha256": "b7a49f2f26316cbc1b87764529b4399ab16c67bcab14b730258b9503c1b56d15",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.update_my_username(text)",
+      "body_sha256": "038918583be8ca5e3baea6013f15c1979c5a8600d0256e99c5bfc86124b20302",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=public"
+      ]
+    },
+    {
+      "signature": "public.upsert_my_creator_tip_settings(boolean, integer[], integer, integer, integer, text)",
+      "body_sha256": "5b689f38a44d612c2bd520f3e5958827733933f7864049091670f3f1528c1b7b",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.watch_party_room_access_pre_live_decouple(text, text)",
+      "body_sha256": "188e8b93db928312d1b71e2f92a04d47c5b7e123af89d773b97b487072fb4315",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_assert_current_creator_money_authority_internal()",
+      "body_sha256": "a48cd81b7e3327ffcb73393dc3e8921c2321b62f3863c23b0e38b1b7885d82f2",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_eligibility_readback()",
+      "body_sha256": "30e466ac8fd4154fcfaa430c7fd8960c5074944c530758e2011c037c234b291e",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_eligibility_readback_pre_automatic()",
+      "body_sha256": "59e7b150a49b0151941a90374dde9b58485fda123b275f4047fe0e2a4b49ac3b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_eligibility_readback_pre_sandbox_capability()",
+      "body_sha256": "82623f1e49ec12b94d0fa75b830fc4e0bad55b660737c22815d6ceb7eff24272",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_creator_money_subject_authorized_internal(uuid)",
+      "body_sha256": "06b24e0f29c58de2841b483c529acb628cf67e2a07ea9e315e37184a1abb6e8b",
+      "security_definer": true,
+      "volatility": "s",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_enforce_creator_money_exposure()",
+      "body_sha256": "9bed59dc0abe83c39cd7241262c0f0cba2f37448a4a4840fa3b69ca4f9c1a16a",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    },
+    {
+      "signature": "public.wave1_evaluate_creator_eligibility(uuid, jsonb, text, text)",
+      "body_sha256": "e4869949655fe535b89e00a80eefbc1e4877e5ff5a838f1b548fb3549226bca0",
+      "security_definer": true,
+      "volatility": "v",
+      "configuration": [
+        "search_path=\"\""
+      ]
+    }
+  ]
+}
