@@ -14,7 +14,8 @@ Deno.serve(async (req: Request) => {
   if (readOptionalEnv("NATIVE_PRODUCTION_RECEIPT_VERIFICATION_ENABLED") !== "true")
     return jsonResponse(200, { status: "disabled", financialAuthority: false });
   try {
-    const text = await readCashoutBody(req.body, 12288, 5000);
+    req.signal.throwIfAborted();
+    const text = await readCashoutBody(req.body, 12288, 5000, req.signal);
     const body = JSON.parse(text);
     if (!body || typeof body !== "object" || Array.isArray(body)
       || Object.keys(body).length !== 3 || typeof body.keyId !== "string"
@@ -24,9 +25,13 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(400, { error: "signed_receipt_required" });
     const admin = createAdminClient();
     if (!admin.configured) return jsonResponse(503, { error: "database_unavailable" });
+    req.signal.throwIfAborted();
     const result = await admin.client.rpc("accept_native_production_paid_video_receipt", {
       p_key_id: body.keyId, p_assertion: body.assertion, p_signature_sha256: body.signatureSha256,
-    });
+    }).abortSignal(req.signal);
+    // Transport cancellation leaves an issued RPC's outcome unresolved.
+    // Never retry it or infer that its durable acceptance was rolled back.
+    req.signal.throwIfAborted();
     if (result.error || !result.data || !["HELD", "ACCESS_VERIFIED"].includes(result.data.status)
       || result.data.financialAuthority !== false || result.data.payable !== false
       || result.data.accessGranted !== (result.data.status === "ACCESS_VERIFIED"))

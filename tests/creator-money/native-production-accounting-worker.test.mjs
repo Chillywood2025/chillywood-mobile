@@ -12,7 +12,7 @@ function handler({enabled='true',configured=true,rpcResult={data:{status:'comple
  new Function('Deno','readOptionalEnv','jsonResponse','readCashoutBody','createAdminClient',code)(
   {serve:fn=>{serve=fn;}},name=>name==='SUPABASE_SERVICE_ROLE_KEY'?'synthetic-service':name==='NATIVE_PRODUCTION_ACCOUNTING_ENABLED'?enabled:null,
   (status,data)=>new Response(JSON.stringify(data),{status}),async stream=>new Response(stream).text(),
-  ()=>({configured,client:{rpc:async(name,args)=>{calls.push({name,args});return rpcResult;}}}));
+  ()=>({configured,client:{rpc:(name,args)=>{calls.push({name,args});return {abortSignal:async signal=>{assert.ok(signal instanceof AbortSignal);return rpcResult;}};}}}));
  const run=async({method='POST',auth='Bearer synthetic-service',body='{}'}={})=>{
   const response=await serve(new Request('http://fixture.invalid',{method,headers:{Authorization:auth},...(method==='GET'?{}:{body})}));
   return {status:response.status,body:await response.json()};
