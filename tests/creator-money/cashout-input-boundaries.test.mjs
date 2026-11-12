@@ -6,6 +6,8 @@ import { load } from './stripe-connect-observed-fixture.mjs';
 function subject() {
   const calls = [];
   const monetization = load('_lib/creatorMonetization.ts', {
+    'react-native': { Platform: { OS: 'ios' } },
+    './stripePaidVideoSandbox': { readStripeSandboxVideoAccess: () => { throw Error('Cashout must not read video access'); } },
     './supabase': {}, './entitlementAuthority': {},
     './accountBoundSupabaseMutation': {
       async runCurrentAccountBoundSupabaseMutationRpc(name, args) {

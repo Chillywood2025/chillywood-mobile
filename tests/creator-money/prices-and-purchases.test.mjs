@@ -202,7 +202,9 @@ test("exact-event history filter is sent to the server and wrong-source results 
 
 test("paid-video initial price binds the dedicated iOS intent to299/499/999 and never a99fallback", async () => {
   const platform = { OS: "ios" }, calls = [];
+  const stripeBoundary = () => { throw Error('Native intent fixture must not enter Stripe checkout or access'); };
   const mocks = { "./nativeProductionPaidVideo": { purchaseNativeProductionPaidVideo: async () => { throw new Error("Intent-only fixture must not launch production purchase"); } }, "react-native": { Platform: platform }, "react-native-get-random-values": {}, "./accountSessionAuthority": {}, "./accountBoundSupabaseMutation": {},
+    "./stripePaidVideoSandbox": { openStripeSandboxVideoCheckout: stripeBoundary, readStripeSandboxVideoAccess: stripeBoundary },
     "./featureFlags": {}, "./revenuecat": {}, "./runtimeConfig": {}, "./revenuecatPurchaseClosure": {},
     "./analytics": {}, "./supabase": { supabase: {} }, "./creatorVideos": {}, "./entitlementAuthority": {}, "./paymentRailPolicy": {},
     "./creatorMonetization": {}, "./creatorMoneyStoreQuote": load("creatorMoneyStoreQuote", {}), "./iosAppStoreCommerce": load("iosAppStoreCommerce", {}) };

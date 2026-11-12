@@ -76,3 +76,20 @@ reconciliation before they can be advertised as supported.
 
 Focused synthetic tests exercise code and SQL behavior; they are not evidence
 of a real Stripe purchase, live delivery, or installed Android/iPhone execution.
+
+## Geography is not yet launch-qualified
+
+The launch scope remains US-only. The standalone web sandbox does not yet
+establish a buyer's country before checkout: account/legal eligibility is not
+residence evidence, and collecting a Stripe billing address is not a verified
+pre-payment geographic restriction. Native Apple/Google storefront evidence is
+platform-specific and is not reused as web residence evidence. The current
+`worldwide` tax-coverage prerequisite is deliberately conservative tax coverage,
+not permission for a worldwide launch and not a US admission proof.
+
+Before this path is enabled for real customers, the approved US-only scope needs
+a reliable server/provider-qualified pre-payment buyer-location control and
+negative proofs for non-US, absent, stale and conflicting evidence. No new
+per-buyer owner approval registry is introduced here. Sandbox fixtures contain
+synthetic US declarations only and cannot establish real-world geography. Live
+activation remains outside this source change and remains off.

@@ -19,7 +19,7 @@ create function public.set_my_stripe_sandbox_video_price(p_video_id uuid,p_amoun
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare v_actor uuid:=auth.uid(); v_owner uuid; v_price private.stripe_paid_video_prices%rowtype; v_settings public.monetization_system_settings%rowtype;
 begin
- perform public.wave1_assert_current_creator_money_authority_internal();
+ perform private.assert_current_creator_for_mode('sandbox');
  if v_actor is null or p_is_paid is null then raise exception 'creator_pricing_auth_required'; end if;
  select owner_id into v_owner from public.videos where id=p_video_id for update;
  if v_owner is distinct from v_actor then raise exception 'creator_pricing_owner_required'; end if;
@@ -50,7 +50,7 @@ grant execute on function public.set_my_stripe_sandbox_video_price(uuid,integer,
 create function public.list_my_stripe_sandbox_video_prices()
 returns jsonb language plpgsql security definer set search_path='' as $$
 begin
- perform public.wave1_assert_current_creator_money_authority_internal();
+ perform private.assert_current_creator_for_mode('sandbox');
  return coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'videoId',p.video_id,'creatorId',p.creator_id,
  'title',v.title,'priceCents',p.amount_minor,'currency',p.currency,'status',p.status,'isPaid',p.status='sandbox',
  'provider','stripe','providerProductId',null,'providerProductKey',null,'salesCount',null,'totalRevenueCents',null,

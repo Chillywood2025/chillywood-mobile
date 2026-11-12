@@ -812,7 +812,8 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
   const viewerUserId = toText(authData.user?.id);
   if (parsedWithAccess.visibility === "draft" && (!viewerUserId || viewerUserId !== parsedWithAccess.ownerId)) return createLockedCreatorVideo(normalizedVideoId, { allowed: false, visibility: "draft", reason: "draft_owner_only", isOwner: false, isBlocked: false, isCircleMember: false, hasPlayableSource: false, viewerUserId: viewerUserId || null, ownerUserId: parsedWithAccess.ownerId });
-  if (paidContentAccess?.nativeProductionDeliveryOnly === true || paidContentAccess?.stripeSandboxDeliveryOnly === true) {
+  // Stripe-only delivery returned above, including every metadata failure.
+  if (paidContentAccess?.nativeProductionDeliveryOnly === true) {
     // The ordinary player resolves the exact session-bound immutable range
     // source. Never obtain an unconditioned legacy origin/rendition URL here.
     return { ...parsedWithAccess, paidContentAccess, playbackUrl: '', playbackResolution: null,

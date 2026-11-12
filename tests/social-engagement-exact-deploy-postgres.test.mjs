@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import {createHash} from 'node:crypto';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 import {loadBundle,MIGRATIONS,readbackSql,buildApplySql,classifyState,HELPERS} from '../scripts/social-engagement-exact-deploy.mjs';
 
@@ -35,6 +36,19 @@ for(const historical of [false,true])test(`exact social transaction preserves ${
     const sourceBefore=await scalar("select jsonb_agg(to_jsonb(c) order by id) value from public.creator_video_comments c");
     for(const signature of HELPERS)assert.ok(await scalar(`select to_regprocedure('${signature}') is not null value`));
     const before=await read();assert.equal(classifyState(bundle,before),'ready');
+    if(!historical){
+      const videoHelper=(await db.query("select pg_get_functiondef(oid) definition,prosrc from pg_proc where oid='public.can_read_creator_video_row(text,text,text,text,text,text,text,text)'::regprocedure")).rows[0];
+      const clause=' and not private.stripe_video_is_protected(v_video_ids[1])';
+      assert.equal(videoHelper.prosrc.split(clause).length,2,'exactly one protective Stripe exclusion');
+      assert.equal(createHash('sha256').update(videoHelper.prosrc.replace(clause,'')).digest('hex'),'f30d29ee49a58acd182c996b0e3cf5f23d71bc7e287ccad6562619b97c3f0eba','the reviewed successor adds only the protective clause');
+      await db.exec(videoHelper.definition.replace(clause,' and true'));
+      assert.equal((await read()).prerequisites,false,'unknown relaxed successor body cannot qualify');
+      await db.exec(videoHelper.definition);
+      await db.exec('grant execute on function public.can_read_creator_video_row(text,text,text,text,text,text,text,text) to service_role');
+      assert.equal((await read()).prerequisites,false,'reviewed successor body with broader ACL cannot qualify');
+      await db.exec('revoke execute on function public.can_read_creator_video_row(text,text,text,text,text,text,text,text) from service_role');
+      assert.equal((await read()).prerequisites,true);
+    }
     const sql=buildApplySql(bundle,before);
     // Concurrent deployment history between plan and apply is not adopted.
     await db.exec("insert into supabase_migrations.schema_migrations values('20261106000000','concurrent_fixture',array['test only'])");

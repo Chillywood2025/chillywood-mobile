@@ -49,7 +49,7 @@ test('actual authenticated cash-out reservations charge instant 2%, standard zer
 });
 
 test('actual client fee preview matches 2% integer ceiling and distinguishes unknown provider fees/final net',()=>{
- const monetization=load('_lib/creatorMonetization.ts',{'./supabase':{},'./entitlementAuthority':{},'./accountBoundSupabaseMutation':{}});
+ const monetization=load('_lib/creatorMonetization.ts',{'react-native':{Platform:{OS:'ios'}},'./stripePaidVideoSandbox':{readStripeSandboxVideoAccess:()=>{throw Error('Cashout must not read video access');}},'./supabase':{},'./entitlementAuthority':{},'./accountBoundSupabaseMutation':{}});
  const payouts=load('_lib/creatorPayouts.ts',{'./supabase':{},'./creatorMonetization':monetization});
  assert.equal(monetization.CREATOR_PAID_CONTENT_PLATFORM_SHARE_BPS,2000);assert.equal(monetization.CREATOR_TIP_CREATOR_SHARE_BPS,10000);
  const summary=payouts.createEmptyCreatorPayoutDashboardReadModel();

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
-import {seedCommerceBuyer,seedQualifiedCommerceCreator,withCommerceActor} from '../helpers/automatic-commerce-fixture.mjs';
+import {acceptCommerceCreatorTerms,seedCommerceBuyer,seedCommerceCreator,seedQualifiedCommerceCreator,withCommerceActor} from '../helpers/automatic-commerce-fixture.mjs';
 
 test('current schema: Stripe receipt, held ledger, replay and refund-first are atomic',{timeout:1200000},async()=>{
  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
@@ -10,14 +10,40 @@ test('current schema: Stripe receipt, held ledger, replay and refund-first are a
  const buyer={id:randomUUID(),session:randomUUID()},creator={id:randomUUID(),session:randomUUID()},video=randomUUID();
  try {
   await db.exec(`set request.jwt.claim.role='service_role';set request.jwt.claims='{"role":"service_role"}'`);
-  await seedCommerceBuyer(db,buyer);await seedQualifiedCommerceCreator(db,creator);
+  await seedCommerceBuyer(db,buyer);await seedCommerceCreator(db,creator);await acceptCommerceCreatorTerms(db,creator);
+  const declared=await withCommerceActor(db,creator,()=>one("select public.declare_creator_money_eligibility(true,'US','CA')"));
+  assert.equal(declared.state,'PENDING_VERIFICATION');
+  assert.equal(declared.canCreateMoneyExposure,false);
+  assert.equal(declared.sandboxCapability.canUseCreatorTools,true);
+  assert.equal(declared.taxComplete,null);assert.equal(declared.sanctionsClear,null);
+  assert.equal(await one('select public.wave1_creator_money_subject_authorized_internal($1)',[creator.id]),false,
+   'pending creator does not acquire live authority');
+  assert.equal(await one("select private.ordinary_creator_subject_for_mode($1,'sandbox')",[creator.id]),true);
   await db.query(`insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes,vip_access_required)
    values($1::uuid,$2::uuid,'SYNTHETIC Stripe video','public','clean','cloudflare_r2','chillywood-media-origin',$2::uuid::text||'/'||$1::uuid::text||'/source.mp4',$2::uuid::text||'/'||$1::uuid::text||'/source.mp4','video/mp4',1024,false)`,[video,creator.id]);
   await db.query("update public.videos set scan_status='clean',scan_provider='pgtap',scan_result='clean',scanned_at=clock_timestamp() where id=$1",[video]);
   // Exercise the actual creator RPC under the authenticated role, not an owner insert.
   const pricing=(actor,amount,currency='usd',paid=true)=>withCommerceActor(db,actor,()=>one(
     'select public.set_my_stripe_sandbox_video_price($1::uuid,$2::integer,$3::text,$4::boolean)',[video,amount,currency,paid]));
+  // Mode-aware admission retains the money-off boundary, even for authoring.
+  await db.exec("update public.platform_money_kill_switches set state='on' where key='live_money_enabled'");
+  await assert.rejects(()=>pricing(creator,1000),/creator_mode_changed|creator_sandbox_authority_required/);
+  await db.exec("update public.platform_money_kill_switches set state='off' where key='live_money_enabled'");
   const price=await pricing(creator,1000);assert.equal(price.status,'saved');assert.equal(price.revision,1);
+  const sourceCurrent=()=>one('select private.stripe_video_source_current($1,$2)',[video,creator.id]);
+  assert.equal(await sourceCurrent(),true);
+  for(const flag of ['live_money_enabled','payouts_enabled','cashout_enabled']) {
+   await db.query("update public.platform_money_kill_switches set state='on' where key=$1",[flag]);
+   assert.equal(await sourceCurrent(),false,`${flag} disables sandbox source authority`);
+   await db.query("update public.platform_money_kill_switches set state='off' where key=$1",[flag]);
+  }
+  await db.query("update public.wave1_creator_eligibility set kyc_complete=false where creator_user_id=$1",[creator.id]);
+  assert.equal(await sourceCurrent(),false,'explicit adverse verification is not pending/unknown');
+  await db.query("update public.wave1_creator_eligibility set kyc_complete=null where creator_user_id=$1",[creator.id]);
+  await db.query("update auth.sessions set not_after=now()-interval '1 minute' where id=$1",[creator.session]);
+  assert.equal(await sourceCurrent(),false,'expired creator session invalidates source');
+  await db.query('update auth.sessions set not_after=null where id=$1',[creator.session]);
+  assert.equal(await sourceCurrent(),true);
   const otherCreator={id:randomUUID(),session:randomUUID()};await seedQualifiedCommerceCreator(db,otherCreator);
   await assert.rejects(()=>pricing(otherCreator,1000),/creator_pricing_owner_required/);
   for(const amount of [0,49,100000000,null])await assert.rejects(()=>pricing(creator,amount),/creator_pricing_amount_out_of_range/);

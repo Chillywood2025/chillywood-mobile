@@ -36,7 +36,7 @@ language sql stable security definer set search_path='' as $$
  select exists(select 1 from public.videos v where v.id=p_video_id and v.owner_id=p_creator_id
  and v.visibility='public' and coalesce(v.moderation_status,'clean') in ('clean','reported')
  and v.quarantined_at is null and v.scan_status='clean')
- and public.wave1_creator_money_subject_authorized_internal(p_creator_id)
+ and private.ordinary_creator_subject_for_mode(p_creator_id,'sandbox')
 $$;
 revoke all on function private.stripe_video_source_current(uuid,uuid) from public,anon,authenticated,service_role;
 
