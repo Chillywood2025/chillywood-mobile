@@ -118,7 +118,7 @@ test('native commerce fixture preflight: canonical creator Premium, Free buyers,
    assert.equal(await query("select coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb) from public.access_grants g"),grants,'creation and pending intents cannot add or alter access grants');
    await noBuyerPremium();
   });
-  await t.test('tip cross-rail fixture admits exact source quotes while Free buyers gain no content',async()=>{
+  await t.test('current tip fixture rejects new Stripe quotes while native admission gives Free buyers no content',async()=>{
    await query(read('tests/fixtures/creator-external-payment-capabilities.sql'));
    const tip=randomUUID(),action=randomUUID(),buyer=actors.buyer9;
    const quote={tipId:tip,creatorId:actors.creator.id,amountCents:299,currency:'usd',privateNote:null,providerAccountId:'acct_fixture',
@@ -128,8 +128,15 @@ test('native commerce fixture preflight: canonical creator Premium, Free buyers,
      'payment_method_types[0]':'card',mode:'payment',expires_at:Math.floor(Date.now()/1000)+3600}};
    const intent=await rpc(actors.buyer10,`public.create_ios_app_store_purchase_intent('com.chillywood.tip.tier2','creator_tip','${actors.creator.id}','{}')`);
    assert.ok(intent.id);
-   const attempt=await rpc(buyer,`public.reserve_creator_tip_checkout_attempt('${buyer.id}','${buyer.session}','${action}',${lit(JSON.stringify(quote))}::jsonb)`,'service_role');
-   assert.ok(attempt);
+   // Historical Stripe admission is covered by the explicit pre-cutover
+   // runner. This fixture replays the current schema, including the cutoff.
+   await assert.rejects(rpc(buyer,`public.reserve_creator_tip_checkout_attempt('${buyer.id}','${buyer.session}','${action}',${lit(JSON.stringify(quote))}::jsonb)`,'service_role'),/native_tip_checkout_required/u);
+   assert.equal(await query(`select count(*) from public.creator_tip_transactions where id='${tip}'`),'0');
+   assert.equal(await query(`select count(*) from private.creator_tip_checkout_attempts where buyer_id='${buyer.id}' and request_id='${action}'`),'0');
+   assert.equal(await query(`select count(*) from private.creator_tip_action_claims where buyer_id='${buyer.id}' and action_id='${action}'`),'0');
+   const retryNative=await rpc(buyer,`public.create_ios_app_store_purchase_intent('com.chillywood.tip.tier2','creator_tip','${actors.creator.id}','{}')`);
+   await rpc(buyer,`public.begin_creator_money_checkout('${retryNative.id}','${action}')`);
+   assert.equal(await query(`select provider from private.creator_tip_action_claims where buyer_id='${buyer.id}' and action_id='${action}'`),'revenuecat_app_store');
    assert.equal(await query("select coalesce(jsonb_agg(to_jsonb(g) order by id),'[]'::jsonb) from public.access_grants g"),grants);
    await noBuyerPremium();
   });

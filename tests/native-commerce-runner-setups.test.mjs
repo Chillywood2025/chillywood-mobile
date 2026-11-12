@@ -118,13 +118,17 @@ test('registered native commerce runner setups and late INSERT factories execute
     nativeSpan(source,'  const id=run(a,\'authenticated\',`select public.request_sandbox_creator_cashout(189', "  if(outcome==='rollback'){"),
    ],`assert.equal(query("select phase from private.sandbox_cashout_executions where id='"+id+"'"),'prepared');invariants(a);`);
   });
-  await check('tip cross-rail actual source factories admit Free buyers through each rail',async()=>{
+  await check('current tip source factories reject Stripe without blocking native Free buyers',async()=>{
    await seedCommerceCreator(commerceSeedAdapter(db.query),commerceActor());
    await run('tip-cross-rail-concurrency-postgres',source=>[
     nativeSpan(source,'  const baselineAccessGrants=query(accessGrantsSnapshotSql);','  let checks=0;'),
     ...['quote','external','native','verify'].map(name=>nativeFunction(source,name)),
-   ],`const action=randomUUID(),tip=randomUUID(),stripe=external('buyer1',action,tip);rpc('buyer1',stripe.sql,stripe.role);
-    verify('buyer1',action,null,tip,'stripe_connect');
+   ],`assert.equal(query("select to_regprocedure('private.reject_new_stripe_tip_admission()') is not null"),'t','current-schema cutoff is installed');
+    const action=randomUUID(),tip=randomUUID(),stripe=external('buyer1',action,tip);
+    assert.throws(()=>rpc('buyer1',stripe.sql,stripe.role),/native_tip_checkout_required/u);
+    verify('buyer1',action,null,tip,null);
+    const retryNative=native('buyer1',action);rpc('buyer1',retryNative.sql);
+    verify('buyer1',action,retryNative,tip,'revenuecat_app_store');
     const nativeAction=randomUUID(),appStore=native('buyer2',nativeAction);rpc('buyer2',appStore.sql);
     verify('buyer2',nativeAction,appStore,null,'revenuecat_app_store');
     assert.equal(query(inheritedAccessGrantsSql),baselineAccessGrants);assert.equal(query(accessGrantsSnapshotSql),raceAccessGrants);
