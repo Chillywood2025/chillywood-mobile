@@ -144,6 +144,19 @@ test('revoked external capability blocks new dispatch but preserves known-sessio
   assert.equal(known.calls[1].method,'GET');assert.equal(receipt.body.checkoutCreated,false);assert.equal(receipt.body.url,null);
 });
 
+test('native-only cutoff retains unknown historical outcome without retry POST or lost payment record',async()=>{
+  const h=harness();h.set({failAfterAccept:true});await h.run();
+  const original=copy(h.attempt());assert.equal(original.providerSessionId,null);
+  h.set({routeAllowed:false});
+  for(let retry=0;retry<2;retry++){
+    const result=await h.run();
+    assert.equal(result.body.status,'reconciliation_required');
+    assert.equal(result.body.url,null);assert.equal(result.body.checkoutCreated,false);
+    assert.deepEqual(h.attempt(),original,'cutoff never erases or marks unknown payment failed');
+  }
+  assert.equal(h.calls.length,1,'only pre-cutoff provider request exists');
+});
+
 test('custom checkout accepts only integer number cents, never coercing request strings or fractional values',async()=>{
   for(const amount_cents of ['300','3e2',300.5,Number.MAX_SAFE_INTEGER+1,0,-1]){
     const h=harness();const result=await h.run({amount_cents});assert.equal(result.status,400);assert.equal(h.calls.length,0);

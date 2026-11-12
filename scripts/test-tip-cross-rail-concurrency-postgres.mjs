@@ -121,6 +121,12 @@ try{
     if(tip){assert.equal(query(`select count(*) from public.creator_tip_transactions where id='${tip}'`),provider==='stripe_connect'?'1':'0');
       assert.equal(query(`select count(*) from private.creator_tip_checkout_attempts where buyer_id='${actors[who].id}' and request_id='${action}'`),provider==='stripe_connect'?'1':'0');}
   }
+  const nativeOnly=query("select to_regprocedure('private.reject_new_stripe_tip_admission()') is not null")==='t';
+  if(process.env.TIP_SCHEMA_EXPECTATION){
+    assert.ok(['historical','current'].includes(process.env.TIP_SCHEMA_EXPECTATION));
+    assert.equal(nativeOnly,process.env.TIP_SCHEMA_EXPECTATION==='current','explicit CI tip schema phase');
+  }
+  if(!nativeOnly) {
   for(const [index,[nativeFirst,sameAction]] of [[true,true],[false,true],[true,false],[false,false]].entries()) {
     const who=`buyer${index+1}`,nativeAction=randomUUID(),stripeAction=sameAction?nativeAction:randomUUID();
     const tip=randomUUID(),n=native(who,nativeAction),s=external(who,stripeAction,tip);
@@ -155,13 +161,42 @@ try{
   verify(who,action,null,tip,'stripe_connect');
   const gateChecks=await runTipCommerceGateRaces({query,session,until,lit,actors});
   assert.equal(gateChecks,16);
+  } else {
+    // Latest schema: no old client may win a new Stripe action. Keep actual
+    // native/advisory contention rather than reviving historical admission.
+    for(const [index,sameAction] of [true,false].entries()) {
+      const who=`buyer${index+1}`,action=randomUUID(),tip=randomUUID();
+      const n=native(who,action),s=external(who,sameAction?action:randomUUID(),tip);
+      await race(`native-only ${sameAction?'same':'different'} action`,who,n,s,'native_tip_checkout_required|tip_action_route_conflict|tip_prior_payment_unresolved');
+      verify(who,action,n,tip,'revenuecat_app_store');
+      assert.equal(query(`select count(*) from private.creator_tip_checkout_attempts where buyer_id='${actors[who].id}'`),'0');
+    }
+    for(const [index,abandonFirst] of [true,false].entries()) {
+      const who=`buyer${index+3}`,action=randomUUID(),n=native(who,action),stop=abandon(action);
+      await race(`native-only abandon ${abandonFirst?'first':'last'}`,who,abandonFirst?stop:n,abandonFirst?n:stop,abandonFirst?'tip_action_abandoned':null);
+      verify(who,action,n,null,abandonFirst?null:'revenuecat_app_store');
+    }
+    const who='buyer5',action=randomUUID(),tip=randomUUID(),s=external(who,action,tip);
+    const denied=docker(args(),call(who,s.sql,s.role));
+    assert.notEqual(denied.status,0);assert.match(denied.stderr,/native_tip_checkout_required/);
+    verify(who,action,null,tip,null);
+    const n=native(who,action);rpc(who,n.sql,n.role);
+    verify(who,action,n,tip,'revenuecat_app_store');
+    const foreign=external('buyer6',randomUUID(),randomUUID(),299,actors.buyer10.session);
+    const wrong=docker(args(),call('buyer6',foreign.sql,foreign.role));
+    assert.notEqual(wrong.status,0);assert.match(wrong.stderr,/tip_buyer_authority_required/);
+    assert.equal(checks,4);
+    console.log('Current native-only tips: 4 observed native advisory-lock races; rejected Stripe insertion leaves no orphan/action claim and does not block native admission.');
+  }
   assert.ok(query(inheritedAccessGrantsSql)===baselineAccessGrants,'tip attempts never remove or modify any exact inherited grant row');
   assert.ok(query(accessGrantsSnapshotSql)===raceAccessGrants,'tip attempts never add, remove or modify access grants');
   assert.equal(query("select count(*) from public.access_grants where user_id in(select user_id from event_reservation_fixture.actors where kind like 'buyer%')"),
     '0','Free tip buyers never gain content access from attempts');
+  if(!nativeOnly) {
   assert.equal(checks,9);
-  console.log('Tip actions: 9 observed native PostgreSQL advisory-lock races plus invalid-session rejection; synthetic providers only.');
-  console.log('Tip entry gates: 16 additional observed canonical gate schedules, including retired receipts and both transaction outcomes.');
+  console.log('Historical tip actions: 9 observed native PostgreSQL advisory-lock races plus invalid-session rejection; synthetic providers only.');
+  console.log('Historical tip entry gates: 16 additional observed canonical gate schedules, including retired receipts and both transaction outcomes.');
+  }
 }finally{
   for(const s of sessions)if(s.child.exitCode===null){s.child.stdin.end('rollback;\n');s.child.kill('SIGTERM');}
   try{if(cloned)success(docker(['exec',container,'dropdb','-U','postgres','--if-exists','--force',database]),'drop generated clone');}

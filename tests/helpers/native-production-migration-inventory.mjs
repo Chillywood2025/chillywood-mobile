@@ -13,4 +13,10 @@ export const nativeProductionMigrationFiles=Object.freeze([
  // Forward convergence depends on the current production wrapper topology;
  // historical pre-production checkpoints must not apply it prematurely.
  '20261112041003_automatic_eligibility_current_topology.sql',
+ // The frozen automatic-commerce fixture predates native-only tip admission.
+ // Current-schema tests still apply this cutoff and prove native admission.
+ '20261112091500_native_only_tip_admission.sql',
+ // Catalog identity convergence belongs to the current full-schema topology,
+ // not historical checkpoints that predate native tip ownership.
+ '20261112103000_android_sandbox_tip_provider_identity.sql',
 ]);

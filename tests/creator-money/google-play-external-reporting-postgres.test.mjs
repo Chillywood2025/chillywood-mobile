@@ -9,7 +9,8 @@ import {loadGoogleRefundModule,googleRefundFixture,googleHistoryClient,googleVer
 const {googlePrice}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-external-reporting.ts');
 
 test('private Google obligations lease/reconcile idempotently without financial authority or fabricated tax', {timeout:240000}, async()=>{
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
+  const cutoff='20261112091500_native_only_tip_admission.sql';
+  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:[cutoff]});
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   try {
     await db.exec(fs.readFileSync('tests/fixtures/event-reservation-authority.sql','utf8'));
@@ -56,6 +57,8 @@ test('private Google obligations lease/reconcile idempotently without financial 
       'line_items[0][price_data][unit_amount]':237,'payment_intent_data[transfer_data][destination]':'acct_fixture',
       'payment_method_types[0]':'card',mode:'payment',expires_at:Math.floor(Date.now()/1000)+3600}};
     const reserved=await one('select public.reserve_creator_tip_checkout_attempt($1,$2,$3,$4)',[buyer.user_id,buyer.session_id,request,q]);
+    // Reporting/recovery obligations for this historical tip remain after cutoff.
+    await db.exec(fs.readFileSync(`supabase/migrations/${cutoff}`,'utf8'));
     assert.equal(reserved.body['automatic_tax[enabled]'],true,'server-selected Android route freezes automatic tax');
     assert.equal(reserved.body['line_items[0][price_data][tax_behavior]'],'inclusive','chosen amount remains the exact total');
     assert.equal(reserved.body.billing_address_collection,'required');

@@ -30,6 +30,8 @@ const reject = (statement, pattern, message) => {
   console.log(`ok ${++checks} - ${message}`);
 };
 check(sql('select current_database()'), database, 'explicit disposable database');
+check(sql("select to_regprocedure('private.reject_new_stripe_tip_admission()') is null"), 't',
+  'Historical settlement fixture must be prepared before native-tip cutoff; never disable current admission guards');
 check(sql("select to_regprocedure('public.process_stripe_merch_webhook_lifecycle(text,text,text,jsonb)') is not null"), 't', 'forward merch projector is installed');
 check(sql("select pg_get_functiondef('public.process_stripe_tip_webhook_lifecycle(text,uuid,uuid,jsonb,jsonb,jsonb)'::regprocedure) like '%payment_status%'"), 't', 'forward tip payment-status authority is installed');
 check(moneyState(), {live_money_enabled:'off',payouts_enabled:'off'}, 'live money and payouts are off before tests');

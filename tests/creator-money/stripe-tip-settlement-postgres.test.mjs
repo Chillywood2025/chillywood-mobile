@@ -8,7 +8,8 @@ import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce
 // Real reservation, receipt, event lease and atomic projector over the complete
 // local migration chain. Only managed infrastructure is doubled; no provider IO.
 test('Stripe tip settlement requires raw provider authority and survives reorder/retry', {timeout:240_000}, async t => {
-  const {db,replayReport}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+  const cutoff='20261112091500_native_only_tip_admission.sql';
+  const {db,replayReport}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[cutoff]});
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   let checks=0,eventNumber=0;
   const eq=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
@@ -49,6 +50,10 @@ test('Stripe tip settlement requires raw provider authority and survives reorder
       const attempt=randomUUID();eq((await reserve(id,type,attempt)).disposition,'claimed');
       return {id,attempt,result:await project(id,attempt,facts)};
     };
+    // One genuinely historical unresolved attempt survives the migration.
+    // Each scenario replays that identity; all settlement runs post-cutover.
+    await seed({bindSession:false});
+    await db.exec(fs.readFileSync(`supabase/migrations/${cutoff}`,'utf8'));
     const scenario=async(name,body)=>t.test(name,async()=>{await db.exec('begin');try{await body();}finally{await db.exec('rollback');}});
 
     await scenario('unpaid completion binds its exact PI without credit, then delayed paid settlement is idempotent',async()=>{
@@ -234,6 +239,6 @@ test('Stripe tip settlement requires raw provider authority and survives reorder
 
     for(const role of ['anon','authenticated'])eq(await one("select has_function_privilege($1,'public.process_stripe_tip_webhook_lifecycle(text,uuid,uuid,jsonb,jsonb,jsonb)','execute')",[role]),false);
     ok(await one("select has_function_privilege('service_role','public.process_stripe_tip_webhook_lifecycle(text,uuid,uuid,jsonb,jsonb,jsonb)','execute')"));
-    t.diagnostic(`${checks} explicit authority/accounting assertions; ${replayReport.files.length} migrations replayed; managed-infrastructure substitutions=${replayReport.skipped.length}`);
+    t.diagnostic(`${checks} explicit authority/accounting assertions; ${replayReport.files.length} baseline migrations replayed plus native-only cutoff applied; managed-infrastructure substitutions=${replayReport.skipped.length}`);
   } finally {await db.close();}
 });

@@ -248,7 +248,7 @@ test("mounted tip no-charge copy follows the selected test route, never ordinary
   assert.equal(badge(production), undefined, "unsupported production catalog does not acquire test copy");
 });
 
-test("mounted tip no-charge copy waits for a current catalog or exact custom test quote", async t => {
+test("mounted tip no-charge copy waits for the current native catalog and ignores external quotes", async t => {
   const testStatus = { creatorId: "creator", canTip: true, testMode: true, providerEnvironment: "test", liveMoneyEnabled: false };
   const badge = h => [...h.nodes.values()].find(node => node.type === "MoneyStatusChip" && /No real charge/.test(node.props.label));
   const pending = deferred();
@@ -259,92 +259,49 @@ test("mounted tip no-charge copy waits for a current catalog or exact custom tes
   await h.resolve(pending, { status: "resolved", subjectUserId: "buyer", prices: [tipPrice()] });
   assert.ok(badge(h));
   await h.typeAmount("2.37");
-  assert.match(badge(h).props.label, /Test checkout/, "exact custom test quote provides its own payment mode");
+  assert.equal(badge(h), undefined, "external quote cannot advertise a payment mode for native-only tips");
   assert.equal(h.purchases.length, 0); assert.equal(h.external.length, 0);
 });
 
-test("tip cost comparison is read-only and discards stale amount/session responses", async t => {
-  const old=deferred(), calls=[];
-  const h=await mountTip(t,{routeCosts:async(...args)=>{calls.push(args);return calls.length===1?old.promise:{message:'Current comparison unavailable'};}});
-  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
-  await h.typeAmount('2.37');
-  await h.resolve(old,{status:'compared',message:'STALE lowest fee'});
-  assert.doesNotMatch(textOf(h.node('tip-route-cost-status')),/STALE/);
-  assert.equal(calls.at(-1)[1],237);assert.deepEqual(calls.at(-1)[2],[]);
-  await h.switchSession();
-  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
+test("native tip sheet never offers or queries a cheaper external route", async t => {
+  for (const platform of ["ios", "android", "web"]) {
+    let routeReads = 0, customReads = 0;
+    const prices = [tipPrice(platform === "ios" ? { provider: "revenuecat_app_store", platform, providerProductId: "com.chillywood.tip.tier1" } : {})];
+    const h = await mountTip(t, { platform, prices, iosSupported: true, nativeSupported: true,
+      routeCosts: async () => { routeReads++; return { status: "compared", expiresAt: new Date(Date.now()+30000).toISOString() }; },
+      customQuote: async () => { customReads++; return { environment: "test", amountCents: 237, capabilityId: "external" }; },
+      selectLowest: async () => ({ provider: "stripe_connect", actionId: "external-action", purchaseBindingId: "external" }),
+    });
+    for (const amount of ["0.99", "2.37", "0.51"]) {
+      await h.typeAmount(amount);
+      assert.equal(h.node("tip-custom-stripe-checkout"), undefined);
+      assert.equal(h.node("tip-lowest-cost-checkout"), undefined);
+      assert.equal(h.node("tip-route-cost-refresh"), undefined);
+      if (amount !== "0.99" || platform === "web") assert.equal(h.node("tip-confirm-button").props.disabled, true);
+    }
+    await h.switchSession(); await h.render({ visible: false }); await h.render({ visible: true });
+    assert.equal(routeReads, 0); assert.equal(customReads, 0);
+    assert.equal(h.selections.length, 0); assert.equal(h.purchases.length, 0); assert.equal(h.external.length, 0);
+  }
 });
 
-test("tip fee comparison expires without dispatching or switching rails", async t => {
-  const h=await mountTip(t,{routeCosts:async()=>({status:'compared',message:'Verified synthetic comparison',expiresAt:new Date(Date.now()+30).toISOString()})});
-  await React.act(async()=>new Promise(resolve=>setTimeout(resolve,60)));
-  assert.match(textOf(h.node('tip-route-cost-status')),/expired/);
-  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
+test("native checkout stays single flight and suppresses late receipt after close/reopen", async t => {
+  const pending = deferred();
+  const h = await mountTip(t, { purchase: () => pending.promise });
+  const press = h.node("tip-confirm-button").props.onPress;
+  await React.act(async () => { press(); press(); });
+  assert.equal(h.purchases.length, 1); assert.equal(h.external.length, 0);
+  await h.render({ visible: false }); await h.render({ visible: true });
+  await h.resolve(pending, { ok: true, message: "STALE private receipt" });
+  assert.equal(h.node("tip-success-receipt"), undefined);
 });
 
-const qualifiedCosts=async()=>({status:'compared',message:'Synthetic qualified comparison',expiresAt:new Date(Date.now()+30000).toISOString()});
-test("explicit lowest-fee action dispatches only the selected exact native route and never falls back",async t=>{
-  const h=await mountTip(t,{prices:[tipPrice({priceKey:'native-binding'})],routeCosts:qualifiedCosts});
-  await h.press('tip-lowest-cost-checkout');
-  assert.equal(h.selections.length,1);assert.equal(h.selections[0].amountCents,99);
-  assert.equal(h.purchases.length,1);assert.equal(h.purchases[0].selectedActionId,'selected-action');assert.equal(h.purchases[0].amountCents,99);
-  assert.equal(h.external.length,0);
-});
-test("selected Stripe route preserves exact amount and action binding with no native retry",async t=>{
-  const h=await mountTip(t,{nativeSupported:true,routeCosts:qualifiedCosts,
-    selectLowest:async()=>({actionId:'selected-action',provider:'stripe_connect',purchaseBindingId:'capability'})});
-  await h.typeAmount('2.37');await h.press('tip-lowest-cost-checkout');
-  const checkout=h.external.find(x=>x?.amountCents);
-  assert.equal(checkout.amountCents,237);assert.equal(checkout.selectedActionId,'selected-action');assert.equal(checkout.capabilityId,'capability');
-  assert.equal(h.purchases.length,0);
-});
-test('web lowest-cost action quotes the older selected capability rather than reselecting newest',async t=>{
- const reads=[];
- const h=await mountTip(t,{platform:'web',routeCosts:qualifiedCosts,
-  customQuote:async(creatorId,amountCents,capabilityId)=>{reads.push(capabilityId);return {creatorId,amountCents,capabilityId:capabilityId??'newer-expensive'};},
-  selectLowest:async()=>({actionId:'selected-action',provider:'stripe_connect',purchaseBindingId:'older-cheaper'})});
- await h.typeAmount('2.37');await h.press('tip-lowest-cost-checkout');
- const checkout=h.external.find(x=>x?.amountCents);
- assert.equal(checkout.capabilityId,'older-cheaper');assert.equal(checkout.selectedActionId,'selected-action');
- assert.equal(reads.at(-1),'older-cheaper');assert.equal(h.purchases.length,0);
-});
-test("selection uncertainty and close/reopen suppress dispatch; repeated taps remain single flight",async t=>{
-  const pending=deferred();
-  const h=await mountTip(t,{prices:[tipPrice({priceKey:'native-binding'})],routeCosts:qualifiedCosts,selectLowest:()=>pending.promise});
-  const button=h.node('tip-lowest-cost-checkout');
-  await React.act(async()=>{void button.props.onPress();void button.props.onPress();});
-  assert.equal(h.selections.length,1);
-  await h.render({visible:false});await h.render({visible:true});
-  await h.resolve(pending,{actionId:'selected-action',provider:'google_play',purchaseBindingId:'native-binding'});
-  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
-  const denied=await mountTip(t,{routeCosts:qualifiedCosts,selectLowest:async()=>{throw new Error('unknown transport');}});
-  await denied.press('tip-lowest-cost-checkout');assert.equal(denied.purchases.length,0);assert.equal(denied.external.length,0);
-});
-
-test("Android custom tip preserves buyer cents and uses native eligibility/disclosure with no browser fallback", async t => {
-  const h=await mountTip(t,{nativeSupported:true});
-  await h.typeAmount("2.37");await h.press("tip-custom-stripe-checkout");
-  const input=h.external.find(x=>x?.amountCents);
-  assert.equal(input.amountCents,237);assert.equal(input.googlePlay.google_play_external_transaction_token,"native-token");
-  assert.equal(h.external.filter(x=>x?.nativeLaunch).length,1);
-  assert.equal(h.external.filter(x=>typeof x==="string").length,0);
-  assert.equal(h.purchases.length,0);
-  const denied=await mountTip(t,{nativeSupported:true,nativeDenied:true});
-  await denied.typeAmount("0.51");await denied.press("tip-custom-stripe-checkout");
-  assert.equal(denied.external.filter(x=>x?.amountCents||x?.nativeLaunch||typeof x==="string").length,0);
-  const old=await mountTip(t);await old.typeAmount("2.37");
-  assert.equal(old.node("tip-custom-stripe-checkout"),undefined);
-});
-
-test("closing and reopening tip sheet or switching account suppresses late native checkout launch",async t=>{
- for(const action of ["close","switch"]) {
-  const d=deferred(),h=await mountTip(t,{nativeSupported:true,externalCheckout:()=>d.promise});
-  await h.typeAmount("2.37");await h.press("tip-custom-stripe-checkout");
-  if(action==="close"){await h.render({visible:false});await h.render({visible:true});}else await h.switchSession();
-  await h.resolve(d,{checkoutCreated:true,tipId:"tip-synthetic",url:"https://checkout.stripe.com/c/pay/test"});
-  assert.equal(h.external.filter(x=>x?.nativeLaunch||typeof x==="string").length,0,action);
-  assert.equal(h.external.filter(x=>x?.nativeCancel).length,1,action);
- }
+test("native checkout uncertainty never retries through Stripe", async t => {
+  const h = await mountTip(t, { nativeSupported: true, iosSupported: true, purchase: async () => { throw new Error("store unavailable"); } });
+  await h.press("tip-confirm-button");
+  assert.match(h.node("tip-success-receipt").props.body, /could not be confirmed/);
+  assert.equal(h.purchases.length, 1); assert.equal(h.external.length, 0);
+  assert.equal(h.node("tip-custom-stripe-checkout"), undefined);
 });
 
 test("mounted tip catalog reads are bounded across rerenders and reopen, with explicit retry and stale-result cleanup", async t => {
@@ -422,33 +379,15 @@ test("typed iOS exact amount selects its own SKU and does not retain the preset 
   assert.notEqual(h.node("tip-custom-amount").props.value, "2.98");
 });
 
-test("eligible custom amount requires explicit Stripe action and fresh exact capability; never substitutes a SKU", async t => {
-  let available=true;
-  const h=await mountTip(t,{platform:'ios',iosSupported:true,externalCheckout:async()=>{if(!available)throw Error('route retired');return {checkoutCreated:true,tipId:'tip-synthetic',url:'https://checkout.stripe.com/c/pay/test'};},tipStatus:{minAmountCents:100},customQuote:async(creatorId,amountCents)=>available?{
-    creatorId,amountCents,capabilityId:'ef000000-0000-4000-8000-000000000001',platform:'ios',currency:'usd',environment:'test',minAmountMinor:50,maxAmountMinor:100000,
-  }:null});
-  await h.typeAmount('0.51');
-  assert.equal(h.node('tip-confirm-button').props.disabled,true,'store SKU must not be used for arbitrary amount');
-  assert.ok(h.node('tip-custom-stripe-checkout'));assert.equal(h.external.length,0);
-  await h.press('tip-custom-stripe-checkout');
-  assert.equal(h.purchases.length,0);assert.equal(h.external[0].amountCents,51);
-  assert.equal(h.external[0].iosExternal,true,'client helper must freshly admit the storefront before quoting');
-  assert.equal(h.external[1],'https://checkout.stripe.com/c/pay/test');
-  await h.foreground();assert.deepEqual(h.receiptReads,['tip-synthetic']);
-  assert.match(h.node('tip-success-receipt').props.body,/not confirmed yet/,'browser return is not payment confirmation');
-  available=false;await h.press('tip-custom-stripe-checkout');
-  assert.equal(h.external.filter(value=>typeof value==='string').length,1,'retired route cannot open another checkout');
-  await h.switchSession();await h.foreground();assert.equal(h.receiptReads.length,1,'old-session receipt is not refreshed in a replacement session');
-});
-
-test("verified provider minimum is visible without changing the buyer-entered amount", async t => {
-  const h=await mountTip(t,{customAvailability:async()=>({quote:null,message:'Minimum for this verified payment route: $0.50 USD. Your amount has not been changed.'})});
-  await h.typeAmount('0.49');
-  assert.equal(h.node('tip-custom-amount').props.value,'0.49');
-  assert.match(h.node('tip-custom-amount-unavailable').props.children,/\$0\.50 USD/);
-  assert.equal(h.node('tip-confirm-button').props.disabled,true);
-  assert.equal(h.node('tip-custom-stripe-checkout'),undefined);
-  assert.equal(h.purchases.length,0);assert.equal(h.external.length,0);
+test("unavailable native amount is preserved without querying external minimums", async t => {
+  let externalReads = 0;
+  const h = await mountTip(t, { customAvailability: async () => { externalReads++; return { quote: null, message: "External minimum" }; } });
+  await h.typeAmount("0.49");
+  assert.equal(h.node("tip-custom-amount").props.value, "0.49");
+  assert.match(h.node("tip-custom-amount-unavailable").props.children, /not available through this store/);
+  assert.equal(h.node("tip-confirm-button").props.disabled, true);
+  assert.equal(h.node("tip-custom-stripe-checkout"), undefined);
+  assert.equal(externalReads, 0); assert.equal(h.purchases.length, 0); assert.equal(h.external.length, 0);
 });
 
 test("mounted tip chooser does not advertise unmapped amounts or another buyer's catalog", async t => {
@@ -477,9 +416,8 @@ test('native-only Sandbox tip capability enables store checkout while external c
   assert.equal(h.node('tip-confirm-button').props.disabled,false);
   await h.press('tip-confirm-button');assert.equal(h.purchases.length,1);assert.equal(h.external.length,0);
   await h.typeAmount('2.37');
-  assert.equal(h.node('tip-custom-stripe-checkout').props.disabled,true);
-  await React.act(async()=>h.node('tip-custom-stripe-checkout').props.onPress());
-  assert.equal(h.external.length,0,'even a stale external button callback cannot consume native-only authority');
+  assert.equal(h.node('tip-custom-stripe-checkout'),undefined);
+  assert.equal(h.external.length,0,'native-only capability cannot expose external checkout');
  }
  const wrong=await mountTip(t,{tipStatus:{canTip:false,nativeSandboxAvailable:true,creatorId:'other-creator'}});
  assert.equal(wrong.node('tip-confirm-button').props.disabled,true);

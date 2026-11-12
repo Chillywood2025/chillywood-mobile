@@ -9,6 +9,8 @@ assert.match(container??'',/^chillywood-event-offer-audit-[a-z0-9-]+$/);
 const args=['exec','-i',container,'psql','-X','-h','/tmp','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1','-Atq'];
 const sql=input=>execFileSync('docker',args,{input,encoding:'utf8',timeout:60_000}).trim();
 assert.equal(sql("select to_regclass('event_reservation_fixture.actors')"),'event_reservation_fixture.actors');
+assert.equal(sql("select to_regprocedure('private.reject_new_stripe_tip_admission()') is null"),'t',
+  'Historical Stripe dispatch race requires a genuine pre-cutover disposable replay; never disable current cutoff triggers to seed it.');
 if(!sql("select to_regprocedure('public.reserve_creator_tip_checkout_attempt(uuid,uuid,uuid,jsonb)')"))
   sql(fs.readFileSync(new URL('../supabase/migrations/20261026175927_creator_tip_checkout_retry_quotes.sql',import.meta.url),'utf8'));
 const actors=[{user:randomUUID(),session:randomUUID()},{user:randomUUID(),session:randomUUID()}];

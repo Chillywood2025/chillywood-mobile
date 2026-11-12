@@ -5,8 +5,9 @@ import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
-test('older cheaper external selection survives exact iOS/Android admission, quote and dispatch; invalid routes never fall back',{timeout:240000},async()=>{
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+test('historical pre-native-only external selection preserves exact iOS/Android quote and dispatch; invalid routes never fall back',{timeout:1200000},async()=>{
+ // Historical dispatch contract; current cutoff is tested separately against the full chain.
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:['20261112091500_native_only_tip_admission.sql']});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));

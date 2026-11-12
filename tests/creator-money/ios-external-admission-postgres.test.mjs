@@ -55,9 +55,9 @@ for(const implicitApiGrants of [false,true]) test(`iOS exact storefront observat
   } finally {await db.close();}
 });
 
-test('iOS final-thirty-minute admission resumes bound checkout but cannot create a short new checkout',{timeout:240000},async()=>{
+test('historical pre-native-only iOS final-thirty-minute admission resumes bound checkout but cannot create a short new checkout',{timeout:1200000},async()=>{
   const realDateNow=Date.now;
-  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false});
+  const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,implicitApiGrants:false,excludeMigrations:['20261112091500_native_only_tip_admission.sql']});
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   try {
     for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority'])
