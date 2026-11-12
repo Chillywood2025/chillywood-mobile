@@ -39,7 +39,7 @@ export async function bindStripeSandboxPlaybackWorker(input:{endpoint:string;hea
   const done=()=>{clearTimeout(timer);channel.port1.close();input.signal.removeEventListener('abort',cancel);};
   const cancel=()=>{done();reject(Error('playback_cancelled'));};
   const timer=setTimeout(()=>{done();reject(Error('playback_worker_unavailable'));},10000);
-  channel.port1.onmessage=event=>{done();event.data?.ok?resolve():reject(Error('playback_worker_unavailable'));};
+  channel.port1.onmessage=event=>{done();if(event.data?.ok)resolve();else reject(Error('playback_worker_unavailable'));};
   input.signal.addEventListener('abort',cancel,{once:true});
   worker.postMessage({action:'bind',id,endpoint:input.endpoint,descriptor:input.descriptor,authorization:input.headers.Authorization,apikey:input.headers.apikey,sessionId:input.headers['X-Chillywood-Auth-Session']},[channel.port2]);
   if(input.signal.aborted)cancel();

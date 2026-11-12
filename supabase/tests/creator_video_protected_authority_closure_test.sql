@@ -20,6 +20,15 @@ select ok(
   and pg_get_functiondef('public.resolve_creator_content_access_pre_subscription_doctrine(text,uuid)'::regprocedure)
     ilike '%v_vip->>''reason''=''vip_active''%'
   and pg_get_functiondef('public.resolve_creator_content_access(text,uuid)'::regprocedure)
+    ilike '%resolve_creator_content_access_before_stripe_video(p_content_type,p_content_id)%'
+  and not has_function_privilege('anon','public.resolve_creator_content_access_before_stripe_video(text,uuid)','EXECUTE')
+  and not has_function_privilege('authenticated','public.resolve_creator_content_access_before_stripe_video(text,uuid)','EXECUTE')
+  and not has_function_privilege('service_role','public.resolve_creator_content_access_before_stripe_video(text,uuid)','EXECUTE')
+  and pg_get_functiondef('public.resolve_creator_content_access_before_stripe_video(text,uuid)'::regprocedure)
+    ilike '%resolve_creator_content_access_before_native_checkout%'
+  and pg_get_functiondef('public.resolve_creator_content_access_before_native_checkout(text,uuid)'::regprocedure)
+    ilike '%resolve_creator_content_access_pre_subscription_doctrine%'
+  and pg_get_functiondef('public.resolve_creator_content_access_before_stripe_video(text,uuid)'::regprocedure)
     ilike '%creator_video_subscription_access_internal%'
   and pg_get_functiondef('public.creator_video_subscription_access_internal(uuid)'::regprocedure)
     ilike '%not coalesce(video."vip_access_required",false)%',

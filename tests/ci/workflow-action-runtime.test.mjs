@@ -86,6 +86,11 @@ const mirrorPrerequisite = {
   run: 'node scripts/ci/prefer-official-ubuntu-mirror.mjs /etc/apt/apt-mirrors.txt > "$RUNNER_TEMP/ubuntu-mirrors.txt"\n'
     + 'sudo install -m 0644 "$RUNNER_TEMP/ubuntu-mirrors.txt" /etc/apt/apt-mirrors.txt\n',
 };
+const sandboxStreamingCheck = {
+  name: "Verify sandbox streaming in the installed browser",
+  "timeout-minutes": 20,
+  run: "node scripts/test-stripe-sandbox-worker-browser.mjs",
+};
 function assertProjectRuntimeContract(workflows) {
   let sdkTails = 0, configuredVersions = 0;
   for (const { name, source } of workflows) {
@@ -95,7 +100,9 @@ function assertProjectRuntimeContract(workflows) {
       const job = structuredClone(sourceJob);
       const isolated = name === "required-validation.yml" && jobName === "product";
       if (isolated) {
-        assert.equal(job.steps.length, 11, "Only the exact reviewed mirror prerequisite may extend the ten-step Product contract");
+        assert.equal(job.steps.length, 12, "Only the exact mirror prerequisite and sandbox browser check may extend the ten-step Product contract");
+        assert.deepEqual(job.steps[7], sandboxStreamingCheck, "Sandbox streaming proof must retain its exact command, timeout and failure semantics");
+        job.steps.splice(7, 1);
         assert.deepEqual(job.steps[4], mirrorPrerequisite, "Mirror preference must precede installation and cannot skip, suppress or change commands");
         // Validate the one added prerequisite first, then preserve the complete
         // original ten-step/hash/runtime contract without changing its digest.
@@ -163,10 +170,28 @@ for (const [label, mutate] of runtimeMutations) {
     const workflows = readWorkflows();
     const entry = workflows.find(item => item.name === "required-validation.yml");
     const parsed = parse(entry.source);
+    const [streaming] = parsed.jobs.product.steps.splice(7, 1);
     const [mirror] = parsed.jobs.product.steps.splice(4, 1);
     mutate(parsed.jobs.product);
     parsed.jobs.product.steps.splice(4, 0, mirror);
+    parsed.jobs.product.steps.splice(7, 0, streaming);
     // JSON is valid YAML; exercise the same parser and contract on real workflow mutations.
+    entry.source = JSON.stringify(parsed);
+    assert.throws(() => assertProjectRuntimeContract(workflows), { code: "ERR_ASSERTION" });
+  });
+}
+for (const [label, mutate] of [
+  ["missing", job => { job.steps.splice(7, 1); }],
+  ["skipped", job => { job.steps[7].if = "false"; }],
+  ["failure suppressed", job => { job.steps[7]["continue-on-error"] = true; }],
+  ["command replaced", job => { job.steps[7].run = "echo skipped"; }],
+  ["timeout shortened", job => { job.steps[7]["timeout-minutes"] = 1; }],
+]) {
+  test(`runtime contract rejects sandbox streaming ${label}`, () => {
+    const workflows = readWorkflows();
+    const entry = workflows.find(item => item.name === "required-validation.yml");
+    const parsed = parse(entry.source);
+    mutate(parsed.jobs.product);
     entry.source = JSON.stringify(parsed);
     assert.throws(() => assertProjectRuntimeContract(workflows), { code: "ERR_ASSERTION" });
   });
