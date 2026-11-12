@@ -18,9 +18,30 @@ const videoCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scr
 const profileCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-profile-engagement-concurrency.mjs';
 const socialDeployCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-social-engagement-exact-deploy-postgres.mjs';
 const capacityCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-paid-party-capacity-concurrency-postgres.mjs';
+const tipCommand='SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-tip-cross-rail-concurrency-postgres.mjs';
+const currentTipCommand=`TIP_SCHEMA_EXPECTATION=current ${tipCommand}`;
+const historicalTipBlock=`# Preserve historical Stripe admission/gate races on a genuine schema
+# boundary. Never disable current admission triggers to seed old tips.
+# This is one additional local DB reset, not a second Product suite.
+supabase db reset --local --version 20261112041003
+node scripts/with-local-ci-cron-paused.mjs <<'HISTORICAL_TIP_PROOFS'
+TIP_SCHEMA_EXPECTATION=historical ${tipCommand}
+HISTORICAL_TIP_PROOFS`;
 const contractHash=contract=>createHash('sha256').update(JSON.stringify(contract)).digest('hex');
 const rebuildStep=job=>job.steps.find(step=>step.name==='Rebuild and test the local database');
 const assertJob=job=>{
+ // Review the new historical/current schema boundary independently, then
+ // recover the unchanged prior contract rather than replacing its fingerprint.
+ const allLines=job.steps.flatMap(step=>(step.run??'').split('\n'));
+ assert.equal(allLines.filter(line=>line===`TIP_SCHEMA_EXPECTATION=historical ${tipCommand}`).length,1);
+ assert.equal(allLines.filter(line=>line===currentTipCommand).length,1);
+ assert.equal(allLines.filter(line=>line===tipCommand).length,0);
+ const tipsNormalized=structuredClone(job),tipStep=rebuildStep(tipsNormalized);
+ assert.equal(tipStep.run.split(historicalTipBlock).length,2);
+ assert.ok(tipStep.run.includes('SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-chat-activity-upgrade-postgres.mjs\n'+historicalTipBlock+'\nsupabase migration up --local\n'));
+ assert.ok(tipStep.run.includes('SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-auction-transfer-concurrency-postgres.mjs\n'+currentTipCommand+'\nSUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-merch-tracking-concurrency-postgres.mjs'));
+ tipStep.run=tipStep.run.replace(historicalTipBlock+'\n','').replace(currentTipCommand,tipCommand);
+ job=tipsNormalized;
  assert.equal(job.steps.flatMap(step=>(step.run??'').split('\n')).filter(line=>line===capacityCommand).length,1);
  const capacityNormalized=structuredClone(job),capacityStep=rebuildStep(capacityNormalized),capacityLines=capacityStep.run.split('\n');
  const capacityPosition=capacityLines.indexOf(capacityCommand);
@@ -60,6 +81,19 @@ const assertJob=job=>{
  assert.equal(contractHash(contract),contractSha256,
   'the complete reviewed Database contract includes the required cutover proof');
 };
+
+test('native-only tip phases preserve prior workload and reject missing or weakened schema proofs',()=>{
+ assertJob(workflow.jobs.database);
+ for(const mutate of [
+  job=>{rebuildStep(job).run=rebuildStep(job).run.replace(historicalTipBlock+'\n','');},
+  job=>{rebuildStep(job).run=rebuildStep(job).run.replace('20261112041003','20261112091500');},
+  job=>{rebuildStep(job).run=rebuildStep(job).run.replace('TIP_SCHEMA_EXPECTATION=historical','TIP_SCHEMA_EXPECTATION=current');},
+  job=>{rebuildStep(job).run=rebuildStep(job).run.replace(currentTipCommand,currentTipCommand+' || true');},
+  job=>{rebuildStep(job).run=rebuildStep(job).run.replace(currentTipCommand,currentTipCommand+'\n'+currentTipCommand);},
+  job=>{rebuildStep(job).run=rebuildStep(job).run.replace(currentTipCommand,tipCommand);},
+  job=>{rebuildStep(job).run=rebuildStep(job).run.replace(historicalTipBlock+'\n','')+historicalTipBlock+'\n';},
+ ]){const mutant=structuredClone(workflow.jobs.database);mutate(mutant);assert.throws(()=>assertJob(mutant),assert.AssertionError);}
+});
 
 test('paid-party capacity concurrency proof is mandatory, singular and preserves prior contract',()=>{
  assertJob(workflow.jobs.database);
