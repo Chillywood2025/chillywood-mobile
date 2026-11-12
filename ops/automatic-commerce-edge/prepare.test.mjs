@@ -9,7 +9,9 @@ import {manifest,prepare,classifyCapture} from './prepare.mjs';
 import {sha256} from '../creator-backend-rollout/prepare-edge.mjs';
 const ROOT=fileURLToPath(new URL('../../',import.meta.url));
 const fixture=JSON.parse(fs.readFileSync(path.join(ROOT,'tests/fixtures/automatic-commerce-edge/baseline.json'),'utf8'));
-const read=p=>fs.existsSync(path.join(ROOT,p))?fs.readFileSync(path.join(ROOT,p),'utf8'):null;
+const application=JSON.parse(fs.readFileSync(path.join(ROOT,'tests/fixtures/automatic-commerce-edge/application-source.json'),'utf8'));
+const read=p=>Object.hasOwn(application.files,p)?application.files[p]:null;
+const readCurrent=p=>fs.existsSync(path.join(ROOT,p))?fs.readFileSync(path.join(ROOT,p),'utf8'):null;
 const capture=(entry,final=false)=>({id:entry.functionId,slug:entry.name,name:entry.name,status:'ACTIVE',
   version:entry.baselineVersion+(final?1:0),verify_jwt:entry.verifyJwt,import_map:false,
   entrypoint_path:`/tmp/captured/source/supabase/functions/${entry.name}/index.ts`,
@@ -17,6 +19,10 @@ const capture=(entry,final=false)=>({id:entry.functionId,slug:entry.name,name:en
     content:final?read(f.path):fixture.files[f.path]}))});
 
 test('fixture binds exact observed pre-PR source without a Git-history or provider dependency',()=>{
+  assert.equal(application.schema,1);assert.equal(application.source,manifest.applicationSource);assert.equal(application.tree,manifest.applicationTree);
+  assert.deepEqual(Object.keys(application.files).sort(),[...new Set(manifest.endpoints.flatMap(e=>e.sourceFiles.map(f=>f.path)))].sort());
+  for(const entry of manifest.endpoints)for(const file of entry.sourceFiles)
+    assert.equal(sha256(read(file.path)),file.sha256,file.path);
   assert.equal(fixture.schema,1);assert.equal(fixture.source,manifest.baselineSource);
   assert.deepEqual(Object.keys(fixture.files).sort(),[...new Set(manifest.endpoints.flatMap(e=>e.baselineFiles.map(f=>f.path)))].sort());
   for(const entry of manifest.endpoints)for(const file of entry.baselineFiles)
@@ -64,6 +70,10 @@ test('baseline mutations reject after a genuine passing baseline',()=>{
 test('modified or additional application source cannot be prepared',async()=>{
   const entry=manifest.endpoints[0],before=capture(entry);
   assert.ok(await prepare(entry.name,before,read));
+  const changed=manifest.endpoints.find(e=>e.sourceFiles.some(f=>f.path==='supabase/functions/_shared/creator-cashout-execution.ts'));
+  assert.ok(changed);
+  assert.notEqual(sha256(readCurrent('supabase/functions/_shared/creator-cashout-execution.ts')),sha256(read('supabase/functions/_shared/creator-cashout-execution.ts')));
+  await assert.rejects(()=>prepare(changed.name,capture(changed),readCurrent),/EDGE_SOURCE_CLOSURE_MISMATCH/);
   await assert.rejects(()=>prepare(entry.name,before,p=>p.endsWith('/index.ts')?read(p)+'\n':read(p)),/EDGE_SOURCE_CLOSURE_MISMATCH/);
   await assert.rejects(()=>prepare(entry.name,before,p=>p==='supabase/functions/deno.json'?'{}':read(p)),/EDGE_SOURCE_CLOSURE_MISMATCH/);
   await assert.rejects(()=>prepare('creator-provider-observation-worker',before,read),/EDGE_TARGET_NOT_AUTHORIZED/);
@@ -79,7 +89,8 @@ test('CLI rejects hidden tooling mutations before executing an unverified helper
   const git=(...args)=>{const result=run('git',args);assert.equal(result.status,0,result.stderr);return result.stdout.trim();};
   try{
     for(const file of files){fs.mkdirSync(path.dirname(path.join(directory,file)),{recursive:true});
-      fs.copyFileSync(path.join(ROOT,file),path.join(directory,file));}
+      if(Object.hasOwn(application.files,file))fs.writeFileSync(path.join(directory,file),read(file));
+      else fs.copyFileSync(path.join(ROOT,file),path.join(directory,file));}
     fs.symlinkSync(path.join(ROOT,'node_modules'),path.join(directory,'node_modules'),'dir');
     git('init','-q');git('add','--',...files);
     git('-c','user.name=Local fixture','-c','user.email=fixture@example.invalid','-c','core.hooksPath=/dev/null',
