@@ -10,7 +10,7 @@ function handler({enabled='true',configured=true,result={data:{status:'HELD',acc
  new Function('Deno','readOptionalEnv','jsonResponse','readCashoutBody','createAdminClient',code)(
   {serve:fn=>{serve=fn;}},name=>name==='SUPABASE_SERVICE_ROLE_KEY'?'synthetic-service':enabled,
   (status,data)=>new Response(JSON.stringify(data),{status}),async stream=>new Response(stream).text(),
-  ()=>({configured,client:{rpc:async(name,args)=>{calls.push({name,args});return result;}}}));
+  ()=>({configured,client:{rpc:(name,args)=>{calls.push({name,args});return {abortSignal:async signal=>{assert.ok(signal instanceof AbortSignal);return result;}};}}}));
  const run=async({method='POST',auth='Bearer synthetic-service',body={keyId:'12345678-1234-4234-8234-123456789abc',assertion:'{"synthetic":true}',signatureSha256:'a'.repeat(64)}}={})=>{
   const response=await serve(new Request('http://fixture.invalid',{method,headers:{Authorization:auth},...(method==='GET'?{}:{body:JSON.stringify(body)})}));
   return {status:response.status,body:await response.json()};

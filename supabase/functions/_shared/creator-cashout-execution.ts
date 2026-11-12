@@ -21,21 +21,26 @@ const fail = (reason: string): never => { throw Error(`cashout_${reason}`); };
 const objectId = (value: unknown, prefix: string) => typeof value === "string" && new RegExp(`^${prefix}_[A-Za-z0-9]+$`).test(value);
 const uuid = (value: unknown) => typeof value === "string" && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value);
 const minor = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 2147483647;
-export async function readCashoutBody(body: ReadableStream<Uint8Array> | null, maximum: number, milliseconds = 10000) {
+export async function readCashoutBody(body: ReadableStream<Uint8Array> | null, maximum: number, milliseconds = 10000, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   if (!body) return "";
   const reader = body.getReader(), chunks: Uint8Array[] = []; let size = 0, expired = false;
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal?.addEventListener('abort', cancel, { once: true });
   const timer = setTimeout(() => { expired = true; void reader.cancel().catch(() => {}); }, milliseconds);
   try {
     for (;;) {
       const part = await reader.read(); if (part.done) break;
       size += part.value.byteLength; if (size > maximum) fail("body_too_large"); chunks.push(part.value);
     }
+    signal?.throwIfAborted();
     if (expired) fail("body_deadline");
     const bytes = new Uint8Array(size); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
     // Underlying cleanup can remain pending after cancellation closes reads.
     // It must not suppress the bounded result or delay durable reconciliation.
     void reader.cancel().catch(() => {});

@@ -67,6 +67,18 @@ try {
   const r=spawnSync(process.execPath,[`ops/automatic-commerce-cutover/${file}`],{env,encoding:'utf8',timeout:240000,maxBuffer:24*1024*1024});
   assert.equal(r.status,0,`${file}: ${r.error?.message??r.stderr}`);reports.push(JSON.parse(r.stdout));
  }
+ // Roles are cluster-wide: each complete current history needs a genuinely
+ // fresh owned cluster. Reuse this same local/Docker provisioning boundary.
+ admin('pg_ctl',['-D',data,'-m','fast','stop']);server=false;
+ for(const ancestry of ['missing','canonical']){
+  data=mode==='--docker'?internal+'/data-'+ancestry:path.join(directory,'data-'+ancestry);
+  admin('initdb',['-D',data,'-U','postgres','--encoding=UTF8','--no-locale','--auth=trust']);
+  admin('pg_ctl',['-D',data,'-l',mode==='--docker'?internal+'/'+ancestry+'.log':path.join(directory,ancestry+'.log'),'-o',`-c unix_socket_directories='' -c listen_addresses='127.0.0.1' -p ${port} -c max_prepared_transactions=0 -c autovacuum=off`,'start']);server=true;
+  const r=spawnSync(process.execPath,['ops/automatic-commerce-cutover/test-current-topology-native.mjs'],{
+   env:{...env,CUTOVER_CURRENT_ANCESTRY:ancestry},encoding:'utf8',timeout:600000,maxBuffer:24*1024*1024});
+  assert.equal(r.status,0,`${ancestry} current topology: ${r.error?.message??r.stderr}`);reports.push(JSON.parse(r.stdout));
+  admin('pg_ctl',['-D',data,'-m','fast','stop']);server=false;
+ }
  console.log(JSON.stringify({schema:1,status:'passed',native:true,elapsedMs:Date.now()-start,sourceFiles:replayReport.files.length,
   statements:replayReport.statements,heldMigrations:held,excludedMigrations:replayReport.excludedMigrations,sourceReplaySha256:sha256(sql.join('\n')),managedServices:'repository fixture doubles; no provider network',reports},null,2));
 } finally {

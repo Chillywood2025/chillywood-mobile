@@ -28,8 +28,13 @@ function googleAuth(scope: string) {
   return new GoogleAuth({ credentials: JSON.parse(required('NATIVE_PRODUCTION_GOOGLE_SERVICE_ACCOUNT')),
     scopes: [scope] });
 }
-async function googleToken(scope: string) {
-  const token = await googleAuth(scope).getAccessToken(); if (!token) throw Error('google_unavailable'); return token;
+async function googleToken(scope: string, signal: AbortSignal) {
+  signal.throwIfAborted();
+  // This SDK does not accept a signal. Await it rather than orphaning a
+  // Promise.race, then reject late credentials before any further operation.
+  const token = await googleAuth(scope).getAccessToken();
+  signal.throwIfAborted();
+  if (!token) throw Error('google_unavailable'); return token;
 }
 function requireProviderReady(provider: unknown) {
   required('NATIVE_PRODUCTION_RECEIPT_KEY_ID'); required('NATIVE_PRODUCTION_RECEIPT_SIGNING_KEY_HEX');
@@ -44,8 +49,9 @@ Deno.serve(async (request: Request) => {
   if (request.method !== 'POST') return json(405, { error: 'method_not_allowed' });
   if (Deno.env.get('NATIVE_PRODUCTION_STORE_WITNESS_ENABLED') !== 'true')
     return json(200, { status: 'disabled', financialAuthority: false, payable: false });
-  const deadline = AbortSignal.timeout(15000);
+  const deadline = AbortSignal.any([request.signal, AbortSignal.timeout(15000)]);
   try {
+    deadline.throwIfAborted();
     const authorization = request.headers.get('Authorization');
     if (!authorization?.startsWith('Bearer ')) return json(401, { error: 'authentication_required' });
     const actor = createClient(required('SUPABASE_URL'), required('SUPABASE_ANON_KEY'), {
@@ -58,9 +64,14 @@ Deno.serve(async (request: Request) => {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { fetch: (url, init) => fetch(url, { ...init, signal: deadline }) } });
     const rpc = async (name: string, args: Record<string, unknown>) => {
-      const result = await admin.rpc(name, args); if (result.error) throw Error('authority_unavailable'); return result.data;
+      deadline.throwIfAborted();
+      const result = await admin.rpc(name, args);
+      // Cancellation of an issued RPC is not proof that it rolled back.
+      // Return HELD without resending or releasing its durable authority.
+      deadline.throwIfAborted();
+      if (result.error) throw Error('authority_unavailable'); return result.data;
     };
-    const body = object(JSON.parse(await readCashoutBody(request.body, 65536, 5000)));
+    const body = object(JSON.parse(await readCashoutBody(request.body, 65536, 5000, deadline)));
     const action = text(body.action, 32), dispatchId = uuid(body.dispatchId);
     const common = { p_dispatch_id: dispatchId, p_buyer_id: buyerId, p_session_id: sessionId };
     const context = object(await rpc('resolve_native_production_witness_context', { ...common, p_recovery: action === 'complete' || action === 'reconcile' }));
@@ -131,7 +142,7 @@ Deno.serve(async (request: Request) => {
           nativeBuild: text(native.nativeBuild), certificateSha256: text(context.googleCertificateSha256),
           requestHash: createHash('sha256').update(witnessRaw, 'utf8').digest('base64url'),
           earliestMs: Date.now() - 120000, latestMs: Date.now() + 5000 },
-          await googleToken('https://www.googleapis.com/auth/playintegrity'), deadline);
+          await googleToken('https://www.googleapis.com/auth/playintegrity', deadline), deadline);
       }
     }
     if (preparing) {
@@ -142,11 +153,15 @@ Deno.serve(async (request: Request) => {
       appleAppId: apple ? Number(context.appleAppId) : undefined, buyerId, productId: text(native.productId),
       transactionId: text(witness.transactionId), purchaseToken: apple ? undefined : text(witness.purchaseToken, 8192),
       expectedGoogleAccountId: apple ? undefined : hex(buyerId) };
+    deadline.throwIfAborted();
     const facts = apple ? await readProductionAppleTransaction(storeContext, {
       signingKey: required('NATIVE_PRODUCTION_APPLE_SIGNING_KEY'), keyId: required('NATIVE_PRODUCTION_APPLE_KEY_ID'),
       issuerId: required('NATIVE_PRODUCTION_APPLE_ISSUER_ID'),
       rootCertificates: JSON.parse(required('NATIVE_PRODUCTION_APPLE_ROOTS_BASE64_JSON')).map((value: string) => Buffer.from(value, 'base64')),
-    }) : await readGooglePurchase(storeContext, await googleToken('https://www.googleapis.com/auth/androidpublisher'), deadline);
+    }) : await readGooglePurchase(storeContext, await googleToken('https://www.googleapis.com/auth/androidpublisher', deadline), deadline);
+    // Apple's SDK/online certificate checks have no per-call cancellation
+    // hook. Await completion; never promote results after our deadline.
+    deadline.throwIfAborted();
     if ((apple ? facts.grossMinor : facts.pricing?.listingMinor) !== Number(native.grossMinor) || facts.currency !== native.currency
       || Date.parse(facts.purchasedAt) < launchLowerMs || Date.parse(facts.purchasedAt) > Date.now()) throw Error('store_witness_mismatch');
     await rpc('accept_native_production_verified_witness', { ...common, p_witness_sha256: digest,

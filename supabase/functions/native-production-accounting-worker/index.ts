@@ -13,13 +13,18 @@ Deno.serve(async (req: Request) => {
   if (readOptionalEnv("NATIVE_PRODUCTION_ACCOUNTING_ENABLED") !== "true")
     return jsonResponse(200, { status: "disabled", providerWrite: false });
   try {
-    const text = await readCashoutBody(req.body, 256, 5000);
+    req.signal.throwIfAborted();
+    const text = await readCashoutBody(req.body, 256, 5000, req.signal);
     const body = text.trim() ? JSON.parse(text) : {};
     if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length)
       return jsonResponse(400, { error: "empty_body_required" });
     const admin = createAdminClient();
     if (!admin.configured) return jsonResponse(503, { error: "database_unavailable" });
-    const result = await admin.client.rpc("process_native_production_accounting_jobs", { p_limit: 20 });
+    req.signal.throwIfAborted();
+    const result = await admin.client.rpc("process_native_production_accounting_jobs", { p_limit: 20 }).abortSignal(req.signal);
+    // An aborted request does not prove the issued transaction rolled back.
+    // Report unresolved without retrying or clearing any database claim.
+    req.signal.throwIfAborted();
     if (result.error || !result.data) throw Error("native_accounting_unresolved");
     return jsonResponse(200, result.data);
   } catch {

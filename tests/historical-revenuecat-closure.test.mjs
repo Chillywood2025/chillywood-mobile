@@ -12,6 +12,7 @@ import {verifyInputs} from '../scripts/google-refund-tax-observer-proof/verify-i
 import {collectSourceBundle} from '../ops/creator-backend-rollout/prepare-edge.mjs';
 import {HISTORICAL_CONFIG,HISTORICAL_ENTRYPOINT,materializeHistoricalBundle,materializeHistoricalProofPackage,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
 const archives=[
+ {name:'supabase/functions/_shared/creator-cashout-execution.ts',file:'tests/fixtures/historical-creator-cashout-execution.ts.txt'},
  {name:'ops/automatic-commerce-cutover/run-native.mjs',file:'tests/fixtures/historical-automatic-commerce-run-native.mjs.txt'},
  {name:'tests/helpers/sandbox-cashout-historical-deployment-fixture.mjs',file:'tests/fixtures/historical-sandbox-cashout-historical-deployment-fixture.mjs.txt'},
  {name:'tests/helpers/native-deployment-database.mjs',file:'tests/fixtures/historical-native-deployment-database.mjs.txt'},

@@ -155,3 +155,28 @@ This source requires exact-head Required Validation, review and normal protected
 merge. Merge is not deployment, provider configuration, credential provisioning,
 scheduling, release or live-money activation. Controlled synthetic provider facts
 and test receipts are regression fixtures, never operational verification.
+# Forward compatibility after native production wrappers
+
+`20261112041003_automatic_eligibility_current_topology.sql` supports two exact
+source-derived histories: the complete original thirteen automatic-commerce
+migrations followed by native production, or those thirteen absent with the
+current native-production wrappers already present. Partial or changed
+predecessors fail closed. Existing migration files and receipts are immutable;
+the latter path records only this new forward migration, never invented old
+receipts.
+
+The missing-history path reuses hash-pinned original SQL with four exact
+definition-lookup adaptations to retained checkout/precharge bodies. Current
+production wrappers and newer purchase-recovery exclusions remain intact.
+Both histories receive the same sixteen explicitly reviewed outer entry gates
+before native authority locks. Existing authorization checks and execution
+permissions remain; like the original canonical protocol, a denied caller may
+reach the lock before the existing authorization failure. Read-only helpers,
+lease-only observation work and private row triggers are not blanket-gated.
+
+The observer remains disabled with no queued work. This source does not deploy
+its Edge worker, configure credentials, schedule invocations, activate providers
+or enable live money. Source-only regressions cover both histories, real normal
+checkout, partial/changed ancestry, critical trigger loss and atomic rollback.
+The existing required native cutover runner additionally checks actual RPC lock
+ordering across both histories with separate PostgreSQL sessions.

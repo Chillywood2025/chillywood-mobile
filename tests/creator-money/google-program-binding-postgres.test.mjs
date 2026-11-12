@@ -5,8 +5,12 @@ import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 
 const migration='20261031173602_google_external_program_capability_binding.sql';
+// Keep the deliberately unrepaired negative control before forward convergence:
+// that migration correctly rejects a missing program-binding predecessor.
+// Current-topology tests retain the complete migration chain.
+const forwardMigration='20261112041003_automatic_eligibility_current_topology.sql';
 test('Google program qualification cannot flow between packages or unbound capabilities', {timeout:240000}, async()=>{
- const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,excludeMigrations:[migration]});
+ const {db}=await createDatabase({includeHeldStudio:true,applyRepair:true,repairInMigrationOrder:true,excludeMigrations:[migration,forwardMigration]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   const cap=await one(`insert into private.creator_external_payment_capabilities(feature,creator_id,provider_account_id,platform,storefront,storefront_country,route_kind,currency,environment,payment_method,min_amount_minor,max_amount_minor,provider_bounds_evidence,route_approval_evidence,verified_at,expires_at,enabled)

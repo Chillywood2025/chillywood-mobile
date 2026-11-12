@@ -10,4 +10,7 @@ export const nativeProductionMigrationFiles=Object.freeze([
  '20261111014539_native_production_attested_delayed_settlement.sql',
  '20261111014948_native_production_paid_access_renewal.sql',
  '20261111022147_native_production_recovery_and_verified_pricing.sql',
+ // Forward convergence depends on the current production wrapper topology;
+ // historical pre-production checkpoints must not apply it prematurely.
+ '20261112041003_automatic_eligibility_current_topology.sql',
 ]);
