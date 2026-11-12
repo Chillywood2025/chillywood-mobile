@@ -20,5 +20,5 @@ Deno.serve(createNativeProductionPaidVideoRange({
    auth:{persistSession:false,autoRefreshToken:false},global:{fetch:(input,init)=>fetch(input,{...init,signal})}});
   const result=await client.rpc(name,args);if(result.error)throw Error("authority_unavailable");return result.data;
  },
- origin:(binding,method,signal,headers)=>createInspectionOriginReader(inspectionOriginConfig(name=>Deno.env.get(name)))(binding,method,signal,headers),
+ origin:(binding,method,signal,headers)=>createInspectionOriginReader(inspectionOriginConfig(name=>Deno.env.get(name)))(binding,method,headers,signal),
 }));
