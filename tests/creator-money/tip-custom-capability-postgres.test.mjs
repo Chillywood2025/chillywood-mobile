@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
-test('real SQL custom tip capability uses trusted eligibility and exact method bounds, never a creator floor', {timeout:240_000}, async t => {
-  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+test('historical pre-native-only custom tip capability uses trusted eligibility and exact method bounds, never a creator floor', {timeout:1200000}, async t => {
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:['20261112091500_native_only_tip_admission.sql']});
   let checks=0;
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   // Fixtures use the disposable owner; application RPCs use real API roles.

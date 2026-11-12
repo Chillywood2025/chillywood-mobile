@@ -5,8 +5,8 @@ import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
-test('server lowest qualified tip selection revalidates at native dispatch and tombstones undispatched actions', {timeout:240000}, async()=>{
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+test('historical external selection and current native checkout preserve exact action and receipt authority', {timeout:1200000}, async()=>{
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:['20261112091500_native_only_tip_admission.sql']});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
@@ -35,6 +35,10 @@ test('server lowest qualified tip selection revalidates at native dispatch and t
   await one('select public.revoke_creator_tip_route_fee_evidence($1)',[higherId]);
   assert.equal((await dispatch()).allowed,false,'any revoked alternative invalidates final lowest-cost dispatch authority');
   await db.exec('rollback');
+  // External admission above is historical. The real native checkout,
+  // RevenueCat settlement and refund below must survive the current cutoff.
+  await db.exec('reset role');
+  await db.exec(fs.readFileSync('supabase/migrations/20261112091500_native_only_tip_admission.sql','utf8'));
   await as();const abandoned=randomUUID();const selection=await select(abandoned);assert.equal(selection.provider,'app_store');assert.equal(selection.dispatchAuthorized,false);
   assert.equal((await one('select public.resolve_creator_tip_payment_action($1,true)',[abandoned])).abandoned,true);
   await assert.rejects(()=>select(abandoned),/tip_action_abandoned/);

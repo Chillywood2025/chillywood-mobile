@@ -5,7 +5,10 @@ import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs'
 import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
 test('Stripe checkout retry uses real immutable authority and receipt SQL', {timeout:240_000}, async t=>{
-  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});let checks=0;
+  // Seed/retry historical admissions before the native-only cutoff; later
+  // paid receipt assertions below run with the cutoff actually installed.
+  const cutoff='20261112091500_native_only_tip_admission.sql';
+  const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[cutoff]});let checks=0;
   const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
   const eq=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
   const deny=async(fn,rx)=>{await assert.rejects(fn,rx);checks++;};
@@ -67,6 +70,18 @@ test('Stripe checkout retry uses real immutable authority and receipt SQL', {tim
       body:{...quote.body,client_reference_id:nextTip,'metadata[chillywood_tip_id]':nextTip}})).tipId,nextTip,
       'verified provider expiration releases a later distinct attempt');
     await db.exec('rollback');
+    // Seed an old synthetic receipt through normal INSERT guards. Never disable
+    // the immutable quote trigger merely to simulate elapsed provider time.
+    const oldTip='ea000000-0000-4000-8000-000000000007',oldRequest='ea000000-0000-4000-8000-000000000008';
+    await db.query(`insert into public.creator_tip_transactions(id,sender_id,creator_id,buyer_account_id,buyer_session_generation,
+      tip_amount_cents,total_paid_cents,creator_net_cents,currency,provider,provider_environment,provider_account_id,
+      idempotency_key,status,payment_status,payout_status,metadata,created_at)
+      values($1,$2,$3,$2,$4,300,300,300,'usd','stripe_connect','test','acct_fixture','expired-retry-synthetic',
+      'pending','pending','not_payable','{"buyer_authority_bound":true}',now()-interval '25 hours')`,[oldTip,other.user_id,host.user_id,other.session_id]);
+    const oldQuote={...quote,tipId:oldTip,body:{...quote.body,client_reference_id:oldTip,'metadata[chillywood_tip_id]':oldTip,'metadata[fan_user_id]':other.user_id}};
+    await db.query(`insert into private.creator_tip_checkout_attempts(buyer_id,request_id,session_id,tip_id,request_body,created_at,retry_until)
+      values($1,$2,$3,$4,$5,now()-interval '25 hours',now()-interval '2 hours')`,[other.user_id,oldRequest,other.session_id,oldTip,oldQuote.body]);
+    await db.exec(fs.readFileSync(`supabase/migrations/${cutoff}`,'utf8'));
     await one("select public.reserve_stripe_tip_webhook_event('evt_retry_paid','payment_intent.succeeded',repeat('a',64),$1)",[webhookAttempt]);
     const paid=await one("select public.process_stripe_tip_webhook_lifecycle('evt_retry_paid',$1,$2,$3,'{\"metadata\":{}}','{}')",
       [webhookAttempt,tip,{event_livemode:false,object_livemode:false,object_type:'payment_intent',
@@ -81,17 +96,6 @@ test('Stripe checkout retry uses real immutable authority and receipt SQL', {tim
         object_id:'ch_fixture',payment_intent_id:'pi_fixture',amount_cents:300,amount_refunded_cents:30,refunded:false,currency:'usd',
         metadata_tip_id:tip,metadata_sender_id:buyer.user_id,metadata_creator_id:host.user_id}]);
     eq(await one('select creator_net_cents from public.creator_tip_transactions where id=$1',[tip]),270,'actual verified partial refund still adjusts creator net');
-    // Seed an old synthetic receipt through normal INSERT guards. Never disable
-    // the immutable quote trigger merely to simulate elapsed provider time.
-    const oldTip='ea000000-0000-4000-8000-000000000007',oldRequest='ea000000-0000-4000-8000-000000000008';
-    await db.query(`insert into public.creator_tip_transactions(id,sender_id,creator_id,buyer_account_id,buyer_session_generation,
-      tip_amount_cents,total_paid_cents,creator_net_cents,currency,provider,provider_environment,provider_account_id,
-      idempotency_key,status,payment_status,payout_status,metadata,created_at)
-      values($1,$2,$3,$2,$4,300,300,300,'usd','stripe_connect','test','acct_fixture','expired-retry-synthetic',
-      'pending','pending','not_payable','{"buyer_authority_bound":true}',now()-interval '25 hours')`,[oldTip,other.user_id,host.user_id,other.session_id]);
-    const oldQuote={...quote,tipId:oldTip,body:{...quote.body,client_reference_id:oldTip,'metadata[chillywood_tip_id]':oldTip,'metadata[fan_user_id]':other.user_id}};
-    await db.query(`insert into private.creator_tip_checkout_attempts(buyer_id,request_id,session_id,tip_id,request_body,created_at,retry_until)
-      values($1,$2,$3,$4,$5,now()-interval '25 hours',now()-interval '2 hours')`,[other.user_id,oldRequest,other.session_id,oldTip,oldQuote.body]);
     eq((await reserve(oldRequest,oldQuote,other)).retryAllowed,false);
     await db.exec('set role authenticated');
     await deny(()=>reserve(),/permission denied/);

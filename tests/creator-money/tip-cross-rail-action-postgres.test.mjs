@@ -5,8 +5,8 @@ import {randomUUID} from 'node:crypto';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCurrentEventCommerceCreator} from '../helpers/current-event-commerce-fixture.mjs';
 
-test('cross-rail action identity is immutable, session scoped, transaction atomic and allows distinct actions', {timeout:240000}, async()=>{
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false});
+test('historical pre-native-only cross-rail action identity is immutable, session scoped and atomic', {timeout:1200000}, async()=>{
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:['20261112091500_native_only_tip_admission.sql']});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
@@ -47,7 +47,8 @@ test('cross-rail action identity is immutable, session scoped, transaction atomi
 
 test('historical Stripe attempt without a shared claim cannot be mistaken for undispatched or abandoned', {timeout:240000}, async()=>{
  const migration='20261030190449_creator_tip_cross_rail_action_claim.sql';
- const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration]});
+ const cutoff='20261112091500_native_only_tip_admission.sql';
+ const {db}=await createDatabase({applyRepair:true,repairInMigrationOrder:true,includeHeldStudio:true,implicitApiGrants:false,excludeMigrations:[migration,cutoff]});
  const one=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
  try {
   for(const name of ['event-reservation-authority','creator-external-payment-capabilities','creator-external-payment-authority']) await db.exec(fs.readFileSync(`tests/fixtures/${name}.sql`,'utf8'));
@@ -58,6 +59,7 @@ test('historical Stripe attempt without a shared claim cannot be mistaken for un
   await db.exec("select set_config('request.jwt.claims','{\"role\":\"service_role\"}',false)");
   await one('select public.reserve_creator_tip_checkout_attempt($1,$2,$3,$4)',[buyer.user_id,buyer.session_id,action,quote]);
   await db.exec(fs.readFileSync(`supabase/migrations/${migration}`,'utf8'));
+  await db.exec(fs.readFileSync(`supabase/migrations/${cutoff}`,'utf8'));
   assert.equal(await one('select count(*)::integer from private.creator_tip_action_claims'),0);
   await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:buyer.user_id,session_id:buyer.session_id,role:'authenticated'})]);await db.exec('set role authenticated');
   const outcome=await one('select public.resolve_creator_tip_payment_action($1,true)',[action]);

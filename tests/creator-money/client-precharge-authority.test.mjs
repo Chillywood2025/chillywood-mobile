@@ -782,7 +782,8 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
   assert.doesNotMatch(channelSource, /tipStatus\?\.canTip === true \|\| sandboxTesterActive/u);
   assert.match(channelSource, /const canRenderTip = viewerPurchaseMode && \(tipStatus\?\.canTip === true \|\| tipStatus\?\.nativeSandboxAvailable === true\)/u);
   const tipSheetSource = readFileSync("components/monetization/tip-sheet.tsx", "utf8");
-  assert.match(tipSheetSource, /const canTipExternally = tipStatus\?\.canTip === true/u);
+  assert.match(tipSheetSource, /const canTipInSandbox = canTipWithStore/u);
+  assert.doesNotMatch(tipSheetSource, /createCreatorTipCheckout|canTipExternally/u);
   assert.match(tipSheetSource, /tipStatus\.nativeSandboxAvailable === true/u);
   assert.doesNotMatch(tipSheetSource, /const canTipInSandbox = sandboxTester \|\|/u);
 

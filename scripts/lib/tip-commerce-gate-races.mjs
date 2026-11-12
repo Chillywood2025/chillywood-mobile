@@ -5,6 +5,8 @@ import {randomUUID} from 'node:crypto';
 import {commerceSeedAdapter,seedCommerceBuyer,assertBuyerHasNoPremium} from '../../tests/helpers/automatic-commerce-fixture.mjs';
 
 export async function runTipCommerceGateRaces({query,session,until,lit,actors,roots=['receipt','reservation']}) {
+  assert.equal(query("select to_regprocedure('private.reject_new_stripe_tip_admission()') is null"),'t',
+    'Historical admission/gate races require genuine pre-cutover replay; current recovery is covered by native-only cutoff proof.');
   const db=commerceSeedAdapter(query),creator=actors.creator.id;
   const capability='ef000000-0000-4000-8000-000000000001';
   const service=`set local role service_role;set local request.jwt.claims='{"role":"service_role"}';set local request.headers='{"x-chillywood-platform":"ios"}';`;
