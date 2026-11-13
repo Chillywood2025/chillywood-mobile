@@ -34,6 +34,15 @@ for(const platform of ['web','ios','android']) {
  });
 }
 for(const platform of ['web','ios','android']) {
+ test(`${platform} creator price authoring uses the same account-bound price and preserves exact cents`,async()=>{
+  const calls=[],api={};
+  const deps={'react-native':{Platform:{OS:platform}},'./supabase':{supabase:{rpc:async name=>{calls.push({name});return {data:[],error:null};}}},'./accountBoundSupabaseMutation':{runCurrentAccountBoundSupabaseMutationRpc:async(name,args)=>{calls.push({name,args});return {data:{status:'saved',id:'price'},error:null};}}};
+  new Function('require','exports',source)(name=>deps[name]??{},api);
+  await api.listMyPaidVideoOffers();await api.savePaidVideoOffer({videoId:'video',isPaid:true,priceCents:1234,currency:'usd'});await api.savePaidVideoOffer({videoId:'video',isPaid:false,priceCents:0});
+  assert.equal(calls[0].name,'list_my_stripe_sandbox_video_prices');
+  assert.deepEqual(calls[1],{name:'set_my_stripe_sandbox_video_price',args:{p_video_id:'video',p_amount_minor:1234,p_currency:'usd',p_is_paid:true}});
+  assert.equal(calls[2].name,'set_my_stripe_sandbox_video_price');assert.equal(calls[2].args.p_is_paid,false);
+ });
  test(`${platform} routes canonical Stripe offer to its admitted transport`,async()=>{
   const h=harness({platform}); const r=await h.api.purchasePaidVideoAccess({videoId:'video',creatorId:'creator',amountCents:100});
   assert.equal(r.ok,false); assert.equal(r.access.provider,'stripe'); assert.deepEqual(h.calls,[platform==='web'?'web-read':'native-read',platform==='web'?'web-open':'native-open']);

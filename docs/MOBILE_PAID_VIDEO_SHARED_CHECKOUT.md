@@ -63,8 +63,11 @@ or relying on the old catalog's checkout shell.
 74 focused routing, historical-access, native/web checkout, player lifecycle,
 playback and price/cashout boundary tests passed for this continuation. Full
 typecheck and exact-head Required Validation have not yet passed this checkpoint.
-Shared creator authoring and history integration remain unfinished; these focused
-results do not claim the whole application or installed phones are verified.
+Creator authoring now uses one exact-cent sandbox price on all three platforms;
+the inactive native fixed-price picker no longer authors these new offers. Pause
+preserves purchased access and does not turn protected content free. Creator and
+buyer history integration still needs completion; these focused results do not
+claim the whole application or installed phones are verified.
 
 ## Remaining activation requirements
 

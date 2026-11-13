@@ -304,7 +304,7 @@ export const formatPaidVideoPrice = (amountCents: number, currency = "usd") =>
   formatMonetizationCurrency(amountCents, currency);
 
 export async function listMyPaidVideoOffers(options?: { throwOnUnavailable?: boolean }): Promise<CreatorPaidVideoOffer[]> {
-  const { data, error } = await paidVideoClient.rpc(Platform.OS === "web" ? "list_my_stripe_sandbox_video_prices" : "list_my_paid_video_offers");
+  const { data, error } = await paidVideoClient.rpc("list_my_stripe_sandbox_video_prices");
   if (error || !Array.isArray(data)) {
     if (options?.throwOnUnavailable) throw new Error("Paid video settings could not be loaded. Please try again.");
     return [];
@@ -330,14 +330,8 @@ export async function savePaidVideoOffer(input: {
   priceCents: number;
   currency?: string | null;
 }) {
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>(Platform.OS === "web" ? "set_my_stripe_sandbox_video_price" : "set_creator_content_price", Platform.OS === "web" ? {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("set_my_stripe_sandbox_video_price", {
     p_video_id: input.videoId, p_amount_minor: input.priceCents, p_currency: input.currency ?? "usd", p_is_paid: input.isPaid,
-  } : {
-    p_content_type: "creator_video",
-    p_content_id: input.videoId,
-    p_is_paid: input.isPaid,
-    p_price_cents: Math.max(0, Math.trunc(input.priceCents || 0)),
-    p_currency: input.currency ?? "usd",
   });
   if (error || !data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Paid video settings could not be saved.");

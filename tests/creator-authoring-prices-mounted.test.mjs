@@ -43,7 +43,7 @@ test('mounted subscription request preserves desired amount and cannot activate 
   assert.equal(writes.length, 2, 'old account callback cannot request a price');
 });
 
-test('mounted video price choice survives rejection, requires exact readback, and never resets to 99', async t => {
+test('mounted video custom price survives rejection, requires exact readback, and never resets to 99', async t => {
   let result = 'reject', saved = false; const writes = [];
   const helper = productionFunctions('_lib/creatorPaidVideos.ts', ['toText', 'savePaidVideoOffer'], {
     Platform: { OS: 'ios' },
@@ -54,24 +54,24 @@ test('mounted video price choice survives rejection, requires exact readback, an
     },
   });
   const h = await mount(t, { route: { tab: 'monetization', manage: 'paid_videos' }, overrides: {
+    ...productionFunctions('_lib/stripePaidVideoPrice.ts', ['parseStripePaidVideoPrice'], {}),
     readCreatorAuthoringPrices: catalog, savePaidVideoOffer: helper.savePaidVideoOffer,
     listMyPaidVideoOffers: async () => saved ? [{ id: 'offer-B', videoId: 'B', creatorId: 'owner', isPaid: true, priceCents: result === 'wrong' ? 99 : 299, currency: 'usd', status: 'sandbox' }] : [],
     saveCreatorSandboxMonetizationConfig: () => assert.fail('fixed-tier bookkeeping cannot overwrite chosen price'),
   } });
   await h.press(h.button('Manage paid unlock for Title B')); await h.press(h.button('Paid'));
   assert.equal(h.button('Save video access').props.disabled, true);
-  await h.press(node(h, 'paid-video-price-catalog-299'));
-  assert.match(h.text(), /iOS only/);
+  await h.change(node(h, 'stripe-paid-video-price-input'), '2.99');
   await h.press(h.button('Save video access'));
-  assert.equal(node(h, 'paid-video-price-catalog-299').props.accessibilityState.checked, true);
+  assert.equal(node(h, 'stripe-paid-video-price-input').props.value, '2.99');
   assert.doesNotMatch(h.text(), /setup saved at/);
   result = 'wrong'; await h.press(h.button('Save video access'));
   assert.match(h.text(), /could not be confirmed/);
-  assert.equal(node(h, 'paid-video-price-catalog-299').props.accessibilityState.checked, true);
+  assert.equal(node(h, 'stripe-paid-video-price-input').props.value, '2.99');
   result = 'valid'; await h.press(h.button('Save video access'));
   assert.match(h.text(), /setup saved at \$2\.99/);
   assert.equal(writes.length, 3);
-  for (const write of writes) { assert.equal(write.name, 'set_creator_content_price'); assert.equal(write.payload.p_price_cents, 299); assert.equal(write.payload.p_content_id, 'B'); }
+  for (const write of writes) { assert.equal(write.name, 'set_my_stripe_sandbox_video_price'); assert.equal(write.payload.p_amount_minor, 299); assert.equal(write.payload.p_video_id, 'B'); }
 });
 
 for (const mode of [
@@ -142,7 +142,7 @@ for (const configured of [false, true]) test(`sandbox setup preserves chosen pri
   if (configured) assert.equal(existing[0].priceCents, 999);
 });
 
-test('web creator price uses exact custom cents and separate Stripe RPC, preserving readback', async t => {
+for (const platform of ['web', 'ios', 'android']) test(`${platform} creator price uses exact custom cents and shared Stripe RPC, preserving readback`, async t => {
   let saved = false; const writes = [];
   const parser = productionFunctions('_lib/stripePaidVideoPrice.ts', ['parseStripePaidVideoPrice'], {});
   const helper = productionFunctions('_lib/creatorPaidVideos.ts', ['toText', 'savePaidVideoOffer'], {
@@ -150,7 +150,7 @@ test('web creator price uses exact custom cents and separate Stripe RPC, preserv
       writes.push({name,payload}); saved = true; return {data:{status:'saved',id:'stripe-B'},error:null};
     },
   });
-  const h = await mount(t,{platform:'web',route:{tab:'monetization',manage:'paid_videos'},overrides:{
+  const h = await mount(t,{platform,route:{tab:'monetization',manage:'paid_videos'},overrides:{
     ...parser, savePaidVideoOffer:helper.savePaidVideoOffer,
     listMyPaidVideoOffers:async()=>saved?[{id:'stripe-B',videoId:'B',creatorId:'owner',isPaid:true,priceCents:457,currency:'usd',status:'sandbox'}]:[],
   }});
@@ -159,5 +159,5 @@ test('web creator price uses exact custom cents and separate Stripe RPC, preserv
   await h.change(node(h,'stripe-paid-video-price-input'),'4.57'); await h.press(h.button('Save video access'));
   assert.equal(writes.length,1); assert.equal(writes[0].name,'set_my_stripe_sandbox_video_price');
   assert.equal(writes[0].payload.p_amount_minor,457);assert.equal(writes[0].payload.p_video_id,'B');assert.equal(writes[0].payload.p_is_paid,true);
-  assert.match(h.text(),/setup saved at \$4\.57/);assert.match(h.text(),/provider qualification is still required/);
+  assert.match(h.text(),/setup saved at \$4\.57/);assert.match(h.text(),/each platform still requires qualified checkout/);
 });

@@ -243,6 +243,8 @@ test("extracted Brand rejection cannot release replacement-session lock or repla
 test("Paid setup rejects mismatched readback and acknowledges only the exact creator/video/price", async () => {
   let writes = 0; let readback = [{ videoId: "wrong-video", creatorId: "owner", isPaid: true, priceCents: 99, currency: "usd", status: "sandbox" }];
   const h = fixture({ selectedPaidVideo: video("selected-77", "public"), videoEditor: { editingVideoId: "selected-77", accessMode: "paid", priceDollars: "" }, videoSaving: false, videoNotice: null, creatorPaidVideoOffers: [] }, { user: { id: "owner" }, mountedRef: { current: true }, paidVideoPrice: { selectedPrice: { amountMinor: 99, currency: "usd", label: "$0.99", availabilityLabel: "iOS and Android" }, isCurrent: () => true }, paidVideoSaveInFlightRef: { current: false }, savePaidVideoOffer: async input => { assert.equal(input.videoId, "selected-77"); writes++; return { status: "saved", id: "offer-77" }; }, listMyPaidVideoOffers: async options => { assert.equal(options.throwOnUnavailable, true); return readback; }, formatCreatorSetupError: (error, fallback) => error.message || fallback });
+  h.state.videoEditor.priceDollars = "0.99";
+  Object.assign(h.context, loadStudioFunctions('_lib/stripePaidVideoPrice.ts', ['parseStripePaidVideoPrice'], {}), { formatMonetizationCurrency: amount => `$${(amount / 100).toFixed(2)}` });
   const api = h.load(["hasPlayableCreatorVideoSource", "getPaidVideoSetupUnavailableReason", "savePaidVideoSetup"]); await api.savePaidVideoSetup();
   assert.match(h.state.videoNotice, /could not be verified/); assert.equal(h.state.videoEditor.editingVideoId, "selected-77");
   readback = [{ ...readback[0], videoId: "selected-77" }]; await api.savePaidVideoSetup();
