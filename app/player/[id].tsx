@@ -7504,7 +7504,7 @@ export default function PlayerScreen() {
 
     setPaidVideoUnlockBusy(true);
     setPaidVideoUnlockMessage(
-      `Opening ${Platform.OS === "web" ? "Stripe sandbox" : Platform.OS === "ios" ? "App Store" : "Google Play"} checkout...`
+      `Opening ${access.provider === "stripe" ? "Stripe sandbox" : access.provider === "revenuecat_app_store" ? "App Store" : access.provider === "revenuecat_google_play" ? "Google Play" : "verified video"} checkout...`
     );
     try {
       debugLog("paid-video", "paid_video_checkout_start", {

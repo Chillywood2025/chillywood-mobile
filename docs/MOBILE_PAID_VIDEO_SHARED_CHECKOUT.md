@@ -15,6 +15,17 @@ mobile checkpoint was not recovered; its test results do not validate this work.
   identity. The native AsyncStorage adapter stores only request/order IDs.
 - Web checkout uses the shared journal. Unsupported transports are explicitly
   rejected before database/provider work. Native checkout is not yet admitted.
+- Dedicated service-only native admission now binds existing orders to current
+  sandbox creator authority and exact route/price/account/session evidence.
+  It is not wired to the endpoint. Android dispatch stays closed until the
+  existing reporting queue has its exact paid-video launch binding. Qualification
+  rows are locked through dispatch; no active routes or evidence are seeded.
+- Player purchase/refresh completions are scoped to the initiating account/video
+  generation. Old completions cannot mutate or release a newer action. Checkout
+  provider wording uses the canonical offer instead of assuming from the OS.
+- Google refund-tax consumers and resumable history preserve paid-video order,
+  price and tax identities and use dedicated video account credentials, not
+  auction fallback. SQL context/launch producers remain integration work.
 
 ## Audited next integration boundaries
 
