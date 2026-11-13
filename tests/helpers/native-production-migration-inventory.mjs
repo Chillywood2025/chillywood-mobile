@@ -28,4 +28,14 @@ export const nativeProductionMigrationFiles=Object.freeze([
  '20261112190000_stripe_video_protected_classification.sql',
  '20261112191000_stripe_video_player_metadata.sql',
  '20261112192000_stripe_video_request_recovery.sql',
+ // Native Stripe transport/reporting and shared history require the current
+ // paid-video topology, not the frozen historical checkpoints.
+ '20261113010532_stripe_video_test_tax_environment.sql',
+ '20261113011831_stripe_video_native_route_admission.sql',
+ '20261113012740_stripe_video_google_launch_binding.sql',
+ '20261113012744_stripe_video_google_refund_tax_context.sql',
+ '20261113013312_stripe_video_google_reporting_repair.sql',
+ '20261113013902_stripe_video_atomic_native_prepare.sql',
+ '20261113014825_stripe_video_platform_access_read.sql',
+ '20261113042617_stripe_video_shared_purchase_history.sql',
 ]);

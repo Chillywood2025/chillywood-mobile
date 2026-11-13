@@ -12,6 +12,10 @@ import {verifyInputs} from '../scripts/google-refund-tax-observer-proof/verify-i
 import {collectSourceBundle} from '../ops/creator-backend-rollout/prepare-edge.mjs';
 import {HISTORICAL_CONFIG,HISTORICAL_ENTRYPOINT,materializeHistoricalBundle,materializeHistoricalProofPackage,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
 const archives=[
+ {name:'supabase/functions/_shared/google-refund-tax-reconciliation.ts',file:'tests/fixtures/historical-google-refund-tax-reconciliation.ts.txt'},
+ {name:'supabase/functions/_shared/stripe-history-checkpoint.ts',file:'tests/fixtures/historical-stripe-history-checkpoint.ts.txt'},
+ {name:'supabase/functions/google-play-external-reporter/index.ts',file:'tests/fixtures/historical-google-play-external-reporter-index.ts.txt'},
+ {name:'tests/helpers/pure-typescript-module.mjs',file:'tests/fixtures/historical-pure-typescript-module.mjs.txt'},
  {name:'supabase/functions/public-creator-video-cards/index.ts',file:'tests/fixtures/historical-public-creator-video-cards-index.ts.txt'},
  {name:'scripts/social-engagement-deployment-manifest.json',file:'tests/fixtures/historical-social-engagement-deployment-manifest.json.txt'},
  ...['commerce-known-cost-accounting','stripe-refund-tax-evidence','stripe-fee-report-evidence'].map(name=>({name:`supabase/functions/_shared/${name}.ts`,file:`tests/fixtures/historical-${name}.ts.txt`})),

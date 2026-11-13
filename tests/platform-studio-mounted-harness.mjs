@@ -149,6 +149,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name.endsWith('/creator-eligibility-declaration-panel'))return evaluate('components/monetization/creator-eligibility-declaration-panel.tsx');
       if(name.endsWith('/creatorMonetizationRouteTargets'))return evaluate('_lib/creatorMonetizationRouteTargets.ts');
       if(name.endsWith('/eventSchedule'))return evaluate('_lib/eventSchedule.ts');
+      if(name.endsWith('/stripePaidVideoPrice'))return evaluate('_lib/stripePaidVideoPrice.ts');
       if(name.endsWith('/useCreatorAuthoringPrice'))return evaluate('_lib/useCreatorAuthoringPrice.ts');
       if(name.endsWith('/creator-price-picker'))return evaluate('components/monetization/creator-price-picker.tsx');
       if(name.endsWith('/event-sale-editor'))return evaluate('components/monetization/event-sale-editor.tsx');

@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { readStripeSandboxVideoAccess } from "./stripePaidVideoSandbox";
+import { readNativeStripeSandboxVideoAccess } from "./stripePaidVideoNative";
 import { supabase } from "./supabase";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
@@ -506,16 +507,6 @@ export async function resolveCreatorContentAccess(options: {
   contentType: string;
   contentId: string;
 }): Promise<CreatorContentAccessResolution> {
-  if (Platform.OS === "web" && options.contentType === "creator_video") {
-    const stripe = await readStripeSandboxVideoAccess(options.contentId);
-    if (stripe?.available) return {
-      ...(stripe.reason !== "owner" ? { stripeSandboxDeliveryOnly: true } : {}),
-      allowed: stripe.canAccess, reason: stripe.canAccess ? (stripe.reason === "owner" ? "owner" : "sandbox_grant") : stripe.checkoutAllowed ? "purchase_required" : "content_unavailable",
-      requiresPurchase: !stripe.canAccess && stripe.checkoutAllowed,
-      priceCents: stripe.amountMinor ?? null, currency: stripe.currency ?? null,
-      creatorId: stripe.creatorId ?? null, resolverStatus: "resolved",
-    };
-  }
   try {
     const response = await withAuthorityReadDeadline(
       monetizationClient.rpc("resolve_creator_content_access", {
@@ -527,7 +518,19 @@ export async function resolveCreatorContentAccess(options: {
     if (!response) return unavailableCreatorContentAccessResolution("resolver_unavailable");
     const { data, error } = response;
     if (error) throw error;
-    return normalizeCreatorContentAccessResolution(data);
+    const historical = normalizeCreatorContentAccessResolution(data);
+    if (historical.allowed || options.contentType !== "creator_video") return historical;
+    if (!data || typeof data !== "object" || (data as Record<string, unknown>).stripeSandboxDeliveryOnly !== true) return historical;
+    const stripe = Platform.OS === "web" ? await readStripeSandboxVideoAccess(options.contentId)
+      : await readNativeStripeSandboxVideoAccess(options.contentId);
+    if (stripe?.available) return {
+      ...(stripe.reason !== "owner" ? { stripeSandboxDeliveryOnly: true } : {}),
+      allowed: stripe.canAccess, reason: stripe.canAccess ? (stripe.reason === "owner" ? "owner" : "sandbox_grant") : stripe.checkoutAllowed ? "purchase_required" : "content_unavailable",
+      requiresPurchase: !stripe.canAccess && stripe.checkoutAllowed,
+      priceCents: stripe.amountMinor ?? null, currency: stripe.currency ?? null,
+      creatorId: stripe.creatorId ?? null, resolverStatus: "resolved",
+    };
+    return historical;
   } catch {
     return unavailableCreatorContentAccessResolution("resolver_unavailable");
   }

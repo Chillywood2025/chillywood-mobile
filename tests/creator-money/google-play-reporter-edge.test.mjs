@@ -6,7 +6,7 @@ import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 const {googlePlayReporterAccessToken}=loadPureTypeScriptModule('supabase/functions/_shared/google-play-reporter-oauth.ts');
 const source=readFileSync('supabase/functions/google-play-external-reporter/index.ts','utf8');
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-function harness({enabled=true,result={status:'unknown',reason:'synthetic_lost_response'},commit=true,tax=false,taxFails=false}={}){
+function harness({enabled=true,result={status:'unknown',reason:'synthetic_lost_response'},commit=true,tax=false,taxFails=false,feature='creator_tip'}={}){
   const secret='synthetic-worker-secret-'+'.'.repeat(40),calls=[];let handler;
   const env={GOOGLE_PLAY_EXTERNAL_REPORTER_WORKER_SECRET:secret,GOOGLE_PLAY_EXTERNAL_REPORTING_ENABLED:String(enabled),
     GOOGLE_PLAY_EXTERNAL_LICENSE_TEST_MODE:'true',GOOGLE_PLAY_EXTERNAL_REPORTER_SERVICE_ACCOUNT_JSON:'synthetic-not-a-real-key'};
@@ -21,7 +21,7 @@ function harness({enabled=true,result={status:'unknown',reason:'synthetic_lost_r
     if(name.endsWith('stripe-connect.ts'))return {
       readOptionalEnv:key=>env[key],jsonResponse:(status,body)=>new Response(JSON.stringify(body),{status}),
       createAdminClient:()=>({configured:true,client:{rpc:async(name,args)=>{
-        calls.push({name,args});if(name==='claim_google_refund_tax_context')return{data:{transaction_id:'synthetic-id',feature:'creator_tip'}};
+        calls.push({name,args});if(name==='claim_google_refund_tax_context')return{data:{transaction_id:'synthetic-id',feature}};
         return name==='claim_google_play_external_report'
           ?{data:{outboxId:'synthetic-outbox',report:{externalTransactionToken:'private-synthetic'}},error:null}
           :{data:commit,error:null};
@@ -60,6 +60,27 @@ test('configured worker reconciles tax before report claim; unresolved tax does 
   assert.equal(names.includes('record_google_refund_tax_evidence'),false,'endpoint cannot bypass resumable lease/checkpoint authority');
   const tax=h.calls.find(c=>c.name==='reconcile-tax');assert.equal(tax.key,'sk_test_synthetic');assert.equal(tax.account,'acct_platform');
   assert.ok(names.includes('finish_google_play_external_report'));
+ }
+});
+
+test('paid-video refund repair uses only dedicated video credentials and keeps reporting durable',async()=>{
+ const h=harness({feature:'paid_video'});
+ Object.assign(h.env,{STRIPE_TEST_SECRET_KEY:'sk_test_video',STRIPE_VIDEO_TEST_ACCOUNT_ID:'acct_video',
+  STRIPE_AUCTION_PLATFORM_TEST_KEY:'sk_test_auction',STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID:'acct_auction'});
+ assert.equal((await h.send()).status,200);
+ const call=h.calls.find(c=>c.name==='reconcile-tax');assert.equal(call.key,'sk_test_video');assert.equal(call.account,'acct_video');
+});
+test('missing video credentials and unknown features never fall through to auction credentials',async()=>{
+ for(const feature of ['paid_video','unrecognized']){
+  const h=harness({feature});Object.assign(h.env,{STRIPE_AUCTION_PLATFORM_TEST_KEY:'sk_test_auction',STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID:'acct_auction'});
+  assert.equal((await h.send()).status,200);assert.equal(h.calls.some(c=>c.name==='reconcile-tax'),false);
+  assert.equal(h.calls.some(c=>c.name==='finish_google_play_external_report'),true);
+ }
+});
+test('event and room auctions retain their existing refund credential route',async()=>{
+ for(const feature of ['event_auction','room_seat_auction']){
+  const h=harness({feature});Object.assign(h.env,{STRIPE_AUCTION_PLATFORM_TEST_KEY:'sk_test_auction',STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID:'acct_auction'});
+  assert.equal((await h.send()).status,200);const call=h.calls.find(c=>c.name==='reconcile-tax');assert.equal(call.key,'sk_test_auction');assert.equal(call.account,'acct_auction');
  }
 });
 

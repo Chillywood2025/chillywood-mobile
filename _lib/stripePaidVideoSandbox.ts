@@ -2,6 +2,7 @@ import { Platform, Linking } from "react-native";
 import { supabase } from "./supabase";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { captureAccountBoundSupabaseMutationSubject, assertAccountBoundSupabaseMutationSubjectCurrent } from "./accountBoundSupabaseMutation";
+import { withStripeVideoAttempt } from "./stripeVideoAttemptJournal";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 export type StripeSandboxVideoAccess = {
@@ -46,10 +47,10 @@ export async function openStripeSandboxVideoCheckout(videoId: string): Promise<s
   if (!offer?.available || !offer.checkoutAllowed || offer.canAccess) throw new Error("Stripe sandbox checkout is not ready for this video. Refresh access before trying again.");
   // Keep unresolved requests across refreshes. Storage failure blocks rather than
   // creating another charge session on an ambiguous retry. No credentials stored.
-  const key = `stripe-video-sandbox:${subject.authority.userId}:${videoId}`;
-  let requestId = sessionStorage.getItem(key);
-  if (requestId !== null && !UUID.test(requestId)) throw new Error("Saved checkout needs recovery before another attempt.");
-  if (!requestId) { requestId = crypto.randomUUID(); sessionStorage.setItem(key, requestId); }
+  return withStripeVideoAttempt(sessionStorage, subject.authority.userId, videoId,
+    () => assertAccountBoundSupabaseMutationSubjectCurrent(subject), async journal => {
+  const attempt = await journal.prepare(() => crypto.randomUUID());
+  const { requestId } = attempt;
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   const result = await supabase.functions.invoke("stripe-paid-video-checkout", {
     headers: { Authorization: `Bearer ${subject.accessToken}`, "x-chillywood-platform": "web" },
@@ -65,10 +66,11 @@ export async function openStripeSandboxVideoCheckout(videoId: string): Promise<s
     throw new Error("Checkout could not be confirmed. Your saved attempt will be reused; do not start another purchase.");
   }
   if (row.status === "failed" && row.canAccess === false && row.checkoutUrl == null) {
-    sessionStorage.removeItem(`${key}:order`); sessionStorage.removeItem(key);
+    await journal.remember(attempt, String(row.orderId));
+    await journal.retireUnpaid({ requestId, orderId: String(row.orderId) });
     return "The server verified that the previous checkout expired without payment. Select Unlock Video again to start a new checkout.";
   }
-  sessionStorage.setItem(`${key}:order`, String(row.orderId));
+  await journal.remember(attempt, String(row.orderId));
   const url = validateStripeSandboxCheckoutUrl(row.checkoutUrl);
   if (!url || row.canAccess !== false || row.status !== "checkout_ready") {
     return "Checkout is pending or unavailable. Refresh video access; returning from checkout does not unlock this video.";
@@ -76,17 +78,18 @@ export async function openStripeSandboxVideoCheckout(videoId: string): Promise<s
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   await Linking.openURL(url);
   return "Sandbox checkout opened. Refresh video access after payment; only server-verified access unlocks playback.";
+  });
 }
 
 /** Reconcile the retained order, then caller must reread canonical access. */
 export async function refreshStripeSandboxVideoPayment(videoId: string): Promise<string | null> {
   if (Platform.OS !== "web") return null;
   const subject = await captureAccountBoundSupabaseMutationSubject();
-  const key = `stripe-video-sandbox:${subject.authority.userId}:${videoId}`;
-  const requestId = sessionStorage.getItem(key);
-  const orderId = sessionStorage.getItem(`${key}:order`);
-  if (!orderId && !requestId) return null;
-  if (!requestId || !UUID.test(requestId) || (orderId && !UUID.test(orderId))) throw new Error("Saved checkout identity is invalid.");
+  return withStripeVideoAttempt(sessionStorage, subject.authority.userId, videoId,
+    () => assertAccountBoundSupabaseMutationSubjectCurrent(subject), async journal => {
+  const attempt = await journal.read();
+  if (!attempt) return null;
+  const { requestId, orderId } = attempt;
   const result = await supabase.functions.invoke("stripe-paid-video-checkout", {
     headers: { Authorization: `Bearer ${subject.accessToken}`, "x-chillywood-platform": "web" },
     body: orderId ? { orderId, action: "status" } : { videoId, requestId, action: "recover" },
@@ -94,13 +97,14 @@ export async function refreshStripeSandboxVideoPayment(videoId: string): Promise
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   if (result.error || (orderId ? result.data?.orderId !== orderId : !UUID.test(String(result.data?.orderId))) || result.data?.buyerId !== subject.authority.userId
     || result.data?.videoId !== videoId || result.data?.environment !== "sandbox" || result.data?.provider !== "stripe"
-    || result.data?.requestId !== sessionStorage.getItem(`stripe-video-sandbox:${subject.authority.userId}:${videoId}`)) {
+    || result.data?.requestId !== requestId) {
     throw new Error("Checkout status could not be verified. Keep this saved attempt.");
   }
-  sessionStorage.setItem(`${key}:order`, String(result.data.orderId));
+  await journal.remember(attempt, String(result.data.orderId));
   if (result.data.status === "failed" && result.data.canAccess === false && result.data.checkoutUrl == null) {
-    sessionStorage.removeItem(`${key}:order`); sessionStorage.removeItem(key);
+    await journal.retireUnpaid({ requestId, orderId: String(result.data.orderId) });
     return "The server verified that the previous checkout expired without payment. Select Unlock Video again to start a new checkout.";
   }
   return null;
+  });
 }

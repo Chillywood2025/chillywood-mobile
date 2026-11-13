@@ -8,6 +8,7 @@ function subject() {
   const monetization = load('_lib/creatorMonetization.ts', {
     'react-native': { Platform: { OS: 'ios' } },
     './stripePaidVideoSandbox': { readStripeSandboxVideoAccess: () => { throw Error('Cashout must not read video access'); } },
+    './stripePaidVideoNative': { readNativeStripeSandboxVideoAccess: () => { throw Error('Cashout must not read native video access'); } },
     './supabase': {}, './entitlementAuthority': {},
     './accountBoundSupabaseMutation': {
       async runCurrentAccountBoundSupabaseMutationRpc(name, args) {

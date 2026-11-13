@@ -4,8 +4,9 @@ import ts from 'typescript';
 
 // Compile the complete production module, including every private helper. This
 // runs on CI's Node 20 without relying on newer Node's implicit TS stripping.
-// Pure modules must not acquire an unreviewed dependency through this harness.
-export function loadPureTypeScriptModule(file) {
+// Dependencies remain rejected unless a test explicitly supplies the reviewed
+// production module. The default still admits no external dependency.
+export function loadPureTypeScriptModule(file, dependencies = {}) {
   const source = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, {
     fileName: file, reportDiagnostics: true,
@@ -16,7 +17,7 @@ export function loadPureTypeScriptModule(file) {
     getCanonicalFileName: value => value, getCurrentDirectory: () => process.cwd(), getNewLine: () => '\n',
   }));
   const module = {exports: {}};
-  const require = name => { throw new Error(`Unexpected dependency in pure TypeScript module ${file}: ${name}`); };
+  const require = name => { if (Object.hasOwn(dependencies, name)) return dependencies[name]; throw new Error(`Unexpected dependency in pure TypeScript module ${file}: ${name}`); };
   new Function('require', 'module', 'exports', 'crypto', compiled.outputText)(require, module, module.exports, webcrypto);
   return module.exports;
 }

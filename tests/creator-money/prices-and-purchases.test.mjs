@@ -22,6 +22,16 @@ const item = (changes = {}) => ({ id: uuid(1), purchaseIntentId: uuid(1), source
   destination: { kind: "creator_event", id: source }, receipt: { providerEventId: uuid(2), originalTransactionId: "original", verifiedAt: stamp },
   terms: { title: "Sunday show", timeZone: "America/New_York", priceCents: 299, replayPolicy: "none" }, termsAvailable: true, grantsAccess: false, ...changes });
 const page = (items = [item()]) => ({ userId: buyer, fetchedAt: stamp, items, nextCursor: null });
+test('Stripe video history preserves gross, partial access revocation, and rejects impossible refund claims',()=>{
+ const h=setup();
+ const video=changes=>item({sourceType:'paid_content',productType:'paid_content_access',productKey:'stripe_sandbox_video',provider:'stripe_connect',
+   destination:{kind:'creator_video',id:source},status:'refunded',amountMinor:1000,refund:{state:'partial',amountMinor:100},...changes});
+ assert.ok(h.purchases.parseCreatorPurchasePage(page([video()]),buyer));
+ assert.ok(h.purchases.parseCreatorPurchasePage(page([video({status:'pending',refund:null})]),buyer));
+ for(const changes of [{refund:{state:'full',amountMinor:100}},{refund:{state:'partial',amountMinor:1100}},{refund:{state:'none',amountMinor:0}},
+   {environment:'production'},{productKey:'unverified'},{grantsAccess:true}])
+   assert.equal(h.purchases.parseCreatorPurchasePage(page([video(changes)]),buyer),null);
+});
 function setup({ rpc, platform = "android" } = {}) {
   let authority = { userId: buyer, accountId: buyer, sessionGeneration: "session-1", state: "ACTIVE", restoreOnly: false };
   const calls = [], restores = [];
@@ -205,6 +215,7 @@ test("paid-video initial price binds the dedicated iOS intent to299/499/999 and 
   const stripeBoundary = () => { throw Error('Native intent fixture must not enter Stripe checkout or access'); };
   const mocks = { "./nativeProductionPaidVideo": { purchaseNativeProductionPaidVideo: async () => { throw new Error("Intent-only fixture must not launch production purchase"); } }, "react-native": { Platform: platform }, "react-native-get-random-values": {}, "./accountSessionAuthority": {}, "./accountBoundSupabaseMutation": {},
     "./stripePaidVideoSandbox": { openStripeSandboxVideoCheckout: stripeBoundary, readStripeSandboxVideoAccess: stripeBoundary },
+    "./stripePaidVideoNative": { openNativeStripeSandboxVideoCheckout: stripeBoundary, readNativeStripeSandboxVideoAccess: stripeBoundary, refreshNativeStripeSandboxVideoPayment: stripeBoundary },
     "./featureFlags": {}, "./revenuecat": {}, "./runtimeConfig": {}, "./revenuecatPurchaseClosure": {},
     "./analytics": {}, "./supabase": { supabase: {} }, "./creatorVideos": {}, "./entitlementAuthority": {}, "./paymentRailPolicy": {},
     "./creatorMonetization": {}, "./creatorMoneyStoreQuote": load("creatorMoneyStoreQuote", {}), "./iosAppStoreCommerce": load("iosAppStoreCommerce", {}) };

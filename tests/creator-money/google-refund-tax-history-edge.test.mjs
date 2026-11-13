@@ -129,6 +129,38 @@ test('omitted unused refund balance transactions survive checkpoint JSON roundtr
   await finish(f,h);assert.equal(completed(h).length,1);
 });
 
+function paidVideoHistoryFixture(){
+ const base=googleRefundFixture(),context={...base.context,feature:'paid_video',recipient_account_id:null,platform_account_id:'acct_platform',
+  video_id:'a7100000-0000-4000-8000-000000000005',price_id:'a7100000-0000-4000-8000-000000000006',price_revision:1,
+  tax_policy_id:'a7100000-0000-4000-8000-000000000007'};
+ const f=googleRefundFixture({context});
+ const metadata={chillywoodFlow:'stripe_paid_video_sandbox',orderId:context.quote_id,buyerId:context.buyer_id,
+  videoId:context.video_id,priceId:context.price_id,priceRevision:'1',commerce_tax_policy_id:context.tax_policy_id};
+ f.data['/checkout/sessions/cs_test_sale'].metadata={...metadata};
+ f.data['/payment_intents/pi_sale'].metadata={...metadata};
+ return f;
+}
+test('paid-video tax history resumes through serialized checkpoints with exact session and intent identity',async()=>{
+ const f=paidVideoHistoryFixture(),h=googleHistoryClient({context:f.context});
+ await invoke(f,h);assert.equal(completed(h).length,0);assert.ok(h.state.checkpoint.entries.length>0);
+ h.state.checkpoint=JSON.parse(JSON.stringify(h.state.checkpoint));
+ await finish(f,h);assert.equal(completed(h).length,1);
+ const facts=completed(h)[0].args.p_facts;assert.equal(facts.refunded_minor,280);assert.equal(facts.tax_reversal_minor,28);
+ for(const path of ['/v1/checkout/sessions/cs_test_sale','/v1/payment_intents/pi_sale']){
+  const projection=projectStripeHistoryFacts(path,{...f.data[path.slice(3)],metadata:{...f.data[path.slice(3)].metadata,private_note:'omit'}});
+  assert.deepEqual(projection.metadata,f.data[path.slice(3)].metadata);assert.equal(JSON.stringify(projection).includes('private_note'),false);
+ }
+});
+test('paid-video history rejects changed intent price identity and transferred charge after checkpoint',async()=>{
+ for(const change of ['price','transfer']){
+  const f=paidVideoHistoryFixture(),h=googleHistoryClient({context:f.context});await invoke(f,h);
+  if(change==='price')f.data['/payment_intents/pi_sale'].metadata.priceRevision='2';
+  else f.data['/charges/ch_sale'].transfer='tr_unexpected';
+  for(let i=0;i<3;i++)await invoke(f,h);
+  assert.equal(completed(h).length,0);
+ }
+});
+
 test('failed durable saves reject without acknowledging completion or recording outside the lease',async()=>{
   for(const failure of [{error:{message:'synthetic-save-failed'},data:null},{error:null,data:false},
     {error:null,data:{status:'reported',financialAuthority:false}},{error:null,data:null}]){

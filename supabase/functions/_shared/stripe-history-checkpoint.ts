@@ -3,6 +3,7 @@ type Entry = {path:string;facts:Json;status:number;observedAt:number};
 export type StripeHistoryCheckpoint = {version:1;phase:'collect'|'verify';cursor:number;entries:Entry[];verificationStartedAt:number|null};
 const object=(v:unknown):v is Json=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const fields=(v:Json,names:string[])=>Object.fromEntries(names.filter(k=>Object.hasOwn(v,k)).map(k=>[k,v[k]]));
+const videoMetadataKeys=['chillywoodFlow','orderId','buyerId','videoId','priceId','priceRevision','commerce_tax_policy_id'];
 const line=(v:unknown)=>{if(!object(v))throw Error('history_shape_invalid');return fields(v,['id','object','livemode','type','amount','amount_tax','tax_behavior']);};
 const canonical=(v:unknown):string=>Array.isArray(v)?`[${v.map(canonical).join(',')}]`:object(v)?`{${Object.keys(v).sort().map(k=>`${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`:JSON.stringify(v);
 const empty=():StripeHistoryCheckpoint=>({version:1,phase:'collect',cursor:0,entries:[],verificationStartedAt:null});
@@ -15,11 +16,12 @@ export function projectStripeHistoryFacts(path:string,value:unknown):Json{
  const pathname=new URL(path,'https://api.stripe.com').pathname;
  if(pathname==='/v1/account')return fields(value,['id','object']);
  if(/^\/v1\/checkout\/sessions\/cs_(test|live)_/.test(pathname))return {...fields(value,['id','object','livemode','mode','status','payment_status','client_reference_id','currency','amount_total','payment_intent']),
-  metadata:object(value.metadata)?fields(value.metadata,['chillywood_order_id','buyer_user_id','environment','rail','auction_quote_id','settlement_contract_id','settlement_policy','provider_product_id','chillywood_tip_id','fan_user_id','creator_user_id']):value.metadata,
+  metadata:object(value.metadata)?fields(value.metadata,['chillywood_order_id','buyer_user_id','environment','rail','auction_quote_id','settlement_contract_id','settlement_policy','provider_product_id','chillywood_tip_id','fan_user_id','creator_user_id',...videoMetadataKeys]):value.metadata,
   automatic_tax:object(value.automatic_tax)?fields(value.automatic_tax,['enabled','status']):value.automatic_tax,
   total_details:object(value.total_details)?fields(value.total_details,['amount_tax','amount_discount','amount_shipping']):value.total_details};
- if(/^\/v1\/payment_intents\/pi_/.test(pathname))return fields(value,['id','object','livemode','status','currency','amount','amount_received','latest_charge','transfer_data','application_fee_amount','on_behalf_of']);
- if(/^\/v1\/charges\/ch_/.test(pathname))return fields(value,['id','object','livemode','payment_intent','paid','captured','currency','amount','amount_captured','disputed','amount_refunded','refunded','balance_transaction']);
+ if(/^\/v1\/payment_intents\/pi_/.test(pathname))return {...fields(value,['id','object','livemode','status','currency','amount','amount_received','latest_charge','transfer_data','application_fee_amount','on_behalf_of']),
+  ...(Object.hasOwn(value,'metadata')?{metadata:object(value.metadata)?fields(value.metadata,videoMetadataKeys):value.metadata}:{})};
+ if(/^\/v1\/charges\/ch_/.test(pathname))return fields(value,['id','object','livemode','payment_intent','paid','captured','currency','amount','amount_captured','disputed','amount_refunded','refunded','balance_transaction','transfer','transfer_data','on_behalf_of','application_fee','application_fee_amount']);
  if(/^\/v1\/balance_transactions\/txn_/.test(pathname))return fields(value,['id','object','source','type','currency','amount','fee','net','status']);
  if(pathname==='/v1/refunds')return {...fields(value,['object','has_more']),data:Array.isArray(value.data)?value.data.map(v=>{
   if(!object(v))throw Error('history_shape_invalid');return {...fields(v,['id','object','charge','payment_intent','currency','status','amount']),
