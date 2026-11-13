@@ -84,9 +84,10 @@ export function parseCreatorPurchasePage(value: unknown, expectedUserId: string)
       } else if (entry.destination !== null) return null;
     }
     if (entry.refund !== undefined) {
-      if (sourceType !== "creator_tip" || entry.provider !== "stripe_connect") return null;
+      const stripeVideo = sourceType === "paid_content" && entry.productKey === "stripe_sandbox_video" && entry.environment === "sandbox";
+      if ((sourceType !== "creator_tip" && !stripeVideo) || entry.provider !== "stripe_connect") return null;
       if (entry.refund === null) {
-        if (!["reconciliation_required", "disputed"].includes(entry.status)) return null;
+        if (!(stripeVideo ? ["pending", "failed", "reconciliation_required", "disputed"] : ["reconciliation_required", "disputed"]).includes(entry.status)) return null;
       } else {
         if (!record(entry.refund) || !["none", "partial", "full"].includes(String(entry.refund.state))
           || !Number.isSafeInteger(entry.amountMinor) || Number(entry.amountMinor) <= 0
@@ -95,7 +96,9 @@ export function parseCreatorPurchasePage(value: unknown, expectedUserId: string)
         const refunded = Number(entry.refund.amountMinor), charged = Number(entry.amountMinor);
         const extent = refunded === 0 ? "none" : refunded === charged ? "full" : "partial";
         if (entry.refund.state !== extent
-          || (extent === "full" ? !["refunded", "disputed"].includes(entry.status) : entry.status === "refunded")) return null;
+          || (stripeVideo
+            ? ((extent === "full" && !["refunded", "disputed", "reconciliation_required"].includes(entry.status)) || (entry.status === "refunded" && extent === "none"))
+            : (extent === "full" ? !["refunded", "disputed"].includes(entry.status) : entry.status === "refunded"))) return null;
       }
     }
     if (entry.destination !== null) {

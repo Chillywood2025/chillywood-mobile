@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {acceptCommerceCreatorTerms,seedCommerceBuyer,seedCommerceCreator,seedQualifiedCommerceCreator,withCommerceActor} from '../helpers/automatic-commerce-fixture.mjs';
 
@@ -124,5 +126,30 @@ test('current schema: Stripe receipt, held ledger, replay and refund-first are a
   assert.deepEqual(classified,[{videoId:video,creatorId:creator.id}]);
   await assert.rejects(()=>db.query("update public.videos set playback_url='https://public.example/video.mp4' where id=$1",[video]),/stripe_video_requires_private_source_without_public_renditions/);
   await assert.rejects(()=>db.query('update public.videos set vip_access_required=true where id=$1',[video]),/stripe_video_requires_private_source_without_public_renditions/);
+  // History is a read projection of the same immutable orders/ledger, not new money.
+  const history=(actor,limit=100,cursor=null)=>withCommerceActor(db,actor,()=>one(
+    'select public.read_my_creator_purchases($1,$2,$3,$4,$5)',[limit,cursor?.createdAt??null,cursor?.id??null,'paid_content',video]));
+  const before=await one('select count(*)::int from public.money_access_ledger_events');
+  const full=await history(buyer);
+  const count=await one('select count(*)::int from private.stripe_paid_video_orders where buyer_id=$1',[buyer.id]);
+  assert.equal(full.items.length,count);assert.equal(new Set(full.items.map(x=>x.id)).size,count);
+  assert.ok(full.items.every(x=>x.grantsAccess===false&&x.amountMinor===1000&&x.productKey==='stripe_sandbox_video'));
+  assert.equal(full.items.find(x=>x.id===first.order).refund.amountMinor,100);
+  assert.equal(full.items.find(x=>x.id===first.order).refund.state,'partial');
+  const api={};new Function('require','exports',ts.transpileModule(readFileSync('_lib/creatorPurchases.ts','utf8'),{
+    compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(()=>({}),api);
+  assert.ok(api.parseCreatorPurchasePage(full,buyer.id),'real RPC history passes client contract');
+  let cursor=null;const paged=[];
+  do {const page=await history(buyer,1,cursor);assert.ok(api.parseCreatorPurchasePage(page,buyer.id));paged.push(...page.items.map(x=>x.id));cursor=page.nextCursor;}while(cursor);
+  assert.deepEqual(paged,full.items.map(x=>x.id));
+  assert.equal((await history(otherCreator)).items.length,0);
+  const creatorHistory=await withCommerceActor(db,creator,()=>one('select public.list_my_paid_video_transactions(100)'));
+  assert.equal(creatorHistory.filter(x=>x.provider==='stripe_connect').length,count);
+  assert.equal(creatorHistory.find(x=>x.id===first.order).amountCents,1000);
+  assert.equal(await one('select count(*)::int from public.money_access_ledger_events'),before,'history cannot create cost/receipt events');
+  await assert.rejects(()=>withCommerceActor(db,buyer,()=>one('select public.read_my_creator_purchases(0)')),/cursor_invalid/);
+  await db.exec('set role authenticated');
+  await assert.rejects(()=>one('select private.stripe_video_purchase_history_item($1)',[first.order]),/permission denied/);
+  await db.exec('reset role');
  } finally {await db.close();}
 });

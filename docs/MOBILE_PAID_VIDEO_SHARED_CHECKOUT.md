@@ -13,11 +13,11 @@ mobile checkpoint was not recovered; its test results do not validate this work.
   Checkout and refresh serialize over one unresolved request; storage writes
   are read back before use. Corruption and ambiguous outcomes preserve recovery
   identity. The native AsyncStorage adapter stores only request/order IDs.
-- Web checkout uses the shared journal. Unsupported transports are explicitly
-  rejected before database/provider work. Native checkout is not yet admitted.
+- Web and native checkout use the shared journal. Unsupported transports are
+  explicitly rejected before database/provider work.
 - Dedicated service-only native admission now binds existing orders to current
   sandbox creator authority and exact route/price/account/session evidence.
-  It is not wired to the endpoint. Android dispatch stays closed until the
+  The endpoint invokes atomic native prepare/admission. Android dispatch stays closed until the
   existing reporting queue has its exact paid-video launch binding. Qualification
   rows are locked through dispatch; no active routes or evidence are seeded.
 - Player purchase/refresh completions are scoped to the initiating account/video
@@ -25,7 +25,7 @@ mobile checkpoint was not recovered; its test results do not validate this work.
   provider wording uses the canonical offer instead of assuming from the OS.
 - Google refund-tax consumers and resumable history preserve paid-video order,
   price and tax identities and use dedicated video account credentials, not
-  auction fallback. SQL context/launch producers remain integration work.
+  auction fallback. Dedicated SQL context/launch producers are wired to those consumers.
 
 ## Audited next integration boundaries
 
@@ -48,8 +48,6 @@ mobile checkpoint was not recovered; its test results do not validate this work.
    not OS-only labels. Account/video ownership applies to refresh and purchase.
    Reuse existing authenticated native playback, not the web Service Worker.
 
-## Still required before activation
-
 ## Recovery continuation checkpoint
 
 The normal paid-video purchase and player access resolvers now select the native
@@ -62,11 +60,16 @@ or relying on the old catalog's checkout shell.
 
 74 focused routing, historical-access, native/web checkout, player lifecycle,
 playback and price/cashout boundary tests passed for this continuation. Full
-typecheck and exact-head Required Validation have not yet passed this checkpoint.
+typecheck passed with exact root and ops lockfiles; exact-head Required Validation
+has not yet passed this checkpoint.
 Creator authoring now uses one exact-cent sandbox price on all three platforms;
 the inactive native fixed-price picker no longer authors these new offers. Pause
 preserves purchased access and does not turn protected content free. Creator and
-buyer history integration still needs completion; these focused results do not
+buyer history now project the existing order and observations, preserve original
+gross and cumulative refunds, and avoid displaying separate cost/refund ledger
+events as additional purchases. Current-schema RPC/client parsing, pagination,
+ownership and unchanged-ledger-count proof passed. The historical buyer-library
+current-schema regression passed too. These focused results do not
 claim the whole application or installed phones are verified.
 
 ## Remaining activation requirements

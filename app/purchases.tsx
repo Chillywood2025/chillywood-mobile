@@ -129,7 +129,7 @@ export default function PurchasesScreen() {
                     <Text style={styles.kind}>{scope.title}{item.environment === "sandbox" ? " · Sandbox" : item.environment === "unknown" ? " · Environment unverified" : ""}</Text>
                     <Text style={styles.title}>{item.title ?? scope.title}</Text>
                     <Text style={styles.price}>Purchase price: {moneyLabel(item)}</Text>
-                    {item.sourceType === "creator_tip" && item.provider === "stripe_connect" ? <Text testID={`purchase-refund-${item.id}`} style={styles.meta}>
+                    {(item.sourceType === "creator_tip" || (item.sourceType === "paid_content" && item.productKey === "stripe_sandbox_video")) && item.provider === "stripe_connect" ? <Text testID={`purchase-refund-${item.id}`} style={styles.meta}>
                       {item.refund ? `Provider-reported refund: ${item.refund.state === "none" ? "None" : item.refund.state === "partial" ? "Partial" : "Full"} · ${moneyLabel({ ...item, amountMinor: item.refund.amountMinor })} of ${moneyLabel(item)}` : "Refund amount unavailable. Check the provider receipt or contact support."}
                     </Text> : null}
                     {item.receipt?.reportedAmountMinor != null && item.receipt.reportedCurrency ? <Text style={styles.meta}>Provider-reported amount: {moneyLabel({ ...item, amountMinor: item.receipt.reportedAmountMinor, currency: item.receipt.reportedCurrency })}</Text> : null}
