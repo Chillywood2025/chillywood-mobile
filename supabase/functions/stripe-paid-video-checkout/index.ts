@@ -1,5 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2';
 import {authenticateRequest} from '../_shared/stripe-connect.ts';
+import {readStripeVideoRequestBody,verifyStripeVideoMarketProof,type StripeVideoMarketObservation} from '../_shared/stripe-video-market-proof.ts';
 import {videoCheckoutForm,videoRpc,stripeVideoGet,reconcileStripeVideoOrder,recoverStripeVideoSession,type ObjectMap} from '../_shared/stripe-paid-video-checkout.ts';
 
 // Native routes are separately default-off and require exact database admission.
@@ -22,20 +23,26 @@ Deno.serve(async(req:Request)=>{
  const routeId=native?Deno.env.get(`${prefix}_ROUTE_ID`):null;
  const returnOrigin=native?httpsOrigin(Deno.env.get(`${prefix}_RETURN_ORIGIN`)??''):httpsOrigin(origin);
  const accountId=Deno.env.get('STRIPE_VIDEO_TEST_ACCOUNT_ID')??'';
- if(native&&(Deno.env.get(`${prefix}_SANDBOX_ENABLED`)!=='true'||!uuid(routeId)||!returnOrigin||!/^acct_[A-Za-z0-9]+$/.test(accountId)))
+ const nativeEnabled=native&&Deno.env.get(`${prefix}_SANDBOX_ENABLED`)==='true';
+ if(native&&(!uuid(routeId)||!returnOrigin||!/^acct_[A-Za-z0-9]+$/.test(accountId)))
   return reply(503,{error:'native_sandbox_not_configured'});
  const secret=Deno.env.get('STRIPE_TEST_SECRET_KEY')??'';
  const productId=Deno.env.get('STRIPE_VIDEO_TEST_PRODUCT_ID')??'';
  const enabled=Deno.env.get('STRIPE_VIDEO_SANDBOX_ENABLED')==='true';
- if(!enabled||!secret.startsWith('sk_test_')||!/^prod_[A-Za-z0-9]+$/.test(productId))return reply(503,{error:'sandbox_not_configured'});
+ if(!secret.startsWith('sk_test_')||!/^prod_[A-Za-z0-9]+$/.test(productId))return reply(503,{error:'sandbox_not_configured'});
  try {
   const auth=await authenticateRequest(req,Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_ANON_KEY')??'');
   if('error' in auth)return reply(401,{error:'current_session_required'});
   const user=auth.user;
   const admin=createClient(Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??'',{auth:{persistSession:false,autoRefreshToken:false}});
-  const body=await req.json();
+  const rawBody=await readStripeVideoRequestBody(req);
+  const body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(rawBody));
   if(!body||typeof body!=='object'||Array.isArray(body))return reply(400,{error:'request_invalid'});
   if(body.action!==undefined&&body.action!=='recover'&&body.action!=='status'&&body.action!=='eligibility')return reply(400,{error:'action_invalid'});
+  // Creation/link exposure can be disabled without blocking authenticated
+  // reconciliation of historical orders. All identity/provider checks remain.
+  if(!enabled&&body.action!=='status'&&body.action!=='recover')return reply(503,{error:'sandbox_not_configured'});
+  if(native&&!nativeEnabled&&body.action!=='status'&&body.action!=='recover')return reply(503,{error:'native_sandbox_not_configured'});
   if(body.action==='eligibility') {
    if(!native||!uuid(body.videoId))return reply(400,{error:'native_video_required'});
    const eligibility=await videoRpc(admin,'read_stripe_video_native_checkout_eligibility',{
@@ -52,7 +59,7 @@ Deno.serve(async(req:Request)=>{
   const project=(o:ObjectMap,checkoutUrl?:string)=>({requestId:o.request_id,videoId:o.video_id,buyerId:o.buyer_id,creatorId:o.creator_id,
    priceId:o.price_id,priceRevision:o.price_revision,amountMinor:o.amount_minor,currency:o.currency,environment:'sandbox',provider:'stripe',
    orderId:o.id,status:o.status,checkoutPlatform:o.checkout_platform??'web',canAccess:o.canAccess===true,...(checkoutUrl?{checkoutUrl}:{})});
-  let order:ObjectMap;let nativeAdmission:ObjectMap|null=null;
+  let order:ObjectMap;let nativeAdmission:ObjectMap|null=null;let market:StripeVideoMarketObservation|null=null;
   if(body.action==='recover') {
    if(!uuid(body.videoId)||!uuid(body.requestId))return reply(400,{error:'video_and_request_required'});
    order=await videoRpc(admin,'read_stripe_sandbox_video_order_by_request',{p_request_id:body.requestId,p_video_id:body.videoId,
@@ -85,6 +92,11 @@ Deno.serve(async(req:Request)=>{
     return reply(order.status==='failed'?200:202,project(order)); // old undispatched session must expire, never impersonate it
    }
   }else{
+   // New charge preparation only. Historical status/recover/webhook/grants do
+   // not depend on today's geography. A valid proof is an IP-country signal,
+   // not residence evidence or native store-program eligibility.
+   market=await verifyStripeVideoMarketProof(req,rawBody,{
+    secret:Deno.env.get('CHILLYWOOD_NETWORK_PROOF_SECRET')??'',audience:Deno.env.get('SUPABASE_URL')??''});
    const account=await stripeVideoGet(secret,'/account');
    product=await stripeVideoGet(secret,`/products/${encodeURIComponent(productId)}`);
    if(!/^acct_[A-Za-z0-9]+$/.test(String(account.id))||(native&&account.id!==accountId)||product.id!==productId||product.livemode!==false||product.active!==true)return reply(503,{error:'test_provider_unqualified'});
@@ -117,6 +129,14 @@ Deno.serve(async(req:Request)=>{
        priceId:order.price_id,priceRevision:order.price_revision}).every(([key,value])=>metadata?.[key]===String(value)))throw Error('session_identity_mismatch');
     const url=typeof session.url==='string'?session.url:undefined;
     if(url&&!/^https:\/\/checkout\.stripe\.com\//.test(url))throw Error('checkout_url_invalid');
+    if(session.status==='open'&&url){
+     const fresh=await verifyStripeVideoMarketProof(req,rawBody,{
+      secret:Deno.env.get('CHILLYWOOD_NETWORK_PROOF_SECRET')??'',audience:Deno.env.get('SUPABASE_URL')??''});
+     const consumed=await videoRpc(admin,'consume_stripe_video_resume_market',{p_order_id:order.id,p_buyer_id:user.id,
+      p_session_id:user.sessionGeneration,p_checkout_session_id:order.checkout_session_id,p_market:fresh});
+     if(consumed.consumed!==true||consumed.purpose!=='resume_url'||consumed.orderId!==order.id
+      ||consumed.checkoutSessionId!==order.checkout_session_id)throw Error('checkout_resume_market_invalid');
+    }
     return reply(200,project(order,session.status==='open'?url:undefined));
    }
    return reply(202,project(order)); // unknown create outcome, never re-POST
@@ -140,7 +160,8 @@ Deno.serve(async(req:Request)=>{
      ||binding.routeKind!=='android_external_content_link'||binding.financialAuthority!==false||binding.accessGranted!==false)throw Error('native_reporting_binding_invalid');
    }
   }
-  order=await videoRpc(admin,'dispatch_stripe_sandbox_video_order',{p_order_id:order.id,p_buyer_id:user.id,p_session_id:user.sessionGeneration});
+  if(!market)throw Error('checkout_market_observation_required');
+  order=await videoRpc(admin,'dispatch_stripe_sandbox_video_order',{p_order_id:order.id,p_buyer_id:user.id,p_session_id:user.sessionGeneration,p_market:market});
   if((order.tax as ObjectMap).policyId!==tax.policyId)throw Error('tax_policy_changed');
   if((order.checkout_platform??'web')!==platform)throw Error('order_transport_mismatch');
   const response=await fetch('https://api.stripe.com/v1/checkout/sessions',{method:'POST',redirect:'error',signal:AbortSignal.timeout(120000),

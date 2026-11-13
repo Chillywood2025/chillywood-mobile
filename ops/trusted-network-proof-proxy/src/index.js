@@ -1,3 +1,4 @@
+import { CHECKOUT_PATH, readCheckoutBody, signCheckoutProof } from "./checkout-proof.js";
 const PROOF_VERSION = "v1";
 const DEFAULT_MAX_BODYLESS_METHODS = new Set(["GET", "HEAD"]);
 
@@ -128,14 +129,26 @@ export default {
     const headers = new Headers(request.headers);
     stripSpoofableHeaders(headers);
 
-    const signed = await signedProofPayload(request, env, realIp);
+    // Other endpoints retain their v1 audit contract. Checkout observations are
+    // bound to bytes and authorization; this does not activate checkout itself.
+    const checkout = url.pathname === CHECKOUT_PATH && request.method === "POST";
+    let forwardedBody = bodyFor(request);
+    let signed;
+    try {
+      if (checkout) {
+        forwardedBody = await readCheckoutBody(request);
+        signed = await signCheckoutProof(request, forwardedBody, env.CHILLYWOOD_NETWORK_PROOF_SECRET, new URL(env.CHILLYWOOD_BACKEND_ORIGIN_URL).origin);
+      } else signed = await signedProofPayload(request, env, realIp);
+    } catch {
+      return json({ error: "checkout_proof_request_invalid" }, 400);
+    }
     headers.set("x-chillywood-network-proof", signed.proof);
     headers.set("x-chillywood-network-proof-signature", `sha256=${signed.signature}`);
     headers.set("x-chillywood-network-proof-timestamp", signed.timestamp);
-    headers.set("x-chillywood-network-proof-version", PROOF_VERSION);
+    headers.set("x-chillywood-network-proof-version", checkout ? "v2" : PROOF_VERSION);
 
     return fetch(target, {
-      body: bodyFor(request),
+      body: forwardedBody,
       headers,
       method: request.method,
       redirect: "manual",

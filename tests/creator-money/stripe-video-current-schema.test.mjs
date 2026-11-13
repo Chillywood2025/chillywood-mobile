@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
+import {syntheticVideoMarketObservation} from '../helpers/stripe-video-market-fixture.mjs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {acceptCommerceCreatorTerms,seedCommerceBuyer,seedCommerceCreator,seedQualifiedCommerceCreator,withCommerceActor} from '../helpers/automatic-commerce-fixture.mjs';
 
@@ -67,7 +68,8 @@ test('current schema: Stripe receipt, held ledger, replay and refund-first are a
   assert.equal(await one('select public.read_stripe_sandbox_video_order_by_request($1,$2,$3,$4)',[request,randomUUID(),buyer.id,nextSession]),null);
   await assert.rejects(()=>one('select public.read_stripe_sandbox_video_order_by_request($1,$2,$3,$4)',[request,video,buyer.id,randomUUID()]),/buyer_authority_required/);
   assert.equal(await one('select session_id from private.stripe_paid_video_orders where id=$1',[reserved.id]),buyer.session);
-  await assert.rejects(()=>one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3)',[reserved.id,buyer.id,buyer.session]),/checkout_dispatch_unavailable/);
+  const market=await syntheticVideoMarketObservation(db,reserved.id);
+  await assert.rejects(()=>one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3,$4)',[reserved.id,buyer.id,buyer.session,market]),/checkout_dispatch_unavailable/);
   assert.equal(await one('select status from private.stripe_paid_video_orders where id=$1',[reserved.id]),'prepared');
   await db.query("update private.stripe_paid_video_orders set expires_at=clock_timestamp()-interval '1 second' where id=$1",[reserved.id]);
   const expired=await one('select public.read_stripe_sandbox_video_order($1,$2,$3)',[reserved.id,buyer.id,buyer.session]);assert.equal(expired.status,'failed');
