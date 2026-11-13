@@ -38,4 +38,6 @@ export const nativeProductionMigrationFiles=Object.freeze([
  '20261113013902_stripe_video_atomic_native_prepare.sql',
  '20261113014825_stripe_video_platform_access_read.sql',
  '20261113042617_stripe_video_shared_purchase_history.sql',
+ // Checkout market proof wraps the current native dispatch topology only.
+ '20261113080000_stripe_video_market_dispatch.sql',
 ]);

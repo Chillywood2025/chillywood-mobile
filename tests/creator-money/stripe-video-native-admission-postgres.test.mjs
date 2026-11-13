@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {syntheticVideoMarketObservation} from '../helpers/stripe-video-market-fixture.mjs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCommerceBuyer,seedCommerceCreator,acceptCommerceCreatorTerms,withCommerceActor} from '../helpers/automatic-commerce-fixture.mjs';
 
@@ -39,7 +40,8 @@ test('native sandbox admission binds the shared order without live Connect autho
   assert.equal(await one('select private.stripe_video_native_admission_current($1)',[order.id]),false);
   await db.query('update public.wave1_creator_eligibility set kyc_complete=null where creator_user_id=$1',[creator.id]);
   await db.query('update private.stripe_video_native_routes set revoked_at=now() where id=$1',[ios]);
-  await assert.rejects(()=>one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3)',[order.id,buyer.id,buyer.session]),/native_admission_required/);
+  const iosMarket=await syntheticVideoMarketObservation(db,order.id);
+  await assert.rejects(()=>one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3,$4)',[order.id,buyer.id,buyer.session,iosMarket]),/native_admission_required/);
   assert.equal(await one('select status from private.stripe_paid_video_orders where id=$1',[order.id]),'prepared');
   const program=await one(`insert into private.google_play_external_program_config(package_name,environment,enrollment_evidence,license_test_qualification_evidence,tax_configuration_evidence,reporter_configuration_evidence,native_build_qualification_evidence,verified_at,expires_at,enabled)
    values('com.chillywood.mobile','test','synthetic','synthetic','synthetic','synthetic','synthetic',now(),now()+interval '1 hour',true) returning id`);
@@ -49,7 +51,8 @@ test('native sandbox admission binds the shared order without live Connect autho
   const second=await makeOrder(),third=await makeOrder();
   const native=await admit(android,'android',buyer.id,buyer.session,'opaque-synthetic-token',second);
   assert.equal(native.platform,'android');assert.equal(JSON.stringify(native).includes('opaque-synthetic-token'),false);
-  await assert.rejects(()=>one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3)',[second,buyer.id,buyer.session]),/native_reporting_binding_required/);
+  const androidMarket=await syntheticVideoMarketObservation(db,second);
+  await assert.rejects(()=>one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3,$4)',[second,buyer.id,buyer.session,androidMarket]),/native_reporting_binding_required/);
   await assert.rejects(admit(android,'android',buyer.id,buyer.session,'opaque-synthetic-token',third),/unique constraint/);
   assert.equal(await one('select checkout_platform from private.stripe_paid_video_orders where id=$1',[third]),'web');
   assert.equal(await one('select count(*)::int from private.stripe_video_native_admissions where order_id=$1',[third]),0);
