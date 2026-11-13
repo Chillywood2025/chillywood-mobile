@@ -8,8 +8,8 @@ globalThis.crypto ??= webcrypto;
 const marketProof=loadPureTypeScriptModule('supabase/functions/_shared/stripe-video-market-proof.ts');
 const signer=await import(`data:text/javascript;base64,${Buffer.from(readFileSync('ops/trusted-network-proof-proxy/src/checkout-proof.js','utf8')).toString('base64')}`);
 const uuid='00000000-0000-4000-8000-000000000001';
-function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform,marketCountry='US',unsigned=false}={}){
- let handler;const calls=[],providerCalls=[],rpcArgs=[];let returnUrl,postedBody;
+function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform,marketCountry='US',unsigned=false,reuseProof=false,providerStatus='open',resumePatch={}}={}){
+ let handler,cachedProof;const consumedNonces=new Set();const calls=[],providerCalls=[],rpcArgs=[];let returnUrl,postedBody;
  const order={checkout_platform:orderPlatform,session_id:uuid,amount_minor:1000,currency:'usd',price_id:uuid,price_revision:1,...(status==='checkout_ready'?{checkout_session_id:'cs_test_one'}:{}),id:uuid,video_id:uuid,buyer_id:uuid,creator_id:'creator',request_id:uuid,status,stripe_account_id:'acct_test',stripe_product_id:'prod_test'};
  const tax={ready:true,policyId:'policy',taxCode:'txcd_100'};
  const deps={videoRpc:async(_admin,name,args)=>{calls.push(name);rpcArgs.push({name,args});if(name==='bind_stripe_video_tax_checkout_policy')return tax;
@@ -17,8 +17,9 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
   if(name==='prepare_stripe_video_native_order'){order.checkout_platform=args.p_platform;return {order,admission:{admissionId:uuid,orderId:uuid,platform:args.p_platform,expiresAt:'2099-01-01T00:00:00Z',verification:args.p_platform==='ios'?'native_storefront_observation_unverified':'native_sdk_observation_unverified',financialAuthority:false,accessGranted:false,...admissionPatch}};}
   if(name==='prepare_stripe_sandbox_video_order'&&preparedPlatform)order.checkout_platform=preparedPlatform;
   if(name==='bind_stripe_video_google_checkout')return {bindingId:uuid,orderId:uuid,admissionId:uuid,routeKind:'android_external_content_link',financialAuthority:false,accessGranted:false,...bindingPatch};
+  if(name==='consume_stripe_video_resume_market'){if(consumedNonces.has(args.p_market.nonce))throw Error('nonce_reused');consumedNonces.add(args.p_market.nonce);return {consumed:true,purpose:'resume_url',orderId:order.id,checkoutSessionId:order.checkout_session_id,...resumePatch};}
   if(name==='dispatch_stripe_sandbox_video_order')return {...order,tax};return order;},
-  stripeVideoGet:async(_secret,path)=>{providerCalls.push(path);return path==='/account'?{id:providerAccount}:path.startsWith('/checkout/sessions/')?{id:'cs_test_one',livemode:false,client_reference_id:uuid,mode:'payment',status:'open',amount_total:1000,currency:'usd',url:'https://checkout.stripe.com/c/pay/existing',metadata:{chillywoodFlow:'stripe_paid_video_sandbox',orderId:uuid,buyerId:uuid,videoId:uuid,priceId:uuid,priceRevision:'1'}}:{id:'prod_test',active:true,livemode:false,tax_code:taxCode};},
+  stripeVideoGet:async(_secret,path)=>{providerCalls.push(path);return path==='/account'?{id:providerAccount}:path.startsWith('/checkout/sessions/')?{id:'cs_test_one',livemode:false,client_reference_id:uuid,mode:'payment',status:providerStatus,amount_total:1000,currency:'usd',url:'https://checkout.stripe.com/c/pay/existing',metadata:{chillywoodFlow:'stripe_paid_video_sandbox',orderId:uuid,buyerId:uuid,videoId:uuid,priceId:uuid,priceRevision:'1'}}:{id:'prod_test',active:true,livemode:false,tax_code:taxCode};},
   videoCheckoutForm:(_o,_t,url)=>{returnUrl=url;calls.push('serialize');return new URLSearchParams('mode=payment');},recoverStripeVideoSession:async()=>null,reconcileStripeVideoOrder:async()=>{calls.push('reconcile');}};
  const env={STRIPE_VIDEO_WEB_ORIGIN:'https://example.com',STRIPE_TEST_SECRET_KEY:'sk_test_value',STRIPE_VIDEO_TEST_PRODUCT_ID:'prod_test',STRIPE_VIDEO_SANDBOX_ENABLED:'true',...(nativeConfigured?{STRIPE_VIDEO_TEST_ACCOUNT_ID:'acct_test',...Object.fromEntries(['IOS','ANDROID'].flatMap(p=>[[`STRIPE_VIDEO_${p}_SANDBOX_ENABLED`,'true'],[`STRIPE_VIDEO_${p}_ROUTE_ID`,uuid],[`STRIPE_VIDEO_${p}_RETURN_ORIGIN`,'https://native.example.com']]))}:{}),...envOverride};
  const source=ts.transpileModule(readFileSync('supabase/functions/stripe-paid-video-checkout/index.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -31,7 +32,7 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
   const headers={authorization:'Bearer synthetic',...(origin===null?{}:{Origin:origin}),...(platform?{'x-chillywood-platform':platform}:{})};
   const url=`${env.SUPABASE_URL}/functions/v1/stripe-paid-video-checkout`;
   const request=new Request(url,{method:'POST',headers,body:bytes});Object.defineProperty(request,'cf',{value:{country:marketCountry}});
-  if(!unsigned){const proof=await signer.signCheckoutProof(request,bytes,env.CHILLYWOOD_NETWORK_PROOF_SECRET,env.SUPABASE_URL);
+  if(!unsigned){const proof=reuseProof&&cachedProof?cachedProof:await signer.signCheckoutProof(request,bytes,env.CHILLYWOOD_NETWORK_PROOF_SECRET,env.SUPABASE_URL);cachedProof=proof;
    Object.assign(headers,{'x-chillywood-network-proof':proof.proof,'x-chillywood-network-proof-signature':`sha256=${proof.signature}`,
     'x-chillywood-network-proof-timestamp':proof.timestamp,'x-chillywood-network-proof-version':'v2'});}
   return handler(new Request(url,{method:'POST',headers,body:bytes}));}};
@@ -81,7 +82,7 @@ test('request recovery without saved order ID never prepares or POSTs a second c
 test('explicit Unlock after new login resumes existing open checkout by GET, preserving original dispatch',async()=>{
  const h=harness({status:'checkout_ready',newSession:true});const response=await h.send();
  assert.equal(response.status,200);assert.equal((await response.json()).checkoutUrl,'https://checkout.stripe.com/c/pay/existing');
- assert.deepEqual(h.calls,['read_stripe_sandbox_video_order_by_request']);
+ assert.deepEqual(h.calls,['read_stripe_sandbox_video_order_by_request','consume_stripe_video_resume_market']);
 });
 const nativeBody=platform=>({videoId:uuid,requestId:uuid,nativeObservation:platform==='ios'?{apiVersion:1,countryCode:'USA'}:{apiVersion:1,externalTransactionToken:'opaque-test-token'}});
 test('each separately configured native platform admits exact order before one dispatch',async()=>{
@@ -143,4 +144,40 @@ test('native eligibility needs exact config but no SDK observation or order/prov
  assert.deepEqual(h.calls,['read_stripe_video_native_checkout_eligibility']);assert.equal(h.providerCalls.length,0);
  const args=h.rpcArgs[0].args;assert.equal(args.p_route,uuid);assert.equal(args.p_account_id,'acct_test');assert.equal(args.p_product_id,'prod_test');assert.equal(args.p_platform,'android');
  const disabled=harness();assert.equal((await disabled.send(null,{action:'eligibility',videoId:uuid},'android')).status,503);assert.equal(disabled.calls.length,0);
+});
+
+test('open web URL requires fresh bound proof without redispatch or replacing original session',async()=>{
+ for(const options of [{unsigned:true},{marketCountry:'CA'},{providerAccount:'acct_other'},{resumePatch:{orderId:'wrong'}}]){
+  const h=harness({status:'checkout_ready',...options});const response=await h.send();
+  assert.equal(response.status,503);assert.equal((await response.json()).checkoutUrl,undefined);assert.equal(h.calls.includes('POST'),false);
+ }
+ const h=harness({status:'checkout_ready',newSession:true,reuseProof:true});
+ assert.ok((await (await h.send()).json()).checkoutUrl);
+ assert.equal(h.rpcArgs.find(x=>x.name==='consume_stripe_video_resume_market').args.p_session_id,'00000000-0000-4000-8000-000000000002');
+ assert.equal((await h.send()).status,503,'same proof cannot re-expose URL twice');
+ assert.equal(h.calls.includes('dispatch_stripe_sandbox_video_order'),false);assert.equal(h.calls.includes('POST'),false);
+});
+test('closed provider checkout remains URL-free without new geography authority',async()=>{
+ for(const providerStatus of ['complete','expired']){
+  const h=harness({status:'checkout_ready',providerStatus,unsigned:true});const response=await h.send();
+  assert.equal(response.status,200);assert.equal((await response.json()).checkoutUrl,undefined);
+  assert.equal(h.calls.includes('consume_stripe_video_resume_market'),false);assert.equal(h.calls.includes('POST'),false);
+ }
+});
+test('global creation switch preserves authenticated status/recover but blocks new and resumed checkout',async()=>{
+ for(const action of ['status','recover']){
+  const h=harness({status:'checkout_ready',unsigned:true,envOverride:{STRIPE_VIDEO_SANDBOX_ENABLED:'false'}});
+  const response=await h.send('https://example.com',{action,orderId:uuid,videoId:uuid,requestId:uuid});
+  assert.equal(response.status,200);assert.equal((await response.json()).checkoutUrl,undefined);
+  assert.equal(h.calls.includes('reconcile'),true);assert.equal(h.calls.includes('POST'),false);
+  assert.equal(h.calls.includes('consume_stripe_video_resume_market'),false);
+ }
+ for(const status of ['prepared','checkout_ready']){
+  const h=harness({status,envOverride:{STRIPE_VIDEO_SANDBOX_ENABLED:'false'}});
+  assert.equal((await h.send()).status,503);assert.equal(h.calls.length,0);assert.equal(h.providerCalls.length,0);
+ }
+ const wrongOrigin=harness({status:'checkout_ready',envOverride:{STRIPE_VIDEO_SANDBOX_ENABLED:'false'}});
+ assert.equal((await wrongOrigin.send('https://foreign.example',{action:'status',orderId:uuid})).status,403);
+ const missingSecret=harness({status:'checkout_ready',envOverride:{STRIPE_VIDEO_SANDBOX_ENABLED:'false',STRIPE_TEST_SECRET_KEY:''}});
+ assert.equal((await missingSecret.send('https://example.com',{action:'status',orderId:uuid})).status,503);
 });

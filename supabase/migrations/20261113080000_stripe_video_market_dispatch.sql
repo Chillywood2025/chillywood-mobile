@@ -1,5 +1,16 @@
 -- Source-only: IP-country observation is not residence or platform eligibility.
 -- No route/qualification seeds or enablement. Old read/reconcile/refund paths stay intact.
+create table private.stripe_video_market_nonces (
+ nonce uuid primary key, order_id uuid not null references private.stripe_paid_video_orders(id),
+ buyer_id uuid not null, session_id uuid not null,
+ purpose text not null check(purpose in('dispatch','resume_url')),
+ consumed_at timestamptz not null default clock_timestamp()
+);
+alter table private.stripe_video_market_nonces enable row level security;
+alter table private.stripe_video_market_nonces force row level security;
+revoke all on private.stripe_video_market_nonces from public,anon,authenticated,service_role;
+create trigger stripe_video_market_nonce_immutable before update or delete on private.stripe_video_market_nonces
+ for each row execute function private.guard_event_ticket_terms_immutable();
 create table private.stripe_video_market_admissions (
  nonce uuid primary key, order_id uuid not null unique references private.stripe_paid_video_orders(id),
  buyer_id uuid not null, session_id uuid not null, request_id uuid not null, video_id uuid not null,
@@ -51,6 +62,8 @@ begin
  then raise exception 'checkout_market_order_mismatch';end if;
  -- A unique nonce is consumed in the SAME transaction as the old dispatch.
  -- Any validation failure rolls consumption back. A second order cannot reuse it.
+ insert into private.stripe_video_market_nonces(nonce,order_id,buyer_id,session_id,purpose)
+ values(n,o.id,p_buyer_id,p_session_id,'dispatch');
  insert into private.stripe_video_market_admissions(nonce,order_id,buyer_id,session_id,request_id,video_id,
    price_id,price_revision,amount_minor,currency,platform,stripe_account_id,country,body_sha256,authorization_sha256,
    observed_at,expires_at,verification)
@@ -62,3 +75,37 @@ begin
 end $$;
 revoke all on function public.dispatch_stripe_sandbox_video_order(uuid,uuid,uuid,jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.dispatch_stripe_sandbox_video_order(uuid,uuid,uuid,jsonb) to service_role;
+
+-- Re-exposing an existing unpaid web URL is not a new dispatch. Bind the fresh
+-- observation to the CURRENT login, retaining the original order/session.
+create function public.consume_stripe_video_resume_market(p_order_id uuid,p_buyer_id uuid,p_session_id uuid,p_checkout_session_id text,p_market jsonb)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare o private.stripe_paid_video_orders;n uuid;seen timestamptz;expiry timestamptz;
+begin
+ if auth.role() is distinct from 'service_role' then raise exception 'service_role_required';end if;
+ if p_market is null or jsonb_typeof(p_market) is distinct from 'object'
+  or p_market->>'verification' is distinct from 'trusted_ip_country_observation'
+  or p_market->>'country' is distinct from 'US' or p_market->>'platform' is distinct from 'web'
+  or coalesce(p_market->>'nonce','') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  or coalesce(p_market->>'bodySha256','') !~ '^[0-9a-f]{64}$'
+  or coalesce(p_market->>'authorizationSha256','') !~ '^[0-9a-f]{64}$'
+ then raise exception 'checkout_market_observation_required';end if;
+ n:=(p_market->>'nonce')::uuid;seen:=(p_market->>'observedAt')::timestamptz;expiry:=(p_market->>'expiresAt')::timestamptz;
+ if seen is null or expiry is null or not isfinite(seen) or not isfinite(expiry)
+  or seen>clock_timestamp()+interval '30 seconds' or expiry<=clock_timestamp() or expiry<>seen+interval '5 minutes'
+ then raise exception 'checkout_market_observation_expired';end if;
+ select * into o from private.stripe_paid_video_orders where id=p_order_id for update;
+ if o.id is null or p_buyer_id is null or p_session_id is null or o.buyer_id<>p_buyer_id
+  or o.checkout_platform is distinct from 'web' or o.environment is distinct from 'sandbox'
+  or o.status not in('dispatched','checkout_ready') or o.expires_at<=clock_timestamp()
+  or p_checkout_session_id is null or o.checkout_session_id is distinct from p_checkout_session_id
+  or o.request_id::text is distinct from lower(p_market->>'requestId')
+  or o.video_id::text is distinct from lower(p_market->>'videoId')
+  or not public.creator_tip_buyer_session_authority_internal(p_buyer_id,p_session_id)
+ then raise exception 'checkout_market_order_mismatch';end if;
+ insert into private.stripe_video_market_nonces(nonce,order_id,buyer_id,session_id,purpose)
+ values(n,o.id,p_buyer_id,p_session_id,'resume_url');
+ return jsonb_build_object('orderId',o.id,'checkoutSessionId',o.checkout_session_id,'purpose','resume_url','consumed',true);
+end $$;
+revoke all on function public.consume_stripe_video_resume_market(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated,service_role;
+grant execute on function public.consume_stripe_video_resume_market(uuid,uuid,uuid,text,jsonb) to service_role;

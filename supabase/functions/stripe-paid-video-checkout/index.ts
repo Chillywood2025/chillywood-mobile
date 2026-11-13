@@ -28,7 +28,7 @@ Deno.serve(async(req:Request)=>{
  const secret=Deno.env.get('STRIPE_TEST_SECRET_KEY')??'';
  const productId=Deno.env.get('STRIPE_VIDEO_TEST_PRODUCT_ID')??'';
  const enabled=Deno.env.get('STRIPE_VIDEO_SANDBOX_ENABLED')==='true';
- if(!enabled||!secret.startsWith('sk_test_')||!/^prod_[A-Za-z0-9]+$/.test(productId))return reply(503,{error:'sandbox_not_configured'});
+ if(!secret.startsWith('sk_test_')||!/^prod_[A-Za-z0-9]+$/.test(productId))return reply(503,{error:'sandbox_not_configured'});
  try {
   const auth=await authenticateRequest(req,Deno.env.get('SUPABASE_URL')??'',Deno.env.get('SUPABASE_ANON_KEY')??'');
   if('error' in auth)return reply(401,{error:'current_session_required'});
@@ -38,6 +38,9 @@ Deno.serve(async(req:Request)=>{
   const body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(rawBody));
   if(!body||typeof body!=='object'||Array.isArray(body))return reply(400,{error:'request_invalid'});
   if(body.action!==undefined&&body.action!=='recover'&&body.action!=='status'&&body.action!=='eligibility')return reply(400,{error:'action_invalid'});
+  // Creation/link exposure can be disabled without blocking authenticated
+  // reconciliation of historical orders. All identity/provider checks remain.
+  if(!enabled&&body.action!=='status'&&body.action!=='recover')return reply(503,{error:'sandbox_not_configured'});
   if(body.action==='eligibility') {
    if(!native||!uuid(body.videoId))return reply(400,{error:'native_video_required'});
    const eligibility=await videoRpc(admin,'read_stripe_video_native_checkout_eligibility',{
@@ -124,6 +127,14 @@ Deno.serve(async(req:Request)=>{
        priceId:order.price_id,priceRevision:order.price_revision}).every(([key,value])=>metadata?.[key]===String(value)))throw Error('session_identity_mismatch');
     const url=typeof session.url==='string'?session.url:undefined;
     if(url&&!/^https:\/\/checkout\.stripe\.com\//.test(url))throw Error('checkout_url_invalid');
+    if(session.status==='open'&&url){
+     const fresh=await verifyStripeVideoMarketProof(req,rawBody,{
+      secret:Deno.env.get('CHILLYWOOD_NETWORK_PROOF_SECRET')??'',audience:Deno.env.get('SUPABASE_URL')??''});
+     const consumed=await videoRpc(admin,'consume_stripe_video_resume_market',{p_order_id:order.id,p_buyer_id:user.id,
+      p_session_id:user.sessionGeneration,p_checkout_session_id:order.checkout_session_id,p_market:fresh});
+     if(consumed.consumed!==true||consumed.purpose!=='resume_url'||consumed.orderId!==order.id
+      ||consumed.checkoutSessionId!==order.checkout_session_id)throw Error('checkout_resume_market_invalid');
+    }
     return reply(200,project(order,session.status==='open'?url:undefined));
    }
    return reply(202,project(order)); // unknown create outcome, never re-POST

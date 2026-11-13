@@ -74,6 +74,7 @@ test('Google paid-video uses one exact existing-queue binding through real nativ
   await db.query('update private.stripe_paid_video_prices set amount_minor=1001 where id=$1',[order.price_id]);
   await assert.rejects(dispatch(order.id,market),/native_admission_required|checkout_dispatch_unavailable/);
   assert.equal(await one('select count(*)::int from private.stripe_video_market_admissions'),0);
+  assert.equal(await one('select count(*)::int from private.stripe_video_market_nonces'),0);
   await db.query('update private.stripe_paid_video_prices set amount_minor=1000 where id=$1',[order.price_id]);
   const dispatched=await dispatch(order.id,market);
   assert.equal(dispatched.tax.policyId,tax);
@@ -92,6 +93,25 @@ test('Google paid-video uses one exact existing-queue binding through real nativ
    dispatch(third,await syntheticVideoMarketObservation(db,third,{nonce}))]);
   assert.equal(submitted.filter(x=>x.status==='fulfilled').length,1,'one unique nonce authorizes only one dispatch');
   assert.equal(await one('select count(*)::int from private.stripe_video_market_admissions'),2);
+  const web=await one("select id from private.stripe_paid_video_orders where checkout_platform='web' and status='dispatched' limit 1");
+  await one("select public.attach_stripe_sandbox_video_session($1,'cs_test_resume')",[web]);
+  const freshBuyer={id:buyer.id,session:randomUUID()};await seedCommerceBuyer(db,freshBuyer);
+  const resume=(proof,who=freshBuyer.id,session=freshBuyer.session,checkout='cs_test_resume')=>one(
+   'select public.consume_stripe_video_resume_market($1,$2,$3,$4,$5)',[web,who,session,checkout,proof]);
+  const resumedProof=await syntheticVideoMarketObservation(db,web);
+  for(const patch of [{country:'CA'},{platform:'android'},{requestId:randomUUID()},{videoId:randomUUID()}])
+   await assert.rejects(resume({...resumedProof,...patch}),/checkout_market_/);
+  await assert.rejects(resume(resumedProof,creator.id),/checkout_market_order_mismatch/);
+  await assert.rejects(resume(resumedProof,buyer.id,randomUUID()),/checkout_market_order_mismatch/);
+  await assert.rejects(resume(resumedProof,buyer.id,freshBuyer.session,'cs_test_other'),/checkout_market_order_mismatch/);
+  await assert.rejects(resume({...resumedProof,nonce}),/unique constraint/,'dispatch nonce cannot authorize URL reread');
+  const resumed=await resume(resumedProof);assert.equal(resumed.consumed,true);assert.equal(resumed.purpose,'resume_url');
+  assert.equal(await one('select session_id from private.stripe_paid_video_orders where id=$1',[web]),buyer.session,'relogin does not replace original financial session');
+  await assert.rejects(resume(resumedProof),/unique constraint/,'URL reread nonce is one-use');
+  await db.query("update private.stripe_paid_video_orders set status='failed' where id=$1",[web]);
+  await assert.rejects(resume(await syntheticVideoMarketObservation(db,web)),/checkout_market_order_mismatch/);
+  for(const role of ['anon','authenticated','service_role'])assert.equal(await one("select has_table_privilege($1,'private.stripe_video_market_nonces','select')",[role]),false);
+  for(const role of ['anon','authenticated'])assert.equal(await one("select has_function_privilege($1,'public.consume_stripe_video_resume_market(uuid,uuid,uuid,text,jsonb)','execute')",[role]),false);
   for(const role of ['anon','authenticated','service_role']){
    assert.equal(await one("select has_table_privilege($1,'private.stripe_video_market_admissions','select')",[role]),false);
    assert.equal(await one("select has_function_privilege($1,'public.dispatch_stripe_sandbox_video_order_before_market(uuid,uuid,uuid)','execute')",[role]),false);
