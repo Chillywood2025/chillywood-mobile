@@ -74,7 +74,8 @@
     },
     {
       "path": "supabase/functions/_shared/google-refund-tax-reconciliation.ts",
-      "sha256": "e2af9aa4d712d3ec7898221c4ebccb11f6d277e7ee10af0a14ac410f2862f730"
+      "sha256": "e2af9aa4d712d3ec7898221c4ebccb11f6d277e7ee10af0a14ac410f2862f730",
+      "snapshot": "tests/fixtures/historical-google-refund-tax-reconciliation.ts.txt"
     },
     {
       "path": "supabase/functions/_shared/merch-observation-budget.ts",
@@ -87,7 +88,8 @@
     },
     {
       "path": "supabase/functions/_shared/stripe-history-checkpoint.ts",
-      "sha256": "8d9bf829a7d8dc88cc838ee51bacc8cccb9b7820f5cae2c8eba849e4c404b243"
+      "sha256": "8d9bf829a7d8dc88cc838ee51bacc8cccb9b7820f5cae2c8eba849e4c404b243",
+      "snapshot": "tests/fixtures/historical-stripe-history-checkpoint.ts.txt"
     },
     {
       "path": "supabase/functions/_shared/stripe-refund-tax-evidence.ts",
@@ -96,7 +98,8 @@
     },
     {
       "path": "supabase/functions/google-play-external-reporter/index.ts",
-      "sha256": "ea1bdbf135a4144f4a3fb05621ca59d1568245e7ee83b5ac59a3de85c91ab4c5"
+      "sha256": "ea1bdbf135a4144f4a3fb05621ca59d1568245e7ee83b5ac59a3de85c91ab4c5",
+      "snapshot": "tests/fixtures/historical-google-play-external-reporter-index.ts.txt"
     },
     {
       "path": "supabase/functions/_shared/commerce-fee-accounting-drain.ts",
