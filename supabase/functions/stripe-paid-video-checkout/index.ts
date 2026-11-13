@@ -23,7 +23,8 @@ Deno.serve(async(req:Request)=>{
  const routeId=native?Deno.env.get(`${prefix}_ROUTE_ID`):null;
  const returnOrigin=native?httpsOrigin(Deno.env.get(`${prefix}_RETURN_ORIGIN`)??''):httpsOrigin(origin);
  const accountId=Deno.env.get('STRIPE_VIDEO_TEST_ACCOUNT_ID')??'';
- if(native&&(Deno.env.get(`${prefix}_SANDBOX_ENABLED`)!=='true'||!uuid(routeId)||!returnOrigin||!/^acct_[A-Za-z0-9]+$/.test(accountId)))
+ const nativeEnabled=native&&Deno.env.get(`${prefix}_SANDBOX_ENABLED`)==='true';
+ if(native&&(!uuid(routeId)||!returnOrigin||!/^acct_[A-Za-z0-9]+$/.test(accountId)))
   return reply(503,{error:'native_sandbox_not_configured'});
  const secret=Deno.env.get('STRIPE_TEST_SECRET_KEY')??'';
  const productId=Deno.env.get('STRIPE_VIDEO_TEST_PRODUCT_ID')??'';
@@ -41,6 +42,7 @@ Deno.serve(async(req:Request)=>{
   // Creation/link exposure can be disabled without blocking authenticated
   // reconciliation of historical orders. All identity/provider checks remain.
   if(!enabled&&body.action!=='status'&&body.action!=='recover')return reply(503,{error:'sandbox_not_configured'});
+  if(native&&!nativeEnabled&&body.action!=='status'&&body.action!=='recover')return reply(503,{error:'native_sandbox_not_configured'});
   if(body.action==='eligibility') {
    if(!native||!uuid(body.videoId))return reply(400,{error:'native_video_required'});
    const eligibility=await videoRpc(admin,'read_stripe_video_native_checkout_eligibility',{

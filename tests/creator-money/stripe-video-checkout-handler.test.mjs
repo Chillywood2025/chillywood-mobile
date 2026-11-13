@@ -181,3 +181,25 @@ test('global creation switch preserves authenticated status/recover but blocks n
  const missingSecret=harness({status:'checkout_ready',envOverride:{STRIPE_VIDEO_SANDBOX_ENABLED:'false',STRIPE_TEST_SECRET_KEY:''}});
  assert.equal((await missingSecret.send('https://example.com',{action:'status',orderId:uuid})).status,503);
 });
+test('native creation flags preserve configured historical recovery without granting checkout eligibility',async()=>{
+ for(const platform of ['ios','android']){
+  const flag=`STRIPE_VIDEO_${platform.toUpperCase()}_SANDBOX_ENABLED`;
+  for(const global of ['true','false'])for(const action of ['status','recover']){
+   const h=harness({nativeConfigured:true,orderPlatform:platform,status:'checkout_ready',newSession:true,unsigned:true,
+    envOverride:{[flag]:'false',STRIPE_VIDEO_SANDBOX_ENABLED:global}});
+   const response=await h.send(null,{action,orderId:uuid,videoId:uuid,requestId:uuid},platform);
+   assert.equal(response.status,200);assert.equal((await response.json()).checkoutUrl,undefined);
+   assert.equal(h.calls.includes('reconcile'),true);
+   assert.equal(h.calls.includes('POST'),false);assert.equal(h.calls.includes('prepare_stripe_video_native_order'),false);
+   assert.equal(h.calls.includes('bind_stripe_video_google_checkout'),false);
+  }
+  for(const body of [nativeBody(platform),{action:'eligibility',videoId:uuid}]){
+   const h=harness({nativeConfigured:true,envOverride:{[flag]:'false'}});
+   assert.equal((await h.send(null,body,platform)).status,503);assert.equal(h.calls.length,0);assert.equal(h.providerCalls.length,0);
+  }
+  const brokenConfig=harness({nativeConfigured:true,envOverride:{[flag]:'false',[`STRIPE_VIDEO_${platform.toUpperCase()}_ROUTE_ID`]:'invalid'}});
+  assert.equal((await brokenConfig.send(null,{action:'status',orderId:uuid},platform)).status,503);
+  const origin=harness({nativeConfigured:true,envOverride:{[flag]:'false'}});
+  assert.equal((await origin.send('https://example.com',{action:'status',orderId:uuid},platform)).status,403);
+ }
+});
