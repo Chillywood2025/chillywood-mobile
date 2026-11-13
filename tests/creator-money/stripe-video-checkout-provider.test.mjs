@@ -11,6 +11,41 @@ const session={id:'cs_test_one',livemode:false,mode:'payment',payment_status:'pa
 const intent={id:'pi_one',livemode:false,status:'succeeded',latest_charge:'ch_one',amount_received:1000,currency:'usd',metadata};
 const charge={id:'ch_one',livemode:false,paid:true,captured:true,payment_intent:'pi_one',amount:1000,currency:'usd',amount_refunded:0};
 const product={id:'prod_video',livemode:false,active:true};
+test('archived products still reconcile provider-confirmed partial and full historical refunds',async()=>{
+ for(const amount of [300,1000]){
+  const calls=[],reads=[];
+  const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:{status:'refunded'},error:null};}};
+  // Stripe retains paid/succeeded on refunded payments; refunded is true only
+  // when the entire charge has been refunded. Product active is mutable catalog state.
+  const historicalCharge={...charge,object:'charge',amount_refunded:amount,refunded:amount===1000};
+  const get=async(_secret,path)=>{
+   reads.push(path);
+   if(path==='/account')return {id:'acct_test',object:'account'};
+   if(path.includes('/line_items'))return {object:'list',has_more:false,data:[{quantity:1,price:{product:'prod_video',unit_amount:1000,tax_behavior:'inclusive'}}]};
+   if(path.startsWith('/checkout/sessions/'))return {...session,object:'checkout.session'};
+   if(path.startsWith('/payment_intents/'))return {...intent,object:'payment_intent'};
+   if(path.startsWith('/charges/'))return historicalCharge;
+   if(path.startsWith('/products/'))return {...product,object:'product',active:false};
+   throw Error(`unexpected read: ${path}`);
+  };
+  await exports.reconcileStripeVideoOrder(admin,order,'sk_test_value',`evt_refund${amount}`,get);
+  assert.equal(reads.length,6);assert.equal(calls.length,1);
+  assert.equal(calls[0].name,'observe_stripe_sandbox_video_payment');
+  assert.equal(calls[0].args.p_event_id,`evt_refund${amount}`);
+  assert.equal(calls[0].args.p_facts.refundAmountMinor,amount);
+  assert.equal(calls[0].args.p_facts.productId,'prod_video');
+  assert.equal(calls[0].args.p_facts.paymentStatus,'paid');
+ }
+});
+test('archived historical products do not weaken provider identity or payment validation',()=>{
+ const archived={...product,active:false};
+ assert.equal(exports.paidVideoFacts(order,session,intent,charge,archived).refundAmountMinor,0);
+ for(const patch of [{id:'prod_other'},{livemode:true},{active:null},{active:undefined}])
+  assert.throws(()=>exports.paidVideoFacts(order,session,intent,charge,{...archived,...patch}));
+ for(const patch of [{amount_refunded:1001},{amount_refunded:null},{payment_intent:'pi_other'},{captured:false}])
+  assert.throws(()=>exports.paidVideoFacts(order,session,intent,{...charge,...patch},archived));
+ assert.throws(()=>exports.paidVideoFacts(order,session,{...intent,metadata:{...metadata,buyerId:'other'}},charge,archived));
+});
 test('Stripe form uses documented payment_method_types, fixed server amount, inclusive tax and no destination',()=>{
  const form=exports.videoCheckoutForm(order,tax,'https://example.com/stripe-video/return');
  assert.equal(form.get('payment_method_types[0]'),'card');assert.equal(form.get('line_items[0][price_data][unit_amount]'),'1000');

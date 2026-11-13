@@ -31,7 +31,9 @@ export function videoCheckoutForm(order: ObjectMap, tax: ObjectMap, returnUrl: s
 
 export function paidVideoFacts(order:ObjectMap, session:ObjectMap, intent:ObjectMap, charge:ObjectMap, product:ObjectMap):ObjectMap {
   const metadata=object(session.metadata); const piMetadata=object(intent.metadata);
-  if (session.livemode !== false || intent.livemode !== false || charge.livemode !== false || product.livemode !== false || product.active !== true
+  // Archiving a catalog product stops new checkout, not reconciliation of its
+  // existing receipts/refunds. Keep exact provider identity and test-mode checks.
+  if (session.livemode !== false || intent.livemode !== false || charge.livemode !== false || product.livemode !== false || typeof product.active !== 'boolean'
     || session.id !== order.checkout_session_id || session.mode !== 'payment' || session.payment_status !== 'paid'
     || session.status !== 'complete' || session.client_reference_id !== order.id
     || intent.status !== 'succeeded' || charge.paid !== true || charge.captured !== true

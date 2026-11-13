@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const uuid='00000000-0000-4000-8000-000000000001';
-function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform}={}){
+function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform,productActive=true}={}){
  let handler;const calls=[],providerCalls=[],rpcArgs=[];let returnUrl,postedBody;
  const order={checkout_platform:orderPlatform,session_id:uuid,amount_minor:1000,currency:'usd',price_id:uuid,price_revision:1,...(status==='checkout_ready'?{checkout_session_id:'cs_test_one'}:{}),id:uuid,video_id:uuid,buyer_id:uuid,creator_id:'creator',request_id:uuid,status,stripe_account_id:'acct_test',stripe_product_id:'prod_test'};
  const tax={ready:true,policyId:'policy',taxCode:'txcd_100'};
@@ -13,7 +13,7 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
   if(name==='prepare_stripe_sandbox_video_order'&&preparedPlatform)order.checkout_platform=preparedPlatform;
   if(name==='bind_stripe_video_google_checkout')return {bindingId:uuid,orderId:uuid,admissionId:uuid,routeKind:'android_external_content_link',financialAuthority:false,accessGranted:false,...bindingPatch};
   if(name==='dispatch_stripe_sandbox_video_order')return {...order,tax};return order;},
-  stripeVideoGet:async(_secret,path)=>{providerCalls.push(path);return path==='/account'?{id:providerAccount}:path.startsWith('/checkout/sessions/')?{id:'cs_test_one',livemode:false,client_reference_id:uuid,mode:'payment',status:'open',amount_total:1000,currency:'usd',url:'https://checkout.stripe.com/c/pay/existing',metadata:{chillywoodFlow:'stripe_paid_video_sandbox',orderId:uuid,buyerId:uuid,videoId:uuid,priceId:uuid,priceRevision:'1'}}:{id:'prod_test',active:true,livemode:false,tax_code:taxCode};},
+  stripeVideoGet:async(_secret,path)=>{providerCalls.push(path);return path==='/account'?{id:providerAccount}:path.startsWith('/checkout/sessions/')?{id:'cs_test_one',livemode:false,client_reference_id:uuid,mode:'payment',status:'open',amount_total:1000,currency:'usd',url:'https://checkout.stripe.com/c/pay/existing',metadata:{chillywoodFlow:'stripe_paid_video_sandbox',orderId:uuid,buyerId:uuid,videoId:uuid,priceId:uuid,priceRevision:'1'}}:{id:'prod_test',active:productActive,livemode:false,tax_code:taxCode};},
   videoCheckoutForm:(_o,_t,url)=>{returnUrl=url;calls.push('serialize');return new URLSearchParams('mode=payment');},recoverStripeVideoSession:async()=>null,reconcileStripeVideoOrder:async()=>{calls.push('reconcile');}};
  const env={STRIPE_VIDEO_WEB_ORIGIN:'https://example.com',STRIPE_TEST_SECRET_KEY:'sk_test_value',STRIPE_VIDEO_TEST_PRODUCT_ID:'prod_test',STRIPE_VIDEO_SANDBOX_ENABLED:'true',...(nativeConfigured?{STRIPE_VIDEO_TEST_ACCOUNT_ID:'acct_test',...Object.fromEntries(['IOS','ANDROID'].flatMap(p=>[[`STRIPE_VIDEO_${p}_SANDBOX_ENABLED`,'true'],[`STRIPE_VIDEO_${p}_ROUTE_ID`,uuid],[`STRIPE_VIDEO_${p}_RETURN_ORIGIN`,'https://native.example.com']]))}:{}),...envOverride};
  const source=ts.transpileModule(readFileSync('supabase/functions/stripe-paid-video-checkout/index.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -24,6 +24,17 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
 }
 test('unadmitted native and unknown transports stop before database or provider calls',async()=>{
  for(const platform of ['ios','android','unknown','']){const h=harness();assert.equal((await h.send('https://example.com',undefined,platform)).status,403);assert.equal(h.calls.length,0);}
+});
+test('archived products remain unavailable for every new checkout transport',async()=>{
+ for(const platform of ['web','ios','android']){
+  const h=harness({productActive:false,nativeConfigured:true,existing:false});
+  const body={videoId:uuid,requestId:uuid,...(platform==='ios'?{nativeObservation:{apiVersion:1,countryCode:'USA'}}:
+   platform==='android'?{nativeObservation:{apiVersion:1,externalTransactionToken:'opaque-test-token'}}:{})};
+  const response=await h.send(platform==='web'?'https://example.com':null,body,platform);
+  assert.equal(response.status,503);assert.equal((await response.json()).error,'test_provider_unqualified');
+  assert.equal(h.calls.some(name=>name.startsWith('prepare_')),false);
+  assert.equal(h.calls.includes('dispatch_stripe_sandbox_video_order'),false);assert.equal(h.calls.includes('POST'),false);
+ }
 });
 test('checkout validates/serializes before durable claim, then exactly one provider POST',async()=>{
  const h=harness();const response=await h.send();assert.equal(response.status,200);

@@ -12,6 +12,10 @@ const supplemental=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/his
 export const HISTORICAL_ENTRYPOINT='supabase/functions/revenuecat-webhook/index.ts';
 export const HISTORICAL_CONFIG='supabase/config.toml';
 const archives={
+ 'supabase/functions/_shared/google-refund-tax-reconciliation.ts':{file:'tests/fixtures/historical-google-refund-tax-reconciliation.ts.txt',sha256:'e2af9aa4d712d3ec7898221c4ebccb11f6d277e7ee10af0a14ac410f2862f730'},
+ 'supabase/functions/_shared/stripe-history-checkpoint.ts':{file:'tests/fixtures/historical-stripe-history-checkpoint.ts.txt',sha256:'8d9bf829a7d8dc88cc838ee51bacc8cccb9b7820f5cae2c8eba849e4c404b243'},
+ 'supabase/functions/google-play-external-reporter/index.ts':{file:'tests/fixtures/historical-google-play-external-reporter-index.ts.txt',sha256:'ea1bdbf135a4144f4a3fb05621ca59d1568245e7ee83b5ac59a3de85c91ab4c5'},
+ 'tests/helpers/pure-typescript-module.mjs':{file:'tests/fixtures/historical-pure-typescript-module.mjs.txt',sha256:'c77907372ff881ed8b198eb048f4591d21b57887ee1d3050c091f505d0fe0e5a'},
  'supabase/functions/public-creator-video-cards/index.ts':{file:'tests/fixtures/historical-public-creator-video-cards-index.ts.txt',sha256:'7bb50f113dfa82441a3903ff2f42bb93de318375478f7b532ea94a829eb5e959'},
  'scripts/social-engagement-deployment-manifest.json':{file:'tests/fixtures/historical-social-engagement-deployment-manifest.json.txt',sha256:'7d4cacdf5c09b286ff0595be61a521cef349479082594653fbbde1c62c51adc4'},
  'supabase/functions/_shared/commerce-known-cost-accounting.ts':{file:'tests/fixtures/historical-commerce-known-cost-accounting.ts.txt',sha256:'e18102bc2f2abe5d76a122fa36da606963641e559fb08809c84867c135f98bcb'},

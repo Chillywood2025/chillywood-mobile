@@ -56,6 +56,11 @@ function runtime(options = {}) {
       ...options.moneyClaim }, error: options.moneyClaimError ?? null };
   };
   const mocks = {
+    "./stripePaidVideoNative": {
+      openNativeStripeSandboxVideoCheckout: () => { throw new Error("Native store quote tests must not enter native Stripe checkout"); },
+      readNativeStripeSandboxVideoAccess: () => { throw new Error("Native store quote tests must not read native Stripe access"); },
+      refreshNativeStripeSandboxVideoPayment: () => { throw new Error("Native store quote tests must not refresh native Stripe payment"); },
+    },
     "./stripePaidVideoSandbox": {
       openStripeSandboxVideoCheckout: () => { throw new Error("Native store quote tests must not enter Stripe checkout"); },
       readStripeSandboxVideoAccess: () => { throw new Error("Native store quote tests must not read Stripe access"); },

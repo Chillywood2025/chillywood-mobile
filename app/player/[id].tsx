@@ -1,5 +1,4 @@
 import { useStripeSandboxPaidVideoPlaybackState } from "../../_lib/useStripeSandboxPaidVideoPlayback";
-import { refreshPaidVideoPayment } from "../../_lib/creatorPaidVideos";
 import { captureCreatorMoneyPurchaseAuthority, isCreatorMoneyPurchaseAuthorityCurrent, isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
 import { CommentLikeButton } from "../../components/social/comment-like-button";
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
@@ -72,7 +71,7 @@ import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { formatOneTimePrice } from "../../_lib/customerExperiencePresentation";
 import { isNativeProductionPaidVideoBuildAvailable } from '../../_lib/nativeProductionPaidVideoBridge';
 import { useNativeProductionPaidVideoPlayback } from '../../_lib/useNativeProductionPaidVideoPlayback';
-import { purchasePaidVideoAccess } from "../../_lib/creatorPaidVideos";
+import { purchasePaidVideoAccess, refreshPaidVideoPayment } from "../../_lib/creatorPaidVideos";
 import { readCreatorTipPublicStatus, type CreatorTipPublicStatus } from "../../_lib/creatorTips";
 import {
     getRuntimeControlBlockedCopy,
