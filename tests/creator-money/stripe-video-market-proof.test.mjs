@@ -39,6 +39,17 @@ test('rejects endpoint suffix match, query, method, audience, body and account s
  await assert.rejects(verify(new Request(request.url,{method:'POST',headers:{...headers,authorization:'Bearer other-session'},body:bytes}),bytes,{secret,audience}));
  await assert.rejects(verify(new Request(request.url,{method:'POST',headers:{...headers,'x-chillywood-platform':'ios'},body:bytes}),bytes,{secret,audience}));
 });
+test('gateway-stripped runtime route maps only to the exact signed external route',async()=>{
+ const {headers}=await fixture();
+ const request=url=>new Request(url,{method:'POST',headers,body:bytes});
+ const observed=await verify(request('http://edge-runtime/stripe-paid-video-checkout'),bytes,{secret,audience});
+ assert.equal(observed.country,'US');
+ for(const route of ['/stripe-paid-video-checkout/','/other/stripe-paid-video-checkout',
+  '/functions/stripe-paid-video-checkout','/v1/stripe-paid-video-checkout',
+  '/stripe-paid-video-checkout/extra','/stripe-paid-video-checkout?x=1','/Stripe-paid-video-checkout',
+  '/%73tripe-paid-video-checkout','/functions/v1/stripe-paid-video-checkout/'])
+  await assert.rejects(verify(request(`http://edge-runtime${route}`),bytes,{secret,audience}));
+});
 test('rejects forged, absent and old-version proof; expiry and future timestamp fail closed',async()=>{
  const {request,headers,signed}=await fixture();
  for(const changes of [{'x-chillywood-network-proof-version':'v1'},{'x-chillywood-network-proof-signature':`sha256=${'0'.repeat(64)}`},{'x-chillywood-network-proof':''}])

@@ -2,6 +2,9 @@
 // Callers must atomically bind/consume the observation with the exact order.
 // It intentionally does not reuse the permissive v1 audit-path matcher.
 const PATH = '/functions/v1/stripe-paid-video-checkout';
+// Supabase's gateway strips /functions/v1 before invoking the handler.
+// These are two exact representations of ONE route, never suffix matches.
+const RUNTIME_PATH = '/stripe-paid-video-checkout';
 const PURPOSE = 'stripe-video-new-checkout';
 const LIMIT = 32768;
 const encoder = new TextEncoder();
@@ -32,7 +35,7 @@ export async function readStripeVideoRequestBody(request:Request):Promise<Uint8A
 export async function verifyStripeVideoMarketProof(request:Request, body:Uint8Array,
   options:{secret:string; audience:string; nowMs?:number}):Promise<StripeVideoMarketObservation> {
   const url=new URL(request.url),now=options.nowMs??Date.now();
-  if(request.method!=='POST'||url.pathname!==PATH||url.search||body.byteLength>LIMIT
+  if(request.method!=='POST'||(url.pathname!==PATH&&url.pathname!==RUNTIME_PATH)||url.search||body.byteLength>LIMIT
     ||!options.secret||!Number.isFinite(now))return fail();
   let audience:URL;try{audience=new URL(options.audience);}catch{return fail();}
   if(audience.protocol!=='https:'||audience.origin!==options.audience)return fail();
