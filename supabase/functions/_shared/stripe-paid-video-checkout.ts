@@ -1,4 +1,5 @@
 // Only provider-retrieved objects may enter these validators, never return URLs.
+import { googlePlayStripeTaxEvidence } from './google-play-stripe-tax-evidence.ts';
 export type ObjectMap = Record<string, unknown>;
 export interface VideoRpc {rpc(name:string,args:ObjectMap):PromiseLike<{data:unknown;error:unknown}>}
 const object = (value: unknown): ObjectMap => value && typeof value === 'object' && !Array.isArray(value) ? value as ObjectMap : {};
@@ -81,8 +82,49 @@ export async function reconcileStripeVideoOrder(admin:VideoRpc,order:ObjectMap,s
  if(lines.has_more!==false||line.quantity!==1||id(object(line.price).product)!==product.id||object(line.price).unit_amount!==order.amount_minor
  ||object(line.price).tax_behavior!=='inclusive')throw Error('provider_line_item_mismatch');
  const facts=paidVideoFacts(order,session,intent,charge,product);
- return videoRpc(admin,'observe_stripe_sandbox_video_payment',{p_order_id:order.id,
+ const observed=await videoRpc(admin,'observe_stripe_sandbox_video_payment',{p_order_id:order.id,
  p_event_id:eventId??`poll:${charge.id}:${facts.refundAmountMinor}`,p_facts:facts});
+ if(order.checkout_platform==='android') {
+  // Financial observation and refund/access revocation commit FIRST. Reporting
+  // enrichment cannot roll them back, and repeated verified reads can repair it.
+  const evidence=await stripeVideoGoogleReportEvidence(session,charge,path=>get(secret,path));
+  await videoRpc(admin,'repair_stripe_video_google_reporting',{p_order_id:order.id,
+   p_payment_intent_id:intent.id,p_charge_id:charge.id,p_refund_amount_minor:facts.refundAmountMinor,
+   p_original_occurred_at:evidence.paidOccurredAt,p_refund_occurred_at:evidence.refundOccurredAt,p_tax:evidence.tax});
+ }
+ return observed;
+}
+
+/** Only authenticated provider GET results enter here. Missing/oversized refund
+ * history leaves a durable blocked reporting obligation, never an invented time. */
+export async function stripeVideoGoogleReportEvidence(session:ObjectMap,charge:ObjectMap,get:(path:string)=>Promise<ObjectMap>) {
+ const timestamp=(value:unknown):string|null=>Number.isSafeInteger(value)&&Number(value)>0&&Number(value)<=Math.floor(Date.now()/1000)
+  ?new Date(Number(value)*1000).toISOString():null;
+ const paidOccurredAt=timestamp(charge.created),tax=googlePlayStripeTaxEvidence(session);
+ let refundOccurredAt:string|null=null;
+ if(Number(charge.amount_refunded)>0)try{
+  let after:string|undefined,sum=0,latest=0,complete=false;const seen=new Set<string>();
+  for(let page=0;page<10;page++){
+   const query=new URLSearchParams({charge:String(charge.id),limit:'100'});if(after)query.set('starting_after',after);
+   const list=await get(`/refunds?${query}`);
+   if(list.object!=='list'||!Array.isArray(list.data)||list.data.length>100||typeof list.has_more!=='boolean')throw Error('refund_history_incomplete');
+   for(const value of list.data){const refund=object(value);
+    if(refund.object!=='refund'||typeof refund.id!=='string'||!/^re_[A-Za-z0-9_]+$/.test(refund.id)||seen.has(refund.id)
+     ||refund.charge!==charge.id||refund.payment_intent!==id(charge.payment_intent)||refund.currency!=='usd')throw Error('refund_identity_invalid');
+    seen.add(refund.id);
+    if(refund.status==='succeeded'){
+     if(!Number.isSafeInteger(refund.amount)||Number(refund.amount)<=0||!timestamp(refund.created)
+      ||(paidOccurredAt!==null&&Number(refund.created)<Number(charge.created)))throw Error('refund_evidence_invalid');
+     sum+=Number(refund.amount);if(!Number.isSafeInteger(sum)||sum>Number(charge.amount_refunded))throw Error('refund_total_changed');
+     latest=Math.max(latest,Number(refund.created));
+    }
+   }
+   if(!list.has_more){complete=true;break;}
+   after=String(object(list.data.at(-1)).id??'');if(!/^re_[A-Za-z0-9_]+$/.test(after))throw Error('refund_cursor_invalid');
+  }
+  if(complete&&sum===charge.amount_refunded)refundOccurredAt=timestamp(latest);
+ }catch{/* Keep reporting blocked; financial refund has already committed. */}
+ return {paidOccurredAt,refundOccurredAt,tax};
 }
 
 // Read-only recovery of a lost create response. Exhaust the bounded interval

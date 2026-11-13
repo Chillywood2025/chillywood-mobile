@@ -5,7 +5,9 @@ import ts from 'typescript';
 import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 
 const math=loadPureTypeScriptModule('supabase/functions/_shared/commerce-known-cost-accounting.ts');
-const checkout=loadPureTypeScriptModule('supabase/functions/_shared/stripe-paid-video-checkout.ts');
+const checkout=loadPureTypeScriptModule('supabase/functions/_shared/stripe-paid-video-checkout.ts',{
+ './google-play-stripe-tax-evidence.ts':loadPureTypeScriptModule('supabase/functions/_shared/google-play-stripe-tax-evidence.ts'),
+});
 function fixture({mode='automatic',tax=100,refund=0,changedFinal=false,oversizedHistory=false}={}){
  const order={id:'order',buyer_id:'buyer',video_id:'video',price_id:'price',price_revision:1,environment:'sandbox',currency:'usd',amount_minor:1000,
   stripe_account_id:'acct_test',stripe_product_id:'prod_one',checkout_session_id:'cs_test_one',payment_intent_id:'pi_one',charge_id:'ch_one',taxCollectionMode:mode};

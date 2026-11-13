@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import ts from 'typescript';
-const exports={};
-new Function('exports',ts.transpileModule(readFileSync('supabase/functions/_shared/stripe-paid-video-checkout.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exports);
+import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
+const exports=loadPureTypeScriptModule('supabase/functions/_shared/stripe-paid-video-checkout.ts',{
+ './google-play-stripe-tax-evidence.ts':loadPureTypeScriptModule('supabase/functions/_shared/google-play-stripe-tax-evidence.ts'),
+});
 const order={id:'order',buyer_id:'buyer',video_id:'video',price_id:'price',price_revision:1,amount_minor:1000,currency:'usd',environment:'sandbox',stripe_account_id:'acct_test',stripe_product_id:'prod_video',checkout_session_id:'cs_test_one',expires_at:'2027-01-01T00:31:00Z'};
 const tax={ready:true,taxBehavior:'inclusive',taxCode:'txcd_10000000',collectionMode:'automatic',liabilityType:'self',policyId:'policy'};
 const metadata={chillywoodFlow:'stripe_paid_video_sandbox',orderId:'order',buyerId:'buyer',videoId:'video',priceId:'price',priceRevision:'1'};
@@ -54,4 +54,29 @@ test('expired checkout releases a retry only with conclusively absent or cancele
   const terminal=['absent','canceled'].includes(state);
   assert.equal(calls.length,terminal?1:0);if(terminal)assert.equal(result.status,'failed');
  }
+});
+test('Google reporting uses original charge time and complete refund time, never conflates them',async()=>{
+ const paid={...session,object:'checkout.session',automatic_tax:{enabled:true,status:'complete'},total_details:{amount_tax:100,amount_discount:0,amount_shipping:0},customer_details:{address:{country:'US'}}};
+ const refunded={...charge,created:1000,amount_refunded:300};
+ const refund={object:'refund',id:'re_one',charge:'ch_one',payment_intent:'pi_one',currency:'usd',amount:300,status:'succeeded',created:2000};
+ const read=async patch=>exports.stripeVideoGoogleReportEvidence(paid,refunded,async()=>({object:'list',has_more:false,data:[{...refund,...patch}]}));
+ const valid=await read({});assert.equal(valid.paidOccurredAt,new Date(1000000).toISOString());assert.equal(valid.refundOccurredAt,new Date(2000000).toISOString());assert.equal(valid.tax.taxAmountMinor,100);
+ for(const patch of [{charge:'ch_other'},{payment_intent:'pi_other'},{amount:301},{created:999},{created:null},{currency:'eur'}])assert.equal((await read(patch)).refundOccurredAt,null);
+ const missing=await exports.stripeVideoGoogleReportEvidence(session,{...refunded,created:null},async()=>{throw Error('unavailable')});
+ assert.equal(missing.paidOccurredAt,null);assert.equal(missing.refundOccurredAt,null);assert.equal(missing.tax,null);
+});
+test('report enrichment runs after committed observation, including repeated polls and missing evidence',async()=>{
+ const calls=[];const admin={rpc:async(name,args)=>{calls.push({name,args});return {data:{status:'refunded'},error:null}}};
+ const nativeOrder={...order,checkout_platform:'android'};
+ const get=async(_secret,path)=>path==='/account'?{id:'acct_test'}:path.includes('/line_items')?{has_more:false,data:[{quantity:1,price:{product:'prod_video',unit_amount:1000,tax_behavior:'inclusive'}}]}:path.includes('/checkout/')?session:path.includes('/payment_intents/')?intent:path.includes('/charges/')?{...charge,amount_refunded:100}:path.includes('/products/')?product:(()=>{throw Error('tax unavailable')})();
+ await exports.reconcileStripeVideoOrder(admin,nativeOrder,'sk_test_value',undefined,get);
+ await exports.reconcileStripeVideoOrder(admin,nativeOrder,'sk_test_value',undefined,get);
+ assert.deepEqual(calls.map(c=>c.name),['observe_stripe_sandbox_video_payment','repair_stripe_video_google_reporting','observe_stripe_sandbox_video_payment','repair_stripe_video_google_reporting']);
+ const args=calls[1].args;assert.equal(args.p_refund_amount_minor,100);assert.equal(args.p_original_occurred_at,null);assert.equal(args.p_refund_occurred_at,null);assert.equal(args.p_tax,null);
+});
+test('reporting RPC failure cannot happen before financial refund observation is committed',async()=>{
+ const calls=[];const admin={rpc:async(name)=>{calls.push(name);return name==='repair_stripe_video_google_reporting'?{error:true}:{data:{status:'refunded'}}}};
+ const get=async(_secret,path)=>path==='/account'?{id:'acct_test'}:path.includes('/line_items')?{has_more:false,data:[{quantity:1,price:{product:'prod_video',unit_amount:1000,tax_behavior:'inclusive'}}]}:path.includes('/checkout/')?session:path.includes('/payment_intents/')?intent:path.includes('/charges/')?{...charge,amount_refunded:100}:path.includes('/products/')?product:(()=>{throw Error('missing')})();
+ await assert.rejects(exports.reconcileStripeVideoOrder(admin,{...order,checkout_platform:'android'},'sk_test_value',undefined,get),/video_authority_unavailable/);
+ assert.deepEqual(calls,['observe_stripe_sandbox_video_payment','repair_stripe_video_google_reporting']);
 });
