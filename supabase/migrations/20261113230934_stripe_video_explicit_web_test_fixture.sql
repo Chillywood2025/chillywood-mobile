@@ -4,6 +4,7 @@ create table private.stripe_video_web_test_policies (
  id uuid primary key default gen_random_uuid(),
  account_id text not null check(account_id ~ '^acct_[A-Za-z0-9]+$'),
  product_id text not null check(product_id ~ '^prod_[A-Za-z0-9]+$'),
+ product_tax_code text not null check(product_tax_code ~ '^txcd_[0-9]+$'), -- actual test catalog snapshot, not a legal classification opinion
  buyer_id uuid not null, creator_id uuid not null, video_id uuid not null,
  environment text not null default 'test' check(environment='test'),
  platform text not null default 'web' check(platform='web'),
@@ -80,7 +81,7 @@ begin
   insert into private.stripe_video_web_test_bindings(order_id,policy_id) values(o.id,p.id);
  end if;
  update private.stripe_paid_video_orders set tax_evidence_kind='synthetic_test_no_collection' where id=o.id;
- return jsonb_build_object('ready',true,'policyId',p.id,'taxBehavior','inclusive',
+ return jsonb_build_object('ready',true,'policyId',p.id,'taxBehavior','inclusive','taxCode',p.product_tax_code,
   'collectionMode','synthetic_test_no_collection','evidenceKind','synthetic_test_no_collection',
   'environment','test','platform','web','orderId',o.id,'accountId',o.stripe_account_id,'productId',o.stripe_product_id,
   'disclosure',p.disclosure);

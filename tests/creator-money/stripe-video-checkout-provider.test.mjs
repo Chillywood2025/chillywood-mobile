@@ -13,7 +13,7 @@ const charge={id:'ch_one',livemode:false,paid:true,captured:true,payment_intent:
 const product={id:'prod_video',livemode:false,active:true};
 test('synthetic web mechanics require explicit exact binding and remain visibly synthetic',()=>{
  const web={...order,checkout_platform:'web',tax_evidence_kind:'synthetic_test_no_collection'};
- const policy={ready:true,taxBehavior:'inclusive',collectionMode:'synthetic_test_no_collection',evidenceKind:'synthetic_test_no_collection',
+ const policy={ready:true,taxBehavior:'inclusive',taxCode:'txcd_100',collectionMode:'synthetic_test_no_collection',evidenceKind:'synthetic_test_no_collection',
   environment:'test',platform:'web',orderId:order.id,accountId:order.stripe_account_id,productId:order.stripe_product_id,
   policyId:'fixture',disclosure:'Synthetic test only; no tax compliance or exemption qualification'};
  const form=exports.videoCheckoutForm(web,policy,'https://example.com/return');

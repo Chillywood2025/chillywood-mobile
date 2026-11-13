@@ -6,12 +6,20 @@ import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
 import {webcrypto} from 'node:crypto';
 globalThis.crypto ??= webcrypto;
 const marketProof=loadPureTypeScriptModule('supabase/functions/_shared/stripe-video-market-proof.ts');
+const realCheckout=loadPureTypeScriptModule('supabase/functions/_shared/stripe-paid-video-checkout.ts',{
+ './google-play-stripe-tax-evidence.ts':loadPureTypeScriptModule('supabase/functions/_shared/google-play-stripe-tax-evidence.ts'),
+});
 const signer=await import(`data:text/javascript;base64,${Buffer.from(readFileSync('ops/trusted-network-proof-proxy/src/checkout-proof.js','utf8')).toString('base64')}`);
 const uuid='00000000-0000-4000-8000-000000000001';
-function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform,marketCountry='US',unsigned=false,reuseProof=false,providerStatus='open',resumePatch={},productActive=true}={}){
+function harness({synthetic=false,status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform,marketCountry='US',unsigned=false,reuseProof=false,providerStatus='open',resumePatch={},productActive=true}={}){
  let handler,cachedProof;const consumedNonces=new Set();const calls=[],providerCalls=[],rpcArgs=[];let returnUrl,postedBody;
  const order={checkout_platform:orderPlatform,session_id:uuid,amount_minor:1000,currency:'usd',price_id:uuid,price_revision:1,...(status==='checkout_ready'?{checkout_session_id:'cs_test_one'}:{}),id:uuid,video_id:uuid,buyer_id:uuid,creator_id:'creator',request_id:uuid,status,stripe_account_id:'acct_test',stripe_product_id:'prod_test'};
  const tax={ready:true,policyId:'policy',taxCode:'txcd_100'};
+ if(synthetic){
+  order.environment='sandbox';
+  Object.assign(tax,{taxBehavior:'inclusive',collectionMode:'synthetic_test_no_collection',evidenceKind:'synthetic_test_no_collection',environment:'test',platform:'web',
+   orderId:order.id,accountId:order.stripe_account_id,productId:order.stripe_product_id,disclosure:'Synthetic test only; no tax compliance or exemption qualification'});
+ }
  const deps={videoRpc:async(_admin,name,args)=>{calls.push(name);rpcArgs.push({name,args});if(name==='bind_stripe_video_tax_checkout_policy')return tax;
   if(name==='read_stripe_sandbox_video_order_by_request'&&!existing)return {};
   if(name==='prepare_stripe_video_native_order'){order.checkout_platform=args.p_platform;return {order,admission:{admissionId:uuid,orderId:uuid,platform:args.p_platform,expiresAt:'2099-01-01T00:00:00Z',verification:args.p_platform==='ios'?'native_storefront_observation_unverified':'native_sdk_observation_unverified',financialAuthority:false,accessGranted:false,...admissionPatch}};}
@@ -20,7 +28,7 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
   if(name==='consume_stripe_video_resume_market'){if(consumedNonces.has(args.p_market.nonce))throw Error('nonce_reused');consumedNonces.add(args.p_market.nonce);return {consumed:true,purpose:'resume_url',orderId:order.id,checkoutSessionId:order.checkout_session_id,...resumePatch};}
   if(name==='dispatch_stripe_sandbox_video_order')return {...order,tax};return order;},
   stripeVideoGet:async(_secret,path)=>{providerCalls.push(path);return path==='/account'?{id:providerAccount}:path.startsWith('/checkout/sessions/')?{id:'cs_test_one',livemode:false,client_reference_id:uuid,mode:'payment',status:providerStatus,amount_total:1000,currency:'usd',url:'https://checkout.stripe.com/c/pay/existing',metadata:{chillywoodFlow:'stripe_paid_video_sandbox',orderId:uuid,buyerId:uuid,videoId:uuid,priceId:uuid,priceRevision:'1'}}:{id:'prod_test',active:productActive,livemode:false,tax_code:taxCode};},
-  videoCheckoutForm:(_o,_t,url)=>{returnUrl=url;calls.push('serialize');return new URLSearchParams('mode=payment');},recoverStripeVideoSession:async()=>null,reconcileStripeVideoOrder:async()=>{calls.push('reconcile');}};
+  videoCheckoutForm:(_o,_t,url)=>{returnUrl=url;calls.push('serialize');return synthetic?realCheckout.videoCheckoutForm(_o,_t,url):new URLSearchParams('mode=payment');},recoverStripeVideoSession:async()=>null,reconcileStripeVideoOrder:async()=>{calls.push('reconcile');}};
  const env={STRIPE_VIDEO_WEB_ORIGIN:'https://example.com',STRIPE_TEST_SECRET_KEY:'sk_test_value',STRIPE_VIDEO_TEST_PRODUCT_ID:'prod_test',STRIPE_VIDEO_SANDBOX_ENABLED:'true',...(nativeConfigured?{STRIPE_VIDEO_TEST_ACCOUNT_ID:'acct_test',...Object.fromEntries(['IOS','ANDROID'].flatMap(p=>[[`STRIPE_VIDEO_${p}_SANDBOX_ENABLED`,'true'],[`STRIPE_VIDEO_${p}_ROUTE_ID`,uuid],[`STRIPE_VIDEO_${p}_RETURN_ORIGIN`,'https://native.example.com']]))}:{}),...envOverride};
  const source=ts.transpileModule(readFileSync('supabase/functions/stripe-paid-video-checkout/index.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  env.SUPABASE_URL='https://project.supabase.co';env.CHILLYWOOD_NETWORK_PROOF_SECRET='synthetic-only-test-secret';
@@ -38,6 +46,13 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
   return handler(new Request(url,{method:'POST',headers,body:bytes}));}};
 }
 
+test('synthetic web handler uses real serializer and exact provider catalog tax code',async()=>{
+ const h=harness({synthetic:true});assert.equal((await h.send()).status,200);
+ assert.equal(new URLSearchParams(h.postedBody()).get('metadata[tax_evidence_kind]'),'synthetic_test_no_collection');
+ for(const taxCode of ['txcd_999',null]){
+  const wrong=harness({synthetic:true,taxCode});assert.equal((await wrong.send()).status,503);assert.ok(!wrong.calls.includes('POST'));
+ }
+});
 test('new checkout rejects direct unsigned and unsupported market before provider calls',async()=>{
  for(const settings of [{unsigned:true},{marketCountry:'CA'},{marketCountry:'XX'},{marketCountry:'T1'},{marketCountry:null}]){
   const h=harness(settings);assert.equal((await h.send()).status,503);assert.equal(h.providerCalls.length,0);

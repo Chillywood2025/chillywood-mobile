@@ -16,6 +16,9 @@ expires within 24 hours, permits at most 20 orders and caps each order at at mos
 identity and budgets cannot be changed afterward. Revocation is supported.
 Bindings are immutable, counted under a policy row lock, and a retry of the
 same order does not consume another slot. Failed/abandoned orders still count.
+The immutable `product_tax_code` records the actual test catalog value; the
+handler still compares it to the provider-retrieved product. This is catalog
+identity evidence only, not a professional tax-classification opinion.
 
 The Stripe-hosted page identifies the synthetic test. Provider receipts must
 retain the exact synthetic metadata, have `livemode=false`, disabled automatic

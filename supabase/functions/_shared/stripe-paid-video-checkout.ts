@@ -13,7 +13,7 @@ export function videoCheckoutForm(order: ObjectMap, tax: ObjectMap, returnUrl: s
     || tax.environment !== 'test' || tax.platform !== 'web' || tax.orderId !== order.id
     || tax.accountId !== order.stripe_account_id || tax.productId !== order.stripe_product_id
     || tax.disclosure !== 'Synthetic test only; no tax compliance or exemption qualification')) throw Error('synthetic_test_binding_required');
-  if (tax.ready !== true || tax.taxBehavior !== 'inclusive' || (!synthetic && (!/^txcd_[0-9]+$/.test(String(tax.taxCode)) || !['automatic','verified_no_collection'].includes(String(tax.collectionMode))))) throw Error('tax_qualification_required');
+  if (tax.ready !== true || tax.taxBehavior !== 'inclusive' || !/^txcd_[0-9]+$/.test(String(tax.taxCode)) || (!synthetic && !['automatic','verified_no_collection'].includes(String(tax.collectionMode)))) throw Error('tax_qualification_required');
   const form = new URLSearchParams({mode:'payment', 'payment_method_types[0]':'card',
     'line_items[0][price_data][currency]':'usd', 'line_items[0][price_data][unit_amount]':String(order.amount_minor),
     'line_items[0][price_data][product]':String(order.stripe_product_id),
