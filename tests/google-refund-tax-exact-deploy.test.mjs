@@ -119,7 +119,16 @@ test('historical frozen source closure, runtime JWT and argument guards cannot b
   }
   fs.appendFileSync(path.join(dir,MIGRATION),'\n-- changed');assert.throws(()=>sourceBinding(dir,source),/TRACKED_SOURCE_DIRTY/);assert.throws(()=>loadBundle(dir),/MIGRATION_HASH_MISMATCH/);
   fs.writeFileSync(path.join(dir,MIGRATION),bundle.body);
-  const edge=bundle.edge[0].files[0].path;fs.appendFileSync(path.join(dir,edge),'\n// changed');assert.throws(()=>loadBundle(dir),/EDGE_HASH_MISMATCH/);fs.writeFileSync(path.join(dir,edge),readHistoricalRefundSource(edge));
+  for(const edge of new Set([bundle.edge[0].files[0].path,
+    'supabase/functions/_shared/google-refund-tax-reconciliation.ts',
+    'supabase/functions/_shared/stripe-history-checkpoint.ts',
+    'supabase/functions/google-play-external-reporter/index.ts'])){
+    const original=readHistoricalRefundSource(edge);
+    fs.appendFileSync(path.join(dir,edge),'\n// changed');assert.throws(()=>loadBundle(dir),/EDGE_HASH_MISMATCH/);
+    const current=fs.readFileSync(edge,'utf8');
+    if(current!==original){fs.writeFileSync(path.join(dir,edge),current);assert.throws(()=>loadBundle(dir),/EDGE_HASH_MISMATCH/);}
+    fs.writeFileSync(path.join(dir,edge),original);
+  }
   const configPath=path.join(dir,'supabase/config.toml'),config=fs.readFileSync(configPath,'utf8');
   const section=/\[functions\.google-play-external-reporter\]([\s\S]*?)(?=\n\[|$)/;
   for(const changed of [
