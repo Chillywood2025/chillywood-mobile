@@ -12,6 +12,11 @@ const supplemental=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/his
 export const HISTORICAL_ENTRYPOINT='supabase/functions/revenuecat-webhook/index.ts';
 export const HISTORICAL_CONFIG='supabase/config.toml';
 const archives={
+ 'supabase/functions/public-creator-video-cards/index.ts':{file:'tests/fixtures/historical-public-creator-video-cards-index.ts.txt',sha256:'7bb50f113dfa82441a3903ff2f42bb93de318375478f7b532ea94a829eb5e959'},
+ 'scripts/social-engagement-deployment-manifest.json':{file:'tests/fixtures/historical-social-engagement-deployment-manifest.json.txt',sha256:'7d4cacdf5c09b286ff0595be61a521cef349479082594653fbbde1c62c51adc4'},
+ 'supabase/functions/_shared/commerce-known-cost-accounting.ts':{file:'tests/fixtures/historical-commerce-known-cost-accounting.ts.txt',sha256:'e18102bc2f2abe5d76a122fa36da606963641e559fb08809c84867c135f98bcb'},
+ 'supabase/functions/_shared/stripe-refund-tax-evidence.ts':{file:'tests/fixtures/historical-stripe-refund-tax-evidence.ts.txt',sha256:'d98403ba574b48f132afd06f0ea6651fda5083bff55e747e2b8d7e8dd54f5921'},
+ 'supabase/functions/_shared/stripe-fee-report-evidence.ts':{file:'tests/fixtures/historical-stripe-fee-report-evidence.ts.txt',sha256:'0ca9f8b55382d20149cace1846a7668dee60962dcb8341a3cb156f2f23c2026e'},
  'supabase/functions/_shared/creator-cashout-execution.ts':{file:'tests/fixtures/historical-creator-cashout-execution.ts.txt',sha256:'cca96d7dd7d4e3a13c5a96320f97ccf766c74f9f2a96bd7509037a2fd09ad715'},
  'ops/automatic-commerce-cutover/run-native.mjs':{file:'tests/fixtures/historical-automatic-commerce-run-native.mjs.txt',sha256:'b33b9e1709205f0a277a6e94fd3c472da80b7c01fb4ee2fa4d31571dd4a74d63'},
  'tests/helpers/sandbox-cashout-historical-deployment-fixture.mjs':{file:'tests/fixtures/historical-sandbox-cashout-historical-deployment-fixture.mjs.txt',sha256:'d08119fa635aeda412a6e40922904d4bb6446c582e594e9bcc115afe5bd0034a'},

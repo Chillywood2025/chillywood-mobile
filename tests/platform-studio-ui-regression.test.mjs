@@ -24,7 +24,7 @@ const { EventScheduleInputError, parseZonedEventScheduleInput } = scheduleContex
 function fixture(initial, bindings = {}) {
   const state = { ...initial };
   const authority = { userId: 'owner', accountId: 'owner', state: 'ACTIVE', restoreOnly: false, sessionGeneration: 'fixture-session' };
-  const context = { React, Promise, Date, Map, Set, console, useCallback: callback => callback,
+  const context = { React, Promise, Date, Map, Set, console, Platform: { OS: 'ios' }, useCallback: callback => callback,
     getCurrentAccountSessionAuthoritySnapshot: () => authority, sameAccountSessionAuthority,
     replayActionsMountedRef: { current: true }, clipUploadAttemptRef: { current: null }, brandDraftOwnershipRef: { current: { revision: 0, dirty: false } },
     ...bindings };

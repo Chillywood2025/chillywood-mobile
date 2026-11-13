@@ -19,4 +19,13 @@ export const nativeProductionMigrationFiles=Object.freeze([
  // Catalog identity convergence belongs to the current full-schema topology,
  // not historical checkpoints that predate native tip ownership.
  '20261112103000_android_sandbox_tip_provider_identity.sql',
+ // Web-only Stripe video successors require the current source/ledger wrappers.
+ '20261112160000_stripe_sandbox_video_creator_prices.sql',
+ '20261112161000_stripe_paid_video_sandbox_checkout.sql',
+ '20261112183000_stripe_paid_video_sandbox_held_receipts.sql',
+ '20261112184000_stripe_paid_video_sandbox_playback.sql',
+ '20261112185000_stripe_video_known_cost_held_earnings.sql',
+ '20261112190000_stripe_video_protected_classification.sql',
+ '20261112191000_stripe_video_player_metadata.sql',
+ '20261112192000_stripe_video_request_recovery.sql',
 ]);

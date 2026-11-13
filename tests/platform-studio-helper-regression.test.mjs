@@ -330,7 +330,7 @@ test("All existing theme controls have visible, bounded presentation values", ()
 test("Strict paid settings read refuses errors or malformed lists, and saves require a real receipt", async () => {
   let response = { data: [], error: null };
   const api = loadStudioFunctions("_lib/creatorPaidVideos.ts", ["listMyPaidVideoOffers", "savePaidVideoOffer"], {
-    toText: text, paidVideoClient: { rpc: async () => response },
+    Platform: { OS: "android" }, toText: text, paidVideoClient: { rpc: async () => response },
     parseJsonArray: (data, parser) => Array.isArray(data) ? data.map(parser).filter(Boolean) : [],
     parseOffer: (row) => row?.videoId ? row : null,
     runCurrentAccountBoundSupabaseMutationRpc: async () => response,

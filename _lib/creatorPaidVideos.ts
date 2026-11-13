@@ -1,3 +1,4 @@
+import { openStripeSandboxVideoCheckout, readStripeSandboxVideoAccess } from "./stripePaidVideoSandbox";
 import { trackEvent } from "./analytics";
 import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 import {
@@ -52,8 +53,8 @@ export type CreatorPaidVideoOffer = {
   provider: string;
   providerProductId: string | null;
   providerProductKey: string | null;
-  salesCount: number;
-  totalRevenueCents: number;
+  salesCount: number | null;
+  totalRevenueCents: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -174,8 +175,8 @@ const parseOffer = (row: Record<string, unknown>): CreatorPaidVideoOffer | null 
     provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductId: toText(row.providerProductId) || null,
     providerProductKey: toText(row.providerProductKey) || null,
-    salesCount: toCents(row.salesCount),
-    totalRevenueCents: toCents(row.totalRevenueCents),
+    salesCount: row.salesCount == null ? null : toCents(row.salesCount),
+    totalRevenueCents: row.totalRevenueCents == null ? null : toCents(row.totalRevenueCents),
     createdAt: toText(row.createdAt),
     updatedAt: toText(row.updatedAt),
   };
@@ -302,7 +303,7 @@ export const formatPaidVideoPrice = (amountCents: number, currency = "usd") =>
   formatMonetizationCurrency(amountCents, currency);
 
 export async function listMyPaidVideoOffers(options?: { throwOnUnavailable?: boolean }): Promise<CreatorPaidVideoOffer[]> {
-  const { data, error } = await paidVideoClient.rpc("list_my_paid_video_offers");
+  const { data, error } = await paidVideoClient.rpc(Platform.OS === "web" ? "list_my_stripe_sandbox_video_prices" : "list_my_paid_video_offers");
   if (error || !Array.isArray(data)) {
     if (options?.throwOnUnavailable) throw new Error("Paid video settings could not be loaded. Please try again.");
     return [];
@@ -328,7 +329,9 @@ export async function savePaidVideoOffer(input: {
   priceCents: number;
   currency?: string | null;
 }) {
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("set_creator_content_price", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>(Platform.OS === "web" ? "set_my_stripe_sandbox_video_price" : "set_creator_content_price", Platform.OS === "web" ? {
+    p_video_id: input.videoId, p_amount_minor: input.priceCents, p_currency: input.currency ?? "usd", p_is_paid: input.isPaid,
+  } : {
     p_content_type: "creator_video",
     p_content_id: input.videoId,
     p_is_paid: input.isPaid,
@@ -347,6 +350,15 @@ export async function savePaidVideoOffer(input: {
 }
 
 export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideoAccessResolution> {
+  if (Platform.OS === "web") {
+    const stripe = await readStripeSandboxVideoAccess(videoId);
+    if (stripe?.available) return {
+      allowed: stripe.canAccess, reason: stripe.canAccess ? "sandbox_grant" : stripe.checkoutAllowed ? "purchase_required" : "content_unavailable",
+      requiresPurchase: !stripe.canAccess && stripe.checkoutAllowed, priceCents: stripe.amountMinor ?? null,
+      currency: stripe.currency ?? null, creatorId: stripe.creatorId ?? null, provider: "stripe",
+      providerProductId: null, providerProductKey: null, offerStatus: "sandbox",
+    };
+  }
   const response = await withAuthorityReadDeadline(
     paidVideoClient.rpc("resolve_creator_content_access", {
       p_content_type: "creator_video",
@@ -593,6 +605,12 @@ export async function purchasePaidVideoAccess(input: {
   }
   if (access.allowed) {
     return { ok: true, message: "You already unlocked this video.", access };
+  }
+  if (Platform.OS === "web" && access.provider === "stripe") {
+    if (access.creatorId !== input.creatorId || access.priceCents !== input.amountCents || access.currency !== (input.currency ?? "usd")) {
+      return { ok: false, message: "This offer changed. Refresh before checkout.", access };
+    }
+    return { ok: false, message: await openStripeSandboxVideoCheckout(input.videoId), access };
   }
   if (!access.requiresPurchase) {
     return { ok: false, message: "Paid video access could not be verified.", access };

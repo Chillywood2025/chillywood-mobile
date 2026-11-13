@@ -38,6 +38,7 @@ const withShortAuthorityDeadline = async (operation, fallback) => {
   }
 };
 const runtime = loadStubbed("_lib/creatorMonetization.ts", {
+  "react-native": { Platform: { OS: "android" } },
   "./supabase": {
     supabase: {
       from: () => ({}),

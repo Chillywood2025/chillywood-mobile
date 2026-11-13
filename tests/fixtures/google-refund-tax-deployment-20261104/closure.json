@@ -91,7 +91,8 @@
     },
     {
       "path": "supabase/functions/_shared/stripe-refund-tax-evidence.ts",
-      "sha256": "d98403ba574b48f132afd06f0ea6651fda5083bff55e747e2b8d7e8dd54f5921"
+      "sha256": "d98403ba574b48f132afd06f0ea6651fda5083bff55e747e2b8d7e8dd54f5921",
+      "snapshot": "tests/fixtures/historical-stripe-refund-tax-evidence.ts.txt"
     },
     {
       "path": "supabase/functions/google-play-external-reporter/index.ts",

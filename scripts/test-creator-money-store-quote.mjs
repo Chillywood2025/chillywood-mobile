@@ -56,6 +56,10 @@ function runtime(options = {}) {
       ...options.moneyClaim }, error: options.moneyClaimError ?? null };
   };
   const mocks = {
+    "./stripePaidVideoSandbox": {
+      openStripeSandboxVideoCheckout: () => { throw new Error("Native store quote tests must not enter Stripe checkout"); },
+      readStripeSandboxVideoAccess: () => { throw new Error("Native store quote tests must not read Stripe access"); },
+    },
     "./nativeProductionPaidVideo": { purchaseNativeProductionPaidVideo: async () => { throw new Error("Sandbox quote fixture must not enter production checkout"); } },
     "react-native-purchases": { getStorefront: () => { throw new Error("Native store quote tests must not enter external storefront admission"); } },
     "./creatorTipCustomQuote": { normalizeCreatorTipCustomQuote: () => { throw new Error("Native store quote tests must not enter external checkout"); } },

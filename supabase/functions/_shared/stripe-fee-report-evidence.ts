@@ -142,17 +142,23 @@ export function normalizeStripeFeeReport(csv: string, context: ReportContext) {
 /** GET-only adapter for an already-created v1 report. No report creation or
  * payment operations; no arbitrary URL, account selector or credential export.
  * Result can be archived by the server, but cannot qualify any settlement. */
-export async function observeStripeFeeReport(context: ReportContext, secret: string, transport: typeof fetch = fetch) {
+export type FeeReportReadOptions = { timeoutMs?: number; signal?: AbortSignal };
+export async function observeStripeFeeReport(context: ReportContext, secret: string, transport: typeof fetch = fetch, options: FeeReportReadOptions = {}) {
   // Validate every context field before even contacting the provider.
   normalizeStripeFeeReport(required.join(","), context);
   if (!new RegExp(`^(sk|rk)_${context.environment}_[A-Za-z0-9]+$`).test(secret)) fail("credential_mode_mismatch");
+  const timeoutMs=options.timeoutMs??15000;
+  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)fail('read_timeout_invalid');
   const get = async (url: string, expectedSize?: number) => {
     // Own the full header/body deadline, including transports which do not
     // settle on abort. Cleanup must not wait for an unresponsive stream cancel.
     const controller = new AbortController();
     const deadline = new Promise<never>((_, reject) => controller.signal.addEventListener("abort",
       () => reject(new Error("stripe_fee_evidence_provider_read_deadline")), { once: true }));
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const abortFromCaller=()=>controller.abort(options.signal?.reason);
+    options.signal?.addEventListener('abort',abortFromCaller,{once:true});
+    if(options.signal?.aborted)abortFromCaller();
     let response: Response | undefined, reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
       response = await Promise.race([Promise.resolve().then(async () => {
@@ -181,6 +187,7 @@ export async function observeStripeFeeReport(context: ReportContext, secret: str
       return bytes;
     } finally {
       clearTimeout(timer);
+      options.signal?.removeEventListener('abort',abortFromCaller);
       if (reader) { void reader.cancel().catch(() => {}); reader.releaseLock(); }
       else { void response?.body?.cancel().catch(() => {}); }
     }

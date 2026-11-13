@@ -1,3 +1,4 @@
+import { parseStripePaidVideoPrice } from "../_lib/stripePaidVideoPrice";
 import { CreatorAuctionHeldEarnings } from "../components/monetization/creator-auction-held-earnings";
 import { CreatorEligibilityDeclarationPanel } from "../components/monetization/creator-eligibility-declaration-panel";
 import { CreatorCashoutPanel } from "../components/monetization/creator-cashout-panel";
@@ -1527,7 +1528,7 @@ export function ChannelStudioScreen() {
   const paidVideoPrice = useCreatorAuthoringPrice("paid_content", {
     sourceId: videoEditor.editingVideoId,
     preferredAmount: creatorPaidVideoOffers.find(offer => offer.videoId === videoEditor.editingVideoId)?.priceCents,
-    enabled: activeMoneyManageTarget === "paid_videos" && !!videoEditor.editingVideoId,
+    enabled: Platform.OS !== "web" && activeMoneyManageTarget === "paid_videos" && !!videoEditor.editingVideoId,
   });
   const vipPrice = useCreatorAuthoringPrice("vip_pass", {
     preferredAmount: creatorVipPassOffers[0]?.priceCents,
@@ -4182,10 +4183,11 @@ export function ChannelStudioScreen() {
       return;
     }
     const isPaid = videoEditor.accessMode === "paid";
-    const price = paidVideoPrice.selectedPrice;
+    const webAmount = Platform.OS === "web" ? parseStripePaidVideoPrice(videoEditor.priceDollars) : null;
+    const price = Platform.OS === "web" ? (webAmount === null ? null : { amountMinor: webAmount, currency: "usd", label: formatMonetizationCurrency(webAmount, "usd"), availabilityLabel: "Stripe website sandbox only; provider qualification is still required" }) : paidVideoPrice.selectedPrice;
     const priceCents = price?.amountMinor ?? 0;
-    if (isPaid && (!paidVideoPrice.isCurrent() || !price)) {
-      setVideoNotice("Choose an available price before saving. Refresh prices if they could not load.");
+    if (isPaid && ((Platform.OS !== "web" && !paidVideoPrice.isCurrent()) || !price)) {
+      setVideoNotice(Platform.OS === "web" ? "Enter a valid USD amount with at most two decimal places. The server checks the permitted price range." : "Choose an available price before saving. Refresh prices if they could not load.");
       return;
     }
     paidVideoSaveInFlightRef.current = true;
@@ -4203,7 +4205,7 @@ export function ChannelStudioScreen() {
         throw new Error("The saved access settings could not be verified for this video. Your selection is preserved; refresh before retrying.");
       }
       setCreatorPaidVideoOffers(offers);
-      setVideoNotice(isPaid ? `Paid Video setup saved at ${price?.label} in sandbox mode. ${price?.availabilityLabel}. Production sales and payouts remain unchanged.` : "Free access saved. The prior paid offer is no longer available for new purchases.");
+      setVideoNotice(isPaid ? `Paid Video setup saved at ${price?.label} in sandbox mode. ${price?.availabilityLabel}. Production sales and payouts remain unchanged.` : Platform.OS === "web" ? "Stripe sandbox offer paused. Existing access and native settings are unchanged." : "Free access saved. The prior paid offer is no longer available for new purchases.");
     } catch (error) {
       if (isCurrent()) setVideoNotice(formatCreatorSetupError(error, "Paid Video setup could not be confirmed. Your selection is preserved; refresh status before retrying."));
     } finally {
@@ -8868,12 +8870,13 @@ export function ChannelStudioScreen() {
               {selectedVideo ? (
                 <View style={styles.eventEmptyCard} testID="money-paid-video-editor">
                   <Text style={styles.eventEmptyTitle}>{selectedVideo.title}</Text>
-                  <Text style={styles.eventEmptyBody}>Choose access and an available store price for this exact video.</Text>
+                  <Text style={styles.eventEmptyBody}>{Platform.OS === "web" ? "Enter your USD price for Stripe sandbox checkout on the website. Native checkout and live payments are unchanged." : "Choose access and an available store price for this exact video."}</Text>
                   <View style={styles.eventActionRow}>
-                    {(["free", "paid"] as const).map((accessMode) => <TouchableOpacity key={accessMode} style={[styles.chip, videoEditor.accessMode === accessMode && styles.chipActive]} disabled={videoSaving} accessibilityRole="button" accessibilityState={{ selected: videoEditor.accessMode === accessMode, disabled: videoSaving }} onPress={() => updateVideoEditor({ accessMode })}><Text style={styles.chipText}>{accessMode === "free" ? "Free" : "Paid"}</Text></TouchableOpacity>)}
+                    {(["free", "paid"] as const).map((accessMode) => <TouchableOpacity key={accessMode} style={[styles.chip, videoEditor.accessMode === accessMode && styles.chipActive]} disabled={videoSaving} accessibilityRole="button" accessibilityState={{ selected: videoEditor.accessMode === accessMode, disabled: videoSaving }} onPress={() => updateVideoEditor({ accessMode })}><Text style={styles.chipText}>{accessMode === "free" ? (Platform.OS === "web" ? "Pause Stripe offer" : "Free") : "Paid"}</Text></TouchableOpacity>)}
                   </View>
-                  {videoEditor.accessMode === "paid" ? <CreatorPricePicker prices={paidVideoPrice.prices} selectedPriceKey={paidVideoPrice.selectedPriceKey} onSelect={paidVideoPrice.select} loading={paidVideoPrice.loading} error={paidVideoPrice.error} onRetry={paidVideoPrice.refresh} disabled={videoSaving} testID="paid-video-price" /> : null}
-                  <AppActionButton label={videoSaving ? "Saving..." : "Save video access"} disabled={videoSaving || (videoEditor.accessMode === "paid" && !paidVideoPrice.selectedPrice)} onPress={() => void savePaidVideoSetup()} testID="money-paid-video-save-button" />
+                  {videoEditor.accessMode === "paid" && Platform.OS === "web" ? <TextInput style={styles.input} value={videoEditor.priceDollars} onChangeText={priceDollars => updateVideoEditor({ priceDollars })} editable={!videoSaving} keyboardType="decimal-pad" accessibilityLabel="Stripe sandbox video price in US dollars" placeholder="USD price, for example 4.99" testID="stripe-paid-video-price-input" /> : null}
+                  {videoEditor.accessMode === "paid" && Platform.OS !== "web" ? <CreatorPricePicker prices={paidVideoPrice.prices} selectedPriceKey={paidVideoPrice.selectedPriceKey} onSelect={paidVideoPrice.select} loading={paidVideoPrice.loading} error={paidVideoPrice.error} onRetry={paidVideoPrice.refresh} disabled={videoSaving} testID="paid-video-price" /> : null}
+                  <AppActionButton label={videoSaving ? "Saving..." : "Save video access"} disabled={videoSaving || (videoEditor.accessMode === "paid" && (Platform.OS === "web" ? parseStripePaidVideoPrice(videoEditor.priceDollars) === null : !paidVideoPrice.selectedPrice))} onPress={() => void savePaidVideoSetup()} testID="money-paid-video-save-button" />
                 </View>
               ) : null}
               {videoNotice ? <Text style={styles.noticeText}>{videoNotice}</Text> : null}
@@ -9731,7 +9734,7 @@ export function ChannelStudioScreen() {
                           </View>
                         </View>
                         <Text style={styles.eventEmptyBody}>
-                          paid_video · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.salesCount} sale{offer.salesCount === 1 ? "" : "s"} · {formatMonetizationCurrency(offer.totalRevenueCents, offer.currency)} sandbox gross
+                          paid_video · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.salesCount === null ? "Sales pending verification" : `${offer.salesCount} sale${offer.salesCount === 1 ? "" : "s"}`} · {offer.totalRevenueCents === null ? "Revenue pending verification" : `${formatMonetizationCurrency(offer.totalRevenueCents, offer.currency)} sandbox gross`}
                         </Text>
                         <TouchableOpacity
                           style={styles.eventSecondaryButton}

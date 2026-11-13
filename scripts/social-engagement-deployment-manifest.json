@@ -102,7 +102,8 @@
     {
       "signature": "public.can_read_creator_video_row(text,text,text,text,text,text,text,text)",
       "bodySha256": [
-        "f30d29ee49a58acd182c996b0e3cf5f23d71bc7e287ccad6562619b97c3f0eba"
+        "f30d29ee49a58acd182c996b0e3cf5f23d71bc7e287ccad6562619b97c3f0eba",
+        "e3f9b67cd09b299849296d46ed74a388a545eed97305c0b8fa7ed60f506bcd8d"
       ],
       "metadata": {
         "language": "plpgsql",

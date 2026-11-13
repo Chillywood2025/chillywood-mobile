@@ -12,6 +12,9 @@ import {verifyInputs} from '../scripts/google-refund-tax-observer-proof/verify-i
 import {collectSourceBundle} from '../ops/creator-backend-rollout/prepare-edge.mjs';
 import {HISTORICAL_CONFIG,HISTORICAL_ENTRYPOINT,materializeHistoricalBundle,materializeHistoricalProofPackage,readPinnedHistoricalSource} from './helpers/historical-revenuecat-closure.mjs';
 const archives=[
+ {name:'supabase/functions/public-creator-video-cards/index.ts',file:'tests/fixtures/historical-public-creator-video-cards-index.ts.txt'},
+ {name:'scripts/social-engagement-deployment-manifest.json',file:'tests/fixtures/historical-social-engagement-deployment-manifest.json.txt'},
+ ...['commerce-known-cost-accounting','stripe-refund-tax-evidence','stripe-fee-report-evidence'].map(name=>({name:`supabase/functions/_shared/${name}.ts`,file:`tests/fixtures/historical-${name}.ts.txt`})),
  {name:'supabase/functions/_shared/creator-cashout-execution.ts',file:'tests/fixtures/historical-creator-cashout-execution.ts.txt'},
  {name:'ops/automatic-commerce-cutover/run-native.mjs',file:'tests/fixtures/historical-automatic-commerce-run-native.mjs.txt'},
  {name:'tests/helpers/sandbox-cashout-historical-deployment-fixture.mjs',file:'tests/fixtures/historical-sandbox-cashout-historical-deployment-fixture.mjs.txt'},
