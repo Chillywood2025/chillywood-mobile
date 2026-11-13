@@ -1340,6 +1340,7 @@ export default function PlayerScreen() {
   const [creatorVideoCommentKeyboardOpen, setCreatorVideoCommentKeyboardOpen] = useState(false);
   const [paidVideoUnlockBusy, setPaidVideoUnlockBusy] = useState(false);
   const paidVideoUnlockLatchRef = useRef(createActionSingleFlightLatch());
+  const paidVideoOperationGenerationRef = useRef(0);
   const [paidVideoUnlockMessage, setPaidVideoUnlockMessage] = useState<string | null>(null);
   const [creatorVideoTipStatus, setCreatorVideoTipStatus] = useState<CreatorTipPublicStatus | null>(null);
   const [creatorVideoTipSheetVisible, setCreatorVideoTipSheetVisible] = useState(false);
@@ -7455,6 +7456,13 @@ export default function PlayerScreen() {
   const paidVideoCheckoutAvailable = useMemo(() => {
     return Platform.OS === "web" || isCreatorDigitalCheckoutShellAvailable() || isNativeProductionPaidVideoBuildAvailable();
   }, []);
+  useEffect(() => {
+    paidVideoOperationGenerationRef.current += 1;
+    paidVideoUnlockLatchRef.current.release();
+    setPaidVideoUnlockBusy(false);
+    setPaidVideoUnlockMessage(null);
+    return () => { paidVideoOperationGenerationRef.current += 1; };
+  }, [creatorVideo?.id, sessionAuthority?.accountId, sessionAuthority?.userId, sessionAuthority?.sessionGeneration, sessionAuthority?.state, sessionAuthority?.restoreOnly]);
   const handlePaidVideoUnlock = useCallback(async () => {
     debugLog("paid-video", "paid_video_unlock_pressed", {
       hasCreatorVideo: !!creatorVideo,
@@ -7488,6 +7496,11 @@ export default function PlayerScreen() {
       return;
     }
     if (!paidVideoUnlockLatchRef.current.tryAcquire()) return;
+    const authority = captureCreatorMoneyPurchaseAuthority();
+    const operationGeneration = paidVideoOperationGenerationRef.current;
+    const operationVideoId = creatorVideo.id;
+    const operationCurrent = () => paidVideoOperationGenerationRef.current === operationGeneration
+      && stripeRefreshVideoRef.current === operationVideoId && isCreatorMoneyPurchaseAuthorityCurrent(authority);
 
     setPaidVideoUnlockBusy(true);
     setPaidVideoUnlockMessage(
@@ -7505,9 +7518,11 @@ export default function PlayerScreen() {
         amountCents,
         currency: access?.currency ?? "usd",
       });
+      if (!operationCurrent()) return;
       setPaidVideoUnlockMessage(result.message);
       if (result.ok) {
       const refreshed = await readCreatorVideoForPlayer(creatorVideo.id);
+      if (!operationCurrent()) return;
       if (refreshed) {
         logCreatorVideoPlaybackResolution(refreshed);
         setCreatorVideo(refreshed);
@@ -7520,10 +7535,12 @@ export default function PlayerScreen() {
       debugLog("paid-video", "paid_video_checkout_error", {
         message: error instanceof Error ? error.message : "unknown_error",
       });
-      setPaidVideoUnlockMessage("Unable to unlock this video right now.");
+      if (operationCurrent()) setPaidVideoUnlockMessage("Unable to unlock this video right now.");
     } finally {
-      paidVideoUnlockLatchRef.current.release();
-      setPaidVideoUnlockBusy(false);
+      if (paidVideoOperationGenerationRef.current === operationGeneration) {
+        paidVideoUnlockLatchRef.current.release();
+        if (operationCurrent()) setPaidVideoUnlockBusy(false);
+      }
     }
   }, [creatorVideo, creatorVideoPaidContentPriceLabel, isSignedIn, paidVideoCheckoutAvailable, paidVideoUnlockBusy]);
   const stripeSandboxDeliveryOnly = creatorVideo?.paidContentAccess?.stripeSandboxDeliveryOnly === true;
@@ -10459,16 +10476,25 @@ export default function PlayerScreen() {
                       accessibilityRole="button" accessibilityLabel="Refresh server-verified video access"
                       testID="stripe-paid-video-refresh-access" onPress={() => {
                         if (!creatorVideo || paidVideoUnlockBusy) return;
+                        if (!paidVideoUnlockLatchRef.current.tryAcquire()) return;
                         const authority = captureCreatorMoneyPurchaseAuthority();
                         const refreshVideoId = creatorVideo.id;
+                        const operationGeneration = paidVideoOperationGenerationRef.current;
+                        const operationCurrent = () => paidVideoOperationGenerationRef.current === operationGeneration
+                          && stripeRefreshVideoRef.current === refreshVideoId && isCreatorMoneyPurchaseAuthorityCurrent(authority);
                         setPaidVideoUnlockBusy(true);
                         let checkoutRefreshNotice: string | null = null;
                         void refreshStripeSandboxVideoPayment(creatorVideo.id).then(notice => { checkoutRefreshNotice = notice; return readCreatorVideoForPlayer(creatorVideo.id); }).then(refreshed => {
-                          if (!isCreatorMoneyPurchaseAuthorityCurrent(authority) || stripeRefreshVideoRef.current !== refreshVideoId) return;
+                          if (!operationCurrent()) return;
                           if (refreshed) { setCreatorVideo(refreshed); setItem(buildCreatorPlayerTitle(refreshed)); }
                           setPaidVideoUnlockMessage(checkoutRefreshNotice ?? (refreshed?.paidContentAccess?.allowed ? "Server-verified access received." : "Access is not verified yet. Payment return alone does not unlock playback."));
-                        }).catch(() => { if (isCreatorMoneyPurchaseAuthorityCurrent(authority)) setPaidVideoUnlockMessage("Access could not be checked. Please refresh again."); })
-                          .finally(() => setPaidVideoUnlockBusy(false));
+                        }).catch(() => { if (operationCurrent()) setPaidVideoUnlockMessage("Access could not be checked. Please refresh again."); })
+                          .finally(() => {
+                            if (paidVideoOperationGenerationRef.current === operationGeneration) {
+                              paidVideoUnlockLatchRef.current.release();
+                              if (operationCurrent()) setPaidVideoUnlockBusy(false);
+                            }
+                          });
                       }}><Text style={styles.playerAccessPrimaryText}>Refresh access</Text></TouchableOpacity>
                   ) : null}
                   {stripeSandboxPlayback.error ? <Text style={styles.videoLoadingSubtext} testID="stripe-sandbox-playback-error">{"Protected sandbox playback could not be verified. Refresh access to try again."}</Text> : null}

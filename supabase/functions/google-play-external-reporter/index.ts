@@ -35,15 +35,18 @@ Deno.serve(async req => {
     // Reuse existing mode-bound credentials; never provision credentials here.
     const tipKey = readOptionalEnv("STRIPE_SECRET_KEY"), tipAccount = readOptionalEnv("STRIPE_MERCH_RECONCILIATION_ACCOUNT_ID");
     const auctionKey = readOptionalEnv("STRIPE_AUCTION_PLATFORM_TEST_KEY"), auctionAccount = readOptionalEnv("STRIPE_AUCTION_PLATFORM_TEST_ACCOUNT_ID");
-    if ((tipKey && tipAccount) || (auctionKey && auctionAccount)) {
+    const videoKey = readOptionalEnv("STRIPE_TEST_SECRET_KEY"), videoAccount = readOptionalEnv("STRIPE_VIDEO_TEST_ACCOUNT_ID");
+    if ((tipKey && tipAccount) || (auctionKey && auctionAccount) || (videoKey && videoAccount)) {
       const budget = createMerchObservationBudget();
       try {
         const candidate = await budget.run(() => admin.client.rpc("claim_google_refund_tax_context"), 5000);
         if (candidate.error) throw Error("refund_tax_claim_failed");
         if (candidate.data) {
           const context = candidate.data as GoogleRefundTaxContext;
-          const key = context.feature === "creator_tip" ? tipKey : auctionKey;
-          const account = context.feature === "creator_tip" ? tipAccount : auctionAccount;
+          // A missing/unknown feature never borrows another flow's credentials.
+          const auction = context.feature === "event_auction" || context.feature === "room_seat_auction";
+          const key = context.feature === "paid_video" ? videoKey : context.feature === "creator_tip" ? tipKey : auction ? auctionKey : null;
+          const account = context.feature === "paid_video" ? videoAccount : context.feature === "creator_tip" ? tipAccount : auction ? auctionAccount : null;
           if (key && account) {
             await budget.run(() => reconcileGoogleRefundTax(admin.client, context, key, account, budget.transport));
           }

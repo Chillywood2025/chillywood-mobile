@@ -1,10 +1,12 @@
 import { observeStripeRefundTax } from "./stripe-refund-tax-evidence.ts";
 type Json = Record<string, unknown>;
 export type GoogleRefundTaxContext = {
-  transaction_id: string; feature: "creator_tip" | "event_auction" | "room_seat_auction";
+  transaction_id: string; feature: "creator_tip" | "event_auction" | "room_seat_auction" | "paid_video";
   quote_id: string; buyer_id: string; creator_id: string; checkout_id: string; payment_intent_id: string;
   gross_minor: number; tax_minor: number; currency: string; recipient_account_id: string | null;
   platform_account_id: string | null;
+  // Required only for paid_video, supplied by its private stored-order context.
+  video_id?: string; price_id?: string; price_revision?: number; tax_policy_id?: string;
 };
 const fail = (): never => { throw Error("google_refund_tax_observation_incomplete"); };
 const obj = (v: unknown): Json => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Json : fail();
@@ -19,6 +21,18 @@ export async function observeGoogleRefundTax(context: GoogleRefundTaxContext, se
   check(/^(sk|rk)_test_[A-Za-z0-9_]+$/.test(secret)); id(expectedAccount, "acct");
   check(context.currency === "usd" && integer(context.gross_minor) > 0
     && integer(context.tax_minor) <= context.gross_minor);
+  check(["creator_tip", "event_auction", "room_seat_auction", "paid_video"].includes(context.feature));
+  let videoMetadata: Record<string, string> | null = null;
+  if (context.feature === "paid_video") {
+    const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    check(context.platform_account_id === expectedAccount && context.recipient_account_id === null
+      && uuid(context.quote_id) && uuid(context.buyer_id) && uuid(context.creator_id)
+      && uuid(context.video_id) && uuid(context.price_id) && uuid(context.tax_policy_id)
+      && Number.isSafeInteger(context.price_revision) && Number(context.price_revision) > 0);
+    videoMetadata = { chillywoodFlow: "stripe_paid_video_sandbox", orderId: context.quote_id, buyerId: context.buyer_id,
+      videoId: context.video_id!, priceId: context.price_id!, priceRevision: String(context.price_revision),
+      commerce_tax_policy_id: context.tax_policy_id! };
+  }
   const get = async (path: string) => {
     const response = await transport(`https://api.stripe.com/v1${path}`, { method: "GET", redirect: "error",
       headers: { Authorization: `Bearer ${secret}`, "Stripe-Version": "2026-10-28.endive" }, signal: AbortSignal.timeout(15000) });
@@ -35,7 +49,7 @@ export async function observeGoogleRefundTax(context: GoogleRefundTaxContext, se
     && checkout.currency === context.currency && checkout.amount_total === context.gross_minor
     && tax.enabled === true && tax.status === "complete" && totals.amount_tax === context.tax_minor
     && totals.amount_discount === 0 && totals.amount_shipping === 0);
-  check(context.feature === "creator_tip"
+  check(videoMetadata ? Object.entries(videoMetadata).every(([key, value]) => metadata[key] === value) : context.feature === "creator_tip"
     ? metadata.chillywood_tip_id === context.quote_id && metadata.fan_user_id === context.buyer_id && metadata.creator_user_id === context.creator_id
     : metadata.auction_quote_id === context.quote_id && metadata.buyer_user_id === context.buyer_id);
   const intent = await get(`/payment_intents/${id(context.payment_intent_id, "pi")}`);
@@ -44,11 +58,17 @@ export async function observeGoogleRefundTax(context: GoogleRefundTaxContext, se
     && intent.amount === context.gross_minor && intent.amount_received === context.gross_minor);
   if (context.feature === "creator_tip") check(obj(intent.transfer_data).destination === context.recipient_account_id);
   else check(intent.transfer_data === null && intent.application_fee_amount === null && intent.on_behalf_of === null);
+  if (videoMetadata) {
+    const intentMetadata = obj(intent.metadata);
+    check(Object.entries(videoMetadata).every(([key, value]) => intentMetadata[key] === value));
+  }
   const chargeId = id(intent.latest_charge, "ch"), charge = await get(`/charges/${chargeId}`);
   check(charge.object === "charge" && charge.id === chargeId && charge.livemode === false
     && charge.payment_intent === context.payment_intent_id && charge.currency === context.currency
     && charge.paid === true && charge.captured === true && charge.amount === context.gross_minor
     && charge.amount_captured === context.gross_minor);
+  if (videoMetadata) check(charge.disputed === false && charge.transfer == null && charge.transfer_data == null
+    && charge.on_behalf_of == null && charge.application_fee == null && charge.application_fee_amount == null);
   const refunded = integer(charge.amount_refunded);
   check(refunded > 0 && refunded < context.gross_minor);
   const refunds: { id: string; amount: number }[] = [];
@@ -76,6 +96,8 @@ export async function observeGoogleRefundTax(context: GoogleRefundTaxContext, se
     && final.payment_intent === context.payment_intent_id && final.amount_refunded === refunded
     && final.currency === context.currency && final.amount === context.gross_minor && final.amount_captured === context.gross_minor
     && final.paid === true && final.captured === true && final.disputed === charge.disputed);
+  if (videoMetadata) check(final.transfer == null && final.transfer_data == null && final.on_behalf_of == null
+    && final.application_fee == null && final.application_fee_amount == null);
   return { account_id: expectedAccount, environment: "test", checkout_id: context.checkout_id,
     payment_intent_id: context.payment_intent_id, charge_id: chargeId, currency: context.currency,
     gross_minor: context.gross_minor, tax_minor: context.tax_minor, refunded_minor: refunded,

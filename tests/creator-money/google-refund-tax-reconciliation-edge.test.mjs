@@ -52,3 +52,35 @@ test('charge refund racing tax reads rejects stale aggregate',async()=>{
  const transport=async(url,init)=>{if(url.endsWith('/charges/ch_sale')&&++charges===2)f.data['/charges/ch_sale'].amount_refunded=600;return f.transport(url,init);};
  await assert.rejects(observeGoogleRefundTax(context,'sk_test_synthetic','acct_platform',transport));
 });
+
+function videoFixture(){
+ const f=fixture(),uuid=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
+ const ctx={...context,feature:'paid_video',quote_id:uuid(1),buyer_id:uuid(2),creator_id:uuid(3),
+  video_id:uuid(4),price_id:uuid(5),price_revision:2,tax_policy_id:uuid(6),recipient_account_id:null,platform_account_id:'acct_platform'};
+ const metadata={chillywoodFlow:'stripe_paid_video_sandbox',orderId:ctx.quote_id,buyerId:ctx.buyer_id,
+  videoId:ctx.video_id,priceId:ctx.price_id,priceRevision:'2',commerce_tax_policy_id:ctx.tax_policy_id};
+ Object.assign(f.data['/checkout/sessions/cs_test_sale'],{client_reference_id:ctx.quote_id,metadata:{...metadata}});
+ Object.assign(f.data['/payment_intents/pi_sale'],{metadata:{...metadata},transfer_data:null,application_fee_amount:null,on_behalf_of:null});
+ return {...f,ctx,observe:()=>observeGoogleRefundTax(ctx,'sk_test_synthetic','acct_platform',f.transport)};
+}
+test('paid-video tax repair validates its own stored order metadata on session and intent',async()=>{
+ const f=videoFixture(),facts=await f.observe();assert.equal(facts.tax_reversal_minor,50);assert.equal(facts.account_id,'acct_platform');
+});
+for(const key of ['orderId','buyerId','videoId','priceId','priceRevision','commerce_tax_policy_id','chillywoodFlow'])
+ for(const path of ['/checkout/sessions/cs_test_sale','/payment_intents/pi_sale'])
+ test(`paid-video rejects substituted ${key} on ${path}`,async()=>{
+  const f=videoFixture();f.data[path].metadata[key]='wrong';await assert.rejects(f.observe());
+ });
+test('paid-video context requires explicit platform identity and complete stored price/tax binding before reads',async()=>{
+ for(const patch of [{platform_account_id:null},{platform_account_id:'acct_other'},{recipient_account_id:'acct_creator'},
+  {video_id:undefined},{price_id:undefined},{tax_policy_id:undefined},{price_revision:0},{price_revision:1.5},{feature:'unknown'}]){
+  const f=videoFixture();Object.assign(f.ctx,patch);await assert.rejects(f.observe());assert.equal(f.calls.length,0);
+ }
+});
+test('paid-video cannot use auction metadata or transferred/disputed charge',async()=>{
+ const f=videoFixture();f.data['/checkout/sessions/cs_test_sale'].metadata={auction_quote_id:f.ctx.quote_id,buyer_user_id:f.ctx.buyer_id};await assert.rejects(f.observe());
+ for(const patch of [{transfer:'tr_other'},{transfer_data:{destination:'acct_other'}},{on_behalf_of:'acct_other'},
+  {application_fee:'fee_other'},{application_fee_amount:1},{disputed:true}]){
+  const g=videoFixture();Object.assign(g.data['/charges/ch_sale'],patch);await assert.rejects(g.observe());
+ }
+});
