@@ -7454,8 +7454,9 @@ export default function PlayerScreen() {
     ? formatOneTimePrice(creatorVideoPaidContentPriceLabel)
     : "";
   const paidVideoCheckoutAvailable = useMemo(() => {
-    return Platform.OS === "web" || isCreatorDigitalCheckoutShellAvailable() || isNativeProductionPaidVideoBuildAvailable();
-  }, []);
+    return creatorVideo?.paidContentAccess?.stripeSandboxDeliveryOnly === true
+      || Platform.OS === "web" || isCreatorDigitalCheckoutShellAvailable() || isNativeProductionPaidVideoBuildAvailable();
+  }, [creatorVideo?.paidContentAccess?.stripeSandboxDeliveryOnly]);
   useEffect(() => {
     paidVideoOperationGenerationRef.current += 1;
     paidVideoUnlockLatchRef.current.release();
@@ -7504,7 +7505,7 @@ export default function PlayerScreen() {
 
     setPaidVideoUnlockBusy(true);
     setPaidVideoUnlockMessage(
-      `Opening ${access.provider === "stripe" ? "Stripe sandbox" : access.provider === "revenuecat_app_store" ? "App Store" : access.provider === "revenuecat_google_play" ? "Google Play" : "verified video"} checkout...`
+      `Opening ${access.stripeSandboxDeliveryOnly === true ? "Stripe sandbox" : "verified video"} checkout...`
     );
     try {
       debugLog("paid-video", "paid_video_checkout_start", {
@@ -10471,7 +10472,7 @@ export default function PlayerScreen() {
                       Playback remains blocked until paid-content access can be verified.
                     </Text>
                   )}
-                  {Platform.OS === "web" ? (
+                  {creatorVideo?.paidContentAccess?.stripeSandboxDeliveryOnly === true ? (
                     <TouchableOpacity style={styles.playerAccessPrimaryBtn} disabled={paidVideoUnlockBusy}
                       accessibilityRole="button" accessibilityLabel="Refresh server-verified video access"
                       testID="stripe-paid-video-refresh-access" onPress={() => {

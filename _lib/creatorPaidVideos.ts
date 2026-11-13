@@ -376,6 +376,7 @@ export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideo
   // The canonical resolver preserves existing grants and rejects stale free routes
   // when a shared Stripe offer exists. Never charge an already-entitled viewer.
   if (historical.allowed) return historical;
+  if (!response.data || typeof response.data !== "object" || (response.data as Record<string, unknown>).stripeSandboxDeliveryOnly !== true) return historical;
   const stripe = Platform.OS === "web"
     ? await readStripeSandboxVideoAccess(videoId)
     : await readNativeStripeSandboxVideoAccess(videoId);

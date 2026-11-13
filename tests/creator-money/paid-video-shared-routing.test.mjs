@@ -4,12 +4,13 @@ import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 
 const source=ts.transpileModule(readFileSync('_lib/creatorPaidVideos.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const accessSource=ts.transpileModule(readFileSync('_lib/creatorMonetization.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 function harness({platform='ios',historical=false,failed=false,eligible=true,granted=false,changed=false}={}) {
  const calls=[],api={};
  const access={available:true,canAccess:granted,checkoutAllowed:eligible&&!granted,amountMinor:100,currency:'usd',creatorId:'creator'};
  const deps={
   'react-native':{Platform:{OS:platform}},
-  './supabase':{supabase:{rpc:async()=>({error:failed?Error('offline'):null,data:{allowed:historical,reason:historical?'active_grant':'stripe_sandbox_protected_delivery_required',resolverStatus:'resolved'}})}},
+  './supabase':{supabase:{rpc:async()=>({error:failed?Error('offline'):null,data:{allowed:historical,stripeSandboxDeliveryOnly:!historical,reason:historical?'active_grant':'stripe_sandbox_protected_delivery_required',resolverStatus:'resolved'}})}},
   './creatorMonetization':{normalizeCreatorContentAccessResolution:x=>x},
   './entitlementAuthority':{withAuthorityReadDeadline:async p=>p},
   './creatorMoneyPurchaseAuthority':{captureCreatorMoneyPurchaseAuthority:()=>({}),isCreatorMoneyPurchaseAuthorityCurrent:()=>!changed},
@@ -18,6 +19,19 @@ function harness({platform='ios',historical=false,failed=false,eligible=true,gra
  };
  new Function('require','exports',source)(name=>deps[name]??{},api);
  return {api,calls};
+}
+for(const platform of ['web','ios','android']) {
+ test(`${platform} normal player access uses protected Stripe transport and preserves existing grants`,async()=>{
+  for(const historical of [false,true]) {
+   const calls=[],api={};
+   const reader=async()=>{calls.push(platform);return {available:true,canAccess:false,checkoutAllowed:true,amountMinor:150,currency:'usd',creatorId:'creator'};};
+   const data=historical?{allowed:true,reason:'active_grant',requiresPurchase:false}:{allowed:false,reason:'stripe_sandbox_protected_delivery_required',requiresPurchase:true,stripeSandboxDeliveryOnly:true};
+   const deps={'react-native':{Platform:{OS:platform}},'./supabase':{supabase:{rpc:async()=>({data,error:null})}},'./entitlementAuthority':{withAuthorityReadDeadline:async p=>p},'./stripePaidVideoSandbox':{readStripeSandboxVideoAccess:reader},'./stripePaidVideoNative':{readNativeStripeSandboxVideoAccess:reader}};
+   new Function('require','exports',accessSource)(name=>deps[name]??{},api);
+   const result=await api.resolveCreatorContentAccess({contentType:'creator_video',contentId:'video'});
+   assert.equal(result.allowed,historical);assert.equal(result.requiresPurchase,!historical);assert.equal(result.stripeSandboxDeliveryOnly,!historical?true:undefined);assert.equal(calls.length,historical?0:1);
+  }
+ });
 }
 for(const platform of ['web','ios','android']) {
  test(`${platform} routes canonical Stripe offer to its admitted transport`,async()=>{

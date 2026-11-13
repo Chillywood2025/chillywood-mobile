@@ -50,6 +50,24 @@ mobile checkpoint was not recovered; its test results do not validate this work.
 
 ## Still required before activation
 
+## Recovery continuation checkpoint
+
+The normal paid-video purchase and player access resolvers now select the native
+Stripe adapter on iOS/Android only for a canonical Stripe-protected offer. Existing
+grants retain precedence; malformed or unavailable canonical access does not
+silently become checkout. Player refresh uses the same platform-specific status
+helper and remains scoped to the initiating account/video operation. The native
+refresh button is available for Stripe-protected offers without enabling payment
+or relying on the old catalog's checkout shell.
+
+74 focused routing, historical-access, native/web checkout, player lifecycle,
+playback and price/cashout boundary tests passed for this continuation. Full
+typecheck and exact-head Required Validation have not yet passed this checkpoint.
+Shared creator authoring and history integration remain unfinished; these focused
+results do not claim the whole application or installed phones are verified.
+
+## Remaining activation requirements
+
 Full admitted prepare/bind/dispatch database proof; Android paid/refund reporting
 and reconciliation proof; native route qualification/enrollment; correct installed
 build/device verification; deployed provider mappings. US-only buyer admission
