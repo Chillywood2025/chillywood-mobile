@@ -19,6 +19,7 @@ function harness({platform='web',response,change=false}={}) {
  const api=load('_lib/stripePaidVideoSandbox.ts',name=>{
   if(name==='react-native')return {Platform:{OS:platform},Linking:{openURL:async url=>opened.push(url)}};
   if(name==='./entitlementAuthority')return {withAuthorityReadDeadline:async p=>p};
+  if(name==='./stripeVideoAttemptJournal')return load('_lib/stripeVideoAttemptJournal.ts');
   if(name==='./accountBoundSupabaseMutation')return {captureAccountBoundSupabaseMutationSubject:async()=>({authority:{userId:buyerId,sessionGeneration:session},accessToken:session}),assertAccountBoundSupabaseMutationSubjectCurrent:()=>{if(!current)throw Error('changed')}};
   if(name==='./supabase')return {supabase:{rpc:async()=>({data:offer}),functions:{invoke:async(name,args)=>{calls++;if(change)current=false;return response?.(args)??{error:true}}}}};
   throw Error(name);

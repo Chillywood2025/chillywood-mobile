@@ -16,8 +16,11 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
  const require=name=>name.startsWith('npm:')?{createClient:()=>({})}:name.includes('stripe-connect')?{authenticateRequest:async()=>({user:{id:uuid,sessionGeneration:newSession?'00000000-0000-4000-8000-000000000002':uuid}})}:deps;
  const fetch=async()=>{calls.push('POST');if(networkFails)throw Error('network');return new Response(JSON.stringify({id:'cs_test_one',livemode:false,client_reference_id:uuid,url:'https://checkout.stripe.com/session'}));};
  new Function('require','exports','Deno','fetch',source)(require,{}, {env:{get:key=>env[key]},serve:fn=>handler=fn},fetch);
- return {calls,send:(origin='https://example.com',body={videoId:uuid,requestId:uuid})=>handler(new Request('https://edge.test',{method:'POST',headers:{Origin:origin},body:JSON.stringify(body)}))};
+ return {calls,send:(origin='https://example.com',body={videoId:uuid,requestId:uuid},platform='web')=>handler(new Request('https://edge.test',{method:'POST',headers:{Origin:origin,...(platform?{'x-chillywood-platform':platform}:{})},body:JSON.stringify(body)}))};
 }
+test('unadmitted native and unknown transports stop before database or provider calls',async()=>{
+ for(const platform of ['ios','android','unknown','']){const h=harness();assert.equal((await h.send('https://example.com',undefined,platform)).status,403);assert.equal(h.calls.length,0);}
+});
 test('checkout validates/serializes before durable claim, then exactly one provider POST',async()=>{
  const h=harness();const response=await h.send();assert.equal(response.status,200);
  assert.deepEqual(h.calls,['read_stripe_sandbox_video_order_by_request','prepare_stripe_sandbox_video_order','bind_stripe_video_tax_checkout_policy','serialize','dispatch_stripe_sandbox_video_order','POST','attach_stripe_sandbox_video_session']);

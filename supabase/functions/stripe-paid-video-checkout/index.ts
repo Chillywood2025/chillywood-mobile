@@ -11,6 +11,9 @@ Deno.serve(async(req:Request)=>{
  if(!/^https:\/\//.test(origin)||req.headers.get('Origin')!==origin)return reply(403,{error:'standalone_web_required'});
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
  if(req.method!=='POST')return reply(405,{error:'method_not_allowed'});
+ // A native app must use its qualified native admission, never the web fallback.
+ // This marker is not proof of platform eligibility; Origin/auth remain required.
+ if(req.headers.get('x-chillywood-platform')!=='web')return reply(403,{error:'checkout_transport_not_admitted'});
  const secret=Deno.env.get('STRIPE_TEST_SECRET_KEY')??'';
  const productId=Deno.env.get('STRIPE_VIDEO_TEST_PRODUCT_ID')??'';
  const enabled=Deno.env.get('STRIPE_VIDEO_SANDBOX_ENABLED')==='true';
