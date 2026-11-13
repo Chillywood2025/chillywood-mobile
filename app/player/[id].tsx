@@ -1,5 +1,5 @@
 import { useStripeSandboxPaidVideoPlaybackState } from "../../_lib/useStripeSandboxPaidVideoPlayback";
-import { refreshStripeSandboxVideoPayment } from "../../_lib/stripePaidVideoSandbox";
+import { refreshPaidVideoPayment } from "../../_lib/creatorPaidVideos";
 import { captureCreatorMoneyPurchaseAuthority, isCreatorMoneyPurchaseAuthorityCurrent, isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
 import { CommentLikeButton } from "../../components/social/comment-like-button";
 import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
@@ -10484,7 +10484,7 @@ export default function PlayerScreen() {
                           && stripeRefreshVideoRef.current === refreshVideoId && isCreatorMoneyPurchaseAuthorityCurrent(authority);
                         setPaidVideoUnlockBusy(true);
                         let checkoutRefreshNotice: string | null = null;
-                        void refreshStripeSandboxVideoPayment(creatorVideo.id).then(notice => { checkoutRefreshNotice = notice; return readCreatorVideoForPlayer(creatorVideo.id); }).then(refreshed => {
+                        void refreshPaidVideoPayment(creatorVideo.id).then(notice => { checkoutRefreshNotice = notice; return readCreatorVideoForPlayer(creatorVideo.id); }).then(refreshed => {
                           if (!operationCurrent()) return;
                           if (refreshed) { setCreatorVideo(refreshed); setItem(buildCreatorPlayerTitle(refreshed)); }
                           setPaidVideoUnlockMessage(checkoutRefreshNotice ?? (refreshed?.paidContentAccess?.allowed ? "Server-verified access received." : "Access is not verified yet. Payment return alone does not unlock playback."));

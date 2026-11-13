@@ -1,4 +1,5 @@
-import { openStripeSandboxVideoCheckout, readStripeSandboxVideoAccess } from "./stripePaidVideoSandbox";
+import { openStripeSandboxVideoCheckout, readStripeSandboxVideoAccess, refreshStripeSandboxVideoPayment } from "./stripePaidVideoSandbox";
+import { openNativeStripeSandboxVideoCheckout, readNativeStripeSandboxVideoAccess, refreshNativeStripeSandboxVideoPayment } from "./stripePaidVideoNative";
 import { trackEvent } from "./analytics";
 import { CREATOR_MONEY_STORE_QUOTE_UNAVAILABLE_COPY, isCreatorMoneyStoreQuoteMatch } from "./creatorMoneyStoreQuote";
 import {
@@ -350,15 +351,6 @@ export async function savePaidVideoOffer(input: {
 }
 
 export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideoAccessResolution> {
-  if (Platform.OS === "web") {
-    const stripe = await readStripeSandboxVideoAccess(videoId);
-    if (stripe?.available) return {
-      allowed: stripe.canAccess, reason: stripe.canAccess ? "sandbox_grant" : stripe.checkoutAllowed ? "purchase_required" : "content_unavailable",
-      requiresPurchase: !stripe.canAccess && stripe.checkoutAllowed, priceCents: stripe.amountMinor ?? null,
-      currency: stripe.currency ?? null, creatorId: stripe.creatorId ?? null, provider: "stripe",
-      providerProductId: null, providerProductKey: null, offerStatus: "sandbox",
-    };
-  }
   const response = await withAuthorityReadDeadline(
     paidVideoClient.rpc("resolve_creator_content_access", {
       p_content_type: "creator_video",
@@ -380,7 +372,25 @@ export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideo
       offerStatus: null,
     };
   }
-  return normalizeAccess(response.data);
+  const historical = normalizeAccess(response.data);
+  // The canonical resolver preserves existing grants and rejects stale free routes
+  // when a shared Stripe offer exists. Never charge an already-entitled viewer.
+  if (historical.allowed) return historical;
+  const stripe = Platform.OS === "web"
+    ? await readStripeSandboxVideoAccess(videoId)
+    : await readNativeStripeSandboxVideoAccess(videoId);
+  if (stripe?.available) return {
+    allowed: stripe.canAccess, reason: stripe.canAccess ? "sandbox_grant" : stripe.checkoutAllowed ? "purchase_required" : "content_unavailable",
+    requiresPurchase: !stripe.canAccess && stripe.checkoutAllowed, priceCents: stripe.amountMinor ?? null,
+    currency: stripe.currency ?? null, creatorId: stripe.creatorId ?? null, provider: "stripe",
+    providerProductId: null, providerProductKey: null, offerStatus: "sandbox",
+  };
+  return historical;
+}
+
+/** Status only: the native helper never reopens an existing checkout. */
+export async function refreshPaidVideoPayment(videoId: string): Promise<string | null> {
+  return Platform.OS === "web" ? refreshStripeSandboxVideoPayment(videoId) : refreshNativeStripeSandboxVideoPayment(videoId);
 }
 
 export async function readMyUnlockedPaidVideoLibraryItems(limit = 24): Promise<UnlockedPaidVideoLibraryResult> {
@@ -606,11 +616,12 @@ export async function purchasePaidVideoAccess(input: {
   if (access.allowed) {
     return { ok: true, message: "You already unlocked this video.", access };
   }
-  if (Platform.OS === "web" && access.provider === "stripe") {
+  if (access.provider === "stripe") {
+    if (!access.requiresPurchase) return { ok: false, message: "Paid video checkout is not available right now.", access };
     if (access.creatorId !== input.creatorId || access.priceCents !== input.amountCents || access.currency !== (input.currency ?? "usd")) {
       return { ok: false, message: "This offer changed. Refresh before checkout.", access };
     }
-    return { ok: false, message: await openStripeSandboxVideoCheckout(input.videoId), access };
+    return { ok: false, message: await (Platform.OS === "web" ? openStripeSandboxVideoCheckout(input.videoId) : openNativeStripeSandboxVideoCheckout(input.videoId)), access };
   }
   if (!access.requiresPurchase) {
     return { ok: false, message: "Paid video access could not be verified.", access };

@@ -36,7 +36,7 @@ test('refresh failure from a retired video cannot overwrite the current view or 
  let reject;const pending=new Promise((_,r)=>{reject=r});const writes=[],generation={current:0},video={current:'video'};let releases=0;
  const env={exports:{},creatorVideo:{id:'video'},paidVideoUnlockBusy:false,paidVideoUnlockLatchRef:{current:{tryAcquire:()=>true,release:()=>{releases++}}},
   paidVideoOperationGenerationRef:generation,stripeRefreshVideoRef:video,captureCreatorMoneyPurchaseAuthority:()=>({}),isCreatorMoneyPurchaseAuthorityCurrent:()=>true,
-  setPaidVideoUnlockBusy:v=>writes.push(v),setPaidVideoUnlockMessage:v=>writes.push(v),refreshStripeSandboxVideoPayment:()=>pending,readCreatorVideoForPlayer:async()=>null};
+  setPaidVideoUnlockBusy:v=>writes.push(v),setPaidVideoUnlockMessage:v=>writes.push(v),refreshPaidVideoPayment:()=>pending,readCreatorVideoForPlayer:async()=>null};
  vm.runInNewContext(ts.transpileModule(`exports.run=()=>{${source.slice(begin,finish)}\n};`,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,env);
  env.exports.run();writes.length=0;generation.current++;video.current='new';reject(Error('old failure'));
  await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(writes,[]);assert.equal(releases,0);
