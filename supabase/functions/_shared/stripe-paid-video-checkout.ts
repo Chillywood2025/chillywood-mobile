@@ -8,7 +8,12 @@ export function videoCheckoutForm(order: ObjectMap, tax: ObjectMap, returnUrl: s
   const url = new URL(returnUrl);
   if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.search) throw Error('https_return_url_required');
   if (order.environment !== 'sandbox' || !Number.isSafeInteger(order.amount_minor) || Number(order.amount_minor) <= 0 || order.currency !== 'usd') throw Error('sandbox_price_required');
-  if (tax.ready !== true || tax.taxBehavior !== 'inclusive' || !/^txcd_[0-9]+$/.test(String(tax.taxCode)) || !['automatic','verified_no_collection'].includes(String(tax.collectionMode))) throw Error('tax_qualification_required');
+  const synthetic = tax.collectionMode === 'synthetic_test_no_collection';
+  if (synthetic && (order.checkout_platform !== 'web' || tax.evidenceKind !== 'synthetic_test_no_collection'
+    || tax.environment !== 'test' || tax.platform !== 'web' || tax.orderId !== order.id
+    || tax.accountId !== order.stripe_account_id || tax.productId !== order.stripe_product_id
+    || tax.disclosure !== 'Synthetic test only; no tax compliance or exemption qualification')) throw Error('synthetic_test_binding_required');
+  if (tax.ready !== true || tax.taxBehavior !== 'inclusive' || (!synthetic && (!/^txcd_[0-9]+$/.test(String(tax.taxCode)) || !['automatic','verified_no_collection'].includes(String(tax.collectionMode))))) throw Error('tax_qualification_required');
   const form = new URLSearchParams({mode:'payment', 'payment_method_types[0]':'card',
     'line_items[0][price_data][currency]':'usd', 'line_items[0][price_data][unit_amount]':String(order.amount_minor),
     'line_items[0][price_data][product]':String(order.stripe_product_id),
@@ -17,6 +22,11 @@ export function videoCheckoutForm(order: ObjectMap, tax: ObjectMap, returnUrl: s
     client_reference_id:String(order.id),'billing_address_collection':'required','automatic_tax[enabled]':String(tax.collectionMode==='automatic'),
     expires_at:String(Math.floor(Date.now()/1000)+60*60),
   });
+  if (synthetic) {
+    form.set('custom_text[submit][message]', 'Synthetic sandbox test only. No real payment or tax qualification.');
+    form.set('metadata[tax_evidence_kind]', 'synthetic_test_no_collection');
+    form.set('payment_intent_data[metadata][tax_evidence_kind]', 'synthetic_test_no_collection');
+  }
   if(tax.collectionMode==='automatic') {
     if(tax.liabilityType==='self') form.set('automatic_tax[liability][type]','self');
     else if(tax.liabilityType==='account' && /^acct_[A-Za-z0-9]+$/.test(String(tax.liabilityAccountId))) {
@@ -31,6 +41,11 @@ export function videoCheckoutForm(order: ObjectMap, tax: ObjectMap, returnUrl: s
 
 export function paidVideoFacts(order:ObjectMap, session:ObjectMap, intent:ObjectMap, charge:ObjectMap, product:ObjectMap):ObjectMap {
   const metadata=object(session.metadata); const piMetadata=object(intent.metadata);
+  if (order.tax_evidence_kind !== 'synthetic_test_no_collection' && (metadata.tax_evidence_kind === 'synthetic_test_no_collection'
+    || piMetadata.tax_evidence_kind === 'synthetic_test_no_collection')) throw Error('synthetic_test_receipt_mismatch');
+  if (order.tax_evidence_kind === 'synthetic_test_no_collection' && (order.environment !== 'sandbox' || order.checkout_platform !== 'web'
+    || metadata.tax_evidence_kind !== 'synthetic_test_no_collection' || piMetadata.tax_evidence_kind !== 'synthetic_test_no_collection'
+    || object(session.automatic_tax).enabled !== false || object(session.total_details).amount_tax !== 0)) throw Error('synthetic_test_receipt_mismatch');
   // Archiving a catalog product stops new checkout, not reconciliation of its
   // existing receipts/refunds. Keep exact provider identity and test-mode checks.
   if (session.livemode !== false || intent.livemode !== false || charge.livemode !== false || product.livemode !== false || typeof product.active !== 'boolean'

@@ -12,6 +12,10 @@ function fixture({mode='automatic',tax=100,refund=0,changedFinal=false,oversized
  const order={id:'order',buyer_id:'buyer',video_id:'video',price_id:'price',price_revision:1,environment:'sandbox',currency:'usd',amount_minor:1000,
   stripe_account_id:'acct_test',stripe_product_id:'prod_one',checkout_session_id:'cs_test_one',payment_intent_id:'pi_one',charge_id:'ch_one',taxCollectionMode:mode};
  const metadata={chillywoodFlow:'stripe_paid_video_sandbox',orderId:'order',buyerId:'buyer',videoId:'video',priceId:'price',priceRevision:'1'};
+ if(mode==='synthetic_test_no_collection'){
+  order.checkout_platform='web';order.tax_evidence_kind='synthetic_test_no_collection';
+  metadata.tax_evidence_kind='synthetic_test_no_collection';
+ }
  const session={id:'cs_test_one',livemode:false,mode:'payment',payment_status:'paid',status:'complete',client_reference_id:'order',payment_intent:'pi_one',amount_total:1000,currency:'usd',metadata,
   automatic_tax:{enabled:mode==='automatic',status:'complete'},total_details:{amount_tax:tax}};
  const intent={id:'pi_one',livemode:false,status:'succeeded',latest_charge:'ch_one',amount_received:1000,currency:'usd',metadata};
@@ -49,6 +53,15 @@ test('verified no-collection needs explicit zero and never fabricates refund tax
  assert.equal(result.input.taxReversalMinor,0);assert.equal(f.taxCalls(),0);assert.equal(result.calculation.creatorMinor,688);
  await assert.rejects(fixture({mode:'verified_no_collection',tax:1}).run(),/binding_invalid/);
  const unknown=fixture({mode:'unknown'});await assert.rejects(unknown.run(),/binding_invalid/);
+});
+test('synthetic web costs use actual zero tax and fee receipts, never legal exemption evidence',async()=>{
+ const f=fixture({mode:'synthetic_test_no_collection',tax:0,refund:100});
+ assert.equal((await f.run()).input.taxReversalMinor,0);assert.equal(f.taxCalls(),0);
+ await assert.rejects(fixture({mode:'synthetic_test_no_collection',tax:1}).run(),/synthetic_test_receipt_mismatch/);
+ for(const platform of ['ios','android']){
+  const native=fixture({mode:'synthetic_test_no_collection',tax:0});native.order.checkout_platform=platform;
+  await assert.rejects(native.run(),/synthetic_test_receipt_mismatch/);
+ }
 });
 test('automatic refund uses tax evidence and final changed provider state is rejected',async()=>{
  const f=fixture({refund:100});assert.equal((await f.run()).input.taxReversalMinor,10);assert.equal(f.taxCalls(),1);
