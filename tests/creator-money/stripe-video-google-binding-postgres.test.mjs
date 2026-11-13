@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {syntheticVideoMarketObservation} from '../helpers/stripe-video-market-fixture.mjs';
 import {createDatabase} from '../helpers/database-runtime-authority-fixture.mjs';
 import {seedCommerceBuyer,seedCommerceCreator,acceptCommerceCreatorTerms,withCommerceActor} from '../helpers/automatic-commerce-fixture.mjs';
 
@@ -58,9 +59,46 @@ test('Google paid-video uses one exact existing-queue binding through real nativ
    from private.stripe_video_native_admissions where id=$1`,[admission.admissionId]),/google_external_token_domain_reused/);
   await assert.rejects(()=>db.query(`insert into private.google_play_external_launch_bindings(feature,quote_id,buyer_id,session_id,program_id,amount_minor,currency,external_transaction_token,token_hash)
    values('paid_video',$1,$2,$3,$4,1000,'usd','bad',repeat('d',64))`,[randomUUID(),buyer.id,buyer.session,program]),/google_external_binding_domain/);
-  const dispatched=await one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3)',[order.id,buyer.id,buyer.session]);
+  const market=await syntheticVideoMarketObservation(db,order.id);
+  const dispatch=(id,proof,who=buyer.id,session=buyer.session)=>one('select public.dispatch_stripe_sandbox_video_order($1,$2,$3,$4)',[id,who,session,proof]);
+  for(const patch of [{country:'CA'},{country:'XX'},{country:'T1'},{nonce:null},{bodySha256:'bad'},
+   {requestId:randomUUID()},{videoId:randomUUID()},{platform:'web'},
+   {observedAt:new Date(Date.now()-600000).toISOString(),expiresAt:new Date(Date.now()-300000).toISOString()},
+   {observedAt:new Date(Date.now()+60000).toISOString(),expiresAt:new Date(Date.now()+360000).toISOString()}]){
+   await assert.rejects(dispatch(order.id,{...market,...patch}),/checkout_market_/);
+  }
+  await assert.rejects(dispatch(order.id,market,creator.id),/checkout_market_order_mismatch/);
+  await assert.rejects(dispatch(order.id,market,buyer.id,randomUUID()),/checkout_market_order_mismatch/);
+  assert.equal(await one('select count(*)::int from private.stripe_video_market_admissions'),0);
+  // Existing downstream financial checks still run; failure must roll nonce consumption back.
+  await db.query('update private.stripe_paid_video_prices set amount_minor=1001 where id=$1',[order.price_id]);
+  await assert.rejects(dispatch(order.id,market),/native_admission_required|checkout_dispatch_unavailable/);
+  assert.equal(await one('select count(*)::int from private.stripe_video_market_admissions'),0);
+  await db.query('update private.stripe_paid_video_prices set amount_minor=1000 where id=$1',[order.price_id]);
+  const dispatched=await dispatch(order.id,market);
   assert.equal(dispatched.tax.policyId,tax);
   assert.equal(await one('select status from private.stripe_paid_video_orders where id=$1',[order.id]),'dispatched');
+  await assert.rejects(dispatch(order.id,market),/checkout_market_order_mismatch/);
+  assert.equal(await one('select count(*)::int from private.stripe_video_market_admissions'),1);
+  const other=async()=>one(`insert into private.stripe_paid_video_orders(buyer_id,session_id,video_id,creator_id,price_id,price_revision,
+   amount_minor,currency,stripe_account_id,stripe_product_id,request_id,expires_at)
+   select buyer_id,session_id,video_id,creator_id,price_id,price_revision,amount_minor,currency,stripe_account_id,stripe_product_id,$2,expires_at
+   from private.stripe_paid_video_orders where id=$1 returning id`,[order.id,randomUUID()]);
+  const second=await other();
+  await assert.rejects(dispatch(second,await syntheticVideoMarketObservation(db,second,{nonce:market.nonce})),/unique constraint/);
+  assert.equal(await one('select status from private.stripe_paid_video_orders where id=$1',[second]),'prepared');
+  const third=await other(),nonce=randomUUID();
+  const submitted=await Promise.allSettled([dispatch(second,await syntheticVideoMarketObservation(db,second,{nonce})),
+   dispatch(third,await syntheticVideoMarketObservation(db,third,{nonce}))]);
+  assert.equal(submitted.filter(x=>x.status==='fulfilled').length,1,'one unique nonce authorizes only one dispatch');
+  assert.equal(await one('select count(*)::int from private.stripe_video_market_admissions'),2);
+  for(const role of ['anon','authenticated','service_role']){
+   assert.equal(await one("select has_table_privilege($1,'private.stripe_video_market_admissions','select')",[role]),false);
+   assert.equal(await one("select has_function_privilege($1,'public.dispatch_stripe_sandbox_video_order_before_market(uuid,uuid,uuid)','execute')",[role]),false);
+  }
+  for(const role of ['anon','authenticated'])assert.equal(await one("select has_function_privilege($1,'public.dispatch_stripe_sandbox_video_order(uuid,uuid,uuid,jsonb)','execute')",[role]),false);
+  assert.equal(await one("select to_regprocedure('public.dispatch_stripe_sandbox_video_order(uuid,uuid,uuid)') is null"),true);
+  await assert.rejects(()=>db.query('delete from private.stripe_video_market_admissions where nonce=$1',[market.nonce]),/immutable/);
   await assert.rejects(bind(),/google_video_order_unavailable/);
   assert.equal(await one("select count(*)::int from private.google_play_external_launch_bindings where feature='paid_video' and quote_id=$1",[order.id]),1);
   assert.equal(await one('select count(*)::int from private.google_play_external_transactions'),0,'binding alone is not a paid transaction');

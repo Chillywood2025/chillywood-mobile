@@ -10,7 +10,7 @@ new Function('module','exports','crypto',ts.transpileModule(readFileSync('supaba
  {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(module,module.exports,webcrypto);
 const {verifyStripeVideoMarketProof:verify}=module.exports;
 const secret='synthetic-test-only-secret',audience='https://project.supabase.co',path=helper.CHECKOUT_PATH;
-const bytes=new TextEncoder().encode(JSON.stringify({videoId:'synthetic',requestId:'synthetic'}));
+const bytes=new TextEncoder().encode(JSON.stringify({videoId:'11111111-1111-4111-8111-111111111111',requestId:'22222222-2222-4222-8222-222222222222'}));
 async function fixture(country='US'){
  const request=new Request(`https://network-proof.example${path}`,{method:'POST',headers:{authorization:'Bearer synthetic','x-chillywood-platform':'web'},body:bytes});
  Object.defineProperty(request,'cf',{value:{country}});

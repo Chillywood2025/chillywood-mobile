@@ -2,8 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
+import {loadPureTypeScriptModule} from '../helpers/pure-typescript-module.mjs';
+import {webcrypto} from 'node:crypto';
+globalThis.crypto ??= webcrypto;
+const marketProof=loadPureTypeScriptModule('supabase/functions/_shared/stripe-video-market-proof.ts');
+const signer=await import(`data:text/javascript;base64,${Buffer.from(readFileSync('ops/trusted-network-proof-proxy/src/checkout-proof.js','utf8')).toString('base64')}`);
 const uuid='00000000-0000-4000-8000-000000000001';
-function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform}={}){
+function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSession=false,nativeConfigured=false,existing=true,orderPlatform='web',envOverride={},admissionPatch={},bindingPatch={},providerAccount='acct_test',preparedPlatform,marketCountry='US',unsigned=false}={}){
  let handler;const calls=[],providerCalls=[],rpcArgs=[];let returnUrl,postedBody;
  const order={checkout_platform:orderPlatform,session_id:uuid,amount_minor:1000,currency:'usd',price_id:uuid,price_revision:1,...(status==='checkout_ready'?{checkout_session_id:'cs_test_one'}:{}),id:uuid,video_id:uuid,buyer_id:uuid,creator_id:'creator',request_id:uuid,status,stripe_account_id:'acct_test',stripe_product_id:'prod_test'};
  const tax={ready:true,policyId:'policy',taxCode:'txcd_100'};
@@ -17,11 +22,40 @@ function harness({status='prepared',taxCode='txcd_100',networkFails=false,newSes
   videoCheckoutForm:(_o,_t,url)=>{returnUrl=url;calls.push('serialize');return new URLSearchParams('mode=payment');},recoverStripeVideoSession:async()=>null,reconcileStripeVideoOrder:async()=>{calls.push('reconcile');}};
  const env={STRIPE_VIDEO_WEB_ORIGIN:'https://example.com',STRIPE_TEST_SECRET_KEY:'sk_test_value',STRIPE_VIDEO_TEST_PRODUCT_ID:'prod_test',STRIPE_VIDEO_SANDBOX_ENABLED:'true',...(nativeConfigured?{STRIPE_VIDEO_TEST_ACCOUNT_ID:'acct_test',...Object.fromEntries(['IOS','ANDROID'].flatMap(p=>[[`STRIPE_VIDEO_${p}_SANDBOX_ENABLED`,'true'],[`STRIPE_VIDEO_${p}_ROUTE_ID`,uuid],[`STRIPE_VIDEO_${p}_RETURN_ORIGIN`,'https://native.example.com']]))}:{}),...envOverride};
  const source=ts.transpileModule(readFileSync('supabase/functions/stripe-paid-video-checkout/index.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- const require=name=>name.startsWith('npm:')?{createClient:()=>({})}:name.includes('stripe-connect')?{authenticateRequest:async()=>({user:{id:uuid,sessionGeneration:newSession?'00000000-0000-4000-8000-000000000002':uuid}})}:deps;
+ env.SUPABASE_URL='https://project.supabase.co';env.CHILLYWOOD_NETWORK_PROOF_SECRET='synthetic-only-test-secret';
+ const require=name=>name.includes('stripe-video-market-proof')?marketProof:name.startsWith('npm:')?{createClient:()=>({})}:name.includes('stripe-connect')?{authenticateRequest:async()=>({user:{id:uuid,sessionGeneration:newSession?'00000000-0000-4000-8000-000000000002':uuid}})}:deps;
  const fetch=async(_url,options)=>{postedBody=options.body;calls.push('POST');if(networkFails)throw Error('network');return new Response(JSON.stringify({id:'cs_test_one',livemode:false,client_reference_id:uuid,url:'https://checkout.stripe.com/c/pay/test_session'}));};
  new Function('require','exports','Deno','fetch',source)(require,{}, {env:{get:key=>env[key]},serve:fn=>handler=fn},fetch);
- return {calls,providerCalls,rpcArgs,returnUrl:()=>returnUrl,postedBody:()=>postedBody,send:(origin='https://example.com',body={videoId:uuid,requestId:uuid},platform='web')=>handler(new Request('https://edge.test',{method:'POST',headers:{...(origin===null?{}:{Origin:origin}),...(platform?{'x-chillywood-platform':platform}:{})},body:JSON.stringify(body)}))};
+ return {calls,providerCalls,rpcArgs,returnUrl:()=>returnUrl,postedBody:()=>postedBody,send:async(origin='https://example.com',body={videoId:uuid,requestId:uuid},platform='web')=>{
+  const bytes=new TextEncoder().encode(JSON.stringify(body));
+  const headers={authorization:'Bearer synthetic',...(origin===null?{}:{Origin:origin}),...(platform?{'x-chillywood-platform':platform}:{})};
+  const url=`${env.SUPABASE_URL}/functions/v1/stripe-paid-video-checkout`;
+  const request=new Request(url,{method:'POST',headers,body:bytes});Object.defineProperty(request,'cf',{value:{country:marketCountry}});
+  if(!unsigned){const proof=await signer.signCheckoutProof(request,bytes,env.CHILLYWOOD_NETWORK_PROOF_SECRET,env.SUPABASE_URL);
+   Object.assign(headers,{'x-chillywood-network-proof':proof.proof,'x-chillywood-network-proof-signature':`sha256=${proof.signature}`,
+    'x-chillywood-network-proof-timestamp':proof.timestamp,'x-chillywood-network-proof-version':'v2'});}
+  return handler(new Request(url,{method:'POST',headers,body:bytes}));}};
 }
+
+test('new checkout rejects direct unsigned and unsupported market before provider calls',async()=>{
+ for(const settings of [{unsigned:true},{marketCountry:'CA'},{marketCountry:'XX'},{marketCountry:'T1'},{marketCountry:null}]){
+  const h=harness(settings);assert.equal((await h.send()).status,503);assert.equal(h.providerCalls.length,0);
+  assert.equal(h.calls.includes('dispatch_stripe_sandbox_video_order'),false);assert.equal(h.calls.includes('POST'),false);
+ }
+});
+test('unsigned non-US status/recover preserve paid access and never dispatch',async()=>{
+ for(const action of ['status','recover']){
+  const h=harness({status:'checkout_ready',marketCountry:'CA',unsigned:true});
+  assert.equal((await h.send('https://example.com',{action,videoId:uuid,requestId:uuid,orderId:uuid})).status,200);
+  assert.equal(h.calls.includes('POST'),false);assert.equal(h.calls.includes('dispatch_stripe_sandbox_video_order'),false);
+ }
+});
+test('exact verified observation accompanies existing atomic dispatch',async()=>{
+ const h=harness();assert.equal((await h.send()).status,200);
+ const observation=h.rpcArgs.find(x=>x.name==='dispatch_stripe_sandbox_video_order').args.p_market;
+ assert.equal(observation.country,'US');assert.equal(observation.requestId,uuid);assert.equal(observation.videoId,uuid);
+ assert.equal(observation.platform,'web');assert.equal(observation.verification,'trusted_ip_country_observation');
+});
 test('unadmitted native and unknown transports stop before database or provider calls',async()=>{
  for(const platform of ['ios','android','unknown','']){const h=harness();assert.equal((await h.send('https://example.com',undefined,platform)).status,403);assert.equal(h.calls.length,0);}
 });
