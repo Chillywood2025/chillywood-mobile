@@ -11,6 +11,27 @@ const session={id:'cs_test_one',livemode:false,mode:'payment',payment_status:'pa
 const intent={id:'pi_one',livemode:false,status:'succeeded',latest_charge:'ch_one',amount_received:1000,currency:'usd',metadata};
 const charge={id:'ch_one',livemode:false,paid:true,captured:true,payment_intent:'pi_one',amount:1000,currency:'usd',amount_refunded:0};
 const product={id:'prod_video',livemode:false,active:true};
+test('synthetic web mechanics require explicit exact binding and remain visibly synthetic',()=>{
+ const web={...order,checkout_platform:'web',tax_evidence_kind:'synthetic_test_no_collection'};
+ const policy={ready:true,taxBehavior:'inclusive',taxCode:'txcd_100',collectionMode:'synthetic_test_no_collection',evidenceKind:'synthetic_test_no_collection',
+  environment:'test',platform:'web',orderId:order.id,accountId:order.stripe_account_id,productId:order.stripe_product_id,
+  policyId:'fixture',disclosure:'Synthetic test only; no tax compliance or exemption qualification'};
+ const form=exports.videoCheckoutForm(web,policy,'https://example.com/return');
+ assert.equal(form.get('automatic_tax[enabled]'),'false');
+ assert.equal(form.get('metadata[tax_evidence_kind]'),'synthetic_test_no_collection');
+ assert.match(form.get('custom_text[submit][message]'),/No real payment or tax qualification/);
+ for(const patch of [{environment:'live'},{platform:'android'},{orderId:'other'},{accountId:'acct_other'},{productId:'prod_other'},{disclosure:''},{evidenceKind:'qualified'}])
+  assert.throws(()=>exports.videoCheckoutForm(web,{...policy,...patch},'https://example.com/return'));
+ for(const checkout_platform of ['ios','android',undefined])assert.throws(()=>exports.videoCheckoutForm({...web,checkout_platform},policy,'https://example.com/return'));
+ const md={...metadata,tax_evidence_kind:'synthetic_test_no_collection'};
+ const s={...session,metadata:md,automatic_tax:{enabled:false},total_details:{amount_tax:0}};
+ const i={...intent,metadata:md};
+ assert.equal(exports.paidVideoFacts(web,s,i,charge,product).livemode,false);
+ assert.throws(()=>exports.paidVideoFacts(order,s,i,charge,product));
+ for(const patch of [{livemode:true},{automatic_tax:{enabled:true}},{total_details:{amount_tax:1}},{metadata}])
+  assert.throws(()=>exports.paidVideoFacts(web,{...s,...patch},i,charge,product));
+ assert.throws(()=>exports.paidVideoFacts({...web,checkout_platform:'android'},s,i,charge,product));
+});
 test('archived products still reconcile provider-confirmed partial and full historical refunds',async()=>{
  for(const amount of [300,1000]){
   const calls=[],reads=[];

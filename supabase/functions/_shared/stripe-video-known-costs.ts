@@ -39,7 +39,9 @@ export async function observeStripeVideoKnownCosts(order:ObjectMap,reports:Video
  paidVideoFacts(order,session,intent,charge,product);
  const tax=integer(obj(session.total_details).amount_tax);
  const automatic=obj(session.automatic_tax);
- const noCollection=order.taxCollectionMode==='verified_no_collection';
+ const synthetic=order.taxCollectionMode==='synthetic_test_no_collection';
+ if(synthetic)match(order.checkout_platform==='web'&&order.tax_evidence_kind==='synthetic_test_no_collection');
+ const noCollection=order.taxCollectionMode==='verified_no_collection'||synthetic;
  match((noCollection?automatic.enabled===false&&tax===0:
   order.taxCollectionMode==='automatic'&&automatic.enabled===true&&automatic.status==='complete')&&tax>=0&&tax<=Number(order.amount_minor));
  const balances:KnownCostInput['balances']=[];
