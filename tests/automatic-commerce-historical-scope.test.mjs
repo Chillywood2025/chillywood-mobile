@@ -10,6 +10,9 @@ const source=fs.readdirSync(new URL('../supabase/migrations/',import.meta.url)).
 
 test('automatic cutover defers only the complete explicit production successor inventory',()=>{
  assertAutomaticCommerceSuccessors(source);
+ const webFixture='20261113230934_stripe_video_explicit_web_test_fixture.sql';
+ assert.ok(nativeProductionMigrationFiles.includes(webFixture));
+ assert.throws(()=>assertAutomaticCommerceSuccessors(source,nativeProductionMigrationFiles.filter(file=>file!==webFixture)),assert.AssertionError);
  for(const deferred of [nativeProductionMigrationFiles.slice(1),[...nativeProductionMigrationFiles,nativeProductionMigrationFiles[0]],
   [...nativeProductionMigrationFiles].reverse(),['20261108095500_paid_party_ticket_capacity_accounting.sql',...nativeProductionMigrationFiles]])
   assert.throws(()=>assertAutomaticCommerceSuccessors(source,deferred),assert.AssertionError);

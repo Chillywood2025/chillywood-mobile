@@ -40,4 +40,7 @@ export const nativeProductionMigrationFiles=Object.freeze([
  '20261113042617_stripe_video_shared_purchase_history.sql',
  // Checkout market proof wraps the current native dispatch topology only.
  '20261113080000_stripe_video_market_dispatch.sql',
+ // Explicit web test policies wrap current paid-video tax/cost functions;
+ // frozen pre-production fixtures must defer them, current replay must not.
+ '20261113230934_stripe_video_explicit_web_test_fixture.sql',
 ]);
